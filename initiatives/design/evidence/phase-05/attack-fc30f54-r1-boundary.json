@@ -1,0 +1,104 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (post/fetch)",
+      "breaking_input": "Real network path: fetch(ep.href, {redirect:'manual'}) returns 3xx; step() treats status<200||>299 as COULD-NOT-SCAN, which is safe, but the x-api-key header is sent on the very first request to adapter.endpoint with no per-request host check after the registry check, and the registry `hosts` check uses only the hardcoded endpoint host. A registry row with hosts [21st.dev] is satisfied by the constant, so nothing binds the key to the row. More concretely: `hostAllowed(ep.hostname, hosts)` runs once on the constant; no check that the row's hosts list is non-empty for a key-bearing source, so a row with auth: env and hosts omitted may pass hostAllowed (depending on its empty-list semantics) and ship the key.",
+      "why": "Credential egress is gated on a check that may admit an empty host list; the key should only ever go to a host explicitly listed on a row carrying auth: env.",
+      "fix": "Refuse when auth is env and hosts is empty; assert ep.hostname is in hosts and protocol is https before attaching the key.",
+      "twin_of": "The licence was checked on one input and the fetch made on another"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (fetch call)",
+      "breaking_input": "Real network call with no timeout or abort signal and no response size cap: `await res.text()` on a server that streams forever or stalls after headers. Also the 202 reply to notifications/initialized is never checked and its body is not read, leaving the connection unconsumed.",
+      "why": "The tool hangs indefinitely or buffers unbounded memory; a stalled upstream means no availability record is written, so the summary reads NOT-ASKED, hiding a hang as 'never queried'. The attempts.log line is written before the request, but availability.log is not.",
+      "fix": "Use AbortSignal.timeout, read the body with a byte cap (refuse over cap as COULD-NOT-SCAN), and write a COULD-NOT-SCAN record on abort.",
+      "twin_of": "An emptied oversize body passed through as a 2xx -> a capped read is truncated or refused, never handed on empty as a success."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (mcp-session-id header)",
+      "breaking_input": "Server replies to initialize with an `mcp-session-id` header containing CR/LF or a very long value; it is echoed verbatim into the next request headers. Also a server-supplied value is trusted without grammar check.",
+      "why": "Remote text goes into outbound headers unvalidated; Node rejects invalid chars by throwing from fetch, which is caught on the tools/call step but the notifications post() is not wrapped in step, and a throw inside the try is caught, yet the failure is silently ignored for the notification.",
+      "fix": "Validate session id against /^[\\w.-]{1,128}$/ else COULD-NOT-SCAN.",
+      "twin_of": "Remote text reached a tab-separated log verbatim"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (--mcp-fixture JSON.parse, readFileSync)",
+      "breaking_input": "`--mcp-fixture /nonexistent.json` or a file with invalid JSON, with ARC_DESIGN_OFFLINE=1: readFileSync/JSON.parse throws an uncaught exception after the key check, giving a stack trace and exit 1 with no availability record. A fixture path is also parsed after stateDir creation.",
+      "why": "A parser throw left as a stack trace beside guarded siblings; and the fixture is read only after credential step so state dir was already created.",
+      "fix": "Wrap in try/catch and fail(1, 'ERR fixture unreadable') before any state is written.",
+      "twin_of": "A parser throw left to a stack trace beside two guarded siblings -> every step that can fail answers with a named ERR line."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (fake predicate)",
+      "breaking_input": "ARC_DESIGN_OFFLINE=1 with `--registry other.yaml` only: seamGuard returns true but fake is false (no fixture/record), so the run proceeds with the real network using a registry from an arbitrary path, and the key is sent to the hardcoded endpoint under a registry the caller chose. In summary, the --registry seam is accepted and its result discarded.",
+      "why": "A test seam substituting the licence source is allowed to drive a real, keyed network request; the fake stamp (via) says 'network' though the registry was a fixture.",
+      "fix": "When any seam is used, force fake mode or refuse real network; stamp via as fixture whenever --registry is overridden.",
+      "twin_of": "A test seam forwarded from the hook's inherited environment -> a seam in a production path needs a second, path-specific switch, and its answers are stamped as fixture."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (--record-request)",
+      "breaking_input": "`--record-request` pointed at an arbitrary path (e.g. an existing tracked file or a path outside the repo) under ARC_DESIGN_OFFLINE=1; appendFileSync appends JSON to it without containment. With no key (auth none), headers never hash, and the recorded url/body are written verbatim.",
+      "why": "Append to any caller-chosen path with no containment or exclusive creation; a leftover ARC_DESIGN_OFFLINE=1 in the environment makes this a write primitive.",
+      "fix": "Contain the path under the state dir or scratch, refuse existing files not created by this run.",
+      "twin_of": "Check-then-create with a truncating write -> create exclusively (`wx`) and append"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (record / log fields)",
+      "breaking_input": "Reply error message or query text containing tab/newline or U+2028: `couldNot(\"tools/call: \" + field(reply.error.message))` is scrubbed by field(), but `couldNot(`${body.method}: ${r.error}`)` passes r.error (network error text, remote-influenced) through record's field(reason) only; and `shown(ep)` fine. The key itself: an error message from fetch or a server error that echoes the x-api-key value is written into availability.log and printed in the COULD-NOT-SCAN line.",
+      "why": "Server error text (reply.error.message) can echo the submitted key and is written to a committed-adjacent log and stdout verbatim; no redaction of the key value.",
+      "fix": "Replace every occurrence of the key in any reason string before logging or printing.",
+      "twin_of": "A remote line echoed into a refusal an agent reads -> refusal reasons are fixed text; remote text is data and is never quoted into an agent's context."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (preview URL printing)",
+      "breaking_input": "Result item containing `https://evil.example/a.png?token=SECRET#x`; the regex captures the full URL with query and fragment and prints it, and the summary/sources flow may later commit it.",
+      "why": "Full URL with query string reaches output that an agent copies into a committed file.",
+      "fix": "Strip query and fragment (and host-check against hosts) before printing.",
+      "twin_of": "A full URL with its query string went into a committed file -> drop query and fragment before anything is committed."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:summary (avail log parse)",
+      "breaking_input": "availability.log lines are matched on `f[1] === id` and `Date.parse(f[0]) >= since`; a --since in a non-UTC offset form or a log written by a run in the future, or a sources.md row from a fixture ('(fixture)' stripped) counted as `rows`, makes a fixture-run ANSWERED count as a live answer. `via` (f[2]) is never consulted, so a fixture-answered line reads as 'answered' in the summary.",
+      "why": "The summary reports observed availability but ignores the fixture/network stamp, so offline test records count toward 'answered' for a live run.",
+      "fix": "Exclude or label via=fixture lines in summary.",
+      "twin_of": "A test seam forwarded from the hook's inherited environment -> a seam in a production path needs a second, path-specific switch, and its answers are stamped as fixture."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:query (concurrent append)",
+      "breaking_input": "Two --query runs for the same brief at once: both appendFileSync to availability.log/attempts.log; interleaved lines on Windows can corrupt a line, which summary drops silently via the f.length>=6 filter, turning an answer into NOT-ASKED.",
+      "why": "Silent drop of malformed records converts a recorded outcome into 'never asked'.",
+      "fix": "Count malformed lines and print them in the summary.",
+      "twin_of": "An informational line read as the failure cause"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:rpcReply",
+      "breaking_input": "SSE reply carrying a huge number of `data:` lines, or a JSON array body with the matching id twice; `find` takes the first of duplicates.",
+      "why": "First-of-duplicates match with no count and unbounded parse of a remote body.",
+      "fix": "Count matches with id; exactly one or COULD-NOT-SCAN.",
+      "twin_of": "`find()` took the first of duplicate rows -> count matches; exactly one or refuse."
+    }
+  ]
+}

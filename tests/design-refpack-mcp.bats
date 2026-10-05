@@ -161,8 +161,8 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   # nicelydone: never asked.
   run node "$(_refpack)" --summary --brief lexos --since "$t0"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"availability 21st-dev: ANSWERED results 2 of 3; SHORT -- asked for 3, got 2; COULD-NOT-SCAN 1 (credential API_KEY_21ST is not set"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"availability lapa-ninja: ANSWERED 0/1 screen(s) added/asked; REFUSED (robots) 1"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"availability 21st-dev [fixture]: ANSWERED results 2 of 3; SHORT -- asked for 3, got 2; COULD-NOT-SCAN 1 (credential API_KEY_21ST is not set"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"availability lapa-ninja [fixture]: ANSWERED 0/1 screen(s) added/asked; REFUSED (robots) 1"* ]] || { echo "$output"; false; }
   [[ "$output" == *"availability nicelydone: NOT-ASKED"* ]] || { echo "$output"; false; }
   [[ "$output" != *"mobbin"* ]] || { echo "an off source was reported as a pack source: $output"; false; }
   [[ "$output" == *"summary: 1 of 3 active pack source(s) answered"* ]] || { echo "$output"; false; }
@@ -178,6 +178,28 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   [[ "$output" == *"not a pass"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 7 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 7 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 7 -- a @test was silently dropped"; false; }
+@test "attack fc30f54: a seam never reaches the network, an echoed key is scrubbed, free text is not a hit, a doubled reply is refused" {
+  _mcp_sandbox
+  run env API_KEY_21ST=k node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --registry "$SANDBOX/design.sources.yaml"
+  [ "$status" -eq 1 ] || { echo "a scratch registry drove a real request: $output"; false; }
+  [[ "$output" == *"needs --mcp-fixture"* ]] || { echo "$output"; false; }
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"error":{"message":"bad key k-secret-77 rejected"}}}}
+' > "$SANDBOX/fxerr.json"
+  run env API_KEY_21ST=k-secret-77 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxerr.json"
+  [ "$status" -eq 4 ] || { echo "$output"; false; }
+  [[ "$output" == *"bad key <key> rejected"* ]] || { echo "$output"; false; }
+  ! grep -q 'k-secret-77' "$(_avail)" || { echo "the echoed key reached the log"; false; }
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"No components found"}]}}}}
+' > "$SANDBOX/fxtext.json"
+  run env API_KEY_21ST=k node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxtext.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"answered 0 of 3; SHORT -- asked for 3, got 0"* ]] || { echo "free text was counted as a hit: $output"; false; }
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":[{"jsonrpc":"2.0","id":2,"result":{}},{"jsonrpc":"2.0","id":2,"result":{}}]}}
+' > "$SANDBOX/fxdup.json"
+  run env API_KEY_21ST=k node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxdup.json"
+  [ "$status" -eq 4 ] || { echo "a doubled reply was chosen between: $output"; false; }
+}
+
+@test "this file registers the 8 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 8 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 8 -- a @test was silently dropped"; false; }
 }

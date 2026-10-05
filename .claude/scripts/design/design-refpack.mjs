@@ -243,6 +243,8 @@ const MCP_SEARCH = {
   "21st-dev": { endpoint: "https://21st.dev/api/mcp", tool: "21st_magic_component_inspiration", header: "x-api-key" },
 };
 const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
+const MCP_DEADLINE_MS = 30000;
+const MCP_MAX_BYTES = 2 * 1024 * 1024;
 
 function parseNamed(argv, known, from) {
   const opts = {};
@@ -267,7 +269,9 @@ function rpcReply(text, id) {
   const tryParse = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
   const whole = tryParse(text);
   const all = whole !== undefined ? [whole].flat() : String(text).split(/\r?\n/).filter((l) => l.startsWith("data:")).map((l) => tryParse(l.slice(5).trim())).filter(Boolean);
-  return all.find((m) => m && m.id === id);
+  // Exactly one message may carry the id; two is an answer this builder will not choose between (attack fc30f54 B11).
+  const hits = all.filter((m) => m && m.id === id);
+  return hits.length === 1 ? hits[0] : undefined;
 }
 
 // Count what a search answered. The result shape is the upstream's, so every reading is tried
@@ -279,8 +283,16 @@ function searchItems(result) {
     let v;
     try { v = JSON.parse(c.text); } catch { v = undefined; }
     const list = Array.isArray(v) ? v : v && typeof v === "object" ? (v.results ?? v.components ?? v.items ?? null) : null;
-    if (Array.isArray(list)) out.push(...list);
-    else if (String(c.text).trim()) out.push({ text: c.text });
+    if (Array.isArray(list)) out.push(...list.filter((x) => x && typeof x === "object"));
+    // Free text, null or a primitive is not a counted result: an error sentence must not read as one hit (attack fc30f54 L2).
+  }
+  return out;
+}
+
+function searchText(result) {
+  const out = [];
+  for (const c of (result && Array.isArray(result.content) ? result.content : [])) {
+    if (c && c.type === "text") out.push(String(c.text));
   }
   return out;
 }
@@ -295,7 +307,18 @@ async function query(argv) {
   if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
   if (!/^([1-9]|1[0-9]|20)$/.test(o["--want"])) fail(1, "--want is a whole number 1-20");
   const want = Number(o["--want"]);
-  const fake = seamGuard(o, MCP_SEAMS) && (o["--mcp-fixture"] != null || o["--record-request"] != null);
+  const seamed = seamGuard(o, MCP_SEAMS);
+  const fake = o["--mcp-fixture"] != null;
+  // A seam (a scratch registry, a request recorder) never drives the real, keyed network (attack fc30f54 B5).
+  if (seamed && !fake) fail(1, "a test seam needs --mcp-fixture: a scratch registry or a recorder never sends a real request");
+  let fixture = null;
+  if (fake) {
+    try { fixture = JSON.parse(readFileSync(resolve(o["--mcp-fixture"]), "utf8")); } catch (e) { fail(1, "--mcp-fixture is unreadable: " + field(e.message)); }
+    if (!fixture || typeof fixture !== "object") fail(1, "--mcp-fixture must hold a JSON object keyed by method");
+  }
+  // The recorder is created by this run, never appended to an existing file (attack fc30f54 B6).
+  const recPath = o["--record-request"] != null ? resolve(o["--record-request"]) : null;
+  if (recPath && existsSync(recPath)) fail(1, "--record-request must name a file that does not exist yet");
 
   // 1. registry -- an off source makes no request at all.
   const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
@@ -308,18 +331,22 @@ async function query(argv) {
   const adapter = Object.hasOwn(MCP_SEARCH, id) ? MCP_SEARCH[id] : null;
   if (!adapter) fail(2, `refused: source '${id}' has no search adapter here; its search tool is not guessed`);
   const ep = new URL(adapter.endpoint);
+  if (ep.protocol !== "https:" || ep.port || ep.username) fail(2, "refused: a keyed MCP endpoint is https on its default port, with no userinfo");
   const hosts = asList(src.hosts).map((h) => String(h).toLowerCase());
   if (!hostAllowed(ep.hostname, hosts)) fail(2, `refused: ${ep.hostname} is not one of source '${id}' hosts [${hosts.join(", ")}]`);
 
   const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", brief);
   mkdirSync(stateDir, { recursive: true });
   const via = fake ? "fixture" : "network";
-  const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(ep))}\t${verdict}\t${field(reason)}\n`);
-  const couldNot = (reason) => { record("COULD-NOT-SCAN", reason); fail(EXIT.UNREADABLE, `COULD-NOT-SCAN ${id} -- ${reason}`); };
+  // The key never lands in a reason, the log or the console, even when the server echoes it (attack fc30f54 B7).
+  let key = null;
+  // Only a key long enough to be a key: a one-letter key would scrub that letter out of every word.
+  const scrub = (t) => (key && key.length >= 8 ? String(t).split(key).join("<key>") : String(t));
+  const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(ep))}\t${verdict}\t${field(scrub(reason))}\n`);
+  const couldNot = (reason) => { record("COULD-NOT-SCAN", reason); fail(EXIT.UNREADABLE, `COULD-NOT-SCAN ${id} -- ${field(scrub(reason))}`); };
 
   // 2. credential: the registry names arc's secret, the adapter names the upstream header. Only
   // the value crosses; arc's name for it never leaves this process.
-  let key = null;
   if (String(src.auth) === "env") {
     const name = String(src.credential_ref ?? "");
     key = name && process.env[name] ? process.env[name] : null;
@@ -328,25 +355,34 @@ async function query(argv) {
 
   // 3. the transport. The fake answers from a fixture and records each request with the key
   // replaced by its hash, so a test can prove which header carried it without writing it down.
-  const fixture = o["--mcp-fixture"] != null ? JSON.parse(readFileSync(resolve(o["--mcp-fixture"]), "utf8")) : null;
   const post = async (body, extra) => {
     const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", ...extra };
     if (key) headers[adapter.header] = key;
     appendFileSync(join(stateDir, "attempts.log"), `${new Date().toISOString()}\t${id}\t${via}\tPOST\t${field(shown(ep))}\t${field(body.method)}\n`);
     if (fake) {
-      if (o["--record-request"] != null) {
+      if (recPath) {
         const shownHeaders = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, v === key ? `sha256:${createHash("sha256").update(v).digest("hex").slice(0, 16)}` : v]));
-        appendFileSync(resolve(o["--record-request"]), JSON.stringify({ url: ep.href, headers: shownHeaders, body }) + "\n");
+        appendFileSync(recPath, JSON.stringify({ url: ep.href, headers: shownHeaders, body }) + "\n");
       }
       const r = fixture && fixture[body.method];
       if (!r) return { status: 0, error: `no fixture answer for ${body.method}` };
       return { status: r.status ?? 200, session: r.session ?? null, text: typeof r.body === "string" ? r.body : JSON.stringify(r.body) };
     }
     try {
-      const res = await fetch(ep.href, { method: "POST", headers, body: JSON.stringify(body), redirect: "manual" });
-      return { status: res.status, session: res.headers.get("mcp-session-id"), text: await res.text() };
+      const res = await fetch(ep.href, { method: "POST", headers, body: JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(MCP_DEADLINE_MS) });
+      // Read under a byte cap: a body that never ends is COULD-NOT-SCAN, never a hang (attack fc30f54 B2).
+      const chunks = [];
+      let size = 0;
+      if (res.body) {
+        for await (const chunk of res.body) {
+          size += chunk.length;
+          if (size > MCP_MAX_BYTES) return { status: 0, error: "the reply passed " + MCP_MAX_BYTES + " bytes" };
+          chunks.push(chunk);
+        }
+      }
+      return { status: res.status, session: res.headers.get("mcp-session-id"), text: Buffer.concat(chunks).toString("utf8") };
     } catch (e) {
-      return { status: 0, error: e && e.message ? e.message : "network error" };
+      return { status: 0, error: e && e.name === "TimeoutError" ? "no answer within " + MCP_DEADLINE_MS / 1000 + " s" : e && e.message ? e.message : "network error" };
     }
   };
   const step = async (body, extra) => {
@@ -358,6 +394,7 @@ async function query(argv) {
   };
 
   const init = await step({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "arc-design-refpack", version: "1" } } }, {});
+  if (init.session != null && !/^[A-Za-z0-9._:-]{1,128}$/.test(init.session)) couldNot("initialize: the server sent a session id outside the header grammar");
   const session = init.session ? { "mcp-session-id": init.session } : {};
   await post({ jsonrpc: "2.0", method: "notifications/initialized" }, session);
   const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: { message: q, searchQuery: q } } }, session);
@@ -369,10 +406,12 @@ async function query(argv) {
   const short = items.length < want ? `; SHORT -- asked for ${want}, got ${items.length}` : "";
   record("ANSWERED", `results ${n} of ${want}${short}`);
   for (const it of items.slice(0, want)) {
-    const name = field(it.name ?? it.title ?? it.text ?? "(unnamed)").slice(0, 120);
-    const pics = JSON.stringify(it).match(/https:\/\/[^"\s]+\.(png|jpe?g|webp|avif|gif)/gi) ?? [];
+    const name = field(it.name ?? it.title ?? "(unnamed)").slice(0, 120);
+    // No query or fragment: a signed URL's token must not reach output an agent copies into a file (attack fc30f54 B8).
+    const pics = JSON.stringify(it).match(/https:\/\/[^"\s?#]+\.(png|jpe?g|webp|avif|gif)/gi) ?? [];
     console.log(`  ${name}${pics.length ? ` -- preview ${field(pics[0])}` : ""}`);
   }
+  if (items.length === 0) for (const t of searchText(reply.result)) console.log("  (unstructured answer, not counted) " + field(scrub(t)).slice(0, 200));
   console.log(`design-refpack query: ${id} answered ${n} of ${want}${short}`);
 }
 
@@ -391,7 +430,11 @@ async function summary(argv) {
   if (active.length === 0) fail(1, "the registry has no active pack source; there is nothing to report on (this is not a pass)");
   const readLines = (p) => (existsSync(p) ? readFileSync(p, "utf8").split(/\r?\n/).filter(Boolean) : []);
   const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", o["--brief"]);
-  const avail = readLines(join(stateDir, "availability.log")).map((l) => l.split("\t")).filter((f) => f.length >= 6 && Date.parse(f[0]) >= since);
+  // A line that does not parse is counted and named, never dropped: a torn record must not turn
+  // an answer into NOT-ASKED (attack fc30f54 B10).
+  const rawAvail = readLines(join(stateDir, "availability.log")).map((l) => l.split("\t"));
+  const malformed = rawAvail.filter((f) => f.length < 6 || Number.isNaN(Date.parse(f[0]))).length;
+  const avail = rawAvail.filter((f) => f.length >= 6 && Date.parse(f[0]) >= since);
   const added = readLines(join(ROOT, "docs", "design", "refpacks", o["--brief"], "sources.md"))
     .filter((l) => /^\| https?:/.test(l)).map((l) => l.split(" | ")).filter((c) => c.length >= 4 && Date.parse(c[1]) >= since).map((c) => c[3].replace(/ \(fixture\)$/, ""));
   let answered = 0;
@@ -410,8 +453,11 @@ async function summary(argv) {
     else head = `ANSWERED ${rows}/${count("ALLOW") + count("DISALLOW") + cns.length} screen(s) added/asked`;
     const ok = (mcp.length && !/^results 0 /.test(mcp[mcp.length - 1])) || rows > 0;
     if (ok) answered++;
-    console.log(`availability ${id}: ${head}${notes.length ? `; ${notes.join("; ")}` : ""}`);
+    // A fixture record is a test, not an observation of the source: it is labelled, never read as live (attack fc30f54 B9).
+    const tag = mine.length && mine.every((f) => f[2] === "fixture") ? " [fixture]" : mine.some((f) => f[2] === "fixture") ? " [fixture+network]" : "";
+    console.log(`availability ${id}${tag}: ${head}${notes.length ? `; ${notes.join("; ")}` : ""}`);
   }
+  if (malformed) console.log(`design-refpack summary: ${malformed} malformed availability line(s) were not read`);
   console.log(`design-refpack summary: ${answered} of ${active.length} active pack source(s) answered since ${field(o["--since"])}`);
 }
 
