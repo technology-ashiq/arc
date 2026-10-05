@@ -64,3 +64,21 @@ Filed as REQ-15 / Phase 11, before the dogfood (Phase 08). Appetite +1.5d (total
 
 Filed inside Phase 11 (still open), REQ-15's acceptance amended from "one menu" to "one Settings page". Appetite
 +0.5d inside Phase 11's 1.5d; the total stays 38.5d.
+
+## Amendment 3 (2026-10-05, owner) — edit a model in place
+
+**Why.** On the Settings page the owner asked for the list of models with an edit: "page la list of profiles kodu edit
+panra maari kodu". Until now a changed URL, model id or key meant remove and add again, which also drops the active
+choice.
+
+1. **One more op, the same route.** `POST /api/models` takes `{ op: "edit", name, model: { name, baseUrl, model, key? },
+   clearKey? }`: the model named `name` is replaced field by field, checked by the same rules as an add. A new name may
+   not be another model's; the active model follows its rename.
+2. **The key is never shown to be edited.** The form never receives the key (only "key …abcd"). An empty key field keeps
+   the stored key, a typed one replaces it, and `clearKey: true` removes it; both together are refused. No response
+   returns a key.
+3. **An edit forgets the model's last test**, under its old and its new name: a result measured against the old URL or
+   model id is not this model's.
+
+Filed inside Phase 11 (still open), REQ-15's acceptance gains "edited in place". About 0.5d inside Phase 11's 1.5d; the
+total stays 38.5d.
