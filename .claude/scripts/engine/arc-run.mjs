@@ -72,7 +72,9 @@ const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
 import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
-import { isExpired, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
+import { isExpired, PROFILE_DRIVER, profileRef, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
+// The owner store (ADR-1350), read-only: a router `profile:` names one of its records (ADR-1801).
+import { endpointOf, findModel, loadRegistry } from "../hq/lib/face/models.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -99,6 +101,9 @@ const MODEL_CAPABLE = ["claude-code", "generic-api"];
 // defaults here mean a receipt emitted from any exit path is honest rather than absent.
 let modelSource = "none";
 let effectiveModel = null;
+// The provider profile the CURRENT attempt runs on (ADR-1800), or null. Declared up here with the two above, for the
+// same reason: `fail()` reaches `emitRun`, which reads it, from exit paths above the routing block.
+let activeProfile = null;
 
 // The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS); hook
 // mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent SIGKILLs
@@ -742,9 +747,64 @@ for (const entry of fallbacks) {
 // A driver with no router entry runs UNPINNED and the receipt says so, rather than quietly
 // inheriting whatever the environment holds.
 let pinnedModel = null;
-if (tier) {
-  const router = loadRouter();
-  const raw = router?.models?.[tier]?.[driver] ?? null;
+
+// ---------- provider profiles (ADR-1800..1802) ----------
+// For `generic-api` a pin may name a PROFILE -- a gateway URL, key and model id kept in the owner store (ADR-1801) --
+// and a class row may carry its own `profile:` that beats the tier's. Only under a routed tier: a named driver consults
+// no tier (ADR-0220), so it consults no profile either and runs exactly as it did before.
+/** The profile name driver `d` resolves to in this run, or null. @param {string} d */
+function profileNameFor(d) {
+  if (!tier || d !== PROFILE_DRIVER) return null;
+  if (routedRow && Object.prototype.hasOwnProperty.call(routedRow, "profile")) return String(routedRow.profile);
+  return profileRef(routerDoc?.models?.[tier]?.[PROFILE_DRIVER] ?? null);
+}
+
+// RESOLVED ONCE, AT PREFLIGHT, FROM ONE STORE SNAPSHOT, before any driver starts. A profile looked up at the fallback
+// hop would refuse only after attempt 1 had spent money, and would read the store a second time -- so one run could mix
+// two versions of a record the owner edited in between. A miss is a refusal naming the profile and the store; it NEVER
+// falls back to the ambient ARC_LLM_* environment, which is exactly the hidden switch ADR-1800 closes.
+let profileSnapshot = null;
+{
+  const chain = [driver, ...fallbacks.map((d) => String(d ?? "").trim())];
+  const wanted = chain.includes(PROFILE_DRIVER) ? profileNameFor(PROFILE_DRIVER) : null;
+  if (wanted !== null) {
+    const refuse = (/** @type {string} */ why) => {
+      // A preview says it WOULD refuse, with the same exit code -- the boundary refusal's own dry-run shape, so the one
+      // command a caller runs before spending money tells them the profile is not on this machine (attack d63004e B3).
+      if (dryRun) console.log(`arc-run: would REFUSE \`${processName}\` -- profile \`${wanted}\` is not usable on this machine: ${why}`);
+      console.error(`arc-run: \`${processName}\` routes \`${PROFILE_DRIVER}\` to profile \`${wanted}\` (engine/router.yaml), and ${why}`);
+      console.error("         a profile lives in the owner store (ADR-1801); add or rename it on the face's Settings page, or change the router line");
+      console.error("         nothing was run and no ambient ARC_LLM_* value was used in its place");
+      process.exit(2);
+    };
+    const got = loadRegistry(root);
+    // The store's reason, with anything quoted blanked: a reason may quote a field or a value, and the store holds keys.
+    // stderr reaches transcripts and CI logs, so nothing of a record's content is printed (attack d63004e B1).
+    if (!got.ok) refuse(`the store could not be used: ${String(got.why).replace(/"[^"]*"/g, '"…"').slice(0, 200)}`);
+    const rec = findModel(got.reg, wanted);
+    if (!rec) refuse(`the store at ${got.path} holds no profile by that name`);
+    profileSnapshot = {
+      name: rec.name,
+      model: rec.model,
+      endpoint: endpointOf(rec.baseUrl),
+      // A keyless local model gets the literal the face's own Ask already sends (arc-dash), never an empty value the
+      // driver would refuse as unset.
+      key: typeof rec.key === "string" && rec.key.trim() !== "" ? rec.key : "none",
+      host: new URL(rec.baseUrl).host,
+    };
+  }
+}
+
+/**
+ * The pin for one attempt on driver `d`, and the profile it runs on -- ONE function for the first attempt and every
+ * fallback hop, because a resolver written twice is the twin this file has recorded more than once.
+ * @param {string} d
+ * @returns {{ pin: string | null, profile: typeof profileSnapshot }}
+ */
+function routeFor(d) {
+  if (!tier) return { pin: null, profile: null };
+  if (profileSnapshot && profileNameFor(d) !== null) return { pin: profileSnapshot.model, profile: profileSnapshot };
+  const raw = routerDoc?.models?.[tier]?.[d] ?? null;
   // THE ROUTED PIN IS CHECKED AGAINST THE SEAT GRAMMAR, AND IT WAS THE ONE INPUT THAT NEVER WAS.
   // `--trial-model` is validated below, and a runtime-reported model is validated in `seatFor` --
   // but `router.models` was read straight onto the receipt. `router-row.mjs` iterates
@@ -755,10 +815,12 @@ if (tier) {
   //
   // Refused loudly here rather than dropped: unlike a runtime's report, a router pin is a reviewed
   // production routing decision, so a malformed one is an operator error to fix in the file, not a
-  // field to silently omit. The message names the file and the exact path to edit.
+  // field to silently omit. The message names the file and the exact path to edit. A `profile:`
+  // value is never a model id: reaching here with one means it was not resolved, and it is refused
+  // rather than sent to a provider as a model name.
   if (raw !== null && raw !== undefined) {
-    if (typeof raw !== "string" || !MODEL_RE.test(raw)) {
-      console.error(`arc-run: engine/router.yaml models.${tier}.${driver} is ${JSON.stringify(raw)}, which is not a clean model id`);
+    if (typeof raw !== "string" || !MODEL_RE.test(raw) || profileRef(raw) !== null) {
+      console.error(`arc-run: engine/router.yaml models.${tier}.${d} is ${JSON.stringify(raw)}, which is not a clean model id`);
       console.error("         The spine refuses it (MODEL_RE), so the run would complete and its receipt would be");
       console.error("         rejected -- a lost receipt on a successful run. Fix the row rather than the seat.");
       // Exit 2, matching the `--trial-model` arm forty lines below and every other operator-error
@@ -766,8 +828,18 @@ if (tier) {
       // this file uses once a run has been attempted.
       process.exit(2);
     }
-    pinnedModel = raw;
+    return { pin: raw, profile: null };
   }
+  return { pin: null, profile: null };
+}
+
+// Every hop's pin is checked here too, not only the first driver's: a malformed pin on a fallback driver used to be
+// found after attempt 1 had spent money (the same preflight argument as the chain check above).
+for (const d of fallbacks) routeFor(String(d ?? "").trim());
+{
+  const r = routeFor(driver);
+  pinnedModel = r.pin;
+  activeProfile = r.profile;
 }
 
 // ---------- the trial seam (ADR-0220) ----------
@@ -789,7 +861,7 @@ if (tier) {
  * the model would assert a routing decision nothing applied -- the false-claim-in-an-append-only-
  * ledger failure this file already refuses at the tier label (see emitRun).
  */
-modelSource = pinnedModel ? "router" : "none";
+modelSource = activeProfile ? "profile" : (pinnedModel ? "router" : "none");
 if (trialModel && ownerModel) {
   console.error("arc-run: --trial-model and --owner-model name two models for one run -- pass one (never last-wins)");
   process.exit(2);
@@ -1184,6 +1256,9 @@ function emitRun(payload) {
     ...(tokens ? { tokens } : {}),
     ...(seat ? { model: seat } : {}),
     ...(runtimeId ? { runtime: runtimeId } : {}),
+    // Which profile and gateway answered (ADR-1800): the model id inside a profile is owner-edited, so the receipt
+    // carries where it came from. Never the key, never the URL path.
+    ...(activeProfile ? { profile: activeProfile.name, gateway_host: activeProfile.host } : {}),
     duration_ms: Math.max(0, Date.now() - runStartedAt),
     model_source: seatSource,
     ...roleFields(),
@@ -1528,6 +1603,9 @@ async function invoke(name) {
       ARC_SEAT_PERSONA_FILE: roleSeat && roleSeat.personaFile ? roleSeat.personaFile : "",
       ARC_DRIVER_MODEL: effectiveModel ?? "",
       ARC_LLM_MODEL: "",
+      // A PROFILE'S GATEWAY AND KEY OVERRIDE THE AMBIENT ONES, for this one child and in its environment only -- never
+      // argv, which any process list can read (ADR-1801). Without a profile the ambient values pass through as before.
+      ...(activeProfile ? { ARC_LLM_ENDPOINT: activeProfile.endpoint, ARC_LLM_API_KEY: activeProfile.key } : {}),
       // The RUN's deadline, as an ABSOLUTE epoch millisecond, so a driver that must impose its
       // own timeout on a subprocess cannot accidentally start a fresh budget. `budgetStr` is
       // the ORIGINAL allowance and is passed unchanged for reporting; a driver reading `min`
@@ -1819,7 +1897,7 @@ if (dryRun) {
     process.exit(dryRefusal.code);
   }
   console.log(`arc-run: would run \`${processName}\` on \`${driver}\`${tier ? ` (tier ${tier})` : ""}${fallbacks.length ? ` fallback ${fallbacks.join(" -> ")}` : ""}`);
-  console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource})`);
+  console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource}${activeProfile ? `, profile ${activeProfile.name} @ ${activeProfile.host}` : ""})`);
   if (roleSeat) {
     console.log(`         role ${roleSeat.role} -> ${roleSeat.agent ?? "nobody"} (${roleSeat.source}: ${roleSeat.why})`);
     if (roleSeat.spineNote) console.log(`         ${roleSeat.spineNote}`);
@@ -1965,11 +2043,13 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   // the provenance field turned that into an explicit claim of the opposite. Every scheduled job
   // takes this path (lib/jobs/delegate.mjs hardcodes --driver auto), so it is the common case
   // rather than an edge one.
+  // The profile is the preflight snapshot, never a re-read (ADR-1801), and the pin was validated at preflight.
   if (tier) {
-    const router = loadRouter();
-    pinnedModel = router?.models?.[tier]?.[driver] ?? null;
+    const r = routeFor(driver);
+    pinnedModel = r.pin;
+    activeProfile = r.profile;
     effectiveModel = trialModel || ownerModel || pinnedModel;
-    modelSource = pinnedModel ? "router" : "none";
+    modelSource = activeProfile ? "profile" : (pinnedModel ? "router" : "none");
   }
   a = await attempt(driver);
 }

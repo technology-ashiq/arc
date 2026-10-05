@@ -1,0 +1,15 @@
+# Phase 00 live demo -- 2026-10-05, branch feat/arc-model-policy-profiles
+# scratch fixture root + owner store outside it; scratch path shortened to <scratch>
+
+$ arc-run --process commit-msg-draft --driver auto --dry-run   (router: generic-api: profile:omni-ds)
+arc-run: would run `commit-msg-draft` on `generic-api` (tier balanced-workhorse)
+         model deepseek/deepseek-v4-flash (source: profile, profile omni-ds @ 127.0.0.1:1)
+         driver workspace C:\Users\ashiq\AppData\Local\Temp\claude\C--Users-ashiq-orca-workspaces-arc-arc-model-policy\a9c7d6e3-a4ff-40f1-a9d7-fdad11fa9c58\scratchpad\demo-root-1 (this repo -- no --work-root given)
+         transcripts NOWHERE -- no --transcript-dir and no ARC_RUN_TRANSCRIPT_DIR, so this dispatch would keep no trail (REQ-03)
+exit=0
+
+$ same, with the record renamed away (profile missing)
+arc-run: `commit-msg-draft` routes `generic-api` to profile `omni-ds` (engine/router.yaml), and the store at C:\Users\ashiq\AppData\Local\Temp\claude\C--Users-ashiq-orca-workspaces-arc-arc-model-policy\a9c7d6e3-a4ff-40f1-a9d7-fdad11fa9c58\scratchpad\demo-store\models.json holds no profile by that name
+         a profile lives in the owner store (ADR-1801); add or rename it on the face's Settings page, or change the router line
+         nothing was run and no ambient ARC_LLM_* value was used in its place
+exit=2

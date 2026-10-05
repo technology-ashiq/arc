@@ -13,6 +13,21 @@ import { holdsCount, laneBadge, laneKpi, laneRoom, roomLink } from "../../../lib
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
 /**
+ * A provider profile as the door served it (model-policy v2, ADR-1800): its name and, when this machine's owner store
+ * holds it, the model and gateway host it reaches. The door never serves a key, so there is none to draw.
+ * @param {unknown} raw
+ */
+export function profileCell(raw) {
+  const p = asObject(raw);
+  const name = field(p, "profile");
+  if (name === "") return "";
+  if (p["missing"] === true) return `profile ${name} (not on this machine)`;
+  const model = field(p, "model");
+  const host = field(p, "gateway_host");
+  return `profile ${name} → ${model || "?"}${host ? ` @ ${host}` : ""}`;
+}
+
+/**
  * @typedef {import("../../../lib/lane-room.mjs").LaneRoom & {
  *   badge: string,
  *   kpis: { key: string, v: string, l: string, sub: string }[],
@@ -22,6 +37,12 @@ import { holdsCount, laneBadge, laneKpi, laneRoom, roomLink } from "../../../lib
  *   bench: { canOpen: boolean, room: string },
  * }} Folded
  */
+
+/** Store records the router grammar cannot name (a space in it): said under the table, never hidden. @param {unknown} raw */
+function unroutableNote(raw) {
+  const names = asArray(raw).map(cell).filter((n) => n !== "");
+  return names.length === 0 ? [] : [`not routable from the router (a profile name has no spaces): ${names.join(", ")}`];
+}
 
 /**
  * @param {Record<string, Payload>} payloads
@@ -43,10 +64,17 @@ export function fold(payloads, ctx) {
     empty: "engine/router.yaml declares no tier.",
     row: (t) => {
       const tier = field(t, "tier");
-      const models = asArray(t["models"]).map((m) => `${field(asObject(m), "driver")}: ${field(asObject(m), "model")}`);
+      const models = asArray(t["models"]).map((m) => {
+        const o = asObject(m);
+        const p = profileCell(o["profile"]);
+        return `${field(o, "driver")}: ${p !== "" ? p : field(o, "model")}`;
+      });
       return tier === "" ? null : { key: tier, cells: [tier, models.length > 0 ? models.join(" · ") : "no model pinned -- a driver runs it unpinned and says so"] };
     },
-    note: "each tier's job description is ADR-0069's prose; the router file names only the model that implements it today",
+    note: [
+      "each tier's job description is ADR-0069's prose; the router file names only the model that implements it today, or, for generic-api, the owner's profile",
+      ...unroutableNote(st.body["unroutable"]),
+    ].join(" · "),
   });
   const processRoutes = servedTable(st, {
     panel: "Process routes",
@@ -56,7 +84,10 @@ export function fold(payloads, ctx) {
     empty: "engine/router.yaml routes no process class.",
     row: (c) => {
       const name = field(c, "name");
-      const chain = [field(c, "driver"), ...asArray(c["fallback"]).map(cell)].filter((d) => d !== "").join(" → ");
+      // generic-api is drawn with the profile it would run on, so the row says which gateway and model it reaches.
+      const p = profileCell(c["profile"]);
+      const chain = [field(c, "driver"), ...asArray(c["fallback"]).map(cell)].filter((d) => d !== "")
+        .map((d) => (d === "generic-api" && p !== "" ? `generic-api (${p})` : d)).join(" → ");
       const terms = field(c, "cap") === "" ? "—" : `${field(c, "cap")} · ${field(c, "judge")} · ${field(c, "review_by")}${c["expired"] === true ? " (past it)" : ""}`;
       return name === "" ? null : { key: name, cells: [name, field(c, "tier"), chain, terms] };
     },
