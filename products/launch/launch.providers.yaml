@@ -295,10 +295,12 @@ providers:
     payment_model: any
     env_keys:
       - RESEND_API_KEY
+      - CLOUDFLARE_API_TOKEN
     hosts:
       - api.resend.com
+      - api.cloudflare.com
     credentials:
-      scope: "domain create + send on one domain"
+      scope: "domain create + send on one domain; writes its own SPF/DKIM/DMARC records on the zone (ADR-1732)"
     adapter: providers/email-transactional/resend.mjs
     digest: null
     approved_by: ashiq
