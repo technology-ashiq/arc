@@ -151,8 +151,8 @@ A later decision from the engine lane, `ADR-0212`, amends parts of the policy fo
 
 | | |
 |---|---|
-| Status | LIVE |
-| Cycle | model-policy v2 (opened 2026-10-05) |
+| Status | IDLE |
+| Cycle | model-policy v2 (opened 2026-10-05, closed 2026-10-06) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
