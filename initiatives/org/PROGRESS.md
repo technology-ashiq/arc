@@ -29,4 +29,4 @@ depends-on: —
 **Current position:** Cycle 20 kicked off 2026-10-05; plan approval requested on the spine. Owner instruction
 2026-10-05: build every phase without waiting.
 **Kickoff attack (tier S, one merged A+C run):** 7 findings, 7 applied (review.completed scoring arm, run.completed-only role fields, planScaffold extraction, skill-import golden/approval, judge reason guard, headroom golden filter, main-guard row). No REJECTED lines.
-**Next step:** Phase 01 -- `org-judge.mjs` (phase-01-spec). Phase 00 built locally (role-seat resolver, lint, arc-run --trial-seat, drivers); one attack round + one push cover the whole cycle.
+**Next step:** Phase 02 -- `skill-import.mjs` (phase-02-spec, to write). Phases 00-01 built locally; REQ-03 is fixture-proven and unused until an `org/teams/*.team.yaml` exists. Phase 00 built locally (role-seat resolver, lint, arc-run --trial-seat, drivers); one attack round + one push cover the whole cycle.
