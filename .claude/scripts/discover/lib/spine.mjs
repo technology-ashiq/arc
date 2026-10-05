@@ -2,6 +2,8 @@
 // through arc-event --strict, so a refused event is a failure here, never a silent exit 0.
 
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { query } from "../../hq/spine.mjs";
@@ -78,9 +80,15 @@ export async function decisionFor(requestId) {
 
 /** Emit one event; returns its ULID or throws UNRECEIPTED with arc-event's own reason. */
 export function emit(kind, payload, { idem } = {}) {
-  const args = [ARC_EVENT, "emit", kind, "--strict", "--process", PROCESS, "--payload", JSON.stringify(payload)];
+  // Through a file, never argv: a long title list overruns the Windows command line (attack dfe58d2 B6).
+  const dir = mkdtempSync(join(tmpdir(), "discover-emit-"));
+  const file = join(dir, "payload.json");
+  writeFileSync(file, JSON.stringify(payload));
+  const args = [ARC_EVENT, "emit", kind, "--strict", "--process", PROCESS, "--payload-file", file];
   if (idem) args.push("--idem", idem);
-  const r = spawnSync(process.execPath, args, { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL" });
+  let r;
+  try { r = spawnSync(process.execPath, args, { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL" }); }
+  finally { rmSync(dir, { recursive: true, force: true }); }
   const id = (r.stdout || "").trim().split("\n").pop();
   if (r.status !== 0 || !ULID.test(id || ""))
     throw new DiscoverError("UNRECEIPTED", `${kind} was not recorded: ${(r.stderr || "").trim().split("\n").pop() || `exit ${r.status}`}`);

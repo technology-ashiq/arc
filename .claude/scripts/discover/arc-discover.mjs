@@ -16,7 +16,7 @@
 // launch's own loadProfile accepts (ADR-1905/1912). Nothing here invokes launch.
 //
 // Exit: 0 done · 1 the source or the spine failed (never an empty result) · 2 refused.
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -91,9 +91,17 @@ export function confine(p, roots = [REPO, tmpdir()]) {
   for (const r of roots) {
     const rr = realpathSync(r);
     const rel = relative(rr, abs);
-    if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel) && !rel.split(sep).includes(".."))) return abs;
+    if (rel === "" || (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel) && !rel.split(sep).includes(".."))) return abs;
   }
   return null;
+}
+
+/** mkdir, then re-confine the REAL path: a link or junction planted after the first check is caught here (attack dfe58d2 B1). */
+function ensureDir(p) {
+  mkdirSync(p, { recursive: true });
+  const real = realpathSync(p);
+  if (!confine(real)) throw new Refusal(`${p} resolves outside the repo/temp roots`);
+  return real;
 }
 
 class Refusal extends Error {}
@@ -113,6 +121,8 @@ async function cmdHunt(o) {
   if (o["--niche-file"] !== undefined) {
     const nf = confine(o["--niche-file"]);
     if (!nf || !existsSync(nf)) refuse("--niche-file is outside the repo/temp roots or does not exist");
+    const st = statSync(nf);
+    if (!st.isFile() || st.size > 4096) refuse("--niche-file must be a regular file of at most 4096 bytes");
     raw = readFileSync(nf, "utf8");
   }
   const niche = parseNiche(raw) ?? refuse("the niche must be 3-60 chars of lowercase letters, digits, spaces and hyphens");
@@ -129,9 +139,9 @@ async function cmdHunt(o) {
   const rejects = await readRejects();
   const result = cluster(records, { rejects });
   const doc = clustersDocument(niche, records, skipped, result);
-  mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, "records.ndjson"), records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : ""));
-  writeFileSync(join(out, "clusters.json"), doc);
+  const outDir = ensureDir(out);
+  writeFileSync(join(outDir, "records.ndjson"), records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : ""));
+  writeFileSync(join(outDir, "clusters.json"), doc);
   const hash = sha256(doc);
   const rejected = result.clusters.filter((c) => c.previously_rejected).length;
   say(`hunt "${niche}": ${records.length} records, ${result.clusters.length} clusters (${rejected} previously rejected) -- clusters.json sha256 ${hash}`);
@@ -143,7 +153,13 @@ async function cmdHunt(o) {
     let fresh = 0;
     for (const r of records) {
       if (seen.has(r.source_id)) continue;
-      emit("idea.captured", { source_id: r.source_id, source_url: r.source_url, title: r.title, niche }, { idem: sha256(`discover|${r.source_id}`) });
+      try {
+        emit("idea.captured", { source_id: r.source_id, source_url: r.source_url, title: r.title, niche }, { idem: sha256(`discover|${r.source_id}`) });
+      } catch (e) {
+        // A rerun skips what landed (capturedIds), so say exactly how far this run got (attack dfe58d2 B7).
+        e.message = `${e.message} -- after ${fresh} idea.captured this run; rerun to finish, nothing is doubled`;
+        throw e;
+      }
       seen.add(r.source_id);
       fresh++;
     }
@@ -178,9 +194,8 @@ async function cmdJudge(o) {
   }
   if (o.flags.has("--run")) {
     for (const [i, f] of fin.entries()) {
-      const input = join(dir, `council-input-${i + 1}.json`);
-      writeFileSync(input, JSON.stringify({ question: f.question }) + "\n");
-      const r = spawnSync(process.execPath, [ARC_RUN, "--process", "council-convene", "--driver", o["--driver"], "--input", `@${input}`, "--root", REPO], { encoding: "utf8", timeout: 3_600_000 });
+      // Inline input, never `@file`: an @-argument is a response file to an MSYS wrapper (attack dfe58d2 B4).
+      const r = spawnSync(process.execPath, [ARC_RUN, "--process", "council-convene", "--driver", o["--driver"], "--input", JSON.stringify({ question: f.question }), "--root", REPO], { encoding: "utf8", timeout: 3_600_000, killSignal: "SIGKILL" });
       const m = (r.stdout || "").match(/"receipt_id"\s*:\s*"([0-9A-HJKMNP-TV-Z]{26})"/);
       f.council = r.status === 0 && m ? { receipt: m[1] } : { failed: `exit ${r.status}: ${(r.stderr || "").trim().split("\n").pop() || "no receipt_id"}` };
     }
@@ -231,7 +246,7 @@ async function cmdExport(o) {
   if (f.slug !== prop.slug) refuse("the proposal slug and the judged slug differ");
   const cfg = scoreConfig();
   const profile = buildProfile({ slug: prop.slug, niche: clusters.niche, defaults: cfg.venture_defaults || {}, overrides: overridesFrom(dec.reason) });
-  const ventures = o["--ventures-dir"] !== undefined ? (confine(o["--ventures-dir"]) ?? refuse("--ventures-dir is outside the repo/temp roots")) : VENTURES;
+  const ventures = ensureDir(o["--ventures-dir"] !== undefined ? (confine(o["--ventures-dir"]) ?? refuse("--ventures-dir is outside the repo/temp roots")) : VENTURES);
   const yamlPath = join(ventures, `${profile.slug}.venture.yaml`);
   const huntPath = join(ventures, `${profile.slug}.hunt.md`);
   if (existsSync(yamlPath) || existsSync(huntPath)) refuse(`${profile.slug} already exists in ${ventures} -- an approved venture is never overwritten`);
@@ -244,9 +259,12 @@ async function cmdExport(o) {
     const { loadProfile, loadCatalog, resolveBoard } = await import("../launch/lib/catalog.mjs");
     const accepted = loadProfile(profile.slug, stage);
     const board = resolveBoard(loadCatalog(), accepted);
-    mkdirSync(ventures, { recursive: true });
-    writeFileSync(huntPath, huntMarkdown({ slug: profile.slug, niche: clusters.niche, question: f.question, cluster: c, score: s, decision: dec.id, request: prop.request }));
-    renameSync(join(stage, `${profile.slug}.venture.yaml`), yamlPath);
+    // Exclusive creates, no rename: an approved venture is never overwritten, even by a racing
+    // export, and nothing crosses a drive (attack dfe58d2 B2/B3). The pair lands whole or not at all.
+    try { writeFileSync(yamlPath, yaml, { flag: "wx" }); }
+    catch (e) { if (e.code === "EEXIST") refuse(`${profile.slug} already exists in ${ventures} -- an approved venture is never overwritten`); throw e; }
+    try { writeFileSync(huntPath, huntMarkdown({ slug: profile.slug, niche: clusters.niche, question: f.question, cluster: c, score: s, decision: dec.id, request: prop.request }), { flag: "wx" }); }
+    catch (e) { unlinkSync(yamlPath); if (e.code === "EEXIST") refuse(`${profile.slug}.hunt.md already exists -- an approved venture is never overwritten`); throw e; }
     say(`export: ${relative(REPO, yamlPath).split(sep).join("/")} accepted by launch loadProfile (${[...board.values()].filter((r) => r.applies).length} of ${board.size} slots apply) -- honesty_class ${profile.honesty_class}`);
     say(`  next (owner): arc launch new ${profile.slug}`);
   } finally {
