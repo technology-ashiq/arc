@@ -273,6 +273,24 @@ EOF
   [[ "$output" == *"surfaces ok across 2 variant(s)"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 13 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"; false; }
+@test "attack c9094cd: deleting pairs.json does not ungate variant-d, and a stray variant dir is refused" {
+  _fixture
+  run bash "$(_explore)" seal ex1
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run bash "$(_explore)" pair ex1 --from a --to d --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '<!doctype html><title>c</title><main><section data-arc-surface="product"><h1>Case</h1></section></main>\n' > docs/design/explore/ex1/variant-a/index.html
+  printf '<!doctype html><title>c</title><main><section><h1>Case</h1></section></main>\n' > docs/design/explore/ex1/variant-d/index.html
+  rm docs/design/explore/ex1/pairs.json
+  run bash "$(_explore)" surfaces ex1
+  [ "$status" -eq 1 ] || { echo "pairs.json deleted and the unmarked variant-d passed: $output"; false; }
+  [[ "$output" == *"variant-d/index.html"* ]] || { echo "$output"; false; }
+  mkdir docs/design/explore/ex1/variant-dd
+  run bash "$(_explore)" surfaces ex1
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"'variant-dd'"*"refused"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 14 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"; false; }
 }

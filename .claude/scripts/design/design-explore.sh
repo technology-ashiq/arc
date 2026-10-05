@@ -61,8 +61,17 @@ EX="$ROOT/docs/design/explore/$ID"
 VARIANTS="a b c"
 # EXP-A1: each pair's TO side is a variant too. With the list fixed at a b c, compose-done on a
 # paired d/e/f judged only a-c and printed "3 of 3" -- the high-judgment arm went ungated.
-if [ -f "$EX/pairs.json" ]; then
-  for _to in $(grep -o '"to": *"[a-z]"' "$EX/pairs.json" | cut -d'"' -f4); do
+# Keyed on the committed seal as well as pairs.json, and read from the directories that exist
+# rather than parsed out of pairs.json: deleting or reformatting that file must not drop a
+# variant from the gates (attack c9094cd B1-B3, B5).
+if [ -f "$EX/pairs.json" ] || [ -f "$ROOT/initiatives/design/evidence/phase-04/seal-$ID.json" ]; then
+  for _vd in "$EX"/variant-*; do
+    [ -d "$_vd" ] || continue
+    _to="${_vd##*/variant-}"
+    case "$_to" in
+      [abcdefghijklmnopqrstuvwxyz]) ;;
+      *) echo "design-explore: '${_vd##*/}' in a sealed or paired explore is not variant-<letter> -- refused, never skipped" >&2; exit 1;;
+    esac
     case " $VARIANTS " in *" $_to "*) ;; *) VARIANTS="$VARIANTS $_to";; esac
   done
 fi
