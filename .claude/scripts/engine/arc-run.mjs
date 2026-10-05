@@ -769,13 +769,18 @@ let profileSnapshot = null;
   const wanted = chain.includes(PROFILE_DRIVER) ? profileNameFor(PROFILE_DRIVER) : null;
   if (wanted !== null) {
     const refuse = (/** @type {string} */ why) => {
+      // A preview says it WOULD refuse, with the same exit code -- the boundary refusal's own dry-run shape, so the one
+      // command a caller runs before spending money tells them the profile is not on this machine (attack d63004e B3).
+      if (dryRun) console.log(`arc-run: would REFUSE \`${processName}\` -- profile \`${wanted}\` is not usable on this machine: ${why}`);
       console.error(`arc-run: \`${processName}\` routes \`${PROFILE_DRIVER}\` to profile \`${wanted}\` (engine/router.yaml), and ${why}`);
       console.error("         a profile lives in the owner store (ADR-1801); add or rename it on the face's Settings page, or change the router line");
       console.error("         nothing was run and no ambient ARC_LLM_* value was used in its place");
       process.exit(2);
     };
     const got = loadRegistry(root);
-    if (!got.ok) refuse(`the store could not be used: ${got.why}`);
+    // The store's reason, with anything quoted blanked: a reason may quote a field or a value, and the store holds keys.
+    // stderr reaches transcripts and CI logs, so nothing of a record's content is printed (attack d63004e B1).
+    if (!got.ok) refuse(`the store could not be used: ${String(got.why).replace(/"[^"]*"/g, '"…"').slice(0, 200)}`);
     const rec = findModel(got.reg, wanted);
     if (!rec) refuse(`the store at ${got.path} holds no profile by that name`);
     profileSnapshot = {
@@ -784,7 +789,7 @@ let profileSnapshot = null;
       endpoint: endpointOf(rec.baseUrl),
       // A keyless local model gets the literal the face's own Ask already sends (arc-dash), never an empty value the
       // driver would refuse as unset.
-      key: rec.key ?? "none",
+      key: typeof rec.key === "string" && rec.key.trim() !== "" ? rec.key : "none",
       host: new URL(rec.baseUrl).host,
     };
   }

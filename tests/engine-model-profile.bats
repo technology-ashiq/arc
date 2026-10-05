@@ -163,6 +163,24 @@ VAL()   { printf '%s\n' "$output" | grep -m1 "^$1=" | cut -d= -f2-; }
   [ "$(VAL REQUESTS)" = "0" ] || { echo "a dry run reached the gateway: $output"; false; }
 }
 
+@test "profile: --dry-run with the profile missing says it would refuse, with the refusal exit" {
+  # attack d63004e B3: the preview is where a caller learns the profile is not on this machine.
+  run PROBE dry-run-missing
+  [[ "$output" == *"RAN"* ]] || { echo "$output"; false; }
+  [ "$(VAL EXIT)" = "2" ] || { echo "$output"; false; }
+  [[ "$output" == *"would REFUSE"*"profile"*"fx"*"not usable on this machine"* ]] || { echo "$output"; false; }
+}
+
+@test "profile: a corrupt store refuses without printing any of its content" {
+  # attack d63004e B1: the store holds keys, and stderr reaches transcripts and CI logs.
+  run PROBE corrupt-store
+  [[ "$output" == *"RAN"* ]] || { echo "$output"; false; }
+  [ "$(VAL EXIT)" = "2" ] || { echo "$output"; false; }
+  [[ "$output" == *"store could not be used"* ]] || { echo "$output"; false; }
+  [ "$(VAL KEY_IN_OUTPUT)" = "0" ] || { echo "the store's key was printed"; false; }
+  [ "$(VAL REQUESTS)" = "0" ] || { echo "$output"; false; }
+}
+
 # ---------------------------------------------------------------------------
 # REQ-04 (Phase 01): the model-policy room
 # ---------------------------------------------------------------------------
@@ -175,10 +193,10 @@ VAL()   { printf '%s\n' "$output" | grep -m1 "^$1=" | cut -d= -f2-; }
 
 # ---------------------------------------------------------------------------
 
-@test "suite: all 15 tests are REGISTERED and none is skipped" {
+@test "suite: all 17 tests are REGISTERED and none is skipped" {
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "15" ] || { echo "expected 15 REGISTERED, bats registered $registered"; false; }
+  [ "$registered" = "17" ] || { echo "expected 17 REGISTERED, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but registered $registered"; false; }
   run grep -c "^[[:space:]]*skip" "$BATS_TEST_FILENAME"
   [ "$output" = "0" ] || { echo "a test in this file is skipped"; false; }

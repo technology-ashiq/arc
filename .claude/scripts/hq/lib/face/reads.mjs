@@ -361,12 +361,13 @@ async function routerRead(ctx) {
   const store = loadRegistry(ctx.repo);
   /** @param {string} name */
   const profileOf = (name) => {
-    if (!store.ok) return { profile: name, missing: true, why: "the owner store could not be read on this machine" };
+    if (!store.ok) return { profile: text(ctx, name).slice(0, 80), missing: true, why: "the owner store could not be read on this machine" };
     const rec = findModel(store.reg, name);
-    if (!rec) return { profile: name, missing: true, why: "no record by that name in this machine's owner store" };
+    if (!rec) return { profile: text(ctx, name).slice(0, 80), missing: true, why: "no record by that name in this machine's owner store" };
     let host = "";
     try { host = new URL(rec.baseUrl).host; } catch { /* the store's own loader already refused a bad URL */ }
-    return { profile: rec.name, model: rec.model, gateway_host: host, missing: false };
+    // Through the same scrub every other served string takes, and bounded (attack d63004e B5).
+    return { profile: text(ctx, rec.name).slice(0, 80), model: text(ctx, rec.model).slice(0, 160), gateway_host: text(ctx, host).slice(0, 160), missing: false };
   };
   const models = obj(router.models);
   /** @param {string} tier */
@@ -406,7 +407,7 @@ async function routerRead(ctx) {
       }),
     })),
     // A store record the router grammar cannot name (a space in it) can never be routed to: said, not hidden.
-    unroutable: store.ok ? store.reg.models.map((m) => m.name).filter((n) => !PROFILE_NAME_RE.test(n)) : [],
+    unroutable: store.ok ? store.reg.models.map((m) => m.name).filter((n) => !PROFILE_NAME_RE.test(n)).map((n) => text(ctx, n).slice(0, 80)) : [],
     classes,
     fallbackRow: Object.hasOwn(router, "default") ? row("default", router.default) : null,
   };

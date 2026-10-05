@@ -98,13 +98,16 @@ function writeStore(path, records) {
 
 function runArc(args, env) {
   return new Promise((r) => {
+    // A hard deadline: a hung arc-run must fail this case, never stall the shard (attack d63004e B4).
+    let timer;
     const child = spawn(process.execPath, [join(fixtureRoot, ".claude/scripts/engine/arc-run.mjs"), "--process", "commit-msg-draft", ...args, "--root", fixtureRoot], {
       env, cwd: fixtureRoot, windowsHide: true,
     });
     let text = "";
     child.stdout.on("data", (d) => { text += d; });
     child.stderr.on("data", (d) => { text += d; });
-    child.on("close", (code) => r({ code, text }));
+    timer = setTimeout(() => { text += " PROBE: arc-run killed at the 90 s deadline"; child.kill("SIGKILL"); }, 90_000);
+    child.on("close", (code) => { clearTimeout(timer); r({ code, text }); });
   });
 }
 
@@ -171,10 +174,19 @@ switch (kase) {
     args = ["--driver", "generic-api", "--trial-model", "vendor/trial-model"]; break;
   case "dry-run":
     writeStore(storePath, [FX]); writeRouter({ pin: "profile:fx" }); args = ["--driver", "auto", "--dry-run"]; break;
+  case "dry-run-missing":
+    env.ARC_FACE_MODELS_FILE = join(scratch, "nowhere", "models.json");
+    writeRouter({ pin: "profile:fx" }); args = ["--driver", "auto", "--dry-run"]; break;
+  case "corrupt-store":
+    // A half-saved store with a key in it: the refusal may not print any of the file's content (attack d63004e B1).
+    mkdirSync(dirname(storePath), { recursive: true });
+    writeFileSync(storePath, `{"schema":1,"active":"fx","models":[{"name":"fx","baseUrl":"${base}","model":"m","key":"${KEY_FX}" `);
+    writeRouter({ pin: "profile:fx" }); break;
   default:
     console.error(`unknown case ${kase}`); process.exit(64);
 }
 res = await runArc(args, env);
+server.closeAllConnections?.();
 server.close();
 
 const all = [KEY_FX, KEY_FY].some((k) => res.text.includes(k));
