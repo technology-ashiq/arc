@@ -81,7 +81,7 @@ export function checkRecord(input) {
 }
 
 /**
- * One change to the registry, as a pure step. `op` is add · activate · remove; nothing else exists, so no request can
+ * One change to the registry, as a pure step. `op` is add · activate · remove · edit; nothing else exists, so no request can
  * read a key back or write a list in one go.
  * @param {Registry} reg @param {unknown} body
  * @returns {{ ok: true, reg: Registry } | { ok: false, why: string }}
@@ -108,7 +108,25 @@ export function applyChange(reg, body) {
     const models = reg.models.filter((m) => m !== hit);
     return { ok: true, reg: { schema: SCHEMA, active: reg.active === hit.name ? (models[0]?.name ?? null) : reg.active, models } };
   }
-  return { ok: false, why: `op must be add, activate or remove, not ${JSON.stringify(b.op)}` };
+  // Edit in place (ADR-1350 Amendment 3): the named model replaced field by field, checked as an add is. The form never
+  // holds the key, so an absent key keeps the stored one, a typed one replaces it, and clearKey removes it.
+  if (b.op === "edit") {
+    for (const k of Object.keys(b)) if (!["op", "name", "model", "clearKey"].includes(k)) return { ok: false, why: `edit takes { op, name, model, clearKey? }, not "${k}"` };
+    if (b.clearKey !== undefined && typeof b.clearKey !== "boolean") return { ok: false, why: "clearKey is true or false" };
+    const hit = reg.models.find((m) => same(m.name, b.name));
+    if (!hit) return { ok: false, why: `no model is named ${JSON.stringify(b.name)}` };
+    const c = checkRecord(b.model);
+    if (!c.ok) return c;
+    if (b.clearKey === true && c.record.key !== undefined) return { ok: false, why: "a new key and remove-the-key together: pick one" };
+    if (reg.models.some((m) => m !== hit && same(m.name, c.record.name))) return { ok: false, why: `a model named "${c.record.name}" already exists; pick another name` };
+    /** @type {ModelRecord} */
+    const next = { name: c.record.name, baseUrl: c.record.baseUrl, model: c.record.model };
+    const key = b.clearKey === true ? undefined : c.record.key ?? hit.key;
+    if (key !== undefined) next.key = key;
+    const models = reg.models.map((m) => (m === hit ? next : m));
+    return { ok: true, reg: { schema: SCHEMA, active: reg.active === hit.name ? next.name : reg.active, models } };
+  }
+  return { ok: false, why: `op must be add, activate, remove or edit, not ${JSON.stringify(b.op)}` };
 }
 
 /**

@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:869-873",
+      "breaking_input": "POST /api/models/set {op:\"edit\", name:\"  one \", model:{name:\"Uno\", ...}} against a model stored as \"One\". Stored name or request name is spelled so that models.same() folds it (for example by Unicode normalisation) differently from String(name).trim().toLowerCase().",
+      "why": "The test cache is cleared with a key built by hand (trim + toLowerCase), while the registry matched the model through models.same(). The apiModelsTest writer keys with hit.name.toLowerCase(), a third spelling. If same() ever folds names more than trim+lowercase does, the old test entry survives the edit. The face then shows a result measured against the old URL as the edited model's. This is the 'two readers of one question' and 'validate one read, compare another' pattern.",
+      "fix": "Have applyChange return the matched record's stored name and the new name. Delete the test entries by those exact stored names, using one shared testKey(name) helper that apiModelsTest also uses, instead of re-deriving the key from the request body.",
+      "twin_of": "Two grammars for one value -> Import one pattern from its owner."
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:937-942",
+      "breaking_input": "Start a test of model One (url A, id a, key K). While it runs, edit One to url B, then edit it back to url A, id a, key K. When the test completes, the registry re-read matches name, URL, id and key.",
+      "why": "The 'same model' guard compares field values, not an identity or generation. After an A→B→A edit the stale result is stored. The edit's tests.delete ran before the late write, so nothing clears the entry afterwards. The result is reported as current although the config was in flux during the measurement, and is only valid by coincidence.",
+      "fix": "Keep a per-model revision counter bumped on every edit (or compare a hash of the whole record). Capture it before the await and store the result only if it is unchanged.",
+      "twin_of": "A slow request answering with what it read before the wait -> read the state again before replying or storing."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1268-1281",
+      "breaking_input": "Any run where the first listed model is not the active one, or the registry holds more than one model. Alternatively, the restore rename times out after the first rename succeeded.",
+      "why": "rowName reads the first non-editing row and requires the text `${to} · answering`, so it only passes if the first row is the active model. This is an unstated assumption about the fixture. Separately, if the restore step fails, the smoke leaves the registry renamed. The later checks (voice, page, the ask checks) run on the mutated state, and a failure there blames the wrong step. This is the 'browser step that passes on the state the step before left' pattern.",
+      "fix": "Locate the row by its name, via a data attribute carrying the model name. Always attempt the restore in a finally. Assert the clean start (exactly one row, active) in this check before mutating.",
+      "twin_of": "A browser step that passes on the state the step before left -> each step asserts its own clean start."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/src/shell/ModelsPanel.tsx:77-85",
+      "breaking_input": "Edit a model, type a new key, rename it to another model's name (or any value the door refuses), and press save.",
+      "why": "onSave calls setEditing(null) before the door answers, so the form and the typed key are destroyed. A refusal comes back (BAD_MODEL, MODELS_UNAVAILABLE, or a network error) and the owner has to retype everything. A refusal then leaves no form to correct. The comment treats this as intended for key hygiene, but it applies to every field.",
+      "fix": "Keep the non-key fields of the form until the door answers ok. Drop only the key field's value at send time, and reopen the form with the refusal text on failure.",
+      "twin_of": "A late refusal still landed -> a card that did not send the call ignores its answer."
+    }
+  ]
+}

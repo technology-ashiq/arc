@@ -865,6 +865,17 @@ function apiModelsChange(ctx, body) {
   if (!step.ok) throw new DashError("BAD_MODEL", step.why);
   const saved = models.saveRegistry(got.path, step.reg);
   if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);
+  // A test measured against the old URL or model id is not the edited model's: forgotten under both names (Amendment 3).
+  // Both names come from the registries applyChange matched, not rebuilt from the body (attack 0087028 B1).
+  if (body.op === "edit") {
+    const tests = testsOf(ctx);
+    const was = models.findModel(got.reg, body.name);
+    if (was) {
+      tests.delete(was.name.toLowerCase());
+      const now = step.reg.models[got.reg.models.indexOf(was)];
+      if (now) tests.delete(now.name.toLowerCase());
+    }
+  }
   return { mode: ctx.mode, ...models.withTests(models.publicView(step.reg), testsOf(ctx)) };
 }
 
@@ -928,12 +939,12 @@ async function apiModelsTest(ctx, body) {
     }
     // The registry is read AGAIN after the wait: the owner may have switched or removed a model while the test ran, and
     // a stale view must not overwrite the newer one in the face (attack 8b23b40 B2). A result is kept only for a model
-    // that is still the same one -- same name, URL and model id.
+    // that is still the same one -- same name, URL, model id and key (an edit can change only the key, Amendment 3).
     const now = models.loadRegistry(ctx.repo);
     if (!now.ok) throw new DashError("MODELS_UNAVAILABLE", now.why);
     const still = models.findModel(now.reg, hit.name);
     const tests = testsOf(ctx);
-    if (still && still.baseUrl === hit.baseUrl && still.model === hit.model) tests.set(hit.name.toLowerCase(), { ...result, at: formatIst(nowMs()) });
+    if (still && still.baseUrl === hit.baseUrl && still.model === hit.model && still.key === hit.key) tests.set(hit.name.toLowerCase(), { ...result, at: formatIst(nowMs()) });
     return { mode: ctx.mode, tested: hit.name, ...result, ...models.withTests(models.publicView(now.reg), tests) };
   } finally {
     TESTS_RUNNING.delete(ctx);

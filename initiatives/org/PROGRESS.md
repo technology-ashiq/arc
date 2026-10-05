@@ -1,6 +1,6 @@
 ✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |# PROGRESS.md — org v2.1 "the four ORG-R holds"
 
-status: LIVE
+status: IDLE
 cycle: arc-org (Cycle 20, opened 2026-10-05)
 phase: 03
 appetite: 3d
@@ -32,5 +32,5 @@ depends-on: —
 
 ## Now
 
-**Current position:** Cycle 20 phases 00-03 all closed 2026-10-05 (PR #325). Lane stays LIVE until the retro.
-**Next step:** `/arc-retro --lane org` to seal Cycle 20. Owner: stamp the kickoff and four phase approvals (`arc-inbox approve`).
+**Current position:** Cycle 20 sealed 2026-10-05 (retro: docs/retro-log.md, HISTORY C20). Lane IDLE.
+**Next step:** none queued. Owner: stamp the kickoff and four phase approvals (`arc-inbox approve`). A new org cycle starts by `/arc-kickoff --lane org`.

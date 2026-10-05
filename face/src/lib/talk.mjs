@@ -226,6 +226,30 @@ export function addChange(form) {
 }
 
 /**
+ * A row's edit form, filled from what the door shows: the name, URL and model id. The key field starts empty -- the
+ * page never has the key -- and empty means keep it (ADR-1350 Amendment 3).
+ * @param {{ name: string, baseUrl: string, modelId: string }} row
+ */
+export function editForm(row) {
+  return { name: row.name, baseUrl: row.baseUrl, model: row.modelId, key: "", clearKey: false };
+}
+
+/**
+ * The one change an "edit" sends, or why the form is not ready. A typed key replaces the stored one, an empty one keeps
+ * it, and clearKey removes it; both together are refused here as at the door.
+ * @param {string} name  the model being edited, as it is named now
+ * @param {ReturnType<typeof editForm>} form
+ * @returns {{ ok: true, change: { op: "edit", name: string, clearKey?: true, model: { name: string, baseUrl: string, model: string, key?: string } } } | { ok: false, why: string }}
+ */
+export function editChange(name, form) {
+  const base = addChange(form);
+  if (!base.ok) return base;
+  const m = base.change.model;
+  if (form.clearKey === true && m.key !== undefined) return { ok: false, why: "Type a new key or remove the key, not both." };
+  return { ok: true, change: form.clearKey === true ? { op: "edit", name, clearKey: true, model: m } : { op: "edit", name, model: m } };
+}
+
+/**
  * The models list as the panel shows it, from GET /api/models. Anything that is not that shape is no list, never a
  * guessed one. The key appears only as "key …abcd" or "no key".
  * @param {unknown} raw
@@ -237,6 +261,10 @@ export function modelsView(raw) {
     .filter((m) => m && typeof m === "object" && typeof m.name === "string")
     .map((m) => ({
       name: String(m.name),
+      // The raw fields an edit form starts from; never the key.
+      baseUrl: String(m.baseUrl ?? ""),
+      modelId: String(m.model ?? ""),
+      hasKey: m.hasKey === true,
       where: `${String(m.model ?? "")} · ${String(m.baseUrl ?? "")}`,
       key: m.hasKey === true ? (typeof m.keyTail === "string" ? `key …${m.keyTail}` : "key set") : "no key",
       active: m.name === b.active,

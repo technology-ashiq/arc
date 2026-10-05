@@ -93,7 +93,7 @@
 .claude/rules/security-sensitive.md	53a673bc21f95d31599991a347922e542fbfad57448645cbf5b696cf85912061
 .claude/rules/stripe.md	1fbe6c24b0f045abc61cab949bf017a6f873bb12a25dcbed49a655180807b65f
 .claude/rules/supabase.md	0020454cde930317d44e16ba85fcf236e01f4d5cd9e3a21d52ed3bf25272a411
-.claude/rules/testing.md	51c1df0de4be27931105891bc3e701ab6e1f573b75f83e9510e2f2339f50ceed
+.claude/rules/testing.md	f5fa9617b858b761180edd5e40a45afce4d0ae91c92abafe80b9d2c1307fa26c
 .claude/rules/ui.md	7f2e4ecd909413f258bb3f4d5bda604d99a0893216964ea6b74b3c07db06513f
 .claude/scripts/absorb/ab-run.mjs	6e1f33030261c72b475df9e0701a27b4d747a8d3632d1120133b8223bf1bc56d
 .claude/scripts/absorb/judgement.mjs	3e2e1ae513f0f5f401fda341ee776886106eac229bb8e23fd6d952acc4368887
@@ -240,7 +240,7 @@
 .claude/scripts/growth/lib/text.mjs	699f00fb5caf44c43a7e0b082bcf1c07243f42e6b51bda5058c8910dcfdfcf01
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
-.claude/scripts/hq/arc-dash.mjs	0fe0280674eaa0a29edad0891715468c996282818113225c3a26fbe9185921f3
+.claude/scripts/hq/arc-dash.mjs	a597413bb013736b387278accba12f301066d0e7303a8b33d6816f71ce5aa63c
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
@@ -260,7 +260,7 @@
 .claude/scripts/hq/ledger-ingest.mjs	196cc1111fc71162fabaea4cb5ebacaef4d7d2e6e00eb99122112bf56ddf1661
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
-.claude/scripts/hq/lib/face/models.mjs	746664b4669317042221e80c5f785c7c766cdf3ee64f16dc701bc56c903d1b04
+.claude/scripts/hq/lib/face/models.mjs	5d41ce518d7a856af4ebe46bf668451b98329375c894154d5586a054b24b8a37
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
 .claude/scripts/hq/lib/face/reads.mjs	83c51cef6282e044cf076222fa180b21d8be7e4567fbcb35efc951cc6ffe5f0e
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20

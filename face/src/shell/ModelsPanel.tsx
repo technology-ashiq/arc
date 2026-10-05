@@ -11,10 +11,11 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { X } from '@phosphor-icons/react'
 import {
-  PRESETS, PREVIEW_LINE, RATE_MAX, RATE_MIN, VOICE_NOTE, addChange, emptyForm, modelsView, readVoiceChoice, voiceList, voicePick,
+  PRESETS, PREVIEW_LINE, RATE_MAX, RATE_MIN, VOICE_NOTE, addChange, editChange, editForm, emptyForm, modelsView, readVoiceChoice, voiceList, voicePick,
   voiceRate, writeVoiceChoice,
 } from '../lib/talk.mjs'
 type ModelForm = ReturnType<typeof emptyForm>
+type EditForm = ReturnType<typeof editForm>
 import { refusalOf } from '../lib/ask.mjs'
 import type { Door } from '../lib/door.mjs'
 import { MONO, UI } from '../ui/kit'
@@ -46,6 +47,8 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
+  // The one row being edited, and its form (ADR-1350 Amendment 3). The key field starts empty: empty keeps the key.
+  const [editing, setEditing] = useState<{ name: string; form: EditForm } | null>(null)
 
   const settle = useCallback(async (p: Promise<unknown>) => {
     setBusy(true)
@@ -56,10 +59,11 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
   useEffect(() => { void settle(door.models()) }, [door, settle])
 
   useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }
+    // Escape leaves an open edit first, and the page only when nothing is being edited.
+    const onKey = (ev: KeyboardEvent) => { if (ev.key !== 'Escape') return; if (editing) setEditing(null); else onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, editing])
 
   const onAdd = (ev: FormEvent) => {
     ev.preventDefault()
@@ -69,6 +73,19 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
     setForm(emptyForm())
     void settle(door.setModels(c.change))
   }
+
+  const onSave = async (ev: FormEvent) => {
+    ev.preventDefault()
+    if (!editing) return
+    const c = editChange(editing.name, editing.form)
+    if (!c.ok) { setProblem(c.why); return }
+    // The form closes only when the door accepts the edit: a refusal (a taken name, a bad URL) leaves it open with what
+    // was typed, so nothing has to be typed again (attack 0087028 B4).
+    setBusy(true)
+    setProblem(null)
+    try { setView(modelsView(await door.setModels(c.change))); setEditing(null) } catch (err) { setProblem(refusalOf(err).human) } finally { setBusy(false) }
+  }
+  const editField = (k: 'name' | 'baseUrl' | 'model' | 'key') => (e: { target: { value: string } }) => setEditing((x) => (x ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))
 
   // A test can take a minute on a busy free model, so it holds its own row, not the whole list.
   const onTest = async (name: string) => {
@@ -133,8 +150,31 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
             <ul className="flex flex-col gap-2 mb-5" aria-label="Your models">
               {loading ? <li className="text-[12.5px]" style={{ color: 'var(--text-3)' }}>reading your models…</li> : null}
               {!loading && view.rows.length === 0 ? <li className="text-[12.5px]" style={{ color: 'var(--text-3)' }}>No model yet. Add one below.</li> : null}
-              {view.rows.map((r) => (
-                <li key={r.name} data-model-row className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2" style={{ border: `1px solid ${r.active ? 'var(--accent)' : 'var(--line-1)'}`, borderRadius: 'var(--r-sm)' }}>
+              {view.rows.map((r) => editing && editing.name === r.name ? (
+                <li key={r.name} data-model-row data-model-editing className="px-3 py-3" style={{ border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)' }}>
+                  <form onSubmit={(e) => void onSave(e)} className="flex flex-col gap-2" aria-label={`Edit ${r.name}`}>
+                    <label className="sr-only" htmlFor="edit-name">Name</label>
+                    <input id="edit-name" data-edit-field="name" value={editing.form.name} onChange={editField('name')} placeholder="a name you will recognise" className={field} style={fieldStyle} />
+                    <label className="sr-only" htmlFor="edit-url">Base URL</label>
+                    <input id="edit-url" data-edit-field="baseUrl" value={editing.form.baseUrl} onChange={editField('baseUrl')} placeholder="base URL" className={field} style={fieldStyle} />
+                    <label className="sr-only" htmlFor="edit-model">Model id</label>
+                    <input id="edit-model" data-edit-field="model" value={editing.form.model} onChange={editField('model')} placeholder="model id" className={field} style={fieldStyle} />
+                    <label className="sr-only" htmlFor="edit-key">New API key</label>
+                    <input id="edit-key" type="password" autoComplete="off" disabled={editing.form.clearKey} value={editing.form.key} onChange={editField('key')} placeholder={r.hasKey ? `leave empty to keep ${r.key}` : 'API key (leave empty for none)'} className={field} style={fieldStyle} />
+                    {r.hasKey ? (
+                      <label className="flex items-center gap-2 text-[12.5px]" style={{ color: 'var(--text-2)' }}>
+                        <input type="checkbox" checked={editing.form.clearKey} onChange={(e) => setEditing((x) => (x ? { ...x, form: { ...x.form, clearKey: e.target.checked, key: '' } } : x))} />
+                        remove the key
+                      </label>
+                    ) : null}
+                    <div className="flex gap-2">
+                      <button type="submit" data-edit-save disabled={busy} className="text-[13px] h-[32px] px-4 rounded-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)" style={{ fontWeight: 600, color: 'var(--bg-0)', background: 'var(--accent)' }}>save</button>
+                      <button type="button" onClick={() => { setEditing(null); setProblem(null) }} className={small} style={smallStyle}>cancel</button>
+                    </div>
+                  </form>
+                </li>
+              ) : (
+                <li key={r.name} data-model-row data-model-active={r.active ? '' : undefined} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2" style={{ border: `1px solid ${r.active ? 'var(--accent)' : 'var(--line-1)'}`, borderRadius: 'var(--r-sm)' }}>
                   <div className="min-w-0 flex-1">
                     <div className="text-[13.5px] truncate" style={{ fontWeight: 600, color: 'var(--text-1)' }}>{r.name}{r.active ? ' · answering' : ''}</div>
                     <div className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{r.where} · {r.key}</div>
@@ -146,6 +186,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
                   {r.active ? null : (
                     <button type="button" disabled={busy} onClick={() => void settle(door.setModels({ op: 'activate', name: r.name }))} className={small} style={smallStyle}>use</button>
                   )}
+                  <button type="button" data-model-edit disabled={busy || testing !== null} aria-label={`Edit ${r.name}`} onClick={() => { setProblem(null); setEditing({ name: r.name, form: editForm(r) }) }} className={small} style={smallStyle}>edit</button>
                   <button type="button" disabled={busy} aria-label={`Remove ${r.name}`} onClick={() => void settle(door.setModels({ op: 'remove', name: r.name }))} className={small} style={smallStyle}>remove</button>
                 </li>
               ))}
