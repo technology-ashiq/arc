@@ -345,7 +345,8 @@ const text = (ctx, v) => (typeof v === "string" ? scrub(v, ctx.repo) : "");
 // ---------- engine/router.yaml: /api/engine, /api/model-policy, /api/roster ----------
 async function routerRead(ctx) {
   const { parseYamlSubset } = await lib("../../../engine/yaml-subset.mjs");
-  const { routerFaults, isExpired, RUNTIME_DRIVERS } = await lib("../../../engine/router-row.mjs");
+  const { routerFaults, isExpired, RUNTIME_DRIVERS, profileRef, PROFILE_DRIVER, PROFILE_NAME_RE } = await lib("../../../engine/router-row.mjs");
+  const { loadRegistry, findModel } = await lib("./models.mjs");
   const f = fileAt(ctx, "engine/router.yaml");
   const parsed = parseYamlSubset(f.text);
   if (!parsed.ok) throw invalid(ctx, f.path, { message: `${obj(parsed.error).what || "yaml-parse"} at line ${obj(parsed.error).line ?? "?"}` });
@@ -354,12 +355,33 @@ async function routerRead(ctx) {
   if (Object.keys(obj(router.classes)).length === 0) throw refusal(ctx, "SOURCE_INVALID", "engine/router.yaml has no `classes` mapping with a row in it -- the router the engine loads cannot be empty");
   if (!Array.isArray(router.tiers) || router.tiers.length === 0) throw refusal(ctx, "SOURCE_INVALID", "engine/router.yaml has no `tiers` list");
   const today = todayIst();
+  // PROVIDER PROFILES (model-policy v2, ADR-1800..1802): a `profile:` names a record in the owner store (ADR-1350),
+  // read here read-only so the room can say which model and gateway a route really reaches. Only the record's name,
+  // model id and HOST leave this function -- never the key, never the base URL's path.
+  const store = loadRegistry(ctx.repo);
+  /** @param {string} name */
+  const profileOf = (name) => {
+    if (!store.ok) return { profile: text(ctx, name).slice(0, 80), missing: true, why: "the owner store could not be read on this machine" };
+    const rec = findModel(store.reg, name);
+    if (!rec) return { profile: text(ctx, name).slice(0, 80), missing: true, why: "no record by that name in this machine's owner store" };
+    let host = "";
+    try { host = new URL(rec.baseUrl).host; } catch { /* the store's own loader already refused a bad URL */ }
+    // Through the same scrub every other served string takes, and bounded (attack d63004e B5).
+    return { profile: text(ctx, rec.name).slice(0, 80), model: text(ctx, rec.model).slice(0, 160), gateway_host: text(ctx, host).slice(0, 160), missing: false };
+  };
+  const models = obj(router.models);
+  /** @param {string} tier */
+  const tierProfile = (tier) => profileRef(obj(models[tier])[PROFILE_DRIVER] ?? null);
   /** @param {string} name @param {unknown} rowRaw */
   const row = (name, rowRaw) => {
     const r = obj(rowRaw);
     const fallback = Array.isArray(r.fallback) ? r.fallback.map(String) : [];
     const chain = [str(r.driver), ...fallback];
+    // The profile a generic-api attempt on this row would run on: the row's own, else its tier's (ADR-1802).
+    const own = Object.hasOwn(r, "profile") && typeof r.profile === "string" ? r.profile : null;
+    const wanted = chain.map((d) => d.trim()).includes(PROFILE_DRIVER) ? (own ?? tierProfile(str(r.tier))) : null;
     return {
+      profile: wanted === null || wanted === "" ? null : { ...profileOf(wanted), from: own !== null ? "class" : "tier" },
       name,
       tier: str(r.tier),
       driver: str(r.driver),
@@ -373,15 +395,19 @@ async function routerRead(ctx) {
     };
   };
   const classes = Object.entries(obj(router.classes)).map(([name, r]) => row(name, r));
-  const models = obj(router.models);
   return {
     f,
     today,
     faults: routerFaults(router).map((x) => scrub(x, ctx.repo)),
     tiers: router.tiers.map(String).map((tier) => ({
       tier,
-      models: Object.entries(obj(models[tier])).map(([driver, model]) => ({ driver, model: String(model) })),
+      models: Object.entries(obj(models[tier])).map(([driver, model]) => {
+        const p = profileRef(model);
+        return p === null || p === "" ? { driver, model: String(model) } : { driver, model: String(model), profile: profileOf(p) };
+      }),
     })),
+    // A store record the router grammar cannot name (a space in it) can never be routed to: said, not hidden.
+    unroutable: store.ok ? store.reg.models.map((m) => m.name).filter((n) => !PROFILE_NAME_RE.test(n)).map((n) => text(ctx, n).slice(0, 80)) : [],
     classes,
     fallbackRow: Object.hasOwn(router, "default") ? row("default", router.default) : null,
   };
@@ -446,6 +472,7 @@ export async function apiModelPolicy(ctx, url) {
       tiers: r.tiers,
       classes: r.fallbackRow ? [...r.classes, r.fallbackRow] : r.classes,
       faults: r.faults,
+      unroutable: r.unroutable,
     });
 }
 

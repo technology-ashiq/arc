@@ -45,6 +45,68 @@ const HOSTED = new Set(["local", "cloud"]);
 
 const REQUIRED = ["cap", "hosted", "judge", "review_by"];
 
+// ---------- provider profiles (ADR-1800..1802) ----------
+// The one driver that takes a gateway rather than only a model. A profile is the gateway's URL, key and model id
+// together, kept in the owner store (ADR-1801); the router names it, and only for this driver.
+export const PROFILE_DRIVER = "generic-api";
+export const PROFILE_PREFIX = "profile:";
+// The store's own name grammar without spaces: a YAML scalar with a space is a quoting accident (ADR-1801).
+export const PROFILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
+
+/**
+ * The profile name a `models[tier][driver]` value refers to, or null when the value is a plain model id. Only the
+ * prefix decides: `profile:` with a bad name is still a profile reference, and `pinFaults` refuses it -- otherwise
+ * `profile:` alone would fall through as a model id and reach a provider as one.
+ * @param {unknown} value
+ */
+export function profileRef(value) {
+  return typeof value === "string" && value.startsWith(PROFILE_PREFIX) ? value.slice(PROFILE_PREFIX.length) : null;
+}
+
+/** A class row's `profile:`, as written. @param {Record<string, unknown>} row */
+function hasProfileKey(row) {
+  return Object.prototype.hasOwnProperty.call(row, "profile");
+}
+
+/**
+ * ADR-1802: a class `profile:` must be a clean name AND sit on a chain that can reach `generic-api`. An unreachable one
+ * reads as decided and decides nothing -- the partial-tenure-row doctrine above, for the same reason.
+ * @param {string} at @param {Record<string, unknown>} row
+ */
+function profileRowFaults(at, row) {
+  if (!hasProfileKey(row)) return [];
+  const v = row.profile;
+  const faults = [];
+  if (typeof v !== "string" || !PROFILE_NAME_RE.test(v)) {
+    faults.push(`${at} has \`profile: ${JSON.stringify(v)}\`, which is not a profile name (${PROFILE_NAME_RE}) -- a profile is named exactly as the owner store names it, with no spaces (ADR-1801)`);
+  }
+  const chain = [row.driver, ...(Array.isArray(row.fallback) ? row.fallback : [])].map((d) => String(d ?? "").trim());
+  if (!chain.includes(PROFILE_DRIVER)) {
+    faults.push(`${at} carries \`profile:\` but its chain (${chain.filter(Boolean).join(" -> ") || "no driver"}) never reaches \`${PROFILE_DRIVER}\`, the only driver a profile applies to -- it would read as decided and decide nothing (ADR-1802)`);
+  }
+  return faults;
+}
+
+/**
+ * ADR-1800: in `models`, a `profile:` value is allowed under `generic-api` only, and must name a profile. Any other
+ * driver applies a model id it was handed, so a profile there would reach its CLI as a model name.
+ * @param {unknown} models
+ */
+export function pinFaults(models) {
+  if (!models || typeof models !== "object" || Array.isArray(models)) return [];
+  const out = [];
+  for (const [tier, byDriver] of Object.entries(models)) {
+    if (!byDriver || typeof byDriver !== "object" || Array.isArray(byDriver)) continue;
+    for (const [d, value] of Object.entries(byDriver)) {
+      const name = profileRef(value);
+      if (name === null) continue;
+      if (d !== PROFILE_DRIVER) out.push(`models.${tier}.${d} is ${JSON.stringify(value)}, but a profile applies to \`${PROFILE_DRIVER}\` only -- \`${d}\` would be handed it as a model id (ADR-1800)`);
+      else if (!PROFILE_NAME_RE.test(name)) out.push(`models.${tier}.${d} is ${JSON.stringify(value)}, which names no profile (${PROFILE_NAME_RE}) (ADR-1800)`);
+    }
+  }
+  return out;
+}
+
 /**
  * A field is present and usable, or it is one of the four named failures. Returning the REASON
  * rather than a boolean is what lets the loader say which of the sixteen cases it hit -- and an
@@ -96,6 +158,8 @@ export function rowFaults(className, row, where) {
   if (hasFallback && !Array.isArray(row.fallback)) {
     faults.push(`${at} has a \`fallback\` that is not a list (${JSON.stringify(row.fallback)}) — a wrong-typed fallback silently becomes no fallback at all`);
   }
+  // Before the early return below: an ordinary row is exactly where a profile goes.
+  faults.push(...profileRowFaults(at, row));
 
   // THE FALLBACK CHAIN IS PART OF "DOES THIS ROW REACH THE RUNTIME", and it was not.
   //
@@ -151,6 +215,7 @@ export function routerFaults(router) {
   if (router && typeof router === "object" && "default" in router) {
     out.push(...rowFaults("default", router.default, "default (the top-level fallback row)"));
   }
+  if (router && typeof router === "object") out.push(...pinFaults(router.models));
   return out;
 }
 

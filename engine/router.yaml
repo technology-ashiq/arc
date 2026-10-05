@@ -40,6 +40,22 @@ models:
   # mapping, and inventing model ids for other vendors here would be exactly the new
   # "which model where" fork this cycle is required not to make. Until a policy amendment
   # names them, those drivers run unpinned and say so.
+  #
+  # PROVIDER PROFILES (ADR-1800..1802, model-policy v2). generic-api reaches a GATEWAY, not one
+  # vendor, so its pin may name a profile instead of a model id:
+  #
+  #   high-judgment:
+  #     claude-code: opus
+  #     generic-api: profile:omni-ds      # the gateway URL, key and model id of record `omni-ds`
+  #
+  # and a class row may carry `profile: <name>` to beat its tier's pin for generic-api only.
+  # A profile lives in the owner store (~/.arc-private/face/models.json, the face's Settings
+  # page), never in this file: which profile is used here is a reviewed diff; what is INSIDE it
+  # is the owner's, and every run receipts it (`model_source: profile`, the model id, `profile`,
+  # `gateway_host`). A name is [A-Za-z0-9][A-Za-z0-9._-]{0,39}. A profile under any other driver,
+  # or on a class whose chain never reaches generic-api, fails the load. A profile the store does
+  # not hold refuses the run before any driver starts -- it never falls back to ARC_LLM_*.
+  # A NAMED driver (--driver generic-api) consults no tier and therefore no profile.
 
 # Tiers are provider-neutral by construction (Constitution A7). These names are the ones
 # ADR-0069 block (a) defines; process-lint FAILs if a tier appears here that block (a) does
