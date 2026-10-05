@@ -283,3 +283,84 @@ arm() {
   [ "$(j 'o.scaffold.code')" = "FOREIGN_WORKFLOW" ] || { echo "$DONE"; false; }
   [ "$(j 'o.reported.length')" = "0" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: hosting twice makes one linked project, one domain, one held vercel.json, and reports the CNAME" {
+  arm hosting twice
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.projects + " " + o.creates + " " + o.domainPosts + " " + o.holdCommits')" = "1 1 1 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hold.ignoreCommand')" = '[ "$VERCEL_ENV" = production ]' ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.reported.join(",")')" == *"dns-target abc123.vercel-dns-017.com"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "remove-domain,delete-project,delete-if-unchanged" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting refuses a project linked to another repo, before any commit" {
+  arm hosting foreign-project
+  [ "$(j 'o.scaffold.code + " " + o.holdCommits')" = "FOREIGN_PROJECT 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting never places the hold over a vercel.json launch did not write" {
+  arm hosting foreign-file
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hold.trim()')" = "{}" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a hosting re-run after release never holds production again" {
+  arm hosting released
+  [ "$(j 'o.scaffold.ok + " " + o.hold.trim()')" = "true {}" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting refuses when Vercel recommends no usable CNAME, reporting no target" {
+  arm hosting no-cname
+  [ "$(j 'o.scaffold.code + " " + o.targets')" = "NO_TARGET 0" ] || { echo "$DONE"; false; }
+  arm hosting evil-cname
+  [ "$(j 'o.scaffold.code + " " + o.targets')" = "NO_TARGET 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting verify answers a missing project and every refusal as not ok" {
+  arm hosting verify-before
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false no vercel project arc-sandbox" ]] || { echo "$DONE"; false; }
+  arm hosting verify-refusals
+  [[ "$(j 'o.badToken.value.reason')" == "BAD_TOKEN: "* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.noUpstream.value.reason')" == "UPSTREAM_MISSING: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting records an owner's project and domain as found and tears neither down" {
+  arm hosting adopted
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "vercel-project-found,github-file,vercel-domain-found,dns-target" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete-if-unchanged" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an unlinked project is told apart from one linked elsewhere" {
+  arm hosting unlinked
+  [ "$(j 'o.scaffold.code')" = "UNLINKED_PROJECT" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"install the Vercel GitHub App"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a hold lifted by deleting vercel.json is never placed again" {
+  arm hosting deleted-hold
+  [ "$(j 'o.scaffold.ok + " " + o.hold')" = "true null" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: only an exact release trailer owns vercel.json; an owner edit after release still does not lock hosting out" {
+  arm hosting forged-trailer
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  arm hosting owner-edit-after-release
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.hold')" == *'"env"'* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting verify needs the hold commit's deployment, and a 500 is an answer" {
+  arm hosting preview-only
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"the production hold was never placed"* ]] || { echo "$DONE"; false; }
+  arm hosting verify-500
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "error: vercel GET /v6/deployments -> 500"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting verify finds the hold deployment by sha however many pushes came after" {
+  arm hosting aged-hold
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+}

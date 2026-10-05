@@ -109,9 +109,15 @@ export default function App() {
     storeMood(storage(), mood)
   }, [mood])
   const [paletteOpen, setPaletteOpen] = useState(false)
-  // HQ's settings (Phase 10, ADR-1350): the owner's models and the voice switch. Opened from the workroom's header only;
-  // the voice switch is held here so the door's bar and the workroom's dock both follow it at once.
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // HQ's Settings page (Phase 10, ADR-1350; Amendment 2): the owner's models and the voice. A workroom page at its own
+  // address (`view=settings`), so the address bar is its truth, like a room's; the voice switch is held here so the
+  // door's bar and the workroom's dock both follow it at once.
+  // Only the workroom has pages: a `view` in a front-door address is dropped (attack 12a0307 B1).
+  const [view, setView] = useState<'settings' | null>(() => (modeOf(window.location.hash) === 'hq' ? parseHash(window.location.hash).view : null))
+  // Whether THIS document pushed the open page's history entry, and whether a close is already on its way back. Kept in
+  // memory, never in history.state: that survives a reload or a restored tab, where going back would leave the app
+  // (attack 12a0307 B4), and it only changes once the pop lands, so a second close would go back twice (L1).
+  const settingsEntry = useRef<'none' | 'pushed' | 'closing'>('none')
   const [voiceOn, setVoiceOn] = useState(() => { try { return readVoicePref(window.localStorage) } catch { return false } })
   const speech = useMemo(() => voiceSupport(window), [])
   const setVoice = useCallback((on: boolean) => { setVoiceOn(on); try { writeVoicePref(window.localStorage, on) } catch { /* private mode: this page only */ } }, [])
@@ -251,6 +257,7 @@ export default function App() {
       setSurface('hq')
       setRoomId(id)
       setAt(nextAt)
+      setView(null)
       // Replace, not push: holding j through the company should not bury the back button under
       // thirty entries. A room is a view, not a destination you navigate back through.
       window.history.replaceState(null, '', buildHash(id, token, asOf, nextAt))
@@ -269,6 +276,9 @@ export default function App() {
       else if (next === 'hq') setRoomId(null)
       setAsOf(h.asOf)
       setAt(h.at)
+      const nextView = next === 'hq' ? h.view : null
+      setView(nextView)
+      if (nextView !== 'settings') settingsEntry.current = 'none'
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -374,6 +384,22 @@ export default function App() {
 
   const shownId = roomId ?? home
   const room = shownId === null ? null : findRoom(shell.rooms, shownId)
+  // The Settings page keeps the room it was opened over in the address, so leaving it lands there. Pushed, not replaced:
+  // Back closes the page; its own close goes back when this page pushed it, and rewrites the address when the page was
+  // loaded straight from a link.
+  const settingsOn = view === 'settings'
+  const openSettings = () => {
+    if (settingsOn) return
+    window.history.pushState(null, '', buildHash(roomId, token, asOf, at, 'settings'))
+    settingsEntry.current = 'pushed'
+    setView('settings')
+  }
+  const closeSettings = () => {
+    if (settingsEntry.current === 'closing') return
+    if (settingsEntry.current === 'pushed') { settingsEntry.current = 'closing'; window.history.back(); return }
+    window.history.replaceState(null, '', buildHash(roomId, token, asOf, at))
+    setView(null)
+  }
   // A template is not a room you can open; asking for it by URL is answered like any unknown id.
   const openable = room && !room.template ? room : null
   // The workroom palette also opens Settings (Phase 11, REQ-15); the front door's never does (owner, 2026-10-01).
@@ -393,7 +419,7 @@ export default function App() {
         <Palette
           items={items}
           onClose={() => setPaletteOpen(false)}
-          onOpen={(item: PaletteItem) => { setPaletteOpen(false); if (isSettingsItem(item)) setSettingsOpen(true); else open(item.room) }}
+          onOpen={(item: PaletteItem) => { setPaletteOpen(false); if (isSettingsItem(item)) openSettings(); else open(item.room) }}
         />
       )}
 
@@ -403,6 +429,8 @@ export default function App() {
         onOpen={open}
         onPalette={() => setPaletteOpen(true)}
         onExit={exit}
+        onSettings={openSettings}
+        settingsOn={settingsOn}
         attachment={attachment}
         ringCount={registry.rings.length}
         extrasNote={extras.isLoading ? '' : extrasNote}
@@ -416,7 +444,7 @@ export default function App() {
         onExit={exit}
         mood={mood}
         onToggleMood={toggleMood}
-        onSettings={() => setSettingsOpen(true)}
+        onSettings={openSettings}
         asOf={asOf}
         today={today}
         asOfSupported={openable !== null && ASOF_ROUTES.length > 0 && asOfReaches(openable, attached ? attached.manifest : null)}
@@ -440,11 +468,13 @@ export default function App() {
               module (face v2 Phases 00 and 02). */}
           <section
             aria-live="polite"
-            data-room={openable ? openable.id : ''}
-            data-render={openable ? (attached ? 'module' : 'generic') : 'none'}
-            data-module={attached ? attached.key : undefined}
+            data-room={openable && !settingsOn ? openable.id : ''}
+            data-render={settingsOn ? 'settings' : openable ? (attached ? 'module' : 'generic') : 'none'}
+            data-module={attached && !settingsOn ? attached.key : undefined}
           >
-            {openable && ctx ? (
+            {settingsOn ? (
+              <ModelsPanel door={door} onClose={closeSettings} voiceOn={voiceOn} onVoice={setVoice} voiceAvailable={speech.listen || speech.speak} />
+            ) : openable && ctx ? (
               <div key={openable.id} className="room-enter">
                 <RoomFrame key={`${openable.id}|${at ?? ''}`} room={openable} attachment={attachment} ctx={ctx} seed={at && openable.id === referenceId ? { at } : undefined} />
               </div>
@@ -456,9 +486,6 @@ export default function App() {
       </main>
 
       <Dock door={door} voiceOn={voiceOn} />
-      {settingsOpen ? (
-        <ModelsPanel door={door} onClose={() => setSettingsOpen(false)} voiceOn={voiceOn} onVoice={setVoice} voiceAvailable={speech.listen || speech.speak} />
-      ) : null}
     </div>
   )
   })()
