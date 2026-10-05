@@ -5,7 +5,7 @@
 // talk.mjs's or ask.mjs's -- this file only holds state and runs the effects they name (the mic, the speaker).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASK_GRANTS, askThrough, askable, readAnswer, readOnly, refusalOf } from '../lib/ask.mjs'
-import { answerTag, speakable, voiceStep, voiceSupport } from '../lib/talk.mjs'
+import { answerTag, readVoiceChoice, speakable, voicePick, voiceStep, voiceSupport } from '../lib/talk.mjs'
 import type { Door } from '../lib/door.mjs'
 
 export type AskState =
@@ -77,7 +77,13 @@ export function useAsk(door: Door, voiceOn: boolean) {
         run({ type: 'answer', speak: support.speak && typeof said === 'string' })
         if (voiceRef.current === 'speaking' && typeof said === 'string') {
           const u = new SpeechSynthesisUtterance(speakable(said))
-          u.lang = navigator.language || 'en-IN'
+          // The voice and speed the owner picked in Settings (Phase 11, REQ-15), read at speaking time so a change
+          // applies to the next answer; a voice the browser no longer has falls back to its default.
+          const choice = (() => { try { return readVoiceChoice(window.localStorage) } catch { return readVoiceChoice(null) } })()
+          const name = voicePick(choice.name, window.speechSynthesis.getVoices())
+          const v = name ? window.speechSynthesis.getVoices().find((x) => x.name === name) : undefined
+          if (v) { u.voice = v; u.lang = v.lang } else { u.lang = navigator.language || 'en-IN' }
+          u.rate = choice.rate
           u.onend = () => run({ type: 'spoken' })
           u.onerror = () => run({ type: 'error' })
           window.speechSynthesis.speak(u)

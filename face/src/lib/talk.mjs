@@ -112,6 +112,84 @@ export function writeVoicePref(storage, on) {
   try { if (storage) storage.setItem(VOICE_KEY, on ? "on" : "off"); } catch { /* private mode: the switch still works for this page */ }
 }
 
+// ── the voice choice, per browser (Phase 11, REQ-15, ADR-1350 Amendment 1) ──
+//
+// Which of the browser's own voices speaks, and how fast. Kept beside the switch in this browser's storage; no cloud
+// voice, no key. A saved voice the browser no longer has is not an error: the browser's default speaks instead.
+
+export const VOICE_NAME_KEY = "arc.face.voice.name";
+export const VOICE_RATE_KEY = "arc.face.voice.rate";
+export const RATE_MIN = 0.75;
+export const RATE_MAX = 1.5;
+export const RATE_DEFAULT = 1;
+export const PREVIEW_LINE = "This is how arc's answers will sound.";
+
+/**
+ * The voices to offer, from `speechSynthesis.getVoices()`: named ones only, each name once, sorted with the browser's
+ * default first and then by language and name.
+ * @param {unknown} raw @returns {Array<{ name: string, lang: string, isDefault: boolean }>}
+ */
+export function voiceList(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of raw) {
+    const v = item && typeof item === "object" ? /** @type {Record<string, unknown>} */ (item) : null;
+    if (!v || typeof v.name !== "string" || !v.name.trim() || seen.has(v.name)) continue;
+    seen.add(v.name);
+    out.push({ name: /** @type {string} */ (v.name), lang: typeof v.lang === "string" ? v.lang : "", isDefault: v.default === true });
+  }
+  return out.sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name));
+}
+
+/**
+ * The voice to speak with: the saved one if the browser still has it, else null (the browser's default).
+ * @param {string | null | undefined} saved @param {Array<{ name: string }>} voices @returns {string | null}
+ */
+export function voicePick(saved, voices) {
+  if (typeof saved !== "string" || !saved) return null;
+  return Array.isArray(voices) && voices.some((v) => v && v.name === saved) ? saved : null;
+}
+
+/** A speed from storage or a slider, clamped to 0.75x..1.5x; anything that is not a number is the default. @param {unknown} raw */
+export function voiceRate(raw) {
+  const n = typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+  if (!Number.isFinite(n)) return RATE_DEFAULT;
+  return Math.round(Math.min(RATE_MAX, Math.max(RATE_MIN, n)) * 100) / 100;
+}
+
+/** @param {{ getItem(k: string): string | null } | null | undefined} storage @returns {{ name: string | null, rate: number }} */
+export function readVoiceChoice(storage) {
+  try {
+    if (!storage) return { name: null, rate: RATE_DEFAULT };
+    const name = storage.getItem(VOICE_NAME_KEY);
+    return { name: name ? name : null, rate: voiceRate(storage.getItem(VOICE_RATE_KEY)) };
+  } catch { return { name: null, rate: RATE_DEFAULT }; }
+}
+
+/** @param {{ setItem(k: string, v: string): void, removeItem?(k: string): void } | null | undefined} storage @param {{ name: string | null, rate: number }} c */
+export function writeVoiceChoice(storage, c) {
+  try {
+    if (!storage) return;
+    if (c.name) storage.setItem(VOICE_NAME_KEY, c.name); else if (storage.removeItem) storage.removeItem(VOICE_NAME_KEY);
+    storage.setItem(VOICE_RATE_KEY, String(voiceRate(c.rate)));
+  } catch { /* private mode: the choice still holds for this page */ }
+}
+
+/**
+ * A model's last test as its row shows it, from the door's `lastTest`: "✓ 3.4 s · 14:02" or "✗ busy... · 14:02", or
+ * "not tested yet". Anything not that shape reads as untested, never as a pass.
+ * @param {unknown} t @returns {{ state: "ok" | "fail" | "none", text: string }}
+ */
+export function testLine(t) {
+  const x = t && typeof t === "object" ? /** @type {Record<string, unknown>} */ (t) : null;
+  if (!x || typeof x.ok !== "boolean" || typeof x.seconds !== "number" || !Number.isFinite(x.seconds)) return { state: "none", text: "not tested yet" };
+  const at = typeof x.at === "string" ? x.at.slice(11, 16) : "";
+  const when = at ? ` · ${at}` : "";
+  if (x.ok) return { state: "ok", text: `✓ answered in ${x.seconds} s${when}` };
+  return { state: "fail", text: `✗ ${typeof x.why === "string" && x.why ? x.why : "it did not answer"} (${x.seconds} s)${when}` };
+}
+
 // ── the models form ──
 
 /** @typedef {{ name: string, baseUrl: string, model: string, key: string }} ModelForm */
@@ -162,6 +240,7 @@ export function modelsView(raw) {
       where: `${String(m.model ?? "")} · ${String(m.baseUrl ?? "")}`,
       key: m.hasKey === true ? (typeof m.keyTail === "string" ? `key …${m.keyTail}` : "key set") : "no key",
       active: m.name === b.active,
+      test: testLine(m.lastTest),
     }));
   return { ok: true, active: typeof b.active === "string" ? b.active : null, rows };
 }

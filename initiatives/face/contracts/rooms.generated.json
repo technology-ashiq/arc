@@ -1221,7 +1221,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "concepts",
@@ -1268,7 +1268,7 @@
       "indexes": "products",
       "stations": [],
       "holds": {},
-      "itemCount": 18
+      "itemCount": 19
     },
     {
       "id": "lane",
@@ -1293,6 +1293,7 @@
         ],
         "lanes": [
           "docs",
+          "launch",
           "org"
         ],
         "commands": [
@@ -1310,7 +1311,8 @@
           "researcher"
         ],
         "lints": [
-          "kickoff-lint"
+          "kickoff-lint",
+          "launch-lint"
         ],
         "concepts": [
           "50% tripwire",
@@ -1324,14 +1326,16 @@
         ],
         "products": [
           "docs",
+          "launch",
           "plan"
         ],
         "adrs": [
           "1500",
-          "1600"
+          "1600",
+          "1700"
         ]
       },
-      "itemCount": 27
+      "itemCount": 31
     }
   ],
   "inventories": {
@@ -1343,6 +1347,7 @@
       "1400": "design-studio",
       "1500": "lane",
       "1600": "lane",
+      "1700": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",

@@ -1,0 +1,29 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:34",
+      "breaking_input": "Make a leaf under the venture root a symlink to a path outside it (e.g. pre-existing in the repo, or planted by an adapter via the allowed node:fs built-in, since zero-dep-leg only blocks package imports, not `node:`). Then call `ctx.write('evil', ...)` where `venture-root/evil -> /outside/target`.",
+      "why": "confinedPath validates the wrong read and uses another. `inside(abs)` (line 34) checks the UNRESOLVED path string, and the symlink resolution only covers the nearest existing ANCESTOR (`realAncestor(dirname(abs))`, line 35) — never the final component. So for a leaf that is itself a link, `anc === realRoot`, no throw, and `return abs` hands back the unresolved leaf; `writeFileSync(abs, ...)` then follows the link and writes outside the venture root, defeating the stated guarantee ('a link inside the venture root that points outside it cannot carry a write out'). The directory-link case is caught; the file-link case is not.",
+      "fix": "Validate the same path you use: after computing `abs`, `const realAbs = existsSync(abs) ? realpathSync(abs) : abs; if (!inside(realAbs)) throw refusal('WRITE_REFUSED', ...)` before returning `abs` (equivalently, resolve the leaf, not just its ancestor)."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:135",
+      "breaking_input": "With the Phase-00 fixture, run `arc-launch apply live-money --venture fx-sandbox <fixture flags>` twice (live-money is gate-3 on a `honesty_class: rehearsal` venture, so it is in ROLLING). First run exits 2 and leaves the slot `absent`. Second run exits 5 and logs 'awaiting the owner's decision on <ULID>'.",
+      "why": "State check uses a terminal state as a non-terminal. After the first refusal the row is `absent` with an `approval_id`, but gate() only short-circuits on `gate_approved`/`verified`; `absent` is not consulted. On re-apply it re-enters `if (row.approval_id && !row.gate_approved)` and returns EXIT.AWAITING when `decisionFor` is null. A rehearsal gate-3 decision is never recorded, so every re-apply is stuck at exit 5 'awaiting approval' instead of the stable exit-2 refusal, and the 'rehearsal never crosses gate-3 -> stays absent' invariant is not stable across runs.",
+      "fix": "In gate(), when `rehearsalRefuses` and the row is already `absent`, re-log and return EXIT.REFUSED without calling decisionFor (or treat `absent` as terminal for ROLLING-gated slots in apply)."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/state.mjs:36",
+      "breaking_input": "Write a parseable state file `.claude/state/launch/demo.json` = `{ \"schema\": 1, \"venture\": \"demo\", \"slots\": null, \"generation\": 5 }`, then run any `new`/`apply` that loads it.",
+      "why": "The shape guard `typeof s.slots !== \"object\"` admits `null` (typeof null is 'object'), so the named STATE_SHAPE refusal that is meant to reject a non-object slots table is bypassed. The file then parses, `Object.entries(null)` throws a TypeError that is not a parse error, and loadState's catch either reports the inaccurate 'state ... did not parse' while silently falling back to `.prev`, or throws STATE_CORRUPT — a parseable-but-malformed state is misdiagnosed and never refused by the check it was written to trip.",
+      "fix": "Tighten the guard to reject nulls/arrays explicitly: `if (!s || s.schema !== 1 || !s.slots || typeof s.slots !== \"object\" || Array.isArray(s.slots)) throw new LaunchError(\"STATE_SHAPE\", ...)`."
+    }
+  ]
+}
