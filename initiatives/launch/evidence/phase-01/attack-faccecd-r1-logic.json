@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:61-67",
+      "breaking_input": "upstream repo id = \"owner/name\\n\" (a valid owner/name followed by a newline)",
+      "why": "repo()'s regex is not anchored with ^...$, so an id with a trailing newline or other suffix passes. The id is interpolated raw into API URL paths, so the newline and any following text alter the request target. ADR-1726's promise that upstream is exactly one repo shaped owner/name is not enforced.",
+      "fix": "Anchor the regex with ^...$ and reject any id that is not exactly owner/name; also encodeURIComponent each path segment before interpolating it into the URL.",
+      "twin_of": "Upstream entries were coerced with String(), so a `null` id became the hostname \"null\""
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:122-131",
+      "breaking_input": "A real GitHub Actions run that stays queued/in_progress longer than 12×20 seconds (e.g. a cold macOS job taking 6 minutes)",
+      "why": "verify() polls 12 times and then reports 'no run of arc-ci on main yet', which is a false negative: the run exists and is still running. The loop conflates 'run not created yet' with 'run not completed yet', and the 240s cap is far too short for cold GitHub-hosted runners.",
+      "fix": "After the poll budget, return ok:false with reason 'run N still <status>' instead of 'no run', and distinguish an empty workflow_runs list from a non-completed run.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:61-67, 74-80",
+      "breaking_input": "Upstream repo id = \"owner/na%2Fme\" (percent-encoded slash inside the name segment)",
+      "why": "The id passes the unanchored owner/name regex (the regex sees 'name' after a slash and permits the encoded characters as a later substring). Since no encodeURIComponent is applied to `full`, the encoded slash is sent to the API as a path separator, changing which API resource is addressed.",
+      "fix": "Anchor the full-match regex and encodeURIComponent the owner and name separately before building /repos/{owner}/{name} paths.",
+      "twin_of": "The adapter path was data the runner trusted"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "tests/launch/contract-ci.mjs:52-56",
+      "breaking_input": "Scenario 'owner-edited' where the hand-edited file is replaced by any content starting with '# Written by arc launch', even if the rest of the file differs from WORKFLOW",
+      "why": "The test asserts out.restored is true only if the rewritten content starts with the header comment. It never asserts the content is byte-identical to WORKFLOW, nor that the latest commit message contains Arc-Launch-Tag. A regression that truncates or alters the workflow would still pass.",
+      "fix": "Assert the decoded file equals WORKFLOW exactly and that the commit message contains `Arc-Launch-Tag: <tag>`.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:43-46",
+      "breaking_input": "A 403 from an endpoint other than branch protection whose message contains 'Upgrade to GitHub Pro' (e.g. a rate-limit or abuse message that happen to include that phrase)",
+      "why": "The PLAN_LIMIT classifier matches any 403 whose message contains that phrase, regardless of the request path. A 403 from GET /repos or from the workflow-runs endpoint would be misreported as the ADR-1726 plan limit instead of the real error.",
+      "fix": "Only map that phrase to PLAN_LIMIT when the failing request was PUT /repos/{owner}/{name}/branches/main/protection.",
+      "twin_of": "Provider error text and resolver answers went raw into the slot's reason"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/launch/fakes/github.mjs:43-50, 77-81",
+      "breaking_input": "A workflow run whose `head_sha` is on a non-main branch (e.g. a pull_request run) while the main branch has no run",
+      "why": "The fake ignores the `branch=main` query parameter and always returns the most recent run regardless of branch. verify() then sees a completed run with green legs and returns ok:true even though main has never run the workflow. The real GitHub API honors the branch filter, so the contract test can pass while the real adapter would fail.",
+      "fix": "Honor the branch query parameter in the fake, and add a scenario where the only run is on a non-main branch; verify() must return ok:false.",
+      "twin_of": "`verify` re-implemented apply's checks and kept only half"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:73-75",
+      "breaking_input": "POST /user/repos returns 422 (concurrent creation), then the follow-up GET returns 404 because the other creator deleted the repo between the two calls",
+      "why": "The 422 fallback path calls own() on the follow-up GET without checking its status. A 404 body is passed to own(), which throws a generic 'github returned no repo for ...' error instead of the explicit UPSTREAM_MISSING/FOREIGN_REPO style refusal the lane uses. It is still a refusal, but the wrong code propagates.",
+      "fix": "After the 422 fallback GET, treat a 404 as UPSTREAM_MISSING and otherwise apply the same own() judgment as the normal path.",
+      "twin_of": "An unrecorded sensitive-action request left the slot \"awaiting\" an id that did not exist"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:49-52",
+      "breaking_input": "A GitHub response whose JSON body is `{ \"workflow_runs\": null }` with HTTP 200",
+      "why": "list(runs.body.workflow_runs) treats null as [] and the loop prints 'no run of arc-ci on main yet'. An anomalous 200 body is silently converted into a false negative instead of a transport/provider error, masking API changes or bugs.",
+      "fix": "Guard with `Array.isArray(runs.body && runs.body.workflow_runs)` and throw a parse error otherwise.",
+      "twin_of": "`errors || []` trusted the provider to send an array of objects"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:39-42",
+      "breaking_input": "A GITHUB_TOKEN of exactly 20 characters like `gho_1234567890123456`",
+      "why": "The token shape regex /^[A-Za-z0-9_]{20,}$/ accepts a 20-character dummy, which real GitHub tokens never are (they are longer and carry a prefix like gho_, ghp_, github_pat_). The adapter then reports a generic 401 instead of BAD_TOKEN, making misconfiguration harder to diagnose.",
+      "fix": "Require GitHub's actual token prefix and length, e.g. /^(gho|ghp|github_pat)_[A-Za-z0-9_]{30,}$/.",
+      "twin_of": "A token with a CR reached a fetch header"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:106-112",
+      "breaking_input": "A workflow run that completes with the three check names present plus an extra required check (e.g. a third-party status check the owner added)",
+      "why": "verify() only checks that the three contexts are in the required list, not that the required list contains exactly the three checks. ADR-1726's 'requires its three checks' permits extras, so a main branch that requires four checks returns ok:true. This is arguably acceptable, but it is a silent divergence from the ADR's wording and could let an owner's extra requirement go unnoticed.",
+      "fix": "Either document that extras are allowed, or fail when contexts.length !== CHECKS.length.",
+      "twin_of": ""
+    }
+  ]
+}

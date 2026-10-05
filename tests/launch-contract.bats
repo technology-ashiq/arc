@@ -142,3 +142,144 @@ j() { node -e 'const o=JSON.parse(process.argv[1]);console.log(String(eval(proce
   dns odd-shapes
   [ "$(j 'o.scaffold.code')" = "NO_ZONE" ] || { echo "$DONE"; false; }
 }
+
+# The repo and ci arms share the in-memory GitHub; arm <probe> <scenario> runs one.
+arm() {
+  run node "$ARC_ROOT/tests/launch/contract-$1.mjs" "$2"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"RAN $2"* ]] || { echo "the arm never ran: $output"; return 1; }
+  DONE=$(printf '%s\n' "$output" | sed -n 's/^DONE //p')
+  [ -n "$DONE" ] || { echo "the arm never finished: $output"; return 1; }
+}
+
+@test "launch-contract: repo scaffold twice creates one private tagged repo and reports it" {
+  arm repo twice
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates')" = "1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.repo.private && o.repo.tagged')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-repo technology-ashiq/arc-sandbox" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.steps.map(s => s.action).join(",")')" = "archive" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: repo refuses a same-name repo it did not create, and a public one, creating nothing" {
+  arm repo foreign
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "FOREIGN_REPO 0" ] || { echo "$DONE"; false; }
+  arm repo public
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "NOT_PRIVATE 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: repo refuses a slug that is not a repo name before any call" {
+  arm repo bad-slug
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_SLUG 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: repo verify on a missing repo is not ok and says so" {
+  arm repo verify-missing
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"does not exist"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci scaffold twice commits the workflow once, tagged, and requires three checks" {
+  arm ci twice
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.workflowCommits + " " + o.tagged + " " + o.local')" = "1 true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.contexts.join(",")')" = "test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",") + " " + o.secondKinds.join(",")')" = "github-workflow,branch-protection github-workflow,branch-protection" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci rewrites a hand-edited workflow against its current sha" {
+  arm ci owner-edited
+  [ "$(j 'o.scaffold.ok + " " + o.restored + " " + o.lastTagged')" = "true true true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify names the red leg and the missing protection" {
+  arm ci red-leg
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"test (windows-latest) failure"* ]] || { echo "$DONE"; false; }
+  arm ci unprotected
+  [[ "$(j 'o.verify.reason')" == *"main does not require test (ubuntu-latest)"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a plan that refuses private-repo protection is refused by name (ADR-1726)" {
+  arm ci plan-limit
+  [ "$(j 'o.scaffold.code')" = "PLAN_LIMIT" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"ADR-1726: record it"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci refuses a repo upstream that is not owner/name, before any call" {
+  arm ci bad-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_UPSTREAM 0" ] || { echo "$DONE"; false; }
+  arm ci no-upstream
+  [ "$(j 'o.scaffold.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a malformed GitHub token refuses before any call and is never printed" {
+  arm repo malformed-token
+  [ "$(j 'o.scaffold.code + " " + o.calls + " " + o.leaked')" = "BAD_TOKEN 0 false" ] || { echo "$DONE"; false; }
+  arm ci bad-token
+  [ "$(j 'o.scaffold.code + " " + o.calls + " " + o.leaked')" = "BAD_TOKEN 0 false" ] || { echo "$DONE"; false; }
+  arm repo bad-token
+  [[ "$(j 'o.scaffold.message')" == *"-> 401: Bad credentials"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify never takes an older head's green run as the answer" {
+  arm ci stale-run
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"no run of arc-ci for main's head bbbbbbb yet"* ]] || { echo "$DONE"; false; }
+  arm ci branch-run
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify reports a run still going apart from no run at all" {
+  arm ci still-running
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"is still in_progress"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci extends the owner's protection, keeping their reviews and checks" {
+  arm ci owner-protection
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.protection.contexts.join(",")')" = "lint,test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.protection.strict + " " + o.protection.reviews.required_approving_review_count')" = "true 2" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-workflow,required-checks" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: protection without status checks refuses, and the committed workflow is still recorded" {
+  arm ci owner-protection-no-checks
+  [ "$(j 'o.scaffold.code')" = "PROTECTION_EXISTS" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-workflow" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.protection.reviews.required_approving_review_count')" = "2" ] || { echo "$DONE"; false; }
+  arm ci plan-limit
+  [ "$(j 'o.reported.join(",")')" = "github-workflow" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify answers a plan limit as not ok, never a thrown refusal" {
+  arm ci verify-plan-limit
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "PLAN_LIMIT: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: repo adopts only a description that ENDS with its marker, and refuses an archived repo" {
+  arm repo marker-mid-text
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "FOREIGN_REPO 0" ] || { echo "$DONE"; false; }
+  arm repo archived
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "REPO_ARCHIVED 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: verify answers every coded refusal as not ok, never a throw (repo and ci)" {
+  arm repo verify-archived
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "REPO_ARCHIVED: "* ]] || { echo "$DONE"; false; }
+  arm ci verify-refusals
+  [ "$(j 'o.badToken.ok + " " + o.badToken.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.badToken.value.reason')" == "BAD_TOKEN: "* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.noUpstream.value.reason')" == "UPSTREAM_MISSING: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci does not adopt an identical workflow the owner committed" {
+  arm ci foreign-workflow
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_WORKFLOW" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.length')" = "0" ] || { echo "$DONE"; false; }
+}
