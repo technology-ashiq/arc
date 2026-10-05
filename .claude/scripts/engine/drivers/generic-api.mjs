@@ -13,7 +13,7 @@
  * second kill criterion anticipates.
  */
 
-import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
 const API_KEY = process.env.ARC_LLM_API_KEY || "";
@@ -103,7 +103,9 @@ await runDriver("generic-api", async ({ processName, input }) => {
   const read = await canonicalDoc(processName);
   if (read.missing) throw new Error(`canonical file not found: ${read.path}`);
   if (!read.ok) throw new Error(`canonical file does not parse: ${read.what}`);
+  const persona = seatPersona();
   const prompt = [
+    ...(persona ? [persona] : []),
     read.doc.body,
     "",
     "---",

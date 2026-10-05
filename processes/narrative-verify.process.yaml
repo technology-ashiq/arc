@@ -1,5 +1,6 @@
 name: narrative-verify
 version: 1.0.0
+role: technical-writer
 intent: "Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block."
 permissions: declared
 

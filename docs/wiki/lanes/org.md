@@ -5,14 +5,14 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/org.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*org v2 "the org room"*
+*org v2.1 "the four ORG-R holds"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-org (Cycle 19, opened 2026-10-03) |
+| Status | LIVE |
+| Cycle | arc-org (Cycle 20, opened 2026-10-05) |
 | Product | [org](../products/org.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/org/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/org/PROGRESS.md)
 
-## Decisions (26)
+## Decisions (30)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -54,6 +54,10 @@ ADRs whose `Product:` line names this lane first.
 | [`1623`](../../../docs/adr/1623-org-dispatch-is-a-job-stub-process-with-an-owner-authored-policy-row.md) | `org-dispatch` is a job-stub process whose policy row the owner authors | accepted | 2026-09-29 |
 | [`1624`](../../../docs/adr/1624-the-roles-view-is-a-section-of-the-existing-org-room.md) | The roles view is a section of the existing `company/org` room, not a new room | accepted | 2026-10-03 |
 | [`1625`](../../../docs/adr/1625-get-api-org-serves-orgs-own-extract.md) | `GET /api/org` serves org's own extract: the chart model, the teams and the scorecards, imported, never re-derived | accepted | 2026-10-03 |
+| [`1626`](../../../docs/adr/1626-a-process-names-a-role-and-arc-run-resolves-the-seat.md) | a process may name a `role:`; `arc-run` resolves it to one bound agent, and `--trial-seat` swaps that agent for one run | accepted | 2026-10-05 |
+| [`1627`](../../../docs/adr/1627-head-judge-emission-is-a-deterministic-emitter-not-a-new-process.md) | head-judge emission is a deterministic emitter (`org-judge.mjs`), not a new engine process | accepted | 2026-10-05 |
+| [`1628`](../../../docs/adr/1628-skill-import-is-pinned-vetted-and-lands-on-a-proposal-branch.md) | `skill import` takes a SHA-pinned source, refuses by default on a ToxicSkills scan, and lands only on a proposal branch with the role card | accepted | 2026-10-05 |
+| [`1629`](../../../docs/adr/1629-hire-to-own-is-one-command-over-agent-scaffold.md) | hire-to-own is one command (`org-own.mjs`) over `agent-scaffold`'s proposal writer | accepted | 2026-10-05 |
 
 ## Source
 
