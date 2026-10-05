@@ -388,12 +388,28 @@ check("D: face/src/lib/stage.mjs is a required default root and a named allowanc
   check("F: the wait ends when the stage is gone, whatever the clock", smoke.unmountWaitOver(0, -1) && smoke.unmountWaitOver(0, 0));
   check("F: a page that took the surface late is still waited for -- its own window has not passed", !smoke.unmountWaitOver(1, W - 1) && !smoke.unmountWaitOver(1, -1));
   check("F: the wait ends once the page's own window has passed with the stage still on (then it FAILs)", smoke.unmountWaitOver(1, W));
-  // MUTANT CONTROL: the old rule counted from the address, i.e. from the harness's own crossing time. Fed the flake's
-  // numbers (the page took the surface 9.8 s late, so 9.75 s on the harness clock is only ~0 s on the page's), it ends
-  // the wait before the page's timer could run -- the same case the new rule must keep waiting on.
-  const oldRule = (stages, sinceAddressMs) => stages === 0 || sinceAddressMs >= W;
-  check("F: MUTANT CONTROL -- the address-clock rule ends the flake's wait, the page-clock rule does not", oldRule(1, W) && !smoke.unmountWaitOver(1, W - 9800));
+  // sinceCrossing: only the trail's last entry, an hq@ newer than all of the pre-crossing trail, counts (attack 0e39c72).
+  // The trail ends on an earlier crossing's hq@ (its way back out was never recorded): only the baseline tells it apart.
+  const before = "door@100 hq@500";
+  check("F: a stale hq@ from an earlier crossing does not count as this one's", smoke.sinceCrossing(before, 20000, before) === -1);
+  check("F: this crossing's hq@ counts from its own time", smoke.sinceCrossing(`${before} hq@9000`, 10000, before) === 1000);
+  check("F: a malformed, huge or negative time is no time at all", ["hq@1e309", "hq@-5", "hq@abc", "hq@ 5"].every((t) => smoke.sinceCrossing(t, 1e9, "") === -1));
+  // waitForUnmount -- the loop the smoke runs -- driven with a scripted page whose trail still holds an earlier crossing's
+  // hq@ and takes the surface late. MUTANT CONTROL: the same page with the baseline dropped (every hq@ counts) ends the
+  // wait on the first poll while the stage is still on; the real call must keep waiting until the stage leaves.
+  const script = (frames) => { let i = 0; return async () => frames[Math.min(i++, frames.length - 1)]; };
+  const late = [
+    { stages: 1, trail: before, now: 20000 },
+    { stages: 1, trail: before, now: 26000 },
+    { stages: 1, trail: `${before} hq@27000`, now: 27500 },
+    { stages: 0, trail: `${before} hq@27000`, now: 29000 },
+  ];
+  const fast = { capMs: 5000, pollMs: 1, wait: async () => {} };
+  const real = await smoke.waitForUnmount(script(late), before, fast);
+  const dropped = await smoke.waitForUnmount(script(late), "", fast);
+  check("F: the real wait keeps going past a stale hq@ and ends when the stage leaves", real.stages === 0 && real.polls === 4, JSON.stringify(real));
+  check("F: MUTANT CONTROL -- with the baseline dropped the same page ends the wait on poll 1, stage still on", dropped.stages === 1 && dropped.polls === 1, JSON.stringify(dropped));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 58 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 62 ? 0 : 1;

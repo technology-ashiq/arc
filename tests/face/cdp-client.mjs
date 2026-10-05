@@ -215,6 +215,14 @@ check("a DevToolsActivePort with a bad port or path is refused",
     let msg4 = "";
     try { await cdp.waitForDevTools(scratch, idle, { timeoutMs: 2000, pollMs: 10, read: broken }); } catch (e) { msg4 = String(e.code ?? e.message); }
     check("a read error other than a held file still throws (EISDIR)", msg4 === "EISDIR", msg4);
+    // EACCES never clears, so it throws at once; a file held to the cap names its code (attack 0e39c72 L3, B3).
+    const denied = () => { const e = new Error("denied"); e.code = "EACCES"; throw e; };
+    let msg5 = "";
+    try { await cdp.waitForDevTools(scratch, idle, { timeoutMs: 2000, pollMs: 10, read: denied }); } catch (e) { msg5 = String(e.code ?? e.message); }
+    const alwaysBusy = () => { const e = new Error("busy"); e.code = "EBUSY"; throw e; };
+    let msg6 = "";
+    try { await cdp.waitForDevTools(scratch, idle, { timeoutMs: 120, pollMs: 10, read: alwaysBusy }); } catch (e) { msg6 = String(e.message); }
+    check("EACCES throws at once, and a file held to the cap is named as held (EBUSY)", msg5 === "EACCES" && /stayed held \(EBUSY\)/.test(msg6), JSON.stringify([msg5, msg6.slice(0, 80)]));
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -801,4 +809,4 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 62 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 63 ? 0 : 1;

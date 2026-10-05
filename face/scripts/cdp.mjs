@@ -408,14 +408,18 @@ export async function waitForDevTools(userDataDir, child, { timeoutMs = 30000, p
   const file = join(userDataDir, "DevToolsActivePort");
   const started = Date.now();
   let unparsed = null;
+  /** @type {string | null} */
+  let held = null;
   while (Date.now() - started < timeoutMs) {
     if (child.spawnError) throw new Error(`Chrome could not start: ${child.spawnError.message}`);
     if (isDead(child)) throw new Error(`Chrome ${deathReason(child)} before DevTools was ready: ${child.stderrTail().slice(-500)}`);
     if (existsSync(file)) {
       // Windows: Chrome still holds the file it is writing, and the read throws EBUSY or EPERM. That is "not yet", not
       // "failed" -- it threw out of the wait and cost the whole front-door pass (CI 37365741070, `ran 0 of 32`).
+      // EBUSY and EPERM are Windows' sharing violations, gone when Chrome closes the file; EACCES is a permission fault
+      // that never clears, so it throws at once rather than spinning to the cap (attack 0e39c72 L3, B3).
       let text = null;
-      try { text = read(file); } catch (e) { if (!["EBUSY", "EPERM", "EACCES"].includes(/** @type {any} */ (e).code)) throw e; }
+      try { text = read(file); } catch (e) { const code = /** @type {any} */ (e).code; if (!["EBUSY", "EPERM"].includes(code)) throw e; held = code; }
       if (text !== null) {
         const parsed = parseDevToolsActivePort(text);
         if (parsed) return `ws://127.0.0.1:${parsed.port}${parsed.path}`;
@@ -426,6 +430,7 @@ export async function waitForDevTools(userDataDir, child, { timeoutMs = 30000, p
   }
   // Absent and unreadable are different results (fixed-defects.md).
   if (unparsed !== null) throw new Error(`Chrome's DevToolsActivePort did not parse within ${timeoutMs} ms: ${JSON.stringify(unparsed.slice(0, 200))}`);
+  if (held !== null) throw new Error(`Chrome's DevToolsActivePort stayed held (${held}) for ${timeoutMs} ms: ${child.stderrTail().trim().slice(-500)}`);
   throw new Error(`Chrome wrote no DevToolsActivePort within ${timeoutMs} ms: ${child.stderrTail().trim().slice(-500)}`);
 }
 
