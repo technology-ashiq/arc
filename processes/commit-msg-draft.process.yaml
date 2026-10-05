@@ -1,5 +1,6 @@
 name: commit-msg-draft
 version: 1.0.0
+role: devops-release
 intent: "Stage related changes and write a conventional commit."
 permissions: declared
 inputs: []

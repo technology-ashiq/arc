@@ -1,5 +1,6 @@
 name: adr-record
 version: 1.0.0
+role: solution-architect
 intent: "Record one owner decision as an ADR at the next free number of the lane's century, and end on its note.logged receipt."
 permissions: declared
 

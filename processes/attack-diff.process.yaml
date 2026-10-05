@@ -1,5 +1,6 @@
 name: attack-diff
 version: 1.1.0
+role: security-engineer
 intent: "Adversarially attack one surface of a diff with concrete breaking inputs, carrying the lane's fixed-defect patterns."
 permissions: declared
 

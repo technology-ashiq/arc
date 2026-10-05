@@ -1,5 +1,6 @@
 name: build-in-public-draft
 version: 1.0.0
+role: build-in-public-social
 intent: "Draft one build-in-public post from an approved context pack. L1 only -- a draft, never a publication."
 permissions: declared
 

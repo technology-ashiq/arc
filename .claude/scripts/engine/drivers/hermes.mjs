@@ -62,7 +62,7 @@ import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { EXIT, canonicalDoc, msUntilDeadline, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
+import { EXIT, canonicalDoc, msUntilDeadline, pinnedModel, runDriver, seatPersona, settle, writeCost } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
 // The seat grammar is imported from the spine's OWN validator rather than re-spelled here.
 // A second copy of a regex is a second thing to keep in sync, and the failure this guards
@@ -772,7 +772,9 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     process.stderr.write(`hermes: NO PROCESS BRIEF for ${processName}${declared.missing ? " (no canonical file)" : declared.ok ? " (the file declares no body)" : " (unreadable)"} — the runtime is being told a process NAME and nothing else\n`);
   }
 
+  const persona = seatPersona();
   const prompt = [
+    ...(persona ? [persona] : []),
     brief ?? `You are executing the arc process \`${processName}\`.`,
     "",
     "---",

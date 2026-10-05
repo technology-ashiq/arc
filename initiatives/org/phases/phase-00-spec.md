@@ -8,21 +8,23 @@
 ## Scope
 - `.claude/scripts/engine/process-lint.mjs`: `role` joins `TOP_LEVEL_KEYS`; a check FAILs unless the role
   card exists and its `binds.process` equals this process's `name` (ADR-1626).
-- `.claude/scripts/org/lib/seat.mjs` (new, pure): `resolveSeat(card, events, { trial, agentExists })` →
-  `{ agent, source: "card"|"scored"|"trial" }`; scored = most `run.completed` ok receipts whose
-  `payload.role === card.id` and `payload.role_agent` is in `binds.agents`; tie or none → first listed.
-- `.claude/scripts/engine/arc-run.mjs`: `--trial-seat AGENT` (given twice / empty / not in `.claude/agents/`
-  → exit 2, nothing emitted); for a process with `role:`, load the card, read the spine the run already reads,
-  resolve, pass the agent's body (frontmatter stripped) to the driver as the seat persona, and add
-  `role`, `role_agent`, `role_agent_source` to the `run.completed` payload only (closed-payload kinds such as
-  `council.verdict` and `decision.recorded` refuse extra fields). A `--trial-seat` run receipts
-  `role_agent_source: trial` and omits `payload.role`, so a trial earns the seat no scorecard credit. A fixture
-  runs a `role:` process whose emitted kinds include a closed-payload kind and asserts the run still exits 0. `--trial-seat` on a
-  process without `role:` → exit 2.
-- Driver adapters (`claude-code`, `codex`): carry the persona as a prompt prefix block (A-01).
-- `role:` added to the 11 processes bound by exactly one card (A-02 holds: develop-proof has two cards and
-  is left without one): adr-record, attack-diff, brief-materialize, build-in-public-draft, commit-msg-draft,
-  council-convene, day-close-roll, kickoff-plan, lesson-log, narrative-verify, review-diff.
+- `.claude/scripts/engine/role-seat.mjs` (new, pure; engine-owned because arc-run imports it and a consumer repo may carry engine without org): `resolveSeat(card, events, { trial })` →
+  `{ agent, source: "card"|"scored"|"trial"|"none", why }` per ADR-1626 (as amended): an agent qualifies
+  with ≥3 runs for the role (`payload.role` or `payload.trial_role`); highest ok rate wins; tie or no
+  qualifier → first listed; no bound agent → `none`.
+- `.claude/scripts/engine/arc-run.mjs`: `--trial-seat AGENT` (given twice / empty / not in `.claude/agents/`, or
+  on a process without `role:` → exit 2, nothing emitted); for a process with `role:`, load the card, read the
+  spine (unreadable → no evidence, said so), resolve, and add `role`, `role_agent`, `role_agent_source` to the
+  `run.completed` payload only (closed-payload kinds such as `council.verdict` refuse extra fields). A trial run
+  receipts `trial_role` in place of `role`, so it earns the seat no scorecard credit. Only a trial run passes the
+  agent's body (frontmatter stripped) to the driver as the seat persona (ADR-1626 amendment: default runs keep
+  today's prompt, because several cards bind the subagents a process invokes, not its seat).
+- Driver adapters (`claude-code`, `codex`): carry the persona as a prompt prefix block read from
+  `ARC_SEAT_PERSONA_FILE` (A-01).
+- `role:` added to the 9 engine processes bound by exactly one card (A-02 holds: develop-proof has two cards and
+  is left without one; brief-materialize and day-close-roll are job stubs, which arc-run never runs): adr-record,
+  attack-diff, build-in-public-draft, commit-msg-draft,
+  council-convene, kickoff-plan, lesson-log, narrative-verify, review-diff.
 - Regenerate compiled commands (`arc-compile --write --all --target claude-code`), the sync golden, product
   manifests for the new file, and the wiki, in the same commit.
 
@@ -38,9 +40,9 @@
 
 ## Verification plan
 - **Test command:** `node tests/org/role-seat.mjs` (run from a bats file on CI) + the process-lint bats arm.
-- **Expected failure first:** before `seat.mjs` exists the fixture fails at import `ERR_MODULE_NOT_FOUND ... org/lib/seat.mjs`; before the lint change, a `role:` process fails `unknown top-level key "role"`.
+- **Expected failure first:** before `role-seat.mjs` exists the fixture fails at import `ERR_MODULE_NOT_FOUND ... engine/role-seat.mjs`; before the lint change, a `role:` process fails `unknown top-level key "role"`.
 - **Live demo scenario:** `node .claude/scripts/engine/arc-run.mjs --process lesson-log --dry-run` prints `role hr-performance -> AGENT (card)`; with `--trial-seat OTHER` prints `(trial)`.
-- **Real-system check:** `node .claude/scripts/engine/process-lint.mjs` over the real `processes/` passes with the 11 `role:` lines.
+- **Real-system check:** `node .claude/scripts/engine/process-lint.mjs` over the real `processes/` passes with the 9 `role:` lines.
 - **Expected evidence:** CI per-JOB conclusions for the head SHA; the fixture's RAN line; the dry-run lines.
 
 ## Rabbit holes in this phase

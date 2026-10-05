@@ -24,14 +24,22 @@ Option 2.
 - `process-lint` admits one new top-level key, `role:` (a role id). It FAILs unless that card exists and its
   `binds.process` names this process — the link is checked in both directions, so a card and a process cannot
   disagree about who runs it.
-- `arc-run` resolves the agent deterministically: among the card's `binds.agents`, the agent with the most
-  `run.completed` ok receipts carrying `payload.role_agent` wins (`scored`); a tie or no evidence takes the
-  FIRST listed agent (`card` — the card's order is the owner's preference). Never random, never by recency.
-- `--trial-seat <agent>` replaces the resolved agent for this invocation only; the agent must be listed in
-  `.claude/agents/`, and the receipt says `role_agent_source: trial`. Like `--trial-model`, given twice or
-  with an empty value it is an operator error (exit 2), and it writes nothing to the card.
-- The resolved agent's file body (frontmatter stripped) reaches the driver as the run's seat persona, so a
-  trial seat changes what runs, not only a label.
+- `arc-run` resolves the agent deterministically. An agent QUALIFIES with at least 3 `run.completed` receipts
+  for this role (`payload.role` or `payload.trial_role` equal to the card id, `payload.role_agent` equal to the
+  agent); the qualifying agent with the highest ok rate wins (`scored`); a tie, or no qualifier, takes the FIRST
+  listed agent (`card` -- the card's order is the owner's preference). A card with no bound agent seats nobody
+  (`role_agent_source: none`, no `role_agent`). Never random, never by recency.
+- `--trial-seat <agent>` replaces the resolved agent for this invocation only; the agent must exist in
+  `.claude/agents/`, and the receipt says `role_agent_source: trial` with `trial_role` in place of `role`, so a
+  trial earns the seat no `org-review` credit but does count toward the agent qualifying. Given twice, empty, or
+  on a process with no `role:` it is an operator error (exit 2), and it writes nothing to the card.
+- The role fields go on `run.completed` only; closed-payload kinds refuse extra fields.
+- **Amended at Phase 00 (2026-10-05): the persona reaches the driver ONLY under `--trial-seat`.** Several cards
+  bind agents the process INVOKES as subagents (board-advisors binds the council members council-convene calls;
+  product-manager binds question-planner). Injecting the resolved agent's body into every default run would
+  change what `attack-diff`, `review-diff` and the council do on every PR with no reviewed diff. A default run
+  records which bound agent the role credits; a trial run puts the trial agent's body (frontmatter stripped)
+  in front of the process body, so a trial seat changes what runs, not only a label.
 
 ## Consequences
 Easier: "same process, different agents" is one flag; `org-review` attributes these runs by `payload.role`

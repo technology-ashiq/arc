@@ -70,6 +70,9 @@ export const TOP_LEVEL_KEYS = Object.freeze([
   // file here that is not an engine process needs to say so, or every engine gate reads it as
   // a broken process. See JOB_STUB_KEYS for the closed schema that replaces this one.
   "job_stub",
+  // `role` names the org role card that sits this process (org ADR-1626). The card must exist and its
+  // `binds.process` must name THIS process: checked both ways, so a card and a process cannot disagree.
+  "role",
 ]);
 
 /**
@@ -111,7 +114,7 @@ export const CHECKS = Object.freeze([
   "yaml-parse", "yaml-excluded", "schema-keyword", "schema-shape", "name-semver",
   "tool-unknown", "permissions-invalid", "placeholder-dialect", "placeholder-malformed",
   "evals-path", "target-passthrough", "unknown-key", "baseline-drift", "body-drift", "frontmatter-injection",
-  "body-unrepresentable", "inputs-shape", "intent-missing", "router-tier",
+  "body-unrepresentable", "inputs-shape", "intent-missing", "router-tier", "role-card",
 ]);
 
 const DIALECT_RES = [/\$\{\d+(:-[^}]*)?\}/g, /\$ARGUMENTS\b/g, /(^|[^\\$])\$\d\b/g];
@@ -153,6 +156,32 @@ if (all) {
 if (!files.length) {
   console.error("usage: process-lint.mjs [FILE...] | --all [--root PATH]");
   process.exit(2);
+}
+
+// ---------- org role cards (ADR-1626) ----------
+// Read once, lazily, and only when a process names a role. A tree with no org/roles/ DIRECTORY at all has no
+// org product installed (a consumer repo synced with the engine alone), and there `role:` is inert -- arc-run
+// seats nobody and credits nobody -- so it is not checked. A tree that HAS org/roles/ checks every role.
+let cardsById = null;
+function roleCards() {
+  if (cardsById) return cardsById;
+  cardsById = new Map();
+  const base = join(root, "org", "roles");
+  let depts = [];
+  try { depts = readdirSync(base); } catch { return cardsById; }
+  for (const d of depts.sort()) {
+    let names = [];
+    try { names = readdirSync(join(base, d)); } catch { continue; }
+    for (const n of names.sort()) {
+      if (!n.endsWith(".role.yaml")) continue;
+      let r;
+      try { r = parseYamlSubset(readFileSync(join(base, d, n), "utf8").replace(/^﻿/, "")); } catch { continue; }
+      const c = r && r.ok ? r.value : null;
+      // First card wins on a duplicate id; org-coverage owns reporting duplicates.
+      if (c && typeof c.id === "string" && !cardsById.has(c.id)) cardsById.set(c.id, c);
+    }
+  }
+  return cardsById;
 }
 
 // ---------- helpers ----------
@@ -338,6 +367,25 @@ for (const file of files) {
         "`intent` contains a line break, which would forge a frontmatter key",
         "a single line", JSON.stringify(short(doc.intent, 50)),
         "keep intent to one line — it becomes the `description:` line verbatim");
+    }
+
+    // --- role: the org card that sits this process, checked in both directions (ADR-1626) ---
+    if (Object.prototype.hasOwnProperty.call(doc, "role") && existsSync(join(root, "org", "roles"))) {
+      const rid = doc.role;
+      const where = at(lineOf(text, "role:"));
+      if (typeof rid !== "string" || !/^[a-z][a-z0-9-]{0,63}$/.test(rid)) {
+        add("role-card", where, "`role` must be a role id", "a lowercase role id", JSON.stringify(rid), "role: devops-release");
+      } else {
+        const card = roleCards().get(rid);
+        const bound = card && card.binds && typeof card.binds === "object" ? card.binds.process : undefined;
+        if (!card) {
+          add("role-card", where, `no role card has id \`${rid}\``, "an id under org/roles/", rid, "role: devops-release");
+        } else if (bound !== doc.name) {
+          add("role-card", where, `role card \`${rid}\` binds process ${JSON.stringify(bound ?? null)}, not this one`,
+            `binds.process: '${doc.name}' on the card`, String(bound ?? null),
+            "set the card's binds.process to this process, or name the role whose card binds it");
+        }
+      }
     }
 
     // --- permissions, and its SEMANTICS (not just enum membership) ---
