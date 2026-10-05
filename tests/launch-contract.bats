@@ -488,3 +488,8 @@ arm() {
   arm release broken-app
   [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build of "*" failed (ERROR) and the commit holds an app" ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: a typed hosting trailer over the owner's config does not let release lift it" {
+  arm release forged-hosting-trailer
+  [ "$(j 'o.release.code + " " + o.text')" = 'FOREIGN_FILE {"rewrites":[]}' ] || { echo "$DONE"; false; }
+}

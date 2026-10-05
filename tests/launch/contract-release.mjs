@@ -95,6 +95,13 @@ switch (scenario) {
     repo().commits.push({ sha: "e".repeat(40), message: "owner rewrites", files: { "vercel.json": "e".repeat(40) } });
     out.release = await attempt(() => release.mod.scaffold(R(["deploy-prod-first"])));
     break;
+  case "forged-hosting-trailer":
+    // The owner's own vercel.json, committed with a message that types hosting's exact trailer: content decides.
+    repo().files["vercel.json"] = { sha: "f".repeat(40), content: Buffer.from("{\"rewrites\":[]}\n").toString("base64") };
+    repo().commits.push({ sha: "f".repeat(40), message: "mine\n\nArc-Launch-Tag: arc-sandbox@hosting@vercel", files: { "vercel.json": "f".repeat(40) } });
+    out.release = await attempt(() => release.mod.scaffold(R(["deploy-prod-first"])));
+    out.text = Buffer.from(repo().files["vercel.json"].content, "base64").toString("utf8").trim();
+    break;
   case "broken-app":
     // The shell lands and its production build fails: release's receipt no longer counts the ERROR.
     await release.mod.scaffold(R(["deploy-prod-first"]));

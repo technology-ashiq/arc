@@ -8,6 +8,8 @@ const GITHUB = "https://api.github.com";
 const FILE = "vercel.json";
 const TAG = "launch-release-1";
 const LIFTED = "{}\n";
+// Byte-for-byte what hosting commits (providers/hosting/vercel.mjs HOLD); adapters are one file each, so it is restated.
+const HOLD =`${JSON.stringify({ ignoreCommand: "[ \"$VERCEL_ENV\" = production ]" }, null, 2)}\n`;
 const SHA = /^[0-9a-f]{40}$/;
 // Built means Vercel ran the build: READY, or ERROR while main has no app yet (frontend proves it serves, ADR-1730).
 const BUILT = new Set(["READY", "ERROR"]);
@@ -101,8 +103,13 @@ export async function scaffold(ctx) {
   // Gate 2's sensitive action: the runner pauses here until the owner approves, before anything is written.
   ctx.sensitive("deploy-prod-first");
 
+  // The trailer is free text anyone can type (debt D19), so the CONTENT must also be exactly the hold hosting writes,
+  // or the lift release itself wrote: anything else is the owner's config (attack d931e53 B1).
+  const text = unb64(cur.body && cur.body.content);
+  if (text !== HOLD && text !== LIFTED) throw refuse("FOREIGN_FILE", `${full}:${FILE} is not the hold hosting placed; release does not edit it`);
+
   let sha;
-  if (unb64(cur.body && cur.body.content) === LIFTED) {
+  if (text === LIFTED) {
     // A kill after the lift and before the tag: the newest commit on the file is release's own.
     const top = list(log.body)[0];
     if (!top || !hasLine(top.commit && top.commit.message, trailer(ctx)) || !SHA.test(String(top.sha)))
