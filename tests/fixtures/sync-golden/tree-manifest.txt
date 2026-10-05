@@ -279,7 +279,7 @@
 .claude/scripts/hq/lib/ledger/pnl.mjs	238dc9d9fe07cdacc6ac8d9bb48b0e9211c3c714651f612a48ced9e0279c3699
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
 .claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
-.claude/scripts/hq/lib/narrative-proof.mjs	8e8003a45e34c7888a0d47395a9ae1c45be9318890087ed6d7a205a03c6d7d7c
+.claude/scripts/hq/lib/narrative-proof.mjs	c5d906b6ad023f1ab1dc0d4bd1ea6f4df4d21001ab8e7f02c767f52c47fd1971
 .claude/scripts/hq/lib/owner-key.mjs	363a037ce80983aef12294b0d08f2a47c3bb3fac5c1627d909503b77dea66586
 .claude/scripts/hq/lib/owner-sig.mjs	33828b142f9f4a5b651026dbf711ce91db1572e3af164d11ce7d20ac296c62d0
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
