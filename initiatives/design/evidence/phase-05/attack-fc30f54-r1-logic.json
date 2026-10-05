@@ -1,0 +1,45 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:312",
+      "breaking_input": "A query string containing a literal tab character, e.g., `tab\\tbreaker`, or a tab-separated log field crafted to contain a newline escape",
+      "why": "The `record` function writes remote/variable text (like the source id or reason) directly into a tab-separated `availability.log` file without stripping control characters. This allows log forging or separation of the log fields, breaking the later `summary` parser which splits on tabs.",
+      "fix": "Sanitize the input fields passed to `record` by stripping all control characters (U+0000-U+001F) before appending to the log file."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:372",
+      "breaking_input": "A fixture response body containing `null`, `undefined`, or a non-object type that causes `JSON.parse` or property access to fail unexpectedly in `searchItems`",
+      "why": "In `searchItems`, the code attempts to parse `c.text` as JSON. If `c.text` is the string \"null\" or an object structure that results in `v` being null/undefined, the logic `v && typeof v === 'object'` handles it, but if `v` is an object without `results`, `components`, or `items`, it falls back to `String(c.text).trim()`. However, the deeper issue is that if the regex matching for images in the `query` function fails on weirdly encoded text or if `it` is malformed, it might crash. More specifically, `searchItems` returns an array, but `query` iterates it and calls `field(it.name ...)`. If `searchItems` returns an object instead of an array due to a parsing quirk, iteration fails. But the main logical flaw is that `searchItems` silently pushes raw text items that are not searched, mixing parsed data and raw text in `out`.",
+      "fix": "Ensure `searchItems` strictly returns an array of validated items and handle the case where `v` is a non-array, non-object primitive more explicitly, or skip it if it's not a search result structure."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:345",
+      "breaking_input": "A `--mcp-fixture` path pointing to a file that does not exist or contains invalid JSON",
+      "why": "The `post` function executes `JSON.parse(readFileSync(resolve(o[\"--mcp-fixture\"]), \"utf8\"))` without a try-catch. If the fixture file is missing or corrupt, the process crashes with an unhandled exception instead of failing gracefully with a `COULD-NOT-SCAN` or usage error.",
+      "fix": "Wrap the `readFileSync` and `JSON.parse` in a try-catch block and fail with a clear error message if the fixture cannot be read or parsed."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:388",
+      "breaking_input": "A `--brief` argument that matches the ID grammar but resolves to a path containing a sequence like `..` or non-ASCII characters that `mkdirSync` might handle unexpectedly on some systems, or a brief that creates a directory name identical to a Windows reserved device name if the user forgets the validation check in a newer version of `validId` that lacks the reserved list.",
+      "why": "The `stateDir` is constructed using `join(ROOT, \".claude\", \"state\", \"design\", \"refpacks\", brief)`. While `validId` is checked, relying on the regex `ID` is sufficient only if the regex explicitly excludes reserved names. If the `ID` regex is a simple alphanumeric one, a user could pass `CON` or `LPT1` as a brief on a system where those are reserved, causing filesystem errors or unexpected behavior. The prompt implies `validId` checks reserved names, but if it's copied without the reserved-word half (a listed defect pattern), this is a hole.",
+      "fix": "Ensure `validId` explicitly includes a check against a list of OS-reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) in addition to the structural grammar."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "tests/design-refpack-mcp.bats:181",
+      "breaking_input": "A future developer adding an 8th test to the file",
+      "why": "The test `this file registers the 7 tests it declares` hardcodes the expected test count to 7. This is a brittle test that will fail immediately if any test is added, requiring an update to this constant every time. It does not protect against a missing test as well as a simple check that specific test names exist.",
+      "fix": "Replace the hardcoded count check with a check for the presence of specific test names, or remove it in favor of the natural failure if a required test is missing."
+    }
+  ]
+}

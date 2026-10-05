@@ -245,3 +245,57 @@ sources:
     # TLS handshake failed on two independent fetchers. This one is UNVERIFIED rather than
     # disallowed -- the distinction is kept because it may move to `trial` after a
     # headless-browser probe, and "we could not check" must not harden into "they said no".
+
+  # ---- added 2026-10-05 (owner, Phase 05): component sources over MCP ----
+  - id: shadcn
+    kind:
+      - components
+    access: mcp
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: none
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-10-05
+    # The shadcn registry MCP, run locally; already installed on the owner's machine at no cost.
+
+  - id: 21st-dev
+    kind:
+      - components
+    access: mcp
+    hosts:
+      - 21st.dev
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: env
+    credential_ref: API_KEY_21ST
+    cost: free
+    status: active
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-10-05
+    # SEARCH MODE ONLY. The free tier is search plus 2 installs a day; generation is credit-gated
+    # and paid, so this row carries no draft-variant use and no generator kind. Turning the
+    # generator on is a status change the owner makes, not a key that happens to be present.
+
+  - id: mobbin
+    kind:
+      - inspiration
+    access: browser
+    hosts:
+      - mobbin.com
+    allowed_use:
+      - reference-pack
+      - provenance
+    auth: manual
+    cost: paid
+    status: off
+    availability: unknown
+    approved_by: ashiq
+    added: 2026-10-05
+    # OFF 2026-10-05 (owner): declined on cost -- every useful screen is behind Pro. Nothing
+    # references this row; it exists so the decision is on the record rather than in a chat.
