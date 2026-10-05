@@ -88,6 +88,9 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       for (const e of p.entries) r.files[e.path] = { sha: e.sha, content: Buffer.from(r.blobs[e.sha], "utf8").toString("base64") };
       p.c.app = p.entries.some((e) => e.path === "package.json");
       r.commits.push(p.c);
+      // A push to main runs arc-ci, like any other commit (ADR-1733's orm verify reads it).
+      r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: p.c.sha, branch: "main", pending: pendingPolls,
+        jobs: LEGS.map((os, i) => ({ name: `test (${os})`, conclusion: (runConclusions && runConclusions[i]) || "success" })) });
       return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
     }
     r.tags = r.tags || {};

@@ -238,10 +238,13 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.github.com
     credentials:
-      scope: "none -- probes the live site"
+      scope: "commits the zod health contract and route; probes the live site (ADR-1733)"
     adapter: providers/backend/next-route-handlers.mjs
     digest: null
     approved_by: ashiq
@@ -278,10 +281,13 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.github.com
     credentials:
-      scope: "none -- probes the live site"
+      scope: "commits the typed schema and its test; reads CI for main head (ADR-1733)"
     adapter: providers/orm/drizzle.mjs
     digest: null
     approved_by: ashiq

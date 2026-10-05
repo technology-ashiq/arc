@@ -493,3 +493,39 @@ arm() {
   arm release forged-hosting-trailer
   [ "$(j 'o.release.code + " " + o.text')" = 'FOREIGN_FILE {"rewrites":[]}' ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: the shell's manifest carries Phase 01's dependencies and backend/orm never edit it" {
+  arm app thread
+  [ "$(j 'Object.keys(o.pkg.dependencies).sort().join(",")')" = "@supabase/ssr,@supabase/supabase-js,drizzle-orm,next,react,react-dom,zod" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.pkg.scripts.test')" = "node --test" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.pkgUnchanged + " " + o.frontendAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backend commits the health contract once and the live route answers exactly it" {
+  arm app thread
+  [ "$(j 'o.backend.ok + " " + o.backendAgain.ok + " " + o.commits.backend')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.backendVerify.ok + " " + o.backendVerify.answerer')" = "true sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: orm commits the typed schema once and is verified by arc-ci green on main's head" {
+  arm app thread
+  [ "$(j 'o.orm.ok + " " + o.ormAgain.ok + " " + o.commits.orm')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.ormVerify.ok + " " + o.ormVerify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.backend.join(",") + " " + o.kinds.orm.join(",")')" = "backend-route orm-schema" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backend never commits over the owner's route, and an answer outside the contract fails" {
+  arm app owner-route
+  [ "$(j 'o.backend.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  arm app bad-health
+  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"answers outside the contract (keys: debug,ok,service,version)" ]] || { echo "$DONE"; false; }
+  arm app before-backend
+  [[ "$(j 'o.backendVerify.reason')" == *"answered 404"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: orm verify names a red leg, and orm refuses without the database's probe table" {
+  arm app red-ci
+  [[ "$(j 'o.ormVerify.ok + " " + o.ormVerify.reason')" == "false run "*"test (windows-latest) failure" ]] || { echo "$DONE"; false; }
+  arm app no-probe
+  [ "$(j 'o.orm.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}

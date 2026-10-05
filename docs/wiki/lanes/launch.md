@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (30)
+## Decisions (31)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -58,6 +58,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1727`](../../../docs/adr/1727-gate-2-holds-production-in-the-venture-repo.md) | Gate 2 holds production in the venture repo, through Vercel's ignored-build step | accepted | 2026-10-05 |
 | [`1728`](../../../docs/adr/1728-environments-proves-previews-with-one-tagged-pr.md) | `environments` proves preview-per-PR by opening one tagged PR | accepted | 2026-10-05 |
 | [`1730`](../../../docs/adr/1730-release-crosses-gate-2-before-frontend-proves-the-page.md) | `release` crosses gate 2 before `frontend`; `frontend`'s verify is the first proof the venture serves | accepted | 2026-10-06 |
+| [`1733`](../../../docs/adr/1733-the-shell-owns-the-dependency-manifest-later-slots-add-files.md) | The shell owns the venture's dependency manifest; later slots add files, and CI is their typed check | accepted | 2026-10-06 |
 
 ## Source
 
