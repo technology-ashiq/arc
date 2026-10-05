@@ -68,3 +68,6 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **verify took any git deployment of the repo as the proof** — only the deployment of the hold commit, same org and repo, B5/L8 — *every "some X exists" verify: is it the X this slot made?*
 - **A teardown step deleted a file by path, whoever had taken it over since** — `delete-if-unchanged`, attack 21d7acb B2 — *every exit-plan step: does it re-check ownership at run time?*
 - **The sha-matched proof was searched in a fixed page of recent deployments** — filter by sha at the API, B3 — *every "find the one we made" inside a paged list*
+- **verify matched the preview by branch sha without asking whose branch it was** — the head must carry the slot's trailer, attack 0109a8d B2 (twin of 1406e29 B5) — *every verify that finds "the" X by name*
+- **A kill between creating a branch and committing to it left a branch the re-run refused as foreign** — a recorded branch still at main's head is finished, B1 — *every two-step create: is the half-made state recognisable as ours?*
+- **A 404 from a token without access read as "absent, create it"** — the repo is read first; invisible means NO_ACCESS, attack 0109a8d — *every check-then-create keyed on a 404*

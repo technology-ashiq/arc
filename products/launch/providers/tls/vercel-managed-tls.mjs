@@ -80,6 +80,8 @@ async function probe(ctx) {
     const status = say(r.body.status, 20);
     if (status === "ERROR") return unscanned(`ssllabs error: ${say(r.body.statusMessage)}`);
     if (status !== "READY") { last = `scan ${status || "pending"}`; continue; }
+    // A READY answer without an endpoints array is a malformed answer, not a scan that did not happen (attack 0109a8d).
+    if (!Array.isArray(r.body.endpoints)) return { ok: false, reason: "ssllabs answered READY without an endpoints list" };
     const eps = list(r.body.endpoints);
     if (!eps.length) return unscanned("ssllabs returned no endpoints");
     const bad = eps.filter((e) => !GOOD.has(e.grade) || !(e.details && e.details.hstsPolicy && e.details.hstsPolicy.status === "present"));

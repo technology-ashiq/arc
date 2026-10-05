@@ -16,3 +16,9 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 
 - B1 [medium] -> debt D18: the window is a kill between an HTTP answer and a synchronous state write; closing it needs a provider-side marker Vercel projects do not carry.
 - Logic surface: RUN FAILED (timeout); round cap reached, merged on boundary + CI.
+
+## attack 0109a8d r1 (slice 5)
+
+- L1 [high] (non-main branch) -> already debt D12 (repo, ci, hosting, environments all assume `main`).
+- L6 [medium] REJECTED -- a preview must be on `*.vercel.app`; another suffix is not this slot's proof.
+- L8 [medium] fixed as `*-if-ours` teardown actions; L10 fixed (READY without endpoints is malformed, not UNSCANNED).

@@ -372,7 +372,7 @@ arm() {
   [ "$(j 'o.reported.join(",")')" = "github-branch technology-ashiq/arc-sandbox:arc/preview-check,github-pr technology-ashiq/arc-sandbox#1" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.evidence.url')" == "https://"*".vercel.app" ]] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.join(",")')" = "close-pr,delete-branch" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "close-pr-if-ours,delete-branch-if-ours" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: environments refuses a preview-check branch it did not make, opening no PR" {
@@ -417,4 +417,21 @@ arm() {
 @test "launch-contract: tls refuses while Vercel reports the domain misconfigured" {
   arm tls misconfigured
   [ "$(j 'o.scaffold.code')" = "DOMAIN_MISCONFIGURED" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: environments verify never takes an owner's preview-check branch as proof" {
+  arm environments owner-branch-verify
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false FOREIGN_BRANCH: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a branch launch recorded but never committed to is finished; one it never recorded is refused" {
+  arm environments killed-after-branch
+  [ "$(j 'o.scaffold.ok + " " + o.branchCommits + " " + o.verify.ok')" = "true 2 true" ] || { echo "$DONE"; false; }
+  arm environments unrecorded-branch-at-main
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_BRANCH" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a token that cannot see the repo refuses, never tries to create" {
+  arm environments no-access
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "NO_ACCESS 0" ] || { echo "$DONE"; false; }
 }

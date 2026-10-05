@@ -73,13 +73,23 @@ export async function scaffold(ctx) {
   const p = await vc(ctx, "GET", `/v9/projects/${pid}`);
   if (p.body && p.body.previewDeploymentsDisabled === true) throw refuse("PREVIEWS_DISABLED", `vercel project ${pid} has preview deployments turned off; the owner turns them on`);
 
-  // The branch is launch's when its head commit carries this slot's trailer; any other branch of that name is refused.
+  // The repo is read first: a 404 on the branch means absent only when the token can see the repo at all. A token
+  // without access answers 404 everywhere, and that must refuse, not try to create (attack 0109a8d).
+  const rp = await gh(ctx, "GET", `/repos/${full}`, undefined, [404]);
+  if (rp.status === 404) throw refuse("NO_ACCESS", `GITHUB_TOKEN cannot see ${full}; give it access to the venture repo`);
+  const main = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
+  const base = main.body && main.body.object && SHA.test(String(main.body.object.sha)) ? main.body.object.sha : null;
+  if (!base) throw new Error(`github returned no main head for ${full}`);
+
+  // The branch is launch's when its head commit carries this slot's trailer. A branch launch recorded that is still
+  // at main's head is one an earlier attempt created and was killed before its commit: it is finished, not refused
+  // (attack 0109a8d B1). Anything else of that name is the owner's and is refused.
+  const bid = `${full}:${BRANCH}`;
   const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/${BRANCH}`, undefined, [404]);
-  if (ref.status === 404) {
-    const main = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
-    const base = main.body && main.body.object && SHA.test(String(main.body.object.sha)) ? main.body.object.sha : null;
-    if (!base) throw new Error(`github returned no main head for ${full}`);
-    await gh(ctx, "POST", `/repos/${full}/git/refs`, { ref: `refs/heads/${BRANCH}`, sha: base });
+  const tip = ref.status === 200 && ref.body && ref.body.object ? String(ref.body.object.sha) : null;
+  if (ref.status === 404 || (tip === base && ctx.resources.some((r) => r.kind === "github-branch" && r.id === bid))) {
+    if (ref.status === 404) await gh(ctx, "POST", `/repos/${full}/git/refs`, { ref: `refs/heads/${BRANCH}`, sha: base });
+    ctx.report({ kind: "github-branch", id: bid });
     await gh(ctx, "PUT", `/repos/${full}/contents/${FILE}`, { message: `environments: preview check (ADR-1728)\n\n${trailer(ctx)}`, content: b64(BODY), branch: BRANCH });
   } else {
     const head = await gh(ctx, "GET", `/repos/${full}/commits/${encodeURIComponent(BRANCH)}`);
@@ -112,6 +122,10 @@ async function probe(ctx) {
   const head = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/${BRANCH}`, undefined, [404]);
   const sha = head.status === 200 && head.body && head.body.object && SHA.test(String(head.body.object.sha)) ? head.body.object.sha : null;
   if (!sha) return { ok: false, reason: `${full} has no ${BRANCH} branch` };
+  // The preview is the proof only when the branch is launch's: an owner's branch of that name proves nothing
+  // (attack 0109a8d B2).
+  const c = await gh(ctx, "GET", `/repos/${full}/commits/${sha}`);
+  if (!isOurs(ctx, c.body && c.body.commit && c.body.commit.message)) return { ok: false, reason: `FOREIGN_BRANCH: ${full}:${BRANCH} head is not launch's commit` };
   let last = `no preview deployment of ${sha.slice(0, 7)} yet`;
   for (let i = 0; i < 8; i++) {
     if (i) await wait(30000, ctx.signal);
@@ -140,7 +154,9 @@ export async function verify(ctx) {
 }
 
 export async function teardown(ctx) {
-  const order = { "github-pr": "close-pr", "github-branch": "delete-branch" };
+  // Each step re-checks at run time that the PR and branch are still launch's (head carries the trailer); the owner
+  // may have taken either over since (attack 0109a8d L8).
+  const order = { "github-pr": "close-pr-if-ours", "github-branch": "delete-branch-if-ours" };
   const mine = ctx.resources.filter((r) => order[r.kind]).sort((a, b) => Object.keys(order).indexOf(a.kind) - Object.keys(order).indexOf(b.kind));
   return { steps: mine.map((r, i) => ({ order: i + 1, action: order[r.kind], resource: r.id })) };
 }

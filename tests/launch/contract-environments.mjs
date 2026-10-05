@@ -64,6 +64,30 @@ switch (scenario) {
   case "verify-before":
     out.verify = await adapter.verify(ctxFor());
     break;
+  case "owner-branch-verify":
+    // The owner's own arc/preview-check, with a READY preview: verify must not take it as launch's proof.
+    repo().branches = { "arc/preview-check": [repo().commits[0], { sha: "b".repeat(40), message: "owner work", files: {} }] };
+    out.verify = await adapter.verify(ctxFor());
+    break;
+  case "killed-after-branch": {
+    // An earlier attempt created the branch and was killed before its commit: the re-run finishes it.
+    repo().branches = { "arc/preview-check": [repo().commits[0]] };
+    reported.push({ kind: "github-branch", id: `${FULL}:arc/preview-check` });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.branchCommits = repo().branches["arc/preview-check"].length;
+    out.verify = await adapter.verify(ctxFor());
+    break;
+  }
+  case "unrecorded-branch-at-main":
+    // A branch at main's head that launch never recorded is not adopted.
+    repo().branches = { "arc/preview-check": [repo().commits[0]] };
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    break;
+  case "no-access":
+    github.store.delete(FULL);
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.creates = github.calls.filter((c) => c.startsWith("POST ")).length;
+    break;
   case "bad-upstream":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ upstream: { hosting: [{ kind: "vercel-project", id: "../x" }] } })));
     out.calls = vercel.calls.length;
