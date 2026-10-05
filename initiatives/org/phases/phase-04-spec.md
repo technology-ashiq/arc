@@ -12,7 +12,7 @@
 - Sync golden and wiki regenerated in the same commit. Added through /arc-change, 2026-10-06.
 
 ## Exit criteria (Definition of Done)
-- [ ] each gate FAILs on each of the three files with one duplicate key, naming the file and the key
+- [ ] each gate FAILs on every face contract file it reads with one duplicate key, naming the file (face-coverage never reads room-copy.json; face-sections catches a registry duplicate as drift)
 - [ ] both gates pass on main's real contracts
 - [ ] tests added & green on CI (`tests/org/dup-keys.mjs` from a bats file)
 - [ ] live demo run + output checked

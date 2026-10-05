@@ -76,3 +76,4 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A scratch tree with no cleanup leaked three repo copies per run** — rmSync in finally, Phase 04 attack B2 — *every mkdtemp in a test*
 - **A spawned gate killed by its timeout (status null) counted as "refused"** — require a numeric non-zero status, Phase 04 attack B5 — *every `status !== 0` check on spawnSync*
 - **One strict-JSON helper pasted into two gates** — `readStrictJson` exported once from core/json-strict.mjs, Phase 04 attack B7 — *every helper copied between two gates*
+- **A gate fixture built its scratch tree from a hand list of directories, so the gate failed for a missing `.claude/hooks` and the "it refused the duplicate" check was vacuous** — the scratch tree is `git archive HEAD`, and a clean copy must pass first; the matrix lists only files each gate truly reads, Cycle 20 Phase 04 CI — *every fixture that copies part of the repo to run a whole-repo gate*
