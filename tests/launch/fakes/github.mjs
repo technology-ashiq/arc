@@ -53,7 +53,53 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     if (method === "GET" && rest === "branches/main")
       return r.commits.length ? json(200, { name: "main", commit: { sha: r.commits[r.commits.length - 1].sha } }) : err(404, "Branch not found");
 
+    // Branches other than main: r.branches[name] = [commits], oldest first; pulls are r.pulls.
+    r.branches = r.branches || {};
+    r.pulls = r.pulls || [];
+    const head = (b) => (b === "main" ? r.commits[r.commits.length - 1] : (r.branches[b] || []).slice(-1)[0]);
+    const rm = rest.match(/^git\/ref\/heads\/(.+)$/);
+    if (rm && method === "GET") { const c = head(rm[1]); return c ? json(200, { ref: `refs/heads/${rm[1]}`, object: { sha: c.sha } }) : err(404, "Not Found"); }
+    if (method === "POST" && rest === "git/refs") {
+      const b = String(body.ref).replace(/^refs\/heads\//, "");
+      if (head(b)) return err(422, "Reference already exists");
+      const from = r.commits.find((c) => c.sha === body.sha);
+      if (!from) return err(422, "Object does not exist");
+      r.branches[b] = [from];
+      return json(201, { ref: body.ref, object: { sha: body.sha } });
+    }
+    const hm = rest.match(/^commits\/([^/]+)$/);
+    if (hm && method === "GET") {
+      const key = decodeURIComponent(hm[1]);
+      const c = head(key) || [...r.commits, ...Object.values(r.branches).flat()].find((x) => x.sha === key);
+      return c ? json(200, { sha: c.sha, commit: { message: c.message } }) : err(404, "No commit found");
+    }
+    if (rest === "pulls" && method === "GET") {
+      const h = url.searchParams.get("head");
+      const st = url.searchParams.get("state") || "open";
+      return json(200, r.pulls.filter((p) => (st === "all" || p.state === st) && (!h || `${login}:${p.head}` === h)));
+    }
+    const pm = rest.match(/^pulls\/(\d+)$/);
+    if (pm && method === "PATCH") {
+      const pr = r.pulls.find((p) => String(p.number) === pm[1]);
+      if (!pr) return err(404, "Not Found");
+      if (pr.merged_at) return err(422, "Cannot reopen a merged pull request");
+      Object.assign(pr, body);
+      return json(200, pr);
+    }
+    if (rest === "pulls" && method === "POST") {
+      if (!head(body.head)) return err(422, "Validation Failed: head does not exist");
+      if (r.pulls.some((p) => p.head === body.head && p.state === "open")) return err(422, "A pull request already exists");
+      const pr = { number: r.pulls.length + 1, state: "open", head: body.head, base: body.base, title: body.title, body: body.body, merged_at: null };
+      r.pulls.push(pr);
+      return json(201, pr);
+    }
     const cm = rest.match(/^contents\/(.+)$/);
+    if (cm && method === "PUT" && body.branch && body.branch !== "main") {
+      if (!r.branches[body.branch]) return err(404, "Branch not found");
+      const c = { sha: sha(), message: body.message, files: { [cm[1]]: "blob" } };
+      r.branches[body.branch].push(c);
+      return json(201, { content: { path: cm[1] }, commit: { sha: c.sha } });
+    }
     if (cm) {
       const f = r.files[cm[1]];
       if (method === "GET") return f ? json(200, { path: cm[1], sha: f.sha, content: f.content, encoding: "base64" }) : err(404, "Not Found");

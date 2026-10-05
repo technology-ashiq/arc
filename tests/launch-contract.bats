@@ -364,3 +364,83 @@ arm() {
   arm hosting aged-hold
   [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: environments opens one tagged preview PR, never touches main, and verifies its READY preview" {
+  arm environments twice
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.prs + " " + o.branchCommits + " " + o.mainCommits')" = "1 2 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-branch technology-ashiq/arc-sandbox:arc/preview-check,github-pr technology-ashiq/arc-sandbox#1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.evidence.url')" == "https://"*".vercel.app" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "close-pr-if-ours,delete-branch-if-ours" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: environments refuses a preview-check branch it did not make, opening no PR" {
+  arm environments foreign-branch
+  [ "$(j 'o.scaffold.code + " " + o.prs')" = "FOREIGN_BRANCH 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: environments refuses a project with previews off, and a failed preview never verifies" {
+  arm environments previews-off
+  [ "$(j 'o.scaffold.code')" = "PREVIEWS_DISABLED" ] || { echo "$DONE"; false; }
+  arm environments preview-error
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false preview "*" is ERROR" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: environments verify before apply, and a bad upstream id, answer without a throw or a call" {
+  arm environments verify-before
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false "*"has no arc/preview-check branch" ]] || { echo "$DONE"; false; }
+  arm environments bad-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_UPSTREAM 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: tls verifies only an A grade with HSTS on every endpoint, answered by SSL Labs" {
+  arm tls apply
+  [ "$(j 'o.scaffold.ok + " " + o.reported.join(",") + " " + o.teardown')" = "true tls-managed 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.ssllabs.com" ] || { echo "$DONE"; false; }
+  arm tls grade-b
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false ssllabs: 76.76.21.22 grade B" ]] || { echo "$DONE"; false; }
+  arm tls no-hsts
+  [[ "$(j 'o.verify.reason')" == *"no HSTS"* ]] || { echo "$DONE"; false; }
+  arm tls pending
+  [ "$(j 'o.verify.ok + " " + o.ssllabsCalls')" = "true 4" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: tls reports a pending, rate-limited or unreachable scanner as UNSCANNED, never verified" {
+  for s in pending-forever rate-limited overloaded unreachable; do
+    arm tls "$s"
+    [ "$(j 'o.verify.ok')" = "false" ] || { echo "$s: $DONE"; false; }
+    [[ "$(j 'o.verify.reason')" == "UNSCANNED("* ]] || { echo "$s: $DONE"; false; }
+  done
+}
+
+@test "launch-contract: tls refuses while Vercel reports the domain misconfigured" {
+  arm tls misconfigured
+  [ "$(j 'o.scaffold.code')" = "DOMAIN_MISCONFIGURED" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: environments verify never takes an owner's preview-check branch as proof" {
+  arm environments owner-branch-verify
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false FOREIGN_BRANCH: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a branch launch recorded but never committed to is finished; one it never recorded is refused" {
+  arm environments killed-after-branch
+  [ "$(j 'o.scaffold.ok + " " + o.branchCommits + " " + o.verify.ok')" = "true 2 true" ] || { echo "$DONE"; false; }
+  arm environments unrecorded-branch-at-main
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_BRANCH" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a token that cannot see the repo refuses, never tries to create" {
+  arm environments no-access
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "NO_ACCESS 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a closed preview PR is reopened, a merged one refuses, an owner's PR is never claimed" {
+  arm environments closed-pr
+  [ "$(j 'o.scaffold.ok + " " + o.prs + " " + o.state')" = "true 1 open" ] || { echo "$DONE"; false; }
+  arm environments merged-pr
+  [ "$(j 'o.scaffold.code + " " + o.prs')" = "PR_MERGED 1" ] || { echo "$DONE"; false; }
+  arm environments owner-pr
+  [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
+}
