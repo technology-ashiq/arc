@@ -5,8 +5,6 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/org.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*org v2.1 "the four ORG-R holds"*
-
 ## At a glance
 
 | | |

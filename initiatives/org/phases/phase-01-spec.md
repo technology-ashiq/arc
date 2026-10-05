@@ -24,13 +24,13 @@
 - `products/org/manifest.json`, sync golden and wiki updated in the same commit.
 
 ## Exit criteria (Definition of Done)
-- [ ] happy path emits exactly one event with the five payload fields
-- [ ] five mutants refuse by name, zero events written
-- [ ] tests added & green on CI (`tests/org/judge.mjs` from a bats file)
-- [ ] live demo run + output checked
-- [ ] contract tests: n/a — no external dependency
-- [ ] `/arc-attack` two surfaces once on the local commit before push
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] happy path emits exactly one event with the five payload fields
+- [x] five mutants refuse by name, zero events written
+- [x] tests added & green on CI (`tests/org/judge.mjs` from a bats file)
+- [x] live demo run + output checked
+- [x] contract tests: n/a — no external dependency
+- [x] `/arc-attack` two surfaces once on the local commit before push
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/org/judge.mjs` (sandbox root + spine + one fixture team with a head and two staffed workers).
