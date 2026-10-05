@@ -218,3 +218,11 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$(slot_field probe reason)" == "refused:ENV_UNDECLARED LAUNCH_UNDECLARED_KEY"* ]] || { echo "$(slot_field probe reason)"; false; }
 }
+
+@test "launch-runner: an adapter sees its depends_on slots' recorded resources, and only those (ADR-1725)" {
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run env FAKE_PRINT_UPSTREAM=1 node "$(L)" apply after-probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *'FAKE_UPSTREAM {"probe":[{"kind":"fake","id":"r1-1"},{"kind":"fake","id":"r2-2"}]}'* ]] || { echo "$output"; false; }
+}

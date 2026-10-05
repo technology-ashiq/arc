@@ -8,6 +8,7 @@
 //   FAKE_FETCH_HOST=h          call ctx.fetch("https://h/") before creating anything
 //   FAKE_WRITE=rel             call ctx.write(rel) before creating anything
 //   FAKE_SENSITIVE=action      call ctx.sensitive(action) before creating anything
+//   FAKE_PRINT_UPSTREAM=1      print `FAKE_UPSTREAM <json of ctx.upstream>` before creating anything
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 export const id = "fake";
@@ -26,6 +27,7 @@ export async function scaffold(ctx) {
   if (env.FAKE_FETCH_HOST) await ctx.fetch(`https://${env.FAKE_FETCH_HOST}/`);
   if (env.FAKE_WRITE) ctx.write(env.FAKE_WRITE, "fixture\n");
   if (env.FAKE_SENSITIVE) ctx.sensitive(env.FAKE_SENSITIVE);
+  if (env.FAKE_PRINT_UPSTREAM) console.log(`FAKE_UPSTREAM ${JSON.stringify(ctx.upstream)}`);
   for (const name of ["r1", "r2"]) {
     const have = read().find((r) => r.tag === ctx.tag && r.name === name);
     let rid = have && have.id;

@@ -49,9 +49,11 @@ if (missing.length) fail(`env:${missing[0]}`);
 
 const ac = new AbortController();
 const timer = setTimeout(() => ac.abort(), Math.max(1, Number(a.timeout) * 1000 - 100));
-const prior = slotRow(loadState(a.stateDir, a.venture), a.slot);
+const st0 = loadState(a.stateDir, a.venture);
+const prior = slotRow(st0, a.slot);
+const upstream = Object.fromEntries((slot.depends_on || []).map((d) => [d, slotRow(st0, d).resources || []]));
 const ctx = makeCtx({
-  profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, tag: resourceTag(a.venture, a.slot, row.id),
+  profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, upstream, tag: resourceTag(a.venture, a.slot, row.id),
   attempt: a.attempt, signal: ac.signal, env: Object.fromEntries(keys.map((k) => [k, kept[k]])), approvals: prior.approvals || [],
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
