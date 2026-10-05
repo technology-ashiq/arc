@@ -32,7 +32,36 @@ run says out loud which sources answered and which did not.
 
 ## Verification plan
 
-Coarse — refined via `/arc-change` when the phase starts. Availability reporting is proved by
+Refined 2026-10-05 via `/arc-change`. **Owner 2026-10-05:** add shadcn MCP and 21st.dev (search
+mode only) to the registry; **Mobbin declined on cost** -- its row is committed `status: off` and
+nothing references it. Five slices, each red-first on CI:
+
+- **S1 -- the registry rows.** Three owner-approved rows in `design.sources.yaml`: `shadcn`
+  (`access: mcp`, `auth: none`, `cost: free`, `status: active`), `21st-dev` (`access: mcp`,
+  `auth: env`, `credential_ref: API_KEY_21ST`, `allowed_use` without any generate use,
+  `status: active`), `mobbin` (`status: off`). `availability: unknown` on all three. Proved by
+  `design-sources-lint` exiting 0, and by the row test refusing a `21st-dev` row that carries a
+  `draft-variant` use or a `generator` kind (the paid generator).
+- **S2 -- availability is observed, per run.** Every refpack run ends with one `availability`
+  line per active source: `ANSWERED n/asked`, `REFUSED (robots)` or `COULD-NOT-SCAN (reason)`.
+  Asked for N and got fewer prints the count, never a shorter pack in silence. An `off` source
+  makes no request at all. Proved on fakes: one source unreachable, one robots `Disallow`, one
+  short answer -- each named in the summary, and the pack still builds from what answered.
+- **S3 -- credential mapping.** The 21st.dev adapter sends the upstream header `x-api-key`,
+  read from `API_KEY_21ST`; arc's internal names never appear in the request. A missing key is
+  COULD-NOT-SCAN, not a crash and not a silent skip. Proved on the fake transport by asserting
+  the recorded request's headers.
+- **S4 -- `.mcp.json` under the shared-file protocol.** `git log origin/main -5 -- .mcp.json`
+  runs and is pasted into `evidence/phase-05/` BEFORE the edit; shadcn and 21st.dev are added in
+  search mode only.
+- **S5 -- the live pack.** A real pack for the LexOS brief from at least 2 live sources (nicelydone
+  plus 21st.dev search), each with its observed availability line; the pack opened in-session
+  before any verdict about it is carried. Contract tests run against the real shadcn and 21st.dev
+  servers.
+
+Two fresh attackers (logic + boundary) run on the PR that ships S2-S3, per the non-negotiable.
+
+The coarse plan this replaces: availability reporting is proved by
 running with one source deliberately unreachable and asserting the run degrades with a printed
 status line rather than a shorter pack and no sign anything was dropped. Credential mapping is
 proved by asserting the upstream request carries the upstream header name, never arc's internal

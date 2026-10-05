@@ -101,6 +101,8 @@ teardown() { _arc_teardown 2>/dev/null || true; }
       "awwwards": "active",
       "godly": "off", "dribbble": "off", "behance": "off",
       "land-book": "off", "page-collective": "off",
+      // Phase 05, owner 2026-10-05: shadcn + 21st.dev (search only) on, Mobbin declined on cost.
+      "shadcn": "active", "21st-dev": "active", "mobbin": "off",
     };
     const bad = [];
     for (const [id, st] of Object.entries(want)) {
@@ -110,6 +112,10 @@ teardown() { _arc_teardown 2>/dev/null || true; }
     const aw = by["awwwards"];
     if (aw && !(aw.allowed_use || []).includes("link-only")) bad.push("awwwards: allowed_use must carry link-only -- its terms forbid reproduction, so provenance is permitted and a local image cache is not");
     if (aw && (aw.allowed_use || []).includes("reference-pack")) bad.push("awwwards: allowed_use must NOT carry reference-pack");
+    // 21st.dev is SEARCH MODE ONLY (owner 2026-10-05): its generator is paid.
+    const t = by["21st-dev"];
+    if (t && ((t.allowed_use || []).includes("draft-variant") || (t.kind || []).includes("generator"))) bad.push("21st-dev: search mode only -- a draft-variant use or a generator kind turns on the paid generator");
+    if (t && t.credential_ref !== "API_KEY_21ST") bad.push("21st-dev: credential_ref must be API_KEY_21ST");
     if (bad.length) { console.log(bad.join("\n")); process.exit(1); }
     console.log("rows ok");
   '
