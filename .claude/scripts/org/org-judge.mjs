@@ -152,14 +152,17 @@ async function main(argv) {
     return 1;
   }
   const arcEvent = join(root, ".claude", "scripts", "hq", "arc-event.mjs");
-  const refused = spineRefusal(arcEvent, "review.completed", d.payload, { cwd: root });
+  // The emit writes to the SAME spine the receipt, the placements and the one-verdict check were read from: a verdict
+  // judged on one spine and landed on another passed its dedupe every time (attack bc27378 B1).
+  const emitOpts = { cwd: root, env: { ...process.env, ARC_SPINE_ROOT: spineDir } };
+  const refused = spineRefusal(arcEvent, "review.completed", d.payload, emitOpts);
   if (refused) { console.log(`org-judge: REFUSED -- the spine would refuse this verdict: ${refused}`); return 1; }
   if (o.dryRun) {
     console.log(`org-judge: would emit review.completed ${JSON.stringify(d.payload)}`);
     console.log("org-judge: dry run -- nothing emitted");
     return 0;
   }
-  const r = emitReceipt(arcEvent, "review.completed", d.payload, { cwd: root });
+  const r = emitReceipt(arcEvent, "review.completed", d.payload, emitOpts);
   if (r.state !== "landed") { console.log(`org-judge: NOT RECORDED (${r.state}) -- ${r.why}`); return 1; }
   console.log(`org-judge: review.completed ${r.id ?? "(id line lost)"} -- ${o.head} ${o.verdict}s ${d.payload.subject_role}'s ${o.receipt}`);
   return 0;

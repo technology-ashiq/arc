@@ -10,8 +10,8 @@ import { join } from "node:path";
 
 const [dir] = process.argv.slice(2);
 if (!dir) { console.error("usage: judge-spine.mjs DIR"); process.exit(2); }
-const HANDOFF = "01M0JUDGESPINE000000000001";
-const RUN = "01M0JUDGESPINE000000000002";
+const HANDOFF = "01M0JDGESPNEX0000000000001";
+const RUN = "01M0JDGESPNEX0000000000002";
 const ev = (id, kind, ts, payload) => ({ v: 1, id, ts, kind, actor: "arc-run", process: "review-diff@1.0.0",
   outcome: "ok", payload, venture: "arc", model: null, cost: null, evidence: null, supersedes: null, run_id: null, idem: null, sha: null });
 const events = [

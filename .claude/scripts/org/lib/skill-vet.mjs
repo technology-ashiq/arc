@@ -8,11 +8,12 @@
 // Pure: the caller hands in the bytes and the names main already holds.
 
 export const MAX_SKILL_BYTES = 64 * 1024;
-export const SKILL_NAME_RE = /^[a-z][a-z0-9-]{1,40}[a-z0-9]$/;
+// A Windows device name (con, nul, com1 ...) passes the grammar and opens a device on the Windows CI leg (attack bc27378 B2).
+export const SKILL_NAME_RE = /^(?!(con|prn|aux|nul|com[0-9]|lpt[0-9])$)[a-z][a-z0-9-]{1,40}[a-z0-9]$/;
 
 // Invisible or direction-changing characters: zero-width, bidi embeddings/overrides/isolates, the BOM past byte 0,
 // every other Unicode format character, and C0/C1 controls other than tab and newline.
-const INVISIBLE_RE = /[​-‏‪-‮⁠-⁤⁦-⁩﻿]|\p{Cf}|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/u;
+const INVISIBLE_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]|\p{Cf}|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/u;
 
 // Each rule: [code, what, regex]. Case-insensitive; matched against the whole text and against a copy with every run
 // of whitespace collapsed to one space, so a phrase split over lines or padded with spaces is still the phrase.
@@ -61,7 +62,7 @@ export function vetSkill(text, { taken = [] } = {}) {
   if (bytes === 0) fail("EMPTY", "the skill is empty");
   if (bytes > MAX_SKILL_BYTES) fail("OVERSIZE", `${bytes} bytes, over the ${MAX_SKILL_BYTES}-byte cap`);
   if (text.includes("�")) fail("NOT_UTF8", "the bytes did not decode as UTF-8 (a replacement character is present)");
-  const body = text.startsWith("﻿") ? text.slice(1) : text;
+  const body = text.startsWith("\uFEFF") ? text.slice(1) : text;
   const inv = INVISIBLE_RE.exec(body);
   if (inv) fail("INVISIBLE", `an invisible or direction-changing character U+${inv[0].codePointAt(0).toString(16).toUpperCase().padStart(4, "0")} at offset ${inv.index}`);
 

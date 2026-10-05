@@ -74,7 +74,8 @@ const quote = (s) => `'${String(s).replace(/'/g, "''")}'`;
  * only differences from the original are origin, hire, binds.agents and history.
  * @returns {{ text: string, replaced: string }}
  */
-export function ownCard(text, name, today) {
+export function ownCard(raw, name, today) {
+  const text = String(raw).replace(/^[\uFEFF]/, "").split("\r\n").join("\n");
   const before = parseYamlSubset(text);
   if (!before.ok || !before.value) stop(2, "the role card on main does not parse");
   const c = before.value;

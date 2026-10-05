@@ -42,7 +42,8 @@ const ROOM_COPY = "initiatives/face/contracts/room-copy.json";
 const REGISTRY = "initiatives/face/contracts/rooms.generated.json";
 /** The tools an agent may be granted here, as Claude Code names them. */
 export const AGENT_TOOLS = Object.freeze(["Read", "Grep", "Glob", "Write", "Edit", "Bash", "WebSearch", "WebFetch", "NotebookEdit"]);
-const NAME_RE = /^[a-z][a-z0-9-]{1,40}[a-z0-9]$/;
+// Never a Windows device name: .claude/agents/con.md is the CON device on a Windows checkout (attack bc27378 B2).
+const NAME_RE = /^(?!(con|prn|aux|nul|com[0-9]|lpt[0-9])$)[a-z][a-z0-9-]{1,40}[a-z0-9]$/;
 const PRODUCT_RE = /^[a-z][a-z0-9-]{0,40}$/;
 
 /** A refusal: the message is the line the CLI prints, the code its exit (org-own imports the planner, ADR-1629). */

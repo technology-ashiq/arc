@@ -455,7 +455,10 @@ const roleSeat = await (async () => {
       try { names = readdirSync(join(base, d)).sort(); } catch { continue; }
       for (const n of names) {
         if (!n.endsWith(".role.yaml")) continue;
-        const r = parseYamlSubset(readFileSync(join(base, d, n), "utf8").replace(/^﻿/, ""));
+        let r;
+        // Skipped, never thrown: process-lint skips the same entry, and the two readers must agree (attack bc27378 B4).
+        try { r = parseYamlSubset(readFileSync(join(base, d, n), "utf8").replace(/^\uFEFF/, ""));
+        } catch { continue; }
         if (r.ok && r.value && r.value.id === roleId) out.push(r.value);
       }
     }
@@ -468,7 +471,10 @@ const roleSeat = await (async () => {
     process.exit(2);
   }
   if (trialSeat) {
-    if (!AGENT_RE.test(trialSeat) || !existsSync(join(root, ".claude", "agents", `${trialSeat}.md`))) {
+    // Listed in the directory AND a regular file: existsSync alone said yes to a device (attack bc27378 B3).
+    let listed = false;
+    try { listed = readdirSync(join(root, ".claude", "agents")).includes(`${trialSeat}.md`) && statSync(join(root, ".claude", "agents", `${trialSeat}.md`)).isFile(); } catch { listed = false; }
+    if (!AGENT_RE.test(trialSeat) || !listed) {
       console.error(`arc-run: --trial-seat ${JSON.stringify(trialSeat)} is not an agent in .claude/agents/`);
       process.exit(2);
     }

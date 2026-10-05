@@ -80,7 +80,7 @@ function canonicalJson(path, text) {
 
 /** The golden with one line inserted in byte order (LC_ALL=C), as agent-scaffold inserts its own. */
 export function addGoldenLine(text, path, content) {
-  if (text.startsWith("﻿") || text.includes("\r") || !text.endsWith("\n")) stop(1, "the sync golden on main is not plain LF lines");
+  if (text.startsWith("\uFEFF") || text.includes("\r") || !text.endsWith("\n")) stop(1, "the sync golden on main is not plain LF lines");
   const lines = text.split("\n").filter((l) => l !== "");
   if (lines.some((l) => l.split("\t")[0] === path)) stop(1, `${path} is already in the sync golden`);
   const line = `${path}\t${createHash("sha256").update(content.replace(/\r/g, "")).digest("hex")}`;
@@ -93,7 +93,9 @@ export function addGoldenLine(text, path, content) {
  * The card with NAME added to binds.skills, by a text splice (comments and order kept), then proven by a re-parse:
  * the only difference from the original is that one list entry.
  */
-export function addSkillToCard(text, name) {
+export function addSkillToCard(raw, name) {
+  // BOM and CRLF folded first: a Notepad-saved card spliced to mixed endings (attack bc27378 B6).
+  const text = String(raw).replace(/^[\uFEFF]/, "").split("\r\n").join("\n");
   const before = parseYamlSubset(text);
   if (!before.ok || !before.value || !before.value.binds) stop(1, "the role card on main does not parse");
   const skills = Array.isArray(before.value.binds.skills) ? before.value.binds.skills : null;

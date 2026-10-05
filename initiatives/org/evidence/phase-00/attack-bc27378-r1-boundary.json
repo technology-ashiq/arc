@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/org/org-judge.mjs:140-167",
+      "breaking_input": "org-judge.mjs --head solution-architect --receipt <ULID> --verdict accept --reason ok --spine-dir /tmp/other-spine, with ARC_SPINE_ROOT unset. Run it twice.",
+      "why": "The handoff receipt, the placements and the ALREADY_JUDGED dedupe are all read from --spine-dir. emitReceipt then runs arc-event.mjs with only cwd set and never passes the spine dir, so the verdict lands on the canonical spine. Both runs pass the dedupe on the alternate spine and write two verdicts to the real one, and the receipt may not exist there at all. The bats fixture hides this by exporting ARC_SPINE_ROOT.",
+      "fix": "Pass the resolved spine dir into the emit child's env (ARC_SPINE_ROOT=spineDir). Or refuse --spine-dir on a non-dry-run unless it resolves to the same directory the emitter will write.",
+      "twin_of": "org-dispatch read governance and open proposals from `--spine-dir` but `--emit` wrote to the canonical spine"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/lib/skill-vet.mjs:12, .claude/scripts/org/skill-import.mjs:176-177",
+      "breaking_input": "A SKILL.md whose frontmatter says `name: con` (also aux, nul, prn, com1, lpt1). Each matches SKILL_NAME_RE.",
+      "why": "The name becomes the path segment .claude/skills/con/SKILL.md. Windows opens con, aux and the like as devices whatever the extension, so the branch cannot be checked out on the Windows CI leg. agent-scaffold's NAME_RE, which org-own reuses for --name, has the same hole.",
+      "fix": "Reject Windows reserved device names (con, prn, aux, nul, com0-9, lpt0-9) in SKILL_NAME_RE and NAME_RE, as lane-resolve does.",
+      "twin_of": "Role ids and produced kinds become file names, and Windows opens `con.role.yaml` as a device whatever the extension"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs (roleSeat, trial seat check)",
+      "breaking_input": "On Windows, `arc-run --process commit-msg-draft --trial-seat con` (or aux, nul), where AGENT_RE accepts con and the lookup is existsSync(.claude/agents/con.md).",
+      "why": "Windows resolves con.md to the CON device, so existsSync can report true for an agent that does not exist. The trial seat is then accepted and readFileSync on the device blocks on the console or returns nothing. Result: a hang or an empty persona with a receipt claiming a trial seat.",
+      "fix": "Reject reserved device names in AGENT_RE and check lstat(...).isFile() instead of existsSync. Also require the agent to appear in a readdirSync listing of .claude/agents.",
+      "twin_of": "/api/org opened every `*.team.yaml` the listing returned, including `con.team.yaml`"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs (cards IIFE)",
+      "breaking_input": "A directory or unreadable entry named org/roles/<dept>/x.role.yaml, or one with a permission error.",
+      "why": "The card loader calls readFileSync with no try/catch and no isFile check. EISDIR or EACCES escapes the async IIFE as an unhandled rejection with a stack trace, so a role-bearing process cannot run at all. process-lint wraps the same read in try/catch and skips the entry, so the two readers disagree.",
+      "fix": "Wrap the read and parse in try/catch, as process-lint's roleCards does. Better, share one card reader between the two.",
+      "twin_of": "treeScripts swallowed every read error / classifies by name before type"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs (persona temp dir cleanup)",
+      "breaking_input": "Start `arc-run --trial-seat X` and cancel it with SIGTERM or SIGINT (a CI cancel).",
+      "why": "The arc-seat- temp dir is removed only in process.on('exit'). Node does not run exit handlers on an unhandled SIGTERM, so a dir holding an agent persona body leaks into tmpdir.",
+      "fix": "Register SIGINT and SIGTERM handlers that remove the dir and then exit. Or write the persona under the run's own scratch dir.",
+      "twin_of": "The self-test cleaned its scratch tree on SIGINT only; a CI cancel sends SIGTERM"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/org/skill-import.mjs:96-111 (addSkillToCard), .claude/scripts/org/org-own.mjs:94",
+      "breaking_input": "A role card on main saved with CRLF endings or a leading BOM (Notepad).",
+      "why": "addSkillToCard splits on \\n only, so the CR stays on every line and the inserted lines are LF-only. The result is a mixed-ending file that fails the proven re-parse with a misleading error, or lands mixed. Neither command strips a BOM, so a BOM card is reported as 'does not parse' for an invisible byte. org-own at least folds CRLF.",
+      "fix": "Normalise a leading BOM and CRLF the way org-own and process-lint do, or preserve the file's own line ending when splicing.",
+      "twin_of": "A UTF-8 BOM (Notepad) became part of the first key and failed a card for an invisible byte"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-own.mjs:37, .claude/scripts/org/skill-import.mjs:44, .claude/scripts/org/org-judge.mjs:44",
+      "breaking_input": "--reason \"--no-tests\", or --description \"-1 to 5 scale\", or --why \"- dropped\".",
+      "why": "The value parsers refuse any value starting with - or --, so legitimate free text is rejected as 'needs a value'. A skipped value could eat the next flag, but this rejects honest prose instead of fixing the cause.",
+      "fix": "Only refuse a value that exactly matches a known flag, or accept `--flag=value` for free-text fields.",
+      "twin_of": ""
+    }
+  ]
+}

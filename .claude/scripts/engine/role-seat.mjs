@@ -12,7 +12,8 @@
 //   trial       --trial-seat named the agent for this run only
 
 export const MIN_RUNS = 3;
-export const AGENT_RE = /^[a-z][a-z0-9-]{0,63}$/;
+// Never a Windows device name: existsSync(".claude/agents/con.md") is true on Windows (attack bc27378 B3).
+export const AGENT_RE = /^(?!(con|prn|aux|nul|com[0-9]|lpt[0-9])$)[a-z][a-z0-9-]{0,63}$/;
 
 function roleOf(p) {
   if (!p || typeof p !== "object") return null;
@@ -72,7 +73,7 @@ export function resolveSeat(card, events, { trial = null } = {}) {
 
 /** The agent file's body with its frontmatter removed -- what a trial seat puts in front of the process. */
 export function personaOf(text) {
-  const t = String(text).replace(/^﻿/, "").replace(/\r\n/g, "\n");
+  const t = String(text).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
   if (!t.startsWith("---\n")) return t.trim();
   const end = t.indexOf("\n---", 4);
   if (end < 0) return t.trim();

@@ -175,7 +175,7 @@ function roleCards() {
     for (const n of names.sort()) {
       if (!n.endsWith(".role.yaml")) continue;
       let r;
-      try { r = parseYamlSubset(readFileSync(join(base, d, n), "utf8").replace(/^﻿/, "")); } catch { continue; }
+      try { r = parseYamlSubset(readFileSync(join(base, d, n), "utf8").replace(/^\uFEFF/, "")); } catch { continue; }
       const c = r && r.ok ? r.value : null;
       // First card wins on a duplicate id; org-coverage owns reporting duplicates.
       if (c && typeof c.id === "string" && !cardsById.has(c.id)) cardsById.set(c.id, c);

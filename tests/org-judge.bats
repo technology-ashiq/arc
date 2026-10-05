@@ -39,7 +39,7 @@ setup() {
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   mkdir -p "$ARC_SPINE_ROOT"
   run node "$ARC_ROOT/tests/org/judge-spine.mjs" "$ARC_SPINE_ROOT"
-  [[ "$output" == "judge-spine: HANDOFF=01M0JUDGESPINE000000000001 RUN=01M0JUDGESPINE000000000002" ]] || { echo "the spine fixture was not written: $output"; return 1; }
+  [[ "$output" == "judge-spine: HANDOFF=01M0JDGESPNEX0000000000001 RUN=01M0JDGESPNEX0000000000002" ]] || { echo "the spine fixture was not written: $output"; return 1; }
 }
 
 @test "org-judge: every test in this file is registered (none dropped by name)" {
@@ -57,7 +57,7 @@ setup() {
 
 @test "org-judge: a head's verdict lands once, judges the worker, and the audit still agrees" {
   local t; t=$(judge_tree) || { echo "fixture failed"; false; }
-  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JUDGESPINE000000000001 --verdict rework --reason "tests missing for the parser" --root "$t"
+  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JDGESPNEX0000000000001 --verdict rework --reason "tests missing for the parser" --root "$t"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == "org-judge: review.completed "* ]] || { echo "$output"; false; }
   [ "$(READ kindcount review.completed)" = "1" ] || { echo "count=$(READ kindcount review.completed)"; false; }
@@ -69,25 +69,25 @@ setup() {
   [[ "$output" == *"0 difference(s)"* ]] || { echo "$output"; false; }
 
   # a second verdict on the same receipt is refused, and nothing more is written
-  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JUDGESPINE000000000001 --verdict accept --reason "fixed" --root "$t"
+  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JDGESPNEX0000000000001 --verdict accept --reason "fixed" --root "$t"
   [ "$status" -eq 1 ] && [[ "$output" == *"ALREADY_JUDGED:"* ]] || { echo "$output"; false; }
   [ "$(READ kindcount review.completed)" = "1" ]
 }
 
 @test "org-judge: refusals name every failed condition and write nothing" {
   local t; t=$(judge_tree) || { echo "fixture failed"; false; }
-  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JUDGESPINE000000000002 --verdict Accept --reason "two" --root "$t"
+  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JDGESPNEX0000000000002 --verdict Accept --reason "two" --root "$t"
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *"NOT_HANDOFF:"* && "$output" == *"BAD_VERDICT:"* ]] || { echo "$output"; false; }
   rm "$t/org/teams/lexos.team.yaml"
-  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JUDGESPINE000000000001 --verdict accept --reason "fine" --root "$t" --dry-run
+  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JDGESPNEX0000000000001 --verdict accept --reason "fine" --root "$t" --dry-run
   [ "$status" -eq 1 ] && [[ "$output" == *"NO_TEAM:"* ]] || { echo "$output"; false; }
   [ "$(READ kindcount review.completed)" = "0" ]
 }
 
 @test "org-judge: a dry run prints the payload and emits nothing" {
   local t; t=$(judge_tree) || { echo "fixture failed"; false; }
-  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JUDGESPINE000000000001 --verdict accept --reason "clean" --root "$t" --dry-run
+  run node "$t/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JDGESPNEX0000000000001 --verdict accept --reason "clean" --root "$t" --dry-run
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *'"subject_role":"code-reviewer"'* ]] || { echo "$output"; false; }
   [ "$(READ kindcount review.completed)" = "0" ]
@@ -97,6 +97,6 @@ setup() {
   [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && skip "Git Bash ln -s copies instead of linking"
   local t; t=$(judge_tree) || { echo "fixture failed"; false; }
   ln -s "$t" "$BATS_TEST_TMPDIR/link" || { echo "no symlink"; false; }
-  run node "$BATS_TEST_TMPDIR/link/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JUDGESPINE000000000001 --verdict accept --reason "clean" --root "$t" --dry-run
+  run node "$BATS_TEST_TMPDIR/link/.claude/scripts/org/org-judge.mjs" --head solution-architect --receipt 01M0JDGESPNEX0000000000001 --verdict accept --reason "clean" --root "$t" --dry-run
   [ "$status" -eq 0 ] && [[ "$output" == *"org-judge: would emit review.completed"* ]] || { echo "the guard no-oped: status $status output [$output]"; false; }
 }
