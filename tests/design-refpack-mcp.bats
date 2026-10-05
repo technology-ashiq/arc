@@ -165,7 +165,8 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   [[ "$output" == *"availability lapa-ninja [fixture]: ANSWERED 0/1 screen(s) added/asked; REFUSED (robots) 1"* ]] || { echo "$output"; false; }
   [[ "$output" == *"availability nicelydone: NOT-ASKED"* ]] || { echo "$output"; false; }
   [[ "$output" != *"mobbin"* ]] || { echo "an off source was reported as a pack source: $output"; false; }
-  [[ "$output" == *"summary: 1 of 3 active pack source(s) answered"* ]] || { echo "$output"; false; }
+  # 21st-dev answered only from a fixture, so it is NOT a live answer (attack ce85db5 B8).
+  [[ "$output" == *"summary: 0 of 3 active pack source(s) answered live since"*"(1 more answered from a fixture only)"* ]] || { echo "$output"; false; }
 }
 
 @test "summary: no --since is refused, and an empty active set is not a pass" {
@@ -200,6 +201,43 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   [ "$status" -eq 4 ] || { echo "a doubled reply was chosen between: $output"; false; }
 }
 
-@test "this file registers the 8 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 8 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 8 -- a @test was silently dropped"; false; }
+@test "attack ce85db5: header grammar, recorder, preview token, tool error, credential pin, zoned --since and torn lines each hold" {
+  _mcp_sandbox
+  # A session id carrying CR LF is refused, not echoed into the next request.
+  printf '{"initialize":{"status":200,"session":"a\\r\\nX-Evil: 1","body":{"jsonrpc":"2.0","id":1,"result":{}}}}\n' > "$SANDBOX/fxsess.json"
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxsess.json"
+  [ "$status" -eq 4 ] || { echo "$output"; false; }
+  [[ "$output" == *"session id outside the header grammar"* ]] || { echo "$output"; false; }
+  # A recorder that already exists is refused before any request.
+  printf 'keep\n' > "$SANDBOX/old.jsonl"
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fx.json" --record-request "$SANDBOX/old.jsonl"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [ "$(cat "$SANDBOX/old.jsonl")" = "keep" ] || { echo "an existing file was appended to"; false; }
+  # A preview URL loses its query: a signed token never reaches output.
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"[{\\"name\\":\\"Card\\",\\"preview\\":\\"https://cdn.21st.dev/c.png?token=SIGNED\\"}]"}]}}}}\n' > "$SANDBOX/fxtok.json"
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 1 --mcp-fixture "$SANDBOX/fxtok.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"preview https://cdn.21st.dev/c.png"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"SIGNED"* ]] || { echo "the token was printed: $output"; false; }
+  # A tool-level error (isError) is COULD-NOT-SCAN, not zero results.
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"isError":true,"content":[{"type":"text","text":"rate limited"}]}}}}\n' > "$SANDBOX/fxerr2.json"
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fxerr2.json"
+  [ "$status" -eq 4 ] || { echo "$output"; false; }
+  [[ "$output" == *"the tool reported an error: rate limited"* ]] || { echo "$output"; false; }
+  # A registry row pointing the key at another secret is refused.
+  sed 's/credential_ref: API_KEY_21ST/credential_ref: GITHUB_TOKEN/' "$SANDBOX/design.sources.yaml" > "$SANDBOX/swap.yaml"
+  run env GITHUB_TOKEN=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-fixture "$SANDBOX/fx.json" --registry "$SANDBOX/swap.yaml"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"this adapter sends only API_KEY_21ST"* ]] || { echo "$output"; false; }
+  # --since without a zone is refused; a torn availability line is counted, not dropped.
+  run node "$(_refpack)" --summary --brief lexos --since 2026-10-05T09:00:00
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  printf 'torn-line-without-tabs\n' >> "$(_avail)"
+  run node "$(_refpack)" --summary --brief lexos --since 2026-01-01T00:00:00Z
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 malformed availability line(s) were not read"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 9 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 9 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 9 -- a @test was silently dropped"; false; }
 }

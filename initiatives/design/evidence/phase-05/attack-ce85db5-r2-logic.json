@@ -1,0 +1,50 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:query(record)",
+      "breaking_input": "A query string containing a literal tab character, e.g., 'tab\\tbreaker', or a remote error message containing a newline escape.",
+      "why": "The record function writes the reason text into a tab-separated availability.log without stripping control characters. This allows log forging or separation of log fields, breaking the later summary parser which splits on tabs.",
+      "fix": "Sanitize the input fields passed to record by stripping all control characters (U+0000-U+001F) before appending to the log file.",
+      "twin_of": "Remote text reached a tab-separated log verbatim -> strip control characters from every logged field."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:searchItems",
+      "breaking_input": "A result text string that parses to a non-array, non-object primitive (like a string 'error' or number 42), or an object without expected keys.",
+      "why": "In searchItems, if the parsed JSON is a primitive or an object missing 'results'/'components'/'items', it is silently ignored or mishandled. If it is a string, it might be incorrectly counted or cause iteration issues downstream in query when accessing it.name.",
+      "fix": "Ensure searchItems strictly returns an array of validated items and explicitly skip primitives or objects that do not match the expected result structure.",
+      "twin_of": "Free text counted as a hit -> count structured items only, and label fixture records in the summary"
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:query(fixture parsing)",
+      "breaking_input": "A --mcp-fixture path pointing to a file that does not exist or contains invalid JSON, with ARC_DESIGN_OFFLINE=1.",
+      "why": "The JSON.parse(readFileSync(...)) call for the fixture is not wrapped in a try-catch. If the file is missing or corrupt, the process crashes with an unhandled exception instead of failing gracefully with a COULD-NOT-SCAN or usage error.",
+      "fix": "Wrap the readFileSync and JSON.parse in a try-catch block and fail with a clear error message if the fixture cannot be read or parsed.",
+      "twin_of": "A parser throw left to a stack trace beside two guarded siblings -> every step that can fail answers with a named ERR line."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:query(stateDir construction)",
+      "breaking_input": "A --brief argument that matches the ID grammar but is a Windows reserved device name like 'CON' or 'LPT1'.",
+      "why": "The stateDir is constructed using join(ROOT, ..., brief). If validId does not explicitly exclude OS-reserved device names, passing 'CON' on Windows could cause filesystem errors or unexpected behavior when creating directories or files.",
+      "fix": "Ensure validId explicitly includes a check against a list of OS-reserved device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) in addition to the structural grammar.",
+      "twin_of": "A Windows reserved device name passed the id grammar -> the lane-name reserved list applies to every id that becomes a directory."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "tests/design-refpack-mcp.bats:204",
+      "breaking_input": "A future developer adding a 9th test to the file without updating the hardcoded count.",
+      "why": "The test 'this file registers the 8 tests it declares' hardcodes the expected test count to 8. This is brittle and will fail immediately if any test is added, requiring constant updates. It does not protect against a missing test as well as a check for specific test names would.",
+      "fix": "Replace the hardcoded count check with a check for the presence of specific test names, or remove it in favor of the natural failure if a required test is missing.",
+      "twin_of": "The same deletable-file switch, recurring in a second file -> key on the committed seal too, derive the set from the directories that exist rather than a parsed file, refuse a name outside the grammar"
+    }
+  ]
+}

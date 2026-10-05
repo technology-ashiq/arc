@@ -240,11 +240,14 @@ async function checkBrowse(argv) {
 // also reach a paid generator never calls it from this builder (owner 2026-10-05: 21st.dev is
 // search mode only). A source with no adapter is refused, never guessed at.
 const MCP_SEARCH = {
-  "21st-dev": { endpoint: "https://21st.dev/api/mcp", tool: "21st_magic_component_inspiration", header: "x-api-key" },
+  "21st-dev": { endpoint: "https://21st.dev/api/mcp", tool: "21st_magic_component_inspiration", header: "x-api-key", credential: "API_KEY_21ST" },
 };
 const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
 const MCP_DEADLINE_MS = 30000;
 const MCP_MAX_BYTES = 2 * 1024 * 1024;
+// Built from code points, not escapes: an editor turned a typed escape for U+2028 into the real
+// character once, which ends a regex literal mid-line.
+const SCRUB_CTRL = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(0x1f) + String.fromCharCode(0x7f, 0x85, 0x2028, 0x2029) + "]+", "g");
 
 function parseNamed(argv, known, from) {
   const opts = {};
@@ -318,7 +321,10 @@ async function query(argv) {
   }
   // The recorder is created by this run, never appended to an existing file (attack fc30f54 B6).
   const recPath = o["--record-request"] != null ? resolve(o["--record-request"]) : null;
-  if (recPath && existsSync(recPath)) fail(1, "--record-request must name a file that does not exist yet");
+  if (recPath) {
+    // Created exclusively before any request: no check-then-create gap, and no write through a link (attack ce85db5 B5).
+    try { writeFileSync(recPath, "", { flag: "wx" }); } catch (e) { fail(1, "--record-request must name a file that does not exist yet (" + field(e.code ?? e.message) + ")"); }
+  }
 
   // 1. registry -- an off source makes no request at all.
   const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
@@ -341,7 +347,12 @@ async function query(argv) {
   // The key never lands in a reason, the log or the console, even when the server echoes it (attack fc30f54 B7).
   let key = null;
   // Only a key long enough to be a key: a one-letter key would scrub that letter out of every word.
-  const scrub = (t) => (key && key.length >= 8 ? String(t).split(key).join("<key>") : String(t));
+  // Control characters are DELETED before the key is matched, so a separator a server slips into
+  // the middle of an echoed key cannot split it past the scrub (attack ce85db5 B1). Then field().
+  const scrub = (t) => {
+    const tight = String(t).replace(SCRUB_CTRL, "");
+    return key && key.length >= 8 ? tight.split(key).join("<key>") : String(t);
+  };
   const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(ep))}\t${verdict}\t${field(scrub(reason))}\n`);
   const couldNot = (reason) => { record("COULD-NOT-SCAN", reason); fail(EXIT.UNREADABLE, `COULD-NOT-SCAN ${id} -- ${field(scrub(reason))}`); };
 
@@ -349,6 +360,8 @@ async function query(argv) {
   // the value crosses; arc's name for it never leaves this process.
   if (String(src.auth) === "env") {
     const name = String(src.credential_ref ?? "");
+    // The adapter, not the registry, names which secret this endpoint may receive (attack ce85db5 B3).
+    if (name !== adapter.credential) fail(2, "refused: source " + id + " names credential_ref " + field(name) + "; this adapter sends only " + adapter.credential);
     key = name && process.env[name] ? process.env[name] : null;
     if (!key) couldNot(`credential ${field(name) || "(none named)"} is not set in the environment`);
   }
@@ -400,7 +413,10 @@ async function query(argv) {
   const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: { message: q, searchQuery: q } } }, session);
   const reply = rpcReply(call.text, 2);
   if (!reply) couldNot("tools/call: no reply carried this request id");
+  if (!reply.error && (reply.method !== undefined || reply.result === undefined || reply.result === null)) couldNot("tools/call: the reply carries no result");
+  if (reply.result && reply.result.isError === true) couldNot("tools/call: the tool reported an error: " + searchText(reply.result).join(" ").slice(0, 200));
   if (reply.error) couldNot(`tools/call: ${field(reply.error.message ?? "error")}`);
+  const say = (t) => console.log(field(scrub(t)));
   const items = searchItems(reply.result);
   const n = Math.min(items.length, want);
   const short = items.length < want ? `; SHORT -- asked for ${want}, got ${items.length}` : "";
@@ -409,10 +425,10 @@ async function query(argv) {
     const name = field(it.name ?? it.title ?? "(unnamed)").slice(0, 120);
     // No query or fragment: a signed URL's token must not reach output an agent copies into a file (attack fc30f54 B8).
     const pics = JSON.stringify(it).match(/https:\/\/[^"\s?#]+\.(png|jpe?g|webp|avif|gif)/gi) ?? [];
-    console.log(`  ${name}${pics.length ? ` -- preview ${field(pics[0])}` : ""}`);
+    say(`  ${name}${pics.length ? ` -- preview ${pics[0]}` : ""}`);
   }
-  if (items.length === 0) for (const t of searchText(reply.result)) console.log("  (unstructured answer, not counted) " + field(scrub(t)).slice(0, 200));
-  console.log(`design-refpack query: ${id} answered ${n} of ${want}${short}`);
+  if (items.length === 0) for (const t of searchText(reply.result)) say("  (unstructured answer, not counted) " + String(t).slice(0, 200));
+  say(`design-refpack query: ${id} answered ${n} of ${want}${short}`);
 }
 
 // One availability line per active pack source for a run, read from what the run RECORDED --
@@ -423,7 +439,9 @@ async function summary(argv) {
   if (!o["--brief"] || !o["--since"]) fail(1, "--summary needs --brief and --since <ISO time the run started>");
   if (!validId(o["--brief"])) fail(1, `--brief must match ${ID}`);
   const since = Date.parse(o["--since"]);
-  if (!/^\d{4}-\d\d-\d\dT/.test(o["--since"]) || Number.isNaN(since)) fail(1, "--since takes an ISO time, e.g. 2026-10-05T09:00:00Z");
+  // A zone is required: a bare time is read as local, the logs are UTC, and on a +05:30 box that
+  // drops five and a half hours of records in silence (attack ce85db5 B7).
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)$/.test(o["--since"]) || Number.isNaN(since)) fail(1, "--since takes an ISO time with a zone, e.g. 2026-10-05T09:00:00Z");
   seamGuard(o, ["--registry"]);
   const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
   const active = sources.filter((s) => s && String(s.status) === "active" && asList(s.allowed_use).includes("reference-pack")).map((s) => String(s.id));
@@ -438,6 +456,7 @@ async function summary(argv) {
   const added = readLines(join(ROOT, "docs", "design", "refpacks", o["--brief"], "sources.md"))
     .filter((l) => /^\| https?:/.test(l)).map((l) => l.split(" | ")).filter((c) => c.length >= 4 && Date.parse(c[1]) >= since).map((c) => c[3].replace(/ \(fixture\)$/, ""));
   let answered = 0;
+  let fixtureOnly = 0;
   for (const id of active) {
     const mine = avail.filter((f) => f[1] === id);
     const count = (v) => mine.filter((f) => f[4] === v).length;
@@ -451,14 +470,18 @@ async function summary(argv) {
     if (mine.length === 0) head = "NOT-ASKED -- active, and this run never queried it";
     else if (mcp.length) head = `ANSWERED ${field(mcp[mcp.length - 1])}`;
     else head = `ANSWERED ${rows}/${count("ALLOW") + count("DISALLOW") + cns.length} screen(s) added/asked`;
-    const ok = (mcp.length && !/^results 0 /.test(mcp[mcp.length - 1])) || rows > 0;
+    const live = mine.some((f) => f[2] !== "fixture");
+    const said = (mcp.length && !/^results 0 /.test(mcp[mcp.length - 1])) || rows > 0;
+    // A fixture-only source answered a test, not this run: it is never counted live (attack ce85db5 B8).
+    const ok = said && live;
+    if (said && !live) fixtureOnly++;
     if (ok) answered++;
     // A fixture record is a test, not an observation of the source: it is labelled, never read as live (attack fc30f54 B9).
     const tag = mine.length && mine.every((f) => f[2] === "fixture") ? " [fixture]" : mine.some((f) => f[2] === "fixture") ? " [fixture+network]" : "";
     console.log(`availability ${id}${tag}: ${head}${notes.length ? `; ${notes.join("; ")}` : ""}`);
   }
   if (malformed) console.log(`design-refpack summary: ${malformed} malformed availability line(s) were not read`);
-  console.log(`design-refpack summary: ${answered} of ${active.length} active pack source(s) answered since ${field(o["--since"])}`);
+  console.log(`design-refpack summary: ${answered} of ${active.length} active pack source(s) answered live since ${field(o["--since"])}${fixtureOnly ? ` (${fixtureOnly} more answered from a fixture only)` : ""}`);
 }
 
 async function main(argv) {

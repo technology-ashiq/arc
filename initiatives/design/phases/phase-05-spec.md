@@ -54,9 +54,13 @@ nothing references it. Five slices, each red-first on CI:
   read from `API_KEY_21ST`; arc's internal names never appear in the request. A missing key is
   COULD-NOT-SCAN, not a crash and not a silent skip. Proved on the fake transport by asserting
   the recorded request's headers.
-- **S4 -- `.mcp.json` under the shared-file protocol.** `git log origin/main -5 -- .mcp.json`
-  runs and is pasted into `evidence/phase-05/` BEFORE the edit; shadcn and 21st.dev are added in
-  search mode only.
+- **S4 -- `.mcp.json` under the shared-file protocol.** The pre-edit `git log` is in
+  `evidence/phase-05/s4-mcp-json-prelog.txt`. **Outcome 2026-10-05: `.mcp.json` is NOT edited.**
+  21st.dev stays out on purpose: an `.mcp.json` entry would put its paid generator in every
+  session's toolset, and the owner's ruling is search only, so it is reached through refpack's
+  search-only adapter. shadcn needs a classification row in the policy lane's capability table
+  (an unclassified server fails policy-matrix closed), and that directory is denied to the
+  session -- the owner's one edit, on the debt ledger.
 - **S5 -- the live pack.** A real pack for the LexOS brief from at least 2 live sources (nicelydone
   plus 21st.dev search), each with its observed availability line; the pack opened in-session
   before any verdict about it is carried. Contract tests run against the real shadcn and 21st.dev
