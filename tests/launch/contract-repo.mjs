@@ -58,6 +58,11 @@ switch (scenario) {
   case "bad-token":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: "gho_shapedButWrong0123456789" })));
     break;
+  case "malformed-token":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: `gho_fixture${String.fromCharCode(13, 10)}Token0123456789` })));
+    out.calls = gh.calls.length;
+    out.leaked = out.scaffold.message.includes("Token0123456789");
+    break;
   case "verify-missing":
     out.verify = await adapter.verify(ctxFor());
     break;

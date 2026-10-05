@@ -73,7 +73,11 @@ export async function scaffold(ctx) {
     const brand = say((ctx.profile.brand && ctx.profile.brand.name) || name, 60);
     const made = await gh(ctx, "POST", "/user/repos", { name, private: true, auto_init: true, description: `${brand} ${marker(ctx.tag)}` }, { allow: [422] });
     // 422 = a concurrent attempt created it between the check and the create: read it back and judge it like any other.
-    found = made.status === 422 ? await gh(ctx, "GET", `/repos/${full}`) : made;
+    // A 404 on that re-read means the 422 was not a concurrent create: GitHub refused the name (attack faccecd B5).
+    if (made.status === 422) {
+      found = await gh(ctx, "GET", `/repos/${full}`, undefined, { allow: [404] });
+      if (found.status === 404) throw new Error(`github refused to create ${full} (422) and no such repo exists`);
+    } else found = made;
   }
   own(ctx, found.body, full);
   ctx.report({ kind: "github-repo", id: full });

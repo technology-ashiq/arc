@@ -63,7 +63,9 @@ async function gh(ctx, method, path, body, { allow = [] } = {}) {
   try { json = await res.json(); } catch { json = null; }
   if (res.ok || allow.includes(res.status)) return { status: res.status, body: json };
   const msg = json && typeof json === "object" && typeof json.message === "string" ? json.message : "";
-  if (res.status === 403 && /upgrade to github pro|make this repository public/i.test(msg))
+  // Only the protection call can be a plan limit; a 403 anywhere else (rate limit, scope) is reported as itself
+  // (attack faccecd L5).
+  if (res.status === 403 && path.includes("/branches/main/protection") && /upgrade to github pro|make this repository public/i.test(msg))
     throw refuse("PLAN_LIMIT", "this GitHub plan refuses branch protection on a private repo (ADR-1726: record it, do not work round it)");
   throw new Error(`github ${method} ${path.split("?")[0]} -> ${res.status}${msg ? `: ${say(msg)}` : ""}`);
 }
@@ -95,11 +97,25 @@ export async function scaffold(ctx) {
       content: b64(WORKFLOW), branch: "main", ...(have ? { sha: have.sha } : {}),
     });
   }
-  await gh(ctx, "PUT", `/repos/${full}/branches/main/protection`, {
-    required_status_checks: { strict: false, contexts: CHECKS },
-    enforce_admins: false, required_pull_request_reviews: null, restrictions: null,
-  });
+  // Reported the moment it exists: a protection call that fails next must not leave a commit nothing records
+  // (attack faccecd B2).
   ctx.report({ kind: "github-workflow", id: `${full}:${PATH}` });
+  // An owner's existing protection is extended, never replaced: a PUT would drop their reviews and restrictions
+  // (attack faccecd B1). Protection without status checks is theirs to change, so it refuses.
+  const prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection`, undefined, { allow: [404] });
+  if (prot.status === 404) {
+    await gh(ctx, "PUT", `/repos/${full}/branches/main/protection`, {
+      required_status_checks: { strict: false, contexts: CHECKS },
+      enforce_admins: false, required_pull_request_reviews: null, restrictions: null,
+    });
+  } else {
+    const rsc = prot.body && typeof prot.body === "object" ? prot.body.required_status_checks : null;
+    if (!rsc || typeof rsc !== "object")
+      throw refuse("PROTECTION_EXISTS", `${full}@main is protected without status checks; launch adds checks to protection, it does not rewrite the owner's rules`);
+    const have2 = Array.isArray(rsc.contexts) ? rsc.contexts.filter((c) => typeof c === "string") : [];
+    if (CHECKS.some((c) => !have2.includes(c)))
+      await gh(ctx, "PATCH", `/repos/${full}/branches/main/protection/required_status_checks`, { strict: rsc.strict === true, contexts: [...new Set([...have2, ...CHECKS])] });
+  }
   ctx.report({ kind: "branch-protection", id: `${full}@main` });
   return { files: [PATH], resources: [{ kind: "github-workflow", id: `${full}:${PATH}` }, { kind: "branch-protection", id: `${full}@main` }], notes: [] };
 }
@@ -111,29 +127,42 @@ const wait = (ms, signal) => new Promise((res, rej) => {
   if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
-// Asked of GitHub: the three checks are required on main, and the newest run of the workflow on main has all three
-// legs green. A run still going is polled; one that ended any other way is the answer.
+// Asked of GitHub: the three checks are required on main, and the run of the workflow for main's CURRENT head has all
+// three legs green. An older run is never the answer (attack faccecd B3); a run not yet created and a run still going
+// are reported apart (attack faccecd L2). Thirteen polls, 20 s apart, fit inside the slot's 300 s timeout.
 export async function verify(ctx) {
   // Every answer below comes over ctx.fetch from api.github.com; the probe is GitHub, never state.
   const ask = ctx.fetch.bind(ctx);
   ctx = { ...ctx, fetch: ask };
   const full = repo(ctx);
-  const prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection/required_status_checks`, undefined, { allow: [404] });
+  let prot;
+  try {
+    prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection/required_status_checks`, undefined, { allow: [404] });
+  } catch (e) {
+    // verify answers; it does not throw a refusal out of a read (attack faccecd B8).
+    if (e && e.code === "PLAN_LIMIT") return { ok: false, reason: `PLAN_LIMIT: ${e.message}` };
+    throw e;
+  }
   const contexts = prot.status === 200 && prot.body && Array.isArray(prot.body.contexts) ? prot.body.contexts : [];
   const missing = CHECKS.filter((c) => !contexts.includes(c));
   if (missing.length) return { ok: false, reason: `main does not require ${missing.join(", ")}` };
-  let last = "no run of arc-ci on main yet";
-  for (let i = 0; i < 12; i++) {
+  const head = await gh(ctx, "GET", `/repos/${full}/branches/main`);
+  const sha = head.body && head.body.commit && typeof head.body.commit.sha === "string" && /^[0-9a-f]{40}$/.test(head.body.commit.sha) ? head.body.commit.sha : null;
+  if (!sha) return { ok: false, reason: `${full} main has no readable head commit` };
+  let last = `no run of arc-ci for main's head ${sha.slice(0, 7)} yet`;
+  for (let i = 0; i < 13; i++) {
     if (i) await wait(20000, ctx.signal);
-    const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&per_page=1`, undefined, { allow: [404] });
-    const run = runs.status === 200 && runs.body ? list(runs.body.workflow_runs)[0] : null;
-    if (!run || typeof run.id !== "number") continue;
-    if (run.status !== "completed") { last = `run ${run.id} is ${say(run.status, 20)}`; continue; }
+    const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&head_sha=${sha}&per_page=1`, undefined, { allow: [404] });
+    if (runs.status === 200 && !(runs.body && Array.isArray(runs.body.workflow_runs)))
+      return { ok: false, reason: "github answered the runs list without a workflow_runs array" };
+    const run = runs.status === 200 ? list(runs.body.workflow_runs).find((r) => r.head_sha === sha && typeof r.id === "number") : null;
+    if (!run) continue;
+    if (run.status !== "completed") { last = `run ${run.id} for ${sha.slice(0, 7)} is still ${say(run.status, 20)}`; continue; }
     const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
     const byName = new Map(list(jobs.body && jobs.body.jobs).map((j) => [j.name, j.conclusion]));
     const red = CHECKS.filter((c) => byName.get(c) !== "success");
     if (red.length) return { ok: false, reason: `run ${run.id}: ${red.map((c) => `${c} ${say(byName.get(c) ?? "absent", 20)}`).join(", ")}` };
-    return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: run.id, sha: say(run.head_sha, 40), checks: CHECKS } };
+    return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: run.id, sha, checks: CHECKS } };
   }
   return { ok: false, reason: last };
 }

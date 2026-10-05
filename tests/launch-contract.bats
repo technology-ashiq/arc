@@ -190,7 +190,7 @@ arm() {
 
 @test "launch-contract: ci rewrites a hand-edited workflow against its current sha" {
   arm ci owner-edited
-  [ "$(j 'o.scaffold.ok + " " + o.restored')" = "true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.scaffold.ok + " " + o.restored + " " + o.lastTagged')" = "true true true" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: ci verify names the red leg and the missing protection" {
@@ -212,4 +212,49 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_UPSTREAM 0" ] || { echo "$DONE"; false; }
   arm ci no-upstream
   [ "$(j 'o.scaffold.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a malformed GitHub token refuses before any call and is never printed" {
+  arm repo malformed-token
+  [ "$(j 'o.scaffold.code + " " + o.calls + " " + o.leaked')" = "BAD_TOKEN 0 false" ] || { echo "$DONE"; false; }
+  arm ci bad-token
+  [ "$(j 'o.scaffold.code + " " + o.calls + " " + o.leaked')" = "BAD_TOKEN 0 false" ] || { echo "$DONE"; false; }
+  arm repo bad-token
+  [[ "$(j 'o.scaffold.message')" == *"-> 401: Bad credentials"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify never takes an older head's green run as the answer" {
+  arm ci stale-run
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"no run of arc-ci for main's head bbbbbbb yet"* ]] || { echo "$DONE"; false; }
+  arm ci branch-run
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify reports a run still going apart from no run at all" {
+  arm ci still-running
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"is still in_progress"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci extends the owner's protection, keeping their reviews and checks" {
+  arm ci owner-protection
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.protection.contexts.join(",")')" = "lint,test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.protection.strict + " " + o.protection.reviews.required_approving_review_count')" = "true 2" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: protection without status checks refuses, and the committed workflow is still recorded" {
+  arm ci owner-protection-no-checks
+  [ "$(j 'o.scaffold.code')" = "PROTECTION_EXISTS" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-workflow" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.protection.reviews.required_approving_review_count')" = "2" ] || { echo "$DONE"; false; }
+  arm ci plan-limit
+  [ "$(j 'o.reported.join(",")')" = "github-workflow" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: ci verify answers a plan limit as not ok, never a thrown refusal" {
+  arm ci verify-plan-limit
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "PLAN_LIMIT: "* ]] || { echo "$DONE"; false; }
 }

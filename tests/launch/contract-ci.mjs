@@ -22,11 +22,16 @@ const WF = ".github/workflows/arc-ci.yml";
 const realTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn) => realTimeout(fn, 0);
 
+const seed = { name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40) }] };
 const ghOpts = {
   "red-leg": { runConclusions: ["success", "failure", "success"] },
   "plan-limit": { planLimit: true },
+  "verify-plan-limit": { planLimit: true },
+  "still-running": { pendingPolls: 50 },
+  "owner-protection": { repos: [{ ...seed, protection: { contexts: ["lint"], strict: true, reviews: { required_approving_review_count: 2 } } }] },
+  "owner-protection-no-checks": { repos: [{ ...seed, protection: { contexts: null, reviews: { required_approving_review_count: 2 } } }] },
 }[scenario] || {};
-const gh = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40) }] }], ...ghOpts });
+const gh = makeGithub({ repos: [seed], ...ghOpts });
 globalThis.fetch = gh.fetch;
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-ci-"));
@@ -56,7 +61,40 @@ switch (scenario) {
     await adapter.scaffold(ctxFor());
     repo().files[WF] = { sha: "e".repeat(40), content: Buffer.from("name: hand-edited\n").toString("base64") };
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
-    out.restored = Buffer.from(repo().files[WF].content, "base64").toString("utf8").startsWith("# Written by arc launch");
+    out.restored = Buffer.from(repo().files[WF].content, "base64").toString("utf8") === readFileSync(join(ROOT, WF), "utf8");
+    out.lastTagged = repo().commits[repo().commits.length - 1].message.includes(`Arc-Launch-Tag: ${TAG}`);
+    break;
+  }
+  case "stale-run":
+    // A commit lands on main after the workflow's run: the green run is for an older head and must not answer.
+    await adapter.scaffold(ctxFor());
+    repo().commits.push({ sha: "b".repeat(40), message: "hand push", files: {} });
+    out.verify = await adapter.verify(ctxFor());
+    break;
+  case "branch-run":
+    // The only run for main's head ran on another branch: the branch filter keeps it out.
+    await adapter.scaffold(ctxFor());
+    repo().runs[0].branch = "feature";
+    out.verify = await adapter.verify(ctxFor());
+    break;
+  case "still-running":
+    await adapter.scaffold(ctxFor());
+    out.verify = await adapter.verify(ctxFor());
+    break;
+  case "owner-protection":
+  case "owner-protection-no-checks":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.protection = repo().protection;
+    out.reported = reported.map((r) => r.kind);
+    break;
+  case "verify-plan-limit":
+    out.verify = await attempt(() => adapter.verify(ctxFor()));
+    break;
+  case "bad-token": {
+    const ctx = ctxFor();
+    out.scaffold = await attempt(() => adapter.scaffold({ ...ctx, env: { GITHUB_TOKEN: `gho_fixture${String.fromCharCode(10)}Token0123456789` } }));
+    out.calls = gh.calls.length;
+    out.leaked = out.scaffold.message.includes("Token0123456789");
     break;
   }
   case "red-leg":
@@ -70,6 +108,7 @@ switch (scenario) {
     break;
   case "plan-limit":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.reported = reported.map((r) => r.kind);
     break;
   case "bad-upstream":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ upstream: { repo: [{ kind: "github-repo", id: "../../evil" }] } })));

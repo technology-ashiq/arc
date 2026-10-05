@@ -1,0 +1,69 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:85",
+      "breaking_input": "The owner has already set main protection with required_pull_request_reviews (2 approvals) and a restrictions list. Running `arc launch` apply for the ci slot a second time sends PUT /branches/main/protection with required_pull_request_reviews:null, restrictions:null and enforce_admins:false.",
+      "why": "The workflow file is only rewritten when its content differs (ADR-1726), but protection is PUT unconditionally on every scaffold. PUT replaces the whole protection object, so it silently wipes the owner's reviews, restrictions and admin enforcement. This is the same 'overwrite what the owner edited' hazard the ADR claims to avoid for files.",
+      "fix": "GET /branches/main/protection first. Skip the PUT when all three contexts are already required. Otherwise merge the existing settings and add only the missing contexts, or use POST .../required_status_checks/contexts to add them."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:79-90",
+      "breaking_input": "The Contents PUT commits the workflow to main, then the protection PUT answers 403 'Upgrade to GitHub Pro...' and scaffold throws PLAN_LIMIT.",
+      "why": "ctx.report for the github-workflow resource runs only after the protection call. A commit now sits on the remote under the launch tag with no recorded resource, so state, teardown --plan and the exit plan cannot see it. The failure path ADR-1726 explicitly anticipates leaves an untracked write.",
+      "fix": "Call ctx.report({kind:'github-workflow'}) immediately after the commit or the unchanged-file check, before the protection call. Report branch-protection only after its PUT succeeds."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:125-136",
+      "breaking_input": "scaffold rewrites the workflow and commits it. verify runs a few seconds later, before GitHub has queued the push-triggered run. The newest run on main is the previous commit's completed all-green run.",
+      "why": "verify takes runs?per_page=1 and never compares run.head_sha to the current head of main, so it returns ok:true with evidence for a stale commit. Tests could not catch this because the fake creates a run synchronously with every commit.",
+      "fix": "Read GET /repos/{full}/branches/main for the head sha and require run.head_sha to equal it. Poll while no run exists for that sha. Have the fake delay run creation to pin it."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:79-90",
+      "breaking_input": "The owner's GitHub default branch setting makes the auto_init repo use 'master', or the owner renamed the branch. repo/github.mjs verify reads body.default_branch, but ci hardcodes ?ref=main, branch:'main' and branches/main/protection.",
+      "why": "The two adapters disagree on the branch. The Contents PUT with branch main returns 404 or 422, or protects and verifies a branch that is not the default, so Vercel's production branch and CI diverge.",
+      "fix": "Take the branch from GET /repos/{full} default_branch, validated as in repo/github.mjs. Use it for every call and for the workflow trigger."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:78",
+      "breaking_input": "POST /user/repos answers 422 for a reason other than a name collision, for example a disallowed name or an org policy that forbids private repos.",
+      "why": "allow:[422] treats every 422 as 'created concurrently' and re-GETs the repo. That GET returns 404 and throws 'GET /repos/x -> 404', which hides GitHub's real validation message. The comment's assumption is not checked against the 422 body.",
+      "fix": "Re-GET only when the 422 message or errors[] indicate 'name already exists'. Otherwise throw with say(json.message)."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:46",
+      "breaking_input": "A pre-existing, unrelated repo named arc-sandbox has a description containing the text '[arc-launch arc-sandbox@repo@github]', pasted from docs or copied from another repo.",
+      "why": "Adoption rests on a substring match of a public, guessable string in a user-editable field. Launch then treats the repo as its own, which defeats the 'never adopts a repo it did not create' guard.",
+      "fix": "Require the description to end with the marker, or anchor the match with a regex. Better, also record the repo id in state and compare it."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/launch/contract-repo.mjs:58",
+      "breaking_input": "A 'bad-token' scenario is implemented but no bats test calls `arm repo bad-token`. A token containing CR/LF or a wrong-shape token is never exercised for either adapter, and ci has no such arm.",
+      "why": "This is the twin of the lane's token-with-CR defect. The only guard is the token() regex, and nothing pins it. A regression that loosens the regex would pass every test.",
+      "fix": "Add bats tests for repo bad-token and a ci bad-token arm. Assert BAD_TOKEN, zero fetch calls, and that the message does not contain the token."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:116",
+      "breaking_input": "verify runs on a private repo under GitHub Free. GET .../protection/required_status_checks answers 403 'Upgrade to GitHub Pro...'.",
+      "why": "gh() converts that 403 into a thrown PLAN_LIMIT refusal from verify, which is documented to return {ok:false, reason}. A verify --all loop (lane defect: one slot threw out of verify --all) can lose its summary, and a read-only probe now reports a refusal code.",
+      "fix": "Add 403 to allow for the verify GET and return {ok:false, reason:'PLAN_LIMIT: ...'}, or catch code PLAN_LIMIT in verify."
+    }
+  ]
+}

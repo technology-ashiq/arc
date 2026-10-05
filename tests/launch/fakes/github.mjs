@@ -2,9 +2,10 @@
 // Actions runs. It replaces only the transport (globalThis.fetch). Deterministic: every sha comes from a counter.
 //   runConclusions  what each of the three legs concludes when a commit lands on main (all success unless set)
 //   planLimit       branch protection answers 403 the way GitHub Free does for a private repo
+//   pendingPolls    how many runs-list reads show a new run as in_progress before it completes
 export const LEGS = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
-export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false } = {}) {
+export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0 } = {}) {
   const fresh = (r) => ({ private: true, description: "", files: {}, runs: [], protection: null, commits: [], ...r });
   const store = new Map(repos.map((r) => [`${r.owner || login}/${r.name}`, fresh(r)]));
   const calls = [];
@@ -17,7 +18,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
   function commit(r, message, files) {
     const c = { sha: sha(), message, files };
     r.commits.push(c);
-    r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha,
+    r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha, branch: "main", pending: pendingPolls,
       jobs: LEGS.map((os, i) => ({ name: `test (${os})`, conclusion: (runConclusions && runConclusions[i]) || "success" })) });
     return c;
   }
@@ -65,15 +66,27 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       }
     }
 
+    // protection: { contexts: [] | null (protected without status checks), strict, reviews }
     if (rest === "branches/main/protection" || rest === "branches/main/protection/required_status_checks") {
       if (planLimit) return err(403, "Upgrade to GitHub Pro or make this repository public to enable this feature.");
-      if (method === "PUT" && rest === "branches/main/protection") { r.protection = { contexts: [...body.required_status_checks.contexts] }; return json(200, { url: "protection" }); }
-      if (method === "GET" && rest.endsWith("required_status_checks"))
-        return r.protection ? json(200, { contexts: r.protection.contexts }) : err(404, "Branch not protected");
+      if (method === "PUT" && rest === "branches/main/protection") { r.protection = { contexts: [...body.required_status_checks.contexts], strict: !!body.required_status_checks.strict, reviews: body.required_pull_request_reviews }; return json(200, { url: "protection" }); }
+      if (!r.protection) return err(404, "Branch not protected");
+      const rsc = r.protection.contexts ? { strict: !!r.protection.strict, contexts: r.protection.contexts } : null;
+      if (method === "GET" && rest === "branches/main/protection")
+        return json(200, { ...(rsc ? { required_status_checks: rsc } : {}), ...(r.protection.reviews ? { required_pull_request_reviews: r.protection.reviews } : {}) });
+      if (!rsc) return err(404, "Required status checks not enabled");
+      if (method === "GET") return json(200, rsc);
+      if (method === "PATCH") { r.protection.contexts = [...body.contexts]; r.protection.strict = !!body.strict; return json(200, { contexts: r.protection.contexts }); }
     }
 
-    if (method === "GET" && rest === "actions/workflows/arc-ci.yml/runs")
-      return json(200, { total_count: r.runs.length, workflow_runs: r.runs.slice(0, 1).map(({ jobs, ...run }) => run) });
+    // A run answers the branch and head_sha filters the way GitHub does; `pending` polls show it in progress first.
+    if (method === "GET" && rest === "actions/workflows/arc-ci.yml/runs") {
+      const branch = url.searchParams.get("branch"), head = url.searchParams.get("head_sha");
+      const hits = r.runs.filter((x) => (!branch || (x.branch || "main") === branch) && (!head || x.head_sha === head));
+      const shown = hits.slice(0, 1).map(({ jobs, pending, ...run }) => (pending > 0 ? { ...run, status: "in_progress" } : run));
+      for (const x of hits.slice(0, 1)) if (x.pending > 0) x.pending--;
+      return json(200, { total_count: hits.length, workflow_runs: shown });
+    }
     const jm = rest.match(/^actions\/runs\/(\d+)\/jobs$/);
     if (jm && method === "GET") {
       const run = r.runs.find((x) => String(x.id) === jm[1]);
