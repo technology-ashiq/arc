@@ -183,8 +183,9 @@ export async function verify(ctx) {
   try {
     return await probe({ ...ctx, fetch: ask });
   } catch (e) {
-    if (e && e.code && e.code !== "ABORTED") return { ok: false, reason: `${e.code}: ${say(e.message)}` };
-    throw e;
+    // An uncoded failure (5xx, 429, transport) is an answer too, not a throw (attack 1406e29 B3, twin).
+    if (e && e.code === "ABORTED") throw e;
+    return { ok: false, reason: `${(e && e.code) || "error"}: ${say(e && e.message)}` };
   }
 }
 

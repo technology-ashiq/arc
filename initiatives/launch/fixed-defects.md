@@ -61,3 +61,10 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **Protection launch only extended was recorded as launch's, so the exit plan would unprotect the owner's branch** — created vs added are separate resource kinds with separate teardown actions, B2 — *every resource launch reports: did launch create it, or touch something that was already there?*
 - **An identical file was claimed as launch's without asking who committed it** — the newest commit touching it must carry the slot's tag trailer, L10 — *every "unchanged, so skip" path that still reports a resource*
 - **Ownership was a marker found anywhere in a user-editable description** — the marker must end it; an archived repo refuses, L5/L9 — *every ownership test on free text*
+- **verify turned coded refusals into answers but still threw on a 5xx, a 429 or a transport error** — everything but ABORTED is an answer, in vercel AND its twins repo and ci, attack 1406e29 B3/L2/L4 — *every verify catch: does it key on `e.code`? Uncoded errors exist*
+- **A project and domain launch only found were recorded as launch's, so teardown would delete the owner's** — `*-found` kinds that the exit plan skips, B1 — *every check-then-create: report the CREATE, not the check*
+- **An absent hold was re-placed, re-holding a live venture after release deleted the file** — the file's history decides, not its presence, B2 — *every "write once" guard keyed on current state*
+- **Ownership trailers were matched by prefix and by newest commit only** — exact lines, any commit in the file's history, L1/L3 — *every trailer or marker check*
+- **verify took any git deployment of the repo as the proof** — only the deployment of the hold commit, same org and repo, B5/L8 — *every "some X exists" verify: is it the X this slot made?*
+- **A teardown step deleted a file by path, whoever had taken it over since** — `delete-if-unchanged`, attack 21d7acb B2 — *every exit-plan step: does it re-check ownership at run time?*
+- **The sha-matched proof was searched in a fixed page of recent deployments** — filter by sha at the API, B3 — *every "find the one we made" inside a paged list*
