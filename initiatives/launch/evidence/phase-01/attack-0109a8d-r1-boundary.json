@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:84-90",
+      "breaking_input": "POST git/refs succeeds, then the PUT of .arc/preview-check.md fails (422, 5xx, a token without contents:write, or the runner killed between the two calls). The branch exists at main's head SHA. ctx.report for it only runs after both calls.",
+      "why": "The branch is created but never recorded, so the exit plan cannot remove it. On every re-run the ref returns 200 and the head commit is main's, which has no Arc-Launch-Tag trailer. isOurs is false, so scaffold throws FOREIGN_BRANCH forever and the slot is wedged by launch's own half-made branch. This is the pattern \"a resource was reported only after a later call succeeded\".",
+      "fix": "Call ctx.report for the branch right after POST git/refs succeeds. In the existing-branch path, treat a branch whose head SHA equals main's head and which has no file as launch's incomplete branch and finish the PUT.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:107-125",
+      "breaking_input": "The owner or a bot creates branch arc/preview-check with their own commit, so there is no launch trailer, and Vercel builds a READY preview of it. They run verify, either before apply or after launch has failed with FOREIGN_BRANCH.",
+      "why": "probe only reads the branch ref SHA and matches a deployment by SHA. It never checks that the head commit carries this slot's trailer, so it returns ok:true for a preview launch did not make. This is the pattern \"verify took any X as the proof\".",
+      "fix": "In probe, fetch the head commit and require isOurs(ctx, message) before accepting. Otherwise return ok:false with a FOREIGN_BRANCH reason.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:92-96",
+      "breaking_input": "The owner opens their own PR from the launch-made arc/preview-check branch, or edits the title. An open PR for head owner:arc/preview-check already exists, so list(open.body)[0] is found, not created.",
+      "why": "The found PR is reported as {kind:\"github-pr\"} with no ownership test. Teardown then emits close-pr for a PR launch never opened. The ADR says a PR of that name that launch did not create is refused, but the code only gates on the branch.",
+      "fix": "Only report the PR as launch's when launch created it. For a found PR, check author or title or body and refuse or skip the report otherwise.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:32-33,86-89",
+      "breaking_input": "The owner pushes a fix commit onto arc/preview-check, or a bot rebases it. The newest commit then has no trailer. Alternatively, an attacker writes a commit whose message has a line exactly equal to Arc-Launch-Tag: <tag>, and the tag is predictable as slug@slot@provider.",
+      "why": "Ownership is decided by the newest commit's message only, and the trailer is a guessable constant. A legitimate branch turns FOREIGN_BRANCH after any push, and a forged trailer is accepted as launch's. The check does not use the first commit or the branch creator.",
+      "fix": "Decide ownership from the branch's first commit after main (compare against the base) or from a recorded SHA in resources. Add a per-run nonce to the trailer if forgery matters.",
+      "twin_of": "Ownership trailers were matched by prefix and by newest commit only -> every trailer or marker check"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:139-143",
+      "breaking_input": "Between apply and teardown the owner merges the preview PR, adds commits to the branch, or reuses the branch for real work. Teardown still returns close-pr and delete-branch for the recorded ids.",
+      "why": "The exit plan is built from recorded resources alone and carries no run-time ownership or state check. Executing delete-branch removes the owner's work.",
+      "fix": "Have each step carry the trailer or head SHA recorded at apply. The executor re-reads the branch and PR and refuses if the head or trailer differs.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:47-51",
+      "breaking_input": "Vercel project link.repo is \"..\" or \".\", so full = \"org/..\". The regex `[A-Za-z0-9._-]{1,100}` accepts it.",
+      "why": "fetch normalizes `/repos/org/../git/ref/heads/main` to `/repos/git/ref/heads/main`. A GitHub request carrying GITHUB_TOKEN then goes to a path other than the repo that was validated. The same holds for a repo name ending in a trailing dot.",
+      "fix": "Reject repo segments that are \".\" or \"..\", and require the first character to be alphanumeric or underscore.",
+      "twin_of": "The adapter path was data the runner trusted: `providers/x/../../tmp/evil.mjs` ran -> every path built from a registry value"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:96",
+      "breaking_input": "An SSL Labs READY response where an endpoint's grade is a string containing a newline or ESC, such as \"A\\n[OK] forged\". The grade passes through grades: eps.map((e) => e.grade) with no say().",
+      "why": "Provider-supplied strings go raw into verify evidence. Evidence is printed or stored, so a forged line or terminal escape lands there. Elsewhere in the same file say() is applied. The grade could also be a non-string.",
+      "fix": "Map grades through say(e.grade, 4). Only list grades that are in GOOD, since ok:true implies they all are.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:92-95",
+      "breaking_input": "The owner merges the preview-check PR, or its file already matches main. The branch is ours, no PR is open, and POST pulls answers 422 \"No commits between main and arc/preview-check\".",
+      "why": "The PR path assumes a diff always exists. After a merge or a squash the create step throws an uncoded error on every re-run, so scaffold never succeeds again and the slot wedges. The ADR relies on the PR staying open.",
+      "fix": "If a PR for the branch exists in any state (state=all), report it and let verify decide. Or recreate the branch from main with a fresh commit.",
+      "twin_of": "A rehearsal's gate-3 refusal was terminal on the first run but a re-run read the recorded approval id as pending -> every state the runner treats as terminal: does every re-entry path honour it?"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:80-83,93",
+      "breaking_input": "A venture repo whose default branch is not \"main\", such as master or trunk.",
+      "why": "The branch source (git/ref/heads/main) and the PR base are hard-coded. A repo whose default branch is not \"main\" gets a raw 404 from scaffold. The preview is also proven against a branch that is not the repo's production branch.",
+      "fix": "Read default_branch from GET /repos/{full} and use it for the ref and the base, or refuse with a coded error.",
+      "twin_of": "Upstream entries were coerced with `String()`, so a `null` id became the hostname \"null\" -> every value one adapter hands another through state"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:90-93",
+      "breaking_input": "SSL Labs returns READY where an endpoint is unreachable: statusMessage \"Unable to connect to the server\", no grade, no details.",
+      "why": "That endpoint falls into `bad` and is reported as a hard failure \"grade none, no HSTS\", not UNSCANNED. An unreachable scanner path is therefore recorded as a verdict about the site's TLS posture.",
+      "fix": "Treat an endpoint with no grade and a non-Ready statusMessage as UNSCANNED(reason) rather than a failed grade.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    }
+  ]
+}

@@ -105,7 +105,7 @@ Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 332 of 
 | [1400–1499](adr/1400.md) | 22 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
 | [1600–1699](adr/1600.md) | 30 | 0 |
-| [1700–1799](adr/1700.md) | 28 | 0 |
+| [1700–1799](adr/1700.md) | 29 | 0 |
 
 ## Commands
 

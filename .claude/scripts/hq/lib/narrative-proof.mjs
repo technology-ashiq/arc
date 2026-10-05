@@ -404,7 +404,7 @@ export async function proofArms(d) {
     out.push(["MUTANT A2 signed approve: with the passphrase, approve writes ONE decision carrying sigs -- one signature per listed page, each verifying with the committed public key over its own approval, page and hash, and none over another page or hash; the decision has exactly decides, reason, verdict, sigs",
       okTry.code === 0 && !!decA && Object.keys(decA.payload).sort().join() === "decides,reason,sigs,verdict" && Object.keys(sigsA).sort().join() === "lanes/x,products/hq" && OSg.sigsShapeProblem(sigsA) === ""
       && OSg.verifyOwnerSig(pubPem, msgFor(idA, "products/hq", HG), sigsA["products/hq"]) && OSg.verifyOwnerSig(pubPem, msgFor(idA, "lanes/x", HL), sigsA["lanes/x"])
-      && !OSg.verifyOwnerSig(pubPem, msgFor(idA, "products/hq", HL), sigsA["products/hq"]) && !OSg.verifyOwnerSig(pubPem, msgFor(idA, "lanes/x", HL), sigsA["products/hq"]) && !OSg.verifyOwnerSig(pubPem, msgFor(idA.replace(/.$/, "Z"), "products/hq", HG), sigsA["products/hq"])]);
+      && !OSg.verifyOwnerSig(pubPem, msgFor(idA, "products/hq", HL), sigsA["products/hq"]) && !OSg.verifyOwnerSig(pubPem, msgFor(idA, "lanes/x", HL), sigsA["products/hq"]) && !OSg.verifyOwnerSig(pubPem, msgFor(idA.replace(/.$/, (c) => (c === "Z" ? "Y" : "Z")), "products/hq", HG), sigsA["products/hq"])]);
     // Every other gate, and a reject, behave as before: no key, no terminal, no sigs, the same three keys.
     const noSigner = { keyDir: join(keyBox, "nowhere"), readPassphrase: async () => { throw new Error("must not prompt"); }, isTty: false };
     const other = [];
