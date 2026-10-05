@@ -61,7 +61,7 @@ room_state() {
     const ok = m.name === "discover" && m.face && m.face.room === "lane";
     process.stdout.write(ok ? "mapped" : "unmapped " + JSON.stringify(m.face));
   ' "$ARC_ROOT/products/discover/manifest.json"
-  [ "$status" -eq 0 ] || { echo "manifest read failed: $stderr"; false; }
+  [ "$status" -eq 0 ] && [ -z "$stderr" ] || { echo "manifest read failed: $stderr"; false; }
   [ "$output" = "mapped" ] || { echo "$output"; false; }
 }
 
@@ -74,11 +74,19 @@ room_state() {
   run grep -c 'process.yaml$' <(ls "$ARC_ROOT/processes")
   [ "$output" -gt 0 ] || { echo "no process files seen -- the scan read nothing"; false; }
   run grep -c '^discover' <(ls "$ARC_ROOT/processes")
+  [ "$status" -le 1 ] || { echo "grep failed scanning processes/"; false; }
   [ "$output" = "0" ] || { echo "a discover process file exists without its policy row: $output"; false; }
   run grep -c '"process:' "$ARC_ROOT/hq.policy.yaml"
   [ "$output" -gt 0 ] || { echo "hq.policy.yaml has no process rows -- the scan read nothing"; false; }
   run grep -c '"process:discover":' "$ARC_ROOT/hq.policy.yaml"
+  [ "$status" -le 1 ] || { echo "grep could not read hq.policy.yaml"; false; }
   [ "$output" = "0" ] || { echo "process:discover row exists with no process file behind it"; false; }
+  # Mutant arm: the same grep on a copy carrying the row must see it, or the check is vacuous.
+  { cat "$ARC_ROOT/hq.policy.yaml"; printf '  "process:discover":
+    e2: []
+'; } > "$BATS_TEST_TMPDIR/policy.yaml"
+  run grep -c '"process:discover":' "$BATS_TEST_TMPDIR/policy.yaml"
+  [ "$output" = "1" ] || { echo "the check did not see a planted process:discover row: $output"; false; }
 }
 
 @test "discover-birth: discover is inside the CATALOG array" {

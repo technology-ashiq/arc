@@ -22,3 +22,6 @@ not only where it was fixed (twin-fix rule). One line per pattern: `pattern — 
 - **a refusal test that accepts any exit 2** — tests/discover-birth.bats stub test (L4) — *assert the exact message, on every verb, from a foreign cwd*
 - **user text interpolated into a command doc's shell line** (`$ARGUMENTS` inside double quotes) — .claude/commands/arc-hunt.md (B1) — *free text goes through a file written by the Write tool, never argv*
 - **a main guard whose realpath throws at module top level** — arc-discover.mjs (B4) — *wrap it: a throw means not-main*
+- **the spec that instructs the defect** (phase-00-spec told the builder to run `hunt "$ARGUMENTS"` after the doc was fixed) — phase-00-spec.md (5e1d529 L10) — *a fix lands in the instruction that would regenerate the bug, not only in the artifact*
+- **an allowlist prefix that permits any trailing argv** (`Bash(node …arc-discover.mjs:*)`) — arc-hunt.md (5e1d529 B1) — *allow the exact command line, nothing after it*
+- **a one-direction absence check** (row absent passes; a planted row was never proven to fail) — discover-birth.bats ADR-1913 test (5e1d529 L7) — *every absence check carries a mutant that plants the thing*
