@@ -13,10 +13,17 @@ const TEMPLATE = [
 ].join("\n");
 const NAME = /^[A-Z][A-Z0-9_]{0,127}$/;
 // A committed env file other than the template is a key in git. `.env.example` and the template variants are not.
-// Any number of dot segments, any case (`.env.production.local`, `.ENV`, `.env.local.bak`); only a name whose LAST
-// segment is example, sample or template is a template (attack 14d5374 B1).
-const ENV_FILE = /(^|\/)\.env(\.[^/]+)*$/i;
-const TEMPLATE_FILE = /(^|\/)\.env(\.[^/]+)*\.(example|sample|template)$/i;
+// A key file is judged on the path's LAST segment, length-capped, by patterns whose groups cannot overlap: the first
+// form (`(\.[^/]+)*` over the whole path) backtracked exponentially on `.env.a.a.a…/x` and froze the worker past its
+// own timeout (attack 07bcb38 B1). Caught: `.env` with any dot segments in any case, `*.env`, `.envrc`; a name whose
+// last segment is example, sample or template is a template (attack 14d5374 B1, 07bcb38 B2).
+const DOT_ENV = /^\.env(?:\.[^.]+)*$/i;
+const TEMPLATE_END = /\.(?:example|sample|template)$/i;
+function isKeyFile(path) {
+  const seg = String(path).split("/").pop().slice(0, 255);
+  if (TEMPLATE_END.test(seg)) return false;
+  return DOT_ENV.test(seg) || /^[^.][^/]*\.env$/i.test(seg) || /^\.envrc$/i.test(seg);
+}
 
 const refuse = (code, message) => Object.assign(new Error(message), { code });
 const SKIP = (n) => n < 0x20 || (n >= 0x7f && n < 0xa0) || n === 0x061c || (n >= 0x200b && n <= 0x200f) || (n >= 0x202a && n <= 0x202e) ||
@@ -133,7 +140,7 @@ async function probe(ctx) {
   if (names === null) return { ok: false, reason: `${full} has no ${FILE}; the env contract is missing` };
   const tree = await gh(ctx, "GET", `/repos/${full}/git/trees/main?recursive=1`);
   if (tree.body && tree.body.truncated === true) return { ok: false, reason: `${full}'s tree is too large to list in one answer; the no-key-in-git check cannot see all of it` };
-  const leaked = list(tree.body && tree.body.tree).map((e) => String(e.path || "")).filter((p) => ENV_FILE.test(p) && !TEMPLATE_FILE.test(p));
+  const leaked = list(tree.body && tree.body.tree).map((e) => String(e.path || "")).filter(isKeyFile);
   // The claim is about main's tip tree only: history and other branches are not read (attack 14d5374 B5, debt D20).
   if (leaked.length) return { ok: false, reason: `key file in git (main tip tree):${leaked.slice(0, 5).map((p) => say(p, 80)).join(", ")}` };
   // Keys and targets only; the request carries no decrypt flag and no value is read from the answer.

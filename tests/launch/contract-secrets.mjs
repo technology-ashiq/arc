@@ -72,6 +72,22 @@ switch (scenario) {
     repo().extraPaths = [".ENV"];
     out.verifyUpper = await adapter.verify(ctx);
     break;
+  case "more-shapes":
+    put(".env.example", "DATABASE_URL=\n");
+    repo().extraPaths = ["config/prod.env"];
+    out.suffix = await adapter.verify(ctx);
+    repo().extraPaths = [".envrc"];
+    out.envrc = await adapter.verify(ctx);
+    break;
+  case "pathological": {
+    // A path built to backtrack an overlapping pattern: the check must stay linear and answer at once.
+    put(".env.example", "\n");
+    repo().extraPaths = [`.env${".a".repeat(40)}/x`, `.env${".a".repeat(4000)}/x`];
+    const t = Date.now();
+    out.verify = await adapter.verify(ctx);
+    out.ms = Date.now() - t;
+    break;
+  }
   case "contract-not-a-file":
     repo().files[".env.example"] = { sha: "c".repeat(40), dir: true };
     out.dir = await adapter.verify(ctx);

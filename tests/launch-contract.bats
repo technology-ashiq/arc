@@ -500,3 +500,14 @@ arm() {
   [ "$(j 'o.kinds.join(",")')" = "github-file,env-contract" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.fileId')" =~ ^technology-ashiq/arc-sandbox:\.env\.example@[0-9a-f]{40}$ ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: *.env and .envrc are keys in git too" {
+  arm secrets more-shapes
+  [ "$(j 'o.suffix.reason')" = "key file in git (main tip tree): config/prod.env" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.envrc.reason')" = "key file in git (main tip tree): .envrc" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a path built to backtrack the key-file check answers at once" {
+  arm secrets pathological
+  [ "$(j 'o.verify.ok + " " + (o.ms < 2000)')" = "true true" ] || { echo "$DONE"; false; }
+}
