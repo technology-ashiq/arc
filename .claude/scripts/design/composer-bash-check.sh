@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # composer-bash-check.sh -- the ui-composer's BASH boundary (ADR-1415 amendment, 2026-09-17).
+# Since ADR-1420 it also bounds the design-curator's Bash and WebFetch; see the design-curator block.
 #
 # ui-composer.md declares `Bash(bash .claude/scripts/design/design-render.sh:*)`: one entry point.
 # On the lexos-p02 live demo every composer ran node, sed -i, python3, PowerShell and cmd through
@@ -56,9 +57,10 @@ PAYLOAD="$(cat)"
 # --identity skips the shortcut: it runs only while a composer is armed, and a payload it cannot
 # parse must reach the checks below rather than be waved through as "someone else" (B3).
 [ "$IDENTITY" -eq 1 ] \
-  || case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*'\u'*) ;; *) _other;; esac
+  || case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*[Dd][Ee][Ss][Ii][Gg][Nn]-[Cc][Uu][Rr][Aa][Tt][Oo][Rr]*|*'\u'*) ;; *) _other;; esac
 NAMES_COMPOSER=0
-case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*) NAMES_COMPOSER=1;; esac
+# Names either agent this file governs (ADR-1420 added the curator); the name is kept.
+case "$PAYLOAD" in *[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|*[Dd][Ee][Ss][Ii][Gg][Nn]-[Cc][Uu][Rr][Aa][Tt][Oo][Rr]*) NAMES_COMPOSER=1;; esac
 
 _refuse() {
   if [ "$IDENTITY" -eq 1 ]; then echo "ui-composer identity: $1" >&2; exit 12; fi
@@ -105,7 +107,7 @@ fi
 # so its cap is 1 MiB (B1): at two bytes a leaf at worst that is under 22 s of stream count.
 _CAP=65536; [ "$IDENTITY" -eq 1 ] && _CAP=1048576
 if [ "${#PAYLOAD}" -gt "$_CAP" ] \
-   && printf '%s' "$PAYLOAD" | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"[^"]*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]'; then
+   && printf '%s' "$PAYLOAD" | grep -qE '"agent_type"[[:space:]]*:[[:space:]]*"[^"]*([Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]|[Dd][Ee][Ss][Ii][Gg][Nn]-[Cc][Uu][Rr][Aa][Tt][Oo][Rr])'; then
   _refuse "the call is ${#PAYLOAD} bytes, longer than any render's; nothing over $_CAP bytes from a composer is checked or run."
 fi
 
@@ -167,7 +169,7 @@ _field() {
 # attackers; running defects #19 and #26).
 if ! _field agent_type '["agent_type"]' '.agent_type' 256 name; then
   case "$NAMES_COMPOSER:$FIELD" in
-    1:*|0:*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*)
+    1:*|0:*[Uu][Ii]-[Cc][Oo][Mm][Pp][Oo][Ss][Ee][Rr]*|0:*[Dd][Ee][Ss][Ii][Gg][Nn]-[Cc][Uu][Rr][Aa][Tt][Oo][Rr]*)
       _refuse "the calling agent cannot be identified exactly, and this call may be ui-composer's.";;
   esac
   _other
@@ -180,7 +182,241 @@ AGENT="$(printf '%s' "$FIELD" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmno
 # the MSYS box leaves AGENT empty, and empty used to be "someone else" (attack r2, B1).
 [ -z "$FIELD" ] || [ -n "$AGENT" ] || _refuse "the agent name could not be normalised."
 AGENT="${AGENT##*:}"
-[ "$AGENT" = "ui-composer" ] || _other
+
+# ---------- design-curator (ADR-1420) ----------
+#
+# The scaffold grants tool NAMES, so the curator holds plain Bash and WebFetch, and this is what
+# scopes them. Bash: exactly `node .claude/scripts/design/design-refpack.mjs` and its five flags,
+# each once. A principle is a sentence, so a value may be double-quoted; inside the quotes only
+# CQ's characters appear -- no $, backtick, backslash or inner quote, so bash expands nothing
+# there. Outside quotes only CB's. WebFetch: design-refpack.mjs --check-browse decides (https,
+# an active pack-eligible registry host, robots ALLOW, inside 40 s). Its other tools are Read,
+# Grep and Glob, which no rule here governs.
+CB='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/:-'
+CQ="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:;()'/?!=&%+~@#_-"
+_crefuse() {
+  echo "BLOCKED by design-curator scope: $1" >&2
+  echo "A curator runs one command through Bash -- node .claude/scripts/design/design-refpack.mjs --brief <id> --source <registry id> --url \"<https url>\" --principle \"<sentence>\" --avoid \"<sentence>\" -- and fetches only an active registry host whose robots.txt allows it." >&2
+  exit 2
+}
+# The project root, or a refusal. A failed probe used to fall back to pwd, so the root became the
+# hook's own directory and every comparison against it was vacuous (staging attack, B4).
+_croot() {
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then printf '%s' "$CLAUDE_PROJECT_DIR"; return 0; fi
+  git rev-parse --show-toplevel 2>/dev/null
+}
+# One spelling for a path, for COMPARISON only: forward slashes, no trailing slash, an MSYS `/c/`
+# drive as `c:/`. Case is folded only where the filesystem folds it: on a case-sensitive one,
+# `/work/Arc` and `/work/arc` are two checkouts (staging attack, B13). Never used to open anything.
+_normp() {
+  _o="$(printf '%s' "$1" | tr '\\' '/' | sed 's#/*$##; s#^/\([A-Za-z]\)/#\1:/#; s#^/\([A-Za-z]\)$#\1:#')"
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) _o="$(printf '%s' "$_o" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')";;
+  esac
+  printf '%s' "$_o"
+}
+# A relative path in a curator call names a file only from the project root, so a call whose
+# working directory is elsewhere is refused -- for Bash (attack r2, B10) and for the reads alike
+# (staging attack, B3). An absent cwd is accepted: the harness always sends one.
+_cpin() {
+  _field cwd '["cwd"]' '.cwd' 4096 || _crefuse "the call's working directory cannot be read exactly."
+  [ -n "$FIELD" ] || return 0
+  _pr="$(_croot)"; [ -n "$_pr" ] || _crefuse "the project root cannot be found, so where this call runs cannot be judged."
+  [ "$(_normp "$FIELD")" = "$(_normp "$_pr")" ] || _crefuse "a curator's call runs from the project root; this one would run in '${FIELD:0:120}'."
+}
+# The curator's reads (attack r2, B1): its Read, Grep and Glob were ungoverned, so a fetched page
+# could tell it to read a secret and carry the text out through a principle. It reads the registry,
+# the design docs (the brief) and the screens it staged, nothing else. The path key is chosen by
+# the tool -- Read's file_path, Grep's and Glob's path -- and the other key present is a refusal,
+# so the hook never judges one field while the tool uses another (staging attack, B5).
+_curator_read() {
+  _tool="$1"
+  _cpin
+  if [ "$_tool" = "Read" ]; then _pk=file_path; _ok=path; else _pk=path; _ok=file_path; fi
+  _field "$_ok" "[\"tool_input\",\"$_ok\"]" ".tool_input.$_ok" 1024 || _crefuse "the input of a curator $_tool cannot be read exactly."
+  [ -z "$FIELD" ] || _crefuse "a curator's $_tool carries $_ok, which $_tool does not use."
+  _field "$_pk" "[\"tool_input\",\"$_pk\"]" ".tool_input.$_pk" 1024 || _crefuse "the path of a curator $_tool cannot be read exactly."
+  _p="$FIELD"
+  # A Glob pattern is a path, so it is held to a plain alphabet: no braces, groups, classes or
+  # negation that could expand into a climb, never absolute, never `..`. A Grep pattern is a
+  # regex over contents, not a path, and only its path is bound (staging attack, B6 and B7).
+  if [ "$_tool" = "Glob" ]; then
+    _field pattern '["tool_input","pattern"]' '.tool_input.pattern' 256 || _crefuse "the pattern of a curator Glob cannot be read exactly."
+    case "$FIELD" in
+      ""|/*|*[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._*/-]*) _crefuse "a curator's Glob pattern uses letters, digits and . _ * / - only, and is relative.";;
+      ..|../*|*/..|*/../*) _crefuse "a curator's Glob pattern never climbs.";;
+    esac
+  fi
+  [ -n "$_p" ] || _crefuse "a curator's $_tool names a path: design.sources.yaml or something under docs/design/."
+  _np="$(_normp "$_p")"; _pr="$(_croot)"
+  [ -n "$_pr" ] || _crefuse "the project root cannot be found, so the path cannot be judged."
+  _nr="$(_normp "$_pr")"
+  [ -n "$_np" ] && [ -n "$_nr" ] || _crefuse "the path could not be normalised."
+  case "$_np" in "$_nr"/*) _np="${_np#"$_nr"/}";; esac
+  while :; do case "$_np" in ./*) _np="${_np#./}";; *) break;; esac; done
+  case "$_np" in
+    ..|../*|*/..|*/../*) _crefuse "'${_p:0:120}' climbs out of where a curator reads.";;
+    design.sources.yaml|docs/design|docs/design/*) exit 0;;
+    # The screens it staged, so it looks before it writes a principle -- the pack's staged/
+    # directory only, never its logs or another state file.
+    .claude/state/design/refpacks/*/staged/?*)
+      _b="${_np#.claude/state/design/refpacks/}"; _b="${_b%%/*}"
+      case "$_b" in ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) ;; *) exit 0;; esac;;
+  esac
+  _crefuse "'${_p:0:120}' is outside what a curator reads: design.sources.yaml, docs/design/, and the screens it staged."
+}
+# A URL is a request to the registry host, and a query is text the host receives. Capped, and no
+# fragment: a fetched page could otherwise have the curator read a brief and send it out 1 KB at
+# a time (staging attack, B2).
+_curl_ok() {
+  case "$1" in *'#'*) _crefuse "a curator's URL carries no fragment.";; esac
+  case "$1" in
+    *'?'*) _q="${1#*\?}"; [ "${#_q}" -le 64 ] || _crefuse "a curator's URL query is at most 64 bytes.";;
+  esac
+}
+_curator_bash() {
+  _cpin
+  # The status is captured in a conditional, so no errexit in force can end the script on it and
+  # hand the dispatcher a code it reads as allow (attack r1, B7).
+  if _field command '["tool_input","command"]' '.tool_input.command' 2000; then _frc=0; else _frc=$?; fi
+  case $_frc in
+    0) ;;
+    3) _crefuse "the command is longer than 2000 bytes; a refpack call is at most a 1024-byte URL and two 300-character sentences.";;
+    *) _crefuse "the command could not be read from the payload.";;
+  esac
+  CMD="$FIELD"
+  [ -n "$CMD" ] || _crefuse "the call carries no command."
+  # The quote goes FIRST: CQ ends in `-`, which must stay last to be a literal. Written after CQ,
+  # the quote made `_-"` a reversed range and emptied the class of `_`, `-` and `"` (attack r1, B1).
+  case "$CMD" in *[!\"$CQ]*) _crefuse "the command carries a character no refpack call needs (shell syntax, a backslash or a line break).";; esac
+  # One pass over the characters: words split on single spaces, a quote opens only a word and
+  # closes only at its end, and nothing outside quotes leaves CB. Words are joined with a line
+  # break, which the alphabet above already excludes from the command itself.
+  _toks=""; _cur=""; _inq=0; _had=0; _i=0; _len=${#CMD}
+  while [ "$_i" -lt "$_len" ]; do
+    _c="${CMD:$_i:1}"; _i=$((_i + 1))
+    if [ "$_inq" -eq 1 ]; then
+      if [ "$_c" = '"' ]; then
+        [ -n "$_cur" ] || _crefuse "an empty quoted value is not a value."
+        _inq=0
+        case "${CMD:$_i:1}" in ""|" ") ;; *) _crefuse "a closing quote must end its word.";; esac
+      else
+        _cur="$_cur$_c"
+      fi
+      continue
+    fi
+    case "$_c" in
+      " ") [ "$_had" -eq 1 ] || _crefuse "the command must be single-spaced."
+           _toks="$_toks$_cur
+"; _cur=""; _had=0;;
+      '"') [ "$_had" -eq 0 ] || _crefuse "a quote may only open a word."
+           _inq=1; _had=1;;
+      *) case "$_c" in [$CB]) ;; *) _crefuse "'$_c' outside quotes is shell syntax.";; esac
+         _cur="$_cur$_c"; _had=1;;
+    esac
+  done
+  [ "$_inq" -eq 0 ] || _crefuse "a quote is never closed."
+  [ "$_had" -eq 1 ] || _crefuse "the command ends in a space."
+  _toks="$_toks$_cur"
+  set -f; IFS='
+'
+  # shellcheck disable=SC2086
+  set -- $_toks
+  unset IFS; set +f
+  [ "${1:-}" = "node" ] && [ "${2:-}" = ".claude/scripts/design/design-refpack.mjs" ] \
+    || _crefuse "'${CMD:0:120}' is not the refpack builder."
+  shift 2
+  _seen=" "
+  while [ "$#" -gt 0 ]; do
+    [ "$#" -ge 2 ] || _crefuse "the flag '${1:0:40}' has no value."
+    case "$_seen" in *" $1 "*) _crefuse "the flag '${1:0:40}' is given twice.";; esac
+    case "$1" in
+      --brief|--source|--url|--principle|--avoid) ;;
+      --stage) [ "$2" = "1" ] || _crefuse "--stage takes 1.";;
+      --staged) case "$2" in [0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef][0123456789abcdef]) ;; *) _crefuse "--staged takes the 16-hex prefix the stage printed.";; esac;;
+      *) _crefuse "the flag '${1:0:40}' is not one a curator's refpack call takes (a test seam never is).";;
+    esac
+    case "$2" in --*) _crefuse "the flag '$1' has no value.";; esac
+    # A second line of defence, not trusting the builder alone to reject a value that becomes a
+    # path (attack r1, B11): ids follow the lane grammar, and the URL is https.
+    case "$1" in
+      --brief|--source)
+        case "$2" in ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _crefuse "$1 takes lowercase letters, digits and hyphens.";; esac
+        [ "${#2}" -le 64 ] || _crefuse "$1 is longer than 64 characters."
+        case "$2" in con|prn|aux|nul|com[0123456789]|lpt[0123456789]) _crefuse "$1 is a Windows device name.";; esac;;
+      --url)
+        case "$2" in https://?*) ;; *) _crefuse "--url is an https URL.";; esac
+        [ "${#2}" -le 1024 ] || _crefuse "--url is longer than 1024 bytes."
+        # The registry binds hosts: no port and no userinfo in the authority (attack r2, B4).
+        _auth="${2#https://}"; _auth="${_auth%%/*}"; _auth="${_auth%%\?*}"; _auth="${_auth%%#*}"
+        case "$_auth" in *:*|*@*) _crefuse "--url carries a port or userinfo; the registry binds hosts.";; esac
+        _curl_ok "$2";;
+      --principle|--avoid)
+        # Free text is capped and must say something: a sentence is not a channel for whatever a
+        # fetched page told the curator to read (attack r2, B1 and B6).
+        [ "${#2}" -le 300 ] || _crefuse "$1 is longer than 300 characters; it is one sentence."
+        case "$2" in *[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789]*) ;; *) _crefuse "$1 says nothing: it needs a letter or a digit.";; esac;;
+    esac
+    _seen="$_seen$1 "
+    shift 2
+  done
+  # Two shapes: a --stage (fetch to look at it, no row) or an add (with its principle).
+  case "$_seen" in
+    *" --stage "*)
+      case "$_seen" in *" --principle "*|*" --avoid "*|*" --staged "*) _crefuse "a call is a stage OR add: a staged screen carries no principle yet.";; esac
+      _need="--brief --source --url";;
+    # An add is bound to the bytes the curator looked at (staging attack, B8).
+    *) _need="--brief --source --url --principle --avoid --staged";;
+  esac
+  for _f in $_need; do
+    case "$_seen" in *" $_f "*) ;; *) _crefuse "a refpack call needs $_f.";; esac
+  done
+  exit 0
+}
+_curator_fetch() {
+  _field url '["tool_input","url"]' '.tool_input.url' 1024 || _crefuse "the URL of a WebFetch cannot be read exactly, or is longer than 1024 bytes."
+  [ -n "$FIELD" ] || _crefuse "the WebFetch carries no URL."
+  _url="$FIELD"
+  _curl_ok "$_url"
+  _root="$(_croot)"
+  [ -n "$_root" ] || _crefuse "the project root cannot be found, so the preflight cannot run."
+  [ -f "$_root/.claude/scripts/design/design-refpack.mjs" ] \
+    || _crefuse "design-refpack.mjs is missing, so a curator's fetch cannot be preflighted."
+  set -- --check-browse "$_url"
+  # The offline seams, for the suite only. A curator cannot set the hook's environment, but an
+  # operator's shell can leak ARC_DESIGN_OFFLINE into the session, so forwarding needs a second,
+  # hook-specific switch, and the builder stamps a fixture answer `fixture` in its log (attack
+  # r1, B5).
+  if [ "${ARC_DESIGN_OFFLINE:-}" = "1" ] && [ "${ARC_DESIGN_HOOK_SEAMS:-}" = "1" ]; then
+    [ -z "${ARC_DESIGN_ROBOTS_FILE:-}" ] || set -- "$@" --robots-file "$ARC_DESIGN_ROBOTS_FILE"
+    [ -z "${ARC_DESIGN_ROBOTS_STATUS:-}" ] || set -- "$@" --robots-status "$ARC_DESIGN_ROBOTS_STATUS"
+  fi
+  # From the root and by a relative path: a POSIX path handed to a native node is red on the
+  # Windows leg only.
+  # In a conditional, the twin of r1 B7: under errexit a bare failing substitution ended the script
+  # with the builder's 3 or 4, which the harness reads as allow (attack r2, B2).
+  if _out="$(cd "$_root" && node .claude/scripts/design/design-refpack.mjs "$@" 2>&1 >/dev/null)"; then _rc=0; else _rc=$?; fi
+  [ "$_rc" -eq 0 ] && exit 0
+  _crefuse "WebFetch ${_url:0:120} -- ${_out:0:300}"
+}
+
+case "$AGENT" in
+  ui-composer) ;;
+  design-curator)
+    # --identity answers for the composer's read and write boundaries, and a curator is not the
+    # composer: it holds no Write or Edit, and its reads are its own.
+    [ "$IDENTITY" -eq 1 ] && _other
+    _field tool_name '["tool_name"]' '.tool_name' 64 name || _crefuse "the tool of a design-curator call cannot be read exactly."
+    case "$PAYLOAD" in *'\u00'[01]*) _crefuse "the call carries an escaped control character.";; esac
+    # An explicit list: an absent or empty tool name is not "some other tool" (attack r1, B6).
+    case "$FIELD" in
+      Bash) _curator_bash;;
+      WebFetch) _curator_fetch;;
+      Read|Grep|Glob) _curator_read "$FIELD";;
+      *) _crefuse "the tool '${FIELD:0:40}' is not one the curator holds.";;
+    esac;;
+  *) _other;;
+esac
 # The identity is all --identity answers; the tool and the command below are the Bash boundary's.
 [ "$IDENTITY" -eq 1 ] && exit 0
 _field tool_name '["tool_name"]' '.tool_name' 64 name || _refuse "the tool of a ui-composer call cannot be read exactly."

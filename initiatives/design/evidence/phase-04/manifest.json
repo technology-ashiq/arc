@@ -1,0 +1,44 @@
+{
+  "phase": "04",
+  "commit": "8f0e39be4038b00793bf2473fea7bdae903124c7",
+  "short": "8f0e39be",
+  "generated": "2026-10-05T11:25:36Z",
+  "files": [
+    {
+      "name": "attack-22632d7-r2-boundary.json",
+      "sha256": "c304f83cefbf856ffff47d23138c3714cd7debbf95e08c012a1e8cf08969a5e5"
+    },
+    {
+      "name": "attack-67551f8-r2-boundary.json",
+      "sha256": "e06602860516f857d5035becc9298465f188d9f5238eeb9da332874c4171d0d1"
+    },
+    {
+      "name": "attack-67551f8-r2-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-c9094cd-r1-boundary.json",
+      "sha256": "6fc0f372b668b8851d2176444d22743b34810a34218ea60890ca666a0892f7f8"
+    },
+    {
+      "name": "attack-c9094cd-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-fab6c70-r1-boundary.json",
+      "sha256": "e3131feb93f66a53d40d92b3c3b8d3e6387844bdb9b00049dedd0c6aa9888e98"
+    },
+    {
+      "name": "attack-fab6c70-r1-logic.json",
+      "sha256": "bfb31b818eb7a57dfc3e6c49fb2d9e3ec740fa9ec7f87a88af08b0031aab210d"
+    },
+    {
+      "name": "s3-live-run.md",
+      "sha256": "d9df39ef413c6095a4f5e760ac0a4c0494d5bbd69316aa69fef6730ec4a39eb2"
+    },
+    {
+      "name": "seal-lexos-case-workspace-expa1.json",
+      "sha256": "50701020155ba5c6f86270435720a59d59b30cb3bbc12bfe56e7bfc09bc674f5"
+    }
+  ]
+}

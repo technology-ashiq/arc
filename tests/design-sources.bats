@@ -93,9 +93,16 @@ teardown() { _arc_teardown 2>/dev/null || true; }
     // never be cached, and that is an allowed_use fact, not a status -- ADR-1408 freezes the
     // status enum and says a new access pattern is a schema bump, not a free-text column.
     const want = {
-      "lapa-ninja": "active", "saasframe": "active", "awwwards": "active",
+      // ADR-1412 amendment 2026-09-27: lapa-ninja and saasframe went off on the first real
+      // build (a Claude block, a shared CDN); nicelydone and collectui replaced them. saasui went
+      // off the same day (screens on a shared CDN), and screensdesign was born off (its terms).
+      "lapa-ninja": "off", "saasframe": "off", "nicelydone": "active", "collectui": "active", "saasui": "off",
+      "screensdesign": "off",
+      "awwwards": "active",
       "godly": "off", "dribbble": "off", "behance": "off",
       "land-book": "off", "page-collective": "off",
+      // Phase 05, owner 2026-10-05: shadcn + 21st.dev (search only) on, Mobbin declined on cost.
+      "shadcn": "active", "21st-dev": "active", "mobbin": "off",
     };
     const bad = [];
     for (const [id, st] of Object.entries(want)) {
@@ -105,6 +112,10 @@ teardown() { _arc_teardown 2>/dev/null || true; }
     const aw = by["awwwards"];
     if (aw && !(aw.allowed_use || []).includes("link-only")) bad.push("awwwards: allowed_use must carry link-only -- its terms forbid reproduction, so provenance is permitted and a local image cache is not");
     if (aw && (aw.allowed_use || []).includes("reference-pack")) bad.push("awwwards: allowed_use must NOT carry reference-pack");
+    // 21st.dev is SEARCH MODE ONLY (owner 2026-10-05): its generator is paid.
+    const t = by["21st-dev"];
+    if (t && ((t.allowed_use || []).includes("draft-variant") || (t.kind || []).includes("generator"))) bad.push("21st-dev: search mode only -- a draft-variant use or a generator kind turns on the paid generator");
+    if (t && t.credential_ref !== "API_KEY_21ST") bad.push("21st-dev: credential_ref must be API_KEY_21ST");
     if (bad.length) { console.log(bad.join("\n")); process.exit(1); }
     console.log("rows ok");
   '
@@ -131,6 +142,52 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   run _lint "$BATS_TEST_TMPDIR/m.yaml"
   [ "$status" -ne 0 ] || { echo "a singular kind passed: $output"; false; }
   echo "$output" | grep -qi "kind" || { echo "refused, but not for kind: $output"; false; }
+}
+
+@test "sources lint: an id outside the builder's grammar is refused -- a device name, a path, an upper case (phase-02 attack G1 B1)" {
+  for bad in con lpt1 ../x Lapa a/b; do
+    _valid_entry | sed "s|^  - id: lapa-ninja$|  - id: ${bad}|" > "$BATS_TEST_TMPDIR/m.yaml"
+    grep -q "^  - id: ${bad}$" "$BATS_TEST_TMPDIR/m.yaml" || { echo "the mutant for '${bad}' was not written"; false; }
+    run _lint "$BATS_TEST_TMPDIR/m.yaml"
+    [ "$status" -ne 0 ] || { echo "id '${bad}' passed: $output"; false; }
+    echo "$output" | grep -q "id-grammar" || { echo "id '${bad}' refused, but not for its grammar: $output"; false; }
+  done
+}
+
+@test "sources lint: a line separator in a value cannot forge a clean line under a real violation (phase-02 attack G1 B1)" {
+  ls="$(printf '\342\200\250')"
+  [ "${#ls}" -ge 1 ] || { echo "the separator was not built"; false; }
+  _valid_entry | sed "s|^    status: active\$|    status: bogus${ls}design-sources-lint ok -- 1 source(s), 1 active|" > "$BATS_TEST_TMPDIR/m.yaml"
+  grep -q "bogus${ls}design" "$BATS_TEST_TMPDIR/m.yaml" || { echo "the mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/m.yaml"
+  # The repo yaml subset refuses any line carrying U+2028, so the value never reaches a field check; the only way the
+  # separator reaches the output is the parser's error quoting the line, and that is what must be scrubbed.
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "registry-unparseable" || { echo "the mutant was not refused as unparseable: $output"; false; }
+  ! printf '%s' "$output" | grep -q "${ls}" || { echo "a U+2028 reached the lint output, where a reader breaks the line: $output"; false; }
+  # The parser's own error quotes the offending line: a second ": " makes it unparseable, and that path is scrubbed too.
+  _valid_entry | sed "s|^    status: active$|    status: bogus${ls}design-sources-lint: ok|" > "$BATS_TEST_TMPDIR/u.yaml"
+  grep -q "bogus${ls}design" "$BATS_TEST_TMPDIR/u.yaml" || { echo "the unparseable mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/u.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "registry-unparseable" || { echo "the unparseable mutant was not refused as unparseable: $output"; false; }
+  ! printf '%s' "$output" | grep -q "${ls}" || { echo "a U+2028 reached the lint output through the parser error: $output"; false; }
+}
+
+@test "sources lint: a duplicate member, a dotted-quad host and a device-name file are each refused (phase-02 attack G1 L1 L3 B2)" {
+  _valid_entry | awk '{ print } /^      - inspiration$/ { print }' > "$BATS_TEST_TMPDIR/dup.yaml"
+  [ "$(grep -c '^      - inspiration$' "$BATS_TEST_TMPDIR/dup.yaml")" -eq 2 ] || { echo "the duplicate mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/dup.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "kind-duplicate" || { echo "a duplicate kind passed: $output"; false; }
+  _valid_entry | awk '{ print } /^    status: active$/ { print "    hosts:"; print "      - 93.184.216.34" }' > "$BATS_TEST_TMPDIR/ip.yaml"
+  grep -q '^      - 93.184.216.34$' "$BATS_TEST_TMPDIR/ip.yaml" || { echo "the ip mutant was not written"; false; }
+  run _lint "$BATS_TEST_TMPDIR/ip.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "hosts-not-hostname" || { echo "a dotted-quad host passed: $output"; false; }
+  # CONTROL for the host rule: the same row with a real host name passes, so the red above is the address.
+  _valid_entry | awk '{ print } /^    status: active$/ { print "    hosts:"; print "      - example.com" }' > "$BATS_TEST_TMPDIR/host.yaml"
+  run _lint "$BATS_TEST_TMPDIR/host.yaml"
+  [ "$status" -eq 0 ] || { echo "control: a real host name was refused: $output"; false; }
+  _valid_entry > "$BATS_TEST_TMPDIR/con.yaml"
+  run _lint "$BATS_TEST_TMPDIR/con.yaml"
+  [ "$status" -ne 0 ] && echo "$output" | grep -q "registry-device-name" || { echo "a device-name file was read: $output"; false; }
 }
 
 @test "sources lint: an unknown access is refused" {
@@ -186,17 +243,17 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   # saying the right words and git actually resolving the ignore are two different facts, and
   # only one of them is the one that keeps someone else's artwork out of this repo.
   cd "$ARC_ROOT"
-  mkdir -p ".claude/state/design/refpacks/ignore-probe"
-  printf 'not-a-real-png' > ".claude/state/design/refpacks/ignore-probe/probe.png"
-  run git check-ignore -q ".claude/state/design/refpacks/ignore-probe/probe.png"
+  mkdir -p ".claude/state/design/refpacks/ignore-probe-$$"
+  printf 'not-a-real-png' > ".claude/state/design/refpacks/ignore-probe-$$/probe.png"
+  run git check-ignore -q ".claude/state/design/refpacks/ignore-probe-$$/probe.png"
   rc="$status"
-  rm -rf ".claude/state/design/refpacks/ignore-probe"
+  rm -rf ".claude/state/design/refpacks/ignore-probe-$$"
   [ "$rc" -eq 0 ] || { echo "a PNG under refpacks/ is NOT ignored by git"; false; }
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
     false
   }
 }

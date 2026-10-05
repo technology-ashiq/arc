@@ -1,0 +1,118 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "Meta file with `recipe` field set to empty string (e.g. `\"recipe\": \"\"`)",
+      "why": "The check `if [ -n \"$other_recipe\" ] && [ \"$other_recipe\" != \"$RECIPE\" ]` treats an empty recipe as absent, so it continues to the refuse branch. But an empty recipe is readable and may intentionally differ from the current recipe (or even be the same empty value). The fail-closed logic only considers 'unreadable' as unknown, but an empty string is readable and not 'unknown' — it should be treated as a distinct value, not as absent. If the other meta has an empty recipe and the current recipe is empty, it will refuse incorrectly; if current recipe is non-empty, it will refuse even though they differ.",
+      "fix": "Distinguish unreadable (e.g. via `_meta_field` returning non-zero) from empty-but-readable. Treat an empty string as a valid recipe value: refuse only when the other recipe is known and equals the current one; otherwise allow. Check explicitly for unreadable vs empty.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "A meta file where `recipe` is a value that contains only whitespace (e.g. `\"recipe\": \"   \"`). The `-n` test is true, and it compares to `$RECIPE`. If the current recipe is also whitespace-only but different whitespace, it will refuse, or if both are identical whitespace it allows — but whitespace-only recipes are not a real recipe and should be treated as unreadable/absent.",
+      "why": "`-n` only checks non-empty; a whitespace-only string passes it. `RECIPE` could be any string including whitespace. The guard's intent is to compare actual recipe values; whitespace-only is not a meaningful recipe and should not be treated as a known value. The `_meta_field` may return whitespace without error.",
+      "fix": "Trim the recipe before checking emptiness, or ensure `_meta_field` returns non-zero for whitespace-only values."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "A meta file where `_meta_field` outputs a recipe with trailing newline or carriage return (common in JSON extraction). `$other_recipe` might be `\"confined-loopback\\n\"` while `$RECIPE` is `\"confined-loopback\"` — the comparison fails, so the guard allows a same-recipe render that should be refused.",
+      "why": "Command substitution strips trailing newlines, but if the recipe contains embedded newlines or other whitespace differences, the string comparison `!=` is exact. The recipe field may legitimately have formatting differences between meta files, making the equality check fragile.",
+      "fix": "Normalise both recipes (trim, collapse whitespace) before comparison, or compare a canonical form."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "A meta file where `recipe` field is present but `_meta_field` fails (e.g. malformed JSON or permissions) and the `|| other_recipe=\"\"` catches it. That is correctly treated as unreadable and refuses. But if `_meta_field` succeeds but returns an empty string because the JSON field is `null` (not a string), the code treats `null` as absent and refuses — yet `null` is a distinct value that might equal the current recipe being `null` (if RECIPE could be null), or it might be a valid 'no recipe' state. The fail-closed behavior here conflates null with unreadable.",
+      "why": "The differentiation between 'unreadable' and 'readable but empty' is lost. A meta with `recipe: null` is readable but has no recipe; it's not 'not known to differ' — it's known to differ from any non-null recipe, so it should be allowed as a second look, not refused.",
+      "fix": "Have `_meta_field` return a distinct error code only when the field is truly unreadable; treat a null/empty value as a valid distinct recipe value and compare appropriately."
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": "tests/design-render-session.bats",
+      "breaking_input": "The test at line 152-172 uses FAKE_AB_SHOTS to produce identical pixels but does not verify that the critique render's recipe actually differs from the explore render's recipe. If the design-render script ignores the `--mode` flag for recipe construction, the two recipes could be identical and the test would falsely pass, masking a real retry refusal.",
+      "why": "The test's premise is that explore mode adds `confined-loopback` to the recipe, but it never asserts that the resulting recipes differ. The test only checks exit status and file existence, not the recipe values. A regression where both modes produce the same recipe would still let this test pass while the bug returns.",
+      "fix": "Assert that the two recipes differ (e.g. by inspecting the meta files or having the script print them), and that the refusal control uses an identical recipe."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/design-render-session.bats:169-171",
+      "breaking_input": "The control run uses `--session other-critic` but does not reset the critique render's recipe to match the explore recipe. If the critique mode recipe is deterministic and identical to the first critique render (without `--session`), the first critique already wrote a meta with that recipe, so the second is same-recipe — that is correct. But the test does not verify the second run's recipe equals the first critique's recipe; it only checks it refuses and prints the message.",
+      "why": "The control is supposed to be a same-recipe fresh session, but the test never confirms the recipes match. If the design-render script adds a random token to each render's recipe, the second run would have a different recipe and the test would still refuse (maybe for a different reason), giving a false pass or a false failure without diagnosing.",
+      "fix": "Explicitly capture the recipe from the first critique render's meta and pass it to the second run (or assert it matches via the meta file)."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "docs/adr/1417-the-stale-duplicate-guard-must-tell-iteration-from-stale-page.md",
+      "breaking_input": "The ADR amendment says 'a meta whose recipe cannot be read is not known to differ, so it still refuses'. But the code treats an empty recipe from a readable field as 'cannot be read' (via `-n`). This is a documentation gap, not a defect, but an attacker could rely on the doc to assume empty recipe is allowed.",
+      "why": "The ADR's fail-closed language is satisfied, but the implementation's edge of empty-string recipe is ambiguous. The documentation does not specify that an empty readable recipe is considered unreadable.",
+      "fix": "Update ADR to define that a readable-but-empty recipe is treated as unreadable, or change code to handle empty as distinct."
+    },
+    {
+      "id": "L8",
+      "severity": "critical",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "A malicious meta file where `recipe` is a string that is not the current recipe but contains the current recipe as a prefix or suffix (e.g. current `RECIPE` is `\"confined-loopback\"`, other_recipe is `\"confined-loopback-extra\"`). The comparison uses exact `!=`, so it would allow — that's correct. But if an attacker can write a meta where `recipe` is exactly the current recipe but in a different Unicode normalization (e.g. NFC vs NFD), the comparison fails and allows a same-recipe render. Bash `[ \"$a\" != \"$b\" ]` is byte comparison; Unicode normalization differences make equal recipes compare unequal.",
+      "why": "The guard's equality is byte-for-byte; recipe strings generated by different tools may have different normalization. An attacker who can influence recipe construction could bypass the retry guard by normalizing differently.",
+      "fix": "Normalize both recipes to a canonical form (e.g. NFC) before comparison, or compare a hash of the canonical form."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "If `_meta_field` is a function that itself writes to stderr or has side effects when the field is absent, the `||` capturing only handles exit codes, but a non-zero exit with partial output could set `other_recipe` to a partial string. If `_meta_field` prints an error line and returns non-zero, the command substitution captures the error line as `other_recipe`, then `-n` is true, and the comparison may allow or refuse incorrectly based on that error text.",
+      "why": "Command substitution captures all stdout even on failure; if `_meta_field` prints diagnostics to stdout on failure, they become the recipe value. The code does not separate error output.",
+      "fix": "Have `_meta_field` write errors to stderr and only write the recipe to stdout; ensure the variable is cleared on non-zero exit regardless of stdout."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "The guard reads `recipe` from the other meta but does not check the `session` field on the other meta. If the other meta has no `session` or an unreadable session, the existing earlier check (before this diff) presumably refuses. But if the recipe comparison allows it, the subsequent logic might proceed to an unguarded path. The test at the top of the diff (other_session != SESSION) is the guard; this diff adds a nested exception. An attacker could craft a meta with a different session and a recipe that equals current but also has a missing session field — the outer check may have already failed closed. Not directly this diff, but the new branch doesn't re-verify session presence.",
+      "why": "The new `continue` skips the refusal, but does not independently verify the other meta's session is valid. It relies on the outer `if [ \"$other_session\" != \"$SESSION\" ]` which already implies a session exists (since other_session came from `_meta_field`). But if `_meta_field` for session fails and returns empty, the outer condition may be true, and the recipe check could allow a malicious meta with a missing session.",
+      "fix": "Ensure the outer session read fails closed (the original code does so). But also ensure that the recipe read does not mask a missing session; the `continue` path should only be taken when the other meta is fully readable."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "If the current recipe `RECIPE` is empty (e.g. a render without a recipe), then any other meta with a non-empty recipe will be allowed (since `other_recipe` is non-empty and != empty), even if the other meta is actually a crash-retry with a different recipe. But a crash-retry would run the same recipe, so if current recipe is empty, a retry would also have an empty recipe; the guard would refuse only if other_recipe is empty and equals empty. But if a legitimate second look has a non-empty recipe, it's allowed — correct. The issue is if the current recipe is empty because of an error in reading it, an attacker could cause aborts.",
+      "why": "The code does not fail closed if `RECIPE` cannot be read; it treats empty as a valid value. The ADR says a meta with no readable recipe must refuse, but that applies to the other meta, not the current one. If current recipe is unreadable, the guard is incomplete.",
+      "fix": "Ensure that `RECIPE` is also derived via a fail-closed read; if it cannot be read, refuse the render entirely."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "tests/design-render-session.bats:155",
+      "breaking_input": "The test's `FAKE_AB_SHOTS=\"A A\"` produces identical pixels, but the test does not verify that the two renders actually have identical pixels; it relies on the fake to guarantee it. If the fake changes, the test could pass for non-identical pixels, not exercising the intended scenario.",
+      "why": "The test's precondition is not asserted; it assumes the fake shots are byte-identical. A regression in the fake would weaken the test.",
+      "fix": "Assert byte equality of the two PNGs before running the critique, or use a deterministic fixture."
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "The guard only checks `other_recipe` against `RECIPE` for the same route. But the outer condition checks `$other_session != $SESSION` — a different session with the same route and same recipe is a retry. However, the code does not check that the other meta's route matches the current route; it assumes the loop variable `m` refers to the same route. If the glob expansion picks up a meta for a different route, and that other route's recipe equals the current recipe (unlikely but possible), it would `continue` past the refusal, allowing a retry of a different route to be treated as a second look.",
+      "why": "The guard is scoped to `$m` being a meta for the current route, but the loop iterates over all */*.json; the recipe comparison does not include a route check. An attacker who can write a meta for a different route with the same recipe could bypass the retry guard for the current route.",
+      "fix": "Before allowing via the recipe difference, verify that the other meta's route equals the current route (e.g. compare its slug to ROUTE)."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:757-761",
+      "breaking_input": "If `_meta_field` is slow or has side effects, the guard is called inside a loop over many files; an attacker could trigger resource issues, but that's not a correctness defect. The `||` construct could mask an error from `_meta_field` that is unrelated to the recipe being missing (e.g. I/O error). A non-zero exit from a transient error is treated as unreadable and refuses — that's fail-closed, good. But if the error is due to a race (file being written), it might refuse a valid second look.",
+      "why": "The guard treats any non-zero exit as 'unreadable' and refuses, which is fail-closed as intended. Not a defect, but could cause availability issues.",
+      "fix": "None; acceptable."
+    }
+  ]
+}

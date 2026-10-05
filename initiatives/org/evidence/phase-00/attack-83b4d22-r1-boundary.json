@@ -1,0 +1,47 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:roleSeat IIFE (hasRole line)",
+      "breaking_input": "arc-run.mjs --process no-such-process, or any process whose canonical file is missing or unparsed, so `doc` is null or undefined, run from a tree where the earlier `doc && ...job_stub` guard let execution continue.",
+      "why": "The earlier job_stub check is written `doc && Object.prototype...`, which implies `doc` can be falsy at this point. The new block calls `Object.prototype.hasOwnProperty.call(doc, \"role\")` with no guard, and `Object.prototype.hasOwnProperty.call(null, ...)` throws a TypeError. The result is a stack trace and a nonzero exit code that is not the documented operator-error 2, raised before routing and before any receipt.",
+      "fix": "Guard with `doc && typeof doc === \"object\" && Object.prototype.hasOwnProperty.call(doc, \"role\")`. If `doc` is falsy, return null and let the existing missing-process path report it."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-judge.mjs:main (root/spineDir/arcEvent/emitOpts)",
+      "breaking_input": "cd /elsewhere && org-judge.mjs --root ../arc --spine-dir ../spine --head H --receipt ULID --verdict accept --reason ok (relative --root or --spine-dir, cwd different from root).",
+      "why": "The receipt, placements and dedupe are read with paths resolved against the process cwd. The emit child is spawned with `cwd: root`, `arcEvent` is the relative path `join(root, ...)`, and `ARC_SPINE_ROOT` is the relative `spineDir`. Both resolve a second time against `root`, so the child either cannot find arc-event.mjs or writes to `root/<spineDir>`, a different spine from the one judged. That is the B1 read-here, write-there defect again, reached through relative paths. The earlier fix passed the env var but did not make it absolute.",
+      "fix": "After parsing, set `root = resolve(o.root)` and `spineDir = resolve(spineDir)` before any use. Pass only absolute paths to the emit child.",
+      "twin_of": "org-dispatch read governance and open proposals from `--spine-dir` but `--emit` wrote to the canonical spine, so the cap and dedupe counted a different spine than the writes"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-judge.mjs:teamStems / readTeam",
+      "breaking_input": "org/teams/con.team.yaml as a regular file on a Windows checkout, or a directory or symlink named x.team.yaml.",
+      "why": "`teamStems` turns a directory listing straight into stems with no isFile or lstat check and no device-name or grammar check on the stem. `readTeam(root, stem)` then opens whatever the listing returned. This is the pattern already fixed for /api/org, not applied here.",
+      "fix": "Filter stems with lstat().isFile(), the stem grammar and the device-name exclusion before reading. Skip a link or directory, as the route does.",
+      "twin_of": "/api/org opened every `*.team.yaml` the listing returned, including `con.team.yaml` and a directory or symlink with that name"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-own.mjs:main (today) and ownCard history line",
+      "breaking_input": "Run --dry-run at 23:59 UTC and apply with the printed --expect after 00:00 UTC.",
+      "why": "The date comes from `new Date().toISOString()` and is written into the card's history line, which is part of the planned file content. The plan digest therefore changes across UTC midnight, and a correct apply is refused as stale. The date is also UTC while the lane records IST dates, so the history entry can be a day off the owner's calendar.",
+      "fix": "Take the date from the dry-run's own digest input, for example an optional --date, or use a date-free history line. Alternatively fix the date once and carry it in the printed expect token."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/org/skill-import.mjs:main (--source fake on apply)",
+      "breaking_input": "skill-import.mjs github:acme/kit/clean-notes/SKILL.md@<sha> --role technical-writer --source fake --expect DIGEST, run on the owner's real clone.",
+      "why": "A fixture read from the repo's own tests/fixtures tree is allowed to pass the full apply path. It writes a real proposal branch and a real approval.requested receipt. That receipt carries the vetted-bytes digest and a source line that claims `github:acme/kit/...@sha`, though no GitHub fetch happened. Provenance is then forged by the tool's own test mode.",
+      "fix": "Refuse `--source fake` unless `--dry-run` is given or an explicit test env var is set. Alternatively write `fetched via: fake fixture` into the approval payload and the commit message."
+    }
+  ]
+}

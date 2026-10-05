@@ -1,0 +1,130 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:120-121",
+      "breaking_input": "--n 00",
+      "why": "The check for --n is /^[0-9]{1,2}$/ which allows leading zeros, Number('00') is 0. Then items.length !== n fails because n=0, so it will always refuse, but if there were 0 variants and 0 refs? Actually variants.len <2 fails first. So it's not a bypass but a misleading error. More importantly, the count contract is violated in a confusing way.",
+      "fix": "Use /^[1-9][0-9]?$/ for n.",
+      "twin_of": "An emptied oversize body passed through as a 2xx -> a capped read is truncated or refused, never handed on empty as a success."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:124-125",
+      "breaking_input": "--seed 4294967296",
+      "why": "Seed regex allows 10 digits, then Number>2^32 check happens. But seed 0000000001 passes regex, Number is 1, but rng does seed>>>0, so 0000000001 is 1, fine. However 9999999999 exceeds 2^32 and is caught. Seed 4294967295 is allowed, rng uses >>>0 which is 4294967295, ok.",
+      "fix": "Not a real issue; consider stricter regex to avoid confusing input.",
+      "twin_of": ""
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:135",
+      "breaking_input": "variant-a and variant-b both have index.html but no render meta at viewport",
+      "why": "If one variant has no render, fail is raised. But the failure message doesn't include which viewport is being requested, potentially confusing but not a security issue.",
+      "fix": "Include viewport in the error message.",
+      "twin_of": ""
+    },
+    {
+      "id": "L4",
+      "severity": "critical",
+      "where": ".claude/scripts/design/design-jury.mjs:177-180",
+      "breaking_input": "A ref file whose hash starts with the given 16-hex prefix but the file is a symlink pointing outside the pack dir",
+      "why": "The code does readdirSync on packDir and matches the filename prefix, but doesn't verify the resolved path stays inside packDir. If an attacker can place a symlink in the pack dir named 'x-<hex>.png' pointing to /etc/passwd, the code will readFileSync through the symlink and hash it. The hash would not match the prefix unless attacker can control the target, but even a symlink to a file with matching hash could be an issue. More directly, the path traversal check `best.m.png.includes(\"..\")` exists for variants but not for refs; the refs are resolved by readdirSync so the name is from the dir, but the file could be a symlink to an arbitrary path, and the hash check would confirm the content but the symentry is a reference to external content which may not be intended.",
+      "fix": "Use realpath and verify it is inside packDir.",
+      "twin_of": "Paths compared without percent-encoding normalisation -> normalise both sides of a path comparison the same way."
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:203-206",
+      "breaking_input": "--ref with a 16-hex prefix that matches a file but the file's bytes hash does not start with that prefix",
+      "why": "The code checks full.startsWith(r) and fails if not. That is correct. But the check for provenance rows uses `l.split(\"|\")` and `.includes(full)` which is fine.",
+      "fix": "None."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:210",
+      "breaking_input": "A ranking line like `- ranked: item-a > item-a > item-a > item-a`",
+      "why": "The check detects duplicate-item and missing-item, good. But the reference-position check is not tied to the order: if a ranking has the reference in a position but writes reference-position: unset, it passes. That's intended as the juror is blind. The runner computes refPos from the ranking, which is fine.",
+      "fix": "None."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:216-220",
+      "breaking_input": "A ranking with a Why heading `## Why item-a over item-b` but the ranked line is reversed",
+      "why": "The check compares the whys to the expected pairs from the order. The test `whys.join(',' ) !== want.join(',')` catches that. But what if a juror writes extra Why sections? The check uses `lines.map(...).filter(Boolean)` which collects all, and then compares to the exact expected list, so extra would fail. Good.",
+      "fix": "None."
+    },
+    {
+      "id": "L8",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:222",
+      "breaking_input": "A ranking file named ranking-01.md",
+      "why": "The regex /^ranking-[0-9]+\\.md$/ allows leading zeros, and the sort uses Number(match) so 01 and 1 both become 1, but since filenames are distinct they would both appear. That's not a vulnerability but a conflict.",
+      "fix": "Use /^ranking-([1-9][0-9]*)\\.md$/ and enforce no leading zeros.",
+      "twin_of": ""
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:229-231",
+      "breaking_input": "A ranking with a line `- ranked:item-a` (no space after colon)",
+      "why": "The regex /^- ranked:/ matches, and slice('- ranked:'.length) works, so it's fine. But what about `- ranked: ` with trailing spaces? It trims each item. Good.",
+      "fix": "None."
+    },
+    {
+      "id": "L10",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:250-252",
+      "breaking_input": "An invalid ranking with a deviation still gets its source list set to null, and referencePosition null. That's fine.",
+      "why": "But the `check` function writes result.json even when there are deviations; it also appends to deviations.log. The result.json is written atomically via tmp+rename. Good.",
+      "fix": "None."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:263-268",
+      "breaking_input": "The `parse` function accepts `--root` twice because it's not in the repeat set, so it fails with 'given twice'. But `--ref` is repeatable. Good.",
+      "why": "However, the `parse` function advances i by 2, so if an argument is missing a value, it checks the next argv which starts with '--', and fails. But what if `--ref` is the last argument? It will fail because i+1 >= argv.length. Good.",
+      "fix": "None."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:96-99",
+      "breaking_input": "The exploreId regex allows ids like 'a' but also 'con' blocked by RESERVED. Good. But the `exploreOf` function reads explore.txt and uses the brief path to compute the brief id via basename(dirname(briefPath)). If explore.txt contains a brief path with a trailing slash like `docs/design/briefs/bx/brief.md/` then dirname gives `docs/design/briefs/bx/brief.md`, basename gives `brief.md`, and regex fails. Good.",
+      "why": "No issue.",
+      "fix": "None."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:145-153",
+      "breaking_input": "Variants are matched with /^variant-[a-z]$/, so only single lowercase letter. The fixture uses a-e, fine. But if a variant has a render meta with png path that is absolute, it is rejected. Good.",
+      "why": "The check `best.m.png.includes(\"..\")` is a substring check that could be bypassed by a path like `foo..bar` but that's not a traversal. More importantly, the path is joined with root, but the meta could contain a path like `../../etc/passwd` and the includes(\"..\") catches that. Good.",
+      "fix": "None."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:243-246",
+      "breaking_input": "The `check` function reads the key and uses key.n to validate count. If key.n is tampered, the check would fail, but the key is sealed under .claude/state which is not committed. Good.",
+      "why": "No issue.",
+      "fix": "None."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:8-9",
+      "breaking_input": "The header comment says 'Known limit: a pack screen keeps its own format and size, so an item can differ from the renders in ways a juror can see.' This is acknowledged.",
+      "why": "No issue.",
+      "fix": "None."
+    }
+  ]
+}

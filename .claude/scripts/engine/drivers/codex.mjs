@@ -11,7 +11,7 @@
 
 import { execFileSync } from "node:child_process";
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { render as renderCodex } from "../adapters/codex.mjs";
 
 const CLI = process.env.ARC_CODEX_CLI || "codex";
@@ -31,7 +31,9 @@ await runDriver("codex", async ({ processName, input }) => {
   if (!read.ok) throw new Error(`canonical file does not parse: ${read.what}`);
   const parsed = { value: read.doc };
 
+  const persona = seatPersona();
   const prompt = [
+    ...(persona ? [persona] : []),
     renderCodex(parsed.value),
     "",
     "---",

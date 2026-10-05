@@ -342,3 +342,151 @@ Allow: /')"
   echo "$output" | grep -q "sources.md" || { echo "sources.md should be a tracked change and is not: $output"; false; }
   true
 }
+
+# ---------- Phase 02 real-build fixes (2026-09-27) ----------
+#
+# The first real pack build met two things the fixtures never had. collectui.com's robots.txt is
+# ALL comments -- Cloudflare's content-signals preamble with no rule -- and the parser looked for a
+# directive before stripping comments, so an allow-all file read as UNREADABLE. And the curator
+# could not SEE a screen before writing its principle, so --stage fetches it for viewing first.
+
+@test "preflight: a robots.txt of comments only is an empty file, and ALLOW (RFC 9309)" {
+  _pack_sandbox
+  rf="$(_robots_file '# As a condition of accessing this website, you agree to abide by the following
+# content signals:
+
+# ai-train: training or fine-tuning AI models.')"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  [ "$status" -eq 0 ] || { echo "a comments-only robots.txt was not ALLOW: $status $output"; false; }
+}
+
+@test "preflight: a content signal ai-input=no refuses, and ai-input=yes does not" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Content-Signal: search=yes, ai-input=no
+Allow: /')"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  [ "$status" -eq 3 ] || { echo "an ai-input=no signal was not a refusal: $status $output"; false; }
+  echo "$output" | grep -q "ai-input=no" || { echo "refused without naming the signal: $output"; false; }
+  rf="$(_robots_file 'User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /')"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  [ "$status" -eq 0 ] || { echo "ai-input=yes (with ai-train=no) was refused: $status $output"; false; }
+}
+
+@test "refpack --stage: fetches for viewing, writes no provenance row, and still passes every check" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Allow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --stage 1 \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 0 ] || { echo "a staged fetch was refused: $output"; false; }
+  ls "$SANDBOX/.claude/state/design/refpacks/lexos/staged/"*.png >/dev/null 2>&1 \
+    || { echo "nothing staged: $(ls -AR "$SANDBOX/.claude/state/design/refpacks/lexos/" 2>&1)"; false; }
+  echo "$output" | grep -q "staged: .claude/state/design/refpacks/lexos/staged/" || { echo "the staged path was not printed: $output"; false; }
+  [ ! -f "$(_sources_md)" ] || { echo "staging wrote a provenance row"; false; }
+  # Paired: staging is not a way around the registry or robots.
+  rf="$(_robots_file 'User-agent: *
+Disallow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-2 --stage 1 \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 3 ] || { echo "a DISALLOW was staged anyway: $status $output"; false; }
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --stage 1 \
+      --principle "p" --avoid "a" --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 1 ] || { echo "--stage with a principle was accepted: $status $output"; false; }
+}
+
+@test "refpack --staged: an add is bound to the bytes that were staged (staging attack B8)" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Allow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --stage 1 \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 0 ] || { echo "stage failed: $output"; false; }
+  local pre; pre="$(printf '%s' "$output" | sed -n 's/.*--staged \([0-9a-f]\{16\}\).*/\1/p')"
+  [ -n "$pre" ] || { echo "the stage did not print a --staged prefix: $output"; false; }
+  # The host now serves different bytes: the add refuses, and writes no row.
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --staged "$pre" \
+      --principle "the status line owns the top-left" --avoid "the four identical buttons" \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture b)"
+  [ "$status" -eq 5 ] && printf '%s' "$output" | grep -q "is not the one staged" || { echo "a changed screen was added: $status $output"; false; }
+  [ ! -f "$(_sources_md)" ] || { echo "a row was written for a screen that changed"; false; }
+  # Paired: the same bytes add cleanly.
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/screen-1 --staged "$pre" \
+      --principle "the status line owns the top-left" --avoid "the four identical buttons" \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)"
+  [ "$status" -eq 0 ] || { echo "the staged bytes were refused: $output"; false; }
+}
+
+@test "preflight: a padded robots.txt answers in linear time (staging attack B1)" {
+  _pack_sandbox
+  rf="$SANDBOX/robots-padded.txt"
+  { head -c 300000 /dev/zero | tr '\0' '\n'; printf 'User-agent: *\nAllow: /\n'; } > "$rf"
+  [ "$(wc -c < "$rf" | tr -d ' ')" -gt 300000 ] || { echo "fixture not padded"; false; }
+  local t0 t1; t0="$(date +%s)"
+  run node "$(_robots)" --url https://example.test/x --ua ClaudeBot --robots-file "$rf"
+  t1="$(date +%s)"
+  [ "$status" -eq 0 ] || { echo "a padded allow-all file was not ALLOW: $status $output"; false; }
+  [ $((t1 - t0)) -lt 10 ] || { echo "the padded file took $((t1 - t0)) s"; false; }
+}
+
+@test "transport: the address that is checked is the address connected to -- one resolution, loopback refused, zero hits (logic pass r1 B1)" {
+  cd "$ARC_ROOT"
+  run node tests/fixtures/design/pinned-transport-probe.mjs .claude/scripts/design/design-robots.mjs
+  [ "$status" -eq 0 ] || { echo "the probe did not run: $status $output"; false; }
+  # Assert it RAN before asserting what it printed: all three cases reported.
+  printf '%s' "$output" | grep -q '"ran":\["a","b","c"\]' || { echo "not every case ran: $output"; false; }
+  printf '%s' "$output" | grep -q '"a":{"ok":false,"error":"refused: rebind.test resolves to a private address","calls":1}' || { echo "A: loopback was not refused on ONE resolution: $output"; false; }
+  printf '%s' "$output" | grep -q '"b":{"ok":false,"error":"refused: rebind.test resolves to a private address"' || { echo "B: a private address beside a public one passed: $output"; false; }
+  printf '%s' "$output" | grep -q '"c":{"ok":false,"error":"refused: 127.0.0.1 is a private address"}' || { echo "C: an IP literal was not refused: $output"; false; }
+  printf '%s' "$output" | grep -q '"hits":0}' || { echo "a refused request still reached the server: $output"; false; }
+}
+
+@test "exit codes: every verdict-to-code lookup is guarded, so an unknown verdict can never exit 0 (logic pass r1 B2)" {
+  cd "$ARC_ROOT"
+  # The CLI of each file maps a verdict through EXIT; a raw lookup of an unknown key is undefined,
+  # and process.exit(undefined) is 0. Every lookup must carry the hasOwn guard.
+  run grep -nE 'EXIT\[d\.verdict\]' .claude/scripts/design/design-robots.mjs .claude/scripts/design/design-refpack.mjs
+  [ "$status" -eq 0 ] || { echo "no verdict lookup found at all -- the scan read nothing"; false; }
+  bad="$(printf '%s\n' "$output" | grep -v 'Object.hasOwn(EXIT, d.verdict)' || true)"
+  [ -z "$bad" ] || { echo "an unguarded verdict lookup: $bad"; false; }
+}
+
+@test "logs: unicode line separators are stripped from every logged field, like C0 controls (logic pass r1 B4)" {
+  cd "$ARC_ROOT"
+  run grep -cF 'replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g' .claude/scripts/design/design-refpack.mjs
+  [ "$output" = "1" ] || { echo "field() does not strip U+0085/U+2028/U+2029: count=$output"; false; }
+}
+
+@test "refpack: a redirect to the same host on another port is refused on the hop, and a plain same-host redirect is the control (phase-02 attack G3 B1)" {
+  _pack_sandbox
+  rf="$(_robots_file 'User-agent: *
+Allow: /')"
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/x --principle p --avoid a \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)" --redirect "https://example.test:8443/y"
+  [ "$status" -eq 2 ] || { echo "a redirect to another port was not refused: $status $output"; false; }
+  [[ "$output" == *"carries a port or userinfo"* ]] || { echo "refused, but not for the port: $output"; false; }
+  ! ls "$SANDBOX/.claude/state/design/refpacks/lexos/"*.png >/dev/null 2>&1 || { echo "an image was cached from a refused hop"; false; }
+  # CONTROL: the same redirect without the port is followed and the screen is added.
+  run node "$(_refpack)" --brief lexos --source lapa-ninja --url https://example.test/x --principle p --avoid a \
+      --registry "$SANDBOX/design.sources.yaml" --robots-file "$rf" --fixture "$(_fixture a)" --redirect "https://example.test/y"
+  [ "$status" -eq 0 ] || { echo "control: a same-host redirect was refused: $status $output"; false; }
+  ls "$SANDBOX/.claude/state/design/refpacks/lexos/"*.png >/dev/null 2>&1 || { echo "control: no image was cached"; false; }
+}
+
+@test "preflight: rules that cost billions of matcher steps end UNREADABLE, fast (phase-02 attack G2 B2)" {
+  _pack_sandbox
+  rf="$BATS_TEST_TMPDIR/heavy.txt"
+  # A star then a long literal the path never completes: ~7M matcher steps per rule, ~3.5 billion for 500 (measured).
+  rule="/*$(printf 'a%.0s' $(seq 1 1000))Z"
+  { printf 'User-agent: *\n'; for _ in $(seq 1 500); do printf 'Disallow: %s\n' "$rule"; done; } > "$rf"
+  [ "$(grep -c '^Disallow: ' "$rf")" -eq 500 ] || { echo "the heavy fixture was not built"; false; }
+  path="$(printf 'a%.0s' $(seq 1 8000))"
+  t0="$(date +%s)"
+  run node "$(_robots)" --url "https://example.test/$path" --ua ClaudeBot --robots-file "$rf"
+  t1="$(date +%s)"
+  [ "$status" -eq 4 ] || { echo "a pathological rule set was not UNREADABLE: $status ${output:0:300}"; false; }
+  [[ "$output" == *"steps; the file was not read through"* ]] || { echo "UNREADABLE, but not for the step budget: ${output:0:300}"; false; }
+  [ $((t1 - t0)) -lt 20 ] || { echo "the budget did not bound the time: $((t1 - t0)) s"; false; }
+}

@@ -1,5 +1,6 @@
 name: review-diff
 version: 1.0.0
+role: code-reviewer
 intent: "Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/."
 permissions: declared
 inputs:

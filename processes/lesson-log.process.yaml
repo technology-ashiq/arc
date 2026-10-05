@@ -1,5 +1,6 @@
 name: lesson-log
 version: 1.0.0
+role: hr-performance
 intent: "Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt."
 permissions: declared
 

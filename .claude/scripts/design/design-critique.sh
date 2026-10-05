@@ -9,6 +9,7 @@
 # impossible.
 #
 #   design-critique.sh begin  <route> [--viewport WxH]   # arm boundary + render
+#   design-critique.sh begin  <route> --brief <path>     # every viewport the brief declares, + its pack
 #   design-critique.sh finish <route>                    # judge artifact, stamp, release
 #
 # `begin` and `finish` are separate because the critic runs BETWEEN them, and the critic is an
@@ -48,8 +49,69 @@ _artifact() {
   ls -1t "$ROOT/$CRITIQUE_DIR"/*"$SLUG".md 2>/dev/null | head -1
 }
 
+# A run begun with --brief records what finish must hold it to (Phase 03 S2): the brief, its pack, and every
+# viewport the brief's platform contract declares. Absent, finish judges exactly as before.
+RUN_FILE="$ROOT/.claude/state/design/renders/design-critic/$SLUG.run"
+
 case "$CMD" in
   begin)
+    BRIEF=""
+    _prev=""
+    for _a in "$@"; do
+      [ "$_prev" = "--brief" ] && BRIEF="$_a"
+      _prev="$_a"
+    done
+    if [ -n "$BRIEF" ]; then
+      for _a in "$@"; do
+        [ "$_a" = "--viewport" ] && { echo "design-critique: --brief derives the viewport set from the platform contract; --viewport would override it" >&2; exit 1; }
+      done
+      [ "$#" -eq 2 ] || { echo "design-critique: begin --brief takes only the brief path" >&2; exit 1; }
+      case "$BRIEF" in
+        docs/design/briefs/*/brief.md) BRIEF_ID="${BRIEF#docs/design/briefs/}"; BRIEF_ID="${BRIEF_ID%/brief.md}";;
+        *) echo "design-critique: --brief must be docs/design/briefs/<id>/brief.md (got $BRIEF)" >&2; exit 1;;
+      esac
+      case "$BRIEF_ID" in
+        ''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|-*) echo "design-critique: the brief id '$BRIEF_ID' is not lowercase kebab" >&2; exit 1;;
+        # A Windows device name passes the charset and breaks the pack path on one CI leg (S2 attack B1).
+        con|prn|aux|nul|com[0-9]|lpt[0-9]) echo "design-critique: the brief id '$BRIEF_ID' is a Windows device name" >&2; exit 1;;
+      esac
+      # A run record from an earlier begin must never survive a begin that fails: finish would hold the new
+      # critique to the old brief (S2 attack B2).
+      rm -f "$RUN_FILE" 2>/dev/null
+      [ -f "$ROOT/$BRIEF" ] || { echo "design-critique: no brief at $BRIEF" >&2; exit 1; }
+      WANT="$(node "$DESIGN_DIR/design-lint.mjs" --viewports "$ROOT/$BRIEF")" || { echo "design-critique: could not derive the viewport set from $BRIEF" >&2; exit 1; }
+      # Quoted, then split by tr: an unquoted $WANT is word-split AND globbed against the cwd (S2 attack B3).
+      WANT="$(printf '%s\n' "$WANT" | tr ' ' '\n' | grep -E '^[0-9]{2,5}x[0-9]{2,5}$' | tr '\n' ' ' | sed 's/ $//')"
+      [ -n "$WANT" ] || { echo "design-critique: $BRIEF declares no viewport -- that is a broken contract, not a pass" >&2; exit 1; }
+      bash "$DESIGN_DIR/critic-scope-check.sh" --begin "$ROUTE" || exit 1
+      RD="$ROOT/.claude/state/design/renders/design-critic"
+      for _vp in $WANT; do
+        if ! bash "$DESIGN_DIR/design-render.sh" "$ROUTE" --viewport "$_vp"; then
+          bash "$DESIGN_DIR/critic-scope-check.sh" --end >/dev/null 2>&1 || true
+          echo "design-critique: render refused at $_vp -- nothing to critique." >&2
+          exit 1
+        fi
+        # design-render names a critique render by route alone, so each viewport is moved under its own name
+        # before the next one overwrites it, and its meta is pointed at the moved file.
+        mv -f "$RD/$SLUG.png" "$RD/$SLUG--$_vp.png" && sed "s#$SLUG\.png#$SLUG--$_vp.png#" "$RD/$SLUG.json" > "$RD/$SLUG--$_vp.json" && rm -f "$RD/$SLUG.json" \
+          || { bash "$DESIGN_DIR/critic-scope-check.sh" --end >/dev/null 2>&1 || true; echo "design-critique: could not keep the $_vp render" >&2; exit 1; }
+      done
+      printf 'brief=%s\nbrief_id=%s\nviewports=%s\n' "$BRIEF" "$BRIEF_ID" "$WANT" > "$RUN_FILE" \
+        || { bash "$DESIGN_DIR/critic-scope-check.sh" --end >/dev/null 2>&1 || true; echo "design-critique: could not record the run" >&2; exit 1; }
+      echo ""
+      echo "design-critique: ready for the critic."
+      echo "  route:    $ROUTE"
+      echo "  brief:    $BRIEF"
+      for _vp in $WANT; do echo "  render:   .claude/state/design/renders/design-critic/$SLUG--$_vp.png  (meta alongside)"; done
+      echo "  pack:     .claude/state/design/refpacks/$BRIEF_ID/  and  docs/design/refpacks/$BRIEF_ID/sources.md"
+      echo "  artifact: $CRITIQUE_DIR/$(date +%Y-%m-%d)-$SLUG.md   <- the critic writes ONLY here"
+      echo "  rules:    one '## Viewport WxH' section per viewport; every BELOW-BAR cites pack:<sha16>"
+      echo ""
+      echo "Next: spawn the design-critic agent, then run:"
+      echo "  bash .claude/scripts/design/design-critique.sh finish $ROUTE"
+      exit 0
+    fi
+    rm -f "$RUN_FILE" 2>/dev/null
     bash "$DESIGN_DIR/critic-scope-check.sh" --begin "$ROUTE" || exit 1
     # Whitelist what is forwarded. This function hardcodes the meta/render READ path below,
     # and --session/--iter/--mode move the renderer WRITE path -- so forwarding them blind
@@ -119,7 +181,37 @@ case "$CMD" in
     BELOW_BAR="$(grep -ciE '^[[:space:]]*([-*+][[:space:]]+|#+[[:space:]]*|[0-9]+\.[[:space:]]+)?\**BELOW-BAR\**[[:space:]]*:' "$ART" 2>/dev/null || true)"
     case "$BELOW_BAR" in ''|*[!0-9]*) BELOW_BAR=0;; esac
 
-    if [ "$VIOLATIONS" -eq 0 ] && [ "$BELOW_BAR" -eq 0 ]; then RESULT="PASS"; else RESULT="FAIL"; fi
+    UNJUDGED=""
+    if [ -f "$RUN_FILE" ]; then
+      RUN_BRIEF_ID="$(sed -n 's/^brief_id=//p' "$RUN_FILE" | head -1)"
+      RUN_VPS="$(sed -n 's/^viewports=//p' "$RUN_FILE" | head -1)"
+      SOURCES="$ROOT/docs/design/refpacks/$RUN_BRIEF_ID/sources.md"
+      # Every BELOW-BAR is anchored to the pack: a bar nobody can point at is taste, not a bar (ADR-1405). Refused,
+      # not failed: an unanchored finding is an unfinished critique, and a verdict over it would be a guess.
+      _bad=""
+      while IFS= read -r _line; do
+        [ -n "$_line" ] || continue
+        _cites="$(printf '%s\n' "$_line" | grep -oE 'pack:[0-9a-f]{16}' | sed 's/^pack://')"
+        if [ -z "$_cites" ]; then _bad="$_bad
+    no pack screen cited: $(printf '%s' "$_line" | cut -c1-120)"; continue; fi
+        for _c in $_cites; do
+          grep -qE "\| *$_c[0-9a-f]{48} *\|" "$SOURCES" 2>/dev/null || _bad="$_bad
+    pack:$_c is not a screen in $RUN_BRIEF_ID's pack"
+        done
+      done <<EOF_BB
+$(grep -iE '^[[:space:]]*([-*+][[:space:]]+|#+[[:space:]]*|[0-9]+\.[[:space:]]+)?\**BELOW-BAR\**[[:space:]]*:' "$ART" 2>/dev/null)
+EOF_BB
+      if [ -n "$_bad" ]; then
+        echo "design-critique: REFUSED -- a BELOW-BAR finding is not anchored to the pack:$_bad" >&2
+        echo "Cite the screen it falls short of as pack:<sha16> (docs/design/refpacks/$RUN_BRIEF_ID/sources.md), then run finish again." >&2
+        exit 1
+      fi
+      # Every declared viewport is judged, or the run cannot PASS (moved here from Phase 01, 2026-09-17).
+      for _vp in $RUN_VPS; do
+        grep -qE "^## Viewport $_vp[[:space:]]*$" "$ART" || UNJUDGED="$UNJUDGED $_vp"
+      done
+    fi
+    if [ "$VIOLATIONS" -eq 0 ] && [ "$BELOW_BAR" -eq 0 ] && [ -z "$UNJUDGED" ]; then RESULT="PASS"; else RESULT="FAIL"; fi
 
     SHA="$(sed -n 's/.*screenshot_sha256[^a-f0-9]*\([a-f0-9]\{16,64\}\).*/\1/p' "$ART" | head -1)"
     [ -n "$SHA" ] || SHA="unrecorded"
@@ -146,6 +238,8 @@ case "$CMD" in
     echo "  artifact:   ${ART#"$ROOT"/}"
     echo "  violations: $VIOLATIONS"
     echo "  below-bar:  $BELOW_BAR"
+    [ -n "$UNJUDGED" ] && echo "  unjudged:  $UNJUDGED -- a declared viewport with no '## Viewport' section cannot PASS"
+    rm -f "$RUN_FILE" 2>/dev/null
     echo "  screenshot_sha256: $SHA"
     if [ "$RESULT" = "PASS" ]; then
       echo "  ledger:     design stamped for $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo no-git)"

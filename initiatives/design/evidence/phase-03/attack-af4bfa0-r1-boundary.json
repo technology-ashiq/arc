@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "critical",
+      "where": "design-jury.mjs:103-108 (deal(), variant loop)",
+      "breaking_input": "Drop a render-session meta file at .claude/state/design/renders/jx--variant-a/x.json with {\"route\":\"/\",\"viewport\":\"1440x900@1\",\"png\":\".env\",\"screenshot_sha256\":\"<the real sha256 of the repo's .env>\",\"iter\":99}. deal() only rejects best.m.png if it contains the substring \"..\", starts with \"/\", or matches a drive letter -- \".env\" (or \".git/config\", or any other relative path elsewhere in the repo) passes all three checks, existsSync/readFileSync succeed, and the sha256 check passes because the attacker (whoever writes the meta json) supplied the matching hash.",
+      "why": "join(root, best.m.png) never asserts the resolved path stays inside the variant's own render session directory (sess) -- it only textually forbids '..' and absolute forms, so any relative path anywhere under root is accepted. The file is then copyFileSync'd into the jury items dir as item-X.png (extname('.env') is '' so it falls back to '.png'), smuggling arbitrary repository content -- secrets, .git internals, unrelated docs -- into a blind-jury artifact that later feeds ranking files and reports.",
+      "fix": "After building `file = join(root, best.m.png)`, resolve both `file` and `sess` with path.resolve and require file to start with sess + path.sep (or equivalently derive the render path only from `sess` + a validated basename, never from a full relative path read out of untrusted meta json).",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "design-jury.mjs:84 vs 141-155 (deal())",
+      "breaking_input": "Run `design-explore.sh jury jx --n 4 --seed 7 --ref <sha16>` and, before it finishes, run `design-explore.sh jury jx --n 4 --seed 42 --ref <sha16>` concurrently against the same explore id `jx` (two background invocations from one shell).",
+      "why": "The existsSync(key.json) check at line 84 is only an early friendly error; the real exclusivity guard is the `wx` flag on the key.json write at the very end (line 153). But mkdirSync(itemsDir) and every copyFileSync into the SHARED items dir happen before that guard. Both concurrent processes can pass the line-84 check, then interleave their copyFileSync calls into the same item-a.ext..item-d.ext files; only one process's writeFileSync(...,{flag:'wx'}) succeeds and seals key.json, but the loser has already potentially overwritten some of the winner's item files with its own (differently-shuffled) sources before hitting EEXIST and exiting. The sealed key.json can then describe a mapping that no longer matches the bytes actually sitting in items/, so jury-check's reference-position derivation silently attributes the wrong source to a label.",
+      "fix": "Acquire the wx-protected key.json (or an equivalent lock file) BEFORE writing anything into the shared items directory -- e.g. write items into a per-process temp directory first, then rename it into place only immediately after the wx write of key.json succeeds; roll back (rm) the temp directory on EEXIST.",
+      "twin_of": "Check-then-create with a truncating write -> create exclusively (wx) and append; never exists()-then-write."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "design-jury.mjs:108 (variant ext) vs 123-124 (reference ext)",
+      "breaking_input": "Same crafted meta.json as B1, but with `\"png\": \"docs/design/refpacks/bx/some-uploaded.svg\"` (any relative path ending in a non-image extension, e.g. .svg, .html, .js) whose bytes hash to the declared screenshot_sha256.",
+      "why": "The reference-pack branch explicitly checks `IMAGE_EXT.has(ext)` and fails a non-image file (line 124), but the variant branch that copies best.m.png into an item has no equivalent check at all -- `ext: extname(file).toLowerCase() || \".png\"` accepts any extension and even forces a fake '.png' label onto extensionless files. The same content-type gate exists for one of the two item sources and not its sibling.",
+      "fix": "Apply the identical `if (!IMAGE_EXT.has(ext)) fail(...)` check to the variant's resolved file extension before pushing it into `items`.",
+      "twin_of": "A seam gate added to one CLI and not its sibling -> a fix to one entry point is checked in every entry point that shares the seam."
+    }
+  ]
+}

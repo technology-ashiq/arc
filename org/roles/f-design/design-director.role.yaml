@@ -13,6 +13,7 @@ hire: null
 binds:
   agents:
     - 'design-director'
+    - 'design-curator'
   skills: []
   scripts: []
   process: null

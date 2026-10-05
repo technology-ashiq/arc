@@ -78,6 +78,12 @@ function independentTally(events, placements) {
       case "cost.incurred": x.cost_receipts += 1; break;
       default: break;
     }
+    // A head's verdict is the head's receipt and the worker's accept or reject (ADR-1627), counted here by its
+    // own arm rather than through judgedVerdicts, so the audit stays an independent second count.
+    if (e.kind === "review.completed" && typeof e.payload?.subject_role === "string") {
+      if (e.payload.verdict === "accept") get(e.payload.subject_role).accepts += 1;
+      if (e.payload.verdict === "rework") get(e.payload.subject_role).rejects += 1;
+    }
   }
   return t;
 }

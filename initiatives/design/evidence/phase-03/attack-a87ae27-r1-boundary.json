@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "tests/design-composer-eyes.bats:25",
+      "breaking_input": "run `bats tests/design-composer-eyes.bats` (any test that calls `_composer_sandbox`) as committed",
+      "why": "The old multi-line `mkdir -p ... \\` continuation was collapsed into one line where the new path segments are joined by a literal two-character sequence `\\n` (backslash + letter n), not a real newline/continuation. Outside quotes, bash expands `\\n` to the bare word `n`, so `mkdir -p` receives three extra un-quoted arguments `n` interleaved with the real paths and silently creates three stray `./n` directories relative to whatever the test's CWD is, on every single invocation of this helper. `mkdir -p` exits 0 regardless, so this never shows up as a test failure -- it just litters the working tree, exactly the recurring 'apostrophe/backtick/`$`/embedded-`\\n`-inside-a-shell-string' failure class this repo's own CLAUDE.md calls out by name.",
+      "fix": "Replace the flattened line with real newline + backslash line-continuations (or one line of plain space-separated quoted args), written via the Write/Edit tool rather than a sed/python one-liner that can eat `\\n`.",
+      "twin_of": null
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/composer-scope-check.sh:351",
+      "breaking_input": "docs/design/explore/<EX>/explore.txt checked out with CRLF endings, e.g. content `id=lexos-v1\\r\\nbrief=docs/design/briefs/lexos-p/brief.md\\r\\n` (plausible on any Windows checkout of this tracked docs/ file under core.autocrlf=true)",
+      "why": "The sed pattern anchors with `brief\\.md$`, which requires the line to end immediately after 'md'. A trailing `\\r` before the newline sits between 'md' and the true end-of-line, so the pattern never matches, `_brief_line` comes back empty, and the case falls into the `''` branch -- PACK and PACK_SOURCES both stay empty. The composer that has a real, legitimate brief and a real pack on disk is fail-closed out of reading it, silently, on every CRLF-affected checkout, defeating the exact fix this diff ships.",
+      "fix": "Strip a trailing `\\r` before matching, e.g. `sed -n 's/\\r$//; s#^brief=...#\\1#p'`, or allow an optional `\\r` before the `$` anchor.",
+      "twin_of": null
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/design/composer-scope-check.sh:349-355",
+      "breaking_input": "a `docs/design/explore/<EX>/explore.txt` whose `brief=` line has been changed (by anything able to write it before this check runs -- a second design-explore.sh invocation reusing EX, a stray write-check gap, or the file being swapped for a symlink) to point at a DIFFERENT, already-existing brief id such as `lexos-case-workspace` that belongs to another project",
+      "why": "The grant used to be pinned to `$EX`, an id that arrives as this script's own invocation argument. This diff moves the root of trust to the CONTENT of a file (`explore.txt`) that lives one directory above the composer's own writable variant tree, with no check that it is a regular file (not a symlink), no check of who last wrote it, and no binding back to whatever originally armed this session for that brief. Rewrite one line in that file and the composer is granted full read access -- via `.claude/state/design/refpacks/<brief-id>/` and `docs/design/refpacks/<brief-id>/sources.md` -- to any other project's confidential reference pack, which is exactly the cross-brief leak this same phase (S3) was built to close.",
+      "fix": "Before trusting `_brief_line`, realpath-contain `explore.txt` to `docs/design/explore/$EX/`, require it be a regular file (not a symlink), and verify it was written by the same arm step that started this session (e.g. compare against a hash/mtime stamped at `--brief` time) rather than trusting whatever the file says at read time.",
+      "twin_of": "A path from a metadata file trusted because it had no `..` -> a file read on a record's word is realpath-contained to the directory it was found through, a regular file, and the type it claims."
+    }
+  ]
+}

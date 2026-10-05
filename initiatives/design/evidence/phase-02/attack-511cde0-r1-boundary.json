@@ -1,0 +1,40 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "critical",
+      "where": "design-robots.mjs (refusePrivate + realTransport.get, ~L255-300)",
+      "breaking_input": "A registry-approved host's DNS is set up with a very short TTL: the record `refusePrivate`'s `dns.lookup(host,{all:true})` sees resolves to a public address (passes the private-address check), then the record is changed to 127.0.0.1 (or 169.254.169.254 for a cloud metadata endpoint) before the immediately-following `fetch(target,...)` call performs its own, independent DNS resolution and connects to the now-rebound private address.",
+      "why": "`refusePrivate(hostname)` and `fetch(target,...)` each resolve the hostname separately with no pinning between the two lookups. This is a classic TOCTOU/DNS-rebinding SSRF: the exact value that was checked (an IP from `dns.lookup`) is never the value actually connected to (whatever `fetch`'s own resolver returns moments later). The same `realTransport.get()` is reused for the robots.txt fetch, the screen fetch, and `checkBrowse`'s page probe, so every network boundary this file guards is bypassable the same way.",
+      "fix": "After `refusePrivate` validates the resolved address(es), connect to that exact validated IP (e.g. supply a custom `dispatcher`/`Agent` with a fixed `lookup`/`connect` that reuses the already-checked address while still sending the original Host/SNI), and repeat the check-and-pin on every redirect hop rather than doing a plain `fetch(target)` after a separate check.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "design-refpack.mjs check() vs checkBrowse() (EXIT[d.verdict] lookup)",
+      "breaking_input": "Any future change to `preflight()`/`decide()` that returns a verdict string outside {ALLOW, DISALLOW, UNREADABLE} (e.g. a new content-signal or timeout verdict) reaches `design-refpack.mjs`'s `check()`: `fail(EXIT[d.verdict], ...)` becomes `fail(undefined, msg)`, and `process.exit(undefined)` behaves like `process.exit()` -- exit code 0.",
+      "why": "`checkBrowse()` explicitly guards the identical lookup with `Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE`, but the sibling lookup in the main pack-building flow's `check()` does the raw `EXIT[d.verdict]` with no such guard. A refusal that falls through this gap prints an error line to stderr but exits 0 -- a refusal that any caller checking `$?` (curator script, CI, a chained `&&`) reads as success.",
+      "fix": "Apply the same `Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE` guard in `check()` that `checkBrowse()` already uses.",
+      "twin_of": "An unknown verdict looked up in a code table gave undefined, and process.exit(undefined) is 0 -> only the exact success verdict exits 0; every other lookup miss is a refusal."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "design-refpack.mjs main() sources.md row write (appendFileSync after the linkSync header creation)",
+      "breaking_input": "Run two `design-refpack.mjs --brief lexos ...` invocations concurrently for the same brief once `sources.md` already exists (so both skip the atomic header-creation branch and go straight to `appendFileSync(sourcesMd, row)`), e.g. a curator adding two screens back-to-back on Windows/NTFS.",
+      "why": "Only the header creation is made atomic (private temp file + `linkSync`). Each row append after that relies on POSIX's O_APPEND-is-atomic guarantee, but on Windows, libuv's append emulation does a separate seek-to-end-of-file followed by a write rather than one atomic append syscall, so two concurrent writers can land at the same offset and interleave or clobber each other's row -- exactly the class of Windows-only concurrent-write corruption this project has hit before with git objects.",
+      "fix": "Serialize row writes the same way the header is protected (write to a private temp file then atomically append via a lock file or a single-writer queue), instead of relying on bare `appendFileSync` being atomic across processes on every OS."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "design-refpack.mjs field() (control-character stripping used by every log/markdown write)",
+      "breaking_input": "A fetched host returns `Content-Type: image/png\\u2028FAKE\\tENTRY` (or a robots.txt `Disallow:` line containing U+2028), which flows through `record()`/`field()` into `availability.log`/`attempts.log`/`curator-browse.log`.",
+      "why": "`field()` only strips `\\u0000-\\u001f` and `\\u007f`; it does not strip Unicode line/paragraph separators (U+2028, U+2029) or NEL (U+0085). Any tool or viewer that treats those as line breaks reads the injected text as an extra, fabricated log entry, since the values logged here (content-type, robots.txt rule text, redirect targets) are fully remote-controlled.",
+      "fix": "Widen `field()`'s stripped set to also remove U+2028, U+2029, U+0085 (and any other line-breaking Unicode class), not just the ASCII C0/DEL range.",
+      "twin_of": "Remote text reached a tab-separated log verbatim -> strip control characters from every logged field."
+    }
+  ]
+}

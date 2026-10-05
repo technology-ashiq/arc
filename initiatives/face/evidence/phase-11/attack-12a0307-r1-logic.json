@@ -1,0 +1,50 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "face/src/App.tsx:388",
+      "breaking_input": "With Settings open over a room (the pushed entry carrying {settings:true}), fire two Escape keydowns back-to-back synchronously (scripted double-press, or an ESC key-repeat landing inside the pop-commit window). Both calls to closeSettings read window.history.state.settings === true — the state does not change until the pop commits — so each queues history.back(); the app lands one entry BEFORE the room (the HQ home or the front door) instead of on the room.",
+      "why": "The pushed-vs-replace decision is read from history.state, which only flips when the browser commits the pop. A second close inside that window re-decides 'pushed' and re-backs; the existing guard pattern (openSettings' `if (settingsOn) return`) has no close-side twin, and a state-based guard would not help either because view is still 'settings' until the hashchange lands. The second close should be a no-op, not a second navigation.",
+      "fix": "Latch the close: set a ref/flag synchronously on the first close and clear it when view actually leaves 'settings' (hashchange lands), or strip the settings flag from the current entry (replaceState(null,'',location.href)) before calling history.back() so any re-entry reads 'not pushed'.",
+      "twin_of": "A re-check with no lock -> a re-check is only a check if nothing can land between it and the write"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "face/scripts/smoke.mjs:1277",
+      "breaking_input": "Break ModelsPanel's Escape-close (delete the keydown handler). The hq-settings-page step records its failure but the smoke keeps running to produce a full verdict line. The rail step then clicks [data-rail-settings] with the page still open: openSettings early-returns (settingsOn), the until() is satisfied instantly by the stale open page (panel count 1, hash still has view=settings) and notRoom is trivially true — so rail-settings records a PASS while the link was never proven to open anything.",
+      "why": "The step never asserts the clean state it depends on: it relies on the previous step's close succeeding but never re-checks panel===0 / hash free of view=settings before clicking, so its until() cannot distinguish 'the link opened the page' from 'the page was already open and the click did nothing'. Its close-side twin assertions are also missing: after ESC it checks only the panel count, not the address or data-render, unlike the header step.",
+      "fix": "Before the click, await the same clean-state triple the header step asserts (panel 0, no view=settings in the hash, no settings section); only then click and require the page and the address to appear. Reuse one shared pre-close assertion for both steps.",
+      "twin_of": "An attach that never proved the poll ran -> A mutant's path is exercised only if the state that reaches it is asserted"
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1281",
+      "breaking_input": "Any passing rail-settings run prints its evidence line as 'the link carries a data-room' — the exact condition the check just proved false (notRoom requires zero [data-rail-settings][data-room]). The CI log's success evidence names the defect.",
+      "why": "The success branch of the ternary (`page ? \"the link carries a data-room\" : ...`) describes the failure condition, so a green run's own log claims the link is a fake room. Evidence lines that state the opposite of the verdict are the selftest-mislabelled class.",
+      "fix": "Print 'the link opened the page and carries no data-room' on the pass branch.",
+      "twin_of": "Selftests printed FAIL while passing -> a selftest's expected failures are labelled as expected"
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "docs/adr/1350-fv2-the-face-talks-owner-chosen-model-any-question-voice.md:51",
+      "breaking_input": "Open Settings from any of the three shipped entry points (header, rail, palette): openSettings always pushes buildHash(shownId ?? '', token, asOf, at, 'settings'), i.e. `#/<room|home>&…&view=settings` — buildHash always emits a `/<room>` part first. The address the ADR Amendment 2 §1 and the phase-11 DoD pin as the page's own address, `#hq&view=settings`, is never produced by any code path; it exists only if hand-typed (where parseHash reads room=null).",
+      "why": "The acceptance text spells the address from memory instead of from buildHash's actual output, so the documented contract and the implementation disagree on the very shape the DoD's smoke row claims to check ('the address reads view=settings' passes for either shape, hiding the drift).",
+      "fix": "Write the real shape (`#/<room>&view=settings`, with the roomless form only as a hand-typed alias) in the ADR and DoD — or, if `#hq&view=settings` is the contract, make openSettings produce exactly that and pin it in l3-logic.",
+      "twin_of": "A closed value spelled from memory -> Take an enum from the file that writes it, not from recall"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "tests/face-browser.bats:120",
+      "breaking_input": "In face/scripts/smoke.mjs's frozen FRONT_DOOR_CHECKS array (line 1059), delete 'rail-settings' and add a check that records(true) unconditionally: the array length stays 30, the smoke prints expected=30 ran=30 ok=30 failed=none, every mutant-control line in bats still refuses exactly what it refused before, and the suite stays green with a real check replaced by a no-op. Alternatively, add a 31st check without touching bats and every clean front-door run goes red.",
+      "why": "FRONT_DOOR_CHECKS=30 is a hand-kept copy of a length the module can print, and it pins only the count, never the names — the count-preserving swap and the count-forgetting addition are both live. This diff extends the hand-kept number (28→30) rather than deriving it.",
+      "fix": "Derive the floor from the module (import FRONT_DOOR_CHECKS or have the smoke print its length and have bats read that) and pin the check names, not just the count.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print"
+    }
+  ]
+}

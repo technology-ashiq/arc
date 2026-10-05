@@ -1,0 +1,22 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "low",
+      "where": "tests/design-render-session.bats:182-196",
+      "breaking_input": "Delete the second operand of the allow test, `[ \"$RECIPE\" = \"$other_recipe;confined-loopback\" ]`, so only the critique-after-explore direction survives. Or change the `;confined-loopback` suffix match to a prefix or substring match.",
+      "why": "The fix admits a symmetric pair. The tests only exercise one direction, a critique render against a prior explore meta. No fixture renders in explore mode after a critique meta exists, and no planted meta has a recipe like `X;confined-loopback;confined-loopback` or `;confined-loopback` plus junk. The reverse branch and the exactness of the token match can regress with every test green. This is the same weakness as the 'refusal test aimed where only that gate can refuse' pattern, applied to the allow side.",
+      "fix": "Add a fixture that plants a critique-recipe meta in another session, then runs an explore-mode render of the same pixels and expects it to be allowed. Add planted recipes that carry the token twice, as a prefix, or in the middle, and expect each to be refused with 'in session planted'.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": "tests/design-render-session.bats:182-196 and .claude/scripts/design/design-render.sh:757-765",
+      "breaking_input": "A planted meta in another session with the `recipe` key deleted entirely, or with a JSON null or numeric value, or with corrupted JSON. Pixels are identical to the current render.",
+      "why": "The ADR amendment says an empty or unreadable recipe refuses. The test loop covers only an empty string, a single space and a different string. The `_meta_field ... || other_recipe=\"\"` failure path is never driven by an absent key or unparseable JSON. If `_meta_field` changes so that an absent key yields a non-empty placeholder, or if the `|| other_recipe=\"\"` fallback is removed, no test goes red.",
+      "fix": "Extend the bad-value loop with node writes that `delete m.recipe`, set `m.recipe=null`, and a case that writes truncated JSON to the planted file. Expect exit 1 and the planted-session refusal text each time."
+    }
+  ]
+}

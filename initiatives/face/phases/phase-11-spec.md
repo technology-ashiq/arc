@@ -11,7 +11,7 @@ Why it exists (owner, 2026-10-03, after #314 merged): "work aguthu response slow
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **One Settings menu (ADR-1350 Amendment 1 §1):** HQ's header Settings opens one menu with two sections, **Models** and **Voice**, and the ⌘K palette has a "Settings" entry that opens the same menu. Still never on the front door's ask bar (`door-no-settings` holds).
+- [ ] **One Settings page (ADR-1350 Amendment 1 §1, Amendment 2):** HQ's header Settings and a Settings link at the foot of the rail open one page with two sections, **Models** and **Voice**, and the ⌘K palette has a "Settings" entry that opens the same page. The page draws in the workroom's main area at `#/lane&view=settings` over the lane room, `#hq&view=settings` over the home (a reload or a bookmark lands on it; Back and its own close return to the room that was open); it is not a room (the rail's link sits below the rooms, is not counted with them and carries no `data-room`) and not a surface, so `face-coverage`'s counts do not move. Pure decisions (`parseHash`/`buildHash` carry `view`, `settingsOpen`) live in `face/src/lib/shell.mjs`, held by `tests/face/l3-logic.mjs`. Still never on the front door (`door-no-settings` holds).
 - [ ] **Test a model (Amendment 1 §2):** each model row has **Test**. `POST /api/models/test` with a model's name asks that model one fixed probe question through `arc-run --process face-ask` (receipted like any answer; the active model does not change) and returns `ok` or the same plain-language cause `providerFault` gives, plus the seconds it took. The row shows ✓ or ✗, the seconds, and when it was tested. A fixture against `tests/face/fake-llm.mjs` holds: a healthy model tests ok with a duration; a 429 tests as busy; a model name that is not in the registry is refused; the key appears in no response.
 - [ ] **The last test is kept per model:** the door keeps each model's last test result for as long as it runs (not written to disk, no key in it); `GET /api/models` returns it beside each row. A fixture asserts a test is visible on the next read and a removed model's result is gone.
 - [ ] **Choose the voice (Amendment 1 §3):** the Voice section keeps the on/off switch and adds the browser's own voices as a list, a speed (0.75x to 1.5x) and **Preview**, which speaks one short sentence. The choice lives in the browser (`localStorage`, like the switch) and every spoken answer uses it. Pure decisions in `face/src/lib/talk.mjs` (`voicePick`, `voiceRate`) are held by `tests/face/talk.mjs`: a saved voice no longer installed falls back to the default, and a rate outside the range is clamped.
@@ -24,7 +24,7 @@ Tests run on CI only, read per job; each fixture asserts it RAN before asserting
 
 | Exit criterion | Check | Evidence | Who |
 |---|---|---|---|
-| One menu | smoke: header Settings and ⌘K "Settings" both open it; two sections found | CI smoke log | CI |
+| One page | smoke: header Settings, the rail's Settings link and ⌘K "Settings" each open it, the address reads `view=settings`, two sections found, closing returns to the room; l3-logic: `view` round-trips through the hash | CI smoke log + per job | CI |
 | Test a model | `tests/face/talk.mjs` section T against fake-llm: ok + seconds, 429 busy, unknown name refused, key absent | CI per job | CI |
 | Last test kept | same section: visible on next `GET /api/models`, gone after remove | CI per job | CI |
 | Voice choice | `tests/face/talk.mjs` section V: `voicePick` fallback, `voiceRate` clamp | CI per job | CI |
@@ -41,6 +41,10 @@ Tests run on CI only, read per job; each fixture asserts it RAN before asserting
 ## Out of scope for this phase
 
 A spend cap or ₹ per answer · streaming · new spine kinds · any change to the rooms or the front door.
+
+## Current-phase note (2026-10-05, `/arc-change --lane face`)
+
+At the live read the owner found voice working and asked for Settings as its own page ("sari thaniya irunthalum, seperate page ah vaikalama ?"). In scope for this phase, which is still open: the same contents move from the popup to a page in the workroom (ADR-1350 Amendment 2). The same day he asked for it in the menu ("menu laye add pannirlaama") and chose a link in the left menu over the popup or a room: a Settings link at the foot of the rail opens the page. No door route changes. About 0.5d inside this phase's 1.5d. One PR, one attack round, one push.
 
 ## Your-setup / pending
 

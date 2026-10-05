@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-explore.sh:66-76",
+      "breaking_input": "Seal ex1 and run `pair ex1 --from a --to d ...`. Then `rm -rf docs/design/explore/ex1/variant-d`, or replace it with a regular file named variant-d, or never let the composer create it. Run `compose-done`, `self-review` and the coverage gate. The `for` loop sees no variant-d directory (or `[ -d ]` fails and it hits `continue`). VARIANTS stays \"a b c\" and the script prints \"3 of 3\", while pairs.json still names d as the high-judgment arm.",
+      "why": "The fix moved the source of truth from pairs.json to whatever directories exist, and it never compares the two. The gate set is now derived from the thing the guarded party can delete, so a missing arm is read as \"no such arm\". It is the same fail-open hole one step over: absence of the artifact removes the check on that artifact.",
+      "fix": "Treat the sealed record and pairs.json as the authority for which variants must exist. When either exists, require every `to` (and `from`) named there to have a real directory, and refuse if one is missing. Pairs can be read with node and a hard failure on a parse error. Union those names into VARIANTS instead of relying on directories alone.",
+      "twin_of": "A guard switched on by the presence of a file the guarded party can delete -> key the guard on the committed record (the seal), and refuse when its companion is missing"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:67",
+      "breaking_input": "An explore with neither pairs.json nor the seal-<ID>.json at the hardcoded phase-04 path, for example after both files are deleted or the seal sits under another phase directory. Create docs/design/explore/ex1/variant-d/index.html with no data-arc-surface marker. The whole `if` block is skipped, so d is never added to VARIANTS and compose-done, surfaces and coverage pass on a-c only.",
+      "why": "The directory scan is still gated on file presence. An unsealed or both-files-deleted explore with extra variant directories is silently ungated, and the seal path is hardcoded to phase-04 and is not checked for existence as a committed record.",
+      "fix": "Always scan variant-* directories. When a variant-[d-z] directory exists and there is no seal and no pairs.json, refuse as an orphan variant instead of skipping it.",
+      "twin_of": "A guard switched on by the presence of a file the guarded party can delete -> key the guard on the committed record (the seal), and refuse when its companion is missing"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:68",
+      "breaking_input": "`ln -s /tmp/other-page docs/design/explore/ex1/variant-d`, or on Windows an NTFS junction, pointing at a directory outside the explore (or at variant-a). `[ -d ]` follows the link, so the gates judge content outside the explore tree. A dangling link is skipped by `continue`, which dropped d silently.",
+      "why": "The variant is accepted on the word of its name and a following `-d` test. No realpath containment to $EX is applied, and a dangling or non-directory entry named variant-<letter> is skipped rather than refused.",
+      "fix": "Refuse any variant-* entry that is a symlink or whose realpath is not inside $EX. Refuse a variant-<letter> entry that is not a real directory, rather than `continue`.",
+      "twin_of": "A path from a metadata file trusted because it had no `..` -> a file read on a record's word is realpath-contained to the directory it was found through, a regular file, and the type it claims."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/design-expa1.bats:258-292",
+      "breaking_input": "Revert the fix in compose-done, self-review and the coverage loop while keeping `surfaces` on the new list, or make the variant dir deleted after pairing. Both new tests still pass, because they run only `surfaces` and never delete variant-d itself.",
+      "why": "The original defect printed \"3 of 3\" in compose-done. Neither new test runs compose-done, self-review or render coverage with a paired d. The deletion control removes pairs.json only and does not remove the variant directory (B1), a reformatted pairs.json, or the unsealed case (B2). The earlier B4 finding was addressed by adding two tests in the same weak spot, so the regression is still not pinned where it occurred.",
+      "fix": "Add tests that run compose-done on a paired d and assert \"of 4\" and the name d. Add tests where variant-d is removed after pairing and where both seal and pairs.json are removed with variant-d present. Each must refuse with its own reason.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    }
+  ]
+}

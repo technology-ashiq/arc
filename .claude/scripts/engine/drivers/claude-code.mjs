@@ -15,7 +15,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
 
 /**
@@ -138,7 +138,9 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // Computed BEFORE the prompt, so a refusal still dies here and never at the CLI.
   const toolArgs = dispatchToolArgs(doc);
 
+  const persona = seatPersona();
   const prompt = [
+    ...(persona ? [persona] : []),
     doc.body,
     "",
     "---",
@@ -188,7 +190,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.1.0",
+  version: () => "claude-code@1.2.0",
 });
 
 settle();
