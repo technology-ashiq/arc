@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertNoDuplicateKeys } from "./json-strict.mjs";
 
 /**
  * "Was this file RUN, or imported?" -- realpath on BOTH sides.
@@ -45,10 +46,18 @@ function productRoom(contract, product) {
   const map = contract.products?.map || {};
   return Object.prototype.hasOwnProperty.call(map, product) ? map[product] : undefined;
 }
+// Through the duplicate-key check first: JSON.parse is last-wins, and main once held PLAN-launch twice while this
+// gate passed (ADR-1630).
+function strictJson(p) {
+  const text = readFileSync(p, "utf8");
+  assertNoDuplicateKeys(text, p.split(/[\\/]/).pop());
+  return JSON.parse(text);
+}
+
 function loadContract(repo) {
   const p = join(repo, "initiatives", "face", "contracts", "expected-set.json");
   if (!existsSync(p)) throw new Error(`expected-set.json not found at ${p}`);
-  return JSON.parse(readFileSync(p, "utf8"));
+  return strictJson(p);
 }
 
 /** The section a given product SHOULD carry, derived entirely from the contract. */
@@ -288,7 +297,7 @@ function registryPath(repo) { return join(repo, "initiatives", "face", "contract
 function loadCopy(repo) {
   const p = join(repo, "initiatives", "face", "contracts", "room-copy.json");
   if (!existsSync(p)) throw new Error(`room-copy.json not found at ${p} -- the authored half of the registry`);
-  return JSON.parse(readFileSync(p, "utf8"));
+  return strictJson(p);
 }
 
 function run(repo, check, quiet = false) {

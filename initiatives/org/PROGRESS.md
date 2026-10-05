@@ -1,8 +1,8 @@
 ✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |# PROGRESS.md — org v2.1 "the four ORG-R holds"
 
-status: IDLE
+status: LIVE
 cycle: arc-org (Cycle 20, opened 2026-10-05)
-phase: 03
+phase: 04
 appetite: 3d
 burn: 1d
 blocked-on: —
@@ -17,6 +17,7 @@ depends-on: —
 | 01 | `org-judge.mjs` head-judge emission (ORG-O) | 0.5d | ✅ 2026-10-05 |
 | 02 | `skill-import.mjs` + `lib/skill-vet.mjs` (pinned, vetted, proposal branch) | 0.6d | ✅ 2026-10-05 |
 | 03 | `org-own.mjs` hire-to-own over `agent-scaffold` | 0.5d | ✅ 2026-10-05 |
+| 04 | duplicate-key check in the face contract gates | 0.25d | ⏳ |
 
 ## Done log
 
@@ -32,5 +33,5 @@ depends-on: —
 
 ## Now
 
-**Current position:** Cycle 20 sealed 2026-10-05 (retro: docs/retro-log.md, HISTORY C20). Lane IDLE.
-**Next step:** none queued. Owner: stamp the kickoff and four phase approvals (`arc-inbox approve`). A new org cycle starts by `/arc-kickoff --lane org`.
+**Current position:** Cycle 20 reopened 2026-10-06 for one phase by `/arc-change` (retro 2026-10-05 row 4, ADR-1630, REQ-06).
+**Next step:** Phase 04 -- `tests/org/dup-keys.mjs` expected failure first, then the two gate edits (phase-04-spec).
