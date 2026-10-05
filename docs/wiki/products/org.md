@@ -23,7 +23,7 @@ None declared.
 
 None declared.
 
-## Scripts (15)
+## Scripts (16)
 
 - [`.claude/scripts/org/jobs/org-dispatch.mjs`](../../../.claude/scripts/org/jobs/org-dispatch.mjs)
 - [`.claude/scripts/org/lib/attribution.mjs`](../../../.claude/scripts/org/lib/attribution.mjs)
@@ -37,6 +37,7 @@ None declared.
 - [`.claude/scripts/org/org-coverage.mjs`](../../../.claude/scripts/org/org-coverage.mjs)
 - [`.claude/scripts/org/org-dispatch.mjs`](../../../.claude/scripts/org/org-dispatch.mjs)
 - [`.claude/scripts/org/org-judge.mjs`](../../../.claude/scripts/org/org-judge.mjs)
+- [`.claude/scripts/org/org-own.mjs`](../../../.claude/scripts/org/org-own.mjs)
 - [`.claude/scripts/org/org-review.mjs`](../../../.claude/scripts/org/org-review.mjs)
 - [`.claude/scripts/org/org-team.mjs`](../../../.claude/scripts/org/org-team.mjs)
 - [`.claude/scripts/org/skill-import.mjs`](../../../.claude/scripts/org/skill-import.mjs)

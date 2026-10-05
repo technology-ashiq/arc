@@ -45,10 +45,12 @@ export const AGENT_TOOLS = Object.freeze(["Read", "Grep", "Glob", "Write", "Edit
 const NAME_RE = /^[a-z][a-z0-9-]{1,40}[a-z0-9]$/;
 const PRODUCT_RE = /^[a-z][a-z0-9-]{0,40}$/;
 
-class Stop extends Error {}
+/** A refusal: the message is the line the CLI prints, the code its exit (org-own imports the planner, ADR-1629). */
+export class ScaffoldStop extends Error { constructor(code, msg) { super(msg); this.code = code; } }
+const Stop = ScaffoldStop;
 const out = [];
 const say = (s) => out.push(s);
-function die(code, msg) { process.stderr.write(`agent-scaffold: ${msg}\n`); process.exitCode = code; throw new Stop(); }
+function die(code, msg) { throw new Stop(code, msg); }
 let written = false;
 
 function parseArgs(argv) {
@@ -68,6 +70,11 @@ function parseArgs(argv) {
     i++;
   }
   if (a.dryRun && a.expect !== undefined) die(2, "--dry-run plans and --expect applies; give one");
+  return checkScaffoldArgs(a);
+}
+
+/** The values a scaffold takes, checked; tools normalised to "A, B". Shared with org-own (ADR-1629). */
+export function checkScaffoldArgs(a) {
   if (!NAME_RE.test(a.name)) die(2, `--name ${JSON.stringify(a.name)} is an agent name (lowercase kebab, 3-42 characters)`);
   // One line of text, written QUOTED into the frontmatter (below): whatever it holds, YAML reads it as that string.
   if (!a.description || !isOneLine(a.description) || Buffer.byteLength(a.description) > 300)
@@ -82,8 +89,8 @@ function parseArgs(argv) {
 }
 
 /** Main's text of one file, or a refusal naming it. */
-async function mainText(path) {
-  const r = await baseText({ repo: REPO, path });
+async function mainText(path, repo = REPO) {
+  const r = await baseText({ repo, path });
   if (r.text === null) die(2, `${path} is not on main`);
   return r;
 }
@@ -145,14 +152,20 @@ export function addToContract(path, text, name, room) {
   return { text: canonical(value), value };
 }
 
-async function main() {
-  const a = parseArgs(process.argv.slice(2));
+/**
+ * Plan one agent's scaffold against `repo`'s main: every file main needs to stay green, the approval it raises, the
+ * commit message and the digest. Writes nothing. `extra` files ride on the same branch (org-own's card, REQ-09).
+ * @returns {Promise<{ branch, base, files, allow, approval, message, what, model, digest }>}
+ */
+export async function planScaffold(a, { repo = REPO, extra = [], branchOp = "agents-add", whatOverride = null, gate = "agent-roster", adr = "ADR-0069", approvalExtra = {} } = {}) {
+  const REPO_ = repo;
+  const mainText_ = (p) => mainText(p, REPO_);
   const agentPath = `.claude/agents/${a.name}.md`;
   const manifestPath = `products/${a.product}/manifest.json`;
-  const branch = proposalBranch("agents-add", a.name);
-  const existing = await baseText({ repo: REPO, path: agentPath });
+  const branch = proposalBranch(branchOp, a.name);
+  const existing = await baseText({ repo: REPO_, path: agentPath });
   if (existing.text !== null) die(2, `${agentPath} is already on main -- an agent is added once`);
-  const [router, contract, golden, manifest, copy] = await Promise.all([mainText(ROUTER), mainText(CONTRACT), mainText(GOLDEN), mainText(manifestPath), mainText(ROOM_COPY)]);
+  const [router, contract, golden, manifest, copy] = await Promise.all([mainText_(ROUTER), mainText_(CONTRACT), mainText_(GOLDEN), mainText_(manifestPath), mainText_(ROOM_COPY)]);
   const base = existing.base;
   if ([router, contract, golden, manifest, copy].some((r) => r.base !== base)) die(2, "main moved while its files were read -- run it again");
 
@@ -191,20 +204,20 @@ async function main() {
   // EVERYTHING THE CONTRACT DERIVES rides on the branch too: the room registry and any product's face: section, from
   // face-sections' own generator -- the four files alone turned main red on face-sections --check (PR 4 logic attack).
   // From MAIN's tree, as every file above is read: the checkout missed a product main held (PR 4 round-2 attacks).
-  const listedProducts = await mainDirNames({ repo: REPO, dir: "products" });
+  const listedProducts = await mainDirNames({ repo: REPO_, dir: "products" });
   if (listedProducts.base !== base) die(2, "main moved while its files were read -- run it again");
   const productNames = listedProducts.names.filter((p) => /^[a-z][a-z0-9-]{0,40}$/.test(p));
   if (!productNames.includes(a.product)) die(2, `--product ${JSON.stringify(a.product)} is not a product on main (${productNames.join(", ")})`);
   const manifests = {};
   for (const p of productNames) {
-    const r = await baseText({ repo: REPO, path: `products/${p}/manifest.json` });
+    const r = await baseText({ repo: REPO_, path: `products/${p}/manifest.json` });
     if (r.base !== base) die(2, "main moved while its files were read -- run it again");
     if (r.text !== null) manifests[p] = p === a.product ? addToManifest(manifestPath, manifest.text, agentPath) : r.text;
   }
   let copyValue;
   try { copyValue = JSON.parse(copy.text); } catch { die(2, `${ROOM_COPY} on main is not JSON`); }
   const derived = deriveFromContract(seated.value, copyValue, manifests);
-  const registry = await baseText({ repo: REPO, path: REGISTRY });
+  const registry = await baseText({ repo: REPO_, path: REGISTRY });
   if (registry.base !== base) die(2, "main moved while its files were read -- run it again");
   const files = [
     { path: agentPath, content: body },
@@ -213,20 +226,27 @@ async function main() {
     ...Object.keys(manifests).filter((p) => p === a.product || Object.hasOwn(derived.manifests, p))
       .map((p) => ({ path: `products/${p}/manifest.json`, content: derived.manifests[p] ?? manifests[p] })),
     ...(registry.text === derived.registryText ? [] : [{ path: REGISTRY, content: derived.registryText }]),
+    ...extra,
   ];
   const allow = files.map((f) => f.path);
-  const checked = await checkProposal({ repo: REPO, branch, paths: allow, allow, base });
+  const checked = await checkProposal({ repo: REPO_, branch, paths: allow, allow, base });
   if (checked.base !== base) die(2, "main moved while the agent was scaffolded -- run it again");
   // The name is followed by a comma: the scanner also reads each string with its spaces removed, and a name like
   // task-runner followed by words is a key to it (PR 3b logic attack, the pin twin).
   // The agent is named by its FILE, and quoted in the sentence: the scanner joins each string with the next, and a
   // bare "risk-assessment-reviewer" beside "cheap-scan" read as a key (PR 4 shell attack).
-  const what = `add the agent "${a.name}", to the ${a.room} room at the ${a.tier} tier (${model} today)`;
-  const approval = (commit) => ({ what, gate: "agent-roster", adr: "ADR-0069", agent_file: agentPath, tier: a.tier, model, room: a.room, product: a.product, branch, base, commit, ...(a.why ? { why: a.why } : {}) });
-  const refused = spineRefusal(ARC_EVENT, "approval.requested", approval("0".repeat(base.length)), { cwd: REPO });
+  const what = whatOverride ?? `add the agent "${a.name}", to the ${a.room} room at the ${a.tier} tier (${model} today)`;
+  const approval = (commit) => ({ what, gate, adr, ...approvalExtra, agent_file: agentPath, tier: a.tier, model, room: a.room, product: a.product, branch, base, commit, ...(a.why ? { why: a.why } : {}) });
+  const refused = spineRefusal(join(REPO_, ".claude", "scripts", "hq", "arc-event.mjs"), "approval.requested", approval("0".repeat(base.length)), { cwd: REPO_ });
   if (refused) die(2, `the approval this agent raises would be refused by the spine, so nothing is written: ${refused}`);
   const message = `agents: ${what} (a proposal, ADR-0069)\n\n${a.why ? `${a.why}\n\n` : ""}The agent file, its product-manifest line, its sync-golden line, its room in the contract, and what the contract derives (face-sections), so main stays green when this merges.\nWritten by the face's work door (ADR-1341).`;
   const digest = planDigest({ branch, base, files, message, approval: approval("0".repeat(base.length)) });
+  return { branch, base, files, allow, approval, message, what, model, digest };
+}
+
+async function main() {
+  const a = parseArgs(process.argv.slice(2));
+  const { branch, base, files, allow, approval, message, what, digest } = await planScaffold(a);
   if (a.dryRun) {
     const plan = await planProposal({ repo: REPO, branch, files, allow, base });
     say(`agent-scaffold: would ${what}`);
@@ -261,7 +281,7 @@ function isMainModule() {
 if (isMainModule()) {
   try { await main(); }
   catch (e) {
-    if (e instanceof Stop) { /* exitCode set */ }
+    if (e instanceof Stop) { process.stderr.write(`agent-scaffold: ${e.message}\n`); process.exitCode = e.code; }
     else if (!written && e instanceof ProposalError) { process.stderr.write(`agent-scaffold: ${e.code} -- ${e.message}\n`); process.exitCode = 2; }
     else {
       const why = e instanceof Error ? e.message : String(e);
