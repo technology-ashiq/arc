@@ -893,8 +893,10 @@ async function apiModelsTest(ctx, body) {
   if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
   const hit = models.findModel(got.reg, body.name);
   if (!hit) throw new DashError("BAD_MODEL", `no model is named ${JSON.stringify(body.name.slice(0, 80))}`);
-  if (!existsSync(join(ctx.repo, "processes", "face-ask.process.yaml")))
-    throw new DashError("MODELS_UNAVAILABLE", "the face-ask process is not on this tree, so no model can be tested here");
+  // Both files the run needs, and each a FILE: existsSync passes a directory of that name (attack 8b23b40 L5, L6).
+  const isFileAt = (/** @type {string[]} */ ...p) => { try { return statSync(join(ctx.repo, ...p)).isFile(); } catch { return false; } };
+  if (!isFileAt("processes", "face-ask.process.yaml") || !isFileAt(".claude", "scripts", "engine", "arc-run.mjs"))
+    throw new DashError("MODELS_UNAVAILABLE", "the face-ask process or arc-run is not on this tree, so no model can be tested here");
   // One test at a time per door: each one spends the owner's quota for up to a minute, and the face's own guard is
   // only in the page (attack 8b23b40 B3). Claimed before the first await, so two requests cannot both pass.
   if (TESTS_RUNNING.has(ctx)) throw new DashError("TEST_BUSY", "a model test is already running; wait for it to finish");
