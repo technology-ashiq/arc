@@ -444,3 +444,37 @@ arm() {
   arm environments owner-pr
   [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: release asks for deploy-prod-first before it writes anything" {
+  arm release unapproved
+  [ "$(j 'o.release.code')" = "APPROVAL_PENDING" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.hold')" == *"ignoreCommand"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.tags')" = "0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the steel thread -- release lifts the hold and tags it once, frontend commits the shell once and the live page passes" {
+  arm release thread
+  [[ "$(j 'o.before.ok + " " + o.before.reason')" == "false https://sandbox.automemory.ai/ answered 404, not 200" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.release.ok + " " + o.releaseAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hold.trim() + " " + o.tags.join(",")')" = "{} launch-release-1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.evidence.state')" = "true ERROR" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hostingAgain.ok + " " + o.holdAfterHosting.trim()')" = "true {}" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.frontend.ok + " " + o.frontendAgain.ok + " " + o.shellCommits')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.answerer')" = "true sandbox.automemory.ai + www.googleapis.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'Object.values(o.frontendVerify.evidence.scores).every(v => v >= 90)')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.release.join(",") + " " + o.kinds.frontend.join(",")')" = "release-commit,github-tag frontend-shell" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a Lighthouse score under 90 fails, and a PageSpeed quota answer is UNSCANNED" {
+  arm release low-score
+  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.reason')" = "false lighthouse below 90: performance 71" ] || { echo "$DONE"; false; }
+  arm release quota
+  [ "$(j 'o.frontendVerify.reason')" = "UNSCANNED(pagespeed quota (429))" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: frontend never commits over the owner's code, and release never lifts a hold hosting did not place" {
+  arm release owner-code
+  [ "$(j 'o.frontend.code + " " + o.page.trim()')" = "FOREIGN_FILE mine" ] || { echo "$DONE"; false; }
+  arm release foreign-hold
+  [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}

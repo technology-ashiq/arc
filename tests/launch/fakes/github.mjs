@@ -59,6 +59,47 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     const head = (b) => (b === "main" ? r.commits[r.commits.length - 1] : (r.branches[b] || []).slice(-1)[0]);
     const rm = rest.match(/^git\/ref\/heads\/(.+)$/);
     if (rm && method === "GET") { const c = head(rm[1]); return c ? json(200, { ref: `refs/heads/${rm[1]}`, object: { sha: c.sha } }) : err(404, "Not Found"); }
+    // Git Data API: blobs, trees, commits and a fast-forward ref update -- the path a multi-file writer commits by.
+    r.blobs = r.blobs || {};
+    r.trees = r.trees || {};
+    if (method === "POST" && rest === "git/blobs") { const s = sha(); r.blobs[s] = body.content; return json(201, { sha: s }); }
+    if (method === "POST" && rest === "git/trees") {
+      const s = sha();
+      r.trees[s] = { base: body.base_tree, entries: body.tree.map((e) => ({ path: e.path, sha: e.sha })) };
+      return json(201, { sha: s });
+    }
+    const gc = rest.match(/^git\/commits\/([0-9a-f]{40})$/);
+    if (gc && method === "GET") {
+      const c = [...r.commits, ...Object.values(r.branches).flat()].find((x) => x.sha === gc[1]);
+      return c ? json(200, { sha: c.sha, tree: { sha: c.tree || `${c.sha.slice(0, 39)}e` }, message: c.message }) : err(404, "Not Found");
+    }
+    if (method === "POST" && rest === "git/commits") {
+      const t = r.trees[body.tree];
+      if (!t) return err(422, "Tree SHA does not exist");
+      r.pending = r.pending || {};
+      const c = { sha: sha(), message: body.message, parents: body.parents, tree: body.tree, files: Object.fromEntries(t.entries.map((e) => [e.path, e.sha])) };
+      r.pending[c.sha] = { c, entries: t.entries };
+      return json(201, { sha: c.sha });
+    }
+    if (method === "PATCH" && rest === "git/refs/heads/main") {
+      const p = r.pending && r.pending[body.sha];
+      if (!p) return err(422, "Object does not exist");
+      if (p.c.parents[0] !== head("main").sha) return err(422, "Update is not a fast forward");
+      for (const e of p.entries) r.files[e.path] = { sha: e.sha, content: Buffer.from(r.blobs[e.sha], "utf8").toString("base64") };
+      p.c.app = p.entries.some((e) => e.path === "package.json");
+      r.commits.push(p.c);
+      return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
+    }
+    r.tags = r.tags || {};
+    const tm = rest.match(/^git\/ref\/tags\/(.+)$/);
+    if (tm && method === "GET") return r.tags[tm[1]] ? json(200, { ref: `refs/tags/${tm[1]}`, object: { sha: r.tags[tm[1]] } }) : err(404, "Not Found");
+    if (method === "POST" && rest === "git/refs" && String(body.ref).startsWith("refs/tags/")) {
+      const t = String(body.ref).slice("refs/tags/".length);
+      if (r.tags[t]) return err(422, "Reference already exists");
+      if (!r.commits.some((c) => c.sha === body.sha)) return err(422, "Object does not exist");
+      r.tags[t] = body.sha;
+      return json(201, { ref: body.ref, object: { sha: body.sha } });
+    }
     if (method === "POST" && rest === "git/refs") {
       const b = String(body.ref).replace(/^refs\/heads\//, "");
       if (head(b)) return err(422, "Reference already exists");
@@ -108,6 +149,8 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
         if (!f && body.sha) return err(422, "sha was supplied for a file that does not exist");
         r.files[cm[1]] = { sha: sha(), content: body.content };
         const c = commit(r, body.message, { [cm[1]]: r.files[cm[1]].sha });
+        // What Vercel's fake reads to decide whether this commit's production build is held (ADR-1727).
+        if (cm[1] === "vercel.json") c.hold = Buffer.from(body.content, "base64").toString("utf8").includes("ignoreCommand");
         return json(f ? 200 : 201, { content: { path: cm[1], sha: r.files[cm[1]].sha }, commit: { sha: c.sha } });
       }
     }
