@@ -66,12 +66,12 @@ _seal_file() { echo "$SANDBOX/initiatives/design/evidence/phase-04/seal-ex1.json
   cp -R initiatives/model-policy/evidence/phase-02 "$scratch"
   printf 'sealed kez\n' > "$scratch/SEALED-key.md"
   # Status read directly, never through a pipe: verify | tail once reported 0 over TAMPERED.
-  bash "$(_explore)" seal-check ex1 --bundle "$scratch" > "$BATS_TEST_TMPDIR/flip.out" 2>&1
-  local st=$?
+  local st=0
+  bash "$(_explore)" seal-check ex1 --bundle "$scratch" > "$BATS_TEST_TMPDIR/flip.out" 2>&1 || st=$?
   [ "$st" -eq 1 ] || { echo "a flipped byte exited $st: $(cat "$BATS_TEST_TMPDIR/flip.out")"; false; }
   grep -q 'TAMPERED -- 1 difference(s).*changed SEALED-key.md' "$BATS_TEST_TMPDIR/flip.out" || { cat "$BATS_TEST_TMPDIR/flip.out"; false; }
-  bash "$(_explore)" seal-check ex1 > "$BATS_TEST_TMPDIR/real.out" 2>&1
-  st=$?
+  st=0
+  bash "$(_explore)" seal-check ex1 > "$BATS_TEST_TMPDIR/real.out" 2>&1 || st=$?
   [ "$st" -eq 0 ] || { echo "the untouched bundle exited $st: $(cat "$BATS_TEST_TMPDIR/real.out")"; false; }
   grep -q '2 file(s) match the seal' "$BATS_TEST_TMPDIR/real.out"
 }
