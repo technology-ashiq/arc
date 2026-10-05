@@ -144,6 +144,19 @@ Three rules, and they are cheap:
 The general form: **prefer an assertion that fails when the code is deleted.** If ripping out the
 implementation would leave the test green, the test is measuring nothing.
 
+### The character that is not there
+
+**The Write and Edit tools write the REAL character for a typed backslash-u escape.** A BOM strip, a
+bidi test input and an invisible-character regex all landed as the literal characters in org Cycle 20
+(seven files) and passed every test, because a literal BOM in a regex still matches a BOM. Before
+committing a source file that names an invisible or bidi character, scan the changed files:
+
+```bash
+git diff --name-only origin/main | xargs grep -lP '[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{2069}\x{FEFF}\x{2028}\x{2029}]'
+```
+
+Any hit is escaped from code points by a script file that never types the escape itself.
+
 ### The test that was never there
 
 Cycle 7 found the worse sibling: **bats silently DROPS a `@test` whose name contains a non-ASCII
