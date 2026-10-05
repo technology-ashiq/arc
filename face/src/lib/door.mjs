@@ -418,7 +418,7 @@ export class Door {
   /** @param {string} q */
   ask(q) { return this.call("/api/ask", { method: "POST", body: { q } }); }
   models() { return this.call("/api/models"); }
-  /** @param {{ op: "add" | "activate" | "remove", [k: string]: unknown }} change */
+  /** @param {{ op: "add" | "activate" | "remove" | "edit", [k: string]: unknown }} change */
   setModels(change) { return this.call("/api/models/set", { method: "POST", body: change }); }
   /** @param {string} name */
   testModel(name) { return this.call("/api/models/test", { method: "POST", body: { name } }); }
