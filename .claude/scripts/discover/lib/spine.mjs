@@ -83,11 +83,13 @@ export function emit(kind, payload, { idem } = {}) {
   // Through a file, never argv: a long title list overruns the Windows command line (attack dfe58d2 B6).
   const dir = mkdtempSync(join(tmpdir(), "discover-emit-"));
   const file = join(dir, "payload.json");
-  writeFileSync(file, JSON.stringify(payload));
   const args = [ARC_EVENT, "emit", kind, "--strict", "--process", PROCESS, "--payload-file", file];
   if (idem) args.push("--idem", idem);
   let r;
-  try { r = spawnSync(process.execPath, args, { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL" }); }
+  try {
+    writeFileSync(file, JSON.stringify(payload));
+    r = spawnSync(process.execPath, args, { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL" });
+  }
   finally { rmSync(dir, { recursive: true, force: true }); }
   const id = (r.stdout || "").trim().split("\n").pop();
   if (r.status !== 0 || !ULID.test(id || ""))

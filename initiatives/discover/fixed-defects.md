@@ -30,3 +30,5 @@ not only where it was fixed (twin-fix rule). One line per pattern: `pattern — 
 - **a rename across volumes** (stage in os.tmpdir, target in the repo) — arc-discover.mjs export (dfe58d2 B3) — *write in place, never rename across a mount*
 - **an `@file` argument handed to anything an MSYS wrapper might front** — arc-discover.mjs judge --run (dfe58d2 B4) — *inline the value or use a file flag*
 - **a JSON payload on argv** — lib/spine.mjs emit (dfe58d2 B6) — *always --payload-file*
+- **a fix applied to one input path and not its twin** (`--niche-file` size/type check, missing on `--offline-fixture`) — arc-discover.mjs (9d389cc B7) — *every user-named file gets the same stat gate*
+- **a rollback that can throw over the error it is rolling back** — arc-discover.mjs export (9d389cc B1) — *guard the undo; append its failure to the original*

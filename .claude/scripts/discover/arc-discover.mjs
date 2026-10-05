@@ -108,7 +108,8 @@ class Refusal extends Error {}
 const refuse = (msg) => { throw new Refusal(msg); };
 const say = (s) => process.stdout.write(s + "\n");
 const readJson = (p, what) => { if (!existsSync(p)) refuse(`${what} not found in --in (${p})`); return JSON.parse(readFileSync(p, "utf8")); };
-const inDir = (o) => confine(o["--in"]) ?? refuse("--in is outside the repo/temp roots");
+// Every verb writes into --in, so it gets the same real-path re-check as --out (attack 9d389cc B2).
+const inDir = (o) => ensureDir(confine(o["--in"]) ?? refuse("--in is outside the repo/temp roots"));
 
 function scoreConfig(path = SCORE_YAML) {
   const r = parseYamlSubset(readFileSync(path, "utf8"));
@@ -131,6 +132,9 @@ async function cmdHunt(o) {
   if (o["--offline-fixture"] !== undefined) {
     const fx = confine(o["--offline-fixture"]);
     if (!fx || !existsSync(fx)) refuse("--offline-fixture is outside the repo/temp roots or does not exist");
+    // The twin of the --niche-file check (attack 9d389cc B7): a FIFO or a huge file is refused, never read.
+    const fst = statSync(fx);
+    if (!fst.isFile() || fst.size > 16 * 1024 * 1024) refuse("--offline-fixture must be a regular file of at most 16 MB");
     fetchFn = fixtureFetch(JSON.parse(readFileSync(fx, "utf8")));
     pace = async () => {}; // a fixture is not a server; pacing protects real ones only
   }
@@ -196,7 +200,9 @@ async function cmdJudge(o) {
     for (const [i, f] of fin.entries()) {
       // Inline input, never `@file`: an @-argument is a response file to an MSYS wrapper (attack dfe58d2 B4).
       const r = spawnSync(process.execPath, [ARC_RUN, "--process", "council-convene", "--driver", o["--driver"], "--input", JSON.stringify({ question: f.question }), "--root", REPO], { encoding: "utf8", timeout: 3_600_000, killSignal: "SIGKILL" });
-      const m = (r.stdout || "").match(/"receipt_id"\s*:\s*"([0-9A-HJKMNP-TV-Z]{26})"/);
+      // The LAST receipt_id: the process output is the final JSON object; earlier lines are narration (attack 9d389cc B5).
+      const all = [...(r.stdout || "").matchAll(/"receipt_id"\s*:\s*"([0-9A-HJKMNP-TV-Z]{26})"/g)];
+      const m = all.length ? all[all.length - 1] : null;
       f.council = r.status === 0 && m ? { receipt: m[1] } : { failed: `exit ${r.status}: ${(r.stderr || "").trim().split("\n").pop() || "no receipt_id"}` };
     }
   }
@@ -264,7 +270,10 @@ async function cmdExport(o) {
     try { writeFileSync(yamlPath, yaml, { flag: "wx" }); }
     catch (e) { if (e.code === "EEXIST") refuse(`${profile.slug} already exists in ${ventures} -- an approved venture is never overwritten`); throw e; }
     try { writeFileSync(huntPath, huntMarkdown({ slug: profile.slug, niche: clusters.niche, question: f.question, cluster: c, score: s, decision: dec.id, request: prop.request }), { flag: "wx" }); }
-    catch (e) { unlinkSync(yamlPath); if (e.code === "EEXIST") refuse(`${profile.slug}.hunt.md already exists -- an approved venture is never overwritten`); throw e; }
+    catch (e) {
+      // A failed rollback must not hide the error that caused it (attack 9d389cc B1).
+      try { unlinkSync(yamlPath); } catch (u) { e.message = `${e.message} (and ${yamlPath} could not be removed: ${u.code || u.message})`; }
+      if (e.code === "EEXIST") refuse(`${profile.slug}.hunt.md already exists -- an approved venture is never overwritten`); throw e; }
     say(`export: ${relative(REPO, yamlPath).split(sep).join("/")} accepted by launch loadProfile (${[...board.values()].filter((r) => r.applies).length} of ${board.size} slots apply) -- honesty_class ${profile.honesty_class}`);
     say(`  next (owner): arc launch new ${profile.slug}`);
   } finally {
