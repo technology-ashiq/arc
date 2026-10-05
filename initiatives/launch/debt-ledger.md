@@ -17,3 +17,5 @@
 | D13 | attack faccecd B6 | repo ownership is a description marker an owner could paste into another repo; the repo id is not pinned in state | the first venture whose slug collides with a repo the owner already has |
 | D14 | attack faccecd L9 | the GitHub token check is shape-only (`[A-Za-z0-9_]{20,}`), so a wrong-but-shaped token is a 401, not BAD_TOKEN | a real run where a 401 was a misplaced token rather than a revoked one |
 | D15 | attack faccecd L10 | ci verify accepts extra required checks beyond its three (an owner's own checks are kept on purpose) | an owner's extra check that blocks every venture merge |
+| D16 | attack 1406e29 B6 | hosting commits `vercel.json` straight to protected `main`; it relies on the owner's token being admin with `enforce_admins: false` (what ci sets) | the first real hosting apply that answers 409/422 on the Contents PUT |
+| D17 | attack 1406e29 L11 | an upstream repo id in mixed case is sent to Vercel as given; GitHub folds case, Vercel may not | the first venture whose owner login has upper-case letters |

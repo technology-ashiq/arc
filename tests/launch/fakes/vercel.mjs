@@ -3,7 +3,8 @@
 // It replaces only the transport; `fetch` routes api.github.com to the GitHub fake. Deterministic ids from a counter.
 //   cname        the CNAME Vercel recommends for any domain (null: it recommends none)
 //   projects     seed projects: [{ name, link: { type, org, repo } }]
-export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [] } = {}) {
+//   failDeployments  the deployments list answers 500
+export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [], failDeployments = false } = {}) {
   let n = 0;
   const id = (p) => `${p}_${String(++n).padStart(6, "0")}`;
   const store = new Map(projects.map((p) => [p.name, { id: id("prj"), domains: [], linkedAt: 0, ...p }]));
@@ -47,12 +48,13 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
     }
     m = p.match(/^\/v6\/domains\/([^/]+)\/config$/);
     if (m && method === "GET") return json(200, { misconfigured: true, recommendedCNAME: cname ? [{ rank: 1, value: `${cname}.` }] : [], recommendedIPv4: [] });
+    if (failDeployments) return err(500, "internal", "An unexpected error occurred");
     if (method === "GET" && p === "/v6/deployments") {
       const proj = byIdOrName(url.searchParams.get("projectId"));
       if (!proj || !proj.link) return json(200, { deployments: [] });
       const r = github.store.get(`${proj.link.org}/${proj.link.repo}`);
       const after = r ? r.commits.slice(proj.linkedAt) : [];
-      return json(200, { deployments: after.reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } })) });
+      return json(200, { deployments: after.reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } })) });
     }
     return err(404, "not_found", `fake vercel: ${method} ${p} not modelled`);
   }

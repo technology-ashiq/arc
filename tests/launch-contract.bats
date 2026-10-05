@@ -324,3 +324,38 @@ arm() {
   [[ "$(j 'o.badToken.value.reason')" == "BAD_TOKEN: "* ]] || { echo "$DONE"; false; }
   [[ "$(j 'o.noUpstream.value.reason')" == "UPSTREAM_MISSING: "* ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: hosting records an owner's project and domain as found and tears neither down" {
+  arm hosting adopted
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "vercel-project-found,github-file,vercel-domain-found,dns-target" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an unlinked project is told apart from one linked elsewhere" {
+  arm hosting unlinked
+  [ "$(j 'o.scaffold.code')" = "UNLINKED_PROJECT" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"install the Vercel GitHub App"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a hold lifted by deleting vercel.json is never placed again" {
+  arm hosting deleted-hold
+  [ "$(j 'o.scaffold.ok + " " + o.hold')" = "true null" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: only an exact release trailer owns vercel.json; an owner edit after release still does not lock hosting out" {
+  arm hosting forged-trailer
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  arm hosting owner-edit-after-release
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.hold')" == *'"env"'* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting verify needs the hold commit's deployment, and a 500 is an answer" {
+  arm hosting preview-only
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"the production hold was never placed"* ]] || { echo "$DONE"; false; }
+  arm hosting verify-500
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "error: vercel GET /v6/deployments -> 500"* ]] || { echo "$DONE"; false; }
+}

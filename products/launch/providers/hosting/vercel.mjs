@@ -64,23 +64,39 @@ function domainOf(ctx) {
   return d;
 }
 
-// The project is launch's when Vercel links it to exactly this repo.
+// The project is launch's when Vercel links it to exactly this repo. An unlinked project is told apart from one
+// linked elsewhere: the first usually means the Vercel GitHub App has no access yet (attack 1406e29 L5).
 function own(project, full) {
   if (!project || typeof project !== "object" || typeof project.id !== "string") throw new Error("vercel returned no project");
   const link = project.link && typeof project.link === "object" ? project.link : null;
-  const linked = link && link.type === "github" && `${link.org}/${link.repo}`.toLowerCase() === full.toLowerCase();
-  if (!linked) throw refuse("FOREIGN_PROJECT", `vercel project ${say(project.name, 64)} exists and is not linked to ${full}; launch never adopts it`);
+  if (!link || typeof link.repo !== "string")
+    throw refuse("UNLINKED_PROJECT", `vercel project ${say(project.name, 64)} has no git link; install the Vercel GitHub App with access to ${full}, then link it`);
+  const linked = link.type === "github" && `${link.org}/${link.repo}`.toLowerCase() === full.toLowerCase();
+  if (!linked) throw refuse("FOREIGN_PROJECT", `vercel project ${say(project.name, 64)} is linked to another repo, not ${full}; launch never adopts it`);
   return project;
 }
 
-// The newest commit touching the file carries this slot's trailer: content alone is not ownership.
-async function wroteIt(ctx, full, path) {
-  const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=main&per_page=1`);
-  const top = list(log.body)[0];
-  const msg = top && top.commit && typeof top.commit.message === "string" ? top.commit.message : "";
-  const release = `Arc-Launch-Tag: ${ctx.tag.split("@")[0]}@release@`;
-  return msg.split("\n").some((l) => l.trim() === `Arc-Launch-Tag: ${ctx.tag}` || l.trim().startsWith(release));
+// The trailers that may own vercel.json: hosting's own and release's, as exact lines -- a prefix pasted into any
+// commit message is not ownership (attack 1406e29 L1).
+const owners = (ctx) => {
+  const slug = ctx.tag.split("@")[0];
+  return new Set([`Arc-Launch-Tag: ${ctx.tag}`, `Arc-Launch-Tag: ${slug}@release@arc-ship-release`]);
+};
+const tagged = (c, set) => {
+  const msg = c && c.commit && typeof c.commit.message === "string" ? c.commit.message : "";
+  return msg.split("\n").some((l) => set.has(l.trim()));
+};
+
+// The file's history on main, newest first. Ownership is that launch ever wrote it, not that the newest commit is
+// launch's: an owner edit after release must not lock hosting out (attack 1406e29 L3).
+async function history(ctx, full) {
+  const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(FILE)}&sha=main&per_page=100`);
+  return list(log.body);
 }
+
+const holds = (text) => {
+  try { const v = JSON.parse(text); return !!v && v.ignoreCommand === JSON.parse(HOLD).ignoreCommand; } catch { return false; }
+};
 
 export function envContract() {
   return ["VERCEL_TOKEN", "GITHUB_TOKEN"];
@@ -90,29 +106,39 @@ export async function scaffold(ctx) {
   const full = repo(ctx);
   const domain = domainOf(ctx);
   const name = full.split("/")[1];
+  const before = (kind, id) => ctx.resources.some((r) => r.kind === kind && r.id === id);
 
+  // Launch claims only what it created (attack 1406e29 B1): a project or domain that was already there is recorded
+  // as found, and the exit plan leaves it alone. One this slot created on an earlier attempt stays its own.
   let found = await vc(ctx, "GET", `/v9/projects/${name}`, undefined, [404]);
-  if (found.status === 404) found = await vc(ctx, "POST", "/v11/projects", { name, framework: "nextjs", gitRepository: { type: "github", repo: full } });
+  let made = false;
+  if (found.status === 404) { found = await vc(ctx, "POST", "/v11/projects", { name, framework: "nextjs", gitRepository: { type: "github", repo: full } }); made = true; }
   const project = own(found.body, full);
-  ctx.report({ kind: "vercel-project", id: project.id });
+  const pkind = made || before("vercel-project", project.id) ? "vercel-project" : "vercel-project-found";
+  ctx.report({ kind: pkind, id: project.id });
 
-  // The hold is written once. A file release has since lifted is left as it is: a re-run of hosting never re-holds a
-  // live venture. A vercel.json launch did not write is refused, never overwritten.
+  // The hold is placed once in the file's life. Absent with a launch commit in its history means release (or the
+  // owner) lifted it: a re-run never holds a live venture again (attack 1406e29 B2). Present without one is the
+  // owner's file and is refused.
   const cur = await gh(ctx, "GET", `/repos/${full}/contents/${FILE}?ref=main`, undefined, [404]);
-  if (cur.status === 404) {
+  const log = await history(ctx, full);
+  const ours = log.some((c) => tagged(c, owners(ctx)));
+  if (cur.status === 404 && !ours) {
     await gh(ctx, "PUT", `/repos/${full}/contents/${FILE}`, {
       message: `hosting: hold production until gate 2 (ADR-1727)\n\nArc-Launch-Tag: ${ctx.tag}`, content: b64(HOLD), branch: "main",
     });
     ctx.report({ kind: "github-file", id: `${full}:${FILE}` });
-  } else if (!(await wroteIt(ctx, full, FILE))) {
-    throw refuse("FOREIGN_FILE", `${full}:${FILE} exists and launch did not write it; the production hold is not placed over it`);
-  } else if (unb64(cur.body && cur.body.content) === HOLD) {
+  } else if (cur.status !== 404 && !ours) {
+    throw refuse("FOREIGN_FILE", `${full}:${FILE} exists and launch never wrote it; the production hold is not placed over it`);
+  } else if (cur.status !== 404 && holds(unb64(cur.body && cur.body.content))) {
     ctx.report({ kind: "github-file", id: `${full}:${FILE}` });
   }
 
+  const dId = `${project.id}:${domain}`;
   const has = await vc(ctx, "GET", `/v9/projects/${project.id}/domains/${domain}`, undefined, [404]);
   if (has.status === 404) await vc(ctx, "POST", `/v10/projects/${project.id}/domains`, { name: domain });
-  ctx.report({ kind: "vercel-domain", id: `${project.id}:${domain}` });
+  const dkind = has.status === 404 || before("vercel-domain", dId) ? "vercel-domain" : "vercel-domain-found";
+  ctx.report({ kind: dkind, id: dId });
 
   const conf = await vc(ctx, "GET", `/v6/domains/${domain}/config?projectIdOrName=${encodeURIComponent(project.id)}`);
   const recs = (conf.body && Array.isArray(conf.body.recommendedCNAME) ? conf.body.recommendedCNAME : [])
@@ -122,11 +148,7 @@ export async function scaffold(ctx) {
   const target = recs.length ? bare(recs[0].value) : "";
   if (!HOST.test(target)) throw refuse("NO_TARGET", `vercel recommended no usable CNAME for ${domain} (got ${JSON.stringify(say(target, 80))})`);
   ctx.report({ kind: "dns-target", id: target });
-  return {
-    files: [],
-    resources: [{ kind: "vercel-project", id: project.id }, { kind: "vercel-domain", id: `${project.id}:${domain}` }, { kind: "dns-target", id: target }],
-    notes: [],
-  };
+  return { files: [], resources: [{ kind: pkind, id: project.id }, { kind: dkind, id: dId }, { kind: "dns-target", id: target }], notes: [] };
 }
 
 const wait = (ms, signal) => new Promise((res, rej) => {
@@ -136,32 +158,38 @@ const wait = (ms, signal) => new Promise((res, rej) => {
   if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
-// Asked of Vercel: the project is linked to the repo and a deployment that a git push triggered exists
-// (meta.githubDeployment "1"). With production held that deployment is the skipped one; that it exists is the proof.
+// Asked of Vercel: the project is linked to the repo, and the deployment of the commit that placed the hold exists
+// as a git-triggered one (meta.githubDeployment "1", same org and repo). Any other git deployment -- a preview, a push
+// before the hold -- is not the proof (attack 1406e29 B5/L8). Eight polls, 30 s apart, stay far inside the slot's
+// 900 s timeout and the runner's stale-lock window (attack 1406e29 B4).
 async function probe(ctx) {
   const full = repo(ctx);
-  const name = full.split("/")[1];
+  const [org, name] = full.toLowerCase().split("/");
   const found = await vc(ctx, "GET", `/v9/projects/${name}`, undefined, [404]);
   if (found.status === 404) return { ok: false, reason: `no vercel project ${name}` };
   const project = own(found.body, full);
-  for (let i = 0; i < 20; i++) {
+  const hold = (await history(ctx, full)).filter((c) => tagged(c, new Set([`Arc-Launch-Tag: ${ctx.tag}`])) && typeof c.sha === "string").pop();
+  if (!hold) return { ok: false, reason: `${full}:${FILE} has no commit from hosting; the production hold was never placed` };
+  for (let i = 0; i < 8; i++) {
     if (i) await wait(30000, ctx.signal);
-    const deps = await vc(ctx, "GET", `/v6/deployments?projectId=${encodeURIComponent(project.id)}&limit=20`);
-    const git = list(deps.body && deps.body.deployments).find((d) => d.meta && d.meta.githubDeployment === "1" && String(d.meta.githubCommitRepo || "").toLowerCase() === name);
-    if (git) return { ok: true, answerer: "api.vercel.com", evidence: { project: project.id, deployment: say(git.uid, 64), sha: say(git.meta.githubCommitSha, 40), state: say(git.readyState || git.state, 20) } };
+    const deps = await vc(ctx, "GET", `/v6/deployments?projectId=${encodeURIComponent(project.id)}&limit=100`);
+    const git = list(deps.body && deps.body.deployments).find((d) => d.meta && d.meta.githubDeployment === "1" && d.meta.githubCommitSha === hold.sha &&
+      String(d.meta.githubCommitRepo || "").toLowerCase() === name && String(d.meta.githubCommitOrg || org).toLowerCase() === org);
+    if (git) return { ok: true, answerer: "api.vercel.com", evidence: { project: project.id, deployment: say(git.uid, 64), sha: hold.sha, state: say(git.readyState || git.state, 20) } };
   }
-  return { ok: false, reason: `no git-triggered deployment for ${name} yet` };
+  return { ok: false, reason: `no git-triggered deployment of the hold commit ${hold.sha.slice(0, 7)} yet` };
 }
 
-// verify answers; a coded refusal becomes a not-ok answer, never a throw out of a read. Only the slot timeout propagates.
+// verify answers; any failure inside the probe -- a coded refusal, a 5xx, a 429, a transport error -- is a not-ok
+// answer, never a throw out of a read (attack 1406e29 B3/L2/L4). Only the slot timeout propagates.
 export async function verify(ctx) {
   // Every answer below comes over ctx.fetch from api.vercel.com; the probe is Vercel, never state.
   const ask = ctx.fetch.bind(ctx);
   try {
     return await probe({ ...ctx, fetch: ask });
   } catch (e) {
-    if (e && e.code && e.code !== "ABORTED") return { ok: false, reason: `${e.code}: ${say(e.message)}` };
-    throw e;
+    if (e && e.code === "ABORTED") throw e;
+    return { ok: false, reason: `${(e && e.code) || "error"}: ${say(e && e.message)}` };
   }
 }
 
