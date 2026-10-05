@@ -89,6 +89,21 @@ switch (scenario) {
     out.frontend = await attempt(() => frontend.mod.scaffold(F()));
     out.page = Buffer.from(repo().files["app/page.js"].content, "base64").toString("utf8");
     break;
+  case "owner-rewrote-hold":
+    // hosting placed the hold, then the owner rewrote vercel.json with their own config: release does not lift it.
+    repo().files["vercel.json"] = { sha: "e".repeat(40), content: Buffer.from("{\"rewrites\":[]}\n").toString("base64") };
+    repo().commits.push({ sha: "e".repeat(40), message: "owner rewrites", files: { "vercel.json": "e".repeat(40) } });
+    out.release = await attempt(() => release.mod.scaffold(R(["deploy-prod-first"])));
+    break;
+  case "broken-app":
+    // The shell lands and its production build fails: release's receipt no longer counts the ERROR.
+    await release.mod.scaffold(R(["deploy-prod-first"]));
+    await frontend.mod.scaffold(F());
+    repo().tags["launch-release-1"] = repo().commits[repo().commits.length - 1].sha;
+    repo().commits[repo().commits.length - 1].message += `\n\nArc-Launch-Tag: arc-sandbox@release@arc-ship-release`;
+    repo().commits[repo().commits.length - 1].app = false;
+    out.releaseVerify = await release.mod.verify(R(["deploy-prod-first"]));
+    break;
   case "foreign-hold":
     // A vercel.json hosting did not write: release refuses to lift it.
     repo().files["vercel.json"] = { sha: "d".repeat(40), content: Buffer.from("{\"x\":1}\n").toString("base64") };

@@ -102,24 +102,27 @@ export async function scaffold(ctx) {
   domainOf(ctx);
   const want = files(brandOf(ctx));
 
+  // main's head is read FIRST and every check below reads that exact commit, so the ownership checks and the commit
+  // built on top of it judge the same tree; the non-forced ref update then refuses if main moved (attack 5e06edf B3).
+  const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
+  const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
+  if (!SHA.test(head)) throw new Error(`github returned no main head for ${full}`);
+
   // Each path is either absent, already exactly ours, or last written by launch; any other file there is the owner's
   // code and the shell is not committed over it.
   const changed = [];
   for (const [path, text] of Object.entries(want)) {
-    const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=main`, undefined, [404]);
+    const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
     if (cur.status === 404) { changed.push(path); continue; }
     const have = decode(cur.body);
     if (have === null) throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file; the shell is not committed over it`);
     if (utf8(have) === text) continue;
-    const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=main&per_page=1`);
+    const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
     if (!hasLine(list(log.body)[0] && list(log.body)[0].commit && list(log.body)[0].commit.message, trailer(ctx)))
       throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's code; the shell is not committed over it`);
     changed.push(path);
   }
 
-  const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
-  const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
-  if (!SHA.test(head)) throw new Error(`github returned no main head for ${full}`);
   if (!changed.length) {
     ctx.report({ kind: "frontend-shell", id: `${full}:${head}` });
     return { files: Object.keys(want), resources: [{ kind: "frontend-shell", id: `${full}:${head}` }], notes: [] };

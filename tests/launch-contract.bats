@@ -478,3 +478,13 @@ arm() {
   arm release foreign-hold
   [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: release does not lift a vercel.json the owner rewrote after hosting" {
+  arm release owner-rewrote-hold
+  [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a failed production build of a commit that holds an app is not a release receipt" {
+  arm release broken-app
+  [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build of "*" failed (ERROR) and the commit holds an app" ]] || { echo "$DONE"; false; }
+}

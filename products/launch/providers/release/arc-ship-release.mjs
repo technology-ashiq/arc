@@ -91,8 +91,12 @@ export async function scaffold(ctx) {
   const cur = await gh(ctx, "GET", `/repos/${full}/contents/${FILE}?ref=main`, undefined, [404]);
   if (cur.status === 404) throw refuse("NO_HOLD", `${full} has no ${FILE}; hosting placed no production hold to lift (ADR-1727)`);
   const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(FILE)}&sha=main&per_page=100`);
-  if (!list(log.body).some((c) => hasLine(c.commit && c.commit.message, hostingTrailer(ctx))))
-    throw refuse("FOREIGN_FILE", `${full}:${FILE} was not written by hosting; release does not edit it`);
+  // The NEWEST commit on the file is hosting's (or release's own, after a kill): an owner who has since rewritten
+  // vercel.json owns it, and release does not lift over their config (attack 5e06edf B1).
+  const top0 = list(log.body)[0];
+  const topMsg = top0 && top0.commit ? top0.commit.message : "";
+  if (!hasLine(topMsg, hostingTrailer(ctx)) && !hasLine(topMsg, trailer(ctx)))
+    throw refuse("FOREIGN_FILE", `${full}:${FILE} was last written by someone other than launch; release does not edit it`);
 
   // Gate 2's sensitive action: the runner pauses here until the owner approves, before anything is written.
   ctx.sensitive("deploy-prod-first");
@@ -142,6 +146,12 @@ async function probe(ctx) {
     const d = list(deps.body && deps.body.deployments).find((x) => x.meta && x.meta.githubCommitSha === sha && x.target === "production");
     if (!d) continue;
     const state = say(d.readyState || d.state, 20);
+    // ERROR counts only while the tagged commit holds no app: once package.json is there, a failed build is a failed
+    // release, not a receipt (attack 5e06edf B2).
+    if (state === "ERROR") {
+      const pkg = await gh(ctx, "GET", `/repos/${full}/contents/package.json?ref=${sha}`, undefined, [404]);
+      if (pkg.status !== 404) return { ok: false, reason: `production build of ${sha.slice(0, 7)} failed (ERROR) and the commit holds an app` };
+    }
     if (BUILT.has(state)) return { ok: true, answerer: "api.vercel.com", evidence: { project: pid, tag: TAG, sha, deployment: say(d.uid, 64), state } };
     if (!PENDING.has(state)) return { ok: false, reason: `production deployment ${say(d.uid, 40)} of ${sha.slice(0, 7)} is ${state || "unknown"} -- the hold still skips it` };
     last = `production deployment ${say(d.uid, 40)} is ${state}`;

@@ -143,7 +143,13 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     }
     if (cm) {
       const f = r.files[cm[1]];
-      if (method === "GET") return f ? json(200, { path: cm[1], sha: f.sha, content: f.content, encoding: "base64" }) : err(404, "Not Found");
+      // ?ref=<commit sha>: the path is answered as of that commit -- absent if no commit up to it touched the path.
+      const at = url.searchParams.get("ref");
+      if (method === "GET" && at && /^[0-9a-f]{40}$/.test(at)) {
+        const idx = r.commits.findIndex((c) => c.sha === at);
+        if (idx >= 0 && !r.commits.slice(0, idx + 1).some((c) => c.files && c.files[cm[1]])) return err(404, "Not Found");
+      }
+      if (method === "GET") return f ? json(200, { type: "file", path: cm[1], sha: f.sha, content: f.content, encoding: "base64" }) : err(404, "Not Found");
       if (method === "PUT") {
         if (f && body.sha !== f.sha) return err(409, `${cm[1]} does not match ${body.sha}`);
         if (!f && body.sha) return err(422, "sha was supplied for a file that does not exist");
