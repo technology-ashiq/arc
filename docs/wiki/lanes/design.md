@@ -201,7 +201,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/design/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/design/PROGRESS.md)
 
-## Decisions (21)
+## Decisions (22)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -228,6 +228,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1418`](../../../docs/adr/1418-an-explore-render-is-confined-to-its-own-variant-directory.md) | An explore render is confined to its own variant directory | accepted | 2026-09-17 |
 | [`1419`](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md) | The composer read and write boundaries bind only a ui-composer caller | accepted | 2026-09-26 |
 | [`1420`](../../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md) | The curator's Bash and WebFetch are bounded by the composer boundary's hook | accepted | 2026-09-26 |
+| [`1421`](../../../docs/adr/1421-exp-a1-composer-seat-stays-balanced-workhorse-inside-the-new-regime.md) | EXP-A1: the composer seat stays balanced-workhorse inside the new regime | accepted | 2026-10-05 |
 
 ## Source
 

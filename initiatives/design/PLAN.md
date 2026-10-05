@@ -72,7 +72,7 @@ and the **composer's iron law 1 forbids reading the pack and its own render**
 | REQ-03 | Every surface the brief declares is rendered and correctly classified | A declared-but-unrendered surface blocks PASS; a planted docs-on-canvas page returns ERR; a product page containing the word "Reference" passes; an unmarked surface fails closed | 01 | validated |
 | REQ-04 | Briefs carry real reference screens, and the repo carries only facts about them | `design.sources.yaml` lint exits 0; a pack of 5–8 screens with `sources.md` provenance from ≥1 `active` source (amended 2026-09-27 from ≥2, owner-approved: every second-source candidate failed on permission, ADR-1412); a PNG planted in the refpack dir is proven ignored by `git check-ignore`; a `status: off` source is never fetched | 02 | validated |
 | REQ-05 | The jury judges craft against a real bar, and the owner's score is comparable across runs | An N-item run completes with 0 logged prompt deviations; every BELOW-BAR finding cites ≥1 pack screen; owner 0–100 blind score recorded as a receipt before unblinding | 03 | validated |
-| REQ-06 | The composer-tier question is settled by evidence, not argument | Paired same-commit run receipts + a formula decision ADR; the sealed prediction of [ADR-1416](../../docs/adr/1416-the-exp-a1-prediction-is-session-authored-on-the-owners-delegation.md) settled hit or miss, in writing | 04 | active |
+| REQ-06 | The composer-tier question is settled by evidence, not argument | Paired same-commit run receipts + a formula decision ADR; the sealed prediction of [ADR-1416](../../docs/adr/1416-the-exp-a1-prediction-is-session-authored-on-the-owners-delegation.md) settled hit or miss, in writing | 04 | validated |
 | REQ-07 | Reference packs come from live sources, and the run says which ones answered | A pack built from ≥2 live sources, each with a per-run `availability` line; a source whose `status` is `off` produces no fetch; a robots.txt `Disallow` produces a recorded refusal, never a silent skip | 05 | active |
 | REQ-08 | A rival's contract is known before any code depends on it | A spike receipt carrying provider version + request + output schema exists **before** any adapter file is committed; terms clearance for that provider recorded as `decision.recorded` | 06 | active |
 | REQ-09 | Rival drafts compete on equal terms in one blind jury | One blind jury over arc×3 + ≥1 rival + 1 reference item, all rendered by arc's own renderer; rival-beats-all-arc rate recorded on the spine whichever way it lands | 07 | active |
@@ -174,6 +174,7 @@ flowchart TB
 | 1418 | An explore render is confined to its own variant directory | accepted |
 | 1419 | The composer read and write boundaries bind only a ui-composer caller | accepted |
 | 1420 | The curator's Bash and WebFetch are bounded by the composer boundary's hook | accepted |
+| 1421 | EXP-A1: the composer seat stays balanced-workhorse inside the new regime | accepted |
 
 ## Non-negotiables
 

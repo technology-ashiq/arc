@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-design v2 (Cycle 16, opened 2026-08-23)
-phase: 04
+phase: 05
 appetite: 12.5d
-burn: 12d
+burn: 14d
 blocked-on: —
 depends-on: —
 
@@ -12,7 +12,7 @@ depends-on: —
 > (tests green on CI read per JOB + live demo + exit criteria + evidence). Evidence over
 > assertion. Evidence is lane-scoped at `initiatives/design/evidence/phase-NN/` (ADR-0055).
 > ADRs, the retro-log, HISTORY and the trial-ledger stay at repo root (ADR-0053). This lane
-> holds ADR century **1400–1499**; ADR-1400..1418 are written there.
+> holds ADR century **1400–1499**; ADR-1400..1421 are written there.
 > Cycle 3's frozen history: [`HISTORY-INDEX.md`](HISTORY-INDEX.md). The pre-v2 idle tracker is
 > archived at [`archive/PROGRESS-idle-2026-08-23.md`](archive/PROGRESS-idle-2026-08-23.md).
 
@@ -24,13 +24,21 @@ depends-on: —
 | 01 | Eyes + viewports + canvas gate — composer scoped-Bash render grant, iron-law read allowlist, ≤3 immutable iterations, platform-contract viewports, marker-based doc-surface gate, sibling-render negative control | 1.5d | ✅ 2026-09-17 |
 | 02 | Registry + curator — `design.sources.yaml` + lint, `design-curator` at balanced-workhorse, robots.txt preflight, real pack from the two permitted galleries, planted-PNG ignore assertion | 1.5d | ✅ 2026-09-27 |
 | 03 | Taste loop — jury amended FOUR→N, one juror at high-judgment, pack-anchored BELOW-BAR, controlled owner blind score. **Carries the taste tripwire that gates phases 05–07** | 2d | ✅ 2026-10-03 |
-| 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | pending |
+| 04 | EXP-A1 — ADR-0070's paired harness in the new regime, prediction pre-registered, reference item present, zero writes into model-policy's sealed bundle | 0.5d | ✅ 2026-10-05 |
 | 05 | Live sources — shadcn + 21st.dev search wiring, `.mcp.json` under the shared-file protocol, per-run availability lines, COULD-NOT-SCAN as its own outcome | 1.5d | pending |
 | 06 | Rival spike — terms clearance recorded FIRST, one provider one fixture, version+request+schema receipted, offline self-containment check, no adapter before the receipt | 1d | pending |
 | 07 | Rival integration — adapters on the engine driver pattern, one blind jury over arc×3 + rival + reference, rival-beats-all-arc rate receipted either way, blindness proved adversarially on two surfaces | 2d | pending |
 | 08 | Governance + retro — packager refuses non-arc renders and absent provenance, spend caps, manual-drop door, all three sealed predictions settled | 1d | pending |
 
 ## Done-log
+
+**Phase 04 — CLOSED 2026-10-05.** REQ-06 validated. The composer seat stays balanced-workhorse ([ADR-1421](../../docs/adr/1421-exp-a1-composer-seat-stays-balanced-workhorse-inside-the-new-regime.md)); ADR-1416's sealed prediction is a **HIT**.
+
+- **CI.** `arc-ci` run **37291904435**, head SHA `8f0e39be`, read per JOB: **19/19 green**, including `design-expa1.bats` (15 tests, count-asserted: seal, the byte-flip failing control read directly, pairs, pair-guard, exp-a1, and the gated-variant fixes). The close commit adds docs and evidence only; its own run is read before merge.
+- **Live run.** Explore `lexos-case-workspace-expa1` at `17044b62`: seal at 07:16:04Z before any composer armed; pairs a->d, b->e, c->f; six composers serial, d/e/f on the high-judgment override; N=7 jury with an on-brief pack reference; owner blind score 11:21:12Z (`note.logged`). `exp-a1`: high-judgment won 2/3 pairs, mean gap **4.7** (44.3 vs 39.7) -> formula gain half **NOT MET**, no promotion. `seal-check` after the run: 10/10 match. Record: [`evidence/phase-04/s3-live-run.md`](evidence/phase-04/s3-live-run.md).
+- **Found and fixed on the way.** The gates judged only a-c, so d/e/f went ungated (`c9094cd0`, then two boundary attack rounds: 9 findings, every high and medium fixed, `fixed-defects.md` +2 rows). A duplicate `PLAN-launch` key in `expected-set.json` (#318 + #322) had `main` red on the factory/money/company rings (`878d2972`).
+- **Deviations.** Two jurors, not three: `design-jury-hj` refused by the session's permission classifier and not worked around. Logic attack surface did not really run on the gate fix (debt ledger). First dispatch armed six composers at once; all refused, re-run serially.
+- **Metrics.** Actual ~2 build days (10-04, 10-05) against a 0.5d appetite. `amendments: 1` (the 10-04 `/arc-change` refining the spec into S1-S3) · `reopened: n`.
 
 **Phase 03 — CLOSED 2026-10-03.** REQ-05 validated. The taste tripwire does not fire.
 
@@ -154,6 +162,8 @@ the engine lane recorded at 18 -> 6. A third round would be patching against the
 
 ## Appetite burn
 
+**Re-count 2026-10-05: 14 of 12.5 days (112%)**, same rule (calendar days carrying lane commits): the twelve below plus 10-04 and 10-05. The cycle is past its total appetite, covered by the owner's 09-16 no-cut ruling; phases 05-08 continue.
+
 **Re-count 2026-10-03: 12 of 12.5 days (96%)**, same rule: the nine below plus 09-28, 09-29 and
 10-03. The taste tripwire did not fire (owner, 10-03), so Phases 04-08 continue; their 8d of
 appetite now sits past the cycle total, which the owner's 09-16 no-cut ruling already covers.
@@ -179,7 +189,7 @@ count and panel before comparing.
 
 ## Now
 
-**Position (2026-10-03):** **Phases 00-03 are CLOSED; Phase 04 (EXP-A1) is next**. **Phase 04 opened 2026-10-04** via `/arc-change`: three slices (S1 seal + byte-flip control, S2 paired harness, S3 live run) in `phases/phase-04-spec.md`. Owner 2026-10-04: paid run approved, ADR-1416 session prediction kept. **Session stop 2026-10-04: S1+S2 BUILT and pushed** (harness `design-expa1.mjs`, two attack rounds, head `45a7988c`; CI run queued, NOT yet read). **Resume here:** (1) `node .claude/scripts/review/ci-digest.mjs` for the head, fix if red; (2) S3 live run: `seal` -> 3 theses via design-director -> `pair` a->d, b->e, c->f -> 6 composers (a/b/c balanced-workhorse, d/e/f high-judgment as per-invocation override, each tier + agent id written into evidence/phase-04/) -> N=7 jury -> owner blind score in person -> `unblind` -> `seal-check` -> `exp-a1` -> decision ADR + prediction hit/miss. Spine receipts for the Phase 03 close and the two 10-03 critiques still owed from the main clone., on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
+**Position (2026-10-05):** **Phases 00-04 are CLOSED; Phase 05 (live sources) is next.** Phase 04 closed 2026-10-05: composer seat stays balanced-workhorse (ADR-1421), ADR-1416 prediction HIT, CI 19/19 at `8f0e39be`. **Resume here:** (1) read CI for the close commit, merge on green per the owner's 2026-10-05 standing order (build all phases, push freely, ask only when blocked); (2) `/arc-change` to refine Phase 05's coarse verification plan into slices; (3) Phase 05 needs from the owner: a 21st.dev API key (search mode only), a yes/no on Mobbin Pro, and which rival goes first (ADR-1413) -- shadcn MCP needs nothing. Spine receipts for the Phase 03 and 04 closes still owed from the main clone. On the same branch and PR #292. Earlier: **Phases 00-03 are CLOSED; Phase 04 (EXP-A1) is next**. **Phase 04 opened 2026-10-04** via `/arc-change`: three slices (S1 seal + byte-flip control, S2 paired harness, S3 live run) in `phases/phase-04-spec.md`. Owner 2026-10-04: paid run approved, ADR-1416 session prediction kept. **Session stop 2026-10-04: S1+S2 BUILT and pushed** (harness `design-expa1.mjs`, two attack rounds, head `45a7988c`; CI run queued, NOT yet read). **Resume here:** (1) `node .claude/scripts/review/ci-digest.mjs` for the head, fix if red; (2) S3 live run: `seal` -> 3 theses via design-director -> `pair` a->d, b->e, c->f -> 6 composers (a/b/c balanced-workhorse, d/e/f high-judgment as per-invocation override, each tier + agent id written into evidence/phase-04/) -> N=7 jury -> owner blind score in person -> `unblind` -> `seal-check` -> `exp-a1` -> decision ADR + prediction hit/miss. Spine receipts for the Phase 03 close and the two 10-03 critiques still owed from the main clone., on the same branch and PR #292. Earlier position: **APPROVED by the owner 2026-08-23** and building. **Phases 00 and 01 are CLOSED**
 (01 on 2026-09-17); **Phase 02 is open**, with Slice A in and Slice B's 14 red-first tests on the
 branch. Working mode
 set by him at approval: phases run SERIAL, one lane branch `feat/arc-design-v2-c16`, pushed
