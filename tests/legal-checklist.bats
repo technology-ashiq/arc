@@ -86,6 +86,7 @@ teardown() { _arc_legal_teardown; }
   [ "$status" -eq 0 ]
   [[ "$output" == *"1 PASS"* ]]
   [[ "$output" == *"6 NOT-CHECKED"* ]]
+  [[ "$output" == *"self-attested, not fetched"* ]]
 }
 
 @test "legal checklist: a PASS on status alone is refused -- it must carry what was served" {

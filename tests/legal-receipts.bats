@@ -545,6 +545,16 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   [ "$(printf '%s\n' "$output" | grep -c '^  facts\.effective_date: unchanged')" -eq 0 ]
 }
 
+@test "legal receipts: a ledger field name carrying a bidi override prints escaped, not raw" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" ledger-field "$SANDBOX/$LEDGER_REL" 'x‮enilno'
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'facts."x‮enilno": removed'* ]]
+  [ "$(printf '%s' "$output" | LC_ALL=C grep -c $'\xe2\x80\xae')" -eq 0 ]
+}
+
 @test "legal receipts: PREVIOUS_MOVED -- a publish landing after the human read the diff is refused" {
   _published
   run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7

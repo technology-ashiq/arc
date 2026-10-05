@@ -157,6 +157,9 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {}, pa
         const r = reachabilityCheck(recorded, Object.hasOwn(pages, row.page) ? pages[row.page] : null);
         if (r.error) { errs.push(`row "${row.id}": ${r.error}`); continue; }
         if (r.fail) { outcome = "FAIL"; note = r.fail; }
+        // Nothing here fetched the URL (the probe arm is cut #1), so the excerpt proves only that
+        // a human pasted text from the approved page. Said on the row, never left implied (B5).
+        else note = `self-attested, not fetched: ${note}`;
       }
     } else if (recorded) {
       errs.push(`row "${row.id}" records outcome "${recorded.outcome}", which is not one of ${OUTCOMES.join(" / ")}`);

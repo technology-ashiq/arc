@@ -545,21 +545,39 @@ function publishedRecord(venture) {
   return { record, sha: bytesHash(text) };
 }
 
-/** A name read from the ledger, printed so it can only ever be one inert token on one line (B2). */
-const shown = (s) => (/^[A-Za-z0-9_.()\- ]+$/.test(String(s)) ? String(s) : JSON.stringify(String(s)));
+/**
+ * A name read from the ledger, printed so it can only ever be one inert ASCII token on one line.
+ * JSON.stringify alone escapes only code points below 0x20, so C1 controls, bidi overrides and
+ * line separators reached the reviewer's terminal raw; every non-printable-ASCII code point is
+ * escaped here (round-1 boundary, B2 twice).
+ */
+const shown = (s) => (/^[A-Za-z0-9_.()\- ]+$/.test(String(s))
+  ? String(s)
+  : JSON.stringify(String(s)).replace(/[^\x20-\x7e]/gu, (c) => [...c].map((u) => {
+    const cp = u.codePointAt(0);
+    return cp > 0xffff ? `\\u{${cp.toString(16)}}` : `\\u${cp.toString(16).padStart(4, "0")}`;
+  }).join("")));
 
-/** Every byte, or false: writeSync may write part of a buffer to a slow pipe and say so (B3). */
+/**
+ * Every byte, or false. writeSync may write part of a buffer to a slow pipe, and on a pipe Node
+ * has made non-blocking it throws EAGAIN when the pipe is merely full: that is retried, bounded,
+ * so a slow consumer is not reported as a refusal. Anything else (EPIPE, a closed fd) is.
+ */
 function writeAll(fd, text) {
   const buf = Buffer.from(text, "utf8");
+  const pause = new Int32Array(new SharedArrayBuffer(4));
   let off = 0;
-  try {
-    while (off < buf.length) {
+  let waits = 0;
+  while (off < buf.length) {
+    try {
       const n = writeSync(fd, buf, off, buf.length - off);
       if (!n) return false;
       off += n;
+      waits = 0;
+    } catch (e) {
+      if (!e || e.code !== "EAGAIN" || ++waits > 200) return false;
+      Atomics.wait(pause, 0, 0, 25);
     }
-  } catch {
-    return false;
   }
   return true;
 }
