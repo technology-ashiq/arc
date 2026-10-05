@@ -583,6 +583,8 @@ is still not evidence of correctness.
 | 2026-09-16 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-face kickoff + every run cycle-long | **no** | n/a: silent runs |
 | 2026-10-02 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-org Cycle 18 kickoff + every run cycle-long | **no** | n/a: silent runs, no promotion |
 | 2026-10-03 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-org Cycle 19 kickoff + every run cycle-long | **no** | n/a: silent runs, no promotion |
+| 2026-10-05 | `current-state-structure` | arc-org Cycle 20 kickoff | **yes** (missing `Entry points:` and `Conventions:` lines) | **no**: both lines were truly absent; fixed, then clean |
+| 2026-10-05 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `verify-red` · `birth-rule(kickoff-lint)` | arc-org Cycle 20 kickoff + every run cycle-long | **no** | n/a: silent runs, no promotion |
 
 **No gate is promotable.** Promotion needs ≥ 3 clean runs with zero false positives, and this cycle's
 silence was not clean. Three gates stayed quiet over defects squarely in their domain, because every
