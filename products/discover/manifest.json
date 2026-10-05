@@ -13,7 +13,11 @@
   ],
   "agents": [],
   "scripts": [
-    ".claude/scripts/discover/arc-discover.mjs"
+    ".claude/scripts/discover/arc-discover.mjs",
+    ".claude/scripts/discover/lib/cluster.mjs",
+    ".claude/scripts/discover/lib/normalize.mjs",
+    ".claude/scripts/discover/lib/spine.mjs",
+    ".claude/scripts/discover/miners/hn.mjs"
   ],
   "files": [],
   "docs": [],

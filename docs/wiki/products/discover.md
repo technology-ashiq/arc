@@ -23,9 +23,13 @@
 
 None declared.
 
-## Scripts (1)
+## Scripts (5)
 
 - [`.claude/scripts/discover/arc-discover.mjs`](../../../.claude/scripts/discover/arc-discover.mjs)
+- [`.claude/scripts/discover/lib/cluster.mjs`](../../../.claude/scripts/discover/lib/cluster.mjs)
+- [`.claude/scripts/discover/lib/normalize.mjs`](../../../.claude/scripts/discover/lib/normalize.mjs)
+- [`.claude/scripts/discover/lib/spine.mjs`](../../../.claude/scripts/discover/lib/spine.mjs)
+- [`.claude/scripts/discover/miners/hn.mjs`](../../../.claude/scripts/discover/miners/hn.mjs)
 
 ## Source
 

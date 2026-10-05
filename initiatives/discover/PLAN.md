@@ -129,6 +129,7 @@ flowchart TB
 | 1913 | discover gets no `hq.policy.yaml` row until it is an engine process (supersedes ADR-1906 policy clause) | accepted |
 | 1914 | discover maps to the generic `lane` room | accepted |
 | 1915 | The miner taps growth's transport instead of widening its adapter (supersedes ADR-1911) | accepted |
+| 1916 | A rejected winner's tokens ride its `approval.requested`, not the decision | accepted |
 
 ## Non-negotiables
 
