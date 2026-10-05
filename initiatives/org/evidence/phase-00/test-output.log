@@ -1,0 +1,18 @@
+CI run 37314038869 @ e5b8622a (PR #325 head, merged as 8f9e2d25): 19/19 jobs success; ubuntu-20 TAP ok=4090 not-ok=0
+ok 3384 role-seat: the resolver fixture runs every check clean
+ok 3385 role-seat: lint passes the real processes, which now name their roles
+ok 3386 role-seat: lint FAILs a role with no card, and a card that binds another process
+ok 3387 role-seat: a default run receipts the role and keeps the prompt unseated
+ok 3388 role-seat: --trial-seat puts the agent in front of the process, receipts trial, and leaves the card alone
+ok 3389 role-seat: --trial-seat refuses twice, empty, unknown, and on a process with no role -- exit 2, no receipt
+ok 3390 role-seat: --dry-run names the seat and why
+ok 3391 role-seat: a role process that emits a closed-payload kind still completes, role fields on run.completed only
+--- live demo
+arc-run: would run `review-diff` on `claude-code`
+         model unpinned (source: none)
+         role code-reviewer -> code-reviewer (card: no agent has 3+ runs for code-reviewer; first listed)
+         spine unreadable (WORKTREE_SPINE) -- resolved without evidence
+         role devops-release -> code-reviewer (trial: --trial-seat, this run only)
+--- real-system
+process-lint: all checks passed ✔ (14 file(s))
+9

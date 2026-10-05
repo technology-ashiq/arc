@@ -23,13 +23,13 @@
 - Manifest, sync golden, wiki in the same commit.
 
 ## Exit criteria (Definition of Done)
-- [ ] clean fixture skill → proposal branch holds the three paths + one `approval.requested`
-- [ ] each ToxicSkills fixture BLOCKs listing every failed condition; no branch, no event
-- [ ] tests added & green on CI (`tests/org/skill-import.mjs` from a bats file)
-- [ ] live demo run + output checked
-- [ ] contract tests: fake and real arms share one expectation set; real arm only with `ARC_SKILL_IMPORT_LIVE=1`
-- [ ] `/arc-attack` two surfaces once on the local commit before push (boundary attacker gets the ToxicSkills list)
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] clean fixture skill → proposal branch holds the three paths + one `approval.requested`
+- [x] each ToxicSkills fixture BLOCKs listing every failed condition; no branch, no event
+- [x] tests added & green on CI (`tests/org/skill-import.mjs` from a bats file)
+- [x] live demo run + output checked
+- [x] contract tests: fake and real arms share one expectation set; real arm only with `ARC_SKILL_IMPORT_LIVE=1`
+- [x] `/arc-attack` two surfaces once on the local commit before push (boundary attacker gets the ToxicSkills list)
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/org/skill-import.mjs` (sandbox git repo, fake source).

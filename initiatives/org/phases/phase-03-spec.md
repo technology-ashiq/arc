@@ -22,13 +22,13 @@
 - Manifest, sync golden, wiki in the same commit.
 
 ## Exit criteria (Definition of Done)
-- [ ] fixture `hired` card → one branch whose tree equals `planScaffold` `allow` + the card path, + one `approval.requested`
-- [ ] three refusal mutants, no branch, no event
-- [ ] tests added & green on CI (`tests/org/own.mjs` from a bats file)
-- [ ] live demo run + output checked
-- [ ] contract tests: n/a — no external dependency
-- [ ] `/arc-attack` two surfaces once on the local commit before push
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] fixture `hired` card → one branch whose tree equals `planScaffold` `allow` + the card path, + one `approval.requested`
+- [x] three refusal mutants, no branch, no event
+- [x] tests added & green on CI (`tests/org/own.mjs` from a bats file)
+- [x] live demo run + output checked
+- [x] contract tests: n/a — no external dependency
+- [x] `/arc-attack` two surfaces once on the local commit before push
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/org/own.mjs` (sandbox git repo with a fixture hired card).

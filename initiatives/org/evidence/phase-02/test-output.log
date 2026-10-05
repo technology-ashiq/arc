@@ -1,0 +1,9 @@
+CI run 37314038869 @ e5b8622a (PR #325 head, merged as 8f9e2d25): 19/19 jobs success; ubuntu-20 TAP ok=4090 not-ok=0
+ok 3392 skill-import: the vet, the source and the command run every check clean
+--- live demo
+skill-import: would import the skill "clean-notes" for the role technical-writer, pinned at commit 0123456789ab
+skill-import: 7 files on a new branch feat/face-skill-import-clean-notes off main 8f9e2d2523b0, then approval.requested
+skill-import: dry run -- no branch, no object, no receipt was written
+{"expect":"f9a35f2e9ad863b5f14ffc86fb024ce2d49d5f9725e998f84757a82b9b227a48"}
+skill-import: UNPINNED: @"main" is not a 40-hex commit -- a branch or tag moves after it is vetted
+events-written=0

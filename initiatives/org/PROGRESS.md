@@ -1,10 +1,10 @@
-# PROGRESS.md — org v2.1 "the four ORG-R holds"
+✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |# PROGRESS.md — org v2.1 "the four ORG-R holds"
 
 status: LIVE
 cycle: arc-org (Cycle 20, opened 2026-10-05)
-phase: 00
+phase: 03
 appetite: 3d
-burn: 0d
+burn: 1d
 blocked-on: —
 depends-on: —
 
@@ -13,20 +13,24 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | process `role:` slot + resolver + `--trial-seat` in `arc-run` | 0.75d | ⏳ |
-| 01 | `org-judge.mjs` head-judge emission (ORG-O) | 0.5d | ⏳ |
-| 02 | `skill-import.mjs` + `lib/skill-vet.mjs` (pinned, vetted, proposal branch) | 0.6d | ⏳ |
-| 03 | `org-own.mjs` hire-to-own over `agent-scaffold` | 0.5d | ⏳ |
+| 00 | process `role:` slot + resolver + `--trial-seat` in `arc-run` | 0.75d | ✅ 2026-10-05 |
+| 01 | `org-judge.mjs` head-judge emission (ORG-O) | 0.5d | ✅ 2026-10-05 |
+| 02 | `skill-import.mjs` + `lib/skill-vet.mjs` (pinned, vetted, proposal branch) | 0.6d | ✅ 2026-10-05 |
+| 03 | `org-own.mjs` hire-to-own over `agent-scaffold` | 0.5d | ✅ 2026-10-05 |
 
 ## Done log
 
-(none yet)
+- **Phases 00-03 ✅ 2026-10-05** -- one PR, #325 (squash `8f9e2d25`), CI run 37314038869 @ e5b8622a 19/19 green, ubuntu-20 TAP 4090 ok / 0 not ok incl. 16 org Cycle 20 tests.
+  - 00: `role:` on 9 processes, `engine/role-seat.mjs`, `arc-run --trial-seat` (persona only on trial, ADR-1626 amendment). Demo: dry-run names the seat; lint clean.
+  - 01: `org-judge.mjs` + the review.completed scorecard arm. Live: refuses NOT_HANDOFF + NO_TEAM on the main spine (no team manifest exists, ADR-1612) -- **REQ-03 is fixture-proven and unused until an `org/teams/*.team.yaml` exists.**
+  - 02: `skill-import.mjs` + vet + source. Live: the fake clean skill plans a 7-file branch; `@main` refused UNPINNED; 0 events.
+  - 03: `planScaffold` extracted; `org-own.mjs`. Live: the real card refuses NOT_HIRED/NO_HIRE/NO_TIER (no hired seat exists today).
+  - Attack: boundary x2 (bc27378: 1 high 2 med; 83b4d22: 2 med), all fixed; logic NOT RUN (deepseek non-JSON, GLM timeout) -> debt row 7. Also fixed main's duplicate `PLAN-launch` key.
+  - 1 day vs 2.35d appetite. amendments: 1 (ADR-1626 persona-on-trial-only) · reopened: n · t-to-phase0: 0 days (kickoff 2026-10-05).
 
-**Appetite burn:** 0 of 3 days used (0%; tripwire 50%).
+**Appetite burn:** 1 of 3 days used (33%; tripwire 50% not reached, every phase done).
 
 ## Now
 
-**Current position:** Cycle 20 kicked off 2026-10-05; plan approval requested on the spine. Owner instruction
-2026-10-05: build every phase without waiting.
-**Kickoff attack (tier S, one merged A+C run):** 7 findings, 7 applied (review.completed scoring arm, run.completed-only role fields, planScaffold extraction, skill-import golden/approval, judge reason guard, headroom golden filter, main-guard row). No REJECTED lines.
-**Next step:** one /arc-attack round over the whole cycle diff, fix, push once, ci-digest, then /arc-phase-done 00..03. Phases 00-03 built locally; main held a duplicate `PLAN-launch` key in expected-set.json (PRs 317 and 318 both added it), removed in Phase 02; REQ-03 is fixture-proven and unused until an `org/teams/*.team.yaml` exists. Phase 00 built locally (role-seat resolver, lint, arc-run --trial-seat, drivers); one attack round + one push cover the whole cycle.
+**Current position:** Cycle 20 phases 00-03 all closed 2026-10-05 (PR #325). Lane stays LIVE until the retro.
+**Next step:** `/arc-retro --lane org` to seal Cycle 20. Owner: stamp the kickoff and four phase approvals (`arc-inbox approve`).

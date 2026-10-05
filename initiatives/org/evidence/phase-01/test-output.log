@@ -1,0 +1,12 @@
+CI run 37314038869 @ e5b8622a (PR #325 head, merged as 8f9e2d25): 19/19 jobs success; ubuntu-20 TAP ok=4090 not-ok=0
+ok 3364 org-judge: every test in this file is registered (none dropped by name)
+ok 3365 org-judge: the decision fixture runs every check clean
+ok 3366 org-judge: a head's verdict lands once, judges the worker, and the audit still agrees
+ok 3367 org-judge: refusals name every failed condition and write nothing
+ok 3368 org-judge: a dry run prints the payload and emits nothing
+ok 3369 org-judge: run through a symlinked path, the CLI still runs (main guard realpaths both sides)
+--- live demo (main clone spine, no team manifest exists)
+org-judge: REFUSED -- 2 condition(s) failed, nothing emitted:
+  NOT_HANDOFF: 01M45GCHEJZ4C8VAQZV2TXM3MS is a kickoff.done, and a head judges only handoff.ready
+  NO_TEAM: no team manifest names solution-architect under heads.e-engineering with product-manager on shift
+exit=1

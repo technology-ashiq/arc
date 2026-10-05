@@ -29,14 +29,14 @@
   manifests for the new file, and the wiki, in the same commit.
 
 ## Exit criteria (Definition of Done)
-- [ ] lint FAILs both mutants; all 14 real processes still lint clean
-- [ ] resolver fixture: scored, tie → first, no evidence → first, trial
-- [ ] `arc-run --dry-run` over a sandbox with a `role:` process receipts the three fields; `--trial-seat` receipts `trial` and the fake driver echoes the trial persona marker; the card's bytes unchanged
-- [ ] tests added & green on CI (`tests/org/role-seat.mjs`, an arm in the process-lint bats)
-- [ ] live demo run + output checked
-- [ ] contract tests: n/a — no external dependency in this phase
-- [ ] `/arc-attack` two surfaces once on the local commit before push, with the lane fixed-defect list
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] lint FAILs both mutants; all 14 real processes still lint clean
+- [x] resolver fixture: scored, tie → first, no evidence → first, trial
+- [x] `arc-run --dry-run` over a sandbox with a `role:` process receipts the three fields; `--trial-seat` receipts `trial` and the fake driver echoes the trial persona marker; the card's bytes unchanged
+- [x] tests added & green on CI (`tests/org/role-seat.mjs`, an arm in the process-lint bats)
+- [x] live demo run + output checked
+- [x] contract tests: n/a — no external dependency in this phase
+- [x] `/arc-attack` two surfaces once on the local commit before push, with the lane fixed-defect list
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/org/role-seat.mjs` (run from a bats file on CI) + the process-lint bats arm.
