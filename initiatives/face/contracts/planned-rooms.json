@@ -20,6 +20,14 @@
       "takes_over": "manifest face: section at /arc-kickoff --lane trader"
     },
     {
+      "room": "discover",
+      "ring": "money",
+      "source": "docs/strategy/plans/PLAN-discover.md (DIS-A..D)",
+      "line": ["hunt", "miner", "normalize", "dedupe/cluster", "score.yaml", "top-2", "council", "approval (stamp)", "one-pager", "separate venture kickoff"],
+      "shows_today": ["idea.captured"],
+      "takes_over": "manifest face: section at /arc-kickoff --lane discover"
+    },
+    {
       "room": "chat-mcp",
       "ring": "command",
       "source": "docs/strategy/plans/BRIEF-chat-mcp.md (sleeping — the face fires its trigger)",
