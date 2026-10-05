@@ -12,7 +12,10 @@ const refuse = (code, message) => Object.assign(new Error(message), { code });
 // Zero-width and invisible marks too, and the cap counts code points so no surrogate pair is cut (attack fb3a494 B3).
 const SKIP = (n) => n < 0x20 || (n >= 0x7f && n < 0xa0) || n === 0x061c || (n >= 0x200b && n <= 0x200f) || (n >= 0x202a && n <= 0x202e) ||
   (n >= 0x2060 && n <= 0x2069) || n === 0x2028 || n === 0x2029 || n === 0xfeff;
-const say = (v, cap = 120) => [...String(v)].filter((c) => !SKIP(c.codePointAt(0))).slice(0, cap).join("");
+const say = (v, cap = 120) => [...(v === null || v === undefined ? "" : String(v))].filter((c) => !SKIP(c.codePointAt(0))).slice(0, cap).join("");
+
+// A result Cloudflare should send as an array of objects is read only as that, never trusted (attack 7722041 B1).
+const list = (v) => (Array.isArray(v) ? v.filter((r) => r && typeof r === "object") : []);
 
 function hostName(value, what) {
   const h = bare(value);
@@ -52,8 +55,8 @@ async function cf(ctx, method, path, body) {
   try { json = await res.json(); } catch { json = null; }
   if (!res.ok || !json || json.success !== true) {
     // errors[] is the provider's word: not an array, or an element that is not an object, yields no text (attack fb3a494 B2).
-    const list = json && Array.isArray(json.errors) ? json.errors.filter((e) => e && typeof e === "object") : [];
-    const errs = list.slice(0, 3).map((e) => `${say(e.code, 12)}: ${say(e.message)}`).join("; ");
+    const errors = list(json && json.errors);
+    const errs = errors.slice(0, 3).map((e) => `${say(e.code, 12)}: ${say(e.message)}`).join("; ");
     throw new Error(`cloudflare ${method} ${path.split("?")[0]} -> ${res.status}${errs ? ` (${errs})` : ""}`);
   }
   return json.result;
@@ -65,7 +68,7 @@ async function zoneOf(ctx, name) {
   for (let i = 0; i < labels.length - 1; i++) {
     const cand = labels.slice(i).join(".");
     const found = await cf(ctx, "GET", `/zones?name=${encodeURIComponent(cand)}`);
-    const z = (found || []).find((r) => bare(r.name) === cand);
+    const z = list(found).find((r) => typeof r.name === "string" && bare(r.name) === cand && typeof r.id === "string");
     if (z) return z;
   }
   throw refuse("NO_ZONE", `no Cloudflare zone this token can see holds ${name}`);
@@ -80,10 +83,10 @@ export async function scaffold(ctx) {
   const to = target(ctx);
   const zone = await zoneOf(ctx, name);
   const records = await cf(ctx, "GET", `/zones/${zone.id}/dns_records?name=${encodeURIComponent(name)}`);
-  const mine = (records || []).filter((r) => r.comment === ctx.tag);
+  const mine = list(records).filter((r) => r.comment === ctx.tag);
   // ANY other record at the name refuses, TXT and MX included: a CNAME may not share its name with another record
   // (RFC 1034 3.6.2), so there is no type that could coexist with the one launch writes (attack 74c7f5a B6).
-  const foreign = (records || []).filter((r) => r.comment !== ctx.tag);
+  const foreign = list(records).filter((r) => r.comment !== ctx.tag);
   if (foreign.length)
     throw refuse("FOREIGN_RECORD", `${name} already has ${foreign.slice(0, 5).map((r) => `${say(r.type, 10)} ${say(r.id, 40)}`).join(", ")} not tagged ${ctx.tag}; launch never edits a record it did not create`);
   let rec = mine[0];

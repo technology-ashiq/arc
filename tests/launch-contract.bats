@@ -137,3 +137,8 @@ j() { node -e 'const o=JSON.parse(process.argv[1]);console.log(String(eval(proce
   [ "$(j 'o.invisible')" = "false" ] || { echo "$DONE"; false; }
   [ "$(j 'o.loneSurrogate')" = "false" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: a zones or records answer that is not an array is read as empty, never a crash" {
+  dns odd-shapes
+  [ "$(j 'o.scaffold.code')" = "NO_ZONE" ] || { echo "$DONE"; false; }
+}

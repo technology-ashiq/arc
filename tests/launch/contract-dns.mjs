@@ -115,6 +115,11 @@ switch (scenario) {
     out.loneSurrogate = [...out.scaffold.message].some((c) => c.length === 1 && c.charCodeAt(0) >= 0xd800 && c.charCodeAt(0) <= 0xdfff);
     break;
   }
+  case "odd-shapes": {
+    globalThis.fetch = async (u) => new Response(JSON.stringify({ success: true, errors: [], result: { name: "automemory.ai", id: "z" } }), { status: 200 });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    break;
+  }
   case "no-upstream":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ upstream: {} })));
     break;

@@ -49,3 +49,4 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **The sanitiser missed U+061C and the zero-width marks, and capped by UTF-16 units** — wider skip set, cap by code points, B3 — *every sanitiser and every `.slice(0, n)` on display text*
 - **upstream handed an adapter resources from a dependency that had failed after recording them** — only a verified dependency's resources reach `ctx.upstream`, B4 — *every value passed between slots: is its producer's state checked?*
 - **The quoted-item fix made `- "a": 1` a silent string** — an item opening a quote must be one whole quoted string or the parse fails, B5 — *every parser fix: what did the old branch catch that the new one now lets through?*
+- **The `errors` guard covered one `x || []` and left three more in the same file** — one `list()` helper reads every Cloudflare array, attack 7722041 B1 — *after fixing a pattern, grep the FILE for its siblings before committing*
