@@ -117,7 +117,11 @@ export function placeAll(events, rules, roleIds) {
  */
 export function scorecard(role, events, placements, { since } = {}) {
   const mine = events.filter((e) => placements.get(e.id)?.role === role && (!since || String(e.ts) >= since));
-  if (!mine.length) return { role, evidence: false };
+  // A head's verdict (org-judge, ADR-1627) is PLACED on the head -- it is the head's receipt -- and JUDGES the
+  // worker named in payload.subject_role. Only a placed verdict counts, so an unattributable one judges nobody.
+  const judged = judgedVerdicts(role, events, placements, since);
+  if (!mine.length && !judged.length) return { role, evidence: false };
+  const span = [...mine, ...judged].map((e) => String(e.ts)).sort();
   const runs = mine.filter((e) => e.kind === "run.completed");
   const decisions = mine.filter((e) => e.kind === "decision.recorded");
   const costs = mine.filter((e) => e.kind === "cost.incurred");
@@ -127,15 +131,21 @@ export function scorecard(role, events, placements, { since } = {}) {
     runs: runs.length,
     runs_ok: runs.filter((e) => e.outcome === "ok").length,
     runs_fail: runs.filter((e) => e.outcome === "fail").length,
-    accepts: decisions.filter((e) => e.payload?.verdict === "approve").length,
-    rejects: decisions.filter((e) => e.payload?.verdict === "reject").length,
+    accepts: decisions.filter((e) => e.payload?.verdict === "approve").length + judged.filter((e) => e.payload.verdict === "accept").length,
+    rejects: decisions.filter((e) => e.payload?.verdict === "reject").length + judged.filter((e) => e.payload.verdict === "rework").length,
     incidents: mine.filter((e) => e.kind === "incident.raised").length,
     // Cost is summed only from cost.incurred receipts; with none, it is absent, not zero.
     cost_minor: costs.length ? costs.reduce((s, e) => s + (Number.isInteger(e.payload?.amount) ? e.payload.amount : 0), 0) : null,
     cost_receipts: costs.length,
     handoffs: mine.filter((e) => e.kind === "handoff.ready").length,
-    first: mine[0].ts, last: mine[mine.length - 1].ts,
+    first: mine.length ? mine[0].ts : span[0], last: mine.length ? mine[mine.length - 1].ts : span[span.length - 1],
   };
+}
+
+/** Placed review.completed verdicts whose subject_role is this role (ADR-1627). */
+export function judgedVerdicts(role, events, placements, since) {
+  return events.filter((e) => e.kind === "review.completed" && placements.has(e.id) && e.payload?.subject_role === role
+    && (e.payload.verdict === "accept" || e.payload.verdict === "rework") && (!since || String(e.ts) >= since));
 }
 
 /** Day-3 checkpoint (ADR-1604): seated roles with >= 1 run.completed or >= 1 decision verdict, placed by a sourced rule. */

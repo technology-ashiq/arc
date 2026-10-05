@@ -1,0 +1,101 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/composer-bash-check.sh:211 (`case \"$CMD\" in *[!$CQ\\\"]*`)",
+      "breaking_input": "The well-formed call from the suite's REFPACK_OK: node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --source lapa-ninja --url \"https://lapa.ninja/assets/shot-1.png\" --principle \"...\" --avoid \"...\"",
+      "why": "CQ ends in `_-`, and the pattern is `[!` + CQ + `\\\"` + `]`. The `-` therefore sits between `_` and `\"`, so bash reads it as the range `_`..`\"` (0x5F..0x22). That range is reversed and empty in the C locale and under bash 5's default globasciiranges, so `_`, `-` and `\"` all drop out of the allowed set. Every legitimate call carries `--brief` and quoted values, so it hits the negated class and is refused. The positive assertion in the first curator test should go red on CI. Every negative assertion in that test (cat, `; rm`, `--registry`, `$(id)`, unterminated quote) would keep passing for this wrong reason, so they prove nothing about the intended rules.",
+      "fix": "Put the quote first and keep `-` last so it stays a literal: `*[!\\\"$CQ]*` with CQ ending in `-`. Add a positive fixture for a value containing `-`, `_` and `\"`, and assert the reason on each negative case."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "design-refpack.mjs:185 (`answer(d.verdict === \"ALLOW\" ? 0 : EXIT[d.verdict], ...)`)",
+      "breaking_input": "Any preflight result whose `verdict` is not a key of EXIT (a new verdict, a guard-refusal verdict, or an unset/renamed field) while the registry host matches.",
+      "why": "`EXIT[d.verdict]` is `undefined`, so `answer(undefined, ...)` prints the refusal and then calls `process.exit(undefined)`. Node exits 0, the hook reads rc 0 and allows the WebFetch. The lookup silently turns 'unknown' into 'allow', which is the defect where a code the caller does not know gets read as success.",
+      "fix": "`const code = d.verdict === \"ALLOW\" ? 0 : (Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE)`. Make `answer` refuse to exit 0 unless the verdict is exactly \"ALLOW\", and pin a fixture with a stubbed unknown verdict.",
+      "twin_of": "A caller read the parser's \"someone else\" code, 1, which is also bash's crash code -> a verdict gets a code the runtime never produces by accident; every unknown code is judged."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "design-refpack.mjs:184 (`preflight({ url, ua: DEFAULT_UA, ...})`) and composer-bash-check.sh:283",
+      "breaking_input": "robots.txt on an active registry host: `User-agent: Claude-User` with `Disallow: /`, followed by `User-agent: *` with `Allow: /`. The curator sends WebFetch https://gallery.example/category/saas",
+      "why": "The licence is checked as arc's DEFAULT_UA, but the page is fetched by the harness's WebFetch under a different user-agent product token. The `*` group answers ALLOW and the hook exits 0, although the site has disallowed the agent that actually fetches. This is the defect where the permission was checked on one input and the fetch made on another.",
+      "fix": "Preflight with the fetcher's real UA token (and any documented alias). Refuse if any of those tokens is disallowed. If the WebFetch UA cannot be known, record that as an accepted residual in ADR-1420 and refuse hosts that carry any agent-specific group.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "composer-bash-check.sh:266-287 (`_curator_fetch`) and design-refpack.mjs:172-185",
+      "breaking_input": "WebFetch https://lapa.ninja/category/saas where the origin answers 301 to https://www.lapa.ninja/category/saas (or a same-host 302 to an allowed path that redirects on to a path the robots file disallows). The apex robots.txt allows it and the www robots.txt disallows it.",
+      "why": "The hook gates only the URL string the curator typed. WebFetch follows same-host and www-to-apex redirects itself, so the page it lands on never passes the registry, https or robots gates. Robots.txt is per origin, so the apex verdict says nothing about www.",
+      "fix": "Have --check-browse resolve the page URL's redirect chain manually (HEAD or GET without following), gating every hop the way the robots fetch is gated. Also preflight the www/apex sibling origin, or refuse any URL whose origin answers a redirect.",
+      "twin_of": "Redirects were followed by the HTTP client -> redirects are manual, and each hop passes every gate the first request did."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "composer-bash-check.sh:277-280 and design-refpack.mjs:180-182",
+      "breaking_input": "The operator's shell exports ARC_DESIGN_OFFLINE=1 and ARC_DESIGN_ROBOTS_FILE pointing at a permissive file (left over from running the suite by hand or from a dev profile). Claude Code starts in that shell, and the curator WebFetches a URL that the real robots.txt disallows.",
+      "why": "The production hook forwards the seams from its own environment. --check-browse swaps in the fake transport and answers ALLOW, and the real WebFetch then runs. Nothing in the curator-browse.log line records that a fake transport decided, so the allow cannot be told apart from a real one. The comment 'the harness never sets ARC_DESIGN_OFFLINE' relies on the operator's environment being clean.",
+      "fix": "Do not forward the seams outside the suite; use a hook-specific test switch that the harness cannot inherit, such as a sandbox root that ships a stub script. If the seam stays, stamp the log line and the exit with 'fake-transport' and refuse to ALLOW on a fake transport unless a second explicit variable is set.",
+      "twin_of": "Test seams shipped ungated in a production CLI -> a fake transport needs an explicit env and stamps what it produced."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "composer-bash-check.sh:295-300 (`_field tool_name ... || ...; case \"$FIELD\" in ... *) exit 0;;`)",
+      "breaking_input": "A design-curator payload whose tool_name key is absent, or present but empty, with a Bash-shaped tool_input.command such as `cat .env`.",
+      "why": "`_field` succeeds with an empty FIELD for an absent key (the main session has no agent_type, so absence must succeed). The empty tool name falls through to `*) exit 0`, so the curator's call is allowed unread. 'Unreadable' is not given its own answer for a curator, although the composer branch refuses it.",
+      "fix": "After the read, `[ -n \"$FIELD\" ] || _crefuse \"the tool of a design-curator call is missing.\"`. Allow only an explicit list (Read, Grep, Glob) instead of a catch-all exit 0.",
+      "twin_of": "An unparseable payload was answered \"not a composer\" before the fail-closed branch could see it -> \"other\" is a positive result about a payload that was read; unreadable is its own answer."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "composer-bash-check.sh:203-208 (`_field command ...` followed by `case $? in`)",
+      "breaking_input": "A curator Bash payload whose command is over 2000 bytes, run while the script has `set -e` or an ERR trap in effect.",
+      "why": "`_field` is called bare and its nonzero status (3 for too long) is read afterwards from `$?`. Under `set -e` the script would exit 3 before the case runs. Claude Code treats any hook exit other than 0 or 2 as a non-blocking error, so the oversized call is allowed. The other call sites use `|| _crefuse` or `if !`; this one does not.",
+      "fix": "Capture the status inside a conditional: `if _field ...; then _frc=0; else _frc=$?; fi`, then `case $_frc in`. Or use `_field ... || _frc=$?` and branch on that.",
+      "twin_of": "A verdict code shared with bash's syntax-error code -> every verdict code is one the runtime never makes; the r1 fix moved one verdict and left its twin."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/design-composer-bash.bats (the curator Bash and WebFetch tests, ~640-700)",
+      "breaking_input": "Break _curator_bash entirely (for example the B1 range bug, or a bash syntax error that yields exit 2). Every negative assertion still passes.",
+      "why": "The negative cases assert only `status -eq 2`, and 2 is also bash's own syntax-error/misuse code and what every unrelated refusal returns. The `--registry` and `; rm` cases never check that the refusal came from the curator rule rather than another rule. The `$(id)` and unterminated-quote cases do not check their specific reasons. The suite cannot tell the intended refusal from an accidental one.",
+      "fix": "Assert the stderr text for each negative case: 'BLOCKED by design-curator scope' plus its reason ('test seam', 'shell syntax' or 'carries a character no refpack call needs', 'never closed'). Add cases for a duplicate flag, a missing flag, an empty quoted value and a stray closing quote.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "design-refpack.mjs:174-178 (host binding uses `url.hostname` only)",
+      "breaking_input": "WebFetch https://lapa.ninja:8443/anything (a non-default port on a registry host), or https://user:pw@lapa.ninja/x",
+      "why": "Host binding compares the hostname only. The robots.txt is fetched from that origin's port, and whatever service listens there answers for the licence. A 404 robots.txt on an unrelated port reads as allow-all. The registry binds hosts, not ports or credentials.",
+      "fix": "Refuse a non-empty `url.port` (unless it equals the scheme default) and any non-empty `url.username` or `url.password` in checkBrowse before the registry match."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "design-refpack.mjs:160-171 and composer-bash-check.sh:283-286",
+      "breaking_input": "A registry file that is unreadable or malformed (loadRegistry throws), or a hook-level refusal (URL unreadable, refpack missing). A deadline that fires after the URL was parsed logs `-` for the URL.",
+      "why": "The ADR says every answer is appended to curator-browse.log, and the phase exit criterion says a refusal is recorded, never a silent skip. The throw from loadRegistry, the pre-`answer` fail() calls (unknown argument, seam not enabled, bad --robots-status) and the hook's own _crefuse paths exit without a log line. The deadline path passes u=null, so the log records that a refusal happened but not for which page.",
+      "fix": "Wrap the body of checkBrowse in try/catch that routes to answer(1|2|4, ...) with the parsed URL when known. Define `answer` before the seam checks, and pass the URL into the timer callback once parsed."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "composer-bash-check.sh:254-257 (unquoted values admitted by the CB alphabet)",
+      "breaking_input": "node .claude/scripts/design/design-refpack.mjs --brief ../../.github/workflows/x --source lapa-ninja --url \"https://lapa.ninja/a.png\" --principle \"p\" --avoid \"a\"",
+      "why": "CB admits `.`, `/` and `:`. The hook is the only scope on the curator's plain Bash, yet it applies no id grammar to --brief or --source and no https prefix to --url. It relies entirely on refpack validating each id where the value becomes a path, and refpack has had that gap before. There is no second line of defence.",
+      "fix": "Require --brief and --source to match `[a-z][a-z0-9-]*` (and refuse Windows reserved device names) and --url to start with `https://` in the hook, on top of refpack's own checks.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    }
+  ]
+}

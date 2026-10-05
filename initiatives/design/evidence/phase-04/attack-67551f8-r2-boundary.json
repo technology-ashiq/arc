@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:166",
+      "breaking_input": "variant-d/thesis.txt is a dangling symlink to a path outside the explore tree. `existsSync(toThesis)` follows the link and returns false, so the hash comparison is skipped and `writeFileSync(toThesis, thesis)` creates and writes the link's target. The fixed `.tmp-<pid>` file for pairs.json has the same problem if it is planted as a symlink.",
+      "why": "The r1 fix lstat-checks the destination directory and an existing thesis file, but the write itself is still a truncating write that follows links. Only the pre-existing, resolvable case is covered.",
+      "fix": "lstat toThesis and refuse any entry that is not absent or a regular file. Write with flag `wx`, or unlink first. Do the same for the pairs.json tmp file.",
+      "twin_of": "Check-then-create with a truncating write -> create exclusively (`wx`) and append; never exists()-then-write."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:230",
+      "breaking_input": "`compose ex1 --variant d` prints \"spawn its composer with that tier as a per-invocation override\" and exits 0. The operator or agent spawns the composer on the wrong tier, or on the same tier as variant-a. `exp-a1` then reports the pair as balanced-workhorse versus high-judgment anyway.",
+      "why": "The arm is advisory text. Nothing records or verifies which tier the composer ran on, and the report reads the arm from pairs.json. The \"one variable\" the experiment depends on is never checked at the process-spawn boundary.",
+      "fix": "Have compose take the tier from pair-guard and stamp it into the armed marker. Have compose-done or exp-a1 refuse if no marker records that tier for each paired variant.",
+      "twin_of": "Permission checked as one user-agent, fetch made as another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:128",
+      "breaking_input": "After seeing the scores, hand-edit seal-ex1.json: rewrite `prediction.text` to match the outcome, set `sealed` to 2020-01-01T00:00:00Z, and leave `files` and `formula` untouched. `seal-check` and `exp-a1` both pass.",
+      "why": "loadSeal binds `files` and `formula` to code but never validates `prediction` (it may be missing entirely), `adrSha256`, `authorship`, or `id`. `sealed` is only checked for parseability, so \"dated before the score\" is a self-reported, editable string.",
+      "fix": "In loadSeal, recompute the ADR quote and hash with CRLF normalised and require them to equal the recorded prediction. Require `rec.id === id`. Require the seal to be a committed git blob that predates the score, instead of trusting `sealed`.",
+      "twin_of": "A threshold read back from the record it judges -> the bar lives in code; a record carrying any other bar is refused"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:268",
+      "breaking_input": "Pair a and d, compose both, then edit variant-d/thesis.txt or the bundle, or rewrite base-revision.txt. Run `exp-a1`: it prints the per-pair verdict and exits 0.",
+      "why": "report() trusts pairs.json after only shape validation. It never re-hashes the thesis files, never re-runs compare against the bundle, and never re-reads the base. Those checks run only at compose time, so a post-compose edit is invisible at the point the verdict is produced. The debt ledger covers only base-revision.",
+      "fix": "Have report() call the same thesis re-hash and bundle compare that pair-guard uses, and refuse on any difference.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:156",
+      "breaking_input": "variant-a already has an index.html, or a composer-session--ex1--variant-d marker is armed. Run `pair ex1 --from a --to d ...`.",
+      "why": "`pair` refuses only when the `to` side has a page. It never checks the `from` side for a page, and never checks for an armed marker on either side. The \"pair is made before either side composes\" rule therefore holds for one half only. A pair copied from an already-composed variant records a thesis hash that the page may not follow.",
+      "fix": "Refuse if either side has an index.html (checked by lstat) or an armed composer-session marker.",
+      "twin_of": "A seam gate added to one CLI and not its sibling -> a fix to one entry point is checked in every entry point that shares the seam."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:247",
+      "breaking_input": "unblind.json containing the JSON literal `null` makes `ub.scored` throw a TypeError and print a stack trace. A `scored` value of \"2999\" or \"1\" parses as a date and satisfies the seal-before-score check.",
+      "why": "loadJson returns null for the text `null`, and report() dereferences it with no guard, unlike its two siblings. Date.parse accepts any lenient string, so the ordering check depends on an editable file that is not validated beyond \"parses\".",
+      "fix": "Require `ub` to be a non-null object and `scored` to be a strict ISO-8601 string. Cross-check `scored` against the unblind file's mtime or its committed timestamp.",
+      "twin_of": "A parser throw left to a stack trace beside two guarded siblings -> every step that can fail answers with a named ERR line."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:143",
+      "breaking_input": "`seal-check ex1 --bundle <pristine copy>` while the real bundle is tampered. It prints \"N file(s) match the seal of <ts>\" and exits 0, without saying the canonical bundle was not examined.",
+      "why": "`--bundle` is an ungated test seam in a production command, and its success line does not name the directory. The step that closes the run (S3's \"seal-check after the run\") can be satisfied by a copy. This is the unfixed prior B11, and it is not in the debt ledger.",
+      "fix": "Gate `--bundle` behind an explicit env var. Stamp the checked path in the output, and print a NOT-CANONICAL marker when the path differs from the real bundle.",
+      "twin_of": "Test seams shipped ungated in a production CLI -> a fake transport needs an explicit env and stamps what it produced."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:104",
+      "breaking_input": "A bundle file that is locked or unreadable on Windows (EBUSY or EACCES) throws in hashTree's readFileSync. The same happens when `.claude/state/design` is a file (ENOTDIR in readdirSync), when mkdirSync/writeFileSync of the thesis fails, or when renameSync fails with EPERM. The renameSync failure also leaves the `.tmp-<pid>` file and an unrecorded thesis copy.",
+      "why": "These fs calls are unguarded, so the output is a stack trace instead of a named \"design-explore exp-a1:\" line, and the tmp file is left behind. Exit code 1 is still fail-closed, but it cannot be told apart from a deliberate refusal.",
+      "fix": "Wrap the remaining fs calls in a helper that routes the error code through fail(). Unlink the tmp file on rename failure.",
+      "twin_of": "A parser throw left to a stack trace beside two guarded siblings -> every step that can fail answers with a named ERR line."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:172",
+      "breaking_input": "Two concurrent `pair` runs for (a,d) and (b,e) both read pairs.json before either writes. The last rename wins and drops the other pair, but both thesis copies already exist.",
+      "why": "The tmp+rename write is atomic, but the read-modify-write is not serialised. The lost pair's variants are then unpaired, so pair-guard passes them with no thesis check. This is the unfixed half of prior B1, and the ledger lists only B2.",
+      "fix": "Take an atomic `mkdir` lock before reading pairs.json and release it after the rename. Alternatively, re-read pairs.json after the write and verify the new pair is present.",
+      "twin_of": "An exclusive write at the end of a job whose middle already wrote shared state -> claim first (an atomic mkdir after every check), then write."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:704",
+      "breaking_input": "Delete both pairs.json and seal-ex1.json from the working tree (the seal is committed, so `git status` shows only a deletion). Or replace them with a dangling symlink or a directory. `-f` and `existsSync` both read that as absent, so compose arms with no check at all.",
+      "why": "The r1 fix keys the guard on the seal, but it still tests presence with `-f` and `existsSync`. Those follow symlinks and treat a directory as not-a-file. The guard stays switched on by files the guarded party can remove, now two of them instead of one.",
+      "fix": "Test presence by lstat for any entry type, in both the shell and node. Refuse when `git ls-files` lists a seal for this id that is missing or not a regular file.",
+      "twin_of": "A guard switched on by the presence of a file the guarded party can delete -> key the guard on the committed record (the seal), and refuse when its companion is missing"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:56",
+      "breaking_input": "`--id -` or `--id -x`, or a 300-character id. The grammar admits a leading dash and has no length cap.",
+      "why": "Only the reserved-name half of prior B4 was fixed. A leading dash can be read as a flag by other shell tools handed $ID, and a long id creates paths that break Windows mkdir on one CI leg. An id containing `--` also false-matches another explore's `composer-session--<id>--` prefix in seal().",
+      "fix": "Use the lane grammar `[a-z][a-z0-9-]*` with a 64-character cap, and reject `--` inside ids.",
+      "twin_of": "A name grammar copied without its reserved-word half -> a name that becomes a path carries both halves of the grammar, everywhere it is accepted."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:111",
+      "breaking_input": "The seal is created on a Windows checkout with autocrlf on, so bundle .md files are CRLF in the working tree and are hashed as CRLF. Any LF checkout, such as the Linux CI leg, then reports TAMPERED for every text file.",
+      "why": "hashTree hashes raw working-tree bytes. A repo that already has a CRLF-checkout defect on record gets a seal that is not reproducible across checkouts, so the one control that matters (seal-check) cries wolf or gets bypassed.",
+      "fix": "Add a .gitattributes `-text` or `eol=lf` rule for the bundle path, or hash with CRLF normalised for text files. Record the rule in the seal.",
+      "twin_of": "A record parsed with an end anchor on a CRLF checkout -> strip CR before anchoring any line of a tracked text file."
+    }
+  ]
+}

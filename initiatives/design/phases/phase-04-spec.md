@@ -34,7 +34,28 @@ reference item present, and settle the composer-tier question with receipts eith
 
 ## Verification plan
 
-Coarse — refined via `/arc-change` when the phase starts. The pairing is proved by asserting
+Refined 2026-10-04 via `/arc-change`. The owner approved the paid run and kept ADR-1416's
+session-authored prediction (2026-10-04). Three slices, each red-first on CI:
+
+- **S1 — the seal and its failing control.** `design-explore.sh seal <id>` records the
+  model-policy phase-02 bundle's sha256 per file into `initiatives/design/evidence/phase-04/`
+  and copies ADR-1416's prediction text, with its authorship line, into the same record, timestamped
+  **before** any composer arms; `seal-check <id>` re-hashes the bundle and exits non-zero on any
+  change. Proved by a scratch copy with one byte flipped: `seal-check` against it exits 1, read
+  as `$?` directly, never through a pipe. `compose` refuses for an EXP-A1 explore until a seal exists.
+- **S2 — the paired harness.** `design-explore.sh pair <id> --from <x> --to <y> --arm <tier>`
+  copies variant x's thesis byte-for-byte to variant y and records `{variant, arm, thesis sha,
+  base rev}` in `pair.json`; `compose` for a paired variant refuses if its thesis sha has moved.
+  Arms are named as router TIERS (`balanced-workhorse`, `high-judgment`), never as models; the
+  composer's `model:` line is never edited, and the tier is a per-invocation override. `exp-a1
+  <id>` reads the owner's blind score and `pair.json` after `unblind` and prints, per pair, which
+  arm won and the mean gap, and applies the standing formula: promotion needs material
+  owner-visible gain **and** the owner's explicit cost/time acceptance.
+- **S3 — the live run.** Three theses, two arms (a/b/c workhorse, d/e/f high-judgment), one
+  N=7 jury (six variants + one pack reference), the owner's blind 0–100 score in person,
+  `seal-check` after the run, a decision ADR, and the prediction settled hit or miss in writing.
+
+The pairing is proved by asserting
 both arms ran at the same commit SHA against the same fixture sha, with only the model override
 differing — one variable, which is the discipline the engine lane learned the hard way when a
 comparison moved two at once and built an ADR on the result. The seal is proved by verifying the

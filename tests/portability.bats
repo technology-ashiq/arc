@@ -41,9 +41,9 @@ ROOTS() { echo "$ARC_ROOT/.claude/scripts $ARC_ROOT/.claude/hooks $ARC_ROOT/.git
 
 _LOCALE_RANGE_KNOWN() {
   cat <<'EOF'
-.claude/scripts/design/design-critique.sh:42
+.claude/scripts/design/design-critique.sh:43
 .claude/scripts/design/design-render.sh:221
-.claude/scripts/design/design-critique.sh:124
+.claude/scripts/design/design-critique.sh:216
 .claude/scripts/design/design-render.sh:681
 EOF
 }

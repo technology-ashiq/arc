@@ -23,19 +23,24 @@ None declared.
 
 None declared.
 
-## Scripts (11)
+## Scripts (16)
 
 - [`.claude/scripts/org/jobs/org-dispatch.mjs`](../../../.claude/scripts/org/jobs/org-dispatch.mjs)
 - [`.claude/scripts/org/lib/attribution.mjs`](../../../.claude/scripts/org/lib/attribution.mjs)
 - [`.claude/scripts/org/lib/card.mjs`](../../../.claude/scripts/org/lib/card.mjs)
 - [`.claude/scripts/org/lib/dispatch.mjs`](../../../.claude/scripts/org/lib/dispatch.mjs)
 - [`.claude/scripts/org/lib/emit.mjs`](../../../.claude/scripts/org/lib/emit.mjs)
+- [`.claude/scripts/org/lib/skill-source.mjs`](../../../.claude/scripts/org/lib/skill-source.mjs)
+- [`.claude/scripts/org/lib/skill-vet.mjs`](../../../.claude/scripts/org/lib/skill-vet.mjs)
 - [`.claude/scripts/org/lib/team.mjs`](../../../.claude/scripts/org/lib/team.mjs)
 - [`.claude/scripts/org/org-catalog.mjs`](../../../.claude/scripts/org/org-catalog.mjs)
 - [`.claude/scripts/org/org-coverage.mjs`](../../../.claude/scripts/org/org-coverage.mjs)
 - [`.claude/scripts/org/org-dispatch.mjs`](../../../.claude/scripts/org/org-dispatch.mjs)
+- [`.claude/scripts/org/org-judge.mjs`](../../../.claude/scripts/org/org-judge.mjs)
+- [`.claude/scripts/org/org-own.mjs`](../../../.claude/scripts/org/org-own.mjs)
 - [`.claude/scripts/org/org-review.mjs`](../../../.claude/scripts/org/org-review.mjs)
 - [`.claude/scripts/org/org-team.mjs`](../../../.claude/scripts/org/org-team.mjs)
+- [`.claude/scripts/org/skill-import.mjs`](../../../.claude/scripts/org/skill-import.mjs)
 
 ## Files (3)
 

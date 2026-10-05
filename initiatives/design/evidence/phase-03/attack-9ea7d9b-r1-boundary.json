@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:757-763",
+      "breaking_input": "A render where $RECIPE is empty or unset because its own computation failed, for example a missing mode helper or a failed probe, with a prior meta in another session whose recipe is non-empty and whose pixels are byte-identical. The test `[ -n \"$other_recipe\" ] && [ \"$other_recipe\" != \"$RECIPE\" ]` is true, so `continue` skips the refusal.",
+      "why": "The fail-closed rule is applied only to the other meta's recipe. This render's own recipe is not checked, so a failed probe of $RECIPE is read as 'differs' and the guard is bypassed. The defect pattern 'a failed probe falls back to a default' recurs here.",
+      "fix": "Refuse or exit before the loop if $RECIPE is empty. Then require both recipes to be non-empty and unequal before `continue`.",
+      "twin_of": "A subprocess that failed produced an empty string read as a positive answer -> a non-empty input that transforms to empty is a failure, never a value."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:757-763",
+      "breaking_input": "A crash-retry under a fresh session id that changes any recipe component, such as a different mode flag, an extra env-derived token, or a viewport. Pixels are byte-identical and the recipe string differs from the earlier meta, so the retry is allowed.",
+      "why": "The rule is 'any recipe inequality is a second look', which is a deny-list of exactly-equal recipes. Case 3 now catches only a retry that repeats the recipe exactly. An allow-list of the one legitimate pair (explore composer render followed by critique render) would be tighter. The ADR itself says a retry repeats the recipe, but a retry made with different flags escapes.",
+      "fix": "Allow only the specific known pair, where one recipe equals the other plus the `confined-loopback` token, or compare the mode field explicitly. Refuse any other difference.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "tests/design-render-session.bats:152-170",
+      "breaking_input": "A meta with the `recipe` field deleted, empty, or corrupted JSON, written under another session with identical pixels. No test covers it.",
+      "why": "The ADR amendment claims 'a meta whose recipe cannot be read still refuses, failing closed'. The only new test covers the differing-recipe allow and the same-recipe refuse. If `_meta_field` errors or `|| other_recipe=\"\"` is changed, the claimed fail-closed branch can regress with no red test. The refusal test also asserts `status -eq 1`, which is bash's generic failure code, and it greps only for the message.",
+      "fix": "Add a fixture that strips the recipe from the other session's meta, then render the same pixels under a fresh session. Assert exit 1 and the 'never re-rendered' text. Include a control with a meta that has a readable, differing recipe.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:759",
+      "breaking_input": "A meta file whose recipe value carries a trailing CR, or a value that `_meta_field` returns as quoted JSON in one writer and unquoted in another, compared with an unquoted $RECIPE.",
+      "why": "The string comparison is raw. Any representational mismatch makes equal recipes compare unequal, so the retry is allowed. That is fail-open on a formatting difference, the opposite of the refuse-on-unknown stance claimed for unreadable recipes. The same defect class appears in 'a record parsed with an end anchor on a CRLF checkout'.",
+      "fix": "Normalise both sides identically before comparing, by stripping CR and whitespace. If the values do not match after normalisation, consult the mode field rather than treating the difference as a fresh recipe.",
+      "twin_of": "A record parsed with an end anchor on a CRLF checkout -> strip CR before anchoring any line of a tracked text file."
+    }
+  ]
+}

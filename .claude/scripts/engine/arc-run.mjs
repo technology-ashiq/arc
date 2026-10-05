@@ -134,6 +134,7 @@ let trialModel = "";
 let ownerModel = "";
 let workRootArg = "";
 let transcriptDirArg = "";
+let trialSeat = "";
 let dryRun = false;
 const seen = new Set();
 
@@ -211,10 +212,12 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === "--owner-model") ownerModel = takeValue(a, i++);
   else if (a === "--work-root") workRootArg = takeValue(a, i++);
   else if (a === "--transcript-dir") transcriptDirArg = takeValue(a, i++);
+  // org ADR-1626: run a `role:` process under a different agent, this invocation only. Same strictness as --trial-model.
+  else if (a === "--trial-seat") trialSeat = takeValue(a, i++);
   else if (a === "--dry-run") dryRun = true;
   else { console.error(`arc-run: unknown option ${a}`); process.exit(2); }
 }
-if (!processName) { console.error("usage: arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M] [--input JSON|@FILE] [--root PATH] [--work-root PATH] [--trial-model ID] [--transcript-dir PATH]"); process.exit(2); }
+if (!processName) { console.error("usage: arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M] [--input JSON|@FILE] [--root PATH] [--work-root PATH] [--trial-model ID] [--trial-seat AGENT] [--transcript-dir PATH]"); process.exit(2); }
 
 function gitToplevel() {
   try { return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
@@ -425,6 +428,85 @@ if (doc && Object.prototype.hasOwnProperty.call(doc, "job_stub") && doc.job_stub
   console.error(`         .claude/scripts/hq/jobs/ and is run by: node .claude/scripts/hq/arc-jobs.mjs run ${processName}`);
   process.exit(1);
 }
+
+// ---------- the role seat (org ADR-1626) ----------
+// A process naming `role:` is sat by one agent its card binds. Resolved HERE, before routing and before
+// anything is emitted, so every refusal below is an operator error with no receipt. The role fields ride
+// on run.completed only (emitRun); closed-payload kinds refuse extra fields.
+// Only a TRIAL seat reaches the driver as a persona: several cards bind the subagents a process invokes
+// (the council members, question-planner), so putting the resolved agent in front of every default run
+// would change attack-diff, review-diff and the council with no reviewed diff (ADR-1626 amendment).
+const roleSeat = await (async () => {
+  // A falsy or non-object doc is the missing-process path's to report, never a TypeError here (attack 83b4d22 B1).
+  const hasRole = !!doc && typeof doc === "object" && Object.prototype.hasOwnProperty.call(doc, "role");
+  if (!hasRole) {
+    if (trialSeat) { console.error(`arc-run: --trial-seat needs a process that names a role:, and \`${processName}\` names none`); process.exit(2); }
+    return null;
+  }
+  // No org/roles/ at all: the org product is not installed here (a consumer synced with the engine alone), so
+  // the role is inert -- the run is exactly what it was before ADR-1626. A trial seat has nothing to sit.
+  if (!existsSync(join(root, "org", "roles"))) {
+    if (trialSeat) { console.error(`arc-run: --trial-seat needs the org product (no org/roles/ under ${root})`); process.exit(2); }
+    return null;
+  }
+  const { AGENT_RE, resolveSeat, personaOf } = await import("./role-seat.mjs");
+  const roleId = doc.role;
+  const cards = (() => {
+    const base = join(root, "org", "roles");
+    let depts = [];
+    try { depts = readdirSync(base).sort(); } catch { return []; }
+    const out = [];
+    for (const d of depts) {
+      let names = [];
+      try { names = readdirSync(join(base, d)).sort(); } catch { continue; }
+      for (const n of names) {
+        if (!n.endsWith(".role.yaml")) continue;
+        let r;
+        // Skipped, never thrown: process-lint skips the same entry, and the two readers must agree (attack bc27378 B4).
+        try { r = parseYamlSubset(readFileSync(join(base, d, n), "utf8").replace(/^\uFEFF/, ""));
+        } catch { continue; }
+        if (r.ok && r.value && r.value.id === roleId) out.push(r.value);
+      }
+    }
+    return out;
+  })();
+  // process-lint holds this link in CI; refusing here too keeps a hand-run on a broken tree from crediting nobody.
+  const card = cards[0];
+  if (!card || !card.binds || card.binds.process !== doc.name) {
+    console.error(`arc-run: \`${processName}\` names role \`${String(roleId)}\`, but no role card with that id binds this process (process-lint role-card)`);
+    process.exit(2);
+  }
+  if (trialSeat) {
+    // Listed in the directory AND a regular file: existsSync alone said yes to a device (attack bc27378 B3).
+    let listed = false;
+    try { listed = readdirSync(join(root, ".claude", "agents")).includes(`${trialSeat}.md`) && statSync(join(root, ".claude", "agents", `${trialSeat}.md`)).isFile(); } catch { listed = false; }
+    if (!AGENT_RE.test(trialSeat) || !listed) {
+      console.error(`arc-run: --trial-seat ${JSON.stringify(trialSeat)} is not an agent in .claude/agents/`);
+      process.exit(2);
+    }
+  }
+  // The spine this run will be credited on. Unreadable (a linked worktree, no repo) is "no evidence", said
+  // out loud -- never a guess at another spine.
+  let events = [];
+  let spineNote = null;
+  try {
+    const { spineRoot } = await import("../hq/lib/spine-io.mjs");
+    const { scanAll } = await import("../hq/spine.mjs");
+    events = scanAll(spineRoot()).events || [];
+  } catch (e) {
+    spineNote = `spine unreadable (${String(e && e.code ? e.code : e && e.message ? e.message : e).split("\n")[0]}) -- resolved without evidence`;
+  }
+  const seat = resolveSeat(card, events, { trial: trialSeat || null });
+  let personaFile = null;
+  if (seat.source === "trial" && !dryRun) {
+    const body = personaOf(readFileSync(join(root, ".claude", "agents", `${seat.agent}.md`), "utf8"));
+    const dir = mkdtempSync(join(tmpdir(), "arc-seat-"));
+    personaFile = join(dir, "persona.md");
+    writeFileSync(personaFile, `SEAT: ${seat.agent} (trial for role ${roleId})\n\n${body}\n`, { encoding: "utf8", flag: "wx" });
+    process.on("exit", () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ } });
+  }
+  return { role: roleId, ...seat, spineNote, personaFile };
+})();
 
 // ---------- routing ----------
 function loadRouter() {
@@ -1099,6 +1181,16 @@ function emitEvent(kind, payloadObj, extraArgs = []) {
 }
 
 
+/** The org seat on run.completed (ADR-1626). A trial carries `trial_role`, never `role`, so org-review never credits the seat for it. */
+function roleFields() {
+  if (!roleSeat) return {};
+  return {
+    ...(roleSeat.source === "trial" ? { trial_role: roleSeat.role } : { role: roleSeat.role }),
+    ...(roleSeat.agent ? { role_agent: roleSeat.agent } : {}),
+    role_agent_source: roleSeat.source,
+  };
+}
+
 function emitRun(payload) {
   const { cost, ...rest } = payload;
   const { flag, tokens } = costArgs(cost);
@@ -1164,6 +1256,7 @@ function emitRun(payload) {
     ...(activeProfile ? { profile: activeProfile.name, gateway_host: activeProfile.host } : {}),
     duration_ms: Math.max(0, Date.now() - runStartedAt),
     model_source: seatSource,
+    ...roleFields(),
   }, extra);
   if (!r.ok) {
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
@@ -1501,6 +1594,8 @@ async function invoke(name) {
       ARC_DRIVER_INPUT_FILE: inputFile,
       ARC_ROOT: root,
       ARC_WORK_ROOT: workRoot,
+      // Always set, so an ambient value can never seat a persona arc-run did not choose (ADR-1626).
+      ARC_SEAT_PERSONA_FILE: roleSeat && roleSeat.personaFile ? roleSeat.personaFile : "",
       ARC_DRIVER_MODEL: effectiveModel ?? "",
       ARC_LLM_MODEL: "",
       // A PROFILE'S GATEWAY AND KEY OVERRIDE THE AMBIENT ONES, for this one child and in its environment only -- never
@@ -1798,6 +1893,10 @@ if (dryRun) {
   }
   console.log(`arc-run: would run \`${processName}\` on \`${driver}\`${tier ? ` (tier ${tier})` : ""}${fallbacks.length ? ` fallback ${fallbacks.join(" -> ")}` : ""}`);
   console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource}${activeProfile ? `, profile ${activeProfile.name} @ ${activeProfile.host}` : ""})`);
+  if (roleSeat) {
+    console.log(`         role ${roleSeat.role} -> ${roleSeat.agent ?? "nobody"} (${roleSeat.source}: ${roleSeat.why})`);
+    if (roleSeat.spineNote) console.log(`         ${roleSeat.spineNote}`);
+  }
   console.log(`         driver workspace ${workRoot}${workRoot === root ? " (this repo -- no --work-root given)" : ""}`);
   // THE PREVIEW REPORTS THE TRANSCRIPT DESTINATION, INCLUDING ITS ABSENCE. `--dry-run` exits
   // before `attempt()`, so the loud-absence warning cannot fire here -- which made the one command

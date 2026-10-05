@@ -1,5 +1,6 @@
 name: kickoff-plan
 version: 1.0.0
+role: product-manager
 intent: "Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated."
 permissions: unrestricted
 inputs:

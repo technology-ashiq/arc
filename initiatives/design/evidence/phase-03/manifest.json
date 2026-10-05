@@ -1,0 +1,56 @@
+{
+  "phase": "03",
+  "commit": "05b9d8384e498db180055db20dbb3eac93a677f9",
+  "short": "05b9d838",
+  "generated": "2026-10-03T17:48:23Z",
+  "files": [
+    {
+      "name": "attack-544724a-r1-boundary.json",
+      "sha256": "2bc04be518aface48a0f16494228051dedf7bfc61d29b6c8f770a5f672ec7878"
+    },
+    {
+      "name": "attack-56cc019-r1-boundary.json",
+      "sha256": "92b8708c61d4e95505badf1cc11c4f86b02957a25c7a8319de01b738edb84f26"
+    },
+    {
+      "name": "attack-5cf49d3-r2-boundary.json",
+      "sha256": "ea9f89bf40a88c9e15691ee9242f9887c3c2829203482f30b551d909f24bf2ab"
+    },
+    {
+      "name": "attack-5cf49d3-r2-logic.json",
+      "sha256": "8a5e964a89f5837ff39628af751bc82aa4054828e809600bb8e12284f98cf5a3"
+    },
+    {
+      "name": "attack-9ea7d9b-r1-boundary.json",
+      "sha256": "4229949b828eb4aa3de9a93c152ccef89536bb1f74648bd10df91de421ee9266"
+    },
+    {
+      "name": "attack-9ea7d9b-r1-logic.json",
+      "sha256": "1dcb3b70ff91400133638066d7ef1f00c4433edcb1883144886f153e2e38cd3f"
+    },
+    {
+      "name": "attack-a87ae27-r1-boundary.json",
+      "sha256": "3994dfa28c0d7d678359377aa729a0403252b7c433c934e9095318aacb4bb6b2"
+    },
+    {
+      "name": "attack-a87ae27-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-af4bfa0-r1-boundary.json",
+      "sha256": "cdcde7c026081a11a0990ddb474aa5f546930f68c1f52b7051b06969cc26bfb9"
+    },
+    {
+      "name": "attack-af4bfa0-r1-logic.json",
+      "sha256": "18db8a16ac6c1f566607271edaa79fab328c0f4eb7746cfb4e27e3dd9719233f"
+    },
+    {
+      "name": "s3-composer-pack.md",
+      "sha256": "d5f2620898ac99cd0f4cb4d4c2e62fc0bb978c7378f98795a73db09aa7276b09"
+    },
+    {
+      "name": "s5-live-explore.md",
+      "sha256": "d4ab6f25a076f2b1de77569755a2e99fd0a96e689da478c2af92f7e891f9b865"
+    }
+  ]
+}

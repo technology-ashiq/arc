@@ -1,5 +1,6 @@
 name: council-convene
 version: 1.0.0
+role: board-advisors
 intent: "Convene the full arc council on one question, headless, and end on its council.verdict receipt."
 permissions: declared
 

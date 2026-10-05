@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (27)
+## Decisions (28)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -55,6 +55,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1724`](../../../docs/adr/1724-real-provider-steps-use-existing-free-accounts-and-owner-placed-tokens.md) | Real-provider steps use arc's existing free accounts and owner-placed tokens; a missing one REFUSES | accepted | 2026-10-03 |
 | [`1725`](../../../docs/adr/1725-dns-follows-hosting-and-reads-its-target-through-ctx-upstream.md) | `dns` follows `hosting` and reads its CNAME target through `ctx.upstream` | accepted | 2026-10-05 |
 | [`1726`](../../../docs/adr/1726-venture-source-reaches-git-through-the-github-api-from-its-writer.md) | Venture source reaches git through the GitHub API, committed by the adapter that writes it | accepted | 2026-10-05 |
+| [`1727`](../../../docs/adr/1727-gate-2-holds-production-in-the-venture-repo.md) | Gate 2 holds production in the venture repo, through Vercel's ignored-build step | accepted | 2026-10-05 |
 
 ## Source
 

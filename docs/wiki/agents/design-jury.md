@@ -9,7 +9,7 @@
 
 | | |
 |---|---|
-| Does | Explore-mode blind juror. Ranks FOUR unlabelled items — the three variants plus a world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact. |
+| Does | Explore-mode blind juror. Ranks N unlabelled items — the explore's variants plus at least one world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact. |
 | Model tier | sonnet |
 | Product | [design](../products/design.md) |
 

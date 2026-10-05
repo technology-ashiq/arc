@@ -150,6 +150,18 @@ export function pinnedModel() {
   return process.env.ARC_DRIVER_MODEL || null;
 }
 
+/**
+ * The trial seat's persona (org ADR-1626), or null. arc-run ALWAYS sets ARC_SEAT_PERSONA_FILE -- empty when no
+ * trial seat was named -- so an ambient value never reaches here from outside a run. Every prompt-building driver
+ * puts this block in front of the process body, so a trial seat changes what runs on every driver, not one.
+ */
+export function seatPersona() {
+  const f = process.env.ARC_SEAT_PERSONA_FILE;
+  if (!f) return null;
+  const text = readFileSync(f, "utf8").trim();
+  return text ? `${text}\n\n---\nTHE PROCESS YOU ARE SEATED IN:\n` : null;
+}
+
 /** Load a recorded response for the fake path, or null when running for real. */
 export function fakeResponse(processName) {
   const dir = process.env.ARC_DRIVER_FAKE;

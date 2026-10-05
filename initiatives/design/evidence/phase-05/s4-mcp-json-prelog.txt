@@ -1,0 +1,16 @@
+$ git log origin/main --oneline -5 -- .mcp.json   # run 2026-10-05, BEFORE the S4 edit
+7677fd11 chore(hygiene): gitignore write-probes, resolve browser stack status
+67c3c508 feat(qa): make agent-browser CLI the primary browser muscle
+1425f7c6 arc initiative
+== .claude/scripts/hq/lib/policy/tool-capabilities.json
+3a598181 feat(policy): phase 00 steel thread -- the law, its parser, and the decision
+== initiatives/policy/evidence/phase-00/hook-matrix.json
+3a598181 feat(policy): phase 00 steel thread -- the law, its parser, and the decision
+== initiatives/face/contracts/expected-set.json
+c9702174 design v2 Phases 02-08 (Cycle 16, rest of the cycle) (#292)
+1b6d3ecf feat(launch): Phase 01 slice 2 -- cloudflare-dns adapter on fakes, dns follows hosting (ADR-1725) (#323)
+ebf3fa17 docs(org): Cycle 19 retro + seal -- lane org LIVE -> IDLE; give PLAN-launch its face room (#318)
+== initiatives/face/contracts/rooms.generated.json
+c9702174 design v2 Phases 02-08 (Cycle 16, rest of the cycle) (#292)
+9827782d feat(launch): lane born + Phase 00 -- slot contracts, lints, durable runner (#320)
+3c5b14ae feat(org): Cycle 19 -- the org room (GET /api/org; roles, scorecards, teams) (#315)

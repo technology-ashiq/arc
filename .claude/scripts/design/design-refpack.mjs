@@ -39,10 +39,13 @@
 // Usage:  design-refpack.mjs --brief <id> --source <registry id> --url <screen url>
 //           --principle <text> --avoid <text>
 //           [--registry <path>] [--robots-file <path> | --robots-status <n>] [--fixture <path>]
+//         design-refpack.mjs --brief <id> --source <id> --url <url> --stage 1   (fetch for viewing only; no row)
+//         design-refpack.mjs --check-browse <url> [--registry <path>] [--robots-file <path> | --robots-status <n>]
+//           (may a design-curator WebFetch this page -- ADR-1420; see checkBrowse)
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -55,9 +58,11 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // Pass the grammar and still break mkdir on the Windows leg (lanes.md, same list).
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
+// "image/jpg" is non-standard, and real CDNs send it (nicelydone, Phase 02 real build); the magic
+// bytes below still decide whether the body IS a jpeg.
+const IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp", "image/avif": "avif", "image/gif": "gif" };
 const MAX_HOPS = 3;
-const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture"];
+const SEAMS = ["--registry", "--robots-file", "--robots-status", "--fixture", "--redirect"];
 
 function fail(code, msg) {
   console.error(`design-refpack: ${msg}`);
@@ -65,7 +70,7 @@ function fail(code, msg) {
 }
 
 function parseArgs(argv) {
-  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", ...SEAMS]);
+  const known = new Set(["--brief", "--source", "--url", "--principle", "--avoid", "--stage", "--staged", ...SEAMS]);
   const opts = {};
   for (let i = 0; i < argv.length; i += 2) {
     const k = argv[i];
@@ -80,7 +85,7 @@ function parseArgs(argv) {
 // Remote text reaches the logs (a rule line, a content-type, an error message). One line, one
 // field: no tab, no line break, no control character can forge a row.
 function field(v) {
-  return String(v).replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  return String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ").trim();
 }
 
 // One markdown table cell: a pipe or a line break inside a principle must not become a column.
@@ -102,6 +107,12 @@ const MAGIC = {
   webp: (b) => b.length > 12 && b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP",
   avif: (b) => b.length > 12 && b.toString("latin1", 4, 8) === "ftyp" && /^avi[fs]$/.test(b.toString("latin1", 8, 12)),
 };
+
+// A port or userinfo on ANY hop, not only the first: hostAllowed reads the hostname alone, so a redirect to the same
+// host on another port passed every hop's check (phase-02 attack G3 B1).
+function portOrUser(u) {
+  return u.port || u.username || u.password ? "carries a port or userinfo; the registry binds hosts" : null;
+}
 
 function validId(v) {
   return ID.test(v) && !RESERVED.test(v);
@@ -133,15 +144,369 @@ function hostAllowed(hostname, hosts) {
   return hosts.some((d) => h === d || h.endsWith("." + d));
 }
 
+// --check-browse <url>: may a design-curator WebFetch this page (ADR-1420)? The curator browses a
+// gallery to choose screens, and a plain WebFetch never passes the preflight the image fetch does,
+// so the Bash boundary's hook asks this before a curator's WebFetch runs. The same registry rules
+// as a pack fetch, applied to ANY eligible row: https only, a host of an active, fetchable row
+// whose allowed_use carries reference-pack, and a robots ALLOW for this exact URL. Every answer
+// is appended to .claude/state/design/curator-browse.log: a refusal not written down is a silent
+// skip. The whole check answers inside 40 s, or refuses: a hook that times out is read as allow.
+// Exit: 0 ALLOW | 1 usage | 2 registry or host refusal | 3 DISALLOW | 4 UNREADABLE.
+//
+// Attack r1 (ADR-1420) shaped four of its rules:
+// - robots is asked for EVERY token the fetch may be judged under: arc's ClaudeBot and Claude-User,
+//   the token the harness's WebFetch answers to. A site that disallows the fetcher while allowing
+//   `*` must not be read as permission (B3). Every token must ALLOW.
+// - the page is probed once without following redirects. WebFetch follows a same-host redirect on
+//   its own, so a redirect is refused and its target named: the curator asks for that URL, and it
+//   is checked in its own right (B4).
+// - a port or userinfo in the URL is refused: the registry binds hosts, not whatever listens on
+//   another port of one (B9).
+// - only the verdict ALLOW exits 0. Any verdict this file does not know is UNREADABLE (B2).
+const BROWSE_DEADLINE_MS = 40000;
+const BROWSE_UAS = [DEFAULT_UA, "Claude-User"];
+async function checkBrowse(argv) {
+  const logPath = join(ROOT, ".claude", "state", "design", "curator-browse.log");
+  let url = null;
+  let via = "network";
+  const answer = (code, verdict, reason) => {
+    const exitCode = verdict === "ALLOW" && code === 0 ? 0 : (code === 0 || code == null ? EXIT.UNREADABLE : code);
+    try {
+      mkdirSync(dirname(logPath), { recursive: true });
+      appendFileSync(logPath, `${new Date().toISOString()}\t${verdict}\t${via}\t${url ? field(shown(url)) : "-"}\t${field(reason)}\n`);
+    } catch { /* the refusal still stands; an unwritable log never turns one into an allow */ }
+    if (exitCode !== 0) console.error(`design-refpack: ${verdict} -- ${field(reason)}`);
+    process.exit(exitCode);
+  };
+  setTimeout(() => answer(EXIT.UNREADABLE, "UNREADABLE", `the preflight did not answer within ${BROWSE_DEADLINE_MS / 1000} s; permission unknown`), BROWSE_DEADLINE_MS);
+  try {
+    const known = new Set(["--check-browse", "--registry", "--robots-file", "--robots-status"]);
+    const o = {};
+    for (let i = 0; i < argv.length; i += 2) {
+      const k = argv[i];
+      if (!known.has(k)) answer(1, "USAGE", `unknown argument '${k}'`);
+      if (i + 1 >= argv.length || argv[i + 1] === "") answer(1, "USAGE", `${k} needs a value`);
+      if (k in o) answer(1, "USAGE", `${k} given twice`);
+      o[k] = argv[i + 1];
+    }
+    const seamsUsed = ["--registry", "--robots-file", "--robots-status"].filter((k) => o[k] != null);
+    if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") answer(1, "USAGE", `${seamsUsed.join(", ")}: test seams; set ARC_DESIGN_OFFLINE=1`);
+    if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) answer(1, "USAGE", "--robots-status must be an HTTP status");
+    const fake = o["--robots-file"] != null || o["--robots-status"] != null;
+    if (fake) via = "fixture";
+    url = parseHttpUrl(o["--check-browse"]);
+    if (!url) answer(1, "USAGE", "--check-browse needs an http(s) URL with a host");
+    if (url.protocol !== "https:") answer(2, "REFUSED", "a curator fetches over https only");
+    if (url.port || url.username || url.password) answer(2, "REFUSED", "a curator's URL carries no port and no userinfo; the registry binds hosts");
+    const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+    const eligible = sources.filter((s) => s && String(s.status) === "active" && String(s.access) === "fetch"
+      && asList(s.allowed_use).includes("reference-pack"));
+    const hostsOf = (s) => asList(s.hosts).map((h) => h.toLowerCase()).filter((h) => HOST.test(h));
+    const match = eligible.filter((s) => hostsOf(s).length > 0 && hostAllowed(url.hostname, hostsOf(s)));
+    if (match.length === 0) answer(2, "REFUSED", `${url.hostname} is not a host of an active registry row whose allowed_use carries reference-pack`);
+    const allHosts = match.flatMap(hostsOf);
+    const guard = (u) => portOrUser(u) ?? (hostAllowed(u.hostname, allHosts) ? null : "is not a registry host");
+    for (const ua of BROWSE_UAS) {
+      const transport = fake
+        ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+        : realTransport({ ua });
+      const d = await preflight({ url, ua, transport, guard });
+      if (d.verdict !== "ALLOW") answer(Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE, String(d.verdict), `as ${ua}: ${d.reason}`);
+    }
+    const probe = fake
+      ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null })
+      : realTransport({ ua: "Claude-User" });
+    let page;
+    try { page = await probe.get(url.href, { maxBytes: 64 * 1024, truncate: true }); } catch (e) {
+      answer(EXIT.UNREADABLE, "UNREADABLE", `the page could not be reached (${e && e.message ? e.message : "transport error"})`);
+    }
+    // A status that is missing or not an HTTP number is not "no redirect" (attack r2, B3).
+    const s = Number(page && page.status);
+    if (!Number.isInteger(s) || s < 100 || s > 599) answer(EXIT.UNREADABLE, "UNREADABLE", "the page probe returned no HTTP status");
+    if (s >= 300 && s < 400) {
+      let to = "an unreadable location";
+      try { to = field(shown(new URL(page.location, url.href))); } catch { /* named as unreadable */ }
+      answer(2, "REFUSED", `the page redirects (${s}) to ${to}; ask for that URL, and it is checked in its own right`);
+    }
+    answer(0, "ALLOW", `every token (${BROWSE_UAS.join(", ")}) allowed, and the page does not redirect`);
+  } catch (e) {
+    answer(EXIT.UNREADABLE, "UNREADABLE", `the check failed (${e && e.message ? e.message : "error"}); permission unknown`);
+  }
+}
+
+// ---------- Phase 05: MCP search sources and the per-run availability summary ----------
+//
+// A search adapter per MCP source. Only the SEARCH tool is named here, so a row whose key could
+// also reach a paid generator never calls it from this builder (owner 2026-10-05: 21st.dev is
+// search mode only). A source with no adapter is refused, never guessed at.
+const MCP_SEARCH = {
+  "21st-dev": { endpoint: "https://21st.dev/api/mcp", tool: "21st_magic_component_inspiration", header: "x-api-key", credential: "API_KEY_21ST" },
+};
+const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
+const MCP_DEADLINE_MS = 30000;
+const MCP_MAX_BYTES = 2 * 1024 * 1024;
+// Built from code points, not escapes: an editor turned a typed escape for U+2028 into the real
+// character once, which ends a regex literal mid-line.
+const SCRUB_CTRL = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(0x1f) + String.fromCharCode(0x7f, 0x85, 0x2028, 0x2029) + "]+", "g");
+
+function parseNamed(argv, known, from) {
+  const opts = {};
+  for (let i = from; i < argv.length; i += 2) {
+    const k = argv[i];
+    if (!known.has(k)) fail(1, `unknown argument '${k}'`);
+    if (i + 1 >= argv.length || argv[i + 1] === "") fail(1, `${k} needs a value`);
+    if (k in opts) fail(1, `${k} given twice`);
+    opts[k] = argv[i + 1];
+  }
+  return opts;
+}
+
+function seamGuard(o, seams) {
+  const used = seams.filter((k) => o[k] != null);
+  if (used.length && process.env.ARC_DESIGN_OFFLINE !== "1") fail(1, `${used.join(", ")} ${used.length > 1 ? "are test seams" : "is a test seam"}; set ARC_DESIGN_OFFLINE=1`);
+  return used.length > 0;
+}
+
+// One JSON-RPC reply out of a body that is JSON or an SSE stream of `data:` lines.
+function rpcReply(text, id) {
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
+  const whole = tryParse(text);
+  const all = whole !== undefined ? [whole].flat() : String(text).split(/\r?\n/).filter((l) => l.startsWith("data:")).map((l) => tryParse(l.slice(5).trim())).filter(Boolean);
+  // Exactly one message may carry the id; two is an answer this builder will not choose between (attack fc30f54 B11).
+  const hits = all.filter((m) => m && m.id === id);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+// Count what a search answered. The result shape is the upstream's, so every reading is tried
+// and the count is what was found -- never the count that was asked for.
+function searchItems(result) {
+  const out = [];
+  for (const c of (result && Array.isArray(result.content) ? result.content : [])) {
+    if (!c || c.type !== "text") continue;
+    let v;
+    try { v = JSON.parse(c.text); } catch { v = undefined; }
+    const list = Array.isArray(v) ? v : v && typeof v === "object" ? (v.results ?? v.components ?? v.items ?? null) : null;
+    if (Array.isArray(list)) out.push(...list.filter((x) => x && typeof x === "object"));
+    // Free text, null or a primitive is not a counted result: an error sentence must not read as one hit (attack fc30f54 L2).
+  }
+  return out;
+}
+
+function searchText(result) {
+  const out = [];
+  for (const c of (result && Array.isArray(result.content) ? result.content : [])) {
+    if (c && c.type === "text") out.push(String(c.text));
+  }
+  return out;
+}
+
+async function query(argv) {
+  const o = parseNamed(argv, new Set(["--brief", "--source", "--want", ...MCP_SEAMS]), 2);
+  const q = argv[0] === "--query" ? argv[1] : null;
+  for (const k of ["--brief", "--source", "--want"]) if (!o[k]) fail(1, `${k} is required`);
+  if (!q || !field(q)) fail(1, "--query needs a search text");
+  const brief = o["--brief"], id = o["--source"];
+  if (!validId(brief)) fail(1, `--brief must match ${ID} and not be a reserved device name, got '${field(brief)}'`);
+  if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
+  if (!/^([1-9]|1[0-9]|20)$/.test(o["--want"])) fail(1, "--want is a whole number 1-20");
+  const want = Number(o["--want"]);
+  const seamed = seamGuard(o, MCP_SEAMS);
+  const fake = o["--mcp-fixture"] != null;
+  // A seam (a scratch registry, a request recorder) never drives the real, keyed network (attack fc30f54 B5).
+  if (seamed && !fake) fail(1, "a test seam needs --mcp-fixture: a scratch registry or a recorder never sends a real request");
+  let fixture = null;
+  if (fake) {
+    try { fixture = JSON.parse(readFileSync(resolve(o["--mcp-fixture"]), "utf8")); } catch (e) { fail(1, "--mcp-fixture is unreadable: " + field(e.message)); }
+    if (!fixture || typeof fixture !== "object") fail(1, "--mcp-fixture must hold a JSON object keyed by method");
+  }
+  // The recorder is created by this run, never appended to an existing file (attack fc30f54 B6).
+  const recPath = o["--record-request"] != null ? resolve(o["--record-request"]) : null;
+  if (recPath) {
+    // Created exclusively before any request: no check-then-create gap, and no write through a link (attack ce85db5 B5).
+    try { writeFileSync(recPath, "", { flag: "wx" }); } catch (e) { fail(1, "--record-request must name a file that does not exist yet (" + field(e.code ?? e.message) + ")"); }
+  }
+
+  // 1. registry -- an off source makes no request at all.
+  const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+  const rows = sources.filter((s) => s && String(s.id) === id);
+  if (rows.length !== 1) fail(2, `refused: source '${id}' appears ${rows.length} times in the registry; exactly one row governs`);
+  const src = rows[0];
+  if (String(src.status) !== "active") fail(2, `refused: source '${id}' has status: ${field(src.status)}; only an active source is asked`);
+  if (!asList(src.allowed_use).includes("reference-pack")) fail(2, `refused: source '${id}' lacks reference-pack in allowed_use`);
+  if (String(src.access) !== "mcp") fail(2, `refused: --query is for an mcp source; '${id}' has access: ${field(src.access)}`);
+  const adapter = Object.hasOwn(MCP_SEARCH, id) ? MCP_SEARCH[id] : null;
+  if (!adapter) fail(2, `refused: source '${id}' has no search adapter here; its search tool is not guessed`);
+  const ep = new URL(adapter.endpoint);
+  if (ep.protocol !== "https:" || ep.port || ep.username) fail(2, "refused: a keyed MCP endpoint is https on its default port, with no userinfo");
+  const hosts = asList(src.hosts).map((h) => String(h).toLowerCase());
+  if (!hostAllowed(ep.hostname, hosts)) fail(2, `refused: ${ep.hostname} is not one of source '${id}' hosts [${hosts.join(", ")}]`);
+
+  const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", brief);
+  mkdirSync(stateDir, { recursive: true });
+  const via = fake ? "fixture" : "network";
+  // The key never lands in a reason, the log or the console, even when the server echoes it (attack fc30f54 B7).
+  let key = null;
+  // Only a key long enough to be a key: a one-letter key would scrub that letter out of every word.
+  // Control characters are DELETED before the key is matched, so a separator a server slips into
+  // the middle of an echoed key cannot split it past the scrub (attack ce85db5 B1). Then field().
+  const scrub = (t) => {
+    const tight = String(t).replace(SCRUB_CTRL, "");
+    return key && key.length >= 8 ? tight.split(key).join("<key>") : String(t);
+  };
+  const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(ep))}\t${verdict}\t${field(scrub(reason))}\n`);
+  const couldNot = (reason) => { record("COULD-NOT-SCAN", reason); fail(EXIT.UNREADABLE, `COULD-NOT-SCAN ${id} -- ${field(scrub(reason))}`); };
+
+  // 2. credential: the registry names arc's secret, the adapter names the upstream header. Only
+  // the value crosses; arc's name for it never leaves this process.
+  if (String(src.auth) === "env") {
+    const name = String(src.credential_ref ?? "");
+    // The adapter, not the registry, names which secret this endpoint may receive (attack ce85db5 B3).
+    if (name !== adapter.credential) fail(2, "refused: source " + id + " names credential_ref " + field(name) + "; this adapter sends only " + adapter.credential);
+    key = name && process.env[name] ? process.env[name] : null;
+    if (!key) couldNot(`credential ${field(name) || "(none named)"} is not set in the environment`);
+  }
+
+  // 3. the transport. The fake answers from a fixture and records each request with the key
+  // replaced by its hash, so a test can prove which header carried it without writing it down.
+  const post = async (body, extra) => {
+    const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", ...extra };
+    if (key) headers[adapter.header] = key;
+    appendFileSync(join(stateDir, "attempts.log"), `${new Date().toISOString()}\t${id}\t${via}\tPOST\t${field(shown(ep))}\t${field(body.method)}\n`);
+    if (fake) {
+      if (recPath) {
+        const shownHeaders = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, v === key ? `sha256:${createHash("sha256").update(v).digest("hex").slice(0, 16)}` : v]));
+        appendFileSync(recPath, JSON.stringify({ url: ep.href, headers: shownHeaders, body }) + "\n");
+      }
+      const r = fixture && fixture[body.method];
+      if (!r) return { status: 0, error: `no fixture answer for ${body.method}` };
+      return { status: r.status ?? 200, session: r.session ?? null, text: typeof r.body === "string" ? r.body : JSON.stringify(r.body) };
+    }
+    try {
+      const res = await fetch(ep.href, { method: "POST", headers, body: JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(MCP_DEADLINE_MS) });
+      // Read under a byte cap: a body that never ends is COULD-NOT-SCAN, never a hang (attack fc30f54 B2).
+      const chunks = [];
+      let size = 0;
+      if (res.body) {
+        for await (const chunk of res.body) {
+          size += chunk.length;
+          if (size > MCP_MAX_BYTES) return { status: 0, error: "the reply passed " + MCP_MAX_BYTES + " bytes" };
+          chunks.push(chunk);
+        }
+      }
+      return { status: res.status, session: res.headers.get("mcp-session-id"), text: Buffer.concat(chunks).toString("utf8") };
+    } catch (e) {
+      return { status: 0, error: e && e.name === "TimeoutError" ? "no answer within " + MCP_DEADLINE_MS / 1000 + " s" : e && e.message ? e.message : "network error" };
+    }
+  };
+  const step = async (body, extra) => {
+    const r = await post(body, extra);
+    if (r.status === 0) couldNot(`${body.method}: ${r.error}`);
+    if (r.status === 401 || r.status === 403) couldNot(`${body.method}: the key was refused (HTTP ${r.status})`);
+    if (r.status < 200 || r.status > 299) couldNot(`${body.method}: HTTP ${r.status}`);
+    return r;
+  };
+
+  const init = await step({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "arc-design-refpack", version: "1" } } }, {});
+  if (init.session != null && !/^[A-Za-z0-9._:-]{1,128}$/.test(init.session)) couldNot("initialize: the server sent a session id outside the header grammar");
+  const session = init.session ? { "mcp-session-id": init.session } : {};
+  await post({ jsonrpc: "2.0", method: "notifications/initialized" }, session);
+  const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: { message: q, searchQuery: q } } }, session);
+  const reply = rpcReply(call.text, 2);
+  if (!reply) couldNot("tools/call: no reply carried this request id");
+  if (!reply.error && (reply.method !== undefined || reply.result === undefined || reply.result === null)) couldNot("tools/call: the reply carries no result");
+  if (reply.result && reply.result.isError === true) couldNot("tools/call: the tool reported an error: " + searchText(reply.result).join(" ").slice(0, 200));
+  if (reply.error) couldNot(`tools/call: ${field(reply.error.message ?? "error")}`);
+  const say = (t) => console.log(field(scrub(t)));
+  const items = searchItems(reply.result);
+  const n = Math.min(items.length, want);
+  const short = items.length < want ? `; SHORT -- asked for ${want}, got ${items.length}` : "";
+  record("ANSWERED", `results ${n} of ${want}${short}`);
+  for (const it of items.slice(0, want)) {
+    const name = field(it.name ?? it.title ?? "(unnamed)").slice(0, 120);
+    // No query or fragment: a signed URL's token must not reach output an agent copies into a file (attack fc30f54 B8).
+    const pics = JSON.stringify(it).match(/https:\/\/[^"\s?#]+\.(png|jpe?g|webp|avif|gif)/gi) ?? [];
+    say(`  ${name}${pics.length ? ` -- preview ${pics[0]}` : ""}`);
+  }
+  if (items.length === 0) for (const t of searchText(reply.result)) say("  (unstructured answer, not counted) " + String(t).slice(0, 200));
+  say(`design-refpack query: ${id} answered ${n} of ${want}${short}`);
+}
+
+// One availability line per active pack source for a run, read from what the run RECORDED --
+// never from the registry's availability field. An active source the run never asked is named,
+// so a pack built from one source can never read like a pack built from two.
+async function summary(argv) {
+  const o = parseNamed(argv, new Set(["--brief", "--since", "--registry"]), 1);
+  if (!o["--brief"] || !o["--since"]) fail(1, "--summary needs --brief and --since <ISO time the run started>");
+  if (!validId(o["--brief"])) fail(1, `--brief must match ${ID}`);
+  const since = Date.parse(o["--since"]);
+  // A zone is required: a bare time is read as local, the logs are UTC, and on a +05:30 box that
+  // drops five and a half hours of records in silence (attack ce85db5 B7).
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)$/.test(o["--since"]) || Number.isNaN(since)) fail(1, "--since takes an ISO time with a zone, e.g. 2026-10-05T09:00:00Z");
+  seamGuard(o, ["--registry"]);
+  const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+  const active = sources.filter((s) => s && String(s.status) === "active" && asList(s.allowed_use).includes("reference-pack")).map((s) => String(s.id));
+  if (active.length === 0) fail(1, "the registry has no active pack source; there is nothing to report on (this is not a pass)");
+  const readLines = (p) => (existsSync(p) ? readFileSync(p, "utf8").split(/\r?\n/).filter(Boolean) : []);
+  const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", o["--brief"]);
+  // A line that does not parse is counted and named, never dropped: a torn record must not turn
+  // an answer into NOT-ASKED (attack fc30f54 B10).
+  const rawAvail = readLines(join(stateDir, "availability.log")).map((l) => l.split("\t"));
+  const malformed = rawAvail.filter((f) => f.length < 6 || Number.isNaN(Date.parse(f[0]))).length;
+  const avail = rawAvail.filter((f) => f.length >= 6 && Date.parse(f[0]) >= since);
+  const added = readLines(join(ROOT, "docs", "design", "refpacks", o["--brief"], "sources.md"))
+    .filter((l) => /^\| https?:/.test(l)).map((l) => l.split(" | ")).filter((c) => c.length >= 4 && Date.parse(c[1]) >= since).map((c) => c[3].replace(/ \(fixture\)$/, ""));
+  let answered = 0;
+  let fixtureOnly = 0;
+  for (const id of active) {
+    const mine = avail.filter((f) => f[1] === id);
+    const count = (v) => mine.filter((f) => f[4] === v).length;
+    const rows = added.filter((s) => s === id).length;
+    const mcp = mine.filter((f) => f[4] === "ANSWERED").map((f) => f[5]);
+    const notes = [];
+    if (count("DISALLOW")) notes.push(`REFUSED (robots) ${count("DISALLOW")}`);
+    const cns = mine.filter((f) => f[4] === "UNREADABLE" || f[4] === "COULD-NOT-SCAN");
+    if (cns.length) notes.push(`COULD-NOT-SCAN ${cns.length} (${field(cns[cns.length - 1][5])})`);
+    let head;
+    if (mine.length === 0) head = "NOT-ASKED -- active, and this run never queried it";
+    else if (mcp.length) head = `ANSWERED ${field(mcp[mcp.length - 1])}`;
+    else head = `ANSWERED ${rows}/${count("ALLOW") + count("DISALLOW") + cns.length} screen(s) added/asked`;
+    const live = mine.some((f) => f[2] !== "fixture");
+    const said = (mcp.length && !/^results 0 /.test(mcp[mcp.length - 1])) || rows > 0;
+    // A fixture-only source answered a test, not this run: it is never counted live (attack ce85db5 B8).
+    const ok = said && live;
+    if (said && !live) fixtureOnly++;
+    if (ok) answered++;
+    // A fixture record is a test, not an observation of the source: it is labelled, never read as live (attack fc30f54 B9).
+    const tag = mine.length && mine.every((f) => f[2] === "fixture") ? " [fixture]" : mine.some((f) => f[2] === "fixture") ? " [fixture+network]" : "";
+    console.log(`availability ${id}${tag}: ${head}${notes.length ? `; ${notes.join("; ")}` : ""}`);
+  }
+  if (malformed) console.log(`design-refpack summary: ${malformed} malformed availability line(s) were not read`);
+  console.log(`design-refpack summary: ${answered} of ${active.length} active pack source(s) answered live since ${field(o["--since"])}${fixtureOnly ? ` (${fixtureOnly} more answered from a fixture only)` : ""}`);
+}
+
 async function main(argv) {
+  if (argv[0] === "--check-browse") return checkBrowse(argv);
+  if (argv[0] === "--query") return query(argv);
+  if (argv[0] === "--summary") return summary(argv);
   const o = parseArgs(argv);
   for (const k of ["--brief", "--source", "--url"]) if (!o[k]) fail(1, `${k} is required`);
   const brief = o["--brief"];
+  // --stage 1: fetch for viewing, write no row (the curator looks before it writes a principle).
+  if (o["--stage"] != null && o["--stage"] !== "1") fail(1, "--stage takes 1");
+  const stage = o["--stage"] === "1";
+  if (stage && (o["--principle"] != null || o["--avoid"] != null)) fail(1, "a call is a --stage OR an add: a staged screen carries no principle yet");
+  // --staged <16 hex>: the add is bound to the bytes the curator looked at. A host that serves
+  // one image to the stage and another to the add is refused, not recorded under a principle
+  // written about the first (staging attack, B8).
+  if (o["--staged"] != null && (stage || !/^[0-9a-f]{16}$/.test(o["--staged"]))) fail(1, "--staged takes the 16-hex sha prefix a --stage printed, on an add only");
   const id = o["--source"];
   if (!validId(brief)) fail(1, `--brief must match ${ID} and not be a reserved device name, got '${field(brief)}'`);
   if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
   const url = parseHttpUrl(o["--url"]);
   if (!url) fail(1, `--url must be an http(s) URL with a host, got '${field(o["--url"])}'`);
+  // The registry binds hosts, not whatever listens on another port of one (ADR-1420 r2 B4, the
+  // pack-path twin of --check-browse's rule).
+  if (url.port || url.username || url.password) fail(2, "refused: a pack URL carries no port and no userinfo; the registry binds hosts");
   if (o["--robots-status"] != null && !/^[1-5][0-9][0-9]$/.test(o["--robots-status"])) fail(1, "--robots-status must be an HTTP status");
   const seamsUsed = SEAMS.filter((k) => o[k] != null);
   if (seamsUsed.length && process.env.ARC_DESIGN_OFFLINE !== "1") {
@@ -166,13 +531,13 @@ async function main(argv) {
   if (String(src.access) !== "fetch") fail(2, `refused: source '${id}' has access: ${field(src.access)}; this builder only fetches`);
 
   // 2. host binding. A scratch registry may omit hosts; the real one may not.
-  const fake = ["--robots-file", "--robots-status", "--fixture"].some((k) => o[k] != null);
+  const fake = ["--robots-file", "--robots-status", "--fixture", "--redirect"].some((k) => o[k] != null);
   const hosts = src.hosts === undefined ? null : asList(src.hosts).map((h) => h.toLowerCase());
   if (hosts !== null && (hosts.length === 0 || !hosts.every((h) => HOST.test(h)))) {
     fail(2, `refused: source '${id}' has a hosts list that is empty or not bare host names`);
   }
   if (hosts === null && !fake) fail(2, `refused: source '${id}' names no hosts, so a URL cannot be bound to it; the owner adds hosts to its registry row`);
-  const outsideHosts = (u) => (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
+  const outsideHosts = (u) => portOrUser(u) ?? (hosts !== null && !hostAllowed(u.hostname, hosts) ? `is not one of source '${id}' hosts [${hosts.join(", ")}]` : null);
   const bind = (u) => {
     const why = outsideHosts(u);
     if (why) fail(2, `refused: ${u.hostname} ${why}`);
@@ -181,7 +546,7 @@ async function main(argv) {
 
   // Every attempt is written BEFORE it is made, so a crash mid-request still counts.
   const inner = fake
-    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null, fixture: o["--fixture"] ?? null })
+    ? fakeTransport({ robotsFile: o["--robots-file"] ?? null, robotsStatus: o["--robots-status"] ?? null, fixture: o["--fixture"] ?? null, redirect: o["--redirect"] ?? null })
     : realTransport({ ua: DEFAULT_UA });
   const via = fake ? "fixture" : "network";
   mkdirSync(stateDir, { recursive: true });
@@ -200,16 +565,17 @@ async function main(argv) {
   const check = async (u) => {
     const d = await preflight({ url: u, ua: DEFAULT_UA, transport, guard: outsideHosts });
     record(u, d.verdict, d.reason);
-    if (d.verdict !== "ALLOW") fail(EXIT[d.verdict], `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
+    if (d.verdict !== "ALLOW") fail(Object.hasOwn(EXIT, d.verdict) ? EXIT[d.verdict] : EXIT.UNREADABLE, `${d.verdict} ${field(shown(u))} -- ${field(d.reason)}`);
   };
   await check(url);
 
   // 4. a row without a principle is not evidence -- judged on the text that would be written,
-  // so a principle of control characters alone is empty (attack r2 B7).
+  // so a principle of control characters alone is empty (attack r2 B7). A staging call writes no
+  // row, so it carries none: its only product is an image the curator can look at.
   const principle = field(o["--principle"] || "");
   const avoid = field(o["--avoid"] || "");
-  if (!principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
-  if (!avoid) fail(1, "--avoid is required: every row names what not to copy");
+  if (!stage && !principle) fail(1, "--principle is required: a row with no adaptable principle is not evidence");
+  if (!stage && !avoid) fail(1, "--avoid is required: every row names what not to copy");
 
   // 5. fetch, following redirects by hand; every hop is bound and preflighted again.
   let current = url;
@@ -243,6 +609,25 @@ async function main(argv) {
     fail(5, `the screen was not cached: ${field(bad)}`);
   }
   const sha = createHash("sha256").update(res.body).digest("hex");
+  if (stage) {
+    // Staged for viewing only: a separate directory the curator may Read, no provenance row, no
+    // commit mark. The add that follows fetches again and passes every check again.
+    const stagedDir = join(stateDir, "staged");
+    const staged = join(stagedDir, `${id}-${sha.slice(0, 16)}.${ext}`);
+    if (!resolve(staged).startsWith(resolve(stagedDir) + sep)) fail(1, `refused: the staged path left the staging directory: ${staged}`);
+    mkdirSync(stagedDir, { recursive: true });
+    // Whole or not at all: a private temp name, then a rename, so a reader never opens a
+    // half-written file under a name that promises its sha (staging attack, B9).
+    const tmp = `${staged}.${process.pid}.${Date.now()}.tmp`;
+    writeFileSync(tmp, res.body);
+    try { renameSync(tmp, staged); } catch (e) { try { unlinkSync(tmp); } catch { /* gone */ } fail(5, `the screen could not be staged: ${field(e.message)}`); }
+    console.log(`staged: ${relative(ROOT, staged).split("\\").join("/")} (sha256 ${sha}) -- Read it, then add it with --principle, --avoid and --staged ${sha.slice(0, 16)}`);
+    process.exit(0);
+  }
+  if (o["--staged"] != null && sha.slice(0, 16) !== o["--staged"]) {
+    record(current, "FETCH-FAILED", "the screen changed since it was staged");
+    fail(5, `refused: the screen fetched now (sha ${sha.slice(0, 16)}) is not the one staged (${o["--staged"]}); stage it again and look again`);
+  }
   const image = join(stateDir, `${id}-${sha.slice(0, 16)}.${ext}`);
   if (!resolve(image).startsWith(resolve(stateDir) + sep)) fail(1, `refused: the image path left the pack directory: ${image}`);
   // The path is content-addressed, so the same screen twice lands on the same file. Only an
@@ -278,11 +663,14 @@ async function main(argv) {
   }
   if (isTree) {
     let marked = false;
-    for (let attempt = 0; attempt < 2 && !marked; attempt++) {
+    // Three attempts with a pause: another git holding .git/index.lock fails an add at once, and two adds
+    // back to back both lost to it (phase-02 attack G3 B3).
+    for (let attempt = 0; attempt < 3 && !marked; attempt++) {
+      if (attempt) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250 * attempt);
       const r = spawnSync("git", ["-C", ROOT, "add", "-N", "--", rel], { encoding: "utf8" });
       marked = !r.error && r.status === 0;
     }
-    if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed twice); add it by hand before the pack is used`);
+    if (!marked) fail(6, `${rel} was written but could not be marked for commit (git add -N failed three times); add it by hand before the pack is used`);
   }
 
   console.log(`added ${field(shown(current))} from ${id} -> ${relative(ROOT, image).split("\\").join("/")} (sha256 ${sha})`);

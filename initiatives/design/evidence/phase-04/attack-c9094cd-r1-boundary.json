@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-explore.sh:62-68",
+      "breaking_input": "After `pair ex1 --from a --to d ...` has run and variant-d exists, the composer (or any later step) runs `rm docs/design/explore/ex1/pairs.json` or renames it. Then `compose-done`, `surfaces` and the coverage gate run with VARIANTS=\"a b c\". Variant-d, the high-judgment arm, ships with no surface markers and no render coverage, and the script prints \"3 of 3\".",
+      "why": "The set of gated variants is switched on by `[ -f pairs.json ]`, a file the guarded party can delete. The patch re-creates the exact hole it set out to close, just one step further out. Nothing cross-checks the variant-* directories on disk or the seal against the pair list.",
+      "fix": "Key the guard on the committed record: the seal, or the variant-* directories that exist. If pairs.json is missing while the seal or any variant-[d-z] directory exists, refuse. Alternatively, record the pairs in the sealed record and read them from there.",
+      "twin_of": "A guard switched on by the presence of a file the guarded party can delete -> key the guard on the committed record (the seal), and refuse when its companion is missing"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:64",
+      "breaking_input": "A pairs.json written by a different serializer, such as `\"to\" : \"d\"` (space before the colon), `\"to\":\\t\"d\"` (tab), or a pretty-printer that puts the value on the next line. The grep pattern `\"to\": *\"[a-z]\"` allows only spaces after the colon and nothing before it, so it matches nothing. VARIANTS stays \"a b c\" and no error is raised.",
+      "why": "This is a textual grep of a JSON file, not a parse. Any formatting variation silently becomes \"no pairs\". An absent match is read as \"not applicable\" instead of a failure, and a pair that exists is never gated.",
+      "fix": "Parse with node, which the lane already uses (design-expa1.mjs), and fail when the file is non-empty but yields zero `to` entries. Cross-check that the count of parsed entries equals the count of `\"to\"` occurrences.",
+      "twin_of": "A failing probe command read as \"not applicable\" -> only a positive \"absent\" skips; an error is a failure."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:64",
+      "breaking_input": "pairs.json that is unreadable (permission denied), truncated, or contains a NUL byte. The grep exit status is discarded inside `$(...)`, and GNU grep prints \"Binary file matches\" for a binary file instead of a match. The loop gets an empty word list or junk, and VARIANTS is left as \"a b c\" with no warning.",
+      "why": "The status of the grep and cut pipeline is never read, so a failed read looks the same as a pairs.json with zero pairs. The result is fail-open.",
+      "fix": "Capture the output into a variable inside a conditional and check the status. Refuse when the file exists but cannot be read or parsed. Use `grep -a`, or parse with node and exit non-zero on a throw.",
+      "twin_of": "A subprocess result was ignored -> read status and error of every spawn whose failure matters."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/design-expa1.bats:258-275",
+      "breaking_input": "Revert the fix so that only the `surfaces` loop uses a hard-coded list, or break the compose-done and render-coverage paths. The new test would still pass if `surfaces` alone reads the pair list.",
+      "why": "The bug being fixed was in compose-done (\"printed 3 of 3\"). The test exercises only `surfaces`, and it asserts \"across 2 variant(s)\" without ever running compose-done, self-review or coverage with a paired d. It has no control for a deleted or reformatted pairs.json (B1, B2), so the regression is not pinned where it occurred.",
+      "fix": "Add tests that run `compose-done` on a paired d and assert that d is named and counted as \"N of 4\". Add tests where pairs.json is deleted after the pair is made, and where it is reformatted. Both must refuse.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:64-66",
+      "breaking_input": "pairs.json that holds `\"to\": \"d\"` twice (pairs a→d and b→d), or a `\"to\": \"z\"` entry nested in an unrelated object. Duplicates are silently deduplicated. A key named \"to\" outside a pair row is added to VARIANTS as a gated variant.",
+      "why": "The `to` values are not validated against the pair command's grammar, and the pair rows are not counted. A duplicate target, or a stray key, changes the gated set without any refusal, and the dedup hides it.",
+      "fix": "Parse the pair rows structurally. Require each `to` to be unique, distinct from every `from`, and to match the same id grammar the `pair` command enforces. Refuse on any violation.",
+      "twin_of": "`find()` took the first of duplicate rows -> count matches; exactly one or refuse."
+    }
+  ]
+}

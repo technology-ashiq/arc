@@ -4,6 +4,7 @@
 // lives inside a .tsx is a branch nobody tests. Routing and the keyboard model are exactly
 // the kind of thing that breaks quietly and is never noticed in a screenshot, so they live
 // here where a node test can hold them.
+import { HQ_PART } from "./mode.mjs";
 
 // There is no HOME constant here any more. The room the shell opens on is the served registry's
 // to say (registry.mjs homeRoom, face v2 Phase 02): the shell names no room.
@@ -15,6 +16,10 @@
  */
 export const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+
+/** The workroom pages that are not rooms: HQ's Settings (ADR-1350 Amendment 2). Not in the rail, not served. */
+export const VIEWS = Object.freeze(/** @type {const} */ (["settings"]));
+/** @typedef {typeof VIEWS[number]} View */
 
 /**
  * The address bar is the FRAGMENT, not the path.
@@ -28,15 +33,17 @@ export const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
  * Shape: `#/<room>` with the token, when present, riding alongside as `token=...`.
  *
  * @param {string} hash
- * @returns {{ room: string | null, token: string | null, asOf: string | null, at: string | null }}
+ * @returns {{ room: string | null, token: string | null, asOf: string | null, at: string | null, view: View | null }}
  */
 export function parseHash(hash) {
-  if (typeof hash !== "string" || !hash) return { room: null, token: null, asOf: null, at: null };
+  if (typeof hash !== "string" || !hash) return { room: null, token: null, asOf: null, at: null, view: null };
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   let room = null;
   let token = null;
   let asOf = null;
   let at = null;
+  /** @type {View | null} */
+  let view = null;
   for (const part of raw.split("&")) {
     if (!part) continue;
     if (part.startsWith("/")) {
@@ -55,27 +62,33 @@ export function parseHash(hash) {
     // Where the Reference room opens: a type, or a type and an entity (Phase 07, REQ-12). Only the grammar a wiki page
     // path uses -- anything else is dropped, never carried into a pick.
     if (k === "at" && REFERENCE_AT.test(v)) at = v;
+    // A workroom page that is not a room (ADR-1350 Amendment 2): only a known name, never an arbitrary string.
+    if (k === "view" && VIEWS.includes(/** @type {View} */ (v))) view = /** @type {View} */ (v);
     // A bare `#token=...` with no room is what arc-dash prints. That is not an error and
     // must not be treated as "no route" -- it is the home route with a token attached.
   }
-  return { room, token, asOf, at };
+  return { room, token, asOf, at, view };
 }
 
 /**
  * Build the fragment for a room, carrying the token AND the scrub through so navigating never
  * drops either. A scrubbed view that reverted to live the moment you changed room would make
  * the time machine useless for the thing it is for: reading one past day across the company.
- * @param {string} room
+ * @param {string | null} room  none (or blank) writes the workroom's home
  * @param {string | null} [token]
  * @param {string | null} [asOf]
  * @param {string | null} [at]  where the Reference room opens (REFERENCE_AT), dropped if it is not one
+ * @param {View | null} [view]  a workroom page drawn in place of the room (VIEWS), dropped if it is not one
  * @returns {string}
  */
-export function buildHash(room, token = null, asOf = null, at = null) {
-  const parts = [`/${encodeURIComponent(room)}`];
+export function buildHash(room, token = null, asOf = null, at = null, view = null) {
+  // No room is the workroom on its home, written as the workroom's own part: `#/` would read back as a room named ""
+  // (attack 12a0307 B2).
+  const parts = [typeof room === "string" && room.trim() ? `/${encodeURIComponent(room)}` : HQ_PART];
   if (token) parts.push(`token=${encodeURIComponent(token)}`);
   if (typeof asOf === "string" && ISO_DAY.test(asOf)) parts.push(`asof=${asOf}`);
   if (typeof at === "string" && REFERENCE_AT.test(at)) parts.push(`at=${encodeURIComponent(at)}`);
+  if (view !== null && VIEWS.includes(view)) parts.push(`view=${view}`);
   return `#${parts.join("&")}`;
 }
 
@@ -326,8 +339,8 @@ export function rankMatches(items, query, limit = 12) {
 }
 
 /**
- * The palette's one entry that is not a place: HQ's Settings menu (Phase 11, REQ-15). Kept out of paletteItems, whose
- * count is the contract's word count, and appended by the shell, which opens the menu instead of a room for it.
+ * The palette's one entry that is not a place: HQ's Settings page (Phase 11, REQ-15, ADR-1350 Amendment 2). Kept out of paletteItems, whose
+ * count is the contract's word count, and appended by the shell, which opens the page instead of a room for it.
  */
 /** @type {Readonly<{ id: string, label: string, hint: string, kind: "concept", room: string }>} */
 export const SETTINGS_ITEM = Object.freeze({ id: "action:settings", label: "Settings", hint: "models (add, test) and voice", kind: "concept", room: "" });

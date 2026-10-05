@@ -36,6 +36,13 @@ that is comparable to every future run.
       [ADR-1411](../../../docs/adr/1411-dsv-l-calibration-is-controlled-or-it-is-theatre.md) are
       on the record **before** the owner scores
 - [ ] Self-review catch rate computed and recorded (assumption-ledger row 6 input)
+- [ ] **The plain-prompt control is measured fresh** on the same brief, the same item count and the
+      same panel, before the owner's score is compared to it. The `~40/100` figure is carried prose
+      with no measurement behind it (PLAN kill criteria). *(`/arc-change` 2026-09-27)*
+- [ ] **The single-gallery-bias trigger is checked** (PLAN assumptions ledger, successor row of
+      2026-09-27): every BELOW-BAR citation and every juror reason is read for whether the pack's
+      one gallery (nicelydone) became the only style that counts. FIRED → a second source is
+      mandatory before Phase 05 opens. *(`/arc-change` 2026-09-27)*
 - [ ] The composer's refpack read allowlist, granted in Phase 01 against an **empty** directory,
       is re-verified now that Phase 02 has populated it: the composer reads ≥1 real pack screen,
       and the sibling-variant negative control is re-run against real files
@@ -48,8 +55,28 @@ that is comparable to every future run.
 
 ## Verification plan
 
-Coarse — refined via `/arc-change` when the phase starts. The N-item amendment is proved by
-running a jury at N=4, N=5 and N=6 with no prompt override in any of them. BELOW-BAR anchoring is
+Refined 2026-09-27 via `/arc-change`, as five slices, each red-first on CI:
+
+- **S1 — the N-item jury and its deviation logger.** `design-jury.md` FOUR → N at every spelling;
+  the high-judgment juror seat (ADR-1414, a reviewed diff citing ADR-0069); `design-explore.sh
+  jury <id> --n N --seed S` assembles the blinded items (variants + ≥1 pack reference) under a
+  seeded shuffle and writes a sealed key; `jury-check` validates every ranking file (each item
+  ranked exactly once, N matches, reasons present) and logs each deviation. Proved by N=4, 5, 6
+  fixtures with no prompt override, and by a planted skip-one-item ranking the logger CATCHES.
+- **S2 — the critic gets the pack.** The critique carries the brief's pack; `design-critique.sh
+  finish` refuses a BELOW-BAR finding that cites no pack screen (by sha prefix or row); the critic
+  judges every rendered viewport, and a critique given one of two declared viewports cannot PASS.
+- **S3 — the composer reads the real pack.** The Phase 01 read allowlist is re-verified against
+  real pack files, with the sibling-variant negative control re-run on real files.
+- **S4 — the owner ritual as a mechanism.** Rubric and anchors fixed in a file before the run;
+  ADR-1411's three sealed predictions and the owner's 0–100 score each receipted with a timestamp,
+  and `unblind` refuses to run until the score exists (the ordering is the assertion); the
+  self-review catch rate and the fresh plain-prompt control computed by script.
+- **S5 — the live run.** One full explore on a lexos-class brief through S1–S4, the plain-prompt
+  control on the same brief and N, the owner's blind score in person, the single-gallery-bias
+  read, and a two-surface attack on the PR.
+
+The N-item amendment is also proved by running a jury at N=4, N=5 and N=6 with no prompt override in any of them. BELOW-BAR anchoring is
 proved by a mutant run in which the pack is swapped for a deliberately world-class set and the
 same variant's BELOW-BAR findings change. The owner's score is proved by its receipt existing
 with a timestamp **before** the unblinding record — a score recorded after unblinding is not a

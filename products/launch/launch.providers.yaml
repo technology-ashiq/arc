@@ -103,10 +103,12 @@ providers:
     payment_model: any
     env_keys:
       - VERCEL_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - api.vercel.com
+      - api.github.com
     credentials:
-      scope: "project create + deploy on one team"
+      scope: "project create + deploy on one team; commits vercel.json to the venture repo (ADR-1727)"
     adapter: providers/hosting/vercel.mjs
     digest: null
     approved_by: ashiq

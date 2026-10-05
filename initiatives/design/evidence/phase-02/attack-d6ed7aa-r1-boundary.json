@@ -1,0 +1,30 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "design-refpack.mjs:246,325-330",
+      "breaking_input": "design-refpack.mjs --brief b1 --source approved-host --url https://approved.example/screen.png --principle p --avoid a, where approved.example is a registered, robots-ALLOW host that responds to /screen.png with a 302 Location: https://approved.example:8443/internal.png (or Location: https://user:pass@approved.example/x)",
+      "why": "The initial --url is checked for `url.port || url.username || url.password` at line 246 before any fetch. But the redirect loop only calls `bind(next)` (line 329, hostname-only via hostAllowed) and `check(next)` (robots preflight) on each hop -- neither re-applies the port/userinfo check. hostAllowed() strips port entirely (it only reads url.hostname), so a redirect to the SAME hostname on a different port, or carrying userinfo, sails through and is fetched. This defeats the documented invariant 'the registry binds hosts, not whatever listens on another port of one' for every hop after the first, letting an open-redirect or compromised approved host steer the fetch at an arbitrary port (SSRF-adjacent) on the same domain.",
+      "fix": "Re-run the same `if (next.port || next.username || next.password) fail(...)` check inside the redirect loop for every `next`, not only for the initial url.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "design-refpack.mjs:394,402",
+      "breaking_input": "An external PR (repo classification is external-ok) adds a file named git.exe (or git.cmd/git.bat) at the repo root. A maintainer or CI job invokes `node .claude/scripts/design/design-refpack.mjs ...` with the shell's current directory set to the repo root (the natural invocation location), then lets the tool add the screen.",
+      "why": "Both spawnSync calls use the bare command name \"git\" with no shell and no cwd option, so Node/libuv resolves the executable using Windows' CreateProcess search order, which checks the current working directory BEFORE the PATH environment variable. If the CWD is the repo root and a file named git.exe/git.cmd/git.bat exists there, that planted binary runs instead of the system git for both the `rev-parse --is-inside-work-tree` probe and the `add -N` call -- a classic PATH-hijack that a hostile PR can plant, especially damaging because this exact codebase already tracks several Windows-only PATH/CWD hazards (lanes.md reserved-name list, MSYS @file expansion) but none of them cover this.",
+      "fix": "Resolve git to an absolute, trusted path once at startup (e.g. via a controlled `where`/`which` lookup restricted to known system directories, or read it from an env var set by the harness) and spawn that absolute path instead of the bare string \"git\"; do not rely on PATH resolution from a CWD that can contain repo-tracked files."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "design-refpack.mjs:399-406",
+      "breaking_input": "Run two design-refpack.mjs invocations for the same --brief back-to-back (e.g. a curator script fetching two screens for one brief within the same second), both reaching the git-add-N step within milliseconds of each other.",
+      "why": "The retry loop calls `spawnSync(\"git\", [\"-C\", ROOT, \"add\", \"-N\", \"--\", rel])` twice with no delay between attempts. git's index.lock acquisition fails immediately (no internal wait) when another git process holds `.git/index.lock`; two concurrent invocations can both fail both attempts back-to-back, causing a legitimately-written provenance row to end with exit 6 (\"written but not marked for commit\") even though nothing is actually wrong with the content -- a false failure purely from lock contention that a linear immediate retry does nothing to fix.",
+      "fix": "Add a short backoff (e.g. 50-150ms) between the two attempts, or detect the specific \"index.lock\" failure and retry a few more times with jittered delay before giving up."
+    }
+  ]
+}
