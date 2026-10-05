@@ -1287,13 +1287,19 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const shown = () => val(P, "(function () { var r = document.querySelector('[data-key-row=SMOKE_TEST_KEY] [data-key-shown]'); return r ? r.textContent : ''; })()");
       const typeInto = async (sel, text) => (await val(P, `(function () { var i = document.querySelector(${JSON.stringify(sel)}); if (!i) return false; i.focus(); return document.activeElement === i; })()`)) === true && (await P.send("Input.insertText", { text }), true);
       const keysTab = menu && (await click(P, '[data-settings-tab="keys"]')) && (await until(async () => (await count(P, '[data-settings-section="keys"] [data-key-add]')) === 1, capMs));
-      const added = keysTab && (await typeInto("[data-key-name]", "SMOKE_TEST_KEY")) && (await typeInto("[data-key-value]", KEYV)) && (await click(P, "[data-key-add]"))
-        && (await until(async () => String(await shown()) === `…${KEYV.slice(-4)}`, capMs));
+      // Each sub-step is kept, so a failure names where it stopped and what the page said (CI 37346497004: added=false).
+      const typedName = keysTab && (await typeInto("[data-key-name]", "SMOKE_TEST_KEY"));
+      const typedValue = typedName && (await typeInto("[data-key-value]", KEYV));
+      const form = String(await val(P, "(function () { var n = document.querySelector('[data-key-name]'), v = document.querySelector('[data-key-value]'), b = document.querySelector('[data-key-add]'); return (n ? n.value : '-') + '|' + (v ? v.value.length : '-') + '|' + (b ? (b.disabled ? 'disabled' : 'enabled') : '-'); })()"));
+      const pressed = typedValue && (await click(P, "[data-key-add]"));
+      const added = pressed && (await until(async () => String(await shown()) === `…${KEYV.slice(-4)}`, capMs));
+      const alertText = () => val(P, "(function () { var a = document.querySelector('[data-settings-section=keys] [role=alert]'); return a ? a.textContent : ''; })()");
+      const addWhy = added ? "" : ` [add stopped: typedName=${Boolean(typedName)} typedValue=${Boolean(typedValue)} form=${form} pressed=${Boolean(pressed)} alert=${JSON.stringify(String(await alertText()).slice(0, 160))}]`;
       const replaced = added && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-replace]")) && (await typeInto("[data-key-replace-value]", KEYV2)) && (await click(P, "[data-key-replace-save]"))
         && (await until(async () => String(await shown()) === `…${KEYV2.slice(-4)}`, capMs));
       const noValue = !String(await val(P, "document.body.innerText")).includes("0123456789abcdef") && !String(await val(P, "document.body.innerText")).includes("fedcba9876543210");
       const removed = replaced && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-remove]")) && (await until(async () => (await count(P, "[data-key-row=SMOKE_TEST_KEY]")) === 0, capMs));
-      record("hq-settings-keys", Boolean(keysTab && added && replaced && noValue && removed), `keys tab=${Boolean(keysTab)} added=${Boolean(added)} replaced=${Boolean(replaced)} value-hidden=${noValue} removed=${Boolean(removed)} (row read ${JSON.stringify(String(await shown()))})`);
+      record("hq-settings-keys", Boolean(keysTab && added && replaced && noValue && removed), `keys tab=${Boolean(keysTab)} added=${Boolean(added)} replaced=${Boolean(replaced)} value-hidden=${noValue} removed=${Boolean(removed)} (row read ${JSON.stringify(String(await shown()))})${addWhy}`);
       // A page, not a popup (Amendment 2): its own address, drawn in the main area in place of the room, no modal over it,
       // and closing it brings the room back with the address clean.
       const asPage = menu && /(^|&)view=settings(&|$)/.test(String(await hash(P)).replace(/^#/, ""))
