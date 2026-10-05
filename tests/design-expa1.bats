@@ -255,6 +255,24 @@ EOF
   [[ "$output" == *"no sealed prediction"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 12 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 12 -- a @test was silently dropped"; false; }
+@test "gates: a paired TO variant is gated like a-c -- an unmarked variant-d page fails surfaces by name" {
+  _fixture
+  run bash "$(_explore)" seal ex1
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run bash "$(_explore)" pair ex1 --from a --to d --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '<!doctype html><title>c</title><main><section data-arc-surface="product"><h1>Case</h1></section></main>\n' > docs/design/explore/ex1/variant-a/index.html
+  printf '<!doctype html><title>c</title><main><section><h1>Case</h1></section></main>\n' > docs/design/explore/ex1/variant-d/index.html
+  run bash "$(_explore)" surfaces ex1
+  [ "$status" -eq 1 ] || { echo "an unmarked paired page passed: $output"; false; }
+  [[ "$output" == *"variant-d/index.html"* ]] || { echo "$output"; false; }
+  # The control: once d is marked, both pages are judged and counted.
+  cp docs/design/explore/ex1/variant-a/index.html docs/design/explore/ex1/variant-d/index.html
+  run bash "$(_explore)" surfaces ex1
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"surfaces ok across 2 variant(s)"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 13 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"; false; }
 }

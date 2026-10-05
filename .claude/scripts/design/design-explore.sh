@@ -59,6 +59,13 @@ esac
 
 EX="$ROOT/docs/design/explore/$ID"
 VARIANTS="a b c"
+# EXP-A1: each pair's TO side is a variant too. With the list fixed at a b c, compose-done on a
+# paired d/e/f judged only a-c and printed "3 of 3" -- the high-judgment arm went ungated.
+if [ -f "$EX/pairs.json" ]; then
+  for _to in $(grep -o '"to": *"[a-z]"' "$EX/pairs.json" | cut -d'"' -f4); do
+    case " $VARIANTS " in *" $_to "*) ;; *) VARIANTS="$VARIANTS $_to";; esac
+  done
+fi
 
 case "$CMD" in
   init)
