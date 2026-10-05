@@ -54,7 +54,8 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       if (!proj || !proj.link) return json(200, { deployments: [] });
       const r = github.store.get(`${proj.link.org}/${proj.link.repo}`);
       const after = r ? r.commits.slice(proj.linkedAt) : [];
-      return json(200, { deployments: after.reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } })) });
+      const sha = url.searchParams.get("sha");
+      return json(200, { deployments: after.filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } })) });
     }
     return err(404, "not_found", `fake vercel: ${method} ${p} not modelled`);
   }

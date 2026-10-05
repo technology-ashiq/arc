@@ -19,3 +19,4 @@
 | D15 | attack faccecd L10 | ci verify accepts extra required checks beyond its three (an owner's own checks are kept on purpose) | an owner's extra check that blocks every venture merge |
 | D16 | attack 1406e29 B6 | hosting commits `vercel.json` straight to protected `main`; it relies on the owner's token being admin with `enforce_admins: false` (what ci sets) | the first real hosting apply that answers 409/422 on the Contents PUT |
 | D17 | attack 1406e29 L11 | an upstream repo id in mixed case is sent to Vercel as given; GitHub folds case, Vercel may not | the first venture whose owner login has upper-case letters |
+| D18 | attack 21d7acb B1 | a worker killed between Vercel's project-create answer and the synchronous `report()` leaves launch's own project recorded as `-found` on the re-run, so the exit plan skips it | the first teardown plan that leaves a `vercel-project-found` the owner never made |

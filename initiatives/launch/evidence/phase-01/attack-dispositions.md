@@ -11,3 +11,8 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 - L10 [medium] REJECTED -- both token checks are anchored `^[...]{20,}$` with no whitespace class, so an interior CR or LF already fails the shape test.
 - B4 [medium] fixed by cutting the poll to 8 x 30 s.
 - L6 -> D12 (branch name), B6 -> D16, L11 -> D17.
+
+## attack 21d7acb r2 (slice 4)
+
+- B1 [medium] -> debt D18: the window is a kill between an HTTP answer and a synchronous state write; closing it needs a provider-side marker Vercel projects do not carry.
+- Logic surface: RUN FAILED (timeout); round cap reached, merged on boundary + CI.

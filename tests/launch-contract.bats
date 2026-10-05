@@ -291,7 +291,7 @@ arm() {
   [ "$(j 'o.hold.ignoreCommand')" = '[ "$VERCEL_ENV" = production ]' ] || { echo "$DONE"; false; }
   [[ "$(j 'o.reported.join(",")')" == *"dns-target abc123.vercel-dns-017.com"* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.join(",")')" = "remove-domain,delete-project,delete" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "remove-domain,delete-project,delete-if-unchanged" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: hosting refuses a project linked to another repo, before any commit" {
@@ -329,7 +329,7 @@ arm() {
   arm hosting adopted
   [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.kinds.join(",")')" = "vercel-project-found,github-file,vercel-domain-found,dns-target" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.join(",")')" = "delete" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete-if-unchanged" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: an unlinked project is told apart from one linked elsewhere" {
@@ -358,4 +358,9 @@ arm() {
   arm hosting verify-500
   [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.value.reason')" == "error: vercel GET /v6/deployments -> 500"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting verify finds the hold deployment by sha however many pushes came after" {
+  arm hosting aged-hold
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
 }

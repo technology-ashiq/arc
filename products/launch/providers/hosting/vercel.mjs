@@ -172,7 +172,8 @@ async function probe(ctx) {
   if (!hold) return { ok: false, reason: `${full}:${FILE} has no commit from hosting; the production hold was never placed` };
   for (let i = 0; i < 8; i++) {
     if (i) await wait(30000, ctx.signal);
-    const deps = await vc(ctx, "GET", `/v6/deployments?projectId=${encodeURIComponent(project.id)}&limit=100`);
+    // Filtered by the hold commit sha, so the proof never ages out of a page window (attack 21d7acb B3).
+    const deps = await vc(ctx, "GET", `/v6/deployments?projectId=${encodeURIComponent(project.id)}&sha=${hold.sha}&limit=20`);
     const git = list(deps.body && deps.body.deployments).find((d) => d.meta && d.meta.githubDeployment === "1" && d.meta.githubCommitSha === hold.sha &&
       String(d.meta.githubCommitRepo || "").toLowerCase() === name && String(d.meta.githubCommitOrg || org).toLowerCase() === org);
     if (git) return { ok: true, answerer: "api.vercel.com", evidence: { project: project.id, deployment: say(git.uid, 64), sha: hold.sha, state: say(git.readyState || git.state, 20) } };
@@ -195,7 +196,8 @@ export async function verify(ctx) {
 
 // The exit plan removes only what launch made: the domain, then the project, then the hold file.
 export async function teardown(ctx) {
-  const order = { "vercel-domain": "remove-domain", "vercel-project": "delete-project", "github-file": "delete" };
+  // The hold file is deleted only if it is still the hold launch wrote: an owner may have taken it over (attack 21d7acb B2).
+  const order = { "vercel-domain": "remove-domain", "vercel-project": "delete-project", "github-file": "delete-if-unchanged" };
   const mine = ctx.resources.filter((r) => order[r.kind]).sort((a, b) => Object.keys(order).indexOf(a.kind) - Object.keys(order).indexOf(b.kind));
   return { steps: mine.map((r, i) => ({ order: i + 1, action: order[r.kind], resource: r.id })) };
 }

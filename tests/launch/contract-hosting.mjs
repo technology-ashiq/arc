@@ -123,6 +123,12 @@ switch (scenario) {
     repo().commits.push({ sha: "7".repeat(40), message: "feature", files: {} });
     out.verify = await adapter.verify(ctxFor());
     break;
+  case "aged-hold":
+    // 150 pushes after the hold: its deployment is far past any page window, and still the proof.
+    await adapter.scaffold(ctxFor());
+    for (let i = 0; i < 150; i++) repo().commits.push({ sha: (1000 + i).toString(16).padStart(40, "0"), message: `push ${i}`, files: {} });
+    out.verify = await adapter.verify(ctxFor());
+    break;
   case "verify-500":
     await adapter.scaffold(ctxFor());
     out.verify = await attempt(() => adapter.verify(ctxFor()));
