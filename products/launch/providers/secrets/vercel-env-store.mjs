@@ -142,7 +142,7 @@ async function probe(ctx) {
   if (tree.body && tree.body.truncated === true) return { ok: false, reason: `${full}'s tree is too large to list in one answer; the no-key-in-git check cannot see all of it` };
   const leaked = list(tree.body && tree.body.tree).map((e) => String(e.path || "")).filter(isKeyFile);
   // The claim is about main's tip tree only: history and other branches are not read (attack 14d5374 B5, debt D20).
-  if (leaked.length) return { ok: false, reason: `key file in git (main tip tree):${leaked.slice(0, 5).map((p) => say(p, 80)).join(", ")}` };
+  if (leaked.length) return { ok: false, reason: `key file in git (main tip tree): ${leaked.slice(0, 5).map((p) => say(p, 80)).join(", ")}` };
   // Keys and targets only; the request carries no decrypt flag and no value is read from the answer.
   const env = await vc(ctx, "GET", `/v10/projects/${pid}/env`);
   const set = new Set(list(env.body && env.body.envs).filter((e) => {

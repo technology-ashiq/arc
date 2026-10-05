@@ -29,7 +29,7 @@ globalThis.fetch = vercel.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-secrets-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctx = makeCtx({
+const ctxNow = () => makeCtx({
   profile: { slug: "arc-sandbox" }, board: {}, slot: { id: "secrets" }, row,
   root: ROOT, resources: reported, upstream: { hosting: [{ kind: "vercel-project", id: "prj_fixture01" }] }, tag: "arc-sandbox@secrets@vercel-env-store", attempt: 1, signal: undefined,
   env: { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789" },
@@ -45,76 +45,76 @@ const put = (path, text) => {
 const out = { scenario };
 switch (scenario) {
   case "fresh":
-    out.first = (await attempt(() => adapter.scaffold(ctx))).ok;
-    out.second = (await attempt(() => adapter.scaffold(ctx))).ok;
+    out.first = (await attempt(() => adapter.scaffold(ctxNow()))).ok;
+    out.second = (await attempt(() => adapter.scaffold(ctxNow()))).ok;
     out.commits = repo().commits.filter((c) => c.files && c.files[".env.example"]).length;
     out.kinds = reported.map((r) => r.kind);
-    out.verify = await adapter.verify(ctx);
-    out.teardown = (await adapter.teardown(ctx)).steps.map((s) => s.action);
+    out.verify = await adapter.verify(ctxNow());
+    out.teardown = (await adapter.teardown(ctxNow())).steps.map((s) => s.action);
     break;
   case "missing":
   case "placed":
   case "preview-only":
     put(".env.example", "# keys\nDATABASE_URL=\n");
-    out.scaffold = await attempt(() => adapter.scaffold(ctx));
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
     out.kinds = reported.map((r) => r.kind);
-    out.verify = await adapter.verify(ctx);
+    out.verify = await adapter.verify(ctxNow());
     break;
   case "leaked":
     put(".env.example", "DATABASE_URL=\n");
     repo().extraPaths = ["apps/web/.env.local", ".env.sample"];
-    out.verify = await adapter.verify(ctx);
+    out.verify = await adapter.verify(ctxNow());
     break;
   case "leaked-shapes":
     put(".env.example", "DATABASE_URL=\n");
     repo().extraPaths = ["apps/web/.env.production.local", ".env.prod.example"];
-    out.verify = await adapter.verify(ctx);
+    out.verify = await adapter.verify(ctxNow());
     repo().extraPaths = [".ENV"];
-    out.verifyUpper = await adapter.verify(ctx);
+    out.verifyUpper = await adapter.verify(ctxNow());
     break;
   case "more-shapes":
     put(".env.example", "DATABASE_URL=\n");
     repo().extraPaths = ["config/prod.env"];
-    out.suffix = await adapter.verify(ctx);
+    out.suffix = await adapter.verify(ctxNow());
     repo().extraPaths = [".envrc"];
-    out.envrc = await adapter.verify(ctx);
+    out.envrc = await adapter.verify(ctxNow());
     break;
   case "pathological": {
     // A path built to backtrack an overlapping pattern: the check must stay linear and answer at once.
     put(".env.example", "\n");
     repo().extraPaths = [`.env${".a".repeat(40)}/x`, `.env${".a".repeat(4000)}/x`];
     const t = Date.now();
-    out.verify = await adapter.verify(ctx);
+    out.verify = await adapter.verify(ctxNow());
     out.ms = Date.now() - t;
     break;
   }
   case "contract-not-a-file":
     repo().files[".env.example"] = { sha: "c".repeat(40), dir: true };
-    out.dir = await adapter.verify(ctx);
+    out.dir = await adapter.verify(ctxNow());
     repo().files[".env.example"] = { sha: "c".repeat(40), big: true };
-    out.big = await adapter.verify(ctx);
+    out.big = await adapter.verify(ctxNow());
     break;
   case "killed-after-put": {
     // The PUT landed, the report never did: the re-run recognises the file by its trailer and claims it.
-    await adapter.scaffold(ctx);
+    await adapter.scaffold(ctxNow());
     reported.length = 0;
-    await adapter.scaffold(ctx);
+    await adapter.scaffold(ctxNow());
     out.kinds = reported.map((r) => r.kind);
     out.fileId = (reported.find((r) => r.kind === "github-file") || {}).id || null;
     break;
   }
   case "value-in-template":
     put(".env.example", "DATABASE_URL=has-a-value-here\n");
-    out.scaffold = await attempt(() => adapter.scaffold(ctx));
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
     break;
   case "bad-line":
     put(".env.example", "export DATABASE_URL\n");
-    out.verify = await adapter.verify(ctx);
+    out.verify = await adapter.verify(ctxNow());
     break;
   case "truncated":
     put(".env.example", "\n");
     repo().truncated = true;
-    out.verify = await adapter.verify(ctx);
+    out.verify = await adapter.verify(ctxNow());
     break;
   default:
     console.error(`unknown scenario ${scenario}`);
