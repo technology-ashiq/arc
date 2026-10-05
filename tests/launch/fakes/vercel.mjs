@@ -4,7 +4,8 @@
 //   cname        the CNAME Vercel recommends for any domain (null: it recommends none)
 //   projects     seed projects: [{ name, link: { type, org, repo } }]
 //   failDeployments  the deployments list answers 500
-export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [], failDeployments = false } = {}) {
+//   previewState     readyState of every preview deployment
+export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [], failDeployments = false, previewState = "READY" } = {}) {
   let n = 0;
   const id = (p) => `${p}_${String(++n).padStart(6, "0")}`;
   const store = new Map(projects.map((p) => [p.name, { id: id("prj"), domains: [], linkedAt: 0, ...p }]));
@@ -55,7 +56,11 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const r = github.store.get(`${proj.link.org}/${proj.link.repo}`);
       const after = r ? r.commits.slice(proj.linkedAt) : [];
       const sha = url.searchParams.get("sha");
-      return json(200, { deployments: after.filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } })) });
+      const prod = after.filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
+      // Every branch commit is a preview, READY unless previewState says otherwise, at a vercel.app URL.
+      const previews = proj.previewDeploymentsDisabled ? [] : Object.entries((r && r.branches) || {}).flatMap(([b, cs]) => cs.slice(1).filter((c) => !sha || c.sha === sha)
+        .map((c) => ({ uid: `dpl_prev_${c.sha.slice(0, 8)}`, readyState: previewState, target: null, url: `arc-sandbox-git-${b.replace(/[^a-z0-9]/g, "-")}.vercel.app`, meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha, githubCommitRef: b } })));
+      return json(200, { deployments: [...previews, ...prod] });
     }
     return err(404, "not_found", `fake vercel: ${method} ${p} not modelled`);
   }

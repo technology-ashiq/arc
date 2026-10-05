@@ -126,10 +126,12 @@ providers:
     payment_model: any
     env_keys:
       - VERCEL_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - api.vercel.com
+      - api.github.com
     credentials:
-      scope: "project settings read"
+      scope: "project settings read; opens one tagged preview-check PR in the venture repo (ADR-1728)"
     adapter: providers/environments/vercel-environments.mjs
     digest: null
     approved_by: ashiq
