@@ -17,11 +17,11 @@ if (!row) { console.error("no vercel-env-store row in the registry"); process.ex
 const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 
 const FULL = "technology-ashiq/arc-sandbox";
-const SECRET = "sk_live_fixture_value_never_printed_0001";
+const MARKER = "fixture-env-value-never-printed-0001";
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const envs = {
-  placed: [{ key: "DATABASE_URL", target: ["production", "preview"], value: SECRET }],
-  "preview-only": [{ key: "DATABASE_URL", target: ["preview"], value: SECRET }],
+  placed: [{ key: "DATABASE_URL", target: ["production", "preview"], value: MARKER }],
+  "preview-only": [{ key: "DATABASE_URL", target: ["preview"], value: MARKER }],
 }[scenario] || [];
 const vercel = makeVercel({ github, projects: [{ name: "arc-sandbox", id: "prj_fixture01", link: { type: "github", org: "technology-ashiq", repo: "arc-sandbox" }, envs }] });
 globalThis.fetch = vercel.fetch;
@@ -66,7 +66,7 @@ switch (scenario) {
     out.verify = await adapter.verify(ctx);
     break;
   case "value-in-template":
-    put(".env.example", "DATABASE_URL=postgres://u:p@h/db\n");
+    put(".env.example", "DATABASE_URL=has-a-value-here\n");
     out.scaffold = await attempt(() => adapter.scaffold(ctx));
     break;
   case "bad-line":
@@ -83,5 +83,5 @@ switch (scenario) {
     process.exit(1);
 }
 out.decryptAsked = vercel.decryptAsked;
-out.secretSeen = JSON.stringify(out).includes(SECRET);
+out.valueSeen = JSON.stringify(out).includes(MARKER);
 console.log(`DONE ${JSON.stringify(out)}`);

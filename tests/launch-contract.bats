@@ -465,7 +465,7 @@ arm() {
 
 @test "launch-contract: secrets never asks Vercel to decrypt and never carries a value" {
   arm secrets placed
-  [ "$(j 'o.decryptAsked + " " + o.secretSeen')" = "false false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.decryptAsked + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a key file in git fails verify; the template variants do not" {
@@ -476,7 +476,7 @@ arm() {
 @test "launch-contract: a template that carries a value or a line that is not NAME= is refused" {
   arm secrets value-in-template
   [ "$(j 'o.scaffold.code')" = "VALUE_IN_GIT" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.scaffold.message')" != *"postgres"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" != *"has-a-value"* ]] || { echo "$DONE"; false; }
   arm secrets bad-line
   [[ "$(j 'o.verify.reason')" == "BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
   arm secrets truncated
