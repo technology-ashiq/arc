@@ -619,3 +619,220 @@ teardown() { _arc_teardown; }
   grep -q '".claude/hooks/PreToolUse.d/10-design-composer.sh"' "$ARC_ROOT/products/design/manifest.json" || {
     echo "installed, but products/design/manifest.json does not ship it; add the row and regenerate the sync golden"; false; }
 }
+
+# ---------- ADR-1420: the design-curator's Bash and WebFetch ----------
+#
+# The scaffold takes tool NAMES, so the curator holds plain Bash and WebFetch; this boundary is
+# what scopes them. Bash runs only design-refpack.mjs with its own five flags. WebFetch runs only
+# on an active, fetchable registry row's host whose robots.txt answers ALLOW. robots.txt is served
+# by the offline seam: ARC_DESIGN_OFFLINE=1 plus ARC_DESIGN_ROBOTS_FILE, read by the hook's check.
+
+_curator_sandbox() {
+  _bash_sandbox
+  cp "$ARC_ROOT/design.sources.yaml" "$SANDBOX/design.sources.yaml"
+  printf 'User-agent: *\nDisallow: /private/\n' > "$SANDBOX/robots.txt"
+  export ARC_DESIGN_OFFLINE=1 ARC_DESIGN_HOOK_SEAMS=1 ARC_DESIGN_ROBOTS_FILE="$SANDBOX/robots.txt"
+}
+# A WebFetch payload. $1 = agent_type ("" for the main session), $2 = url.
+_wp() {
+  if [ -n "$1" ]; then
+    printf '{"session_id":"s","agent_id":"k1","agent_type":"%s","hook_event_name":"PreToolUse","tool_name":"WebFetch","tool_input":{"url":"%s","prompt":"list the screens"}}' "$1" "$2"
+  else
+    printf '{"session_id":"s","hook_event_name":"PreToolUse","tool_name":"WebFetch","tool_input":{"url":"%s","prompt":"list the screens"}}' "$2"
+  fi
+}
+_fetch() { run --separate-stderr bash -c 'bash "$0" <<< "$1"' "$SANDBOX/.claude/hooks/PreToolUse.sh" "$(_wp "$1" "$2")"; }
+
+REFPACK_OK='node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --source lapa-ninja --url "https://lapa.ninja/assets/shot-1.png" --principle "Dense tables earn trust: one row, one fact, and the totals line up." --avoid "Do not copy the green palette; it is their brand, not a principle." --staged 0123456789abcdef'
+
+@test "ADR-1420: a curator's Bash runs design-refpack.mjs with its own flags and nothing else" {
+  _curator_sandbox
+  _hook design-curator Bash "$REFPACK_OK"
+  [ "$status" -eq 0 ] || { echo "a well-formed refpack call was refused: $stderr"; false; }
+  # Positive: a value carrying - _ and punctuation, the characters attack r1 B1 found emptied from the class.
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief lexos-p02 --source saasframe --url "https://saasframe.io/a_b-c.png?w=1&h=2" --principle "Snake_case ids, kebab-case slugs (and totals) line up; always." --avoid "Their brand-green, #1; skip it!" --staged 0123456789abcdef'
+  [ "$status" -eq 0 ] || { echo "a value with - _ and punctuation was refused: $stderr"; false; }
+  # Each refusal is asserted by its REASON: 2 is also bash's own misuse code (attack r1 B8).
+  _refused_for() {
+    [ "$status" -eq 2 ] || { echo "[$1] not refused: $status $stderr"; return 1; }
+    printf '%s' "$stderr" | grep -q "BLOCKED by design-curator scope" || { echo "[$1] refused, but not by the curator rule: $stderr"; return 1; }
+    printf '%s' "$stderr" | grep -q "$2" || { echo "[$1] refused for another reason than '$2': $stderr"; return 1; }
+  }
+  _hook design-curator Bash "cat docs/design/explore/lexos-v1/variant-b/index.html"
+  _refused_for cat "is not the refpack builder"
+  _hook design-curator Bash "$REFPACK_OK ; rm -rf docs"
+  _refused_for second-command "outside quotes is shell syntax"
+  _hook design-curator Bash "${REFPACK_OK} --registry /tmp/r.yaml"
+  _refused_for seam "a test seam never is"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/$(id)" --principle "p" --avoid "a"'
+  _refused_for substitution "carries a character no refpack call needs"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png" --principle "p" --avoid "unterminated'
+  _refused_for unterminated "never closed"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --brief c --source lapa-ninja --url "https://lapa.ninja/x.png" --principle "p" --avoid "a"'
+  _refused_for duplicate "given twice"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png" --principle "p"'
+  _refused_for missing "needs --avoid"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png" --principle "" --avoid "a"'
+  _refused_for empty-value "empty quoted value"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png"x --principle "p" --avoid "a"'
+  _refused_for stray-close "closing quote must end its word"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief ../../.github/x --source lapa-ninja --url "https://lapa.ninja/x.png" --principle "p" --avoid "a"'
+  _refused_for brief-grammar "lowercase letters, digits and hyphens"
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url http://lapa.ninja/x.png --principle "p" --avoid "a"'
+  _refused_for http "is an https URL"
+  _hook arc:Design-Curator Bash "cat README.md"
+  _refused_for namespaced "is not the refpack builder"
+}
+
+@test "ADR-1420 r1 B6: a curator call with no tool name, or a tool it does not hold, is refused" {
+  _curator_sandbox
+  # Each refusal asserts the curator rule's own reason: 2 is every rule's code (staging attack B11).
+  _hook_raw '{"agent_type":"design-curator","tool_input":{"command":"ls"}}'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "design-curator scope" || { echo "a curator call with no tool name was allowed: $status $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Write","tool_input":{"file_path":"x","content":"y"}}'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "not one the curator holds" || { echo "a curator Write was allowed: $status $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":"design.sources.yaml"}}'
+  [ "$status" -eq 0 ] || { echo "a curator Read was refused: $status $stderr"; false; }
+}
+
+@test "ADR-1420 r1 B5/B9: seams need the hook switch, and a port or userinfo is refused" {
+  _curator_sandbox
+  # The no-switch half is not driven here: it would reach the real network. It is pinned by the
+  # hook's source instead -- forwarding is gated on BOTH variables.
+  grep -q 'ARC_DESIGN_OFFLINE:-}" = "1" \] && \[ "${ARC_DESIGN_HOOK_SEAMS:-}" = "1"' \
+    "$ARC_ROOT/.claude/scripts/design/composer-bash-check.sh" || { echo "seam forwarding is not gated on the hook switch"; false; }
+  _fetch design-curator "https://nicelydone.club:8443/apps"
+  [ "$status" -eq 2 ] || { echo "a non-default port was allowed: $status"; false; }
+  printf '%s' "$stderr" | grep -q "no port and no userinfo" || { echo "refused, but not for the port: $stderr"; false; }
+  _fetch design-curator "https://user:pw@nicelydone.club/apps"
+  [ "$status" -eq 2 ] || { echo "userinfo was allowed: $status"; false; }
+  # A fixture answer is stamped as one in the log.
+  _fetch design-curator "https://nicelydone.club/apps"
+  [ "$status" -eq 0 ] || { echo "control: an allowed page was refused: $stderr"; false; }
+  tail -1 "$SANDBOX/.claude/state/design/curator-browse.log" | grep -q $'\tfixture\t' || { echo "a fixture allow is not stamped fixture in the log"; false; }
+}
+
+@test "ADR-1420 r1 B3: robots is asked as every token the fetch answers to" {
+  _curator_sandbox
+  printf 'User-agent: Claude-User\nDisallow: /\n\nUser-agent: *\nAllow: /\n' > "$SANDBOX/robots.txt"
+  _fetch design-curator "https://nicelydone.club/apps"
+  [ "$status" -eq 2 ] || { echo "a site disallowing Claude-User was browsed: $status"; false; }
+  printf '%s' "$stderr" | grep -q "as Claude-User" || { echo "refused, but not for the Claude-User group: $stderr"; false; }
+}
+
+@test "ADR-1420: a curator's WebFetch needs an active registry host and a robots ALLOW" {
+  _curator_sandbox
+  _fetch design-curator "https://nicelydone.club/apps"
+  [ "$status" -eq 0 ] || { echo "an allowed gallery page was refused: $stderr"; false; }
+  _fetch design-curator "https://example.com/anything"
+  [ "$status" -eq 2 ] || { echo "an off-registry host was fetched: $status"; false; }
+  printf '%s' "$stderr" | grep -qi "registry" || { echo "refused, but not by the host binding: $stderr"; false; }
+  _fetch design-curator "https://nicelydone.club/private/drafts"
+  [ "$status" -eq 2 ] || { echo "a robots DISALLOW path was fetched: $status"; false; }
+  printf '%s' "$stderr" | grep -q "DISALLOW" || { echo "refused, but not by robots: $stderr"; false; }
+  _fetch design-curator "http://nicelydone.club/apps"
+  [ "$status" -eq 2 ] || { echo "a plain-http fetch was allowed: $status"; false; }
+  # awwwards is active and fetchable but link-only: it may be linked, not browsed for a pack.
+  _fetch design-curator "https://www.awwwards.com/websites/"
+  [ "$status" -eq 2 ] || { echo "a link-only source was browsed: $status"; false; }
+  # godly is off: no fetch at all. lapa-ninja went off on 2026-09-27, and is refused the same way.
+  _fetch design-curator "https://godly.website/"
+  [ "$status" -eq 2 ] || { echo "an off source was browsed: $status"; false; }
+  _fetch design-curator "https://lapa.ninja/category/saas"
+  [ "$status" -eq 2 ] || { echo "lapa-ninja, now off, was browsed: $status"; false; }
+}
+
+@test "ADR-1420: an unreadable robots.txt refuses a curator fetch, and says UNREADABLE" {
+  _curator_sandbox
+  unset ARC_DESIGN_ROBOTS_FILE; export ARC_DESIGN_ROBOTS_STATUS=403
+  _fetch design-curator "https://collectui.com/challenges"
+  [ "$status" -eq 2 ] || { echo "a 403 robots.txt was read as permission: $status"; false; }
+  printf '%s' "$stderr" | grep -q "UNREADABLE" || { echo "refused, but not as UNREADABLE: $stderr"; false; }
+}
+
+@test "ADR-1420: the main session and ui-composer are unchanged by the curator rules" {
+  _curator_sandbox
+  _fetch "" "https://example.com/anything"
+  [ "$status" -eq 0 ] || { echo "the main session's WebFetch was scoped: $stderr"; false; }
+  _hook "" Bash "cat README.md"
+  [ "$status" -eq 0 ] || { echo "the main session's Bash was scoped: $stderr"; false; }
+  _fetch ui-composer "https://example.com/anything"
+  [ "$status" -eq 0 ] || { echo "a composer WebFetch changed behaviour: $stderr"; false; }
+  # Paired: the composer boundary is still live.
+  _live
+}
+
+@test "ADR-1420 r2 B1: a curator reads the registry and docs/design only, and its sentences are capped" {
+  _curator_sandbox
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":"docs/design/explore/lexos-v1/brief.md"}}'
+  [ "$status" -eq 0 ] || { echo "a curator Read of a brief was refused: $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Grep","tool_input":{"pattern":"hosts","path":"design.sources.yaml"}}'
+  [ "$status" -eq 0 ] || { echo "a curator Grep of the registry was refused: $stderr"; false; }
+  local p
+  for p in .env ../secrets.txt docs/design/../../.env /etc/passwd .claude/state/design/x; do
+    _hook_raw "{\"agent_type\":\"design-curator\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"$p\"}}"
+    [ "$status" -eq 2 ] || { echo "a curator read $p: $status"; false; }
+    printf '%s' "$stderr" | grep -q "BLOCKED by design-curator scope" || { echo "[$p] refused, but not by the curator rule: $stderr"; false; }
+  done
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Grep","tool_input":{"pattern":"KEY"}}'
+  [ "$status" -eq 2 ] || { echo "a whole-tree curator Grep was allowed: $status"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Glob","tool_input":{"pattern":"../**/.env","path":"docs/design"}}'
+  [ "$status" -eq 2 ] || { echo "a climbing curator Glob pattern was allowed: $status"; false; }
+  local long; long="$(head -c 301 /dev/zero | tr '\0' 'a')"
+  _hook design-curator Bash "node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url \"https://lapa.ninja/x.png\" --principle \"$long\" --avoid \"a\""
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "longer than 300" || { echo "a 301-character principle was allowed: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja/x.png" --principle " " --avoid "."'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "says nothing" || { echo "a blank principle was allowed: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url "https://lapa.ninja:8443/x.png" --principle "p" --avoid "a"'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "port or userinfo" || { echo "a port in a pack URL was allowed: $status $stderr"; false; }
+}
+
+@test "ADR-1420 r2 B10: a curator's Bash runs from the project root only" {
+  _curator_sandbox
+  local root="${CLAUDE_PROJECT_DIR:-$SANDBOX}"
+  local cmd='node .claude/scripts/design/design-refpack.mjs --brief b --source lapa-ninja --url \"https://lapa.ninja/x.png\" --principle \"p\" --avoid \"a\" --staged 0123456789abcdef'
+  CLAUDE_PROJECT_DIR="$root"; export CLAUDE_PROJECT_DIR
+  _hook_raw "{\"agent_type\":\"design-curator\",\"cwd\":\"$root\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}"
+  [ "$status" -eq 0 ] || { echo "a curator call from the root was refused: $stderr"; false; }
+  _hook_raw "{\"agent_type\":\"design-curator\",\"cwd\":\"$root/docs\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$cmd\"}}"
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "runs from the project root" || { echo "a curator call from a subdirectory was allowed: $status $stderr"; false; }
+}
+
+@test "Phase 02 real build: a curator stages a screen to look at it, and may read only what it staged" {
+  _curator_sandbox
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief lexos-case-workspace --source nicelydone --url "https://assets.nicelydone.club/elements/full/a.png" --stage 1'
+  [ "$status" -eq 0 ] || { echo "a staging call was refused: $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source nicelydone --url "https://nicelydone.club/a.png" --stage yes'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q -- "--stage takes 1" || { echo "--stage with another value was allowed: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source nicelydone --url "https://nicelydone.club/a.png" --stage 1 --principle "p" --avoid "a"'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "stage OR add" || { echo "a staging call carrying a principle was allowed: $status $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":".claude/state/design/refpacks/lexos-case-workspace/staged/abc.png"}}'
+  [ "$status" -eq 0 ] || { echo "the curator could not read its staged screen: $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":".claude/state/design/refpacks/lexos-case-workspace/attempts.log"}}'
+  [ "$status" -eq 2 ] || { echo "the curator read outside staged/: $status"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Read","tool_input":{"file_path":".claude/state/design/refpacks/lexos-case-workspace/staged/../../../composer-session--x"}}'
+  [ "$status" -eq 2 ] || { echo "the curator climbed out of staged/: $status"; false; }
+}
+
+@test "staging attack B2/B3/B5/B6/B8: query cap, no fragment, cwd pinned for reads, one path key, plain Glob, --staged on adds" {
+  _curator_sandbox
+  local q; q="$(head -c 65 /dev/zero | tr '\0' 'a')"
+  _fetch design-curator "https://nicelydone.club/apps?d=$q"
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "query is at most 64" || { echo "a 65-byte query was fetched: $status $stderr"; false; }
+  _fetch design-curator "https://nicelydone.club/apps#frag"
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "no fragment" || { echo "a fragment was fetched: $status $stderr"; false; }
+  _hook design-curator Bash "node .claude/scripts/design/design-refpack.mjs --brief b --source nicelydone --url \"https://nicelydone.club/a.png?d=$q\" --principle \"p\" --avoid \"a\" --staged 0123456789abcdef"
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "query is at most 64" || { echo "a 65-byte query rode an add: $status $stderr"; false; }
+  _hook design-curator Bash 'node .claude/scripts/design/design-refpack.mjs --brief b --source nicelydone --url "https://nicelydone.club/a.png" --principle "p" --avoid "a"'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "needs --staged" || { echo "an add without --staged was allowed: $status $stderr"; false; }
+  local root="${CLAUDE_PROJECT_DIR:-$SANDBOX}"; CLAUDE_PROJECT_DIR="$root"; export CLAUDE_PROJECT_DIR
+  _hook_raw "{\"agent_type\":\"design-curator\",\"cwd\":\"$root/other\",\"tool_name\":\"Read\",\"tool_input\":{\"file_path\":\"docs/design/x.md\"}}"
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "runs from the project root" || { echo "a read from another cwd was allowed: $status $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Grep","tool_input":{"pattern":"x","path":"docs/design","file_path":"design.sources.yaml"}}'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "does not use" || { echo "a Grep carrying file_path was allowed: $status $stderr"; false; }
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Glob","tool_input":{"pattern":"{..,x}/{..,x}/.env","path":"docs/design"}}'
+  [ "$status" -eq 2 ] && printf '%s' "$stderr" | grep -q "letters, digits" || { echo "a brace Glob was allowed: $status $stderr"; false; }
+  # Paired: a Grep regex is not a path, and '..' in it is an ordinary regex.
+  _hook_raw '{"agent_type":"design-curator","tool_name":"Grep","tool_input":{"pattern":"a..b","path":"docs/design"}}'
+  [ "$status" -eq 0 ] || { echo "a Grep regex with .. was refused: $stderr"; false; }
+}

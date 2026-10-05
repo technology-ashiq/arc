@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:105-110",
+      "breaking_input": "An entry with `kind: [inspiration, inspiration]` — a duplicate within the array — passes the closed-set check and the non-empty check. The consumer may treat duplicates as two uses or a parsing quirk, but the lint accepts a row that is semantically ambiguous.",
+      "why": "The lint checks that every member of `kind`/`allowed_use` is in the allowed set and that the array is non-empty, but it never checks for duplicate members. A duplicate is a degenerate input that the permission surface should refuse; the consumer's grammar may not be defined for it.",
+      "fix": "For each of `kind` and `allowed_use`, after the allowed-set loop, assert `new Set(v).size === v.length` and fail with a named error if not.",
+      "twin_of": ""
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:133-137",
+      "breaking_input": "An entry with `auth: env` and a `credential_ref` that is a string but only whitespace, e.g. `credential_ref: '   '`. The lint rejects it because `!s.credential_ref.trim()` is true. But if the YAML value is `'   '` with surrounding quotes, the parser keeps the spaces; the `trim()` check catches it. However, if the value is `null` in YAML (an empty scalar), `typeof s.credential_ref` is 'object' and the first condition fails (since `typeof null !== 'string'`), but the second condition `!s.credential_ref.trim()` would throw if it were reached; it's not reached because the `&&` short-circuits. Actually the first check catches null. The real gap: `auth: env` with `credential_ref: 123` (a number) — `typeof` is 'number', first condition true, second short-circuits, so it passes. But the consumer may expect a string.",
+      "why": "The check `typeof s.credential_ref !== \"string\" || !s.credential_ref.trim()` is correct for type, but a numeric credential_ref (YAML allows unquoted numbers) passes the `typeof` check as 'number' and the first disjunct is true, so the second isn't evaluated; the whole condition is true, so it fails correctly. Actually the condition is `(typeof s.credential_ref !== \"string\" || !s.credential_ref.trim())` — for a number, `typeof !== 'string'` is true, so the whole condition is true, so it fails. So no gap there. The real gap: a `credential_ref` that is the empty string `''` — `typeof` is 'string', `trim()` is '', `!''` is true, so fails. Fine. The gap is when `auth: env` and `credential_ref` is an object or array — `typeof` 'object', fails. So this is actually fine. Let me find a real gap.",
+      "fix": "Re-examine; the condition is robust. No finding here.",
+      "twin_of": ""
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:143-148",
+      "breaking_input": "An entry with `hosts: ['example.com', 'Example.com']` — mixed case. The lint's regex requires lower-case, so `Example.com` fails. Good. But what about `hosts: ['example.com.', 'example.com']` — a trailing dot? The regex `^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$` requires at least one dot, and the last label must end in alphanumeric, so `example.com.` fails because the trailing dot leaves no final alphanumeric. Good. A real gap: a host with a single label like `localhost` is refused, but the consumer might allow it. The lint's regex requires at least two labels, so `localhost` is refused. That's a design choice, not a bug. Another gap: `hosts` with an IP address like `127.0.0.1` passes the regex? `127.0.0.1` — labels are numeric, regex allows digits, so it passes. But the comment says \"bare, lower-case host names\" — IPs are not host names, and the consumer may compare stringly. A permission entry that allows an IP could bypass a domain-based policy.",
+      "why": "The regex accepts IPv4 literals as host names, but the comment and the consumer's host comparison may treat IPs differently (e.g., no DNS rebinding protection). A registry row that lists an IP is not a host name and could let the curator fetch from an IP that the owner never approved as a host.",
+      "fix": "After the regex test, reject any host that is a valid IPv4 or IPv6 literal (e.g., using `net.isIP`), or explicitly document and allow them only if intended.",
+      "twin_of": ""
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:50-52",
+      "breaking_input": "A `kind` array that is empty, e.g. `kind: []`, is refused by the `kind-empty` check. Good. But a `kind` array with only unknown members, e.g. `kind: [bogus]`, is refused. Good. The gap: `kind: [inspiration, inspiration]` — duplicates — as above.",
+      "why": "Duplicate members are not checked; the closed-set check only verifies membership, not uniqueness.",
+      "fix": "Add a uniqueness check for `kind` and `allowed_use`.",
+      "twin_of": "L1"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:175-176",
+      "breaking_input": "A source with `status: active` and `availability: unknown` passes, but the consumer might treat `unknown` as a reason to skip fetching. The lint doesn't enforce that an `active` source must have a known availability — but that's a policy, not a lint bug. The real gap: the lint's final output uses `sources.filter((s) => s.status === \"active\").length` but the `status` could be a non-string (e.g., `status: 1` in YAML parses to number 1) — the lint's closed-set check `allowed.has(v)` with `v` as number 1: `ACCESS.has(1)` is false, so it fails. Good. What about `status: true`? Also fails. So no gap.",
+      "why": "No concrete gap found.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:85-92",
+      "breaking_input": "The `id` grammar `^[a-z0-9][a-z0-9-]{0,63}$` allows an id that is all digits, e.g. `12345`. That's valid per the regex and not a Windows device name. But the consumer (design-refpack.mjs) might use the id as a directory name, and an all-numeric id is fine. However, the regex also allows ids ending in a hyphen, e.g. `abc-` — the regex `[a-z0-9-]{0,63}` allows trailing hyphen, so `abc-` matches. But many filesystem tools treat trailing-dot or trailing-space as reserved on Windows; the RESERVED list only covers device names, not trailing dot/space. A Windows-reserved name like `foo.` or `foo ` (space) would pass the regex? `foo.` — the regex only allows `[a-z0-9-]`, so dot fails. `foo ` space fails. So no. But what about an id like `con.txt`? The RESERVED regex `/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/` is anchored with `$` so `con.txt` doesn't match, but Windows reserves `con.txt` as a device name too. The lint accepts `con.txt`, but the consumer that creates a directory from the id will fail on Windows.",
+      "why": "The RESERVED list only matches exact device names, not the `name.ext` variants that Windows also reserves (e.g., `con.txt`, `prn.foo`). The consumer's directory creation would fail on Windows, making a linted row unusable.",
+      "fix": "Extend the RESERVED check to also reject ids that start with a reserved device name followed by a dot, e.g., `/^(con|prn|aux|nul|com[0-9]|lpt[0-9])\\..*/`.",
+      "twin_of": ""
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:105-110",
+      "breaking_input": "An entry with `allowed_use: [link-only, reference-pack]` is refused by the use-contradiction check. Good. But what about `allowed_use: [link-only, link-only]`? Duplicates pass, and the contradiction check only looks for both distinct values, so duplicates are fine. Not a real issue.",
+      "why": "No.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:143-148",
+      "breaking_input": "The `hosts` regex uses `+` for the dot-separated labels, requiring at least one dot, so a host like `localhost` is refused. But the consumer might allow `localhost` as a valid host for local development. The lint is stricter than the consumer, which would make a valid row fail the lint — a denial of service, not a security hole. However, if the consumer allows `localhost` and the lint refuses it, that's a mismatch: a row that the consumer could use cannot be committed. The comment says \"bare, lower-case host names\" — `localhost` is a bare host name. The regex requiring a dot is an over-restriction.",
+      "why": "The regex requires at least two labels, rejecting single-label hostnames like `localhost` that the consumer may accept, causing the lint to refuse valid registries.",
+      "fix": "Allow single-label hostnames by making the dot-separated part optional, e.g., `^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$` with at least one label.",
+      "twin_of": ""
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:60-66",
+      "breaking_input": "The `parsed` object is assumed to have a `.doc` or `.value` or be the doc itself. If the parser returns `{ok: true, doc: {sources: [...]}}`, it's fine. But if the parser returns `{ok: true, value: {sources: [...]}}`, it's fine. If it returns just `{sources: [...]}` with no `ok` field, then `parsed.ok` is undefined, `parsed.ok === false` is false, so it proceeds, and `doc` becomes `parsed.doc ?? parsed.value ?? parsed` — `parsed.doc` undefined, `parsed.value` undefined, so `doc = parsed` which is `{sources: [...]}`. Fine. But what if the parser returns `{ok: true, doc: null}`? Then `doc` is null, and `sources` is null, and the empty-check fails as expected. No gap.",
+      "why": "No concrete gap.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:96-98",
+      "breaking_input": "The lint checks `if (!s || typeof s !== \"object\")` and fails with `entry-shape`, but then it continues to use `s.id` in the `id` variable even if `s` is not an object (e.g., `s` is a string). For a string `s`, `s.id` is undefined, so `id` becomes '<no id>', and then later `s.kind` on a string returns undefined, which fails `kind-not-array`. But the `entry-shape` failure already fired and `continue` skips the rest, so it's fine. Actually the `continue` is there.",
+      "why": "The `continue` prevents further access. No gap.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:133-137",
+      "breaking_input": "`auth: env` with `credential_ref` set to an empty array `[]` — `typeof []` is 'object', so `typeof s.credential_ref !== \"string\"` is true, so it fails correctly. `auth: none` with `credential_ref: null` — `s.credential_ref !== undefined` is true because null !== undefined, so it fails as orphan. Good. `auth: none` with `credential_ref` not present — undefined, so no orphan check. Fine.",
+      "why": "No gap.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:159-164",
+      "breaking_input": "The contradiction check only triggers when both `link-only` and `reference-pack` are present. What about `link-only` with `provenance`? The comment says `link-only` is for Awwwards whose terms forbid reproduction, and `provenance` is a citation use, which is fine. No issue.",
+      "why": "No gap.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L13",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:105-110",
+      "breaking_input": "An entry with `allowed_use: [reference-pack, reference-pack]` passes, but duplicates are semantically meaningless and could confuse a consumer that counts entries. More importantly, an entry with `kind: [generator, generator]` is accepted, but the consumer might iterate and produce duplicate behavior. The lint should refuse duplicates to keep the registry canonical.",
+      "why": "Duplicate members in `kind` and `allowed_use` are not rejected, so a registry row can carry a redundant list that a careless consumer might treat as multiple distinct uses.",
+      "fix": "Add a uniqueness check for both arrays.",
+      "twin_of": "L1"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:70-74",
+      "breaking_input": "The `seen` set tracks ids to catch duplicates. But it adds `s.id` even when `s.id` is undefined (after the id-missing failure). If two entries both lack ids, the first adds `undefined`, the second sees `undefined` in `seen` and reports id-duplicate — which is a false positive (they're both missing, not duplicated). A mutant with two entries both missing ids would get an extra error, but still fails, so not a security issue.",
+      "why": "The duplicate check uses `s.id` even when id is missing, conflating missing with duplicate.",
+      "fix": "Only add to `seen` when `typeof s.id === 'string'`.",
+      "twin_of": ""
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:96-98",
+      "breaking_input": "If `s` is `null`, `typeof null` is 'object', so the `typeof s !== \"object\"` check is false, and it proceeds to `s.kind` which throws a TypeError, crashing the lint with a stack trace instead of a named ERR. The `fail` line fires `entry-shape` but then `continue` is not reached because the `if (!s || typeof s !== \"object\")` condition is false for `null`? Actually `!s` is true for null, so the condition `!s || ...` is true, so it enters the block, calls `fail`, and `continue` skips. So it's fine. For `s` being a number, `!s` is false if non-zero, and `typeof s !== 'object'` is true, so it fails and continues. For `s` being a string, `!s` is false, `typeof` is 'string' !== 'object', so it fails and continues. So all non-objects are caught.",
+      "why": "No gap.",
+      "fix": "N/A",
+      "twin_of": ""
+    }
+  ]
+}

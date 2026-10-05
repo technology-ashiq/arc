@@ -477,7 +477,9 @@ export async function main(argv, env = process.env) {
         // for a secret read as a bare RUN FAILED (face Phase 06 slice 05). Said first, whenever the tail lacks it.
         // The transcript-destination WARN is not a cause: it led the lines and hid the gateway's refusal. ONLY that WARN
         // is passed over -- another WARN can be the refusal itself (round-2 attack 1d98650 B10).
-        const cause = errLines.find((l) => /^arc-run: /.test(l) && !/could not emit run\.completed|^arc-run: WARN .*NO destination is set/.test(l));
+        // generic-api's own "reasoning off" line is not a cause either: it is printed first on every run with the knob
+        // on, and it hid the real failure of a design logic pass (2026-09-27, ADR-0226 Amendment 3).
+        const cause = errLines.find((l) => /^arc-run: /.test(l) && !/could not emit run\.completed|^arc-run: WARN .*NO destination is set|^arc-run: generic-api: reasoning off/.test(l));
         lines.push(`${label}: RUN FAILED (arc-run exit ${r.status ?? "none"}${r.error ? `, ${r.error.message}` : ""})${cause && !errLines.slice(-8).includes(cause) ? `\n    cause: ${cause}` : ""}\n    ${tail}`);
         anyFailed = true;
         continue;

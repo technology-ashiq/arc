@@ -1,0 +1,117 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-expa1.mjs:97-101",
+      "breaking_input": "run `seal` when `.claude/state/design` contains a symlink named `composer-session--ex1--x` pointing outside the tree. readdirSync sees a name starting with the prefix, seal refuses. Then create a real composer-session marker with a guarded name; the guard is bypassed by pre-planting.",
+      "why": "The check `readdirSync(state).some((n) => n.startsWith('composer-session--'+id+'--'))` only inspects names, not that the entry is a regular file or directory belonging to this explore; a planted symlink or a sibling explore's stale marker triggers a false refusal, while the real marker for THIS id is never checked for being regular. This is a check-then-use where the checked value (any name with the prefix) differs from the value that matters (a live marker file).",
+      "fix": "lstat each entry and require it to be a regular file (or a real armed marker) before treating it as a composer session; also confirm the file's content matches this explore id."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-expa1.mjs:104-106",
+      "breaking_input": "run `seal` when `variant-a` is a symlink to a directory containing `index.html`. The filter `/^variant-[a-z]$/` passes the name, and `existsSync(join(ex, v, 'index.html'))` follows the symlink, so `seal` refuses even though variant-a is not a real variant; conversely, if a symlink points to a non-existent dir, the seal runs despite a potential page hiding behind a link.",
+      "why": "The existence check follows symlinks, but the earlier `readRegular`/hash logic treats symlinks as planted input. A symlinked variant directory lets an attacker influence the pre-run refusal (denial of service) or evade the refusal (if the link target is missing at seal time), and the page check does not verify the variant is a real directory. The check binds to a path that is not the path later used by the hash tree (which lstat-checks).",
+      "fix": "Before checking for index.html, lstat the variant directory and require it to be a real directory, not a symlink."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:135-142",
+      "breaking_input": "Create a seal record whose `formula` lacks `minMeanGap` (or has it as a non-number). Then run `exp-a1`; `compare` passes (files match), and `minMeanGap` is only read in the arithmetic `gap >= rec.formula.minMeanGap`, which is `NaN >= undefined` -> false, printing NOT MET without any refusal.",
+      "why": "`sealCheck` and `pairGuard` validate the record's `files` object but never validate `formula` or its numeric fields. A tampered seal (edited by hand, or a seal written by a buggy future version) yields a silent wrong promotion verdict instead of a refusal. Missing fields fail open (no gain), but a non-numeric `minMeanGap` (e.g. 0) or `minPairsWon` (e.g. 0) would make the formula MET spuriously.",
+      "fix": "In `loadJson` for a seal (or in `sealCheck`/`report`), require `formula.minPairsWon` and `formula.minMeanGap` to be finite numbers and `minPairsWon` to be an integer."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:135-142",
+      "breaking_input": "A seal with `minPairsWon: 0` and `minMeanGap: 0` and any single pair with a tie: `hjWins=0 >= 0` and `gap=0 >= 0`, so the formula is MET even though high-judgment won nothing.",
+      "why": "The formula does not require any actual win; `minPairsWon: 0` (which a tampered or malformed seal can supply) makes a tie acceptable. The fix in L3 (require positive integers) addresses the root; without it, the verdict is a silent promotion on a tie.",
+      "fix": "As in L3, validate `minPairsWon >= 1` and `minMeanGap > 0`, and refuse any seal that violates these."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:135-142",
+      "breaking_input": "A seal with `sealed` timestamp far in the past and an unblind `scored` that is not a valid date, e.g. `\"scored\": \"not-a-date\"`. `Date.parse('not-a-date')` yields NaN; `Date.parse(rec.sealed) < NaN` is false, so the check passes (no refusal), and a blank scored field leads to a downstream `scoreOf` failure or, if rows exist, a report that does not enforce the pre-registration.",
+      "why": "The date comparison `Date.parse(rec.sealed) < Date.parse(ub.scored)` treats an unparseable `scored` as NaN, which compares false, allowing a malformed unblind to bypass the prediction-before-score ordering. This is a fail-open on invalid input.",
+      "fix": "Validate both dates parse to finite numbers; if either fails, refuse."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:153-164",
+      "breaking_input": "An unblind row `source` exactly `'variant-a'` appears twice; `find` returns the first. Craft the second row with the intended score and the first with a wrong score; the report trusts the wrong one.",
+      "why": "`find` on duplicate row sources silently picks the first; the contract (one row per variant) is unenforced, and a duplicate gives an attacker two chances to put their preferred score first. Also, if the first row is malformed (score missing) it fails rather than counting duplicates.",
+      "fix": "Count rows per source; exactly one row per variant, or refuse with the duplicate/shortfall named."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:153-164",
+      "breaking_input": "An unblind row for `variant-a` has `score: null` (JSON null, which is not `number`). `scoreOf` calls `fail`, exiting 1. But if the row's `source` is `'variant-A'` (capital A) because a case-differing label was allowed earlier, `find` misses and fails — inconsistent handling. Meanwhile an unblind with `rows` missing entirely reaches `scoreOf` and fails with 'no owner score', which is fine; the gap is that a row with `score: \"abc\"` is caught, but a row with `score: null` is also caught — not a bug. However, a row whose `source` is `'variant-ax'` is silently ignored and the pair is reported with a failure only when the missing score is looked up; if the pair was for `variant-a`, `find` with exact match returns undefined and fails, which is acceptable. The real logic gap: `rows` may list scores for variants that are not in any pair; those extra rows are never validated for shape.",
+      "why": "The report only reads rows for variants that appear in pairs; extra rows (a planted or corrupted record) are never sanity-checked, and a malformed row for an unpaired variant is ignored. More importantly, `find` on untrusted key is a plain-object lookup pattern that lets a wrong `source` (typo) fail the whole report with a confusing error instead of counting.",
+      "fix": "Validate the whole `rows` array: each row must have a `source` matching the `/^variant-[a-z]$/` grammar and a numeric `score`; refuse any row that does not."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:171-176",
+      "breaking_input": "A pairs.json with `pairs` array containing an object whose `fromArm` is `'balanced-workhorse'` but `from`/`to` are not letters (e.g. `from:'A'`). `report` builds `s = {[p.fromArm]: scoreOf(p.from)}` and `scoreOf('variant-A')` fails — a refusal after possibly printing earlier pairs; if an attacker plants a pairs file with `fromArm`/`toArm` that are not in TIERS (e.g. `'high-judgment '` with a trailing space), `s['high-judgment']` is undefined and the comparison `undefined > number` is false, `undefined < number` false, so `won` becomes `'tie'`, silently undercounting high-judgment wins.",
+      "why": "`report` trusts `pairs.json`'s arm names and variant letters without re-validating against the `letter()` grammar and `TIERS` set. A tampered pairs.json (or one produced by a non-`pair` writer) can inject a non-tier arm string that turns a real win into a tie, changing the promotion verdict.",
+      "fix": "Before using any pair in `report`, validate `from`, `to` are single letters, `fromArm`/`toArm` are in `TIERS`, and both differ as `pair` enforces."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-expa1.mjs:153-164",
+      "breaking_input": "`scoreOf` uses `ub.rows || []`, then `find((x) => x.source === 'variant-'+v)`. If `ub.rows` is not an array but an object (JSON `{}`), `find` on a non-array throws a TypeError that is not caught, producing a stack trace (not a clean ERR line).",
+      "why": "The unblind file is user-controlled JSON; `report` guards neither the shape of `rows` nor the `score` type beyond the `find` callback. A malformed `rows` object crashes with an uncaught exception instead of a named refusal, matching the defect pattern of a parser throw left unguarded.",
+      "fix": "Validate `ub.rows` is an array before `find`; also wrap `scoreOf`-related lookups so a non-array is refused with a named error."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:199-207",
+      "breaking_input": "A pairs.json whose `pairs` is an array of zero length (sealed and then emptied by hand). `pairs.pairs.length === 0` triggers `fail('no pairs')` — correct. However, if `pairs.pairs` is `null` (JSON null), `for (const p of pairs.pairs)` in `pairGuard` throws TypeError (uncaught), while `report`'s loop would throw too; `pairGuard` returns before the `pairs.length===0` check, leaving an unguarded crash.",
+      "why": "`pairGuard` loads pairs.json and iterates `pairs.pairs` without verifying it is an array; an exploiter or an earlier bug writing `null` causes a stack trace. It violates the 'every step that fails answers with a named ERR' pattern.",
+      "fix": "In `pairGuard` (and `report`), require `pairs.pairs` to be an array; refuse otherwise."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:135-142",
+      "breaking_input": "A seal whose `files` contains a key like `\"../escape.txt\"` (a relative path with `..`). `hashTree` never produces such keys because it computes relative paths within the tree, but a tampered seal record could list `\"../outside\"`. `compare` checks `if (!(f in now)) diffs.push('missing ../outside')` — no path traversal on read, just a difference; the seal-check refuses as intended. The gap is in `prediction()`: the ADR path is fixed. More relevant: `loadJson` of the seal trusts `rec.files` keys and compares them against `now` keys; a key like `\"..\"` can never match a real file, giving a false refusal — a DoS but not a bypass.",
+      "why": "The seal's file list is not validated to be real relative paths within the bundle; a hand-edited seal can introduce impossible keys causing a lockout. Low severity as it only refuses.",
+      "fix": "When loading a seal, reject any `files` key not matching a relative non-`..` path."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:176-187",
+      "breaking_input": "A pairs.json with `base` set to `'abc'` while `base-revision.txt` contains `'abc '` (trailing space). `pair` trims the file read (`trim()`), so `pairs.base` is `'abc'`; `report` never reads `base-revision.txt`. `pairs.base` is checked only in `pair` when adding subsequent pairs, and `pairGuard` ignores it. The actual base-revision content and the recorded base can diverge if a later process rewrites `base-revision.txt`; `report` and `pairGuard` never re-verify the current base matches `pairs.base`.",
+      "why": "Base-revision integrity is checked once at pair time, but nothing re-hashes `base-revision.txt` before `exp-a1`; an attacker (or a moved checkout) can change the base between pairing and reporting, and the report still trusts the recorded base, undermining the 'both arms at one commit' guarantee.",
+      "fix": "In `pairGuard` and `report`, re-read `base-revision.txt` and refuse if it does not match `pairs.base`."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:152-162",
+      "breaking_input": "`report` computes `mean(hj)` and `gap` over `hj`/`wh` arrays. If a pairs array has a pair whose `fromArm` and `toArm` are both `'balanced-workhorse'` (tampered), `s['high-judgment']` is undefined, `hj.push(undefined)`, and `mean(hj)` includes `undefined`, making `gap` NaN and `gap >= minMeanGap` false — a silent NOT MET even if the formula would otherwise pass, or with `minMeanGap` NaN it could be MET. The guard in `L8` addresses this; without it, arithmetic on undefined is a fail-open for the win count.",
+      "why": "Mirrors L8 but focuses on the arithmetic: undefined scores propagate NaN, which never triggers a refusal and can flip the verdict.",
+      "fix": "Same as L8: validate arm names before using them as keys."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-expa1.mjs:120-126",
+      "breaking_input": "`compare` trusts `rec.files` keys as plain object property names. A seal with key `'__proto__'` (JSON object literal `\"__proto__\": \"hash\"`) sets the prototype of `rec.files`, so `'__proto__' in now` is true (inherited), and if a real file named `__proto__` exists with a different hash, `now[f] !== h` may pass as a mismatch; worse, `Object.keys(rec.files)` includes `'__proto__'`, and `diffs` may report a false difference on inherited properties. This is a plain-object lookup keyed by (seal-controlled) text.",
+      "why": "Using `in` on a plain object with an inherited `__proto__` key produces a false 'missing' or 'changed' result — a DoS on seal-check; likewise a tampered seal can inject `__proto__` to confuse comparison.",
+      "fix": "Use `Object.hasOwn(now, f)` and `Object.hasOwn(rec.files, f)` instead of `in`, and reject file keys that are not own data properties."
+    }
+  ]
+}

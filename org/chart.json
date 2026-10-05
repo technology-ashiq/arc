@@ -731,7 +731,8 @@
           "owner_choice": false,
           "binds": {
             "agents": [
-              "design-director"
+              "design-director",
+              "design-curator"
             ],
             "skills": [],
             "scripts": [],
@@ -750,7 +751,8 @@
           "owner_choice": false,
           "binds": {
             "agents": [
-              "design-jury"
+              "design-jury",
+              "design-jury-hj"
             ],
             "skills": [],
             "scripts": [],

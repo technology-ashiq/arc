@@ -1,0 +1,30 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "design-critique.sh (begin --brief block, BRIEF_ID grammar check, ~line 70-71 per this diff's hunk starting at +49)",
+      "breaking_input": "Commit `docs/design/briefs/con/brief.md` (or nul/prn/aux/com1/lpt1) and run: `design-critique.sh begin <route> --brief docs/design/briefs/con/brief.md`",
+      "why": "BRIEF_ID is extracted from the brief path and validated only against `''|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|-*` -- a pure charset+leading-dash check with no Windows-reserved-device-name exclusion. `con` passes, and it is then used as a directory segment in `docs/design/refpacks/$RUN_BRIEF_ID/sources.md` at finish time. This project's own lanes.md rule states plainly that 'the lane-name reserved list applies to every id that becomes a directory' because such a name 'breaks `mkdir` on exactly one of the three CI legs' -- the exact same id-becomes-a-directory shape recurs here, unguarded, on the Windows leg this repo actually runs.",
+      "fix": "Reuse the lane-name reserved-device-list check (con, prn, aux, nul, com0-9, lpt0-9) against BRIEF_ID in the same case statement that already checks the charset.",
+      "twin_of": "A Windows reserved device name passed the id grammar -> the lane-name reserved list applies to every id that becomes a directory."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "design-critique.sh (RUN_FILE write at end of begin --brief loop, ~line 90; re-read in finish, ~line 180-182)",
+      "breaking_input": "1) `begin R --brief docs/design/briefs/bx/brief.md` succeeds, writing RUN_FILE with brief_id=bx. 2) Without calling finish, run `begin R --brief docs/design/briefs/cx/brief.md` again and make its second viewport's render fail (e.g. break design-render.sh's browser dependency) so it hits the 'render refused' branch and exits 1. 3) A critique artifact is authored for R citing cx's pack. 4) `finish R` is run.",
+      "why": "`RUN_FILE` is only written by the single `printf ... > \"$RUN_FILE\"` line at the very end of the --brief loop, reached only on full success. A mid-loop failure exits (via the render-refused or mv/sed-failure branches) without ever touching a RUN_FILE left over from an earlier, unrelated begin/finish cycle for the same route. finish then reads the STALE brief_id/viewports and validates the new critique's BELOW-BAR citations against the WRONG brief's `sources.md` and the WRONG viewport set -- silently checking the wrong bar, or rejecting legitimate citations, while ADR-1405's whole point is that 'a bar nobody can point at is taste, not a bar.'",
+      "fix": "Clear or write a per-attempt RUN_FILE at the START of every begin --brief invocation (before the render loop), not only on success, so a failed attempt can never leave a prior cycle's binding readable by a later finish."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "design-critique.sh (WANT filtering line, ~line 74-75 in the begin --brief block)",
+      "breaking_input": "A brief whose platform contract causes `node design-lint.mjs --viewports <brief>` to print a token containing a shell glob character (e.g. a bare `*`) instead of a clean `WxH` list -- a lint-tool bug or format drift, not even malice.",
+      "why": "`WANT=\"$(printf '%s\\n' $WANT | grep -E '^[0-9]{2,5}x[0-9]{2,5}$' | ...)\"` expands the first `$WANT` unquoted, so bash performs word-splitting AND pathname expansion against the current working directory before the numeric filter ever runs. If cwd happens to contain a file whose name matches the WxH shape (or the glob otherwise changes the token stream), it can be silently folded into the declared viewport set, and the render loop then renders/judges a viewport nobody declared.",
+      "fix": "Quote the first expansion: `printf '%s\\n' \"$WANT\"` (or route through `tr ' ' '\\n'` on the already-captured string) so no globbing/splitting happens before the regex filter."
+    }
+  ]
+}

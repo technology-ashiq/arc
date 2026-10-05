@@ -61,3 +61,41 @@ two** qualifying sources and zero margin — if either breaks, that acceptance c
 is why it is carried as an assumption-ledger row with a real trigger rather than as a safe
 assumption. The curator therefore performs a **robots.txt preflight per fetch and refuses on
 disallow**, so permission is enforced mechanically rather than by this table staying current.
+
+## Amendment 2026-09-27 — the zero margin was spent on the first real build
+
+The assumption-ledger row fired on the first real pack build (Phase 02, 0 screens added):
+
+- **Lapa Ninja** — its Cloudflare answers `robots.txt` with **403** to `ClaudeBot` and
+  `Claude-User`, while a browser agent gets through. That is the site refusing Claude. A borrowed
+  agent string would be evasion, so the row goes **off**.
+- **SaaSFrame** — pages browse fine, but every screenshot is served from Webflow's shared CDN
+  (`cdn.prod.website-files.com`), whose `robots.txt` answers **403 AccessDenied**. Permission is
+  unknown for every image the gallery shows, and adding a host shared by every Webflow site to one
+  row's binding would bind nothing. The row goes **off**.
+
+The owner chose the replacements on 2026-09-27, on the same test this ADR applies, run by probe
+the same day: **nicelydone.club** and **collectui.com** go **active**. Each serves `robots.txt`
+as plain text allowing `ClaudeBot` and `Claude-User` on both the page host and the image host, and
+neither publishes terms at the usual paths. The rule did not change; the table did, which is the
+mechanism working. The preflight per fetch still decides every request.
+
+### Second change, same day: saasui off, screensdesign born off
+
+collectui is a client-rendered app, so a plain fetch reaches no screen URL. The owner then made
+**saasui.design** active. Its homepage images were on its own host, but every screen on an
+application page is on **cdn.sanity.io**, a CDN shared by every Sanity project: the SaaSFrame
+case again. The site's `/_next/image` proxy is on saasui.design, but its query (~120 bytes) is
+past the curator's 64-byte cap (ADR-1420). The owner declined widening that boundary for one
+gallery, so the row goes **off**.
+
+**screensdesign.com** was scouted as the replacement. robots allows both agents, and every screen
+image is on its own `media.screensdesign.com`. But its Terms of Service §(e) forbid "any robot,
+spider, scraper, or other automated means" without prior written consent. It is recorded **off**
+so it is not scouted again. The lesson is about order: a homepage count is not the screen pages,
+and the terms page is read before any probe, not after.
+
+That leaves one working source (nicelydone). The owner amended REQ-04 from "≥2 active sources"
+to "≥1" through `/arc-change` rather than widen a boundary or keep scouting (0 of 5 clean). The
+price is a new PLAN ledger row: if Phase 03's jury shows single-gallery bias, a second source is
+mandatory again before Phase 05.
