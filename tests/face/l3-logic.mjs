@@ -434,6 +434,17 @@ check("the concepts anchored in the template are reachable", laneConcepts.length
 check("every concept carries the STATION as well as the room -- half a destination is not one",
   paletteAll.filter((i) => i.kind === "concept").every((i) => typeof i.station === "string" && i.station.length > 0));
 
+// Settings is a workroom entry, never the front door's (owner, 2026-10-01; attack 8b23b40 L4): a decision held here,
+// not a comment at two call sites. The mutant is a door list that carries it.
+check("paletteFor is exported (vacuous-pass guard)", typeof shell.paletteFor === "function");
+const doorList = shell.paletteFor("door", withLive, conceptMap);
+const hqList = shell.paletteFor("hq", withLive, conceptMap);
+/** @param {{ id: string }[]} list */
+const doorClean = (list) => list.length === paletteAll.length && !list.some((i) => shell.isSettingsItem(i));
+check("the door's palette never offers Settings", doorClean(doorList), `door=${doorList.length}`);
+check("the workroom's palette offers Settings exactly once, after every place", hqList.filter((i) => shell.isSettingsItem(i)).length === 1 && shell.isSettingsItem(hqList[hqList.length - 1]), `hq=${hqList.length}`);
+check("the same judge FAILs the workroom's list on the door (mutant)", !doorClean(hqList));
+
 // A concept homed in a room that does not exist is a result that opens nothing. face-coverage
 // now fails closed on exactly that, so it should be impossible -- which is the reason to skip
 // it here rather than render it: if the gate ever regresses, the palette must not be the place

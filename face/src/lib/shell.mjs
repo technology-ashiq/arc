@@ -335,3 +335,16 @@ export const SETTINGS_ITEM = Object.freeze({ id: "action:settings", label: "Sett
 export function isSettingsItem(item) {
   return !!item && item.id === SETTINGS_ITEM.id;
 }
+
+/**
+ * The palette for a surface: the workroom's adds Settings, the front door's never does (owner, 2026-10-01). A decision
+ * here, held by l3-logic, not a comment beside two call sites (attack 8b23b40 L4).
+ * @param {"door" | "hq"} surface
+ * @param {{ id: string, name: string, ring: string, sentence?: string, template?: boolean }[]} rooms
+ * @param {Record<string, { room: string, station: string }>} [concepts]
+ * @returns {{ id: string, label: string, hint: string, kind: "room" | "concept", room: string, station?: string }[]}
+ */
+export function paletteFor(surface, rooms, concepts) {
+  const items = paletteItems(rooms, concepts);
+  return surface === "hq" ? [...items, SETTINGS_ITEM] : items;
+}

@@ -19,7 +19,7 @@ import './index.css'
 import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
 import { findRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
-import { SETTINGS_ITEM, buildHash, conceptsFromContract, isSettingsItem, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash, referenceAt } from './lib/shell.mjs'
+import { buildHash, conceptsFromContract, isSettingsItem, isTextField, keyAction, moveRoom, navOrder, paletteFor, parseHash, referenceAt } from './lib/shell.mjs'
 import { asOfReaches, attachModules, collectModules, EXEMPTION_FILE, extraRooms, homeRoom, modeChip, PULSE_MS, railGroups, refusedPayload, roomHoldingKind, withExtras } from './lib/registry.mjs'
 import type { ExtraRooms, ModuleContext } from './lib/registry.mjs'
 import { needsYouByRoom } from './lib/map.mjs'
@@ -335,7 +335,7 @@ export default function App() {
       <>
         {paletteOpen && shell && (
           <Palette
-            items={paletteItems(shell.rooms, concepts)}
+            items={paletteFor('door', shell.rooms, concepts)}
             onClose={() => setPaletteOpen(false)}
             onOpen={(item: PaletteItem) => { setPaletteOpen(false); open(item.room) }}
           />
@@ -377,7 +377,7 @@ export default function App() {
   // A template is not a room you can open; asking for it by URL is answered like any unknown id.
   const openable = room && !room.template ? room : null
   // The workroom palette also opens Settings (Phase 11, REQ-15); the front door's never does (owner, 2026-10-01).
-  const items: PaletteItem[] = [...paletteItems(shell.rooms, concepts), SETTINGS_ITEM]
+  const items: PaletteItem[] = paletteFor('hq', shell.rooms, concepts)
   const needs = needsYouByRoom(openItems ?? [], contract, shell.rooms.map((r) => r.id))
   const attached = openable ? attachment.attached[openable.id] : undefined
   const ctx: ModuleContext | null = openable
