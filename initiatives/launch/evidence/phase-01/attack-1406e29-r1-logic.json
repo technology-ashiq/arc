@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/hosting/vercel.mjs:108",
+      "breaking_input": "The newest commit touching vercel.json is an owner commit whose message contains a line starting with 'Arc-Launch-Tag: technology-ashiq/arc-sandbox@release@' (e.g. a README note quoting the trailer, or a forged message); the file was not written by release, but wroteIt() accepts it because the check is startsWith on the release prefix, not an exact trailer line",
+      "why": "startsWith(release) lets any user-editable commit message containing that prefix pass the ownership trailer check. The code claims content alone is not ownership, but then treats a prefix match inside any commit message as ownership. This lets a non-launch commit lift the hold and makes a re-run of hosting leave production unheld. Twin of the 'marker found anywhere in user-editable description' pattern.",
+      "fix": "Only accept an exact, full trailer line on its own (line.trim() === the exact Arc-Launch-Tag value for the release slot), never a startsWith prefix, and/or verify the commit author matches the launch token identity.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/hosting/vercel.mjs:153",
+      "breaking_input": "During verify's 20x30s poll, a network abort/timeout of ctx.fetch throws an Error with no .code (or a code other than ABORTED); verify's catch only swallows e.code === 'ABORTED' and rethrows everything else out of a read-only probe, so a transient transport error fails a read that should answer not-ok",
+      "why": "The defect pattern 'verify threw a refusal out of a read-only probe' is repeated: the catch handles only the ABORTED code and lets every other refusal or transport error escape the read verb. The slot timeout itself is also a coded refusal but is intentionally rethrown; a non-ABORTED transport failure becomes an uncaught throw from verify.",
+      "fix": "In verify, convert every coded refusal (including non-ABORTED codes) into a not-ok {reason}, and only rethrow genuinely unexpected exceptions after they are classified; at minimum wrap the probe calls so any refusal is an answer.",
+      "twin_of": "verify threw a refusal out of a read-only probe"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/hosting/vercel.mjs:137",
+      "breaking_input": "Run hosting once: vercel.json is created with the hold and the github-file resource is reported. Release lifts it with a tagged commit. The owner then edits vercel.json (e.g. adds an 'env' key) making the file's newest commit an untagged owner commit. Re-running hosting now sees the file exists, wroteIt() fails because the newest commit has no trailer, and refuses FOREIGN_FILE even though launch originally wrote the file and the hold is currently lifted",
+      "why": "wroteIt() only looks at the newest commit touching the file, not the commit history or the recorded resource. The 'released' test only covers the case where the newest commit is the release-tagged one. An owner edit after release makes any future hosting re-run unable to re-place a hold, blocking re-holding after an accidental owner edit. Twin of the identical-file/skip path that still needs ownership.",
+      "fix": "Check the file's commit history for a launch trailer (e.g. per_page>10 and look for the original Arc-Launch-Tag commit) rather than only the newest commit, or record the original commit sha in the github-file resource.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": "products/launch/providers/hosting/vercel.mjs:153",
+      "breaking_input": "A Vercel 401/403/429 from the deployments list inside probe() throws an Error whose message is 'vercel GET /v6/deployments -> 401' with no code; verify catches it and, because e.code is undefined, rethrows it out of a read verb, so a transient credential/rate-limit failure escapes as a hard crash instead of a not-ok answer",
+      "why": "The catch only handles coded refusals (e.code && e.code !== 'ABORTED'); API HTTP errors thrown by call() have no custom code, so they are never converted to not-ok answers. This is the same verify-refusal escape repeated for every Vercel/GitHub API error inside the probe.",
+      "fix": "Give call() errors a coded property (e.g. HTTP_STATUS) and have verify convert every coded refusal to {ok:false, reason}; or in the verify catch, treat any error from the probe (except the deliberate ABORTED propagation) as a not-ok answer.",
+      "twin_of": "The verify fix caught one refusal code around one call, so the others still threw out of a read"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:82",
+      "breaking_input": "Vercel returns a project whose link is null or whose link.org/repo are missing (a project created by the Vercel UI that is not yet linked); own() throws FOREIGN_PROJECT with no way for the caller to distinguish 'exists but unlinked' from 'linked to another repo', and the refusal message shows no actionable reason",
+      "why": "own() collapses 'unlinked project' and 'project linked elsewhere' into the same code, and the message only names the project and full. An unlinked project is a recoverable state (the adapter could link it or ask for the GitHub App install), but it is treated as foreign and never touched.",
+      "fix": "Return a distinct code (e.g. UNLINKED_PROJECT) when project.link is absent, with a message instructing the owner to link the repo or install the Vercel GitHub App, and keep FOREIGN_PROJECT only for a project linked to a different repo.",
+      "twin_of": "Any 403 with the right words became PLAN_LIMIT"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:120",
+      "breaking_input": "A repo has no branch protection or main protections; the adapter PUTs vercel.json directly to branch 'main'. If the repo has no main branch (e.g. default branch is 'master') the Contents API 404s on main, and the created Vercel project/domain are left recorded but the hold and CNAME are partially applied",
+      "why": "The code hardcodes sha=main for the contents GET and branch=main for the PUT without asking the repo's default branch. The test fixture always has a main branch, so the real-world case where the venture repo's default branch is master, trunk, or development fails with an unrecorded partial create: project and domain may be created before the file PUT fails.",
+      "fix": "Resolve the repo's default branch from the GitHub repo API and use that branch for both the contents GET and the PUT; also verify the branch exists before creating Vercel resources.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:115",
+      "breaking_input": "After the hold PUT succeeds, a domain POST or config call fails (e.g. domain already in use elsewhere); the github-file resource was already reported, so the teardown deletes the hold file, but the vercel project remains linked to the repo and the CNAME never reported. A re-run sees the file missing, PUTs it again, but the previously created project is reported as a new resource each run with no idempotency check on reported resources",
+      "why": "The scaffold reports the git file immediately after PUT. A later failure leaves the project and domain in partial states; nothing records which run created the project, and the reported array grows with duplicate project/domain ids on re-runs. The twinned defect is 'a resource was reported only after a later call succeeded' — here the inverse: reported before later calls succeed.",
+      "fix": "Report each resource only after the entire scaffold succeeds, or record partial state keyed by project id so re-runs reuse the same resources instead of duplicating them.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:151",
+      "breaking_input": "The probe checks only that some deployment has meta.githubDeployment='1' and githubCommitRepo matching the project name. A deployment created by an owner's direct push before the hold was committed also carries githubDeployment='1' and githubCommitRepo, so verify answers ok even when the hold file is missing or was never committed",
+      "why": "The exit criterion is 'a git-triggered deployment exists', but the reason this matters (ADR-1727) is the ignored build IS the proof the hold was exercised. The probe never checks that the deployment's commit is the one that introduced vercel.json, nor that the deployment is the skipped one (state CANCELED/ignored), nor that the deployment's sha is newer than the hold commit. A pre-hold push satisfies the probe.",
+      "fix": "Match the deployment to the commit that created vercel.json (e.g. compare githubCommitSha to the hold commit sha, or require the deployment to be a skipped/ignored production deployment recorded after the hold commit).",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:114",
+      "breaking_input": "GitHub returns vercel.json content with a different but semantically equal serialization (e.g. single-line compact JSON or reordered keys); unb64(cur.body.content) === HOLD fails the exact string comparison, so a hold that launch wrote but a formatter rewrote is treated as 'not the hold', no resource is reported, and teardown will not delete the file",
+      "why": "The equality is whitespace/byte-exact against HOLD's pretty-printed form. The twin pattern is 'an identical file was claimed as launch's without asking who committed it' — here the file is NOT claimed even though the hold is functionally present, losing the resource from teardown.",
+      "fix": "Parse the JSON and compare the ignoreCommand value (or normalize the serialization) instead of the raw bytes; report the resource whenever the parsed hold matches.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:40",
+      "breaking_input": "GITHUB_TOKEN shape is /^[A-Za-z0-9_]{20,}$/ which accepts a 40-underscore string or a placeholder like 'gho_' + 20 'x's; aCR is stripped by trim only at the edges, so an interior CR (env value with CRLF line breaks inside a token) is not caught by the shape test if the rest is alnum, and it reaches the Authorization header",
+      "why": "The shape test checks characters but not cardinality or real token format. The prior defect pattern says a token with a CR reached a fetch header and fetch's TypeError quotes the header — here interior whitespace is not rejected, and call() builds the header with Bearer auth, so a token containing a CRLF could inject a header line (though the header value itself is sanitized only in the error path, the request still carries the forged header).",
+      "fix": "Reject tokens containing any whitespace (not just trim edges), and require a stricter Vercel/GitHub token shape (e.g. allow only visible ASCII, reject control chars, require a minimum variety of characters).",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:83",
+      "breaking_input": "The repo id passed from upstream is validated only with a regex /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\\/[a-z][a-z0-9-]{0,63}$/; a repo named 'a' (single char owner) fails the owner part? Actually owner 'a' passes but repo 'a' passes too. More concretely: an upstream id 'Technology-Ashiq/Arc-Sandbox' passes the regex (case-insensitive on owner? No — owner allows uppercase, repo requires lowercase) — owner with uppercase passes, but the code then uses `${full}` directly into the Vercel gitRepository.repo and GitHub API path; GitHub treats owner case-insensitively, but Vercel's gitRepository may not, so a case-mismatched upstream id creates a project linked to a non-existent repo on Vercel",
+      "why": "The regex validates shape but not that the repo identifier is case-canonicalized before being sent to two providers with different case semantics; the own() check lowercases both sides, but the create call sends the original mixed-case full. The twin is validating one read and using another.",
+      "fix": "Canonicalize full to its GitHub spelling from the upstream GitHub repo resource (owner lowercase, repo as-reported) before using it in API paths and Vercel links.",
+      "twin_of": "Upstream entries were coerced with String(), so a null id became the hostname \"null\""
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:86",
+      "breaking_input": "If Vercel returns a 200 with a project body whose id is missing (malformed response, or a gateway 200 with empty body), own() throws 'vercel returned no project' — an uncoded Error that in verify propagates out of the read; the same error text is not a coded refusal",
+      "why": "own() uses throw new Error (no code) for 'no project', unlike the refuse() calls. Any call path that reaches this (including verify's probe) throws an uncoded error out of a read-only verb, matching the twin 'verify threw a refusal out of a read-only probe'.",
+      "fix": "Use refuse('BAD_VERCEL_RESPONSE') for the missing-project case, and let verify convert coded refusals to not-ok.",
+      "twin_of": "verify threw a refusal out of a read-only probe"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:124",
+      "breaking_input": "Vercel returns recommendedCNAME as [{rank:2, value:'b.example.com'}, {rank:1, value:'a.example.com'}] — the code sorts by Number(a.rank)||99, which turns rank 0 and rank 'x' both into 99 with no stable tiebreak; more importantly the sort is numeric but the fake's recommendedCNAME has no rank field, so in the contract test the sort is stable by insertion order, but in real Vercel a missing rank becomes 99 and a malformed first entry (rank '0') is skipped past a valid later one; the reported target is chosen before validating the value with HOST? The code does validate HOST after picking recs[0], so an evil value fails — the actual failure is that a null/empty first recommendation with a valid second is rejected with NO_TARGET, or a sort tie on equal ranks picks whichever Vercel returned first",
+      "why": "The pattern is 'every poll loop's final reason' / 'every value one adapter hands another' — the target is chosen based on a sort that trusts untrusted rank values, then validated. A provider sending a perfectly valid second recommendation whose first entry has a bogus rank is refused, making hosting fail on a provider data quirk.",
+      "fix": "Filter recommendations first by having a string value that passes HOST, then sort by rank among valid ones, and pick the highest-ranked valid target.",
+      "twin_of": "Provider error text and resolver answers went raw into the slot's reason"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:171",
+      "breaking_input": "teardown sorts resources by Object.keys(order).indexOf(a.kind), so unknown kinds are placed before known ones (indexOf returns -1) and are dropped by the filter only in the map, not the filter; the teardown step list can start with an action for a kind that launch never made if a future resource kind is added to order without removing it from the sort key list",
+      "why": "The scaffold's else-if only reports github-file when the content exactly equals HOLD. When the file exists and was lifted (released), no github-file resource is reported, so teardown has no step to delete it — but that is correct after release. The bug is when the file exists with the hold and was re-reported? The test 'released' expects teardown only removes domain+project and not the hold because the hold is already lifted. That is intended. So the actual low-severity gap: if the exact-HOLD comparison fails due to formatting (L9), teardown never deletes a file launch did write.",
+      "fix": "Report the github-file resource whenever wroteIt() confirms launch wrote the file, regardless of whether the current content matches HOLD exactly, and let teardown's delete action be conditional on the resource being present.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:100",
+      "breaking_input": "The HOLD JSON is built once with JSON.stringify and a trailing newline; the commit that places it uses branch='main', but if the repo has branch protection with 'require linear history' or the contents API returns a 409 conflict because main advanced between the GET and PUT, the PUT fails and the project/domain are left half-created; on a re-run the 404 branch re-attempts the PUT but the project was already created in the first run, and the second run's reported resources include a fresh vercel-project id from the second run? No — the second run GETs the project by name and reuses it, so the duplicate is avoided; the real issue is the re-run treats the existing project as its own and reports it, but the first run's teardown never knew about it, so a teardown after the first failed run only deletes the domain and not the project",
+      "why": "A scaffold that fails between project create and domain/hold leaves the project resource in ctx.resources only if report() already ran; report() runs immediately after create, so the project IS recorded. The uncovered gap is the hold commit never being re-tried with a rebase after a concurrent main change, leaving the hold absent while the run reports success via the domain and target (the file branch may 404 first, PUT succeeds, then all reports happen — a concurrent main change between GET and PUT is the concrete break)",
+      "fix": "On a 409/422 from the contents PUT, re-read the latest main, retry the PUT onto the new HEAD, or fail the scaffold with a coded CONFLICT and do not report the file resource.",
+      "twin_of": "The parent hashed the adapter file and the worker imported a second read of it, and re-read the registry too -> validate one read, use another"
+    }
+  ]
+}

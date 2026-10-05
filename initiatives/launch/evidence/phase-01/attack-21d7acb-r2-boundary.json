@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:101-111",
+      "breaking_input": "POST /v11/projects creates the project, then own() throws (UNLINKED_PROJECT because the GitHub App link lags the create, or the process is killed before ctx.report). The same applies to the domain: POST /domains succeeds, then the process dies before report. On the re-run, GET /v9/projects/<name> returns 200 and nothing was recorded.",
+      "why": "The created kind is chosen from `made || before(...)`. `made` lives only in memory, so the re-run classifies launch's own orphan as `vercel-project-found` (and the domain as `vercel-domain-found`). Teardown skips both, so launch leaks the project it made. This is the B7 round-1 finding, still open and never dispositioned, and the new found-kind logic makes it permanent.",
+      "fix": "Report the created project and domain immediately after the POST, before own() or any later call, using the created kind. Alternatively, stamp a launch marker on the project at creation and test it on re-run.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:206-209",
+      "breaking_input": "First scaffold reports github-file `owner/repo:vercel.json`. Release lifts the hold, and the owner then adds their own `env` to vercel.json (the owner-edit-after-release case). The exit plan is executed.",
+      "why": "Teardown emits an unconditional `delete` for the recorded github-file resource. The resource id carries no sha or content check, so the step deletes whatever vercel.json exists at teardown time, which is now the owner's file. The fix gated ownership on history at scaffold time, but teardown never re-checks it. This is a 'did launch write what it is about to delete' gap.",
+      "fix": "Make the delete step conditional. At execution time, require the file content to still equal HOLD, or the blob sha to equal the sha recorded when the hold was placed. Otherwise skip it. Record that sha in the resource id.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it -> every \"unchanged, so skip\" path that still reports a resource"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:176-181",
+      "breaking_input": "A live venture after release has more than 100 deployments (previews and production pushes). `verify --all` runs and GET /v6/deployments?projectId=...&limit=100 returns only the newest 100.",
+      "why": "The deployment of the hold commit is the oldest one and falls outside the window. No match is found, so verify reports 'no git-triggered deployment of the hold commit' on every later run, and a healthy slot flaps to not-ok. The fixed-size window is a boundary the new sha-match proof makes fatal.",
+      "fix": "Ask Vercel for that commit directly with the `meta-githubCommitSha=<sha>` filter, or follow `pagination.next` until the sha is found.",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on -> every verify that reads \"the latest X\": the latest for WHAT?"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:70-73",
+      "breaking_input": "vercel.json has more than 100 commits (the owner's CI rewrites it). `commits?path=vercel.json&sha=main&per_page=100` returns only the newest page, so launch's original trailer commit is on page 2.",
+      "why": "`ours` becomes false. With the file present, scaffold throws FOREIGN_FILE and locks out a re-run of hosting. With the file absent (hold lifted by deletion), it re-places the hold on a live venture. In verify the `.pop()` takes the oldest of the page, not the real hold commit. The 100 cap is unpaginated.",
+      "fix": "Paginate the commit list until a trailer is found or the list ends. Or record the hold commit sha in the github-file resource and look it up directly.",
+      "twin_of": "An absent hold was re-placed, re-holding a live venture after release deleted the file -> every \"write once\" guard keyed on current state"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:38-43,198",
+      "breaking_input": "The slot timeout aborts an in-flight ctx.fetch. Node rejects with a DOMException named AbortError carrying the numeric code 20 (or TimeoutError, code 23), not the string \"ABORTED\".",
+      "why": "call() rethrows anything with a truthy `e.code` as is. verify then tests `e.code === \"ABORTED\"`, which is false for 20, so the timeout is swallowed as `{ok:false, reason:\"20: ...\"}`. The same defect is in the repo and ci verify catches changed in this diff. The abort-swallowed twin returns for in-flight requests.",
+      "fix": "Treat `e.name === \"AbortError\" || e.name === \"TimeoutError\" || signal.aborted` as ABORTED, in call() and in all three verify catches.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll -> every wait, retry or poll loop in an adapter or the runner"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:70-78",
+      "breaking_input": "An owner's PR description that quotes the exact line `Arc-Launch-Tag: <slug>@release@arc-ship-release` is squash-merged. GitHub copies the PR body into the commit message, and that commit touches vercel.json.",
+      "why": "`tagged` accepts any exact line in any commit that touched the file, with no author or committer check. Free text that a squash merge can inject now confers ownership. The owner's file is then treated as launch's and is no longer refused as FOREIGN_FILE. Round-1 B8 was not dispositioned.",
+      "fix": "Also require the commit author or committer to be the launch token identity. Or compare against the commit sha recorded in state.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description -> every ownership test on free text"
+    }
+  ]
+}

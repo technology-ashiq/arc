@@ -37,11 +37,11 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 
 ## Now
 
-**Current position:** Phase 01. Slice 1 merged 2026-10-04 (PR #322): `plan · status · verify · teardown --plan` on
-fakes. No real provider has been called.
-**Next step:** Phase 01 slice 2, fakes-first (owner, 2026-10-05): the cloudflare-dns adapter + in-memory fake + the
-transport seam that replays a recorded real response through the real adapter code; `dns` now follows `hosting` and
-reads its CNAME target through `ctx.upstream` (ADR-1725). Real runs wait on the tokens below. Day-3 kill is in this phase.
+**Current position:** Phase 01, fakes-first. Merged: slice 1 read verbs (#322), slice 2 cloudflare-dns + `ctx.upstream`
+(#323, ADR-1725), slice 3 github repo + github-actions ci (#326, ADR-1726). No real provider has been called.
+**Next step:** slice 4 vercel hosting: a project linked to the repo, production held by a committed `vercel.json`
+until gate 2 (ADR-1727), the CNAME target reported for dns. Then environments · secrets · tls · frontend · release.
+Real runs wait on the tokens below; a real `ci` apply also tests private-repo protection (ADR-1726).
 
 **Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
 a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the

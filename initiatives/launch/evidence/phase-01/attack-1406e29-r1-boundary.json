@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/hosting/vercel.mjs:98-106",
+      "breaking_input": "A Vercel project named arc-sandbox already exists, linked to the right repo (the owner made it, or an earlier run's state was lost). The domain is already attached to it. scaffold passes own(), then reports vercel-project and vercel-domain without asking who created them.",
+      "why": "The adapter records resources it only found as its own. teardown then emits delete-project and remove-domain for the owner's project and domain. The 'did launch create it, or touch something already there' pattern recurs. The ownership guard checks only the repo link.",
+      "fix": "Report a project or domain only on the call that created it (the 404 then POST path). Otherwise record it as adopted and exclude it from teardown.",
+      "twin_of": "Protection launch only extended was recorded as launch's, so the exit plan would unprotect the owner's branch -> every resource launch reports: did launch create it, or touch something that was already there?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:109-117",
+      "breaking_input": "release lifts the hold by deleting vercel.json, or the owner deletes it, as ADR-1727 says is allowed ('deletes vercel.json lifts the hold by hand'). hosting is re-run (retry, or a resume after a later failure). The GET contents call returns 404.",
+      "why": "The 404 branch rewrites the hold with the hosting tag. A live venture's production is held again, silently. The 'released' test covers only a lifted file, not an absent one. Absence is indistinguishable from 'never written' because the check reads only the file, not the history.",
+      "fix": "On 404, query the commit log for the path. If any commit with this slot's or the release slot's trailer ever touched it, do not re-place the hold.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it -> every \"unchanged, so skip\" path that still reports a resource"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:131-146",
+      "breaking_input": "Vercel returns a plain 5xx or a 429 on the deployments list during verify. call() throws a plain Error with no code.",
+      "why": "verify rethrows anything without e.code, so a transient provider error escapes a read-only probe. The comment says only the slot timeout propagates, but the code does not enforce that. This is the 'verify threw out of a read' pattern. The catch-list fix covered coded refusals only, not uncoded errors.",
+      "fix": "Catch every error except ABORTED and return {ok:false, reason: say(e.message)}.",
+      "twin_of": "The verify fix caught one refusal code around one call, so the others still threw out of a read -> every \"catch X\" fix: list every code the guarded body can throw"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:125-134",
+      "breaking_input": "verify runs with no ctx.signal (a direct verify, or a caller that does not pass one). The probe loop waits 19 times for 30s, about 9.5 minutes, plus 20 requests.",
+      "why": "The critical section reaches the ten-minute stale-lock threshold. withLock may break a live holder's lock as a 'reused pid', and nothing else bounds the poll. The long-critical-section twin shows up again here.",
+      "fix": "Cap the total poll time well under the stale threshold (for example 4 minutes). Take a deadline from ctx and stop on it, not only on the signal.",
+      "twin_of": "`withLock` treats a holder older than ten minutes as a reused pid and breaks its lock, while a hosting apply may run fifteen -> any other caller of `withLock` with a long critical section"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:122-130",
+      "breaking_input": "A preview deployment of a pull-request branch, or an old push, has meta.githubDeployment \"1\" and githubCommitRepo equal to the name. The project is linked but vercel.json was never committed (or the PUT failed after the report).",
+      "why": "The probe takes the first git-triggered deployment for the repo. It does not require that the deployment's commit sha is the hold commit or that it ran on main. verify passes without proving the hold is in place or that production was ever held. This is 'the latest X, for WHAT'. It also matches the repo name only, not the org.",
+      "fix": "Record the hold commit sha at scaffold. Require the deployment's githubCommitSha to equal it, or to be a descendant on main. Also match githubCommitOrg.",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on -> every verify that reads \"the latest X\": the latest for WHAT?"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/hosting/vercel.mjs:109-114",
+      "breaking_input": "The ci slot has already applied branch protection to main (ADR-1726), with required reviews or restricted pushes. hosting's PUT to /contents/vercel.json with branch: main is a direct push to the protected branch.",
+      "why": "GitHub rejects the direct commit with 409 or 422. hosting fails after the project is created and reported, so the production hold can never be placed. The fake GitHub does not model protection on contents PUT, so no test sees it. The branch name 'main' is also hard-coded in sha=, ref= and branch: for a repo whose default branch may differ.",
+      "fix": "Read the default branch from the repo state. Place the hold before protection is applied, or use a PR or an app bypass. Add a fake scenario for a protected branch.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:96-100",
+      "breaking_input": "The POST /v11/projects response omits `link` or has a different casing, even though the project was created. own() throws FOREIGN_PROJECT immediately after the create.",
+      "why": "The created project is never reported (ctx.report comes after own()). It is an orphan that a re-run then refuses as foreign, and teardown never lists it. This is the create-then-validate-then-report ordering again.",
+      "fix": "Report the project id right after a successful POST, before the ownership check. Or re-GET the project and validate that.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:64-74",
+      "breaking_input": "The commit message for vercel.json is edited, or an owner commit body contains a line exactly equal to `Arc-Launch-Tag: arc-sandbox@release@x`. wroteIt() accepts it.",
+      "why": "Ownership of a file is decided by free text in a commit message that anyone with push access can write. startsWith(release) accepts any release-tagged commit. A foreign vercel.json can be treated as launch's, and the owner's file is claimed.",
+      "fix": "Also require the commit author or committer to be the launch identity. Or compare the tagged commit's sha to the one recorded in state.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description -> every ownership test on free text"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/hosting/vercel.mjs:92-98",
+      "breaking_input": "VERCEL_TOKEN is a team-scoped token and the project lives under a team. The calls carry no teamId or slug query.",
+      "why": "GET /v9/projects/<name> returns 404 in the wrong scope, so the adapter POSTs a new project in the personal scope, or fails 409/403 with a confusing refusal. The registry row says 'one team', but no scope is ever sent or checked.",
+      "fix": "Take the team id from the profile or env and append ?teamId= to every Vercel call. Assert the project's accountId on adoption.",
+      "twin_of": "Any 403 with the right words became PLAN_LIMIT -> every classifier keyed on message text: is it also keyed on the request?"
+    }
+  ]
+}

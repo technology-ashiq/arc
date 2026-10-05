@@ -1,0 +1,91 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:104-120",
+      "breaking_input": "Run `arc launch verify --all` with GITHUB_TOKEN set to 20 underscore characters, or with the ci slot's upstream missing; ci verify's repo(ctx) or gh() throws BAD_TOKEN/UPSTREAM_MISSING before the try/catch that only maps PLAN_LIMIT, so the verify loop aborts and the summary is lost.",
+      "why": "The B8 fix catches only PLAN_LIMIT. repo(ctx) before the try can throw UPSTREAM_MISSING/BAD_UPSTREAM, token() can throw BAD_TOKEN, and wait() can throw ABORTED on slot timeout. A read-only probe must answer {ok:false}, never throw a coded refusal out of verify --all.",
+      "fix": "Wrap the whole verify body and convert every coded error to {ok:false, reason: code + message}; do the same in repo verify.",
+      "twin_of": "verify threw a refusal out of a read-only probe"
+    },
+    {
+      "id": "L2",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:39-42 and products/launch/providers/ci/github-actions.mjs:39-42",
+      "breaking_input": "GITHUB_TOKEN = 20 underscore characters (no prefix, no letters). The shape regex accepts it, so the adapter makes a real fetch and reports a generic 401 instead of BAD_TOKEN.",
+      "why": "The L9 fix was not applied: /^[A-Za-z0-9_]{20,}$/ still accepts a 20-character dummy. Real GitHub tokens carry a prefix and are longer, so a wrong-but-shaped token is misreported as a credentials failure rather than a configuration error.",
+      "fix": "Require GitHub's actual token shape, e.g. a prefix plus at least 30 alphanumeric/underscore characters, and reject anything else before any fetch.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included -> every adapter that builds an auth header from ctx.env"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:113-118",
+      "breaking_input": "Owner adds a required check 'security' to main protection; the latest run for main's head has the three arc-ci legs green but the 'security' check fails. ci verify returns ok:true.",
+      "why": "verify only checks that CHECKS are present in the required contexts and that those three jobs are green; it never checks the status of the other required contexts. A branch that is actually blocked by a failing required check is reported as passing.",
+      "fix": "Fetch the run's check runs or jobs for every context in the protection's required_status_checks and require all of them to be green, not just CHECKS.",
+      "twin_of": "`verify` re-implemented apply's checks and kept only half"
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:73-75",
+      "breaking_input": "POST /user/repos returns 422 because the org forbids private repos (not a name collision); the follow-up GET returns 404. scaffold throws a code-less Error 'github refused to create ...' instead of a named refusal.",
+      "why": "The L7 fix was not applied: any 422 is treated as a concurrent create and re-read, and a 404 on that re-read becomes a generic Error with no code, so the runner cannot classify it as UPSTREAM_MISSING or BAD_SLUG.",
+      "fix": "Inspect the 422 body for a name-exists message before re-GET; if the re-GET is 404, throw refuse('UPSTREAM_MISSING', ...) or the appropriate named refusal."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/repo/github.mjs:46",
+      "breaking_input": "A pre-existing private repo named arc-sandbox has description 'my [arc-launch arc-sandbox@repo@github] project' (the marker pasted anywhere in the text). repo scaffold adopts it and ci later writes the workflow into it.",
+      "why": "own() uses description.includes(marker), so a substring match in a user-editable field is enough to make launch treat a repo it did not create as its own. The marker is public and guessable.",
+      "fix": "Anchor the marker match (e.g. require the description to end with the marker) and additionally record the GitHub repo id in state and compare it."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:94-98",
+      "breaking_input": "Owner's main protection has required_status_checks.checks = [{context:'lint', app_id:12345}] and contexts ['lint']; ci scaffold PATCHes required_status_checks with only strict+contexts, so the app_id binding is dropped and any app can satisfy 'lint'.",
+      "why": "The B1 fix replaced PUT with PATCH, but PATCH still replaces the whole required_status_checks object. Sending only contexts discards the checks[] app bindings the owner configured, so the extension is still a silent overwrite of part of the owner's setting.",
+      "fix": "Read the existing checks[] and send them alongside the new contexts, or use POST .../required_status_checks/contexts to add only the missing contexts.",
+      "twin_of": "A PUT replaced the owner's branch protection (reviews, restrictions) to add three checks"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:86-93",
+      "breaking_input": "Owner enables branch protection with required reviews in the window between ci scaffold's GET /branches/main/protection (404) and its PUT; the PUT replaces the new protection with reviews:null.",
+      "why": "The code only avoids replacing protection it can see. The GET-then-PUT is a check-then-act on shared state, so a protection created in that window is wiped exactly like the B1 defect.",
+      "fix": "Re-GET after the PUT and verify the owner's reviews/restrictions are still present, or use PATCH/POST to add checks to whatever exists.",
+      "twin_of": "Gate check-then-emit ran outside the lock, so two applies made two requests and state kept the one the owner did not approve"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "products/launch/providers/repo/github.mjs:33-36",
+      "breaking_input": "Profile slug 'arc-sandbox-' (trailing hyphen) passes repoName regex; POST /user/repos returns 422 and the follow-up GET returns 404, so scaffold throws a code-less error instead of BAD_SLUG.",
+      "why": "The slug regex allows a trailing hyphen, which GitHub repo names cannot have. The data-derived name is not fully validated before it becomes an API path segment, so an invalid slug surfaces as a confusing 422 fallback.",
+      "fix": "Reject leading/trailing hyphens in repoName and map the 422 fallback to BAD_SLUG when the name is invalid.",
+      "twin_of": "`ctx.write` accepted `nul`, `C:foo` and `file.txt:stream`, which are files on Linux and something else on Windows -> every path segment built from data: slugs, ids, file names"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/repo/github.mjs:46-52",
+      "breaking_input": "After a teardown archives the venture repo, run `arc launch` again for the same venture; repo scaffold GETs the archived repo (still private and tagged), own() passes, and ci scaffold's Contents PUT fails 403 because the repo is read-only.",
+      "why": "own() and verify() never check the repo's `archived` field. A re-run after the documented teardown adopts a read-only repo and fails later with a confusing generic error instead of refusing up front.",
+      "fix": "In own(), refuse REPO_ARCHIVED when repo.archived is true (or unarchive before writing), and have verify return {ok:false} for an archived repo."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:74-84",
+      "breaking_input": "Owner already has .github/workflows/arc-ci.yml with byte-identical content to WORKFLOW; ci scaffold skips the Contents PUT, reports github-workflow, and teardown later deletes the owner's file.",
+      "why": "The unchanged-file check avoids re-committing, but the resource is still reported as launch's, so teardown will delete a file launch never created; the commit trailer is also absent. The resource should only be claimed when launch actually wrote it.",
+      "fix": "Only report github-workflow when launch actually created or updated the file, or when the existing file's latest commit carries Arc-Launch-Tag; otherwise refuse or skip."
+    }
+  ]
+}
