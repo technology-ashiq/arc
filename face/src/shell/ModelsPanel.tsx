@@ -1,5 +1,5 @@
-// ModelsPanel.tsx -- HQ's Settings menu (face v2 Phase 10, REQ-14, ADR-1350; Phase 11, REQ-15, Amendment 1), opened
-// from the workroom header and from ⌘K.
+// ModelsPanel.tsx -- HQ's Settings page (face v2 Phase 10, REQ-14, ADR-1350; Phase 11, REQ-15, Amendments 1 and 2),
+// drawn in the workroom's main area at `view=settings`, opened from the workroom header and from ⌘K.
 //
 // Two sections. MODELS: the owner adds the model the face answers with -- any OpenAI-compatible endpoint, free or paid,
 // or a local one -- switches, removes, and TESTS one before asking it anything (ok or why, and the seconds it took; the
@@ -110,9 +110,10 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
   )
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[8vh] px-4" role="dialog" aria-modal="true" aria-label="Settings: models and voice" style={{ fontFamily: UI }}>
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default" style={{ background: 'var(--scrim)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)' }} />
-      <div data-models-panel className="relative w-full max-w-[600px] max-h-[84vh] overflow-y-auto px-6 py-5" style={{ border: '1px solid var(--line-2)', background: 'var(--bg-2)', borderRadius: 'var(--r-lg)', boxShadow: 'var(--shadow-pop)' }}>
+    // A page in the workroom's main area, not a dialog over it (ADR-1350 Amendment 2): no scrim, and the rail and header
+    // stay usable beside it.
+    <div className="room-enter" aria-label="Settings: models and voice" style={{ fontFamily: UI }}>
+      <div data-models-panel className="relative w-full max-w-[720px] px-6 py-5" style={{ border: '1px solid var(--line-2)', background: 'var(--bg-2)', borderRadius: 'var(--r-lg)' }}>
         <button type="button" aria-label="Close the settings" onClick={onClose} className="absolute top-3 right-3 inline-flex items-center justify-center w-[28px] h-[28px] cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)" style={{ color: 'var(--text-3)', borderRadius: 'var(--r-sm)' }}>
           <X size={14} aria-hidden="true" />
         </button>
