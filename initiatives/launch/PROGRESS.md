@@ -37,10 +37,11 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 
 ## Now
 
-**Current position:** Phase 00 closed 2026-10-04 (PR #320). The runner, lints and trust boundary run on fakes; no real
-provider has been called.
-**Next step:** Phase 01 — the four read verbs (`plan · status · verify · teardown --plan`) on fakes first; then the real
-adapters, which need the owner's tokens (below). Day-3 kill question is asked inside this phase.
+**Current position:** Phase 01. Slice 1 merged 2026-10-04 (PR #322): `plan · status · verify · teardown --plan` on
+fakes. No real provider has been called.
+**Next step:** Phase 01 slice 2, fakes-first (owner, 2026-10-05): the cloudflare-dns adapter + in-memory fake + the
+transport seam that replays a recorded real response through the real adapter code; `dns` now follows `hosting` and
+reads its CNAME target through `ctx.upstream` (ADR-1725). Real runs wait on the tokens below. Day-3 kill is in this phase.
 
 **Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
 a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the

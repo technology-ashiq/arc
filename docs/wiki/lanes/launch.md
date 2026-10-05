@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (25)
+## Decisions (26)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -53,6 +53,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1722`](../../../docs/adr/1722-venture-repos-are-private-under-the-owners-account.md) | A venture repo is a private GitHub repo under the owner's account, named after the slug | accepted | 2026-10-03 |
 | [`1723`](../../../docs/adr/1723-arc-launch-is-a-node-cli-wrapped-by-one-command-doc.md) | `arc launch` is a node CLI wrapped by one hand-written command doc | accepted | 2026-10-03 |
 | [`1724`](../../../docs/adr/1724-real-provider-steps-use-existing-free-accounts-and-owner-placed-tokens.md) | Real-provider steps use arc's existing free accounts and owner-placed tokens; a missing one REFUSES | accepted | 2026-10-03 |
+| [`1725`](../../../docs/adr/1725-dns-follows-hosting-and-reads-its-target-through-ctx-upstream.md) | `dns` follows `hosting` and reads its CNAME target through `ctx.upstream` | accepted | 2026-10-05 |
 
 ## Source
 

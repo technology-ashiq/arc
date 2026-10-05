@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **144** | **34** |
 
-Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 323 of 388 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 324 of 389 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -105,7 +105,7 @@ Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 323 of 
 | [1400–1499](adr/1400.md) | 21 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
 | [1600–1699](adr/1600.md) | 26 | 0 |
-| [1700–1799](adr/1700.md) | 25 | 0 |
+| [1700–1799](adr/1700.md) | 26 | 0 |
 
 ## Commands
 

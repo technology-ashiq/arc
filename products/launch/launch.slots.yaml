@@ -24,6 +24,7 @@ slots:
     verify: dns-probe
     depends_on:
       - domain
+      - hosting
     gate: none
     approval: false
     timeout: 300
