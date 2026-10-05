@@ -279,9 +279,12 @@
           "not instrumented",
           "tier (model)",
           "trial (model_source)"
+        ],
+        "adrs": [
+          "1800"
         ]
       },
-      "itemCount": 4
+      "itemCount": 5
     },
     {
       "id": "policy",
@@ -1348,6 +1351,7 @@
       "1500": "lane",
       "1600": "lane",
       "1700": "lane",
+      "1800": "model-policy",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
