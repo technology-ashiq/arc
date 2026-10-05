@@ -470,7 +470,7 @@ arm() {
 
 @test "launch-contract: a key file in git fails verify; the template variants do not" {
   arm secrets leaked
-  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false key file in git: apps/web/.env.local" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false key file in git (main tip tree): apps/web/.env.local" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a template that carries a value or a line that is not NAME= is refused" {
@@ -481,4 +481,22 @@ arm() {
   [[ "$(j 'o.verify.reason')" == "BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
   arm secrets truncated
   [[ "$(j 'o.verify.reason')" == *"too large to list"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: multi-segment and upper-case env files are keys in git; a .x.example is a template" {
+  arm secrets leaked-shapes
+  [ "$(j 'o.verify.reason')" = "key file in git (main tip tree): apps/web/.env.production.local" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verifyUpper.reason')" = "key file in git (main tip tree): .ENV" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a contract that is a directory or too large to read is refused, never read as empty" {
+  arm secrets contract-not-a-file
+  [[ "$(j 'o.dir.ok + " " + o.dir.reason')" == "false BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.big.ok + " " + o.big.reason')" == "false BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a kill after the template PUT is recovered by its trailer, and the file is pinned to its blob sha" {
+  arm secrets killed-after-put
+  [ "$(j 'o.kinds.join(",")')" = "github-file,env-contract" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.fileId')" =~ ^technology-ashiq/arc-sandbox:\.env\.example@[0-9a-f]{40}$ ]] || { echo "$DONE"; false; }
 }

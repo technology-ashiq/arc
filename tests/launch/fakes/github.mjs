@@ -105,7 +105,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     }
     if (cm) {
       const f = r.files[cm[1]];
-      if (method === "GET") return f ? json(200, { path: cm[1], sha: f.sha, content: f.content, encoding: "base64" }) : err(404, "Not Found");
+      if (method === "GET") return f ? json(200, (f.dir ? [{ path: `${cm[1]}/x`, type: "file" }] : f.big ? { type: "file", path: cm[1], sha: f.sha, content: "", encoding: "none" } : { type: "file", path: cm[1], sha: f.sha, content: f.content, encoding: "base64" })) : err(404, "Not Found");
       if (method === "PUT") {
         if (f && body.sha !== f.sha) return err(409, `${cm[1]} does not match ${body.sha}`);
         if (!f && body.sha) return err(422, "sha was supplied for a file that does not exist");

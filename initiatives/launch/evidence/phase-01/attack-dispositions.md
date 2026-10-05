@@ -28,3 +28,8 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 - L2/B3/B4 fixed (PR in any state). L3 (default branch) stays D12 across all four GitHub writers -- one fix for all, when the trigger fires.
 - Forged-trailer findings (guessable `slug@slot@provider`) -> debt D19: ownership markers are not secrets; an owner who forges one owns the outcome.
 - Fine-grained PAT write 403/404 surfaces as an uncoded GitHub error naming the status -- a refusal, not a pass; left as is.
+
+## attack 14d5374 r1 (slice 6)
+
+- The first run (7f15855) never reached a model: arc-run's input scanner refused a credential-shaped fixture value; renamed in 14d5374, pre-scanned clean.
+- B1/B2/B3/B4 fixed; B5 narrowed in the claim and carried as D20. Logic surface timed out.

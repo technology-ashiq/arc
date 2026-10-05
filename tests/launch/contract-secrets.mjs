@@ -65,6 +65,28 @@ switch (scenario) {
     repo().extraPaths = ["apps/web/.env.local", ".env.sample"];
     out.verify = await adapter.verify(ctx);
     break;
+  case "leaked-shapes":
+    put(".env.example", "DATABASE_URL=\n");
+    repo().extraPaths = ["apps/web/.env.production.local", ".env.prod.example"];
+    out.verify = await adapter.verify(ctx);
+    repo().extraPaths = [".ENV"];
+    out.verifyUpper = await adapter.verify(ctx);
+    break;
+  case "contract-not-a-file":
+    repo().files[".env.example"] = { sha: "c".repeat(40), dir: true };
+    out.dir = await adapter.verify(ctx);
+    repo().files[".env.example"] = { sha: "c".repeat(40), big: true };
+    out.big = await adapter.verify(ctx);
+    break;
+  case "killed-after-put": {
+    // The PUT landed, the report never did: the re-run recognises the file by its trailer and claims it.
+    await adapter.scaffold(ctx);
+    reported.length = 0;
+    await adapter.scaffold(ctx);
+    out.kinds = reported.map((r) => r.kind);
+    out.fileId = (reported.find((r) => r.kind === "github-file") || {}).id || null;
+    break;
+  }
   case "value-in-template":
     put(".env.example", "DATABASE_URL=has-a-value-here\n");
     out.scaffold = await attempt(() => adapter.scaffold(ctx));

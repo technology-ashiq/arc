@@ -13,8 +13,10 @@ const TEMPLATE = [
 ].join("\n");
 const NAME = /^[A-Z][A-Z0-9_]{0,127}$/;
 // A committed env file other than the template is a key in git. `.env.example` and the template variants are not.
-const ENV_FILE = /(^|\/)\.env(\.[A-Za-z0-9_-]+)?$/;
-const TEMPLATE_FILE = /(^|\/)\.env\.(example|sample|template)$/;
+// Any number of dot segments, any case (`.env.production.local`, `.ENV`, `.env.local.bak`); only a name whose LAST
+// segment is example, sample or template is a template (attack 14d5374 B1).
+const ENV_FILE = /(^|\/)\.env(\.[^/]+)*$/i;
+const TEMPLATE_FILE = /(^|\/)\.env(\.[^/]+)*\.(example|sample|template)$/i;
 
 const refuse = (code, message) => Object.assign(new Error(message), { code });
 const SKIP = (n) => n < 0x20 || (n >= 0x7f && n < 0xa0) || n === 0x061c || (n >= 0x200b && n <= 0x200f) || (n >= 0x202a && n <= 0x202e) ||
@@ -86,7 +88,12 @@ function contract(text) {
 async function readContract(ctx, full) {
   const cur = await gh(ctx, "GET", `/repos/${full}/contents/${FILE}?ref=main`, undefined, [404]);
   if (cur.status === 404) return null;
-  return contract(unb64(cur.body && cur.body.content));
+  // Only a plain base64 file is read: a directory, a submodule or a file too large for the contents API answers with
+  // no content, and an empty contract read from it would pass every check (attack 14d5374 B2).
+  const b = cur.body;
+  if (!b || Array.isArray(b) || b.type !== "file" || b.encoding !== "base64" || typeof b.content !== "string")
+    throw refuse("BAD_CONTRACT", `${FILE} on main is not a plain file the contents API returns whole`);
+  return contract(unb64(b.content));
 }
 
 export function envContract() {
@@ -99,9 +106,20 @@ export async function scaffold(ctx) {
   const pid = project(ctx);
   const full = await linkedRepo(ctx, pid);
   const names = await readContract(ctx, full);
+  // The file launch wrote is recorded with the blob sha it wrote, so the exit plan deletes it only while that is
+  // still what main holds (attack 14d5374 B4). A re-run after a kill between the PUT and the report recognises the
+  // file by its trailer on the newest commit that touched it (B3).
   if (names === null) {
-    await gh(ctx, "PUT", `/repos/${full}/contents/${FILE}`, { message: `secrets: the env contract, names only (ADR-1729)\n\nArc-Launch-Tag: ${ctx.tag}`, content: b64(TEMPLATE), branch: "main" });
-    ctx.report({ kind: "github-file", id: `${full}:${FILE}` });
+    const put = await gh(ctx, "PUT", `/repos/${full}/contents/${FILE}`, { message: `secrets: the env contract, names only (ADR-1729)\n\nArc-Launch-Tag: ${ctx.tag}`, content: b64(TEMPLATE), branch: "main" });
+    const sha = put.body && put.body.content && typeof put.body.content.sha === "string" ? put.body.content.sha : "unknown";
+    ctx.report({ kind: "github-file", id: `${full}:${FILE}@${sha}` });
+  } else if (!ctx.resources.some((r) => r.kind === "github-file")) {
+    const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(FILE)}&sha=main&per_page=1`);
+    const top = list(log.body)[0];
+    const msg = top && top.commit && typeof top.commit.message === "string" ? top.commit.message : "";
+    const cur = await gh(ctx, "GET", `/repos/${full}/contents/${FILE}?ref=main`);
+    if (msg.split("\n").some((l) => l.trim() === `Arc-Launch-Tag: ${ctx.tag}`) && cur.body && typeof cur.body.sha === "string")
+      ctx.report({ kind: "github-file", id: `${full}:${FILE}@${cur.body.sha}` });
   }
   ctx.report({ kind: "env-contract", id: `${full}:${FILE}` });
   return { files: [], resources: [{ kind: "env-contract", id: `${full}:${FILE}` }], notes: [] };
@@ -116,7 +134,8 @@ async function probe(ctx) {
   const tree = await gh(ctx, "GET", `/repos/${full}/git/trees/main?recursive=1`);
   if (tree.body && tree.body.truncated === true) return { ok: false, reason: `${full}'s tree is too large to list in one answer; the no-key-in-git check cannot see all of it` };
   const leaked = list(tree.body && tree.body.tree).map((e) => String(e.path || "")).filter((p) => ENV_FILE.test(p) && !TEMPLATE_FILE.test(p));
-  if (leaked.length) return { ok: false, reason: `key file in git: ${leaked.slice(0, 5).map((p) => say(p, 80)).join(", ")}` };
+  // The claim is about main's tip tree only: history and other branches are not read (attack 14d5374 B5, debt D20).
+  if (leaked.length) return { ok: false, reason: `key file in git (main tip tree):${leaked.slice(0, 5).map((p) => say(p, 80)).join(", ")}` };
   // Keys and targets only; the request carries no decrypt flag and no value is read from the answer.
   const env = await vc(ctx, "GET", `/v10/projects/${pid}/env`);
   const set = new Set(list(env.body && env.body.envs).filter((e) => {
@@ -125,7 +144,7 @@ async function probe(ctx) {
   }).map((e) => e.key));
   const missing = names.filter((n) => !set.has(n));
   if (missing.length) return { ok: false, reason: `owner places for production: ${missing.slice(0, 10).join(", ")}${missing.length > 10 ? ` (+${missing.length - 10})` : ""}` };
-  return { ok: true, answerer: "api.vercel.com + api.github.com", evidence: { project: pid, repo: full, names: names.length, keyFilesInGit: 0 } };
+  return { ok: true, answerer: "api.vercel.com + api.github.com", evidence: { project: pid, repo: full, names: names.length, keyFilesInMainTipTree: 0 } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.
