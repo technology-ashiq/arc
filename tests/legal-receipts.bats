@@ -485,6 +485,79 @@ _verify() {
   [ "$VERIFY_STATUS" -eq 3 ]
 }
 
+# ---------------------------------------------------------------------------------------------
+# The re-publish. Phase 01's exit criteria ask for a semantic diff the human reads BEFORE the stamp
+# and a date law that holds across publishes, not only on the first one.
+# ---------------------------------------------------------------------------------------------
+
+LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
+
+@test "legal receipts: a RE-propose names the facts field that moved, before anyone approves" {
+  _published
+  [ -f "$SANDBOX/$LEDGER_REL" ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"receipt: approval.requested"* ]]
+  [[ "$output" == *"this is a RE-publish"* ]]
+  [[ "$output" == *"facts.refund_window_days: changed"* ]]
+  # One field moved, so exactly one is named: a diff that lists every field is a blob again.
+  [ "$(printf '%s\n' "$output" | grep -c '^  facts\.')" -eq 1 ]
+  [[ "$output" != *"FULL-BLOB"* ]]
+}
+
+@test "legal receipts: a re-publish against a record with no field prints WARNs full-blob" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" strip-field-prints "$SANDBOX/$LEDGER_REL"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"this is a RE-publish"* ]]
+  [[ "$output" == *"WARN consistency"*"FULL-BLOB"* ]]
+}
+
+@test "legal receipts: NON_MONOTONIC -- a re-publish moving effective_date backwards is refused" {
+  # The first publish carries 2026-08-13. The second is decided on 2026-08-01, so BACKDATED cannot
+  # be what refuses it: only the ledger's previous date can.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" effective_date 2026-08-12
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out2/_approval.json" "$SANDBOX/d2.json" approve "2026-08-01T00:00:00Z"
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out2" \
+    --request "$(_decides "$SANDBOX/d2.json")" >"$SANDBOX/pub2.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub2.txt"
+  [[ "$output" == *"NON_MONOTONIC"* ]]
+  [[ "$output" != *"BACKDATED"* ]]
+  [ ! -f "$SANDBOX/out2/_published.json" ]
+}
+
+@test "legal receipts: a re-publish moving effective_date FORWARD publishes" {
+  # The positive control for the refusal above: without it NON_MONOTONIC could be passing because
+  # every second publish is broken.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" effective_date 2026-08-20
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out2/_approval.json" "$SANDBOX/d2.json" approve "2026-08-14T00:00:00Z"
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out2" \
+    --request "$(_decides "$SANDBOX/d2.json")" >"$SANDBOX/pub2.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 0 ]
+  run cat "$SANDBOX/pub2.txt"
+  [[ "$output" == *"facts.effective_date: changed"* ]]
+  [[ "$output" == *"published "*" page(s)"* ]]
+}
+
 @test "legal receipts: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"

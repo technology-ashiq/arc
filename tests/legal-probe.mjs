@@ -750,6 +750,20 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * strip-field-prints <published.json> -- make a published record look like one written before
+   * per-field prints existed. The only state left in which a re-publish cannot name what moved.
+   */
+  case "strip-field-prints": {
+    const [file] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    if (!doc.run || !doc.run.facts_fields) die(`${file} carries no run.facts_fields to strip`);
+    delete doc.run.facts_fields;
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("stripped:facts_fields");
+    break;
+  }
+
   /** approval-unknown-key <approval.json> -- add a key the closed profile does not allow. */
   case "approval-unknown-key": {
     const [file] = rest;

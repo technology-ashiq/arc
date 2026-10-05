@@ -442,6 +442,27 @@ export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveD
 }
 
 /**
+ * One fingerprint per facts FIELD, keyed by its dotted path, so a re-publish can name which value
+ * moved without the receipt carrying the value. The receipt is committed to arc, which is public,
+ * and a venture's facts hold the operator's name and address before any page is live. A
+ * fingerprint of a value the published page prints anyway reveals nothing the page does not.
+ * Arrays are one field: a reordered sub-processor list is a change the reviewer should see.
+ * @param {object} facts @returns {Record<string,string>}
+ */
+export function factsFieldPrints(facts) {
+  const out = {};
+  const walk = (node, path) => {
+    if (node !== null && typeof node === "object" && !Array.isArray(node)) {
+      for (const k of Object.keys(node).sort()) walk(node[k], path ? `${path}.${k}` : k);
+      return;
+    }
+    out[path] = bytesHash(`${path}|${JSON.stringify(node === undefined ? null : node)}`);
+  };
+  walk(facts, "");
+  return out;
+}
+
+/**
  * What actually changed between the published version and this one, in the terms a human
  * approving it needs: which facts values moved, and which clauses appeared or disappeared.
  *
@@ -451,7 +472,19 @@ export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveD
  * reassuring empty list.
  */
 export function semanticDiff(previousRun, currentRun) {
-  const changedFacts = [];
+  // null, not [], when the published record predates field prints: "no field changed" and "cannot
+  // tell which field changed" must never print the same.
+  const before = previousRun.facts_fields;
+  const after = currentRun.facts_fields;
+  let changedFacts = null;
+  if (before && after && typeof before === "object" && typeof after === "object") {
+    changedFacts = [];
+    for (const field of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
+      if (!(field in before)) changedFacts.push({ field, change: "added" });
+      else if (!(field in after)) changedFacts.push({ field, change: "removed" });
+      else if (before[field] !== after[field]) changedFacts.push({ field, change: "changed" });
+    }
+  }
   const prevPages = new Map((previousRun.pages || []).map((p) => [p.page, p]));
   const curPages = new Map((currentRun.pages || []).map((p) => [p.page, p]));
 
@@ -470,7 +503,10 @@ export function semanticDiff(previousRun, currentRun) {
 
   const factsMoved = previousRun.facts_sha256 !== currentRun.facts_sha256;
   const templatesMoved = previousRun.template_set_sha !== currentRun.template_set_sha;
-  const opaque = factsMoved && !clauseChanges.length;
+  // Opaque = the facts moved and the diff can name neither a field nor a clause. With field prints
+  // on both sides a facts move always names a field, so this fires only on a record written
+  // before them -- the one case left where re-approving means signing a blob.
+  const opaque = factsMoved && !clauseChanges.length && !(changedFacts && changedFacts.length);
 
   return {
     facts_changed: factsMoved,
@@ -481,7 +517,7 @@ export function semanticDiff(previousRun, currentRun) {
     // The honest warning. Recorded as data rather than printed prose so a test can assert it.
     opaque_rechange: opaque,
     opaque_reason: opaque
-      ? "the facts hash moved but no clause appeared or disappeared, so the change is in a VALUE the pages interpolate. Re-approving this without reading the rendered bytes is a signature, not a review."
+      ? "the facts hash moved but neither a facts field nor a clause can be named, so this is a FULL-BLOB re-approval. Re-approving it without reading the rendered bytes is a signature, not a review."
       : null,
   };
 }

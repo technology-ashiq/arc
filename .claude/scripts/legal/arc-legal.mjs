@@ -30,7 +30,7 @@ import { planDigest, expectLine, staleReason, emitReceipt, withExclusiveLock } f
 import { query, spineRoot } from "../hq/spine.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
-  backdatingErrors, semanticDiff, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
+  backdatingErrors, semanticDiff, factsFieldPrints, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
   verifyPublished, VERIFY_INTACT, VERIFY_TAMPERED,
 } from "./lib/receipts.mjs";
 
@@ -440,6 +440,8 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
     // Carried so the checklist can decide activation applicability without re-parsing facts.
     payment_model: facts.payment_model,
     facts_sha256: factsSha,
+    // Per-field prints, so a re-publish names WHICH value moved (REQ-06's semantic diff).
+    facts_fields: factsFieldPrints(facts),
     effective_date: facts.effective_date,
     grievance_windows: windows,
     pages: pages.map(({ text, ...rest }) => rest),
@@ -522,6 +524,27 @@ function writeStagedInto(staged, out, payloadText) {
   return { touched };
 }
 
+/** The previous published record for a venture, from the committed ledger, or null when none exists. */
+function publishedRecord(venture) {
+  const file = join(PRODUCT, "published", venture + ".json");
+  return existsSync(file) ? readJson(file) : null;
+}
+
+/**
+ * The re-publish diff, printed the same way at propose (BEFORE the human reads) and at publish.
+ * Shown only at publish, it reached the reviewer after the stamp, when it could no longer help.
+ */
+function printSemanticDiff(diff) {
+  console.log("this is a RE-publish. What changed:");
+  console.log(`  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`);
+  if (diff.changed_facts)
+    for (const f of diff.changed_facts) console.log(`  facts.${f.field}: ${f.change}`);
+  for (const c of diff.clause_changes)
+    console.log(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
+  if (diff.templates_changed) console.log("  template set: changed");
+  if (diff.opaque_rechange) console.error(`WARN consistency:-:-:${diff.opaque_reason}`);
+}
+
 async function proposeMain(args) {
   if (!args.venture) { console.error(`propose needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`propose needs --out DIR\n\n${usage()}`); return 2; }
@@ -582,6 +605,8 @@ async function proposeMain(args) {
     console.log(`facts ${payload.facts_sha256} (from ${factsFrom})`);
     console.log(`set ${payload.template_set}@${payload.template_set_sha}`);
     console.log(`payload ${sha}`);
+    const previous = publishedRecord(payload.venture);
+    if (previous && previous.run && Array.isArray(previous.run.pages)) printSemanticDiff(semanticDiff(previous.run, run));
     if (dryRun) {
       // A PLAN NOBODY COULD READ WHOLE IS NOT A PLAN: piped through `head`, the digest line was lost while the exit still
       // said 0 (PR 5c round-1 shell attack, the leads twin). Written synchronously; a failed write is a refusal.
@@ -807,15 +832,8 @@ async function publishMain(args) {
     return 2;
   }
 
-  let diff = null;
-  if (previous && previous.run && Array.isArray(previous.run.pages)) {
-    diff = semanticDiff(previous.run, fresh);
-    console.log("this is a RE-publish. What changed:");
-    console.log(`  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`);
-    for (const c of diff.clause_changes)
-      console.log(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
-    if (diff.opaque_rechange) console.error(`WARN consistency:-:-:${diff.opaque_reason}`);
-  }
+  const diff = previous && previous.run && Array.isArray(previous.run.pages) ? semanticDiff(previous.run, fresh) : null;
+  if (diff) printSemanticDiff(diff);
 
   writeFileSync(join(args.dir, "_published.json"), JSON.stringify({
     subject: APPROVAL_SUBJECT,
