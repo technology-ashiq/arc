@@ -85,12 +85,14 @@ sources:
 EOF
 }
 
-# A fixture answering initialize and a search that returns TWO components.
+# A fixture answering initialize and a search that returns TWO components, in the LIVE shape read
+# off 21st.dev on 2026-10-06: structuredContent.results, with a prose rendering of the same list
+# beside it that must not be counted a second time.
 _fixture() {
   cat > "$SANDBOX/fx.json" <<'EOF'
 {"initialize":{"status":200,"session":"s1","body":{"jsonrpc":"2.0","id":1,"result":{}}},
  "notifications/initialized":{"status":202,"body":""},
- "tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"[{\"name\":\"Case header\",\"preview\":\"https://cdn.21st.dev/a.png\"},{\"name\":\"Timeline\"}]"}]}}}}
+ "tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"structuredContent":{"results":[{"type":"component","id":1,"name":"Case header","preview":"https://cdn.21st.dev/a.png"},{"type":"component","id":2,"name":"Timeline"}]},"content":[{"type":"text","text":"2 result(s) across 21st.dev (metadata only). ### [component] Case header ### [component] Timeline"}]}}}}
 EOF
   [ -s "$SANDBOX/fx.json" ] || { echo "fixture: not written"; return 1; }
 }
@@ -238,6 +240,27 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   [[ "$output" == *"1 malformed availability line(s) were not read"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 9 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 9 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 9 -- a @test was silently dropped"; false; }
+@test "live contract: the search calls the read-only search tool with query, type and limit, and counts structuredContent once" {
+  _mcp_sandbox
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "case header" --brief lexos --source 21st-dev --want 4 --mcp-fixture "$SANDBOX/fx.json" --record-request "$SANDBOX/req2.jsonl"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Two results, not two plus the prose rendering beside them.
+  [[ "$output" == *"answered 2 of 4; SHORT -- asked for 4, got 2"* ]] || { echo "$output"; false; }
+  grep -q '"name":"search","arguments":{"query":"case header","type":"component","limit":4}' "$SANDBOX/req2.jsonl" || { echo "not the live contract: $(grep tools/call "$SANDBOX/req2.jsonl")"; false; }
+  ! grep -q '21st_magic' "$SANDBOX/req2.jsonl" || { echo "the deprecated tool name was called"; false; }
+}
+
+@test "pack: an mcp source's preview image is added under its own hosts, and refused off them" {
+  _mcp_sandbox
+  printf 'PNG-FIXTURE-21ST\n' > "$SANDBOX/shot.bin"
+  printf 'User-agent: *\nAllow: /\n' > "$SANDBOX/robots.txt"
+  run node "$(_refpack)" --brief lexos --source 21st-dev --url https://cdn.21st.dev/u/status-bar/preview.png --principle "the state of each day is one coloured cell, so a week reads at a glance" --avoid "the uptime vocabulary" --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin"
+  [ "$status" -eq 0 ] || { echo "an mcp source image on its host was refused: $output"; false; }
+  grep -q '| 21st-dev (fixture) |' "$SANDBOX/docs/design/refpacks/lexos/sources.md" || { cat "$SANDBOX/docs/design/refpacks/lexos/sources.md"; false; }
+  run node "$(_refpack)" --brief lexos --source 21st-dev --url https://evil.example/preview.png --principle p --avoid a --robots-file "$SANDBOX/robots.txt" --fixture "$SANDBOX/shot.bin"
+  [ "$status" -eq 2 ] || { echo "an image off the row's hosts was accepted: $output"; false; }
+}
+
+@test "this file registers the 11 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"; false; }
 }

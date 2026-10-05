@@ -239,8 +239,15 @@ async function checkBrowse(argv) {
 // A search adapter per MCP source. Only the SEARCH tool is named here, so a row whose key could
 // also reach a paid generator never calls it from this builder (owner 2026-10-05: 21st.dev is
 // search mode only). A source with no adapter is refused, never guessed at.
+// The tool and its arguments are the LIVE contract, read off tools/list on 2026-10-06: the legacy
+// Magic name was translated server-side and answered in prose, so the first live run counted 0
+// of 8 real results. `search` is read-only; the same endpoint also serves edit, delete and upload
+// tools, which is why it is reached through this adapter and never through .mcp.json.
 const MCP_SEARCH = {
-  "21st-dev": { endpoint: "https://21st.dev/api/mcp", tool: "21st_magic_component_inspiration", header: "x-api-key", credential: "API_KEY_21ST" },
+  "21st-dev": {
+    endpoint: "https://21st.dev/api/mcp", tool: "search", header: "x-api-key", credential: "API_KEY_21ST",
+    args: (q, want) => ({ query: q, type: "component", limit: want }),
+  },
 };
 const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
 const MCP_DEADLINE_MS = 30000;
@@ -281,6 +288,10 @@ function rpcReply(text, id) {
 // and the count is what was found -- never the count that was asked for.
 function searchItems(result) {
   const out = [];
+  // The live shape: structuredContent.results. When it is present it is the answer, and the prose
+  // beside it is a rendering of the same list, never a second count.
+  const sc = result && result.structuredContent;
+  if (sc && typeof sc === "object" && Array.isArray(sc.results)) return sc.results.filter((x) => x && typeof x === "object");
   for (const c of (result && Array.isArray(result.content) ? result.content : [])) {
     if (!c || c.type !== "text") continue;
     let v;
@@ -410,7 +421,7 @@ async function query(argv) {
   if (init.session != null && !/^[A-Za-z0-9._:-]{1,128}$/.test(init.session)) couldNot("initialize: the server sent a session id outside the header grammar");
   const session = init.session ? { "mcp-session-id": init.session } : {};
   await post({ jsonrpc: "2.0", method: "notifications/initialized" }, session);
-  const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: { message: q, searchQuery: q } } }, session);
+  const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: adapter.args(q, want) } }, session);
   const reply = rpcReply(call.text, 2);
   if (!reply) couldNot("tools/call: no reply carried this request id");
   if (!reply.error && (reply.method !== undefined || reply.result === undefined || reply.result === null)) couldNot("tools/call: the reply carries no result");
@@ -528,7 +539,11 @@ async function main(argv) {
   if (!asList(src.allowed_use).includes("reference-pack")) {
     fail(2, `refused: source '${id}' allowed_use is [${asList(src.allowed_use).map(field).join(", ")}] and lacks reference-pack; it may be linked, not cached`);
   }
-  if (String(src.access) !== "fetch") fail(2, `refused: source '${id}' has access: ${field(src.access)}; this builder only fetches`);
+  // An mcp source's preview IMAGE is fetched like any screen (Phase 05 S5): it must sit on one of
+  // the row's hosts and pass the same robots preflight below. Only the image is fetched here; the
+  // search that found it went through --query. Every other access kind is refused.
+  if (String(src.access) !== "fetch" && String(src.access) !== "mcp") fail(2, `refused: source '${id}' has access: ${field(src.access)}; this builder fetches a fetch or mcp source's images only`);
+  if (String(src.access) === "mcp" && src.hosts === undefined) fail(2, `refused: mcp source '${id}' names no hosts, so its image URL cannot be bound to it`);
 
   // 2. host binding. A scratch registry may omit hosts; the real one may not.
   const fake = ["--robots-file", "--robots-status", "--fixture", "--redirect"].some((k) => o[k] != null);
