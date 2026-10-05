@@ -743,11 +743,12 @@
       "scheduler": "scheduler",
       "docs": "lane",
       "org": "lane",
-      "launch": "lane"
+      "launch": "lane",
+      "discover": "lane"
     }
   },
   "commands": {
-    "$comment": "28; (G) = generated from a process file, never hand-edited",
+    "$comment": "29; (G) = generated from a process file, never hand-edited",
     "map": {
       "arc": "toolbelt",
       "arc-toolcheck": "toolbelt",
@@ -776,7 +777,8 @@
       "arc-design-critique": "design-studio",
       "arc-face-module": "design-studio",
       "arc-absorb": "absorb",
-      "arc-attack": "review-ship"
+      "arc-attack": "review-ship",
+      "arc-hunt": "lane"
     }
   },
   "agents": {
@@ -1368,7 +1370,8 @@
       "legal": "legal",
       "memory": "memory",
       "docs": "lane",
-      "launch": "lane"
+      "launch": "lane",
+      "discover": "lane"
     }
   },
   "adrs": {
@@ -1382,6 +1385,7 @@
       "1600": "lane",
       "1700": "lane",
       "1800": "model-policy",
+      "1900": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1454,7 +1458,6 @@
     "map": {
       "ops": "ops",
       "trader": "trader",
-      "discover": "discover",
       "chat-mcp": "chat-mcp"
     }
   },

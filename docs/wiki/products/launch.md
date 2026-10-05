@@ -11,7 +11,7 @@
 |---|---|
 | Version | 0.1.0 |
 | Requires | [core](core.md), [engine](engine.md), [hq](hq.md) |
-| Required by | — |
+| Required by | [discover](discover.md) |
 | Lane | [launch](../lanes/launch.md) |
 | Face room | lane (ring factory) |
 

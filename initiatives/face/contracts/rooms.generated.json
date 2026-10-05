@@ -1054,12 +1054,9 @@
       "holds": {
         "kinds": [
           "idea.captured"
-        ],
-        "plannedRooms": [
-          "discover"
         ]
       },
-      "itemCount": 2
+      "itemCount": 1
     },
     {
       "id": "chat-mcp",
@@ -1224,7 +1221,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 19
+      "itemCount": 20
     },
     {
       "id": "concepts",
@@ -1271,7 +1268,7 @@
       "indexes": "products",
       "stations": [],
       "holds": {},
-      "itemCount": 19
+      "itemCount": 20
     },
     {
       "id": "lane",
@@ -1295,12 +1292,14 @@
           "phase.closed"
         ],
         "lanes": [
+          "discover",
           "docs",
           "launch",
           "org"
         ],
         "commands": [
           "arc-change",
+          "arc-hunt",
           "arc-kickoff (G)",
           "arc-phase-done",
           "arc-resume"
@@ -1328,6 +1327,7 @@
           "steel thread"
         ],
         "products": [
+          "discover",
           "docs",
           "launch",
           "plan"
@@ -1335,10 +1335,11 @@
         "adrs": [
           "1500",
           "1600",
-          "1700"
+          "1700",
+          "1900"
         ]
       },
-      "itemCount": 31
+      "itemCount": 35
     }
   ],
   "inventories": {
@@ -1352,6 +1353,7 @@
       "1600": "lane",
       "1700": "lane",
       "1800": "model-policy",
+      "1900": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1373,7 +1375,6 @@
     "plannedRooms": {
       "ops": "ops",
       "trader": "trader",
-      "discover": "discover",
       "chat-mcp": "chat-mcp"
     },
     "ci": {
