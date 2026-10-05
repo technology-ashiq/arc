@@ -764,6 +764,44 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * ledger-field <published.json> <key> -- plant a facts-field print under an arbitrary key, the
+   * way a tampered or badly merged ledger would. The key is taken verbatim, escapes decoded, so a
+   * test can plant a line break without a literal one in a shell string.
+   */
+  case "ledger-field": {
+    const [file, key] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    if (!doc.run || !doc.run.facts_fields) die(`${file} carries no run.facts_fields`);
+    doc.run.facts_fields[JSON.parse(`"${key}"`)] = "0".repeat(64);
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("planted");
+    break;
+  }
+
+  /**
+   * served-evidence <out-dir> <page> <row-id> <out.json> [stale|placeholder]
+   * The evidence a human records after opening a live URL: an excerpt of the served body and the
+   * output_sha256 of the committed page it was matched against. `stale` records an older page's
+   * hash; `placeholder` records a body that is not the page at all.
+   */
+  case "served-evidence": {
+    const [dir, page, row, outFile, mode] = rest;
+    const run = readJson(join(dir, "_run.json"));
+    const p = (run.pages || []).find((x) => x.page === page);
+    if (!p) die(`no page "${page}" in ${dir}/_run.json`);
+    const body = readFileSync(join(dir, `${page}.mdx`), "utf8").split("\n")
+      .filter((l) => l.trim().length >= 60 && !l.startsWith("<!--") && !l.startsWith("#"));
+    if (!body.length) die(`${page}.mdx has no body line of 60 characters to excerpt`);
+    const excerpt = mode === "placeholder"
+      ? "Page not found. Return to the homepage to keep browsing our products."
+      : body[0].slice(0, 80);
+    const sha = mode === "stale" ? "a".repeat(64) : p.output_sha256;
+    writeFileSync(outFile, JSON.stringify({ [row]: { outcome: "PASS", note: "opened the live URL", served_excerpt: excerpt, matched_output_sha256: sha } }) + "\n", "utf8");
+    console.log("evidence:" + (mode || "matching"));
+    break;
+  }
+
   /** approval-unknown-key <approval.json> -- add a key the closed profile does not allow. */
   case "approval-unknown-key": {
     const [file] = rest;

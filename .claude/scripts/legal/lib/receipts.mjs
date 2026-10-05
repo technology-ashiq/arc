@@ -65,12 +65,16 @@ export const APPROVAL_KEYS = [
   "template_set_sha",
   "effective_date",
   "pages",
+  // The ledger record the re-publish diff was computed against, or "none" for a first publish.
+  // The human approves the diff they read; a publish that landed in between would make publish
+  // compute a different one with no refusal (round-1 boundary attack, B4).
+  "previous_published_sha256",
 ];
 
 const PAGE_KEYS = ["page", "output_sha256"];
 
 /** Build the approval-request payload from a completed run. Deterministic: pages are sorted. */
-export function approvalPayload(run) {
+export function approvalPayload(run, previousPublishedSha = null) {
   return {
     subject: APPROVAL_SUBJECT,
     venture: run.venture,
@@ -78,6 +82,7 @@ export function approvalPayload(run) {
     template_set: run.template_set,
     template_set_sha: run.template_set_sha,
     effective_date: run.effective_date,
+    previous_published_sha256: previousPublishedSha ?? "none",
     pages: [...run.pages]
       .map((p) => ({ page: p.page, output_sha256: p.output_sha256 }))
       .sort((a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : 0)),
@@ -104,6 +109,9 @@ export function validateApprovalPayload(payload) {
     errs.push("template_set_sha is not a sha256 hex digest");
   if (payload.effective_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(payload.effective_date)))
     errs.push("effective_date is not an ISO date");
+  if (payload.previous_published_sha256 !== undefined && payload.previous_published_sha256 !== "none"
+      && !/^[0-9a-f]{64}$/.test(String(payload.previous_published_sha256)))
+    errs.push('previous_published_sha256 is neither "none" nor a sha256 hex digest');
 
   if (payload.pages !== undefined) {
     if (!Array.isArray(payload.pages) || !payload.pages.length) {

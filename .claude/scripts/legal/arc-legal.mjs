@@ -528,10 +528,40 @@ function writeStagedInto(staged, out, payloadText) {
   return { touched };
 }
 
-/** The previous published record for a venture, from the committed ledger, or null when none exists. */
+/**
+ * The previous published record for a venture from the committed ledger: `{ record, sha }`, both
+ * null when nothing was published, or `{ problem }` when a ledger file exists and cannot be used.
+ * Unreadable is never "none" -- that would show a reviewer a re-publish as a first publish, the
+ * guard-skipped-when-its-input-is-absent class publish already refuses as PREVIOUS_UNREADABLE (B1).
+ */
 function publishedRecord(venture) {
   const file = join(PRODUCT, "published", venture + ".json");
-  return existsSync(file) ? readJson(file) : null;
+  if (!existsSync(file)) return { record: null, sha: null };
+  let text, record;
+  try { text = readFileSync(file, "utf8"); record = JSON.parse(text); }
+  catch (e) { return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and cannot be read (${e && e.code ? e.code : "not JSON"}).` }; }
+  if (!record || !record.run || !Array.isArray(record.run.pages))
+    return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and carries no usable run, so what changed cannot be shown.` };
+  return { record, sha: bytesHash(text) };
+}
+
+/** A name read from the ledger, printed so it can only ever be one inert token on one line (B2). */
+const shown = (s) => (/^[A-Za-z0-9_.()\- ]+$/.test(String(s)) ? String(s) : JSON.stringify(String(s)));
+
+/** Every byte, or false: writeSync may write part of a buffer to a slow pipe and say so (B3). */
+function writeAll(fd, text) {
+  const buf = Buffer.from(text, "utf8");
+  let off = 0;
+  try {
+    while (off < buf.length) {
+      const n = writeSync(fd, buf, off, buf.length - off);
+      if (!n) return false;
+      off += n;
+    }
+  } catch {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -542,22 +572,17 @@ function publishedRecord(venture) {
  */
 function printSemanticDiff(diff) {
   const out = ["this is a RE-publish. What changed:",
-    `  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`];
+    `  effective_date ${shown(diff.effective_date.from)} -> ${shown(diff.effective_date.to)}`];
   if (diff.changed_facts)
-    for (const f of diff.changed_facts) out.push(`  facts.${f.field}: ${f.change}`);
+    for (const f of diff.changed_facts) out.push(`  facts.${shown(f.field)}: ${f.change}`);
   else if (diff.facts_changed)
-    // Said whether or not a clause also moved: a clause line must not stand in for the facts (B2).
+    // Said whether or not a clause also moved: a clause line must not stand in for the facts.
     out.push("  facts: changed, field not nameable (the published record predates field prints)");
   for (const c of diff.clause_changes)
-    out.push(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
+    out.push(`  ${shown(c.page)}: +${c.added.map(shown).join(",") || "-"} -${c.removed.map(shown).join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
   if (diff.templates_changed) out.push("  template set: changed");
-  try {
-    writeSync(1, out.join("\n") + "\n");
-    if (diff.opaque_rechange) writeSync(2, `WARN consistency:-:-:${diff.opaque_reason}\n`);
-  } catch {
-    return false;
-  }
-  return true;
+  if (!writeAll(1, out.join("\n") + "\n")) return false;
+  return diff.opaque_rechange ? writeAll(2, `WARN consistency:-:-:${diff.opaque_reason}\n`) : true;
 }
 
 async function proposeMain(args) {
@@ -596,7 +621,9 @@ async function proposeMain(args) {
       return 2;
     }
 
-    const payload = approvalPayload(run);
+    const prior = publishedRecord(args.venture);
+    if (prior.problem) { console.error(`propose refuses: ${prior.problem} Nothing was written.`); return 2; }
+    const payload = approvalPayload(run, prior.sha);
     const errs = validateApprovalPayload(payload);
     if (errs.length) {
       console.error("the approval payload this build produced is itself invalid:\n  - " + errs.join("\n  - "));
@@ -620,8 +647,7 @@ async function proposeMain(args) {
     console.log(`facts ${payload.facts_sha256} (from ${factsFrom})`);
     console.log(`set ${payload.template_set}@${payload.template_set_sha}`);
     console.log(`payload ${sha}`);
-    const previous = publishedRecord(payload.venture);
-    if (previous && previous.run && Array.isArray(previous.run.pages) && !printSemanticDiff(semanticDiff(previous.run, run))) {
+    if (prior.record && !printSemanticDiff(semanticDiff(prior.record.run, run))) {
       console.error("the re-publish diff could not be printed whole, so nothing can be bound to it - run it again with stdout open");
       return 2;
     }
@@ -825,12 +851,18 @@ async function publishMain(args) {
   const ledgerFile = join(ledgerDir, args.venture + ".json");
   const hadPrevious = existsSync(ledgerFile);
   const previous = hadPrevious ? readJson(ledgerFile) : null;
+  // The ledger as the human's diff saw it, against the ledger as it stands now (B4).
+  const previousSha = hadPrevious ? bytesHash(readFileSync(ledgerFile, "utf8")) : "none";
+  const previousMoved = approved.previous_published_sha256 !== previousSha
+    ? [`PREVIOUS_MOVED: the approval was read against ${String(approved.previous_published_sha256).slice(0, 12)} as the previous publish, and the ledger now holds ${previousSha.slice(0, 12)}. Another publish landed in between, so the diff the human read is not this one. Propose again.`]
+    : [];
 
   const approvedSets = existsSync(join(PRODUCT, "approved-sets.json")) ? readJson(join(PRODUCT, "approved-sets.json")) : null;
 
   const problems = [
     ...templateSetApprovalErrors({ approvedSets, templateSet: fresh.template_set, sha: fresh.template_set_sha }),
     ...found.problems,
+    ...previousMoved,
     ...(decision ? verifyDecision(decision, approved, args.request) : []),
     ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: listPagesRecursively(args.dir) }),
     ...backdatingErrors({
@@ -851,7 +883,11 @@ async function publishMain(args) {
   }
 
   const diff = previous && previous.run && Array.isArray(previous.run.pages) ? semanticDiff(previous.run, fresh) : null;
-  if (diff) printSemanticDiff(diff);
+  // Propose refuses when its diff cannot be printed; publish now does too, before any record is written (B3).
+  if (diff && !printSemanticDiff(diff)) {
+    console.error("publish REFUSED: the re-publish diff could not be printed whole - nothing was written");
+    return 2;
+  }
 
   writeFileSync(join(args.dir, "_published.json"), JSON.stringify({
     subject: APPROVAL_SUBJECT,
@@ -1064,7 +1100,7 @@ function bumpTemplatesMain(args) {
 function checklistMain(args) {
   if (!args.venture) { console.error(`checklist needs --venture NAME\n\n${usage()}`); return 2; }
 
-  const { run } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
+  const { run, pages: rendered } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
   const providerPages = renderInputs(run.template_set).data["provider-pages.json"];
   if (!providerPages) throw new Fail(3, "products/legal/data/provider-pages.json is missing");
 
@@ -1077,6 +1113,7 @@ function checklistMain(args) {
     facts: { payment_model: run.payment_model },
     routes,
     evidence,
+    pages: Object.fromEntries(rendered.map((p) => [p.page, { text: p.text, output_sha256: p.output_sha256 }])),
   });
 
   if (errs.length) {

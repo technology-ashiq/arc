@@ -77,14 +77,51 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" == *"table delimiter"* ]]
 }
 
-@test "legal checklist: an ordinary note is accepted, so the refusal above means something" {
+@test "legal checklist: an ordinary note with served evidence is a PASS, so the refusals mean something" {
   _arc_legal_sandbox
-  run node "$ARC_ROOT/tests/legal-probe.mjs" write "$SANDBOX/ev.json" '{"PROV.TERMS":{"outcome":"PASS","note":"checked the live URL on 2026-08-14"}}'
+  ARC_LEGAL_CLI="$ARC_LEGAL_CLI" _arc_legal_render "fixture-gateway-gst" >/dev/null
+  run node "$ARC_ROOT/tests/legal-probe.mjs" served-evidence "$ARC_LEGAL_OUT" terms PROV.TERMS "$SANDBOX/ev.json"
   [ "$status" -eq 0 ]
   run node "$ARC_LEGAL_CLI" checklist --venture "fixture-gateway-gst" --evidence "$SANDBOX/ev.json"
   [ "$status" -eq 0 ]
   [[ "$output" == *"1 PASS"* ]]
   [[ "$output" == *"6 NOT-CHECKED"* ]]
+}
+
+@test "legal checklist: a PASS on status alone is refused -- it must carry what was served" {
+  # A 200 passes a placeholder, a soft-404 and a homepage redirect alike, so a reachability PASS
+  # without an excerpt of the served body and the page hash it matched is not evidence.
+  _arc_legal_sandbox
+  run node "$ARC_ROOT/tests/legal-probe.mjs" write "$SANDBOX/ev.json" '{"PROV.TERMS":{"outcome":"PASS","note":"200 OK"}}'
+  [ "$status" -eq 0 ]
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" checklist --venture "fixture-gateway-gst" --evidence "$SANDBOX/ev.json" \
+    >"$SANDBOX/o.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/o.txt"
+  [[ "$output" == *"served_excerpt"* ]]
+}
+
+@test "legal checklist: a served body that is not the page turns the PASS into a FAIL" {
+  _arc_legal_sandbox
+  ARC_LEGAL_CLI="$ARC_LEGAL_CLI" _arc_legal_render "fixture-gateway-gst" >/dev/null
+  run node "$ARC_ROOT/tests/legal-probe.mjs" served-evidence "$ARC_LEGAL_OUT" terms PROV.TERMS "$SANDBOX/ev.json" placeholder
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" checklist --venture "fixture-gateway-gst" --evidence "$SANDBOX/ev.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0 PASS · 1 FAIL"* ]]
+  [[ "$output" == *"placeholder, a soft-404 or a redirect"* ]]
+}
+
+@test "legal checklist: evidence matched against an older page version is a FAIL" {
+  _arc_legal_sandbox
+  ARC_LEGAL_CLI="$ARC_LEGAL_CLI" _arc_legal_render "fixture-gateway-gst" >/dev/null
+  run node "$ARC_ROOT/tests/legal-probe.mjs" served-evidence "$ARC_LEGAL_OUT" terms PROV.TERMS "$SANDBOX/ev.json" stale
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" checklist --venture "fixture-gateway-gst" --evidence "$SANDBOX/ev.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1 FAIL"* ]]
+  [[ "$output" == *"Re-check the live URL"* ]]
 }
 
 @test "legal checklist: a row with no source_url FAILS rather than rendering" {

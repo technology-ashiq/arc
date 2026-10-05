@@ -525,6 +525,45 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   [[ "$output" != *"facts.stores_third_party_client_data"* ]]
 }
 
+@test "legal receipts: an UNREADABLE ledger refuses propose rather than reading as a first publish" {
+  _published
+  printf '{"run":' > "$SANDBOX/$LEDGER_REL"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"PREVIOUS_UNREADABLE"* ]]
+  [ ! -f "$SANDBOX/out2/_approval.json" ]
+}
+
+@test "legal receipts: a ledger field name carrying a line break prints as ONE quoted token" {
+  # A tampered ledger key must not forge a diff line the reviewer reads before stamping.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" ledger-field "$SANDBOX/$LEDGER_REL" 'x\n  facts.effective_date: unchanged'
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'facts."x\n  facts.effective_date: unchanged": removed'* ]]
+  [ "$(printf '%s\n' "$output" | grep -c '^  facts\.effective_date: unchanged')" -eq 0 ]
+}
+
+@test "legal receipts: PREVIOUS_MOVED -- a publish landing after the human read the diff is refused" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  # Another publish lands: the ledger bytes move after the diff was read.
+  printf '\n' >> "$SANDBOX/$LEDGER_REL"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out2/_approval.json" "$SANDBOX/d2.json" approve "2026-08-14T00:00:00Z"
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out2" \
+    --request "$(_decides "$SANDBOX/d2.json")" >"$SANDBOX/pub2.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub2.txt"
+  [[ "$output" == *"PREVIOUS_MOVED"* ]]
+  [ ! -f "$SANDBOX/out2/_published.json" ]
+}
+
 @test "legal receipts: a re-publish against a record with no field prints WARNs full-blob" {
   _published
   run node "$ARC_ROOT/tests/legal-probe.mjs" strip-field-prints "$SANDBOX/$LEDGER_REL"
