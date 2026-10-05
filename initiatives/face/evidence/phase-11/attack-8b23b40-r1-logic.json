@@ -1,0 +1,104 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:912",
+      "breaking_input": "Registry holds models A (active) and B. POST /api/models/test {\"name\":\"A\"} — the child hangs up to 60 s. During the run POST /api/models/set {\"op\":\"remove\",\"name\":\"B\"} (the panel keeps remove/activate/add enabled while a test runs: they gate on `busy`, the test gates on its own `testing`). When the run lands, the handler returns publicView(got.reg) — the registry as read BEFORE the run — and ModelsPanel does setView(modelsView(...)): B reappears in the list (drawn '· answering' if B was active at test start) until the next GET.",
+      "why": "The response served after a 60 s await is built from a registry snapshot taken before the await; any concurrent change is overwritten in the UI. A read older than the write is served instead of thrown away — the in-flight-poll defect.",
+      "fix": "Re-read the registry when the run lands and serve that view (refuse with a named code if loadRegistry fails); optionally also disable mutations while a test is in flight.",
+      "twin_of": "a poll in flight brought the stamped approval back — a read older than the write is thrown away"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:911",
+      "breaking_input": "Registry holds model S → baseUrl https://a.example/v1. POST /api/models/test {\"name\":\"S\"} (run hangs). During the run: POST /api/models/set remove S, then add a DIFFERENT S → https://b.example/v1. The run against a.example lands with exit 0 and the handler runs tests.set(\"s\", {ok:true,...}) — GET /api/models now shows the NEW S (b.example) as '✓ answered', though b.example was never called.",
+      "why": "The verdict is attributed by lowercased NAME at completion; the registry is never re-read and the entry is not checked to still be the same model, so a re-added name inherits the dead endpoint's result. The comment 'a re-added model of the same name starts untested' only holds when no test is in flight.",
+      "fix": "Record the entry's baseUrl/model digest at start; on completion re-read the registry and set the test only if the digest still matches, else drop it.",
+      "twin_of": "A check with a spawn between them — a new step between a check and its write is a new race"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:909",
+      "breaking_input": "Point a model at a provider that answers HTTP 200 with {\"choices\":[{\"message\":{\"content\":\"\"}}]} (empty or whitespace completion). generic-api treats a well-formed completion as success, arc-run exits 0, and the ok branch fires: the row reads '✓ answered in 3.4 s' though the model produced no answer. The route row itself declares spineEffect: \"receipt\", but the handler never reads the spine to confirm a receipt or an answer exists — ok is decided purely by `res.exit === 0`.",
+      "why": "'Answered' is proven by the child's exit code, never by the receipt the route says the run produces — the exit-code-as-proof defect.",
+      "fix": "Decide ok from the spine: require this run's face-ask run.completed receipt (the id arc-run printed) and a non-empty answer before ok:true; otherwise fail with a named cause.",
+      "twin_of": "'Emitted' is proven by the receipt, never by the exit code"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "face/src/App.tsx:380",
+      "breaking_input": "On the front door (hash without #hq) press Ctrl+K, type 'Settings', Enter: App computes `items = [...paletteItems(...), SETTINGS_ITEM]` unconditionally for every palette render in the shared App, so wherever the palette opens the Settings entry is offered and onOpen opens ModelsPanel — exactly what the owner ruled out on 2026-10-01. The smoke's door-no-settings guard counts only [data-hq-settings], [data-models-panel] and [data-ask-settings]; a palette button carries none of them, so the check records pass.",
+      "why": "The front-door exclusion is fenced only by a code comment, and the guard that backs it cannot see the thing it excludes.",
+      "fix": "Derive the list from the surface (append SETTINGS_ITEM only when the HQ workroom is open) and give the palette entry a data attribute the door-no-settings count reads.",
+      "twin_of": "A write fenced only by prose — a permission that exists only in the prompt is not a permission"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:893",
+      "breaking_input": "mkdir a directory named processes/face-ask.process.yaml on the tree: existsSync passes, runTool spawns arc-run, which cannot read the 'file' and exits non-zero — the owner gets a provider-fault sentence (or a raw spawn error), never the promised 'the face-ask process is not on this tree' refusal.",
+      "why": "existsSync accepts a directory; the pre-check's named cause is wrong for a wrong-shaped entry.",
+      "fix": "Use statSync(...).isFile() before trusting the path.",
+      "twin_of": "existsSync accepted a directory as an executable"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:897",
+      "breaking_input": "Remove or rename engine/arc-run.mjs while processes/face-ask.process.yaml exists: the pre-flight passes and `await runTool(...)` has no try/catch — an ENOENT surfaces as a non-DashError throw (door 500 carrying machine paths) or as exit≠0 misread as a provider fault.",
+      "why": "The pre-flight checks one of the two files the run needs; the twin resource (the engine script) gets no check and the spawn layer has no named failure path.",
+      "fix": "isFile-check both inputs before spawning and wrap the runTool call so spawn-layer failures return a named DashError.",
+      "twin_of": "Pre-flighted the APP port and not the DOOR port — any twin resource gets the same check twice"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:908",
+      "breaking_input": "Break face-ask.process.yaml's YAML (or make it unreadable) on a tree where it exists: arc-run exits ≠0 with a config error on stderr; the handler runs models.providerFault(redactKey(stderr)) and the owner reads a sentence about the provider being overloaded or refusing, then retries against a healthy provider instead of fixing the tree. Same for a spawn failure or a killed child.",
+      "why": "Every non-zero exit is classified as a provider fault; the door names a cause it did not establish.",
+      "fix": "Classify by cause: reserve providerFault for driver/provider lines arc-run writes; process-file, spawn and kill failures get their own sentences.",
+      "twin_of": "Refusals under the wrong name — a refusal names its real cause"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:897",
+      "breaking_input": "Loop POST /api/models/test {\"name\":\"<model>\"} from N tabs/scripts: the handler holds no per-ctx lock or semaphore, so N arc-run children each spend the owner's provider quota for up to 60 s concurrently. The client's disabled={testing !== null} is one tab's React state, not a permission.",
+      "why": "A rate limit is not a concurrency limit: the paid child is gated client-side only.",
+      "fix": "Serialize or cap concurrent model tests per ctx with a named BUSY refusal.",
+      "twin_of": "No ceiling on paid children — a rate limit is not a concurrency limit"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "face/src/shell/ModelsPanel.tsx:189",
+      "breaking_input": "Chrome: a saved voice sits in localStorage. Open Settings and drag the speed slider BEFORE voiceschanged fires (the `voices` state is still []). picked = voicePick(saved, []) === null, so onChange runs choose({ name: null, rate }) and writeVoiceChoice removes VOICE_NAME_KEY — moving the speed silently deletes the saved voice choice.",
+      "why": "The slider handler re-derives the name from a not-yet-loaded voices list and persists the derived null over the stored choice; the stored value should be the source, not a stale derivation of it.",
+      "fix": "Persist choice.name from choice state; only the voice <select> may write the name.",
+      "twin_of": "validate one read, compare another — copy once, then judge and use the copy"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "face/src/shell/useAsk.ts:84",
+      "breaking_input": "Reload the page with voice on and a saved voice, then ask immediately: at speak time window.speechSynthesis.getVoices() is still empty (Chrome loads it async), voicePick returns null and the first answer is spoken by the browser default even though the saved voice is installed. The panel waits for voiceschanged; the speaker path does not — the two readers of one question diverge.",
+      "why": "The fallback meant for 'the browser no longer has the voice' also fires when it merely has not loaded the list yet.",
+      "fix": "Subscribe to voiceschanged in useAsk too, or share one voices source with the panel before picking.",
+      "twin_of": "the loaderId filter guarded requestWillBeSent but not its twin — a filter on one event of a pair applies to its twin"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "face/src/lib/talk.mjs:184",
+      "breaking_input": "The unit test hand-writes at: '2026-10-03T18:02:42+05:30' and asserts at.slice(11,16) reads '18:02'; the real `at` comes from formatIst(nowMs()) on the door side, and no check ever runs formatIst's actual output through testLine. If formatIst emits a form whose characters 11..16 are not HH:MM (a day-first or leading-weekday variant), every tested row prints a wrong or empty time while still claiming ✓.",
+      "why": "The writer of the timestamp and its reader were never crossed; the test pins the reader's assumption, not the writer's output.",
+      "fix": "Build the unit test's `at` by calling formatIst (or export the HH:MM extraction beside testLine and use it on both sides).",
+      "twin_of": "two readers of one question are crossed on every input the contract allows, not only on today's tree"
+    }
+  ]
+}

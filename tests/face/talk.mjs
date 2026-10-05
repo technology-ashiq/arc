@@ -28,6 +28,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { startFakeLlm, GHOST_ID, scriptedAnswer, questionOf } from "./fake-llm.mjs";
 import { judgeModelAnswer, GENERAL_LABEL, ARC_LABEL, UNVERIFIED_LABEL } from "../../.claude/scripts/hq/arc-dash.mjs";
+import { formatIst } from "../../.claude/scripts/hq/lib/canonical.mjs";
 import { unescapeDoorText } from "../../face/src/lib/door.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -148,6 +149,9 @@ check("A: providerFault -- a receipt that could not be written is named with its
     Tv.testLine({ ok: true, seconds: 3.4, why: null, at: "2026-10-03T18:02:42+05:30" }).text === "✓ answered in 3.4 s · 18:02"
     && Tv.testLine({ ok: false, seconds: 0.8, why: "busy", at: "x" }).state === "fail"
     && Tv.testLine({ ok: true }).state === "none" && Tv.testLine(null).state === "none" && Tv.testLine({ ok: "yes", seconds: 1 }).state === "none");
+  // The reader crossed with the door's real writer, not a hand-written stamp (attack 8b23b40 L11).
+  const stamped = formatIst(Date.UTC(2026, 9, 3, 12, 32, 42));
+  check("V: testLine reads the time from formatIst's own output", Tv.testLine({ ok: true, seconds: 1, why: null, at: stamped }).text === "✓ answered in 1 s · 18:02", stamped);
 }
 
 // ── E: the face's decisions ──
@@ -371,6 +375,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 84;
+const EXPECTED = 85;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);
