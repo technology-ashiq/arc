@@ -234,8 +234,191 @@ async function checkBrowse(argv) {
   }
 }
 
+// ---------- Phase 05: MCP search sources and the per-run availability summary ----------
+//
+// A search adapter per MCP source. Only the SEARCH tool is named here, so a row whose key could
+// also reach a paid generator never calls it from this builder (owner 2026-10-05: 21st.dev is
+// search mode only). A source with no adapter is refused, never guessed at.
+const MCP_SEARCH = {
+  "21st-dev": { endpoint: "https://21st.dev/api/mcp", tool: "21st_magic_component_inspiration", header: "x-api-key" },
+};
+const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
+
+function parseNamed(argv, known, from) {
+  const opts = {};
+  for (let i = from; i < argv.length; i += 2) {
+    const k = argv[i];
+    if (!known.has(k)) fail(1, `unknown argument '${k}'`);
+    if (i + 1 >= argv.length || argv[i + 1] === "") fail(1, `${k} needs a value`);
+    if (k in opts) fail(1, `${k} given twice`);
+    opts[k] = argv[i + 1];
+  }
+  return opts;
+}
+
+function seamGuard(o, seams) {
+  const used = seams.filter((k) => o[k] != null);
+  if (used.length && process.env.ARC_DESIGN_OFFLINE !== "1") fail(1, `${used.join(", ")} ${used.length > 1 ? "are test seams" : "is a test seam"}; set ARC_DESIGN_OFFLINE=1`);
+  return used.length > 0;
+}
+
+// One JSON-RPC reply out of a body that is JSON or an SSE stream of `data:` lines.
+function rpcReply(text, id) {
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
+  const whole = tryParse(text);
+  const all = whole !== undefined ? [whole].flat() : String(text).split(/\r?\n/).filter((l) => l.startsWith("data:")).map((l) => tryParse(l.slice(5).trim())).filter(Boolean);
+  return all.find((m) => m && m.id === id);
+}
+
+// Count what a search answered. The result shape is the upstream's, so every reading is tried
+// and the count is what was found -- never the count that was asked for.
+function searchItems(result) {
+  const out = [];
+  for (const c of (result && Array.isArray(result.content) ? result.content : [])) {
+    if (!c || c.type !== "text") continue;
+    let v;
+    try { v = JSON.parse(c.text); } catch { v = undefined; }
+    const list = Array.isArray(v) ? v : v && typeof v === "object" ? (v.results ?? v.components ?? v.items ?? null) : null;
+    if (Array.isArray(list)) out.push(...list);
+    else if (String(c.text).trim()) out.push({ text: c.text });
+  }
+  return out;
+}
+
+async function query(argv) {
+  const o = parseNamed(argv, new Set(["--brief", "--source", "--want", ...MCP_SEAMS]), 2);
+  const q = argv[0] === "--query" ? argv[1] : null;
+  for (const k of ["--brief", "--source", "--want"]) if (!o[k]) fail(1, `${k} is required`);
+  if (!q || !field(q)) fail(1, "--query needs a search text");
+  const brief = o["--brief"], id = o["--source"];
+  if (!validId(brief)) fail(1, `--brief must match ${ID} and not be a reserved device name, got '${field(brief)}'`);
+  if (!validId(id)) fail(1, `--source must match ${ID} and not be a reserved device name, got '${field(id)}'`);
+  if (!/^([1-9]|1[0-9]|20)$/.test(o["--want"])) fail(1, "--want is a whole number 1-20");
+  const want = Number(o["--want"]);
+  const fake = seamGuard(o, MCP_SEAMS) && (o["--mcp-fixture"] != null || o["--record-request"] != null);
+
+  // 1. registry -- an off source makes no request at all.
+  const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+  const rows = sources.filter((s) => s && String(s.id) === id);
+  if (rows.length !== 1) fail(2, `refused: source '${id}' appears ${rows.length} times in the registry; exactly one row governs`);
+  const src = rows[0];
+  if (String(src.status) !== "active") fail(2, `refused: source '${id}' has status: ${field(src.status)}; only an active source is asked`);
+  if (!asList(src.allowed_use).includes("reference-pack")) fail(2, `refused: source '${id}' lacks reference-pack in allowed_use`);
+  if (String(src.access) !== "mcp") fail(2, `refused: --query is for an mcp source; '${id}' has access: ${field(src.access)}`);
+  const adapter = Object.hasOwn(MCP_SEARCH, id) ? MCP_SEARCH[id] : null;
+  if (!adapter) fail(2, `refused: source '${id}' has no search adapter here; its search tool is not guessed`);
+  const ep = new URL(adapter.endpoint);
+  const hosts = asList(src.hosts).map((h) => String(h).toLowerCase());
+  if (!hostAllowed(ep.hostname, hosts)) fail(2, `refused: ${ep.hostname} is not one of source '${id}' hosts [${hosts.join(", ")}]`);
+
+  const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", brief);
+  mkdirSync(stateDir, { recursive: true });
+  const via = fake ? "fixture" : "network";
+  const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(ep))}\t${verdict}\t${field(reason)}\n`);
+  const couldNot = (reason) => { record("COULD-NOT-SCAN", reason); fail(EXIT.UNREADABLE, `COULD-NOT-SCAN ${id} -- ${reason}`); };
+
+  // 2. credential: the registry names arc's secret, the adapter names the upstream header. Only
+  // the value crosses; arc's name for it never leaves this process.
+  let key = null;
+  if (String(src.auth) === "env") {
+    const name = String(src.credential_ref ?? "");
+    key = name && process.env[name] ? process.env[name] : null;
+    if (!key) couldNot(`credential ${field(name) || "(none named)"} is not set in the environment`);
+  }
+
+  // 3. the transport. The fake answers from a fixture and records each request with the key
+  // replaced by its hash, so a test can prove which header carried it without writing it down.
+  const fixture = o["--mcp-fixture"] != null ? JSON.parse(readFileSync(resolve(o["--mcp-fixture"]), "utf8")) : null;
+  const post = async (body, extra) => {
+    const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", ...extra };
+    if (key) headers[adapter.header] = key;
+    appendFileSync(join(stateDir, "attempts.log"), `${new Date().toISOString()}\t${id}\t${via}\tPOST\t${field(shown(ep))}\t${field(body.method)}\n`);
+    if (fake) {
+      if (o["--record-request"] != null) {
+        const shownHeaders = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, v === key ? `sha256:${createHash("sha256").update(v).digest("hex").slice(0, 16)}` : v]));
+        appendFileSync(resolve(o["--record-request"]), JSON.stringify({ url: ep.href, headers: shownHeaders, body }) + "\n");
+      }
+      const r = fixture && fixture[body.method];
+      if (!r) return { status: 0, error: `no fixture answer for ${body.method}` };
+      return { status: r.status ?? 200, session: r.session ?? null, text: typeof r.body === "string" ? r.body : JSON.stringify(r.body) };
+    }
+    try {
+      const res = await fetch(ep.href, { method: "POST", headers, body: JSON.stringify(body), redirect: "manual" });
+      return { status: res.status, session: res.headers.get("mcp-session-id"), text: await res.text() };
+    } catch (e) {
+      return { status: 0, error: e && e.message ? e.message : "network error" };
+    }
+  };
+  const step = async (body, extra) => {
+    const r = await post(body, extra);
+    if (r.status === 0) couldNot(`${body.method}: ${r.error}`);
+    if (r.status === 401 || r.status === 403) couldNot(`${body.method}: the key was refused (HTTP ${r.status})`);
+    if (r.status < 200 || r.status > 299) couldNot(`${body.method}: HTTP ${r.status}`);
+    return r;
+  };
+
+  const init = await step({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "arc-design-refpack", version: "1" } } }, {});
+  const session = init.session ? { "mcp-session-id": init.session } : {};
+  await post({ jsonrpc: "2.0", method: "notifications/initialized" }, session);
+  const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: { message: q, searchQuery: q } } }, session);
+  const reply = rpcReply(call.text, 2);
+  if (!reply) couldNot("tools/call: no reply carried this request id");
+  if (reply.error) couldNot(`tools/call: ${field(reply.error.message ?? "error")}`);
+  const items = searchItems(reply.result);
+  const n = Math.min(items.length, want);
+  const short = items.length < want ? `; SHORT -- asked for ${want}, got ${items.length}` : "";
+  record("ANSWERED", `results ${n} of ${want}${short}`);
+  for (const it of items.slice(0, want)) {
+    const name = field(it.name ?? it.title ?? it.text ?? "(unnamed)").slice(0, 120);
+    const pics = JSON.stringify(it).match(/https:\/\/[^"\s]+\.(png|jpe?g|webp|avif|gif)/gi) ?? [];
+    console.log(`  ${name}${pics.length ? ` -- preview ${field(pics[0])}` : ""}`);
+  }
+  console.log(`design-refpack query: ${id} answered ${n} of ${want}${short}`);
+}
+
+// One availability line per active pack source for a run, read from what the run RECORDED --
+// never from the registry's availability field. An active source the run never asked is named,
+// so a pack built from one source can never read like a pack built from two.
+async function summary(argv) {
+  const o = parseNamed(argv, new Set(["--brief", "--since", "--registry"]), 1);
+  if (!o["--brief"] || !o["--since"]) fail(1, "--summary needs --brief and --since <ISO time the run started>");
+  if (!validId(o["--brief"])) fail(1, `--brief must match ${ID}`);
+  const since = Date.parse(o["--since"]);
+  if (!/^\d{4}-\d\d-\d\dT/.test(o["--since"]) || Number.isNaN(since)) fail(1, "--since takes an ISO time, e.g. 2026-10-05T09:00:00Z");
+  seamGuard(o, ["--registry"]);
+  const sources = await loadRegistry(o["--registry"] ? resolve(o["--registry"]) : join(ROOT, "design.sources.yaml"));
+  const active = sources.filter((s) => s && String(s.status) === "active" && asList(s.allowed_use).includes("reference-pack")).map((s) => String(s.id));
+  if (active.length === 0) fail(1, "the registry has no active pack source; there is nothing to report on (this is not a pass)");
+  const readLines = (p) => (existsSync(p) ? readFileSync(p, "utf8").split(/\r?\n/).filter(Boolean) : []);
+  const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", o["--brief"]);
+  const avail = readLines(join(stateDir, "availability.log")).map((l) => l.split("\t")).filter((f) => f.length >= 6 && Date.parse(f[0]) >= since);
+  const added = readLines(join(ROOT, "docs", "design", "refpacks", o["--brief"], "sources.md"))
+    .filter((l) => /^\| https?:/.test(l)).map((l) => l.split(" | ")).filter((c) => c.length >= 4 && Date.parse(c[1]) >= since).map((c) => c[3].replace(/ \(fixture\)$/, ""));
+  let answered = 0;
+  for (const id of active) {
+    const mine = avail.filter((f) => f[1] === id);
+    const count = (v) => mine.filter((f) => f[4] === v).length;
+    const rows = added.filter((s) => s === id).length;
+    const mcp = mine.filter((f) => f[4] === "ANSWERED").map((f) => f[5]);
+    const notes = [];
+    if (count("DISALLOW")) notes.push(`REFUSED (robots) ${count("DISALLOW")}`);
+    const cns = mine.filter((f) => f[4] === "UNREADABLE" || f[4] === "COULD-NOT-SCAN");
+    if (cns.length) notes.push(`COULD-NOT-SCAN ${cns.length} (${field(cns[cns.length - 1][5])})`);
+    let head;
+    if (mine.length === 0) head = "NOT-ASKED -- active, and this run never queried it";
+    else if (mcp.length) head = `ANSWERED ${field(mcp[mcp.length - 1])}`;
+    else head = `ANSWERED ${rows}/${count("ALLOW") + count("DISALLOW") + cns.length} screen(s) added/asked`;
+    const ok = (mcp.length && !/^results 0 /.test(mcp[mcp.length - 1])) || rows > 0;
+    if (ok) answered++;
+    console.log(`availability ${id}: ${head}${notes.length ? `; ${notes.join("; ")}` : ""}`);
+  }
+  console.log(`design-refpack summary: ${answered} of ${active.length} active pack source(s) answered since ${field(o["--since"])}`);
+}
+
 async function main(argv) {
   if (argv[0] === "--check-browse") return checkBrowse(argv);
+  if (argv[0] === "--query") return query(argv);
+  if (argv[0] === "--summary") return summary(argv);
   const o = parseArgs(argv);
   for (const k of ["--brief", "--source", "--url"]) if (!o[k]) fail(1, `${k} is required`);
   const brief = o["--brief"];

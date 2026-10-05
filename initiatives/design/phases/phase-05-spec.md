@@ -47,6 +47,9 @@ nothing references it. Five slices, each red-first on CI:
   Asked for N and got fewer prints the count, never a shorter pack in silence. An `off` source
   makes no request at all. Proved on fakes: one source unreachable, one robots `Disallow`, one
   short answer -- each named in the summary, and the pack still builds from what answered.
+  The summary (`design-refpack.mjs --summary --brief <id> --since <run start>`) and the MCP search
+  (`--query`) are run by the orchestrating session, not by design-curator: the curator's Bash is
+  hook-bound to one builder command (ADR-1420), and widening it is out of this phase's scope.
 - **S3 -- credential mapping.** The 21st.dev adapter sends the upstream header `x-api-key`,
   read from `API_KEY_21ST`; arc's internal names never appear in the request. A missing key is
   COULD-NOT-SCAN, not a crash and not a silent skip. Proved on the fake transport by asserting
