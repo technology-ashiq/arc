@@ -164,11 +164,21 @@ VAL()   { printf '%s\n' "$output" | grep -m1 "^$1=" | cut -d= -f2-; }
 }
 
 # ---------------------------------------------------------------------------
+# REQ-04 (Phase 01): the model-policy room
+# ---------------------------------------------------------------------------
 
-@test "suite: all 14 tests are REGISTERED and none is skipped" {
+@test "profile: the model-policy room serves and draws profile, model and host, never the key" {
+  run node "$ARC_ROOT/tests/engine-model-profile-room.mjs"
+  [[ "$output" == *"RAN "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+# ---------------------------------------------------------------------------
+
+@test "suite: all 15 tests are REGISTERED and none is skipped" {
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "14" ] || { echo "expected 14 REGISTERED, bats registered $registered"; false; }
+  [ "$registered" = "15" ] || { echo "expected 15 REGISTERED, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but registered $registered"; false; }
   run grep -c "^[[:space:]]*skip" "$BATS_TEST_FILENAME"
   [ "$output" = "0" ] || { echo "a test in this file is skipped"; false; }

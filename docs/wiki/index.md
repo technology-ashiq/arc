@@ -8,14 +8,14 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Products](#products) | 19 | 17 |
 | [Lanes](#lanes) | 19 | 17 |
 | [Processes](#processes) | 14 | 0 |
-| [Decisions (ADR bands)](#decisions-adr-bands) | 18 | 0 |
+| [Decisions (ADR bands)](#decisions-adr-bands) | 19 | 0 |
 | [Commands](#commands) | 28 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **144** | **34** |
+| **Total** | **145** | **34** |
 
-Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 331 of 396 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **111 of 145** pages have no narrative yet. ADR headers: 335 of 400 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -59,7 +59,7 @@ Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 331 of 
 | [ledger](lanes/ledger.md) | IDLE | arc-ledger (opened 2026-08-12, closed 2026-08-13) |
 | [legal](lanes/legal.md) | LIVE | arc-legal (Cycle 14, opened 2026-08-12) |
 | [memory](lanes/memory.md) | IDLE | arc-memory (Cycle 11, closed 2026-08-12) |
-| [model-policy](lanes/model-policy.md) | IDLE | model-policy (Cycle 5, closed 2026-08-02) |
+| [model-policy](lanes/model-policy.md) | LIVE | model-policy v2 (opened 2026-10-05) |
 | [org](lanes/org.md) | LIVE | arc-org (Cycle 20, opened 2026-10-05) |
 | [policy](lanes/policy.md) | IDLE | arc-policy (Cycle 9, closed 2026-08-10) |
 | [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
@@ -106,6 +106,7 @@ Narrative debt: **110 of 144** pages have no narrative yet. ADR headers: 331 of 
 | [1500–1599](adr/1500.md) | 15 | 0 |
 | [1600–1699](adr/1600.md) | 30 | 0 |
 | [1700–1799](adr/1700.md) | 28 | 0 |
+| [1800–1899](adr/1800.md) | 4 | 0 |
 
 ## Commands
 
