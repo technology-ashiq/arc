@@ -5,6 +5,8 @@ const GITHUB = "https://api.github.com";
 const SHA = /^[0-9a-f]{40}$/;
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const SERVICE = "venture";
+// The route answers this exact version, so the live answer can be tied to launch's route (attack 3f04230 L14).
+const VERSION = "0.1.0";
 // Next route files need JavaScript's `export` of a request handler and nothing that ADR-1703 bans; plain names only.
 const FILES = {
   "lib/contract.js": [
@@ -21,7 +23,7 @@ const FILES = {
     "export const dynamic = \"force-dynamic\";",
     "",
     "export async function GET() {",
-    `  const body = Health.parse({ ok: true, service: ${JSON.stringify(SERVICE)}, version: "0.1.0" });`,
+    `  const body = Health.parse({ ok: true, service: ${JSON.stringify(SERVICE)}, version: ${JSON.stringify(VERSION)} });`,
     "  return Response.json(body, { headers: { \"cache-control\": \"no-store\" } });",
     "}",
     "",
@@ -69,6 +71,16 @@ const trailer = (ctx) => `Arc-Launch-Tag: ${ctx.tag}`;
 const hasLine = (msg, line) => typeof msg === "string" && msg.split("\n").some((l) => l.trim() === line);
 const utf8 = (b64) => new TextDecoder().decode(Uint8Array.from(atob(String(b64).replace(/\s/g, "")), (c) => c.charCodeAt(0)));
 
+// At `head`, `path` holds launch's exact bytes AND its newest commit carries this slot's trailer (attack 3f04230 B1/B4/L5).
+async function oursAt(ctx, full, head, path) {
+  const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
+  const b = cur.body;
+  if (cur.status === 404 || !b || b.type !== "file" || typeof b.content !== "string" || utf8(b.content) !== FILES[path]) return false;
+  const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
+  const top = list(log.body)[0];
+  return hasLine(top && top.commit && top.commit.message, trailer(ctx));
+}
+
 export function envContract() {
   return ["GITHUB_TOKEN"];
 }
@@ -86,9 +98,11 @@ export async function scaffold(ctx) {
     if (cur.status === 404) { changed.push(path); continue; }
     const b = cur.body;
     if (!b || b.type !== "file" || b.encoding !== "base64" || typeof b.content !== "string") throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file`);
-    if (utf8(b.content) === text) continue;
+    // Identical bytes are still the owner's unless launch committed them: the trailer decides, content alone never
+    // does (attack 3f04230 L3/L4).
     const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
     const top = list(log.body)[0];
+    if (utf8(b.content) === text && hasLine(top && top.commit && top.commit.message, trailer(ctx))) continue;
     if (!hasLine(top && top.commit && top.commit.message, trailer(ctx))) throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's code; it is not committed over`);
     changed.push(path);
   }
@@ -124,6 +138,13 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 // Asked of the live venture: /api/health answers 200, JSON, exactly { ok: true, service, version } and nothing more.
 async function probe(ctx) {
   const url = `https://${domainOf(ctx)}/api/health`;
+  // The route on main is launch's own; a live answer from someone else's route proves nothing (attack 3f04230 B4).
+  const full = repo(ctx);
+  const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
+  const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
+  if (!SHA.test(head)) return { ok: false, reason: `${full} main has no readable head` };
+  for (const path of Object.keys(FILES))
+    if (!(await oursAt(ctx, full, head, path))) return { ok: false, reason: `${full}@${head.slice(0, 7)}: ${path} is not launch's file` };
   let last = "no answer";
   for (let i = 0; i < 6; i++) {
     if (i) await wait(30000, ctx.signal);
@@ -134,7 +155,7 @@ async function probe(ctx) {
     let b = null;
     try { b = await res.json(); } catch { return { ok: false, reason: `${url} answers malformed JSON` }; }
     const keys = b && typeof b === "object" && !Array.isArray(b) ? Object.keys(b).sort().join(",") : "";
-    if (keys !== "ok,service,version" || b.ok !== true || b.service !== SERVICE || typeof b.version !== "string" || !b.version)
+    if (keys !== "ok,service,version" || b.ok !== true || b.service !== SERVICE || b.version !== VERSION)
       return { ok: false, reason: `${url} answers outside the contract (keys: ${say(keys, 60) || "none"})` };
     return { ok: true, answerer: domainOf(ctx), evidence: { url, version: say(b.version, 40) } };
   }

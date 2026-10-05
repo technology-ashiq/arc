@@ -72,6 +72,24 @@ switch (scenario) {
   case "before-backend":
     out.backendVerify = await A.backend.mod.verify(ctxFor("backend"));
     break;
+  case "owner-edits-after":
+    // After launch, the owner rewrites db/schema.js and the route: green CI over their files is not launch's proof.
+    await A.backend.mod.scaffold(ctxFor("backend"));
+    await A.orm.mod.scaffold(ctxFor("orm"));
+    for (const [path, msg] of [["db/schema.js", "owner schema"], ["app/api/health/route.js", "owner route"]]) {
+      const s = `${"d".repeat(39)}${path.length % 10}`;
+      repo().files[path] = { sha: s, content: Buffer.from("// mine\n").toString("base64") };
+      repo().commits.push({ sha: s, message: msg, files: { [path]: s } });
+    }
+    out.ormVerify = await A.orm.mod.verify(ctxFor("orm"));
+    out.backendVerify = await A.backend.mod.verify(ctxFor("backend"));
+    break;
+  case "owner-copy":
+    // The owner committed launch's exact contract file by hand: identical bytes are not launch's without the trailer.
+    await A.backend.mod.scaffold(ctxFor("backend"));
+    repo().commits.push({ sha: "e".repeat(40), message: "copy", files: { "lib/contract.js": repo().files["lib/contract.js"].sha } });
+    out.backend = await attempt(() => A.backend.mod.scaffold(ctxFor("backend")));
+    break;
   case "red-ci":
     await A.orm.mod.scaffold(ctxFor("orm"));
     out.ormVerify = await A.orm.mod.verify(ctxFor("orm"));

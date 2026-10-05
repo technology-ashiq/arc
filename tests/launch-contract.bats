@@ -529,3 +529,14 @@ arm() {
   arm app no-probe
   [ "$(j 'o.orm.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: once the owner rewrites the schema or route, green CI and a live 200 are no longer launch's proof" {
+  arm app owner-edits-after
+  [[ "$(j 'o.ormVerify.ok + " " + o.ormVerify.reason')" == "false "*"db/schema.js is not launch's schema file" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"is not launch's file" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: identical bytes the owner committed are not launch's without its trailer" {
+  arm app owner-copy
+  [ "$(j 'o.backend.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}

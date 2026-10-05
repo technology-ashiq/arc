@@ -36,3 +36,7 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
   production build of the lift commit errors; release's receipt is "production now builds, not skipped". Serving is
   frontend's proof, and frontend's verify (live 200 + Lighthouse) catches a broken build.
 - Logic: round 1 failed its output contract (empty `fix`), round 2 NOT RUN.
+
+## attack 3f04230 r1 (slice 9)
+
+- B1/B2/B4/L3/L4/L5/L12/L14/L15 fixed. L1 REJECTED: the header is built from the trimmed, shape-checked token, so no CR/LF can reach it. L2 REJECTED: a 422 on the non-forced ref update throws before the report, so no unmerged commit is recorded. L6/L8/L9 -> D19 (guessable markers). B3 (three-OS CI longer than the slot timeout) -> D22. L10 -> D23.

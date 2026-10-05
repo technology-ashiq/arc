@@ -68,6 +68,16 @@ const trailer = (ctx) => `Arc-Launch-Tag: ${ctx.tag}`;
 const hasLine = (msg, line) => typeof msg === "string" && msg.split("\n").some((l) => l.trim() === line);
 const utf8 = (b64) => new TextDecoder().decode(Uint8Array.from(atob(String(b64).replace(/\s/g, "")), (c) => c.charCodeAt(0)));
 
+// At `head`, `path` holds launch's exact bytes AND its newest commit carries this slot's trailer (attack 3f04230 B1/B4/L5).
+async function oursAt(ctx, full, head, path) {
+  const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
+  const b = cur.body;
+  if (cur.status === 404 || !b || b.type !== "file" || typeof b.content !== "string" || utf8(b.content) !== FILES[path]) return false;
+  const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
+  const top = list(log.body)[0];
+  return hasLine(top && top.commit && top.commit.message, trailer(ctx));
+}
+
 export function envContract() {
   return ["GITHUB_TOKEN"];
 }
@@ -84,9 +94,11 @@ export async function scaffold(ctx) {
     if (cur.status === 404) { changed.push(path); continue; }
     const b = cur.body;
     if (!b || b.type !== "file" || b.encoding !== "base64" || typeof b.content !== "string") throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file`);
-    if (utf8(b.content) === text) continue;
+    // Identical bytes are still the owner's unless launch committed them: the trailer decides, content alone never
+    // does (attack 3f04230 L3/L4).
     const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
     const top = list(log.body)[0];
+    if (utf8(b.content) === text && hasLine(top && top.commit && top.commit.message, trailer(ctx))) continue;
     if (!hasLine(top && top.commit && top.commit.message, trailer(ctx))) throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's schema; it is not committed over`);
     changed.push(path);
   }
@@ -125,17 +137,22 @@ async function probe(ctx) {
   const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
   const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
   if (!SHA.test(head)) return { ok: false, reason: `${full} main has no readable head` };
-  const cur = await gh(ctx, "GET", `/repos/${full}/contents/db/schema.js?ref=${head}`, undefined, [404]);
-  if (cur.status === 404) return { ok: false, reason: `${full}@${head.slice(0, 7)} holds no db/schema.js` };
+  for (const path of Object.keys(FILES))
+    if (!(await oursAt(ctx, full, head, path))) return { ok: false, reason: `${full}@${head.slice(0, 7)}: ${path} is not launch's schema file` };
   let last = `no arc-ci run for ${head.slice(0, 7)} yet`;
   for (let i = 0; i < 8; i++) {
     if (i) await wait(30000, ctx.signal);
     const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&head_sha=${head}&per_page=1`, undefined, [404]);
+    // No arc-ci workflow at all is an answer, not a wait (attack 3f04230 B2).
+    if (runs.status === 404) return { ok: false, reason: `${full} has no arc-ci workflow (the ci slot writes it)` };
     const run = runs.status === 200 && runs.body ? list(runs.body.workflow_runs).find((r) => r.head_sha === head && typeof r.id === "number") : null;
     if (!run) continue;
     if (run.status !== "completed") { last = `run ${run.id} is still ${say(run.status, 20)}`; continue; }
     const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
-    const byName = new Map(list(jobs.body && jobs.body.jobs).map((j) => [j.name, j.conclusion]));
+    const js = list(jobs.body && jobs.body.jobs);
+    // A completed run can still list a job without its conclusion: that is still running (attack 3f04230 L12).
+    if (js.some((j) => LEGS.includes(j.name) && j.status !== "completed")) { last = `run ${run.id} still has a leg running`; continue; }
+    const byName = new Map(js.map((j) => [j.name, j.conclusion]));
     const red = LEGS.filter((n) => byName.get(n) !== "success");
     if (red.length) return { ok: false, reason: `run ${run.id}: ${red.map((n) => `${n} ${say(byName.get(n) ?? "absent", 20)}`).join(", ")}` };
     return { ok: true, answerer: "api.github.com", evidence: { repo: full, head, run: run.id } };

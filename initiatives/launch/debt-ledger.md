@@ -21,3 +21,5 @@
 | D17 | attack 1406e29 L11 | an upstream repo id in mixed case is sent to Vercel as given; GitHub folds case, Vercel may not | the first venture whose owner login has upper-case letters |
 | D18 | attack 21d7acb B1 | a worker killed between Vercel's project-create answer and the synchronous `report()` leaves launch's own project recorded as `-found` on the re-run, so the exit plan skips it | the first teardown plan that leaves a `vercel-project-found` the owner never made |
 | D19 | attack 8a7fb7f | ownership trailers and markers are guessable constants (`slug@slot@provider`); anyone with write access can forge launch's claim on a branch, file or repo | a resource launch adopted that the owner says launch never made |
+| D22 | attack 3f04230 B3 | orm verify polls arc-ci for 4 minutes inside a 300 s slot; a cold three-OS install outlasts it and reads "still running" until the next verify | the first real orm apply whose CI takes longer than the slot timeout |
+| D23 | attack 3f04230 L10 | the live fake always answers JSON, so backend verify's not-JSON branch has no test | the first real /api/health that answers HTML (a Vercel error page) |

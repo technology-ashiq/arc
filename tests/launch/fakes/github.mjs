@@ -19,7 +19,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     const c = { sha: sha(), message, files };
     r.commits.push(c);
     r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha, branch: "main", pending: pendingPolls,
-      jobs: LEGS.map((os, i) => ({ name: `test (${os})`, conclusion: (runConclusions && runConclusions[i]) || "success" })) });
+      jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
     return c;
   }
 
@@ -90,7 +90,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       r.commits.push(p.c);
       // A push to main runs arc-ci, like any other commit (ADR-1733's orm verify reads it).
       r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: p.c.sha, branch: "main", pending: pendingPolls,
-        jobs: LEGS.map((os, i) => ({ name: `test (${os})`, conclusion: (runConclusions && runConclusions[i]) || "success" })) });
+        jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
       return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
     }
     r.tags = r.tags || {};
