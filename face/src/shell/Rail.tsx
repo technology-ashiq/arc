@@ -5,9 +5,11 @@
 //   1. the rooms, rings and order are the SERVED registry's (railGroups), never roomRegistry.js;
 //   2. a row's icon is its module's own `Icon` export, and a room with no module wears a dashed
 //      circle -- the rail shows which rooms are still generic before you open one;
-//   3. (paid, face v2 Phase 09, ADR-1349) the brand is v0.7's button again, back to the front door.
+//   3. (paid, face v2 Phase 09, ADR-1349) the brand is v0.7's button again, back to the front door;
+//   4. (face v2 Phase 11, ADR-1350 Amendment 2) a Settings link under the rooms opens HQ's Settings page. It is not a
+//      room: not in the groups, not counted, and it carries no data-room.
 import type { ComponentType } from 'react'
-import { CircleDashed, MagnifyingGlass } from '@phosphor-icons/react'
+import { CircleDashed, GearSix, MagnifyingGlass } from '@phosphor-icons/react'
 import { stateBadge } from '../lib/rooms.mjs'
 import type { Room } from '../lib/rooms.mjs'
 import type { Attachment } from '../lib/registry.mjs'
@@ -20,7 +22,7 @@ export const RAIL_W = 240
 export const HEAD_H = 56
 
 export default function Rail({
-  groups, current, onOpen, onPalette, onExit, attachment, ringCount, extrasNote = '',
+  groups, current, onOpen, onPalette, onExit, onSettings, settingsOn, attachment, ringCount, extrasNote = '',
 }: {
   groups: Group[]
   current: string | null
@@ -28,6 +30,9 @@ export default function Rail({
   onPalette: () => void
   /** back to the front door (v0.7's brand button) */
   onExit: () => void
+  /** open HQ's Settings page, and whether it is the page shown now */
+  onSettings: () => void
+  settingsOn: boolean
   attachment: Attachment
   ringCount: number
   /** why some exempted extra rooms are not drawn, or empty when every row was */
@@ -65,7 +70,7 @@ export default function Rail({
               {g.ring}
             </div>
             {g.rooms.map((r) => {
-              const isActive = current === r.id
+              const isActive = !settingsOn && current === r.id
               const planned = Boolean(r.planned)
               const extra = Boolean(r.extra)
               const attached = attachment.attached[r.id]
@@ -91,6 +96,21 @@ export default function Rail({
             })}
           </div>
         ))}
+      </div>
+
+      <div className="shrink-0 px-3 py-2" style={{ borderTop: '1px solid var(--line-1)' }}>
+        <button
+          type="button"
+          data-rail-settings
+          onClick={onSettings}
+          aria-current={settingsOn ? 'page' : undefined}
+          title="Models (add, test) and voice"
+          className="w-full flex items-center gap-2.5 text-left px-2.5 h-[32px] cursor-pointer transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent) hover:bg-(--bg-3)"
+          style={{ borderRadius: 'var(--r-md)', background: settingsOn ? 'var(--bg-4)' : 'transparent', transitionTimingFunction: EASE }}
+        >
+          <GearSix size={16} weight={settingsOn ? 'fill' : 'regular'} color={settingsOn ? 'var(--accent)' : 'var(--text-2)'} aria-hidden="true" />
+          <span className="text-[13px] truncate" style={{ fontFamily: UI, fontWeight: settingsOn ? 600 : 500, color: settingsOn ? 'var(--text-1)' : 'var(--text-2)' }}>Settings</span>
+        </button>
       </div>
 
       <div className="shrink-0 px-4 py-3 text-[11px] leading-[17px]" style={{ fontFamily: UI, color: 'var(--text-3)', borderTop: '1px solid var(--line-1)' }}>

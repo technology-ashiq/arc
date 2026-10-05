@@ -45,3 +45,22 @@ Not done here: per-answer ₹ estimates and a spend cap (the owner picks free or
 3. **Choose the voice.** The Voice section adds the browser's own `speechSynthesis` voices, a speed of 0.75x to 1.5x, and a preview. The choice is kept in the browser beside the switch (§6); no cloud voice, no new dependency, no key.
 
 Filed as REQ-15 / Phase 11, before the dogfood (Phase 08). Appetite +1.5d (total 38.5d). No new spine kind; streaming and a spend cap stay out.
+
+## Amendment 2 (2026-10-05, owner) — Settings is its own page, not a popup
+
+**Why.** At the Phase 11 live read the owner found voice working and asked for Settings as a page of its own:
+"sari thaniya irunthalum, seperate page ah vaikalama ?" -- even kept apart from the rooms, as a separate page.
+
+1. **A page in the workroom, not a room.** Settings draws in the workroom's main area in place of a room, at its own
+   address (`#hq&view=settings`), so it can be reloaded, bookmarked and left with Back. It is not a room in the rail's groups, not served
+   by `/api/rooms`, and not a surface: the workroom stays the one surface besides the front door (ADR-1349), so
+   `face-coverage`'s room and surface counts do not move.
+2. **Three ways in.** HQ's header Settings, a Settings link at the foot of the rail (below the rooms, not counted with
+   them; the owner asked for it in the menu the same day, "menu laye add pannirlaama") and the ⌘K "Settings" entry open
+   the page; leaving it returns to the room
+   that was open. The front door still carries no settings (the 2026-10-01 ruling stands, `door-no-settings` holds).
+3. **The same contents.** Models (add, activate, remove, Test with ok-or-why and seconds, the last test kept) and Voice
+   (the switch, the browser's voices, speed 0.75x to 1.5x, Preview), unchanged from Amendment 1. No door route changes.
+
+Filed inside Phase 11 (still open), REQ-15's acceptance amended from "one menu" to "one Settings page". Appetite
++0.5d inside Phase 11's 1.5d; the total stays 38.5d.

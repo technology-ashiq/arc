@@ -445,6 +445,15 @@ check("the door's palette never offers Settings", doorClean(doorList), `door=${d
 check("the workroom's palette offers Settings exactly once, after every place", hqList.filter((i) => shell.isSettingsItem(i)).length === 1 && shell.isSettingsItem(hqList[hqList.length - 1]), `hq=${hqList.length}`);
 check("the same judge FAILs the workroom's list on the door (mutant)", !doorClean(hqList));
 
+// Settings is a workroom page at its own address, not a room (ADR-1350 Amendment 2): `view` round-trips with the room it
+// was opened over, and only a known page name is carried -- in either direction.
+check("VIEWS is exported and names settings (vacuous-pass guard)", Array.isArray(shell.VIEWS) && shell.VIEWS.includes("settings"));
+const pageHash = shell.buildHash("lane", "tok", "2026-10-05", null, "settings");
+const pageBack = shell.parseHash(pageHash);
+check("the Settings page round-trips with its room, token and day", pageBack.view === "settings" && pageBack.room === "lane" && pageBack.token === "tok" && pageBack.asOf === "2026-10-05", pageHash);
+check("a room address carries no view", shell.parseHash(shell.buildHash("lane", "tok")).view === null);
+check("an unknown view is dropped both ways", shell.parseHash("#/lane&view=evil").view === null && !/view=/.test(shell.buildHash("lane", null, null, null, /** @type {any} */ ("evil"))));
+
 // A concept homed in a room that does not exist is a result that opens nothing. face-coverage
 // now fails closed on exactly that, so it should be impossible -- which is the reason to skip
 // it here rather than render it: if the gate ever regresses, the palette must not be the place
