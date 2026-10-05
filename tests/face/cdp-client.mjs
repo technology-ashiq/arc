@@ -203,6 +203,18 @@ check("a DevToolsActivePort with a bad port or path is refused",
     let msg2 = "";
     try { await cdp.waitForDevTools(scratch, idle, { timeoutMs: 300, pollMs: 20 }); } catch (e) { msg2 = String(e.message); }
     check("a DevToolsActivePort that exists but does not parse is reported as such, not as absent", /did not parse/.test(msg2), msg2);
+    // Windows: the file is held while Chrome writes it, and the read throws EBUSY -- "not yet", polled again (CI 37365741070).
+    writeFileSync(join(scratch, "DevToolsActivePort"), "9222\n/devtools/browser/x\n");
+    let busy = 2;
+    const held = (p) => { if (busy-- > 0) { const e = new Error("busy"); e.code = "EBUSY"; throw e; } return readFileSync(p, "utf8"); };
+    let url = null, msg3 = "";
+    try { url = await cdp.waitForDevTools(scratch, idle, { timeoutMs: 2000, pollMs: 10, read: held }); } catch (e) { msg3 = String(e.message); }
+    check("a DevToolsActivePort held busy twice is read on the third poll, not thrown", url === "ws://127.0.0.1:9222/devtools/browser/x" && busy < 0, url ?? msg3);
+    // MUTANT CONTROL: any other read error still throws at once -- the retry is for a held file only.
+    const broken = () => { const e = new Error("is a directory"); e.code = "EISDIR"; throw e; };
+    let msg4 = "";
+    try { await cdp.waitForDevTools(scratch, idle, { timeoutMs: 2000, pollMs: 10, read: broken }); } catch (e) { msg4 = String(e.code ?? e.message); }
+    check("a read error other than a held file still throws (EISDIR)", msg4 === "EISDIR", msg4);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -789,4 +801,4 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 62 ? 0 : 1;

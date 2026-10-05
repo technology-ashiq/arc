@@ -1068,6 +1068,20 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
  */
 export const UNMOUNT_MARGIN_MS = 8000;
 /**
+ * The most the harness waits on one crossing, on its own clock: the page-clock window above plus the longest main-thread
+ * hold seen before the page took the surface (10.8 s on macOS, 2026-10-05), with room. A page that never records `hq@`
+ * still ends here and FAILs.
+ */
+export const UNMOUNT_WALL_CAP_MS = 30000;
+/**
+ * Whether a crossing's unmount wait is over: the stage is gone, or the PAGE's own clock says the window has passed since
+ * it took the workroom surface. `sincePageMs` is -1 while the page has not recorded `hq@`, which never ends the wait.
+ * @param {number} stages @param {number} sincePageMs
+ */
+export function unmountWaitOver(stages, sincePageMs) {
+  return stages === 0 || (Number.isFinite(sincePageMs) && sincePageMs >= STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS);
+}
+/**
  * The shortest hold that is a warp: the fly-through is 1.6 s (WARP_IN_S) and the stage is kept STAGE_UNMOUNT_MS. A stage
  * that left in under 1.5 s did not fly through. Written here, not read from mode.mjs, so a changed constant there cannot
  * move the bar with it.
@@ -1155,8 +1169,14 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
       if (!reached) { record(unmountName, false, "never crossed"); return; }
       const crossedAt = Date.now();
+      // The stage's unmount timer starts when the PAGE takes the workroom surface, not when the address changed: on a
+      // loaded runner software WebGL held the main thread 6-10 s between the two (macOS, 2026-10-04/05: hash at ~1 s,
+      // `hq@` in the trail at 7.5-10.8 s), so a window counted from the address ran out before the timer had started.
+      // The window is counted on the page's own clock from its `hq@` entry; a stage that never leaves still FAILs at
+      // the cap, and the harness never waits more than UNMOUNT_WALL_CAP_MS in all.
+      const pageSince = () => val(page, "(function () { var t = (document.documentElement.dataset.surfaceTrail || '').split(' ').filter(function (x) { return x.indexOf('hq@') === 0; }).pop(); return t ? performance.now() - Number(t.slice(3)) : -1; })()");
       await sleep(STAGE_UNMOUNT_MS);
-      await until(async () => (await count(page, "[data-stage]")) === 0, UNMOUNT_MARGIN_MS, 150);
+      await until(async () => unmountWaitOver(await count(page, "[data-stage]"), Number(await pageSince())), UNMOUNT_WALL_CAP_MS, 150);
       const stages = await count(page, "[data-stage]");
       const opened = await inWorkroom(page);
       // The warp is judged from what the page recorded, not from a read that races it: a read "right after" the crossing

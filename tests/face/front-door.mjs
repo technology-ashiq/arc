@@ -380,5 +380,20 @@ check("D: face/src/lib/stage.mjs is a required default root and a named allowanc
   check("D: an explicit --root gets no allowance", spawnSync(process.execPath, [LINT, "--root", "face/src/frontdoor"], { encoding: "utf8", cwd: REPO }).stdout.includes("FAIL face/src/frontdoor/neon.mjs"));
 }
 
+// ── F: the unmount wait counts on the page's clock (smoke.mjs, the macOS flake of 2026-10-04/05) ──
+{
+  const smoke = await import(pathToFileURL(join(REPO, "face", "scripts", "smoke.mjs")).href);
+  const W = mode.STAGE_UNMOUNT_MS + smoke.UNMOUNT_MARGIN_MS;
+  check("F: unmountWaitOver is exported (vacuous-pass guard)", typeof smoke.unmountWaitOver === "function" && smoke.UNMOUNT_WALL_CAP_MS > W);
+  check("F: the wait ends when the stage is gone, whatever the clock", smoke.unmountWaitOver(0, -1) && smoke.unmountWaitOver(0, 0));
+  check("F: a page that took the surface late is still waited for -- its own window has not passed", !smoke.unmountWaitOver(1, W - 1) && !smoke.unmountWaitOver(1, -1));
+  check("F: the wait ends once the page's own window has passed with the stage still on (then it FAILs)", smoke.unmountWaitOver(1, W));
+  // MUTANT CONTROL: the old rule counted from the address, i.e. from the harness's own crossing time. Fed the flake's
+  // numbers (the page took the surface 9.8 s late, so 9.75 s on the harness clock is only ~0 s on the page's), it ends
+  // the wait before the page's timer could run -- the same case the new rule must keep waiting on.
+  const oldRule = (stages, sinceAddressMs) => stages === 0 || sinceAddressMs >= W;
+  check("F: MUTANT CONTROL -- the address-clock rule ends the flake's wait, the page-clock rule does not", oldRule(1, W) && !smoke.unmountWaitOver(1, W - 9800));
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 53 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 58 ? 0 : 1;
