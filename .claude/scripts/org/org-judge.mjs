@@ -15,7 +15,7 @@
  * 1 refused, 2 operator error.
  */
 import { readdirSync, realpathSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { collect } from "./org-coverage.mjs";
 import { loadOrg, readSpine } from "./org-review.mjs";
@@ -123,14 +123,16 @@ export function judge({ o, cards, events, placements, teams }) {
 async function main(argv) {
   let o;
   try { o = parseArgs(argv); } catch (e) { if (e instanceof Usage) { console.error(`org-judge: ${e.message}`); return 2; } throw e; }
-  const root = o.root;
+  // Absolute before any use: the emit child runs with cwd root, so a relative path read here and there names two
+  // different spines (attack 83b4d22 B2).
+  const root = resolve(o.root);
   const org = await loadOrg(root);
   if (org.findings && org.findings.length) {
     console.error(`org-judge: REFUSED -- the attribution map has ${org.findings.length} finding(s), so no receipt can be placed:`);
     for (const f of org.findings.slice(0, 5)) console.error(`  ${f}`);
     return 1;
   }
-  let spineDir = o.spineDir;
+  let spineDir = o.spineDir === null ? null : resolve(o.spineDir);
   if (!spineDir) {
     try {
       const { spineRoot } = await import(pathToFileURL(join(root, ".claude", "scripts", "hq", "lib", "spine-io.mjs")).href);

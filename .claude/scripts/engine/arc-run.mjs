@@ -432,7 +432,8 @@ if (doc && Object.prototype.hasOwnProperty.call(doc, "job_stub") && doc.job_stub
 // (the council members, question-planner), so putting the resolved agent in front of every default run
 // would change attack-diff, review-diff and the council with no reviewed diff (ADR-1626 amendment).
 const roleSeat = await (async () => {
-  const hasRole = Object.prototype.hasOwnProperty.call(doc, "role");
+  // A falsy or non-object doc is the missing-process path's to report, never a TypeError here (attack 83b4d22 B1).
+  const hasRole = !!doc && typeof doc === "object" && Object.prototype.hasOwnProperty.call(doc, "role");
   if (!hasRole) {
     if (trialSeat) { console.error(`arc-run: --trial-seat needs a process that names a role:, and \`${processName}\` names none`); process.exit(2); }
     return null;
