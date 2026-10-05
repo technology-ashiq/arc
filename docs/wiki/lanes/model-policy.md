@@ -145,14 +145,14 @@ a later engine cycle inherits `ADR-0069`. The tracker flags one clash for that c
 planned routing ladder has an automatic switching step, and the rulebook forbids automatic switching.
 A later decision from the engine lane, `ADR-0212`, amends parts of the policy for agent runtimes.
 
-*Cycle 5 · model-policy "Balanced Model Policy"*
+*model-policy v2 "Provider profiles in the model policy"*
 
 ## At a glance
 
 | | |
 |---|---|
 | Status | IDLE |
-| Cycle | model-policy (Cycle 5, closed 2026-08-02) |
+| Cycle | model-policy v2 (opened 2026-10-05, closed 2026-10-06) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -162,9 +162,16 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/model-policy/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/model-policy/PROGRESS.md)
 
-## Decisions (0)
+## Decisions (4)
 
-No ADR names this lane first in its `Product:` line.
+ADRs whose `Product:` line names this lane first.
+
+| ADR | Decision | Status | Date |
+|---|---|---|---|
+| [`1800`](../../../docs/adr/1800-mpp-a-a-generic-api-pin-may-name-a-profile-amending-adr-0069.md) | MPP-A: a `generic-api` pin may name a profile (amending ADR-0069 blocks a and b) | accepted | 2026-10-05 |
+| [`1801`](../../../docs/adr/1801-mpp-b-profiles-live-in-the-adr-1350-store-one-list-read-only-to-the-engine.md) | MPP-B: profiles live in the ADR-1350 store, one list, read-only to the engine; a missing profile refuses | accepted | 2026-10-05 |
+| [`1802`](../../../docs/adr/1802-mpp-c-a-class-row-may-carry-its-own-profile-where-generic-api-is-reachable.md) | MPP-C: a class row may carry its own `profile:`, only where `generic-api` is reachable; faults at load | accepted | 2026-10-05 |
+| [`1803`](../../../docs/adr/1803-mpp-d-the-settings-page-stays-the-face-lanes-cost-and-used-by-are-filed-there.md) | MPP-D: the Settings page stays the face lane's; a profile's cost, "used by" and remove guard are filed there | accepted | 2026-10-05 |
 
 ## Source
 

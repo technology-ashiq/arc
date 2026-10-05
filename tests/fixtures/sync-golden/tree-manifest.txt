@@ -182,7 +182,7 @@
 .claude/scripts/engine/arc-attack.mjs	006764a0d92cf2b8072aa79433a113c9c633965165e43499ea99f43cfa7cdff4
 .claude/scripts/engine/arc-bench.mjs	9ea9ee838a8dd6b90480bf51f41c84b57c6f579be7c433933db9709e293f4065
 .claude/scripts/engine/arc-compile.mjs	472d55d6d62328a5798be283685697bce95714b70889dbf37a787131ef161a20
-.claude/scripts/engine/arc-run.mjs	4169cda0778fcac7d35b91c3788882031801b273aa203a396d4e5c7aa07a3a5f
+.claude/scripts/engine/arc-run.mjs	7677da6c4a721aa944c3f3bc263199e248ee8dd04f253b5b468808df7a8482b8
 .claude/scripts/engine/build-attack-input.mjs	68905d2d78eb5b97825067539b566d035e0d693350a7f4acae8db86875af4140
 .claude/scripts/engine/build-pack-input.mjs	39c32c1678df504e21d32db6b44f67dc0d8955f28f3b0e2adfd4bfe5ddfec46d
 .claude/scripts/engine/calibrate-budget.mjs	41d1ab89d227b6d47c8f4fa2c9eb6ba4755fe349f743a2093540635fcb9e50d4
@@ -205,7 +205,7 @@
 .claude/scripts/engine/process-lint.mjs	16fc9d36445ea1d0c6972b3244f9afb448ed37fa8201b56306aa12f23eeef5dc
 .claude/scripts/engine/propose.mjs	130115fe10292f582bca3fcf8d07e2f7331a0a4beb5a33de4e99d9ab82c2de26
 .claude/scripts/engine/role-seat.mjs	a850a37ccb725efbaafb7a79612615baa8bb8b1177033175e3da04356b7aeed2
-.claude/scripts/engine/router-row.mjs	1f71c4f402e4a1335726274086ae91d8c036522dc26a638c60e4612670a51038
+.claude/scripts/engine/router-row.mjs	033ff78fd5de83289b361ae72b4b9fd96acde56803e04e063e5632b9254e0967
 .claude/scripts/engine/schema-subset.mjs	b15c1678610434ef41e2e2c0f18dbe3e6ff50c6f0dea34bb18ea91d9f4aa3517
 .claude/scripts/engine/type-tagged-hash.mjs	28c050837204e062e1e3b84f159258caa1c93fa730c2b36c5147e95dd7e5e820
 .claude/scripts/engine/yaml-subset.mjs	9a116d5e36f7d7deb8f7eaa2cd4f1b736d0c8d31bed1f17369aa046f073a13e3
@@ -262,7 +262,7 @@
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/models.mjs	5d41ce518d7a856af4ebe46bf668451b98329375c894154d5586a054b24b8a37
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
-.claude/scripts/hq/lib/face/reads.mjs	dd206a37132509c754eb89ccc34f7eae2d09dcb228954ff233f66b9c332c6241
+.claude/scripts/hq/lib/face/reads.mjs	83c51cef6282e044cf076222fa180b21d8be7e4567fbcb35efc951cc6ffe5f0e
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
 .claude/scripts/hq/lib/face/work-door.mjs	c3168466d25da0a130233840d5dda13d6e54f9739d1af94554997a0d6f0efbbb

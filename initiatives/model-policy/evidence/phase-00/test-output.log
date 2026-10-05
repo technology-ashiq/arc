@@ -1,0 +1,75 @@
+arc-ci run https://github.com/technology-ashiq/arc/actions/runs/37351833108
+head acbba2bc905facd8e017db1b1b89c073bad22073 conclusion success
+  success  ci-tier
+  success  selftest (windows-latest, 20, shard 12/12)
+  success  selftest (windows-latest, 20, shard 3/12)
+  success  selftest (windows-latest, 20, shard 7/12)
+  success  selftest (windows-latest, 20, shard 10/12)
+  success  selftest (windows-latest, 20, shard 9/12)
+  success  selftest (macos-latest, 20, shard 1/3)
+  success  selftest (macos-latest, 20, shard 3/3)
+  success  selftest (windows-latest, 20, shard 4/12)
+  success  selftest (ubuntu-latest, 20)
+  success  selftest (windows-latest, 20, shard 1/12)
+  success  selftest (windows-latest, 20, shard 5/12)
+  success  selftest (macos-latest, 20, shard 2/3)
+  success  selftest (windows-latest, 20, shard 2/12)
+  success  selftest (ubuntu-latest, 18)
+  success  selftest (windows-latest, 20, shard 6/12)
+  success  selftest (windows-latest, 20, shard 8/12)
+  success  selftest (windows-latest, 20, shard 11/12)
+  success  selftest (ubuntu-latest, 22)
+PR #334 merged as bf4fd6a1 (squash of head acbba2bc). Tests run on CI only (.claude/rules/testing.md).
+
+tests/engine-model-profile.bats -- every leg that ran it (3 legs x 17):
+ok 1255 profile: the load refuses each inert or malformed profile, and the controls load
+ok 1256 profile: a tier pin sends the profile key and model to the profile gateway, not the decoys
+ok 1257 profile: the receipt says profile, names the model, the profile and the gateway host
+ok 1258 profile: the key is in no output and no receipt
+ok 1259 profile: a class profile beats the tier pin
+ok 1260 profile: claude-code runs the tier pin first, and the generic-api hop runs the class profile
+ok 1261 profile: a profile the store lacks refuses before claude-code starts, with no receipt
+ok 1262 profile: with no store at all it refuses, and the ambient endpoint is never used
+ok 1263 profile: a store inside the run root is refused
+ok 1264 profile: a store record with remote plain http is refused
+ok 1265 profile: a profile is matched without case, and the receipt carries the stored name
+ok 1266 profile: a NAMED driver ignores profiles and runs on the ambient key as before
+ok 1267 profile: --dry-run names the profile and the gateway host
+ok 1268 profile: --dry-run with the profile missing says it would refuse, with the refusal exit
+ok 1269 profile: a corrupt store refuses without printing any of its content
+ok 1270 profile: the model-policy room serves and draws profile, model and host, never the key
+ok 1271 suite: all 17 tests are REGISTERED and none is skipped
+ok 1491 profile: the load refuses each inert or malformed profile, and the controls load
+ok 1492 profile: a tier pin sends the profile key and model to the profile gateway, not the decoys
+ok 1493 profile: the receipt says profile, names the model, the profile and the gateway host
+ok 1494 profile: the key is in no output and no receipt
+ok 1495 profile: a class profile beats the tier pin
+ok 1496 profile: claude-code runs the tier pin first, and the generic-api hop runs the class profile
+ok 1497 profile: a profile the store lacks refuses before claude-code starts, with no receipt
+ok 1498 profile: with no store at all it refuses, and the ambient endpoint is never used
+ok 1499 profile: a store inside the run root is refused
+ok 1500 profile: a store record with remote plain http is refused
+ok 1501 profile: a profile is matched without case, and the receipt carries the stored name
+ok 1502 profile: a NAMED driver ignores profiles and runs on the ambient key as before
+ok 1503 profile: --dry-run names the profile and the gateway host
+ok 1504 profile: --dry-run with the profile missing says it would refuse, with the refusal exit
+ok 1505 profile: a corrupt store refuses without printing any of its content
+ok 1506 profile: the model-policy room serves and draws profile, model and host, never the key
+ok 1507 suite: all 17 tests are REGISTERED and none is skipped
+ok 307 profile: the load refuses each inert or malformed profile, and the controls load
+ok 308 profile: a tier pin sends the profile key and model to the profile gateway, not the decoys
+ok 309 profile: the receipt says profile, names the model, the profile and the gateway host
+ok 310 profile: the key is in no output and no receipt
+ok 311 profile: a class profile beats the tier pin
+ok 312 profile: claude-code runs the tier pin first, and the generic-api hop runs the class profile
+ok 313 profile: a profile the store lacks refuses before claude-code starts, with no receipt
+ok 314 profile: with no store at all it refuses, and the ambient endpoint is never used
+ok 315 profile: a store inside the run root is refused
+ok 316 profile: a store record with remote plain http is refused
+ok 317 profile: a profile is matched without case, and the receipt carries the stored name
+ok 318 profile: a NAMED driver ignores profiles and runs on the ambient key as before
+ok 319 profile: --dry-run names the profile and the gateway host
+ok 320 profile: --dry-run with the profile missing says it would refuse, with the refusal exit
+ok 321 profile: a corrupt store refuses without printing any of its content
+ok 322 profile: the model-policy room serves and draws profile, model and host, never the key
+ok 323 suite: all 17 tests are REGISTERED and none is skipped

@@ -1,0 +1,45 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:~772 (refuse(`the store could not be used: ${got.why}`))",
+      "breaking_input": "A models.json that is truncated or corrupted next to a record's key field (a half-saved write, or a hand edit that drops a comma). A JSON.parse failure inside loadRegistry then yields a `why` string. Recent Node versions put a snippet of the source text into SyntaxError messages, and that snippet can include the key.",
+      "why": "`got.why` is printed verbatim to stderr. arc-run's stderr is captured by transcripts and CI logs, which breaks the 'a key never reaches stderr or a log line' non-negotiable. The face reader (reads.mjs) correctly uses a fixed string and never prints `why`, so the two entry points disagree.",
+      "fix": "Print a fixed, key-free reason keyed on an error code. If `why` must be shown, strip it to the error class and path. Add a test that plants a key next to a syntax error and greps the output for it."
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:~790 (`key: rec.key ?? \"none\"`)",
+      "breaking_input": "A store record with `\"key\": \"\"`, or a whitespace-only key, if checkRecord does not normalise it. `??` only catches null and undefined.",
+      "why": "ARC_LLM_API_KEY is set to the empty string in the child. The driver then refuses it as unset, which is the failure the comment says this line prevents. The profile also does not fall back to ambient, so the run fails only after attempt 1 has already been spent. The preflight snapshot promises to catch this class of fault early.",
+      "fix": "Use `rec.key ? rec.key : \"none\"` after trimming. Better, refuse at preflight when the key is a non-null empty string."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:~762-790 (preflight block runs before the dryRun branch)",
+      "breaking_input": "`arc-run --process X --driver auto --dry-run` on a machine or CI runner with no owner store (ADR-1801 says runners have none), once any tier pin or class row names a profile.",
+      "why": "The profile preflight is unconditional, so a read-only preview exits 2 and cannot show the routing. Any gate or lint that dry-runs all processes goes red on store-less runners the moment one real `profile:` row is merged. The preview is the only place that could report 'profile missing here' without failing.",
+      "fix": "Under --dry-run, report the missing profile in the preview line and exit 0, or exit with a distinct code. Add a bats case for dry-run with no store."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/engine-model-profile-probe.mjs:~115 (server.close() with no connection teardown)",
+      "breaking_input": "The probe's fetch client holds a keep-alive connection to the listener. `server.close()` waits for it to end.",
+      "why": "The probe process can stay alive for up to the keep-alive timeout of about 5 seconds, or until a hung arc-run child is killed. There is no overall deadline anywhere in the probe, so a hung arc-run stalls the shard until the Windows CI hang. Fifteen cases multiply the delay.",
+      "fix": "Call `server.closeAllConnections()` after the run. Wrap runArc in a hard timeout that kills the child, and print the RAN line only on a clean finish."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:~370 (`unroutable` and `profileOf` fields)",
+      "breaking_input": "A store record named with control characters, an ANSI escape sequence, or a very long string (store NAME_RE allows spaces, and the length cap is unknown).",
+      "why": "`unroutable` names and `rec.model` are served and drawn without `scrub`, unlike the other string fields in this file, which pass through `text()`. The names also reach `fold` notes unbounded.",
+      "fix": "Run them through `scrub` and a length cap, as the other fields do."
+    }
+  ]
+}
