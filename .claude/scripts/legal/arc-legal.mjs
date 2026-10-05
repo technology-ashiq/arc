@@ -540,7 +540,8 @@ function publishedRecord(venture) {
   let text, record;
   try { text = readFileSync(file, "utf8"); record = JSON.parse(text); }
   catch (e) { return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and cannot be read (${e && e.code ? e.code : "not JSON"}).` }; }
-  if (!record || !record.run || !Array.isArray(record.run.pages))
+  if (!record || !record.run || !Array.isArray(record.run.pages)
+      || !record.run.pages.every((p) => p && typeof p.page === "string" && (p.clauses === undefined || Array.isArray(p.clauses))))
     return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and carries no usable run, so what changed cannot be shown.` };
   return { record, sha: bytesHash(text) };
 }
@@ -868,11 +869,19 @@ async function publishMain(args) {
   const ledgerDir = join(PRODUCT, "published");
   const ledgerFile = join(ledgerDir, args.venture + ".json");
   const hadPrevious = existsSync(ledgerFile);
-  const previous = hadPrevious ? readJson(ledgerFile) : null;
-  // The ledger as the human's diff saw it, against the ledger as it stands now (B4).
-  const previousSha = hadPrevious ? bytesHash(readFileSync(ledgerFile, "utf8")) : "none";
+  // ONE read: the bytes hashed for PREVIOUS_MOVED are the bytes the diff and NON_MONOTONIC use.
+  // Two reads let the approval match newer bytes while the checks ran on older ones.
+  let previousText = null;
+  if (hadPrevious) {
+    try { previousText = readFileSync(ledgerFile, "utf8"); }
+    catch (e) { throw new Fail(3, `cannot read ${ledgerFile}: ${e.message}`); }
+  }
+  let previous = null;
+  if (previousText !== null) { try { previous = JSON.parse(previousText); } catch { previous = {}; } }
+  // The ledger as the human's diff saw it, against the ledger as it stands now.
+  const previousSha = previousText !== null ? bytesHash(previousText) : "none";
   const previousMoved = approved.previous_published_sha256 !== previousSha
-    ? [`PREVIOUS_MOVED: the approval was read against ${String(approved.previous_published_sha256).slice(0, 12)} as the previous publish, and the ledger now holds ${previousSha.slice(0, 12)}. Another publish landed in between, so the diff the human read is not this one. Propose again.`]
+    ? [`PREVIOUS_MOVED: the approval was read against ${shown(String(approved.previous_published_sha256).slice(0, 12))} as the previous publish, and the ledger now holds ${previousSha.slice(0, 12)}. Another publish landed in between, so the diff the human read is not this one. Propose again.`]
     : [];
 
   const approvedSets = existsSync(join(PRODUCT, "approved-sets.json")) ? readJson(join(PRODUCT, "approved-sets.json")) : null;

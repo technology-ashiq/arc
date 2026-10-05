@@ -472,9 +472,18 @@ export function factsFieldPrints(facts, printed) {
   const walk = (node, path) => {
     // Only plain mappings are descended into: a Date or Map has no own keys and would vanish (B3).
     if (isPlain(node) && Object.keys(node).length) {
-      for (const k of Object.keys(node).sort()) walk(node[k], path ? `${path}.${k}` : k);
+      for (const k of Object.keys(node).sort()) {
+        // A dot in a key collides with a nested path (`{"a.b"}` and `{a:{b}}`), and the loser's
+        // change would never be named. The facts parser yields no such key; refused, not assumed.
+        if (k.includes(".")) throw new Error(`facts key "${k}" contains a dot, which collides with a nested path`);
+        walk(node[k], path ? `${path}.${k}` : k);
+      }
       return;
     }
+    // A Map, Set or Date stringifies to a constant, so a change to it could never be named. The
+    // facts parser yields none; refused rather than printed as a print that cannot move.
+    if (node !== null && typeof node === "object" && !Array.isArray(node) && !isPlain(node))
+      throw new Error(`facts field "${path}" is not a plain value (${Object.prototype.toString.call(node)}), so a change to it cannot be fingerprinted`);
     const value = JSON.stringify(node === undefined ? null : node);
     if (printed.has(path)) out[path] = bytesHash(`${path}|${value}`);
     else hidden.push([path, value]);
@@ -538,7 +547,8 @@ export function semanticDiff(previousRun, currentRun) {
   // Opaque = the facts moved and the diff can name neither a field nor a clause. With field prints
   // on both sides a facts move always names a field, so this fires only on a record written
   // before them -- the one case left where re-approving means signing a blob.
-  const opaque = factsMoved && !clauseChanges.length && !(changedFacts && changedFacts.length);
+  // A clause move does not name the facts change, so it no longer suppresses the warning.
+  const opaque = factsMoved && !(changedFacts && changedFacts.length);
 
   return {
     facts_changed: factsMoved,

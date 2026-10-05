@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "arc-legal.mjs:~872 (publishMain, previousMoved)",
+      "breaking_input": "A _approval.json in the caller-chosen --dir whose previous_published_sha256 is a string such as an ESC[2J sequence or a bidi override followed by filler. Run `publish --dir <that dir>` against a venture that already has a ledger.",
+      "why": "The value is printed raw via String(...).slice(0,12) in the PREVIOUS_MOVED refusal, and `shown` is not applied. The refusal is built before verifyChain discards the file, so a tampered approval writes terminal control sequences into the reviewer's terminal. This round fixed the escape for ledger names and left this print one function away. It was reported last round and is still open.",
+      "fix": "Print it through `shown`, or print it only when it matches /^[0-9a-f]{64}$/ and otherwise print the literal word malformed.",
+      "twin_of": "escape-covers-only-c0"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "arc-legal.mjs:361-381 (usedTokens from ctx.used) with receipts.mjs printedFactPaths",
+      "breaking_input": "A template that reads `facts.operator.pan` (or any low-entropy private field) only inside a `when=`-false clause or a non-selected branch of a venture, or only in a guard expression. The field is read but never emitted into any page.",
+      "why": "The printed set is built from ctx.used, which records reads, not emitted output. That field gets its own unsalted per-field sha256 in the public ledger, so a guess can be confirmed. This is the same class as fingerprint-is-an-oracle, reopened through the allowlist. It was reported in the previous two rounds, and nothing in the diff or the tests puts a token inside a false guard.",
+      "fix": "Collect the printed paths only at the interpolation step that writes text into the page. Add a bats case with a token inside a false guard and assert the field folds under (fields no page prints).",
+      "twin_of": "fingerprint-is-an-oracle"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "arc-legal.mjs:~870-872 (publishMain ledger reads)",
+      "breaking_input": "A second publish for the same venture replaces the ledger between `readJson(ledgerFile)` and `readFileSync(ledgerFile,'utf8')`. This works if the ledger read is not inside the exclusive lock.",
+      "why": "The printed diff and the NON_MONOTONIC check use the first read (`previous`). The PREVIOUS_MOVED comparison hashes the second read. The approval can match the newer bytes while the diff the human reads and the date check describe the older record. This is validate-one-read-use-another, and the previous round reported it without a fix.",
+      "fix": "Read the ledger text once, then JSON.parse and hash that same text. Confirm the block runs under withExclusiveLock.",
+      "twin_of": "trusts-one-recorded-value"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "receipts.mjs:factsFieldPrints walk (path join with '.')",
+      "breaking_input": "facts {\"a.b\":1} and facts {a:{b:1}}, or a pair of keys that join to the same dotted path.",
+      "why": "Both write out['a.b'], so the later one overwrites the earlier. Changing the loser never shows up as a changed field, and the opaque warning may stay silent while facts_sha256 moved. The comment on the null-prototype map implies every key is represented, but this collision was left open from the previous two rounds. A Map leaf also stringifies to {} and carries no content.",
+      "fix": "Key prints by JSON.stringify of the segment array, or refuse keys containing '.' at schema validation. Serialize Map and Set leaves through a replacer.",
+      "twin_of": "walk-drops-what-it-cannot-enumerate"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "checklist.mjs:~156 (`outcome === \"PASS\" && row.page`)",
+      "breaking_input": "A provider-pages row with no `page` field, with evidence {\"outcome\":\"PASS\",\"note\":\"200 OK\"}.",
+      "why": "The served-evidence requirement is skipped when row.page is absent. Such a row still passes on a status code alone, which is the hole this change claims to close. It was reported last round and is unchanged.",
+      "fix": "Require served evidence for every reachability PASS. If a row legitimately has no page, make that an explicit schema flag and refuse PASS otherwise.",
+      "twin_of": "check-optional-by-omission"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "checklist.mjs:reachabilityCheck with arc-legal.mjs checklistMain pages map",
+      "breaking_input": "An operator who never opens the URL pastes 40 or more characters from the generated header comment of the page (the `<!-- ... -->` lines). They copy matched_output_sha256 from _run.json and set outcome PASS.",
+      "why": "`pages[].text` is the committed text including its header, and the excerpt is only checked as a substring of it. A header comment is never in a served body, so a placeholder or soft-404 passes. The row is labelled self-attested, but the check also accepts text that cannot be served at all.",
+      "fix": "Match the excerpt against the body with the header and comments removed, and mark rows that matched only the header as FAIL.",
+      "twin_of": "evidence-claims-more-than-it-proves"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/legal-receipts.bats (bidi override test, literal U+202E in source)",
+      "breaking_input": "A reviewer or editor that strips or normalizes invisible bidi characters from the .bats file. The ledger-field argument and the expected-output pattern both carry the character literally.",
+      "why": "The test's inputs are invisible characters typed into source, the typed-literal pattern that vacuous-by-construction describes. If the character is stripped the fixture silently changes. The probe already decodes JSON escapes, so a literal is not needed.",
+      "fix": "Pass 'x\\u202eenilno' to ledger-field. Build the expected pattern with printf and an escape sequence.",
+      "twin_of": "literal-control-byte"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "initiatives/legal/evidence/fixed-defect-list.md and fixed-defects.md (new rows 33-40)",
+      "breaking_input": "The new rows are numbered 33 to 40, but rows 33 to 38 already exist in the same table (Phase 02). Row numbers 33, 34, 35, 36, 37 and 38 each appear twice.",
+      "why": "The list is the attacker's carried memory and build-attack-input.mjs reads it. If it keys or dedupes by row id, six patterns collide. Nothing asserts that ids are unique. This was reported last round and is unchanged, and the new rows added further collisions.",
+      "fix": "Renumber from the highest existing id. Add a uniqueness check in the generator.",
+      "twin_of": "derived-check-that-compares-two-literals"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "arc-legal.mjs:printSemanticDiff (`c.note` printed raw)",
+      "breaking_input": "A ledger page entry whose clause data makes semanticDiff produce a note containing a newline, an ESC sequence or a bidi character. The note is appended as ` (${c.note})` without `shown`.",
+      "why": "Page and clause names now go through `shown`, but c.note comes from the same ledger-derived comparison and is printed raw. This leaves the escape fix half-applied to the same line, which is the escape-covers-only-c0 class one token away.",
+      "fix": "Pass c.note through `shown`, or restrict notes to a fixed enum of constant strings.",
+      "twin_of": "escape-covers-only-c0"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "arc-legal.mjs:publishedRecord (shape check) and receipts.mjs:semanticDiff",
+      "breaking_input": "A ledger JSON with run.pages equal to [null], or an element such as {\"page\":\"terms\"} with no clauses. Run `propose` for that venture.",
+      "why": "publishedRecord only checks Array.isArray(run.pages), so the PREVIOUS_UNREADABLE guard passes. semanticDiff then dereferences p.page or p.clauses and throws an uncaught TypeError, instead of the defined exit 2 refusal, if proposeMain has no outer catch. A hand-merged or partly written ledger would trigger this.",
+      "fix": "Validate each page entry (object, string page, array of clauses) in publishedRecord and return PREVIOUS_UNREADABLE otherwise.",
+      "twin_of": "guard-skipped-when-its-input-is-absent"
+    }
+  ]
+}

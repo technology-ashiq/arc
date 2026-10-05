@@ -138,6 +138,17 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" == *"source_url"* ]]
 }
 
+@test "legal checklist: a row with no page FAILS, so served evidence cannot be skipped" {
+  _arc_legal_sandbox
+  run node "$ARC_ROOT/tests/legal-probe.mjs" data-edit "$SANDBOX" provider-pages.json '"page": "terms",' '"pagex": "terms",'
+  [ "$status" -eq 0 ]
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" checklist --venture "fixture-gateway-gst" >"$SANDBOX/o.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/o.txt"
+  [[ "$output" == *"or a page"* ]]
+}
+
 @test "legal checklist: the ADR-1201 row counts are asserted, so a dropped row is an error" {
   # 5 provider-required and 2 provider-conditional, pinned against a VERIFIED provider page-list.
   # A row silently dropped would otherwise just make the checklist shorter.

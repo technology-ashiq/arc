@@ -525,6 +525,21 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   [[ "$output" != *"facts.stores_third_party_client_data"* ]]
 }
 
+@test "legal receipts: a token only inside a SKIPPED clause gets no print of its own" {
+  # fixture-mor-gst carries a gstin, and both clauses that print it are guarded to invoice_kind
+  # gst, which a merchant-of-record venture is not. Tokens resolve only inside clauses whose guard
+  # holds, so the printed set is what the pages emit, not what the facts hold.
+  _arc_legal_sandbox
+  ARC_LEGAL_CLI="$ARC_LEGAL_CLI" _arc_legal_render "fixture-mor-gst" >/dev/null
+  run grep -c '^gstin:' "$SANDBOX/tests/fixtures/legal/ventures/fixture-mor-gst/facts.yaml"
+  [ "$output" -eq 1 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$ARC_LEGAL_OUT/_run.json" "facts_fields.gstin"
+  [ "$status" -eq 9 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$ARC_LEGAL_OUT/_run.json" "facts_fields.refund_window_days"
+  [ "$status" -eq 0 ]
+  [ "${#output}" -eq 64 ]
+}
+
 @test "legal receipts: an UNREADABLE ledger refuses propose rather than reading as a first publish" {
   _published
   printf '{"run":' > "$SANDBOX/$LEDGER_REL"
@@ -547,11 +562,11 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
 
 @test "legal receipts: a ledger field name carrying a bidi override prints escaped, not raw" {
   _published
-  run node "$ARC_ROOT/tests/legal-probe.mjs" ledger-field "$SANDBOX/$LEDGER_REL" 'x‮enilno'
+  run node "$ARC_ROOT/tests/legal-probe.mjs" ledger-field "$SANDBOX/$LEDGER_REL" 'x\u202eenilno'
   [ "$status" -eq 0 ]
   run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'facts."x‮enilno": removed'* ]]
+  [[ "$output" == *'facts."x\u202eenilno": removed'* ]]
   [ "$(printf '%s' "$output" | LC_ALL=C grep -c $'\xe2\x80\xae')" -eq 0 ]
 }
 

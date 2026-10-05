@@ -121,8 +121,10 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {}, pa
       errs.push(`checklist row "${row.id}" has no source_url. A requirement stated with no evidence link is the thing this product exists not to print.`);
       continue;
     }
-    if (!row.id || !row.what) {
-      errs.push(`a checklist row is missing an id or a description: ${JSON.stringify(row).slice(0, 80)}`);
+    // `page` is required too: the served-evidence check keys on it, and a row without one would
+    // pass on a status code alone -- the check vanishing when its input is absent.
+    if (!row.id || !row.what || !row.page) {
+      errs.push(`a checklist row is missing an id, a description or a page: ${JSON.stringify(row).slice(0, 80)}`);
       continue;
     }
 
