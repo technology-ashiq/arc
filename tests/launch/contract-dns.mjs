@@ -36,7 +36,7 @@ globalThis.fetch = cf.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-dns-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctxFor = ({ upstream = { hosting: [{ kind: "dns-target", id: TARGET }] }, token = "cf-token", resources = reported } = {}) => makeCtx({
+const ctxFor = ({ upstream = { hosting: [{ kind: "dns-target", id: TARGET }] }, token = "cf-token-0123456789abcdef", resources = reported } = {}) => makeCtx({
   profile: { slug: "arc-sandbox", brand: { domain: NAME } }, board: {}, slot: { id: "dns" }, row,
   root: ROOT, resources, upstream, tag: TAG, attempt: 1, signal: undefined,
   env: { CLOUDFLARE_API_TOKEN: token }, report: (r) => { if (!reported.some((x) => x.id === r.id)) reported.push(r); },
@@ -95,6 +95,26 @@ switch (scenario) {
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
     break;
   }
+  case "crlf-token":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: `cf-token-0123456789abcdef${String.fromCharCode(13)}` })));
+    break;
+  case "broken-token":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: `cf-token-0123${String.fromCharCode(10)}456789abcdef` })));
+    out.leaked = out.scaffold.message.includes("456789abcdef");
+    break;
+  case "null-errors": {
+    globalThis.fetch = async () => new Response(JSON.stringify({ success: false, errors: [null, "boom"] }), { status: 403 });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    break;
+  }
+  case "invisible-error": {
+    const marks = [0x061c, 0x200b, 0x2060, 0xfeff].map((c) => String.fromCharCode(c)).join("");
+    globalThis.fetch = async () => new Response(JSON.stringify({ success: false, errors: [{ code: 9, message: `a${marks}b${"y".repeat(118)}${String.fromCodePoint(0x1f600)}` }] }), { status: 403 });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.invisible = [...out.scaffold.message].some((c) => [0x061c, 0x200b, 0x2060, 0xfeff].includes(c.codePointAt(0)));
+    out.loneSurrogate = [...out.scaffold.message].some((c) => c.length === 1 && c.charCodeAt(0) >= 0xd800 && c.charCodeAt(0) <= 0xdfff);
+    break;
+  }
   case "no-upstream":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ upstream: {} })));
     break;
@@ -102,7 +122,7 @@ switch (scenario) {
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ upstream: { hosting: [{ kind: "dns-target", id: TARGET }, { kind: "dns-target", id: "b.example.com" }] } })));
     break;
   case "bad-token":
-    out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: "wrong" })));
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ token: "wrong-token-but-shaped-0001" })));
     break;
   case "upstream-frozen": {
     const ctx = ctxFor();

@@ -110,6 +110,30 @@ j() { node -e 'const o=JSON.parse(process.argv[1]);console.log(String(eval(proce
   dns hostile-error
   [ "$(j 'o.scaffold.ok')" = "false" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.scaffold.message')" == *"-> 403 (1: evilFAKE LINE xxx"* ]] || { echo "$DONE"; false; }
-  [ "$(j '/[\n‮]/.test(o.scaffold.message)')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j '[...o.scaffold.message].some((c) => c === String.fromCharCode(10) || c === String.fromCharCode(0x202e))')" = "false" ] || { echo "$DONE"; false; }
   [ "$(j 'o.scaffold.message.length < 260')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a token with a trailing CR (a CRLF env file) is trimmed and works" {
+  dns crlf-token
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a token that is not a token shape refuses without printing it" {
+  dns broken-token
+  [ "$(j 'o.scaffold.code')" = "BAD_TOKEN" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.leaked')" = "false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a malformed errors list still surfaces the HTTP status" {
+  dns null-errors
+  [ "$(j 'o.scaffold.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"cloudflare GET /zones -> 403"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: zero-width and bidi marks are stripped and the cap never splits a surrogate pair" {
+  dns invisible-error
+  [[ "$(j 'o.scaffold.message')" == *"-> 403 (9: aby"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.invisible')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.loneSurrogate')" = "false" ] || { echo "$DONE"; false; }
 }

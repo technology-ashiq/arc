@@ -9,8 +9,10 @@ const bare = (h) => String(h || "").trim().toLowerCase().replace(/\.$/, "");
 const refuse = (code, message) => Object.assign(new Error(message), { code });
 // Provider and resolver text reaches the runner's reason and the board: controls, bidi and line separators are dropped
 // and the length capped, so a hostile answer cannot forge or hide a line (attack 74c7f5a B4).
-const SKIP = (n) => n < 0x20 || (n >= 0x7f && n < 0xa0) || (n >= 0x202a && n <= 0x202e) || (n >= 0x2066 && n <= 0x2069) || n === 0x2028 || n === 0x2029 || n === 0x200e || n === 0x200f;
-const say = (v, cap = 120) => [...String(v)].filter((c) => !SKIP(c.codePointAt(0))).join("").slice(0, cap);
+// Zero-width and invisible marks too, and the cap counts code points so no surrogate pair is cut (attack fb3a494 B3).
+const SKIP = (n) => n < 0x20 || (n >= 0x7f && n < 0xa0) || n === 0x061c || (n >= 0x200b && n <= 0x200f) || (n >= 0x202a && n <= 0x202e) ||
+  (n >= 0x2060 && n <= 0x2069) || n === 0x2028 || n === 0x2029 || n === 0xfeff;
+const say = (v, cap = 120) => [...String(v)].filter((c) => !SKIP(c.codePointAt(0))).slice(0, cap).join("");
 
 function hostName(value, what) {
   const h = bare(value);
@@ -25,16 +27,33 @@ function target(ctx) {
   return hostName(all[0].id, "hosting dns-target");
 }
 
+// The token is checked before it reaches a header: a value with a CR (a CRLF env file) makes fetch throw a TypeError
+// that quotes the whole header, secret included (attack fb3a494 B1). Transport errors are rethrown without their text.
+function token(ctx) {
+  const t = String(ctx.env.CLOUDFLARE_API_TOKEN || "").trim();
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(t)) throw refuse("BAD_TOKEN", "CLOUDFLARE_API_TOKEN is not a token shape (letters, digits, _ and -, 20 or more); its value is not printed");
+  return t;
+}
+
 async function cf(ctx, method, path, body) {
-  const res = await ctx.fetch(`${API}${path}`, {
-    method,
-    headers: { authorization: `Bearer ${ctx.env.CLOUDFLARE_API_TOKEN}`, "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const auth = `Bearer ${token(ctx)}`;
+  let res;
+  try {
+    res = await ctx.fetch(`${API}${path}`, {
+      method,
+      headers: { authorization: auth, "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    if (e && e.code) throw e;
+    throw new Error(`cloudflare ${method} ${path.split("?")[0]} -> transport error (${say(e && e.name, 30) || "unknown"})`);
+  }
   let json = null;
   try { json = await res.json(); } catch { json = null; }
   if (!res.ok || !json || json.success !== true) {
-    const errs = ((json && json.errors) || []).slice(0, 3).map((e) => `${say(e.code, 12)}: ${say(e.message)}`).join("; ");
+    // errors[] is the provider's word: not an array, or an element that is not an object, yields no text (attack fb3a494 B2).
+    const list = json && Array.isArray(json.errors) ? json.errors.filter((e) => e && typeof e === "object") : [];
+    const errs = list.slice(0, 3).map((e) => `${say(e.code, 12)}: ${say(e.message)}`).join("; ");
     throw new Error(`cloudflare ${method} ${path.split("?")[0]} -> ${res.status}${errs ? ` (${errs})` : ""}`);
   }
   return json.result;

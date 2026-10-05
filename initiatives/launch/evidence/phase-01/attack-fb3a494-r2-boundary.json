@@ -1,0 +1,58 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:38-41",
+      "breaking_input": "CLOUDFLARE_API_TOKEN placed by the owner from a CRLF-edited env file, so its value ends in `\\r`, or contains a newline. `ctx.fetch` builds the header `authorization: Bearer <token>\\r`.",
+      "why": "Node's fetch rejects an invalid header value with a TypeError that quotes the whole value (`Headers.append: \"Bearer ...\" is an invalid header value`). `cf()` does not catch it, so the secret reaches the thrown message, then the slot reason, the receipt and the board. `say()` is applied to provider error text only, not to transport errors. ADR-1724's 'never print a key' is broken on exactly the Windows path this owner uses.",
+      "fix": "Trim the token and check it against `/^[A-Za-z0-9_-]{20,}$/` before building the header, throwing `BAD_TOKEN` without echoing the value. Wrap the `ctx.fetch` call so a thrown error is rethrown with a fixed message. Add a contract arm with a `\\r` token that asserts the message does not contain the token."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:30",
+      "breaking_input": "A Cloudflare error body of `{\"success\":false,\"errors\":[null]}`, or `\"errors\":\"boom\"`, or `\"errors\":{}`, returned with HTTP 403.",
+      "why": "`(json && json.errors) || []` is used without an `Array.isArray` check, and `e.code` is read on a null element. The result is a TypeError ('Cannot read properties of null' or 'slice is not a function') instead of `cloudflare GET ... -> 403`. The HTTP status, the one signal the contract test pins, is lost for a malformed body. This is the `typeof x === \"object\"` guard pattern and the 'value one adapter reads from another party' pattern.",
+      "fix": "Use `const list = Array.isArray(json && json.errors) ? json.errors : []`, filter to objects, and add a contract arm with a null errors element.",
+      "twin_of": "`typeof null === \"object\"` let `\"slots\": null` past the state shape guard into a TypeError -> every `typeof x === \"object\"` guard in the lane"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:14-15",
+      "breaking_input": "A resolver answer or provider error containing U+061C (Arabic letter mark, a bidi control), U+200B, U+2060 or U+FEFF. Also a string of 119 ASCII characters followed by an emoji, which `.slice(0, cap)` cuts mid-pair.",
+      "why": "SKIP lists 202A-202E, 2066-2069, 200E/200F and the C0/C1 controls, but not U+061C or the zero-width and invisible characters. A hostile DoH answer can still hide text or reorder a line. The slice runs on UTF-16 units after joining, so it can leave a lone surrogate that the terminal prints as a replacement character.",
+      "fix": "Add 0x061c, 0x200b-0x200d, 0x2060-0x2064 and 0xfeff to SKIP. Cap with `[...chars].slice(0, cap)` before joining. Add a test for U+061C.",
+      "twin_of": "`clean()` stopped at C0/C1 controls, so U+202E and the other bidi overrides could still reorder a line visually -> every sanitiser: list what it replaces, then list what a terminal still honours"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:52-54",
+      "breaking_input": "A `hosting` slot whose state row is `failed`, `timeout`, or torn down but still holds `{kind:\"dns-target\", id:\"stale.vercel-dns.com\"}` from a partial attempt. `apply dns` is then run.",
+      "why": "`upstream` is built from every `depends_on` slot's `resources` regardless of that slot's status. The dns adapter then writes a CNAME to a target from an unverified or abandoned hosting run. The runner passes the data and no status. If it also does not refuse an apply whose dependency is not verified, which is not visible in this diff, the dependency order is only advisory. Also confirm that `slotRow` returns an object for a dependency with no state row, or the worker throws before it writes a receipt.",
+      "fix": "In the worker, include only upstream resources from slots whose status is `applied` or `verified`, or refuse the apply with a named dependency. Check that `slotRow` is defined for missing rows. Add a runner test with a failed dependency that holds resources.",
+      "twin_of": "A rehearsal's gate-3 refusal was terminal on the first run but a re-run read the recorded approval id as pending -> every state the runner treats as terminal: does every re-entry path honour it?"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/yaml-subset.mjs:237-241",
+      "breaking_input": "A sequence item with a quoted mapping key, such as `- \"id\": hosting` or `- 'key': value`, in any YAML read through parseYamlSubset (37 files).",
+      "why": "A leading `\"` or `'` now bypasses the mapping branch entirely, so the item becomes a scalar string `\"id\": hosting` with quotes and colon intact, silently. Before the change it was a mapping with a mangled key. The exclusion is on the first character, not on whether the quote closes the whole item, so it also catches a quoted key followed by a colon. Nothing refuses it, and the lint type-check covers only `exit_criteria`.",
+      "fix": "Use the scalar path only when the item is one balanced quoted string that spans the whole item. Otherwise throw a parse error. Add a fixture for `- \"a\": 1`.",
+      "twin_of": "A quoted YAML list item holding `: ` was parsed as a one-key mapping -> every YAML field the code reads as a string: assert its type, not its presence"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/launch/launch-lint.mjs:65",
+      "breaking_input": "`depends_on:` or `optional_for:` in the catalog containing `- 123`, `- yes`, or an empty item.",
+      "why": "Only `exit_criteria` got the string-type assertion. The other string-list fields are read as strings by the DAG and predicate code, with no type check on their entries. This is the same defect class the fix named ('assert its type, not its presence'), left open one field away.",
+      "fix": "Apply the same `typeof e === \"string\" && e.trim()` check to `depends_on` and `optional_for`, and add a mutant that fails closed.",
+      "twin_of": "A quoted YAML list item holding `: ` was parsed as a one-key mapping -> every YAML field the code reads as a string: assert its type, not its presence"
+    }
+  ]
+}

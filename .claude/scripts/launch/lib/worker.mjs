@@ -51,7 +51,9 @@ const ac = new AbortController();
 const timer = setTimeout(() => ac.abort(), Math.max(1, Number(a.timeout) * 1000 - 100));
 const st0 = loadState(a.stateDir, a.venture);
 const prior = slotRow(st0, a.slot);
-const upstream = Object.fromEntries((slot.depends_on || []).map((d) => [d, slotRow(st0, d).resources || []]));
+// Only a VERIFIED dependency's resources reach the adapter: a failed or half-run upstream attempt can hold a stale
+// value, and an adapter would build on it (attack fb3a494 B4).
+const upstream = Object.fromEntries((slot.depends_on || []).map((d) => { const r = slotRow(st0, d); return [d, r.state === "verified" ? r.resources || [] : []]; }));
 const ctx = makeCtx({
   profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, upstream, tag: resourceTag(a.venture, a.slot, row.id),
   attempt: a.attempt, signal: ac.signal, env: Object.fromEntries(keys.map((k) => [k, kept[k]])), approvals: prior.approvals || [],

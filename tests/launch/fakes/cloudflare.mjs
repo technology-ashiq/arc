@@ -1,7 +1,7 @@
 // In-memory Cloudflare: one or more zones, a DNS record store, and the two DoH resolvers answering from that store.
 // It replaces only the transport (globalThis.fetch); the adapter and ctx.fetch's host guard run as they do for real.
 // A proxied record is answered as A records, the way Cloudflare's edge flattens it -- so a grey-cloud check is real.
-export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" }], token = "cf-token", seed = [] } = {}) {
+export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" }], token = "cf-token-0123456789abcdef", seed = [] } = {}) {
   const records = seed.map((r, i) => ({ id: `seed-${i + 1}`, ...r }));
   const calls = [];
   let n = 0;

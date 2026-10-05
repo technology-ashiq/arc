@@ -52,6 +52,7 @@ export function envContract() {
 
 // The fixture's outside world is the provider file: verify asks it, never the runner's own state.
 export async function verify(ctx) {
+  if (process.env.FAKE_PRINT_UPSTREAM) console.log(`FAKE_UPSTREAM ${JSON.stringify(ctx.upstream)}`);
   const mine = read().filter((r) => r.tag === ctx.tag);
   return mine.length === 2 ? { ok: true, answerer: "fake-provider-file", evidence: { resources: mine.length } } : { ok: false, reason: `provider holds ${mine.length} of 2` };
 }
