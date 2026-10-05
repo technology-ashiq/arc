@@ -1,228 +1,173 @@
-# PLAN.md — Balanced Model Policy (pre-engine model discipline)
+# PLAN.md — Provider profiles in the model policy
 
-> Lane: `model-policy` · Cycle 5. Design source:
-> [`docs/strategy/plans/PLAN-model-policy.md`](../../docs/strategy/plans/PLAN-model-policy.md)
-> (v2.1, FINAL — content frozen, decisions MP-A..F locked by the owner). This file is the
-> lane's one live plan (ADR-0051); the design source is its approved input, not a second truth.
+> Lane: `model-policy` · v2, born 2026-10-05 by `/arc-kickoff --lane model-policy`. The lane's one live plan (ADR-0051).
+> Cycle 5's plan, progress, phase specs and evidence are archived in-lane under `archive/*-cycle5-2026-08-02*`
+> (the face lane's Cycle 15 precedent, ADR-1332). This lane claims the ADR century **1800–1899**.
 
 ## Goal
 
-One sentence: arc's model usage stops being taste-encoded-in-frontmatter — a written,
-adopted Balanced Model Policy (which seat gets which tier, why, what would change it, and
-the receipt discipline every future model decision must carry), plus the four cheapest
-discipline fixes the audit surfaced (council middle tier with a fixed cost envelope,
-calibration loop unblocked honestly, composer tier answered by a fair paired experiment,
-attacker reject trace) — so that when the engine trigger fires, it implements a policy that
-already exists instead of inventing one.
+The owner routes any task class to any OpenAI-compatible gateway (OpenRouter, OmniRoute, AgentRouter, a local model) by
+naming a **profile** in the router, and swaps a profile's model, gateway or key whenever they like without a PR. Tiers
+stay law (ADR-0069), and every run's receipt says which model actually answered.
 
 ## Current state
 
-*Verified against the tree 2026-08-02 at kickoff — every line below was re-checked
-mechanically, not carried over from the design source. No `codebase-surveyor` run: the
-design source already supplied a curated Current-state block, so the work was to **falsify
-it**, which a grep does better than an agent summary. Two claims came back different from
-the source (the `/arc-change` mirror; the font-pin's conditionality).*
+*Verified against the tree on 2026-10-05 (codebase survey plus direct reads).*
 
-**Stack:** markdown + zero-dep Node ESM (`.mjs`) + bash scripts. No app runtime, no
-package build, no external services — arc's own tooling is the product surface here.
-**Entry points:** `.claude/commands/arc-council.md` · `.claude/commands/arc-kickoff.md` ·
-`.claude/scripts/council/{council-lint,council-calibrate}.mjs` ·
-`.claude/scripts/design/design-render.sh` · `.claude/agents/*.md` frontmatter ·
-`docs/adr/` (root namespace) · `docs/council/**/docs/adr/` (council namespace).
-**Conventions:** one decision per ADR file, zero-padded, never edited once accepted —
-superseded instead · new gates ship WARN-first with a `docs/trial-ledger.md` row and are
-promoted only on evidence (A1) · council sessions are append-only · lane files are the
-truth and `PORTFOLIO.md` is a derived view (ADR-0051).
-**Do-not-touch:** `docs/evidence/**` and `docs/archive/**` are frozen (ADR-0058) · the
-`quick` and `deep` council paths and the juror contract (ADR-0002, ADR-0015..0018) ·
-`settings.local.json`'s personal model pin · the 3-variant explore tooling's shape ·
-anything under a sleeping plan's scope (router, drivers, bench).
+- **Stack:** Node ESM scripts (no install) · YAML subset router · Bats + node test modules · face React/Vite (read side only).
+- **Entry points:** `.claude/scripts/engine/arc-run.mjs` · `engine/router.yaml` · `.claude/scripts/engine/router-row.mjs` · `.claude/scripts/hq/lib/face/reads.mjs` (`/api/model-policy`).
+- **Conventions:** every decision in a `.mjs` node imports with no install; refusals exit 2 before any driver starts; receipts written once in `emitRun`.
+- **Do-not-touch:** the face session's files (ADR-1803 list) and every generated file below.
 
-- **Model census (27 agents, all static frontmatter):** cheap-scan ×1 (`codebase-surveyor`,
-  haiku) · workhorse ×22 (sonnet — including every creative and research seat:
-  `ui-composer`, `design-jury`, `design-critic`, `researcher`, `council-researcher`,
-  `plan-attacker`…) · high-judgment ×4 (`code-reviewer`, `council-verifier`,
-  `design-director`, `security-auditor`, opus). Matches the design source exactly.
-- **Cost is displayed, never enforced.** Statusline shows tokens/$/duration/effort; no
-  budget stop and no escalation ladder at the LLM-call level (engine REQ-04/05, sleeping).
-- **Council cost knob is all-or-nothing.** `.claude/commands/arc-council.md` implements
-  `quick` (3 stances, no research, no verifier, writes nothing) and the full/deep panel.
-  There is no middle tier — gap confirmed still open.
-- **Calibration scoreboard is empty.** Session 001 carries a `PREDICTION → RESULT` line and
-  the dated ADR-0010 correction, but **no `Review-by:` line**, which is the key
-  `council-calibrate --overdue` matches on. Zero verdicts have ever been graded.
-- **The composer seat is the untested lever.** ADR-0049 restored composer freedom, but
-  `ui-composer` still runs workhorse while `design-director` (which judges it) runs
-  high-judgment.
-- **Attacker rejections vanish.** `.claude/commands/arc-kickoff.md:79` reads "reject → drop
-  silently, no log". **`.claude/commands/arc-change.md` has no reject, attacker, panel or
-  finding step at all** — the "mirror" REQ-05 presumes does not exist (assumption A-05).
-- **Explore tooling is 3-variant-shaped** and lives one directory per brief under
-  `docs/design/explore/`
-  (`hq-dashboard-v1`, `lexos-case-workspace-v1`, `lexos-case-workspace-v2`), each holding a
-  `matrix.md`. Any A/B must respect that shape or it is rewriting the tooling (a no-go).
-- **Two REQ-03 mechanics confirmed live:** `design-render.sh` pins `font-family: Arial
-  !important` **only when `PIN_FONT=1`**; the unpinned path exists and stamps the recipe
-  `font-true;aa-on`. And `ui-composer` iron law 1 forbids reading `matrix.md`, so a shared
-  assignment must reach composers via `thesis.txt`.
-- **Citation hazard:** the council build keeps its **own** ADR namespace under
-  `docs/council/`. "council-v2 ADR-0010" is
-  `docs/council/kickoff-v2/docs/adr/0010-fix-session-001-in-place.md`; the root-namespace
-  `docs/adr/0010-*.md` is "Quality Passport" and is unrelated.
+- **Chain today:** `engine/router.yaml` routes `class → tier → driver`. The model is `models[tier][driver]`
+  (`arc-run.mjs:662-690`, recomputed per fallback hop at `:1869-1874`). Only `claude-code` has entries
+  (haiku/sonnet/opus). `generic-api` and `codex` run `unpinned` by design.
+- **generic-api's gateway is the environment:** `drivers/generic-api.mjs:18-22` reads `ARC_LLM_ENDPOINT`,
+  `ARC_LLM_API_KEY`, and the model from `ARC_DRIVER_MODEL` (else `ARC_LLM_MODEL`, which arc-run blanks, `:1435`).
+- **A `profile:x` pin today is a silent bug, not a fault.** `MODEL_RE` allows `:`, so `models.t.generic-api:
+  profile:x` passes the pin check at `arc-run.mjs:681` and is sent to the provider as a model id.
+- **Router validation** lives in `engine/router-row.mjs` (`routerFaults`, tenure terms). It never reads `router.models`
+  and ignores unknown class keys, so `profile:` on a class loads silently today. `routerFaults` is shared by `arc-run`
+  (`:434`) and the face's reader (`hq/lib/face/reads.mjs:348`, `/api/model-policy`).
+- **Precedence:** `--trial-model` > `--owner-model` > router pin (`:770`). Both flags are refused on a routed tier
+  (`:731-737`). `model_source` is `router|trial|owner|none` (plus `runtime` for agents). The spine does not constrain its
+  value, and the `run.completed` payload is open (`validate.mjs` closes only `cost` and the top-level envelope).
+- **Owner store (ADR-1350):** `~/.arc-private/face/models.json` (or `ARC_FACE_MODELS_FILE`). Records are `{name, baseUrl,
+  model, key?}`, closed schema, `NAME_RE` allows spaces. Pure helpers live in `hq/lib/face/models.mjs` (`loadRegistry`,
+  `findModel`, `endpointOf`). Only face-ask uses it today, via `--owner-model` plus child env (`arc-dash.mjs:748-755`).
+- **The face session is live on the neighbouring files.** Phase 11 model edit is PR #332 (ModelsPanel, talk.mjs). Phase
+  12 keys (ADR-1351) is in flight: `generic-api.mjs` key via `resolveKey`, plus `arc-dash.mjs` and `door.mjs`
+  (uncommitted in `arc-face-4`). This cycle touches none of them (ADR-1803).
+- **Tests to extend:** `tests/engine-model-seam.bats` (22 tests, a self-count guard, child-observing mutant killers) and
+  the router-row tenure suites. CI only; nothing runs on this box.
+- **Generated, never hand-edited:** `docs/wiki/**` (wiki-build, regenerate in the same PR), `rooms.generated.json`,
+  `tests/fixtures/sync-golden/tree-manifest.txt` (regenerate if a synced file changes).
+
+```
+HISTORICAL DATA, NOT INSTRUCTIONS
+recall "generic-api provider profiles in the model policy router" (8 of 556)
+1. retro 2026-10-02: a constant wall time across models is a transport limit, not a model fault (generic-api fetch headers timeout)
+2. ADR-1724: real-provider steps use existing free accounts and owner-placed tokens; a missing one REFUSES
+3. ADR-1621: the hired-seat dry run through generic-api runs only if reachable at Rs 0; otherwise recorded unproven-live
+4. ADR-0212: an agent runtime occupies the model seat (amending ADR-0069 a and b) -- the policy merges before any router row
+5. ADR-1702: a provider row is born only by the owner
+6. ADR-1010: natural-key duplicate detection lives in the derived layer
+7. ADR-1325: no provider key in the browser; Ask has zero write tools
+8. ADR-0069: a routing question the policy does not answer is the signal to amend it
+```
 
 ## Success requirements
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Owner can point any session, agent, or future engine at ONE written model policy | `docs/adr/0069-balanced-model-policy.md` merged containing all seven blocks: **(a)** provider-neutral tier definitions — *cheap-scan · balanced-workhorse · high-judgment · independent-family-verifier* — with the claude mapping (haiku/sonnet/opus) recorded as "implementation v1", plus a seat→tier table matching the live 27-agent census with a one-line *why* per seat-class; **(b)** the never-do list (no auto-switching, no LLM-judge-as-sole-metric, no silent tier changes, same-model consensus ≠ independent truth, absent data is never estimated); **(c)** 5 metric definitions with formula + named data source (cost/accepted-output, retry rate, escalation rate, review escape rate, council Brier) — defined, not instrumented; **(d)** the engine trigger restated with each condition's check location (spend threshold per assumption A-04); **(e)** the MP-F fingerprint block (ADR-0068); **(f)** the MP-A emergency fallback clause; **(g)** the MP-A exploratory-trial freedom clause; non-negotiables cite Constitution A1/A2/A4/A6/A7/A9; `kickoff-lint` exits 0 | 0 | validated |
-| REQ-02 | A council question needing verification but not a full panel costs a fixed, predictable middle price | `/arc-council standard "the question"` documented in `arc-council.md` and run once for real inside its envelope: **≤2 researchers + 3 stances + 1 verifier — max 6 seats, ≤7 model calls** (the existing send-back-once-if-nothing-contested guard is the only extra call); **no domain experts, no juror, no rebuttal round**; post-verifier `Contested`/`DISPUTED` IDs go straight to `## UNRESOLVED`, never debated; **no auto-upgrade** — an under-covered run says so and the human explicitly chooses `deep`; the saved session passes `council-lint --verdict` (any new lint check WARN-first) and carries a `Mode: standard` line; `deep` stays default (ADR-0002 untouched) | 1 | validated |
-| REQ-03 | The composer-tier question is answered by a fair paired experiment, not a historic comparison | At one pinned commit, on the existing `lexos-case-workspace` brief, the director assigns 3 theses + art directions **once**; two explore runs then share them verbatim via `thesis.txt` — run-S (3 workhorse composers) and run-O (3 high-judgment composers) — same renderer recipe (`PIN_FONT=0`, recipe string `font-true;aa-on`, equality asserted before ranking), same reference screen. Owner pre-registers a one-line PREDICTION, then blind-ranks all **7 items** (6 pages + reference, shuffled labels) before any arm identity is revealed; jury ranks the same 7 blind. Each arm records its MP-F fingerprint + wall-clock duration + visible statusline cost (absent fields stay absent). Keep/revert decided in a one-page ADR by the fixed formula: **keep high-judgment only if the blind ordering shows a material, owner-visible quality gain AND the owner explicitly accepts the recorded cost/time delta** — "slightly better" alone reverts. Historic `lexos-case-workspace-v2` is context, never an arm | 2 | validated |
-| REQ-04 | The council's honesty loop starts producing data without manufacturing any | Session 001 retrofitted by **appending** `Review-by:` + `Resolution:` per council-v2 **ADR-0012** (`docs/council/kickoff-v2/docs/adr/0012-outcome-lives-in-session-files.md` — a session may carry more than one `## OUTCOME`/`Review-by:`, last is authoritative). *Corrected 2026-08-02: MP-D originally cited council-v2 ADR-0010, which sanctions the `CONFIDENCE` High→Medium cap and was already executed 2026-07-15 — see ADR-0066's correction. This is an append, not the one-way in-place edit.* Every existing line preserved; `council-calibrate --overdue` then surfaces it (mechanism proven by its own output). Then the honesty fork: **if** the Resolution criterion is genuinely observable today → grade the real HIT/MISS via `/arc-council review`; **if not** → record `RESULT: UNRESOLVED` with a fresh future `Review-by:` and the cycle still passes. The DoD is the working mechanism plus an honest grade, never a filled scoreboard — a forced or vague HIT/MISS is a Truth-Law (E3) violation and fails this REQ | 1 | validated |
-| REQ-05 | Rejected attacker findings leave a trace | `.claude/commands/arc-kickoff.md` step 5 changed from "reject → drop silently, no log" to one line per rejection — `REJECTED: {finding} — {reason}` — with reason drawn from the fixed taxonomy `duplicate · out-of-appetite · unsupported · violates-no-go · already-covered · non-actionable`; proven on the next kickoff by ≥1 recorded rejection; any lint that learns to look for it starts WARN-first. Scope is `arc-kickoff.md` only — the `/arc-change` mirror does not exist (assumption A-05) | 3 | validated |
+| REQ-01 | A `generic-api` run routed by a tier profile reaches that profile's gateway, with its model id and key, and nothing from the shell | In a fixture root whose router pins `models.TIER.generic-api: profile:fx` and whose `ARC_FACE_MODELS_FILE` holds record `fx` `arc-run --driver auto` sends its request to a recording listener on an ephemeral local port that the record's `baseUrl` points at: the listener sees the path `/v1/chat/completions`, `Authorization: Bearer` equal to the profile's key and `body.model` equal to the profile's model id, and with ambient `ARC_LLM_ENDPOINT`, `ARC_LLM_API_KEY`, `ARC_LLM_MODEL` and `ARC_DRIVER_MODEL` set to decoys it still sees only the profile's values; the receipt carries `model_source: profile`, `model` = the record's id, `profile: fx`, `gateway_host: 127.0.0.1:1`, and the key string appears in no receipt, argv or output | 00 | active |
+| REQ-02 | One class can use its own gateway while the rest of its tier uses another | A class row with `profile: fy` beats the tier's `profile:fx` on the `generic-api` attempt (receipt `profile: fy`); a row `driver: claude-code, fallback: [generic-api], profile: fy` runs the tier's Claude pin on attempt 1 and `fy` on the hop, proven by both attempts' observed driver environment | 00 | active |
+| REQ-03 | A wrong or missing profile is caught before any money is spent, never papered over | `router-row.mjs` reports a load fault for each of: class `profile:` not matching `^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$`; class `profile:` on a chain that never reaches `generic-api`; `profile:` under `models.TIER.DRIVER` for a driver other than `generic-api`; bare `profile:` — one fixture each, plus a passing control; and a routed profile absent from the store exits **2** before any driver starts, naming the profile and the store path, with **no** receipt and no fall-back to ambient `ARC_LLM_*`; a fixture `driver: claude-code, fallback: [generic-api], profile: gone` exits 2 with the claude-code driver never started; further fixtures: (a) a store file inside the run root exits 2 naming the store path; (b) `profile: FX` against record `fx` resolves and the receipt's `profile` is the stored name `fx`; (c) a record whose base URL is remote plain http (which `loadRegistry` refuses) exits 2 | 00 | active |
+| REQ-04 | The owner sees, in the model-policy room, which gateway and model each class will actually reach | `GET /api/model-policy` serves, for every tier pin and class row, `profile` and — when this machine's store has it — `model` and `gateway_host` (never the key, never the base URL path), or `missing: true`, and lists any store record whose name the router grammar cannot reference (a space) as `not routable`; `fold.mjs` renders it as `profile → model @ host` in the tier table and the process-routes table, and a fixture store with a planted key proves the key is in no route body | 01 | active |
 
 ## Appetite
 
-**3 days hard cap.** **Tier:** S
+**2 days.** A constraint, not an estimate.
 
-This is a constraint, not an estimate. Blown appetite means cut scope or kill a phase —
-never a silent extension (Constitution A9).
+**Tier:** S
 
-**Kill criteria:** at **1.25d**, if Phase 01 has not closed (REQ-02 envelope run + REQ-04
-retrofit both proven), flag it on `PROGRESS.md` and re-forecast Phase 02's window
-explicitly — Phase 02 owes a real 1.25d and, by this plan's own zero-slack arithmetic, has
-nothing to absorb a Phase 01 slip with. At **1.5d (50%)**, if REQ-01 is not merged the
-policy itself is contested → STOP, take the contested article to `/arc-council standard`,
-bank nothing, retro. If the REQ-03 paired runs cannot both complete by **2.5d**, bank
-whichever arm finished as evidence, drop the REQ to `BRIEF-composer-ab.md` with its partial
-receipts attached — never extend. At 100% → cut or kill. (`PROGRESS.md` tracks the burn.)
+**Kill criteria:** at **1 day (50%)**, if Phase 00 has not closed, cut REQ-04 to a text-only column with no store
+lookup (the profile name alone) and close the cycle on REQ-01..03. At 100%, cut or kill; never extend.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-  owner([Person: owner — picks the mode, ranks blind, accepts the cost])
-
-  subgraph policy [System: Balanced Model Policy - this cycle]
-    adr[Container: policy ADR 0069 - tiers, never-dos, metrics, trigger]
-    dec[Container: decision ADRs 0063-0068 - MP-A..F rationale]
-    fp[Container: MP-F fingerprint block - fields written into existing receipts]
+  owner([Owner])
+  subgraph arc [System: arc]
+    router[(Container: engine/router.yaml<br/>class to tier to driver to model or profile)]
+    rowlint[Component: router-row.mjs<br/>load faults incl. profile reachability]
+    run[Container: arc-run.mjs<br/>resolve per hop, child env only]
+    drv[Component: drivers/generic-api.mjs]
+    spine[(Container: spine run.completed<br/>model_source profile, profile, gateway_host)]
+    reads[Component: face reads.mjs /api/model-policy]
+    room[Container: face model-policy room]
   end
-
-  subgraph surfaces [System: arc surfaces this policy governs]
-    council[Container: arc-council - quick / standard / deep ladder]
-    kickoff[Container: arc-kickoff - attack panel + reject trace]
-    explore[Container: design explore - director, composers, jury]
-    agents[Container: 27 agent frontmatter model: lines]
-  end
-
-  spine[(Container: receipt spine — existing event kinds only)]
-  engine[External: future engine cycle — router.yaml, budgets, bench]
-
-  owner --> adr
-  dec --> adr
-  adr --> fp
-  adr -->|governs, cited by every tier change| agents
-  adr --> council
-  adr --> kickoff
-  fp --> explore
-  explore -->|paired A/B receipts| adr
-  council --> spine
-  kickoff --> spine
-  explore --> spine
-  adr -->|inherited, not re-decided| engine
+  store[(Owner store ~/.arc-private/face/models.json<br/>name, baseUrl, model, key)]
+  settings[Face Settings page - face lane]
+  gw[External: OpenAI-compatible gateway<br/>OpenRouter, OmniRoute, local]
+  owner -->|reviewed diff| router
+  owner --> settings --> store
+  router --> rowlint --> run
+  store -->|read-only| run
+  run -->|ARC_LLM_ENDPOINT, KEY, ARC_DRIVER_MODEL| drv --> gw
+  run --> spine
+  router --> reads
+  store -->|read-only, never the key| reads --> room
 ```
 
 ## Key decisions (ADR index)
 
 | # | Decision | Status |
 |---|---|---|
-| 0063 | MP-A — policy outranks implementation; exploratory-freedom + emergency-fallback carve-outs | accepted |
-| 0064 | MP-B — seat-tier principle; creative seats earn their tier by receipted A/B | accepted |
-| 0065 | MP-C — council mode ladder fixed at three; the human picks the word | accepted |
-| 0066 | MP-D — session-001 retrofit executes council-v2 ADR-0010; no new sanction | accepted |
-| 0067 | MP-E — attacker reject-log is a trace, not a process; fixed six-word taxonomy | accepted |
-| 0068 | MP-F — model fingerprints are forward-only and never estimated | accepted |
-| 0069 | Balanced Model Policy — tiers, never-dos, metrics, engine trigger | accepted |
-| 0070 | REQ-03 verdict — composer seat stays balanced-workhorse (A-01 dead) | accepted |
+| 1800 | MPP-A: a `generic-api` pin may name a profile; receipted `model_source: profile` (amends ADR-0069 a, b, e) | accepted |
+| 1801 | MPP-B: profiles live in the ADR-1350 store, one list, read-only to the engine; a missing profile refuses | accepted |
+| 1802 | MPP-C: a class row may carry its own `profile:` only where `generic-api` is reachable; faults at load | accepted |
+| 1803 | MPP-D: the Settings page stays the face lane's; cost, "used by" and the remove guard are filed there | accepted |
 
 ## Non-negotiables
 
-- **No engine code.** Nothing under `processes/`, no drivers, no `router.yaml`, no budget enforcement, no bench runner — those plans sleep until their own triggers (A8).
-- **No auto model switching anywhere.** Every production tier change is a reviewed diff citing the Balanced Model Policy (ADR-0069; rationale MP-A/ADR-0063); the two MP-A carve-outs are the only exceptions and both are human-approved.
-- The session-model pin stays personal (`settings.local.json`) — shared settings never gain a `model` key this cycle.
-- Council remains additive-only; council ADR-0002 (deep default) and the council-v3 juror contract (ADR-0015..0018) untouched; `standard` never weakens `deep`.
-- REQ-03 verdicts follow ADR-0047/0048/0049: blind ordering + owner's own eyes on the artifact; no absolute scores inside the loop; PREDICTION pre-registered before reveal.
-- Fingerprints are forward-only and never estimated (MP-F / ADR-0068).
-- Every phase close leaves its receipt on the spine (existing kinds only).
+- Tiers are law (ADR-0069): no component changes a tier, driver or profile assignment at run time, and a failing profile never falls to another profile or to the ambient environment.
+- A key never reaches argv, a receipt, a log line, a route body or the repo; it travels only in the driver child's environment.
+- A profile-resolved run is receipted `model_source: profile` with the actual model id, the profile name and the gateway host — never `router`.
+- `--trial-model` and `--owner-model` stay refused on a routed tier; existing `router.yaml` rows resolve byte-identically.
+- This cycle does not modify `ModelsPanel.tsx`, `talk.mjs`, `door.mjs`, `arc-dash.mjs`, `models.mjs` or `drivers/generic-api.mjs` (ADR-1803).
+- Tests run on CI only, read per job; every suite asserts it ran before asserting what it printed, and a test that passes with the implementation deleted is not a test.
 
 ## No-gos (explicitly out of scope)
 
-Router, drivers and bench (their own sleeping plans) · per-call cost enforcement ·
-automatic complexity classifier or auto-escalation · external-juror expansion · changing
-the design pipeline beyond the REQ-03 paired runs · rewriting the 3-variant explore
-tooling · touching `terse` output style or hooks · new spine event kinds · re-tiering any
-seat other than the REQ-03 experiment arm · building a fingerprint collector script.
-
-Anything engine-shaped that surfaces mid-cycle becomes a queued note in
-`docs/strategy/plans/PLAN-engine-process-layer.md`, routed via `/arc-change` — never code.
+Editing the Settings page or the store schema (cost field, "used by", remove guard — filed to the face lane, ADR-1803) ·
+pinning any real profile in `engine/router.yaml` (the owner proposes that as their own reviewed diff) · `codex` or
+`hermes` profiles (neither applies a model the way `generic-api` does) · filling `independent-family-verifier` · moving
+`/arc-attack`'s logic surface off `--trial-model` · any automatic fallback between profiles · a public manifest of
+profiles.
 
 ## Rabbit holes
 
-- **Benchmarking temptation** → REQ-03 is one paired experiment with receipts, not a paper.
-  Sample-size and multi-model sweeps belong to `BRIEF-bench.md`.
-- **Metric instrumentation** → REQ-01 *defines* five metrics; wiring them is engine
-  territory. Define, link, stop.
-- **Mode-ladder debates** → one fixed `standard` envelope (MP-C); refinements are retro
-  material, not this cycle's.
-- **Fingerprint tooling** → MP-F is a discipline (fields in receipts humans and agents
-  already write), not a collector. Building a collector is engine work.
-- **Renderer archaeology** → Phase 2 sets `PIN_FONT=0` and asserts recipe equality. It does
-  not re-litigate `design-render.sh`'s determinism design.
+- **Re-validating the store's records in the engine.** `models.mjs` already checks every record on load; arc-run uses
+  its result and adds only the router-side name grammar.
+- **Proving a real gateway answers.** Fakes only: a closed local port proves endpoint, key and model all reached the
+  driver (the `engine-model-seam.bats` pattern). No paid run (standing owner rule).
+- **Generalising "profile" to every driver.** Only `generic-api` takes a gateway; the grammar refuses it elsewhere.
 
 ## Assumptions ledger
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| A-01 · The workhorse composer seat is a live quality bottleneck | REQ-03's blind ordering interleaves the arms (neither arm dominates) → assumption dead; workhorse stays and the ADR records it with the fingerprints | 2 |
-| A-02 · A 2-researcher envelope covers a real slice of council use | 3 consecutive real `standard` runs each end in "recommend deep" → envelope wrong, revisit at retro (ADR-0065 trigger) | 1 |
-| A-03 · Owner sustains ~30 min/week for calibration dogfood | 2 consecutive skipped weeks after REQ-04 lands → cadence unrealistic, shrink to fortnightly by ADR note | 3 |
-| A-04 · No rupee spend threshold is needed in the policy — the two event triggers (public-prep start, provider event) are sufficient to fire the engine cycle, so REQ-01 block (d) ships naming them and stating plainly that no spend figure is set | Monthly AI spend becomes something the owner notices or complains about **before** either event trigger fires → the number was load-bearing after all and the policy gets an amendment carrying it | 0 |
-| A-05 · `arc-kickoff.md` is the only surface where an attacker finding is rejected, so it is the only surface needing a trace — REQ-05's "`/arc-change` mirror" refers to a step that does not exist | `/arc-change` gains an attacker/panel step, **or** a real rejection happens in an `/arc-change` run and the owner wants it traced → REQ-05 was under-scoped and the mirror becomes a follow-up cycle's row | 3 |
-| A-06 · A real kickoff will run soon enough after this cycle to exercise the REQ-05 reject line, so closing Phase 03 with it "implemented, unproven" is safe rather than permanent | **14 days** pass after this cycle closes with no `/arc-kickoff` of any lane having recorded a `REJECTED:` line → the proof is not coming on its own; REQ-05 gets re-validated deliberately or re-scoped, and the taxonomy's fitness is still untested | 3 |
+| A-01 · The face's Phase 12 key resolver, once merged into `generic-api.mjs`, lets an explicitly set `ARC_LLM_API_KEY` win over any keys-store value, so a profile key set in the child env reaches the provider | Before the Phase 00 push, `git log origin/main --oneline -5 -- .claude/scripts/engine/drivers/generic-api.mjs`; if Phase 12 has merged, REQ-01's listener sees the keys-store value instead of the profile key, or the resolver reads another variable | 00 |
+| A-02 · `models.mjs`'s exported `loadRegistry`, `findModel` and `endpointOf` keep their names and shapes while the face lane edits the file in parallel | A face PR renames or reshapes any of the three, and the engine import breaks on CI | 01 |
+| A-03 · One list is the right store: the owner will not want chat and a routed class separated when one record is edited | The owner edits a record for chat and is surprised that a routed class moved with it | 01 |
 
 ## External dependencies
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| *(none)* | All machinery is internal (council scripts, explore tooling, spine, agent frontmatter). The optional cross-model juror env stays optional and untouched this cycle. | n/a | n/a | n/a |
+| OpenAI-compatible gateway (via `generic-api`) | `POST BASE/chat/completions`, bearer key, `model` | a recording listener on an ephemeral port inside the suite's own probe (path, bearer, `body.model`); closed port `127.0.0.1:1` only as the transport-failed control | the owner's OpenRouter / OmniRoute records | `tests/engine-model-profile.bats` (Phase 00) against the fake; the real gateway is exercised by the owner's own runs, never by CI |
+| Owner store (ADR-1350) | `loadRegistry(repo)` / `findModel(reg, name)` / `endpointOf(baseUrl)` | fixture JSON via `ARC_FACE_MODELS_FILE` | `~/.arc-private/face/models.json` | same suite: fixture store resolved; store absent refuses |
 
 ## Pre-mortem (Klein)
 
-*It's later. The cycle shipped and failed.* Seeded from `docs/retro-log.md` first.
+*Six months later, this shipped and failed.*
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | **The policy becomes a poster.** Precedent: `arc-CONSTITUTION-draft.md` is still a draft; and retro 2026-08-02 (arc-portfolio) — ADR-0056's mandated "Mode B: not certified" board note was never written and stayed absent through two phases, found only by a section whose job was to delete it. A stated control is not a control until something asserts it exists | Adoption **is** Phase 0's exit, not a follow-up: ADR-0069 merged + spine receipt emitted, and the kill criteria names it at 1.5d. Phase 0's verification asks the retro's own question — "what asserts this is here?" — and answers it with `kickoff-lint` + the merged file, not with intent |
-| 2 | **The paired A/B is still confounded.** Retro 2026-07-30 (arc-design-cycle3): a normalisation added for measurement destroyed the property being measured — `design-render.sh` pinned Arial for hash stability, so every variant was judged with its typography deleted, invisible for a whole cycle | ONE director assignment shared verbatim by both arms; same pinned commit; **`PIN_FONT=0` so the recipe is `font-true;aa-on`** and typography survives into the judgement; RECIPE-string equality asserted before any ranking. Any drift = re-run the arm, never "note it and continue" |
-| 3 | **The shared assignment can't legitimately reach the composers.** Retro 2026-07-30 (arc-design-cycle3): a required input had no path to the agent that needed it — the director writes the content fixture into `matrix.md` and `ui-composer` iron law 1 forbids composers reading `matrix.md`, so three composers invented three different cases | Verified at kickoff: the legitimate channel is `thesis.txt`. Phase 2 puts the thesis **and the content fixture** in `thesis.txt` for both arms and checks byte-equality of the two arms' `thesis.txt` before either run starts. If content differs between arms, the comparison is void |
-| 4 | **The retrofit is read as violating append-only, or graded under scoreboard pressure.** Sanction lives in a different ADR namespace than an executor will search | ADR-0066 pins the reading *and* the full cross-namespace path. REQ-04's honesty fork makes `UNRESOLVED` a **passing** outcome — Truth-Law E3 outranks a pretty scoreboard |
-| 5 | **A new gate ships unattacked.** Retro 2026-08-02 (arc-portfolio): the mandated adversarial breaking-input pass was skipped on three gates in one phase by a process that has required it since 2026-07-16; the pass then found 61 issues, 5 live in shipped code. Retro 2026-07-16: markdown-contract parsing bugs recur (first-match on repeated sections, case-insensitive match then exact compare, `$` under `/m`) | Any lint touched this cycle (`council-lint --verdict` for `Mode: standard`, any REQ-05 reject-line check) gets its adversarial breaking-input pass **bound to the phase that ships it**, not to the cycle close — and ships WARN-first with a trial-ledger row |
+| 1 | **The profile becomes the un-reviewed tier change.** A record is edited from cheap to frontier and costs jump, or quality drops, with no trail | ADR-1800: every profile run's receipt carries `model`, `profile` and `gateway_host`; REQ-01 asserts them. The "used by" view is filed to face (ADR-1803). Accepted: a content edit needs no PR, by the owner's choice |
+| 2 | **Silent fallback to the environment.** A missing profile quietly uses `ARC_LLM_*` from the shell, the exact hidden knob this cycle closes | REQ-03's missing-store fixture runs with a hostile ambient `ARC_LLM_ENDPOINT` set and asserts exit 2 with no receipt |
+| 3 | **The key leaks.** It reaches argv (visible in process lists), stderr, a receipt or a route body | Child env only; REQ-01 and REQ-04 plant a recognisable key and grep every output, receipt and body for it (retro 2026-10-02 / ADR-1325 doctrine) |
+| 4 | **Entry-point twin.** Resolution and the missing-profile refusal work on the first attempt but not on a fallback hop, or in arc-run but not in the face reader; or a NAMED driver (`--driver generic-api`, bench, `/arc-attack`) silently starts honouring profiles and collides with `--trial-model` (retro 2026-08-23 arc-engine, 2026-08-17 arc-bench) | One resolver, run once at preflight from one store snapshot and reused per hop; faults live in `router-row.mjs`, shared with `reads.mjs`. A named driver consults no tier (ADR-0220) and so no profile: a fixture proves `--driver generic-api` with a profile-routed class is byte-identical to today (ambient env, `model_source: none`) |
+| 5 | **Collision with the face session** on `generic-api.mjs` / `models.mjs` / `arc-dash.mjs` | ADR-1803 boundary and a non-negotiable; `git log origin/main -- PATH` checked before push; A-01 and A-02 carry the coupling |
 
 ## Phases (risk-ordered)
 
-Phase 0 is the steel thread: the policy itself, merged. Nothing else in this cycle means
-anything if the policy does not exist — every other REQ is a discipline the policy names.
-
 | Phase | Capability | Appetite |
 |---|---|---|
-| 00 | **Steel thread — the policy itself.** ADR-0069 written with all seven blocks a–g, linted, merged; receipt emitted (REQ-01) | 0.5d |
-| 01 | Council `standard` mode live inside its envelope + one real run; session-001 retrofit + honest grade-or-UNRESOLVED; overdue discovery proven (REQ-02, REQ-04) | 0.75d |
-| 02 | Paired composer A/B: shared director assignment, run-S + run-O at one pinned commit, blind 7-item rankings, fingerprints + duration + visible cost, keep/revert ADR (REQ-03) | 1.25d |
-| 03 | Attacker reject-log with fixed taxonomy (REQ-05) + one dogfood pass over the mode ladder + retro; trial-ledger rows for anything WARN-first | 0.5d |
+| 00 | **Steel thread — the engine resolves a profile.** `router-row.mjs` profile faults; `arc-run` per-hop resolution (tier pin and class override) into the child's env; missing profile refuses; receipt `model_source: profile` + `profile` + `gateway_host`; `router.yaml` header documents the grammar (REQ-01, REQ-02, REQ-03) | 1.25d |
+| 01 | **The owner sees it.** `/api/model-policy` serves profile, model and host (never the key) from the store; the model-policy room renders `profile → model @ host`; the face lane's Settings items filed as one paste-ready `/arc-change` prompt (REQ-04) | 0.75d |
 
-**Total: 3.0 of 3.0 days.** There is no slack — the kill criteria at 1.5d and 2.5d are the
-release valves, not overtime.
-
-**North-star:** when the engine trigger eventually fires, its kickoff copies its routing
-table, escalation defaults AND receipt schema **from** ADR-0069 instead of deciding them —
-measured by the engine kickoff needing zero new "which model where" forks.
+**Total: 2.0 of 2.0 days.** One branch (`feat/arc-model-policy-profiles`), one PR, merged once at the end, with one
+attack round per the standing rule.
