@@ -1056,7 +1056,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
   "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings",
-  "hq-settings-menu", "hq-settings-test", "hq-settings-voice", "hq-settings-edit", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
+  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
