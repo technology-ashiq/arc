@@ -5,12 +5,12 @@
 **Depends on:** phase-00
 **REQs closed here:** REQ-01, REQ-02
 **Day-4 kill + 50% tripwire:** at the Phase 01 exit (day 4), if a hostile fixture hunt is not byte-identical, or any injection fixture is not refused → STOP and re-plan; if Phase 01 is not closed by day 4 → scope-cut conversation (cut order in PLAN).
-**Soft dependency:** growth's HN widening. Not merged by day 1 → the ADR-1911 fallback mode is locked for the whole cycle (A-02).
+**No cross-lane dependency:** the miner taps growth's adapter transport (ADR-1915).
 
 ## Scope (in order)
 
 1. **Recording first (attack C3).** Before any miner code: a read-only `curl` of ≤ 20 HN Algolia requests at 1 req/s from the worktree (no spine write, so the worktree restriction does not apply), redacted and committed to `tests/discover/fixtures/recorded/hn.json`.
-2. `.claude/scripts/discover/miners/hn.mjs`: imports growth's `hnAlgoliaAdapter` + `hnAlgoliaVerifier`, wraps pacing (1 req/s) and UA (ADR-1904), emits NDJSON `source_url · text · engagement · ts · source_id`. `--offline-fixture` swaps ONLY the `fetchImpl` transport and runs the real adapter with `offline: false`.
+2. `.claude/scripts/discover/miners/hn.mjs`: runs growth's `hnAlgoliaAdapter` with a `fetchImpl` tap that paces (1 req/s), sets the UA (ADR-1904), caps the body and records each response; parses the tapped hits into NDJSON `source_url · text · engagement · ts · source_id`. `--offline-fixture` swaps ONLY the `fetchImpl` transport and runs the real adapter with `offline: false`.
 3. `.claude/scripts/discover/lib/normalize.mjs`: NFC, control-character strip, byte cap per field, non-UTF8 → U+FFFD; output is data only, never interpolated into a command.
 4. `.claude/scripts/discover/lib/cluster.mjs`: Jaccard over growth's `STOP`-filtered tokens, similarity stored as an integer (`overlap*10000/union`, floored), fixed threshold, code-point (never locale) ordering, LF-only output, no path or clock in `clusters.json` (ADR-1902); `cluster_fp` = sha256 of the sorted top-8 stem tokens; the cross-cycle reject reader goes through the spine reader (ADR-1907). The reject payload shape is pinned in one fixture that the Phase 03 writer test also loads.
 5. `arc-discover.mjs hunt {niche} --offline-fixture {dir} --out {dir}` replacing the Phase 00 stub; `idea.captured` per new item (idem `hn:{objectID}`, deduped by a spine read BEFORE emitting, so `DUP_IDEM` never appears) and `run.completed process=discover@0.1.0`.
@@ -18,7 +18,7 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-01 fixtures green on CI, each asserting RAN first; in fallback mode the body-class fixtures assert SKIPPED-with-reason
+- [ ] REQ-01 fixtures green on CI, each asserting RAN first; an adapter success with zero tapped responses is `COULD NOT SCAN`
 - [ ] REQ-02: the fixture snapshot is asserted non-empty first (≥ 12 records, ≥ 3 clusters, at least one cluster with ≥ 2 members, each asserted by count before any hash is compared); a bats arm fails if the real adapter code path is not entered; the same snapshot gives an equal `clusters.json` sha256 across two runs and a shuffled-input run, compared to the golden committed at `tests/discover/fixtures/hn-snap-01/clusters.sha256`, so all 3 legs equal one committed value
 - [ ] `discover-miner.bats` FAILS (never skips) if `recorded/hn.json` is missing or has 0 hits, and asserts a real-adapter-only field (`objectID`) came out of the replay
 - [ ] the double-fetch fixture gives one `idea.captured`; the reject fixture gives `previously rejected {receipt id}`

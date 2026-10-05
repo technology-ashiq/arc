@@ -27,7 +27,7 @@ Verified 2026-10-06 at `2b4e7e30` (direct reads; four design-source premises cor
   **`launch-lint` never reads a profile** (ADR-1912).
 - **growth HN adapter:** `hnAlgoliaAdapter({offline, fetchImpl, hitsPerQuery})` + `hnAlgoliaVerifier()` +
   `STOP` in `.claude/scripts/growth/lib/adapters.mjs:63/198`. ⚠ It returns only `{title, objectID, query}` per hit,
-  and `offline: true` returns `[]` (ADR-1911, ADR-1901).
+  and `offline: true` returns `[]` (ADR-1911, ADR-1901). ⚠ Build reading: it returns `attestedCandidates` keyword PHRASES, not hits, so discover taps its `fetchImpl` transport (ADR-1915).
 - **Spine:** ⚠ **46** closed kinds (`.claude/scripts/hq/lib/validate.mjs:40`), not 30. Every kind discover needs exists.
   ⚠ `council.verdict`'s payload is **closed** at `session_id · question_hash · call · confidence` (`:326`), so
   `predicted_90d` does not exist and cannot be added by discover (ADR-1910).
@@ -48,7 +48,7 @@ closed council payload (ADR-1910), REQ-06 to launch's real acceptor (ADR-1912), 
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Raw pain becomes structured evidence | `miners/hn.mjs` imports growth's adapter and, for a niche query, emits NDJSON records `source_url · text · engagement · ts · source_id` (engagement/ts/text `ABSENT` in the ADR-1911 fallback mode); red fixtures pinned and RAN-asserted: deleted item, empty title, injection string in a title (`$(…)`, backtick, `; rm`, YAML `: ` + newline, `{{`), 1 MB body, non-UTF8 bytes, HTTP 429, a 200 with no hits array; the mode is locked once for the cycle (A-02) and, in fallback mode, the body-class fixtures assert SKIPPED-with-reason rather than passing | 01 | active |
+| REQ-01 | Raw pain becomes structured evidence | `miners/hn.mjs` imports growth's adapter and, for a niche query, emits NDJSON records `source_url · text · engagement · ts · source_id` through a `fetchImpl` tap on growth's own adapter (ADR-1915); a field missing on a hit stays `ABSENT`; red fixtures pinned and RAN-asserted: deleted item, empty title, injection string in a title (`$(…)`, backtick, `; rm`, YAML `: ` + newline, `{{`), 1 MB body, non-UTF8 bytes, HTTP 429, a 200 with no hits array; an adapter success whose tap recorded zero responses is `COULD NOT SCAN`, never an empty result | 01 | active |
 | REQ-02 | No duplicate ideas across runs and cycles | same item fetched twice → exactly one `idea.captured` (spine idem); near-duplicates cluster by token-overlap; the same snapshot run twice, and a second run with input order shuffled → byte-identical `clusters.json`, which holds no wall-clock or run-id field (those live only in the spine event); a cluster whose `cluster_fp` (sha256 of its sorted top-8 stem tokens, never member ids) token set has Jaccard ≥ the cluster threshold against a `decision.recorded` reject's stored token set is listed as `previously rejected {receipt id}` and is not scored | 01 | active |
 | REQ-10 | The face sees discover | `products/discover/manifest.json` passes the FV2-C/I room contract; the `discover` entry leaves `planned-rooms.json` in the same PR; `face-coverage` + `wiki-coverage` + `product-lint` green on CI | 00 | active |
 | REQ-03 | Scoring is explicit and tunable | `products/discover/score.yaml` with 4 weights; every score row lists ≥ 1 evidence line id; the same input → identical score bytes; a weight change applies only after a `decision.recorded` (DIS-C); when `engagement`/`ts` are `ABSENT` the scorer drops those weights and renormalises the rest by a named rule recorded in the score row (`engagement: ABSENT`, never 0 or NaN), fixture-pinned | 02 | active |
@@ -124,10 +124,11 @@ flowchart TB
 | 1908 | DIS-H: audit `saas-market-analysis-agent` before any scorer code | accepted |
 | 1909 | DIS-I: discover is a venture-scope lane; organs stay single | accepted |
 | 1910 | Calibration uses the existing council pair, not a `predicted_90d` field | accepted |
-| 1911 | The HN adapter's missing fields are a growth-lane change, additive only | accepted |
+| 1911 | The HN adapter's missing fields are a growth-lane change, additive only | superseded by 1915 |
 | 1912 | The `venture.yaml` acceptor is launch's `loadProfile()`, not `launch-lint` | accepted |
 | 1913 | discover gets no `hq.policy.yaml` row until it is an engine process (supersedes ADR-1906 policy clause) | accepted |
 | 1914 | discover maps to the generic `lane` room | accepted |
+| 1915 | The miner taps growth's transport instead of widening its adapter (supersedes ADR-1911) | accepted |
 
 ## Non-negotiables
 
@@ -165,7 +166,7 @@ flowchart TB
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
 | A-01: the owner can point to `saas-market-analysis-agent` on disk | no location is given at Phase 00 open → the memo records `NOT LOCATABLE` with the searched paths, and Phase 02's scorer is built from the design source alone | 00 |
-| A-02: growth accepts the additive HN-field widening and merges it within 2 days | not merged by Phase 01 day 1 → the ADR-1911 fallback is locked for the whole cycle and the day-4 kill question runs in fallback mode; a later growth merge is a post-cycle `/arc-change`, never a mid-phase flip | 01 |
+| A-02: growth's `hnAlgoliaAdapter` keeps sending every request through the injected `fetchImpl` (ADR-1915) | the miner's replay arm records zero tapped responses on a run the adapter reported as successful → `/arc-change --lane growth`; discover never forks the adapter | 01 |
 | A-03: token-overlap at a fixed threshold separates distinct pains on HN titles | on the fixture snapshot, two hand-labelled different pains merge, or one pain splits into > 3 clusters → the kill criterion's frequency sort | 01 |
 | A-04: council-juror can run a two-finalist session within REQ-07's 60-minute budget | the Phase 02 fixture session alone takes > 20 min wall clock, or the owner has not approved council spend by Phase 03 day 1 → the real hunt downgrades to one juror + skeptic | 02 |
 | A-05: launch's `PROFILE_FIELDS` enums can express every idea the hunt approves | an approved idea fits no `type` value → STOP and run `/arc-change --lane launch`; the exporter never invents a value | 03 |
@@ -175,7 +176,6 @@ flowchart TB
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
 | HN Algolia search API | `miners/hn.mjs` → growth `hnAlgoliaAdapter({fetchImpl})` (`hn.algolia.com`) | `tests/discover/fakes/hn-fetch.mjs`, a `fetchImpl` replaying recorded JSON incl. 429, empty, no-hits, oversized, non-UTF8 | live API at 1 req/s, identified UA | `tests/discover-miner.bats`: the real response, captured read-only and committed BEFORE miner code, replays through the real adapter (`offline: false`); fails, never skips, on a missing or empty recording |
-| growth HN field widening | additive PR to growth's adapter (`/arc-change --lane growth`), imported never edited | fixture with `ABSENT` fields | merged adapter | miner bats in the cycle's locked mode (A-02) |
 | council jurors (ADR-0069 tiers incl. `independent-family-verifier`) | `council-juror.mjs` | fake juror returning canned verdicts | paid live session | fixture arm only; real spend needs the owner's written OK (REQ-07) |
 | the owner (audit-agent path, niche name, inbox stamp) | `arc-inbox.mjs approve` from the main clone | fixture receipts | the owner's keystroke | none — recorded in evidence |
 
@@ -189,7 +189,7 @@ flowchart TB
 | 2 | REQ-07: the real hunt ran only at the end, found the pipeline unusable on live HN text or nothing was ever emitted in production, and the cap was spent (retro 2026-09-16 usage-last; 2026-08-10 0 production emissions) | Phase 01 runs a live mini-hunt from the main clone and records the production `idea.captured` count; each phase closes from the main clone right after its merge; the owner names the REQ-07 niche at Phase 00 open |
 | 3 | REQ-06: the exporter drifted from launch's contract | the CI fixture imports launch's real `loadProfile`, so a launch change turns discover red the same day (ADR-1912) |
 | 4 | REQ-02: duplicates were re-litigated because the reject reader and writer disagreed on shape (retro 2026-08-24: the seam between a collector and its checks was untested) | the reject payload is fixed in a Phase 00 fixture that both the writer test and the reader test load |
-| 5 | REQ-10: birth rows collided with a live lane, or growth never merged the HN widening, so the lane stalled on a hidden dependency (retro 2026-08-02/08-03 shared-file collisions) | the birth PR is Phase 00 and lands alone, first; `git log origin/main` on each shared path; the A-02 fallback is a first-class locked mode; the recorded-real-response replay stays in the miner contract test (External dependencies) |
+| 5 | REQ-10: birth rows collided with a live lane, or a cross-lane dependency stalled the lane (retro 2026-08-02/08-03 shared-file collisions) | the birth PR is Phase 00 and lands alone, first; `git log origin/main` on each shared path; the HN fields come from a transport tap, not a growth change (ADR-1915); the recorded-real-response replay stays in the miner contract test (External dependencies) |
 
 Kickoff attack (tier M, three attackers, 21 findings): 20 applied (A2 + B5 merged on the ABSENT rule; C3's replay moved from pre-mortem row 5 to External dependencies; B3's soft deps written into spec text because `**Depends on:**` names phases only), 1 rejected:
 
