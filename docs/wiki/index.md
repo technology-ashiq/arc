@@ -36,7 +36,7 @@ Narrative debt: **108 of 142** pages have no narrative yet. ADR headers: 326 of 
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
-| [org](products/org.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 12 |
+| [org](products/org.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 15 |
 | [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 3 |
 | [qa](products/qa.md) | 1.0.0 | [core](products/core.md) | 3 | 2 | 0 |
 | [review](products/review.md) | 1.0.0 | [core](products/core.md) | 4 | 2 | 22 |
