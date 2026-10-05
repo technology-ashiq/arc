@@ -11,7 +11,7 @@
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-org (Cycle 19, opened 2026-10-03) |
 | Product | [org](../products/org.md) |
 

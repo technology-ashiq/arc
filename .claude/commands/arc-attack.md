@@ -37,6 +37,9 @@ round 1, fix, round 2, fix, **push once**, read CI per job, fix only what CI fin
      `ARC_ATTACK_TRIAL_MODEL`).
    - Round 2 attacks the fixes: `--round 2` picks up round 1's result for each surface. Max two
      rounds per PR; LOW leftovers go to the debt ledger.
+   - **A failed round-1 logic run is re-run as round 1, on the fallback model, before any fix.** Round 2
+     refuses logic without a round-1 logic result, so skipping this means no logic attack before merge.
+     org Cycle 19 did that, and the logic attacker's first run, after the merge, found a high.
 
 2. **Print its output verbatim.** Findings are written to
    `initiatives/<lane>/evidence/phase-NN/attack-<sha7>-r<K>-<surface>.json`.

@@ -84,9 +84,14 @@ running the real sync and the suite's own helper — then check the row COUNT is
 
 ```bash
 bash sync-to-project.sh "$SCRATCH" >/dev/null
-source tests/test_helper.bash && _arc_tree_manifest "$SCRATCH" > tests/fixtures/sync-golden/tree-manifest.txt
+source tests/test_helper.bash && _arc_tree_manifest "$SCRATCH" \
+  | grep -vF -f <(git ls-files --others --exclude-standard | sed 's/$/\t/') \
+  > tests/fixtures/sync-golden/tree-manifest.txt
 git diff -U0 tests/fixtures/sync-golden/tree-manifest.txt | grep "^+[^+]" | cut -f1
 ```
+
+The `grep -vF` drops untracked files: the sync copies the working tree, so a local tool's untracked
+file (`.claude/.headroom_wrap_*`) landed in all four regens of org Cycle 19 and was deleted by hand.
 
 Do it **last**, after every code edit. A manifest regenerated mid-change is stale by the next
 commit, and its staleness is invisible until CI.
