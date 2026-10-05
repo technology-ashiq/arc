@@ -444,3 +444,41 @@ arm() {
   arm environments owner-pr
   [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: secrets writes the names-only template once and claims only the file it wrote" {
+  arm secrets fresh
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.commits + " " + o.kinds.join(",")')" = "1 github-file,env-contract" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com + api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete-if-unchanged" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets names what the owner must place, and passes once it is set for production" {
+  arm secrets missing
+  [ "$(j 'o.kinds.join(",")')" = "env-contract" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false owner places for production: DATABASE_URL" ] || { echo "$DONE"; false; }
+  arm secrets preview-only
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  arm secrets placed
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets never asks Vercel to decrypt and never carries a value" {
+  arm secrets placed
+  [ "$(j 'o.decryptAsked + " " + o.secretSeen')" = "false false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a key file in git fails verify; the template variants do not" {
+  arm secrets leaked
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false key file in git: apps/web/.env.local" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a template that carries a value or a line that is not NAME= is refused" {
+  arm secrets value-in-template
+  [ "$(j 'o.scaffold.code')" = "VALUE_IN_GIT" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" != *"postgres"* ]] || { echo "$DONE"; false; }
+  arm secrets bad-line
+  [[ "$(j 'o.verify.reason')" == "BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
+  arm secrets truncated
+  [[ "$(j 'o.verify.reason')" == *"too large to list"* ]] || { echo "$DONE"; false; }
+}

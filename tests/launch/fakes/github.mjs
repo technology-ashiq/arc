@@ -93,6 +93,9 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       r.pulls.push(pr);
       return json(201, pr);
     }
+    // main's tree: every path in r.files plus any in r.extraPaths (files the venture holds that no test wrote).
+    if (method === "GET" && rest === "git/trees/main")
+      return json(200, { truncated: !!r.truncated, tree: [...Object.keys(r.files), ...(r.extraPaths || [])].map((path) => ({ path, type: "blob" })) });
     const cm = rest.match(/^contents\/(.+)$/);
     if (cm && method === "PUT" && body.branch && body.branch !== "main") {
       if (!r.branches[body.branch]) return err(404, "Branch not found");
