@@ -283,3 +283,44 @@ arm() {
   [ "$(j 'o.scaffold.code')" = "FOREIGN_WORKFLOW" ] || { echo "$DONE"; false; }
   [ "$(j 'o.reported.length')" = "0" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: hosting twice makes one linked project, one domain, one held vercel.json, and reports the CNAME" {
+  arm hosting twice
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.projects + " " + o.creates + " " + o.domainPosts + " " + o.holdCommits')" = "1 1 1 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hold.ignoreCommand')" = '[ "$VERCEL_ENV" = production ]' ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.reported.join(",")')" == *"dns-target abc123.vercel-dns-017.com"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "remove-domain,delete-project,delete" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting refuses a project linked to another repo, before any commit" {
+  arm hosting foreign-project
+  [ "$(j 'o.scaffold.code + " " + o.holdCommits')" = "FOREIGN_PROJECT 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting never places the hold over a vercel.json launch did not write" {
+  arm hosting foreign-file
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hold.trim()')" = "{}" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a hosting re-run after release never holds production again" {
+  arm hosting released
+  [ "$(j 'o.scaffold.ok + " " + o.hold.trim()')" = "true {}" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting refuses when Vercel recommends no usable CNAME, reporting no target" {
+  arm hosting no-cname
+  [ "$(j 'o.scaffold.code + " " + o.targets')" = "NO_TARGET 0" ] || { echo "$DONE"; false; }
+  arm hosting evil-cname
+  [ "$(j 'o.scaffold.code + " " + o.targets')" = "NO_TARGET 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: hosting verify answers a missing project and every refusal as not ok" {
+  arm hosting verify-before
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false no vercel project arc-sandbox" ]] || { echo "$DONE"; false; }
+  arm hosting verify-refusals
+  [[ "$(j 'o.badToken.value.reason')" == "BAD_TOKEN: "* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.noUpstream.value.reason')" == "UPSTREAM_MISSING: "* ]] || { echo "$DONE"; false; }
+}
