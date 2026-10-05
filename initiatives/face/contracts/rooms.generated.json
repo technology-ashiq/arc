@@ -1054,9 +1054,12 @@
       "holds": {
         "kinds": [
           "idea.captured"
+        ],
+        "plannedRooms": [
+          "discover"
         ]
       },
-      "itemCount": 1
+      "itemCount": 2
     },
     {
       "id": "chat-mcp",
@@ -1375,6 +1378,7 @@
     "plannedRooms": {
       "ops": "ops",
       "trader": "trader",
+      "discover": "discover",
       "chat-mcp": "chat-mcp"
     },
     "ci": {

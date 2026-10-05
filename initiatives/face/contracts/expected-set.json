@@ -1458,6 +1458,7 @@
     "map": {
       "ops": "ops",
       "trader": "trader",
+      "discover": "discover",
       "chat-mcp": "chat-mcp"
     }
   },

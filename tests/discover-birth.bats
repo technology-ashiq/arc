@@ -27,25 +27,25 @@ room_state() {
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
-@test "discover-birth: the discover room is solid, not planned" {
+@test "discover-birth: the money/discover planned room stays until the face lane converts its module (ADR-1914)" {
   run --separate-stderr room_state "$(PR)"
   [ "$status" -eq 0 ] && [ -z "$stderr" ] || { echo "room check did not run: $status $stderr"; false; }
-  [ "$output" = "solid" ] || { echo "discover still listed in planned-rooms.json"; false; }
+  [ "$output" = "planned" ] || { echo "the discover planned room was removed; face/src/modules/money/discover reads its line from it"; false; }
 }
 
-@test "discover-birth: the solid-room check goes red on a copy that still plans discover" {
+@test "discover-birth: the planned-room check goes red on a copy with the discover room removed" {
   local copy="$BATS_TEST_TMPDIR/planned-rooms.json"
   node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const list = Array.isArray(r) ? r : r.rooms;
-    list.push({ room: "discover", ring: "money" });
-    fs.writeFileSync(process.argv[2], JSON.stringify(r));
+    const kept = list.filter((x) => x.room !== "discover");
+    if (Array.isArray(r)) fs.writeFileSync(process.argv[2], JSON.stringify(kept)); else fs.writeFileSync(process.argv[2], JSON.stringify({ ...r, rooms: kept }));
   ' "$(PR)" "$copy"
   [ -s "$copy" ] || { echo "mutant copy was not written"; false; }
   run --separate-stderr room_state "$copy"
   [ "$status" -eq 0 ] || { echo "room check did not run on the mutant: $stderr"; false; }
-  [ "$output" = "planned" ] || { echo "the check did not see the planted discover room: $output"; false; }
+  [ "$output" = "solid" ] || { echo "the check did not see the room removed: $output"; false; }
 }
 
 @test "discover-birth: the room check refuses an unreadable shape instead of calling it solid" {
