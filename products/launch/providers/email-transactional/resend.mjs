@@ -92,11 +92,23 @@ export function envContract() {
   return ["RESEND_API_KEY", "CLOUDFLARE_API_TOKEN"];
 }
 
+// Every page of the domain list: a domain past the first page must be found, never re-created (attack cc949ef B5).
+async function findDomain(ctx, domain) {
+  let after = "";
+  for (let page = 0; page < 50; page++) {
+    const r = (await rs(ctx, "GET", `/domains?limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`)).body;
+    const rows = list(r && r.data);
+    const hit = rows.find((d) => bare(d.name) === domain);
+    if (hit) return hit;
+    if (!(r && r.has_more === true) || !rows.length || typeof rows[rows.length - 1].id !== "string") return null;
+    after = rows[rows.length - 1].id;
+  }
+  throw refuse("TOO_MANY_DOMAINS", "resend lists more than 5000 domains; launch does not search further");
+}
+
 export async function scaffold(ctx) {
   const domain = domainOf(ctx);
-  const listed = (await rs(ctx, "GET", "/domains")).body;
-  const all = list(listed && listed.data);
-  let dom = all.find((d) => bare(d.name) === domain);
+  let dom = await findDomain(ctx, domain);
   let kind = "resend-domain";
   if (dom) kind = ctx.resources.some((r) => r.kind === "resend-domain" && r.id === String(dom.id)) ? "resend-domain" : "resend-domain-found";
   else dom = (await rs(ctx, "POST", "/domains", { name: domain })).body;
@@ -106,14 +118,19 @@ export async function scaffold(ctx) {
   const detail = (await rs(ctx, "GET", `/domains/${encodeURIComponent(dom.id)}`)).body;
   const recs = wanted(domain, detail && detail.records);
   const zone = await zoneOf(ctx, domain);
+  // Every conflict is found BEFORE anything is written: a refusal half-way would leave Resend a partial record set
+  // (attack cc949ef B6). One DMARC and one SPF per name is the rule a resolver enforces: a same-policy record launch
+  // did not create is the owner's, and is refused rather than doubled.
+  const plan = [];
   for (const want of recs) {
     const existing = list(await cf(ctx, "GET", `/zones/${zone.id}/dns_records?type=${want.type}&name=${encodeURIComponent(want.name)}`));
     const mine = existing.find((r) => r.comment === ctx.tag);
-    // One DMARC and one SPF per name is the rule a resolver enforces: a same-type record launch did not create is the
-    // owner's, and is refused rather than doubled.
     const foreign = existing.filter((r) => r.comment !== ctx.tag && (want.type !== "TXT" || policyOf(r.content) === policyOf(want.content)));
     if (!mine && foreign.length)
       throw refuse("FOREIGN_RECORD", `${want.name} already has a ${want.type} record launch did not create; launch does not write over it`);
+    plan.push({ want, mine });
+  }
+  for (const { want, mine } of plan) {
     const body = { type: want.type, name: want.name, content: want.content, ttl: 1, proxied: false, comment: ctx.tag, ...(want.priority !== undefined ? { priority: want.priority } : {}) };
     let rec = mine;
     if (!rec) rec = await cf(ctx, "POST", `/zones/${zone.id}/dns_records`, body);
@@ -138,8 +155,7 @@ const txts = (answer) => list(answer && answer.Answer).filter((a) => a.type === 
 // Asked of Resend and of both public resolvers; eight polls, 30 s apart, inside the slot's 300 s timeout.
 async function probe(ctx) {
   const domain = domainOf(ctx);
-  const data = (await rs(ctx, "GET", "/domains")).body;
-  const dom = list(data && data.data).find((d) => bare(d.name) === domain);
+  const dom = await findDomain(ctx, domain);
   if (!dom) return { ok: false, reason: `resend has no domain ${domain}` };
   let last = "";
   for (let i = 0; i < 8; i++) {

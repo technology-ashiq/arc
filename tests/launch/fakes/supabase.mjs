@@ -14,19 +14,23 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const err = (status, message) => json(status, { message });
 
+  // Answers with the LAST statement's rows only, as the real endpoint does: a trailing `commit` answers [].
   function run(p, sql) {
-    const out = [];
+    let out = [];
     const anon = /set local role anon/i.test(sql);
     for (const stmt of sql.split(";").map((s) => s.trim()).filter(Boolean)) {
-      if (/^create table if not exists public\.launch_probe/i.test(stmt)) p.tables.launch_probe = p.tables.launch_probe || { rls: false, rows: [] };
+      out = [];
+      if (/^(begin|commit|set local role anon)$/i.test(stmt)) continue;
+      if (/^select count\(\*\)::int as n from pg_tables/i.test(stmt)) out = [{ n: p.tables.launch_probe ? 1 : 0 }];
+      else if (/^create table if not exists public\.launch_probe/i.test(stmt)) p.tables.launch_probe = p.tables.launch_probe || { rls: false, rows: [] };
       else if (/^alter table public\.launch_probe enable row level security/i.test(stmt)) p.tables.launch_probe.rls = true;
       else if (/^insert into public\.launch_probe/i.test(stmt)) { const t = p.tables.launch_probe; if (!t.rows.some((r) => r.id === 1)) t.rows.push({ id: 1 }); }
-      else if (/^select count\(\*\)::int as n from pg_policies/i.test(stmt)) out.splice(0, out.length, { n: policy ? 1 : 0 });
+      else if (/^select count\(\*\)::int as n from pg_policies/i.test(stmt)) out = [{ n: policy ? 1 : 0 }];
       else if (/^select count\(\*\)::int as n from public\.launch_probe/i.test(stmt)) {
         const t = p.tables.launch_probe;
         if (!t) return { error: "relation \"public.launch_probe\" does not exist" };
         const visible = anon && t.rls && !rlsOff && !policy ? 0 : t.rows.length;
-        out.splice(0, out.length, { n: visible });
+        out = [{ n: visible }];
       }
     }
     return { rows: out };

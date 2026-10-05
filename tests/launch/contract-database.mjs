@@ -24,6 +24,8 @@ const opts = {
   policy: { policy: true },
   paused: { projects: [{ id: "ownerref000000000002", name: "arc-sandbox", status: "INACTIVE" }] },
   "object-shape": { queryShape: "object" },
+  "policy-recorded": { policy: true },
+  "slow-start": { becomeHealthy: 99 },
 }[scenario] || {};
 const sb = makeSupabase(opts);
 globalThis.fetch = sb.fetch;
@@ -70,6 +72,23 @@ switch (scenario) {
   case "rls-off":
     await adapter.scaffold(ctxNow());
     out.verify = await adapter.verify(ctxNow());
+    break;
+  case "owner-probe-table":
+    // The owner's own project already holds a table named launch_probe: launch never touches it.
+    sb.store.push({ id: "fixtureref0000000099", name: "arc-sandbox", status: "ACTIVE_HEALTHY", tables: { launch_probe: { rls: false, rows: [{ id: 1 }, { id: 2 }] } }, polls: 0 });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.rls = sb.store[0].tables.launch_probe.rls;
+    break;
+  case "policy-recorded":
+    // The policy check refuses after UP: the table it just made is already recorded, so the exit plan drops it.
+    sb.store.length = 0;
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.kinds = reported.map((r) => r.kind);
+    break;
+  case "slow-start":
+    // A project that is not healthy within the bounded wait: a resumable refusal, never a held lock.
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.kinds = reported.map((r) => r.kind);
     break;
   case "bad-region":
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ region: "mars" })));

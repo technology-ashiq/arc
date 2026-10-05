@@ -30,7 +30,9 @@ const resendRecords = {
   "outside-zone": [{ record: "DKIM", name: "resend._domainkey.evil.example", type: "TXT", value: "p=x" }],
   "bad-type": [{ record: "X", name: `x.${D}`, type: "A", value: "192.0.2.1" }],
 }[scenario] || null;
-const resend = makeResend({ cloudflare, inner: cloudflare.fetch, records: resendRecords });
+// paged: 150 other domains come first, so the venture's own sits on the second page of 100.
+const seedDomains = scenario === "paged" ? [...Array.from({ length: 150 }, (_, i) => ({ id: `dom_other_${String(i).padStart(3, "0")}`, name: `other${i}.example.com` })), { id: "dom_mine", name: D }] : [];
+const resend = makeResend({ cloudflare, inner: cloudflare.fetch, records: resendRecords, domains: seedDomains });
 globalThis.fetch = resend.fetch;
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-email-"));
@@ -66,6 +68,11 @@ switch (scenario) {
   case "owner-other-txt":
     // A non-policy TXT at _dmarc is not a DMARC conflict: launch adds its own beside it.
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    break;
+  case "paged":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.domains = resend.store.length;
+    out.kind = (reported.find((r) => r.kind.startsWith("resend-domain")) || {}).kind || null;
     break;
   case "unverified":
     // The domain exists but its records were removed: Resend does not verify, and neither does the slot.

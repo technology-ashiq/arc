@@ -497,7 +497,7 @@ arm() {
 
 @test "launch-contract: email never writes over the owner's DMARC, and refuses records outside the domain or of other types" {
   arm email owner-dmarc
-  [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 3" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 0" ] || { echo "$DONE"; false; }
   arm email outside-zone
   [ "$(j 'o.scaffold.code + " " + o.written')" = "BAD_RECORD 0" ] || { echo "$DONE"; false; }
   arm email bad-type
@@ -509,4 +509,22 @@ arm() {
 @test "launch-contract: email verify is not ok when Resend has not verified" {
   arm email unverified
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false resend failed;"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner's launch_probe table is never altered, and a refusal after UP still records the table" {
+  arm database owner-probe-table
+  [ "$(j 'o.scaffold.code + " " + o.rls')" = "PROBE_TABLE_FOREIGN false" ] || { echo "$DONE"; false; }
+  arm database policy-recorded
+  [ "$(j 'o.scaffold.code + " " + o.kinds.join(",")')" = "PROBE_HAS_POLICY supabase-project,db-probe-table" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a slow Supabase start is a resumable refusal inside the lock window" {
+  arm database slow-start
+  [ "$(j 'o.scaffold.code + " " + o.kinds.join(",")')" = "PROJECT_NOT_READY supabase-project" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"apply again to resume"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: email finds its domain past the first page instead of creating a second" {
+  arm email paged
+  [ "$(j 'o.scaffold.ok + " " + o.domains + " " + o.kind')" = "true 151 resend-domain-found" ] || { echo "$DONE"; false; }
 }

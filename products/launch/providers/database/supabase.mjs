@@ -11,7 +11,10 @@ const UP = [
   "alter table public.launch_probe enable row level security;",
   "insert into public.launch_probe (id, note) values (1, 'owner-only') on conflict (id) do nothing;",
 ].join("\n");
-const AS_ANON = "begin; set local role anon; select count(*)::int as n from public.launch_probe; commit;";
+// The query endpoint answers with the LAST statement's rows, so the select is last and the transaction is left to end
+// with the request (a trailing commit would answer with no rows, attack cc949ef B4).
+const AS_ANON = "begin; set local role anon; select count(*)::int as n from public.launch_probe;";
+const EXISTS = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename = 'launch_probe';";
 const AS_OWNER = "select count(*)::int as n from public.launch_probe;";
 const POLICIES = "select count(*)::int as n from pg_policies where schemaname = 'public' and tablename = 'launch_probe';";
 
@@ -90,15 +93,17 @@ const wait = (ms, signal) => new Promise((res, rej) => {
   if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
+// Bounded at 7 minutes, under the runner's 10-minute stale-lock window: a slower project start is a failed attempt the
+// next apply resumes (the project is already this slot's resource), never a held lock (attack cc949ef B1).
 async function healthy(ctx, ref) {
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 14; i++) {
     if (i) await wait(30000, ctx.signal);
     const p = await sb(ctx, "GET", `/projects/${ref}`);
     const st = say(p.body && p.body.status, 30);
     if (st === "ACTIVE_HEALTHY") return;
     if (/^(INACTIVE|PAUSED|REMOVED|INIT_FAILED|GOING_DOWN)$/.test(st)) throw refuse("PROJECT_DOWN", `supabase project ${ref} is ${st}`);
   }
-  throw refuse("PROJECT_NOT_READY", `supabase project ${ref} did not become healthy in 12 minutes`);
+  throw refuse("PROJECT_NOT_READY", `supabase project ${ref} is not healthy after 7 minutes; apply again to resume`);
 }
 
 export async function scaffold(ctx) {
@@ -125,10 +130,16 @@ export async function scaffold(ctx) {
   ctx.report({ kind, id: ref });
 
   await healthy(ctx, ref);
+  // A launch_probe table launch did not create is the owner's: it is never altered or written to (attack cc949ef B3).
+  const tid = `${ref}:public.launch_probe`;
+  const exists = count(await query(ctx, ref, EXISTS)) === 1;
+  if (exists && !ctx.resources.some((r) => r.kind === "db-probe-table" && r.id === tid))
+    throw refuse("PROBE_TABLE_FOREIGN", "public.launch_probe already exists and launch did not create it; it is not touched");
   await query(ctx, ref, UP);
+  // Recorded the moment it exists, before the policy check that may refuse (attack cc949ef B2).
+  ctx.report({ kind: "db-probe-table", id: tid });
   // A policy someone added would make the anon read succeed by design; the probe table must have none.
   if (count(await query(ctx, ref, POLICIES)) !== 0) throw refuse("PROBE_HAS_POLICY", "public.launch_probe has a policy; the RLS probe needs none");
-  ctx.report({ kind: "db-probe-table", id: `${ref}:public.launch_probe` });
   return { files: [], resources: [{ kind, id: ref }, { kind: "db-probe-table", id: `${ref}:public.launch_probe` }], notes: [] };
 }
 

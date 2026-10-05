@@ -24,7 +24,14 @@ export function makeResend({ cloudflare, inner, token = "re_fixture_token_012345
     if ((init.headers || {}).authorization !== `Bearer ${token}`) return err(401, "API key is invalid");
     const body = init.body ? JSON.parse(init.body) : null;
     const p = url.pathname;
-    if (method === "GET" && p === "/domains") return json(200, { object: "list", data: store.map(({ id, name, status }) => ({ id, name, status })) });
+    // Paged like the real list: `limit` rows, `has_more`, continue `after` an id.
+    if (method === "GET" && p === "/domains") {
+      const limit = Number(url.searchParams.get("limit") || 20);
+      const after = url.searchParams.get("after");
+      const start = after ? store.findIndex((d) => d.id === after) + 1 : 0;
+      const rows = store.slice(start, start + limit);
+      return json(200, { object: "list", has_more: start + limit < store.length, data: rows.map(({ id, name, status }) => ({ id, name, status })) });
+    }
     if (method === "POST" && p === "/domains") {
       if (store.some((d) => d.name === body.name)) return err(422, "domain already exists");
       const d = { id: `dom_${String(++n).padStart(6, "0")}`, name: body.name, status: "not_started", records: listed(body.name) };
