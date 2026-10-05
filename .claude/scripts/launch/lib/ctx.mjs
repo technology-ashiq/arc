@@ -39,7 +39,16 @@ export function confinedPath(root, rel) {
 
 const PROBE_HOSTS = ["dns.google", "cloudflare-dns.com"];
 
-export function makeCtx({ profile, board, slot, row, root, resources, tag, attempt, signal, env, report, approvals = [] }) {
+// `upstream` holds what the runner recorded for this slot's own depends_on slots, nothing wider (ADR-1725). Each value
+// is another adapter's output: the reader validates it before using it. An entry without string kind and id is dropped,
+// never coerced -- `String(null)` handed a reader the hostname "null" (attack 74c7f5a B2).
+function freezeUpstream(upstream) {
+  const good = (r) => r && typeof r === "object" && typeof r.kind === "string" && typeof r.id === "string";
+  return Object.freeze(Object.fromEntries(Object.entries(upstream || {}).map(([s, rs]) =>
+    [s, Object.freeze((Array.isArray(rs) ? rs : []).filter(good).map((r) => Object.freeze({ kind: r.kind, id: r.id })))])));
+}
+
+export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [] }) {
   const queued = [];
   const guardedFetch = (hosts) => async (url, init = {}) => {
     let u;
@@ -53,7 +62,7 @@ export function makeCtx({ profile, board, slot, row, root, resources, tag, attem
   };
   const probeFetch = guardedFetch(PROBE_HOSTS);
   return Object.freeze({
-    profile, board, slot, provider: row.id, root, resources: [...(resources || [])], tag, attempt, signal,
+    profile, board, slot, provider: row.id, root, resources: [...(resources || [])], upstream: freezeUpstream(upstream), tag, attempt, signal,
     env: Object.freeze({ ...env }),
     fetch: guardedFetch(row.hosts || []),
     write(rel, text) {

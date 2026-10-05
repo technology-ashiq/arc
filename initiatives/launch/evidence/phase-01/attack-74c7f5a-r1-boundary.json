@@ -1,0 +1,55 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:70-73",
+      "breaking_input": "`verify` runs with a ctx whose `signal` is already aborted: the slot timeout fired during the first `ctx.probe.doh` call. On the next loop iteration `wait(10000, ctx.signal)` registers an `abort` listener that never fires.",
+      "why": "`addEventListener('abort')` on an already-aborted signal is never invoked, so the abort is swallowed. The adapter sleeps 10 s per remaining iteration (up to 50 s) and keeps probing past the deadline. The listener is also never removed when the timer wins, so a long-lived signal accumulates one listener per iteration. The contract test replaces `setTimeout` with a 0 ms version and passes `signal: undefined`, so it never exercises this.",
+      "fix": "In `wait`, reject immediately if `signal?.aborted`. Remove the listener when the timer fires. Add a contract arm that passes a pre-aborted signal."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:45",
+      "breaking_input": "Any caller of `makeCtx` other than `worker.mjs`, such as a verify path that builds its own ctx, or a state row whose `resources` array contains `null` (`[null]`) or an entry with no `id`.",
+      "why": "`upstream` defaults to `{}`, so a ctx built without it makes the dns adapter throw `UPSTREAM_MISSING` on `verify`/`apply`. This repeats the 'new verb restates the guards and keeps half' pattern: only the worker was updated. Separately, `freezeUpstream` calls `r.kind` on a null element and throws a TypeError. In the worker, `makeCtx` is called before the attempt's receipt path is set up, so the worker may die with no receipt. A missing `id` becomes the string `\"undefined\"`, which the dns adapter then rejects only later.",
+      "fix": "Grep every `makeCtx` call site and pass `upstream` from one shared helper. In `freezeUpstream`, skip entries that are not objects or lack string `kind` and `id`. Add a test where verify on dns resolves its target.",
+      "twin_of": "`verify` re-implemented apply's checks and kept only half: no venture-root guard and no adapter-path containment -> every NEW verb that runs an adapter: does it call the shared guards, or restate them?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/launch-runner.bats:222-228",
+      "breaking_input": "Change `worker.mjs` to pass every slot's resources, e.g. `Object.keys(st0.slots)`, instead of only `slot.depends_on`. The test still passes.",
+      "why": "The test is titled 'and only those', but state holds a single applied slot (`probe`) and `after-probe` depends on it, so no non-dependency with resources exists to leak. The ADR-1725 scoping guarantee (an adapter cannot see slots it does not depend on) is not tested. The test also depends on the fixture ids `r1-1`/`r2-2`.",
+      "fix": "Apply a second unrelated slot first so it has resources, then assert it is absent from `FAKE_UPSTREAM`."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:24-31,87",
+      "breaking_input": "A DoH or Cloudflare response whose `Answer[].data` or `errors[].message` contains newlines, ESC sequences or U+202E, or is megabytes long. These values flow into the `reason` string of `verify` and the thrown `Error` message.",
+      "why": "The adapter interpolates remote-controlled strings (`cnames(...)`, `e.message`, `r.type`, `r.id`) raw and uncapped into reasons and messages that the runner prints. Cleaning then depends entirely on every downstream printer calling `clean()`. The bad-target branch already uses `JSON.stringify(...).slice(0, 80)`, but these paths do not.",
+      "fix": "Truncate to a fixed length and strip controls and bidi characters (or JSON.stringify) inside the adapter before building reasons and messages.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/launch/contract-dns.mjs:26-29,60-63",
+      "breaking_input": "Scenario `proxied` is handled in the switch (seed record, scaffold) but no bats test invokes `dns proxied`. Each run also calls `mkdtempSync` and never cleans the temp dir.",
+      "why": "The `proxied` scenario is dead code, so the claim that scaffold flips an orange-cloud record to grey is untested. Every invocation leaks a `launch-dns-*` temp dir, which on a Windows CI runner is cumulative clutter in `%TEMP%`.",
+      "fix": "Add a bats test for `proxied`, or remove the scenario. Remove the temp dir in a `finally` block, or reuse one dir per process."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:58-61",
+      "breaking_input": "The brand domain already has an unrelated non-CNAME record at the same name that is legitimate and unrelated to the CNAME: a TXT (domain verification), an MX or a CAA.",
+      "why": "`foreign` includes every record with that name that is not tagged, regardless of type. The adapter refuses with FOREIGN_RECORD even though a TXT or MX at the name cannot conflict with a CNAME-less create. Cloudflare rejects a CNAME alongside other records at the same name, so refusing is defensible, but the refusal names no remediation and the fake never models the TXT case.",
+      "fix": "Document the decision and add a contract arm for a coexisting TXT/MX, or restrict the refusal to record types that actually conflict (A, AAAA, CNAME) and let Cloudflare's own error surface for the rest."
+    }
+  ]
+}

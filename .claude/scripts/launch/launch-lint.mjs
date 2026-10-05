@@ -62,6 +62,10 @@ export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, provi
     for (const [k, v] of Object.entries(s)) if (k !== "id" && typeof v === "string" && providerIds.has(v)) add("slot-names-provider", s.id, `field ${k} names provider ${v}`);
     if (!TIERS.has(s.tier)) add("enum", s.id, `tier ${s.tier} is not core | required | optional`);
     if (!Array.isArray(s.exit_criteria) || !s.exit_criteria.length) add("exit-criteria", s.id, "no exit_criteria");
+    else if (s.exit_criteria.some((e) => typeof e !== "string" || !e.trim())) add("exit-criteria", s.id, "an exit_criteria entry is not a plain sentence (a `: ` outside quotes reads as a mapping)");
+    // Every string list the DAG and predicates read is type-checked, not only the one that broke (attack fb3a494 B6).
+    for (const k of ["depends_on", "optional_for"])
+      if (s[k] !== undefined && (!Array.isArray(s[k]) || s[k].some((e) => typeof e !== "string" || !e.trim()))) add("list-shape", s.id, `${k} must be a list of plain names`);
     try { parsePredicate(s.required_when ?? "always"); } catch (e) { add("predicate", s.id, e.message); }
     if (s.tier === "optional" && (!Array.isArray(s.optional_for) || !s.optional_for.length)) add("optional-for", s.id, "optional slot without optional_for");
     if (s.tier === "core") {

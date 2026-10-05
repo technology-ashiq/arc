@@ -218,3 +218,24 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$(slot_field probe reason)" == "refused:ENV_UNDECLARED LAUNCH_UNDECLARED_KEY"* ]] || { echo "$(slot_field probe reason)"; false; }
 }
+
+@test "launch-runner: an adapter sees its depends_on slots' recorded resources, and only those (ADR-1725)" {
+  # slow holds resources too and after-probe does not depend on it: its ids must stay out of the view.
+  run node "$(L)" apply slow --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run env FAKE_PRINT_UPSTREAM=1 node "$(L)" apply after-probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *'FAKE_UPSTREAM {"probe":[{"kind":"fake","id":"r1-3"},{"kind":"fake","id":"r2-4"}]}'* ]] || { echo "$output"; false; }
+}
+
+@test "launch-runner: a dependency that is no longer verified hands the adapter nothing (attack fb3a494 B4)" {
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$(L)" apply after-probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  node -e 'const fs=require("fs");const f=process.argv[1];const s=JSON.parse(fs.readFileSync(f,"utf8"));if(!s.slots.probe.resources.length)process.exit(3);s.slots.probe.state="failed";fs.writeFileSync(f,JSON.stringify(s))' "$FX_STATE" || { echo "state edit did not land"; false; }
+  run env FAKE_PRINT_UPSTREAM=1 node "$(L)" verify after-probe --venture fx-sandbox $FX_FLAGS
+  [[ "$output" == *'FAKE_UPSTREAM {"probe":[]}'* ]] || { echo "$output"; false; }
+}

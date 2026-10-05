@@ -234,6 +234,16 @@ function parseSeq(ctx, indent, depth) {
       continue;
     }
     checkFlow(rest, line.n);
+    // A quoted item is a scalar even when its text holds `: ` -- `- "deploy with githubDeployment: 1"` was read as a
+    // one-key mapping whose key kept its opening quote (launch catalog, 2026-10-05). Only an item that is ONE whole
+    // quoted string is; a quoted key (`- "id": x`) or a quote followed by more text is refused, never guessed at.
+    if (/^["']/.test(rest)) {
+      if (!/^"(?:[^"\\]|\\.)*"$/.test(rest) && !/^'(?:[^']|'')*'$/.test(rest))
+        err("yaml-parse", line.n, "a sequence item that opens a quote must be exactly one quoted string", "`- \"text\"`",
+          rest.slice(0, 60), "quote the whole item, or write the mapping key without quotes");
+      out.push(scalar(rest, line.n));
+      continue;
+    }
     if (/^[^\s:][^:]*:(\s|$)/.test(rest)) {
       const virt = indent + 2;
       logical.splice(ctx.i, 0, { ...line, indent: virt, text: rest, content: rest });
