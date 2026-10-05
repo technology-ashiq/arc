@@ -17,7 +17,7 @@
 
 ## Commands (1)
 
-- [/arc-hunt](../commands/arc-hunt.md) — Hunt a niche for real pain -- mine HN, normalize, dedupe and cluster into an evidenced shortlist; council judges the finalists and an owner-approved one leaves as a venture.yaml (ADR-1900..1912).
+- [/arc-hunt](../commands/arc-hunt.md) — Hunt a niche for real pain -- mine HN, normalize, dedupe and cluster into an evidenced shortlist; council judges the finalists and an owner-approved one leaves as a venture.yaml (ADR-1900..1915).
 
 ## Agents
 

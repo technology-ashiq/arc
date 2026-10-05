@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **149** | **34** |
 
-Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 352 of 417 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 353 of 418 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -109,7 +109,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 352 of 
 | [1600–1699](adr/1600.md) | 30 | 0 |
 | [1700–1799](adr/1700.md) | 29 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
-| [1900–1999](adr/1900.md) | 16 | 0 |
+| [1900–1999](adr/1900.md) | 17 | 0 |
 
 ## Commands
 
@@ -132,7 +132,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 352 of 
 | [/arc-face-module](commands/arc-face-module.md) | Scaffold one face module (module.mjs, fold.mjs, ops.mjs, View.tsx) for a room the door serves, and prove it green on face-pure and face-coverage in the same command. Refuses an id /api/rooms does not serve. |
 | [/arc-fix-issue](commands/arc-fix-issue.md) | Investigate and fix a GitHub issue by number. |
 | [/arc-freeze](commands/arc-freeze.md) | Lock edits to one or more directories -- a deterministic edit-boundary enforced by the PreToolUse hook (freeze-check.sh). The can't-forget version of gstack /freeze. |
-| [/arc-hunt](commands/arc-hunt.md) | Hunt a niche for real pain -- mine HN, normalize, dedupe and cluster into an evidenced shortlist; council judges the finalists and an owner-approved one leaves as a venture.yaml (ADR-1900..1912). |
+| [/arc-hunt](commands/arc-hunt.md) | Hunt a niche for real pain -- mine HN, normalize, dedupe and cluster into an evidenced shortlist; council judges the finalists and an owner-approved one leaves as a venture.yaml (ADR-1900..1915). |
 | [/arc-kickoff](commands/arc-kickoff.md) | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
 | [/arc-phase-done](commands/arc-phase-done.md) | Close a phase per the build playbook's Definition of Done — or refuse. |
 | [/arc-pr](commands/arc-pr.md) | Open a GitHub PR for the current branch. |

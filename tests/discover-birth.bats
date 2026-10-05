@@ -3,30 +3,33 @@
 #
 # Each row check has a negative arm: the same assertion run on a temp copy with the row undone must
 # FAIL with the named message, so one CI run proves the check can go red (red-first by mutant arm).
+# Every probe asserts it RAN (status 0, empty stderr) before its output is believed.
 
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 PR() { printf '%s' "$ARC_ROOT/initiatives/face/contracts/planned-rooms.json"; }
 
-# Prints "planned" when the file still lists a discover room, "solid" otherwise.
+# Prints "planned" when the file lists a discover room, "solid" otherwise; THROWS on any other shape.
 room_state() {
   node -e '
     const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-    const list = Array.isArray(r) ? r : r.rooms;
-    process.stdout.write(list.some((x) => x.room === "discover") ? "planned" : "solid");
+    const list = Array.isArray(r) ? r : r && r.rooms;
+    if (!Array.isArray(list) || list.length === 0) throw new Error("planned-rooms has no rooms list");
+    process.stdout.write(list.some((x) => x && x.room === "discover") ? "planned" : "solid");
   ' "$1"
 }
 
 @test "discover-birth: every test in the file is registered" {
   local declared
-  declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 7 ] || { echo "declared $declared, expected 7"; false; }
+  declared=$(grep -c '^@test "discover-birth: ' "$BATS_TEST_FILENAME")
+  [ "$declared" -eq 9 ] || { echo "declared $declared, expected 9"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
 @test "discover-birth: the discover room is solid, not planned" {
-  run room_state "$(PR)"
+  run --separate-stderr room_state "$(PR)"
+  [ "$status" -eq 0 ] && [ -z "$stderr" ] || { echo "room check did not run: $status $stderr"; false; }
   [ "$output" = "solid" ] || { echo "discover still listed in planned-rooms.json"; false; }
 }
 
@@ -40,31 +43,59 @@ room_state() {
     fs.writeFileSync(process.argv[2], JSON.stringify(r));
   ' "$(PR)" "$copy"
   [ -s "$copy" ] || { echo "mutant copy was not written"; false; }
-  run room_state "$copy"
+  run --separate-stderr room_state "$copy"
+  [ "$status" -eq 0 ] || { echo "room check did not run on the mutant: $stderr"; false; }
   [ "$output" = "planned" ] || { echo "the check did not see the planted discover room: $output"; false; }
 }
 
+@test "discover-birth: the room check refuses an unreadable shape instead of calling it solid" {
+  printf '{"nope": 1}' > "$BATS_TEST_TMPDIR/bad.json"
+  run --separate-stderr room_state "$BATS_TEST_TMPDIR/bad.json"
+  [ "$status" -ne 0 ] || { echo "a file with no rooms list was read as: $output"; false; }
+  [ "$output" != "solid" ]
+}
+
 @test "discover-birth: the manifest maps to a generic room the face serves" {
-  run node -e '
+  run --separate-stderr node -e '
     const m = require(process.argv[1]);
     const ok = m.name === "discover" && m.face && m.face.room === "lane";
     process.stdout.write(ok ? "mapped" : "unmapped " + JSON.stringify(m.face));
   ' "$ARC_ROOT/products/discover/manifest.json"
+  [ "$status" -eq 0 ] || { echo "manifest read failed: $stderr"; false; }
   [ "$output" = "mapped" ] || { echo "$output"; false; }
 }
 
 @test "discover-birth: discover adds no ungoverned process (ADR-1913)" {
-  run bash -c 'ls "$1"/processes | grep -c "^discover" || true' _ "$ARC_ROOT"
+  [ -d "$ARC_ROOT/processes" ] || { echo "processes/ not found -- could not scan"; false; }
+  [ -f "$ARC_ROOT/hq.policy.yaml" ] || { echo "hq.policy.yaml not found -- could not scan"; false; }
+  local listed
+  listed=$(ls "$ARC_ROOT/processes" | wc -l)
+  [ "$listed" -gt 0 ] || { echo "processes/ listed empty -- could not scan"; false; }
+  run grep -c 'process.yaml$' <(ls "$ARC_ROOT/processes")
+  [ "$output" -gt 0 ] || { echo "no process files seen -- the scan read nothing"; false; }
+  run grep -c '^discover' <(ls "$ARC_ROOT/processes")
   [ "$output" = "0" ] || { echo "a discover process file exists without its policy row: $output"; false; }
+  run grep -c '"process:' "$ARC_ROOT/hq.policy.yaml"
+  [ "$output" -gt 0 ] || { echo "hq.policy.yaml has no process rows -- the scan read nothing"; false; }
   run grep -c '"process:discover":' "$ARC_ROOT/hq.policy.yaml"
   [ "$output" = "0" ] || { echo "process:discover row exists with no process file behind it"; false; }
 }
 
-@test "discover-birth: discover is in the CATALOG and the stub refuses" {
-  grep -q '"discover"' "$ARC_ROOT/.claude/scripts/core/arc-products.mjs" || { echo "discover missing from CATALOG"; false; }
-  run node "$ARC_ROOT/.claude/scripts/discover/arc-discover.mjs" hunt x
-  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
-  [[ "$output" == *"not built yet"* ]] || { echo "$output"; false; }
+@test "discover-birth: discover is inside the CATALOG array" {
+  run grep -cE '^const CATALOG = \[.*"discover"' "$ARC_ROOT/.claude/scripts/core/arc-products.mjs"
+  [ "$output" = "1" ] || { echo "discover missing from the CATALOG array"; false; }
+}
+
+@test "discover-birth: every verb of the stub refuses with its exact message, from any cwd" {
+  local cli="$ARC_ROOT/.claude/scripts/discover/arc-discover.mjs" args
+  for args in "hunt x" "" "frobnicate --out y"; do
+    cd "$BATS_TEST_TMPDIR"
+    # shellcheck disable=SC2086
+    run --separate-stderr node "$cli" $args
+    [ "$status" -eq 2 ] || { echo "[$args] status $status: $stderr"; false; }
+    [ "$stderr" = "arc-discover: not built yet — Phase 01" ] || { echo "[$args] stderr: $stderr"; false; }
+    [ -z "$output" ] || { echo "[$args] stdout not empty: $output"; false; }
+  done
 }
 
 @test "discover-birth: band 1900 is discover's" {

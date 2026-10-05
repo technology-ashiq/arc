@@ -17,3 +17,8 @@ not only where it was fixed (twin-fix rule). One line per pattern: `pattern — 
 - a validator in one read path and a different, weaker read in the other — check reader vs writer of the reject shape
 
 ## Fixed in this lane
+- **a probe whose output is believed without asserting it ran** (status 0 + empty stderr first; an unreadable input must fail, never read as clean) — tests/discover-birth.bats room/manifest/process checks (8bb1a72 L1 L5 L7 B3) — *assert RAN, then assert what it said*
+- **a grep that can match outside the structure it claims to check** (CATALOG word anywhere in the file) — tests/discover-birth.bats CATALOG test (B2) — *anchor the match to the structure's own line*
+- **a refusal test that accepts any exit 2** — tests/discover-birth.bats stub test (L4) — *assert the exact message, on every verb, from a foreign cwd*
+- **user text interpolated into a command doc's shell line** (`$ARGUMENTS` inside double quotes) — .claude/commands/arc-hunt.md (B1) — *free text goes through a file written by the Write tool, never argv*
+- **a main guard whose realpath throws at module top level** — arc-discover.mjs (B4) — *wrap it: a throw means not-main*

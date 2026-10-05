@@ -15,5 +15,10 @@ export function main() {
   return 2;
 }
 
-const invoked = process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+// realpath can throw (a deleted cwd, a dangling link); that is "not invoked as this file", never a stack trace.
+function isMain() {
+  try { return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return false; }
+}
+const invoked = isMain();
 if (invoked) process.exitCode = main(process.argv.slice(2));

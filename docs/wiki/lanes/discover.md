@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/discover/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/discover/PROGRESS.md)
 
-## Decisions (16)
+## Decisions (17)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -44,6 +44,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1913`](../../../docs/adr/1913-discover-gets-no-policy-row-until-it-is-an-engine-process.md) | discover gets no `hq.policy.yaml` row until it is an engine process | accepted | 2026-10-06 |
 | [`1914`](../../../docs/adr/1914-discover-maps-to-the-generic-lane-room.md) | discover's product, lane, ADR band and command map to the generic `lane` room | accepted | 2026-10-06 |
 | [`1915`](../../../docs/adr/1915-the-miner-taps-growths-transport-instead-of-widening-its-adapter.md) | The miner taps growth's transport instead of widening its adapter | accepted (supersedes ADR-1911) | 2026-10-06 |
+| [`1916`](../../../docs/adr/1916-reject-tokens-ride-the-approval-request.md) | A rejected winner's tokens ride its `approval.requested`, not the decision | accepted | 2026-10-06 |
 
 ## Source
 
