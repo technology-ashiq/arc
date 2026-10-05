@@ -106,6 +106,29 @@ check("A: the registry and arc-run read a model id with one grammar -- an id arc
 // MUTANT CONTROL: a view that leaks the record whole. The same assertion must FAIL it, or the check above proved nothing.
 const leaky = { ...view, models: reg.models };
 check("A: MUTANT CONTROL -- a view that echoes the record FAILs the same check", JSON.stringify(leaky).includes(PLANTED));
+// Edit in place (ADR-1350 Amendment 3): the form never holds the key, so absent keeps it, typed replaces it, clearKey drops it.
+{
+  const KEY2 = ["sk", "or", "v1", "SECONDtalkKEY", "77aa"].join("-");
+  const base = add(add(m.emptyRegistry(), { name: "One", baseUrl: "https://a.example/v1", model: "a", key: PLANTED }).reg, { name: "Two", baseUrl: "https://b.example/v1", model: "b" }).reg;
+  const ed = (body) => m.applyChange(base, { op: "edit", ...body });
+  const kept = ed({ name: "one", model: { name: "Uno", baseUrl: "https://c.example/v1", model: "c" } });
+  check("A: edit renames in place, keeps the key when none is typed, and the active choice follows the rename",
+    kept.ok && kept.reg.models.length === 2 && kept.reg.models[0].name === "Uno" && kept.reg.models[0].baseUrl === "https://c.example/v1" && kept.reg.models[0].key === PLANTED && kept.reg.active === "Uno", JSON.stringify(kept.ok ? kept.reg.active : kept.why));
+  const swapped = ed({ name: "One", model: { name: "One", baseUrl: "https://a.example/v1", model: "a", key: KEY2 } });
+  const cleared = ed({ name: "One", clearKey: true, model: { name: "One", baseUrl: "https://a.example/v1", model: "a" } });
+  check("A: edit replaces the key when one is typed, and removes it with clearKey", swapped.ok && swapped.reg.models[0].key === KEY2 && cleared.ok && !("key" in cleared.reg.models[0]));
+  const refused = [
+    ed({ name: "One", model: { name: "two", baseUrl: "https://a.example/v1", model: "a" } }),
+    ed({ name: "One", clearKey: true, model: { name: "One", baseUrl: "https://a.example/v1", model: "a", key: KEY2 } }),
+    ed({ name: "Ghost", model: { name: "Ghost", baseUrl: "https://a.example/v1", model: "a" } }),
+    ed({ name: "One", model: { name: "One", baseUrl: "ftp://a.example", model: "a" } }),
+    ed({ name: "One", clearKey: "yes", model: { name: "One", baseUrl: "https://a.example/v1", model: "a" } }),
+    ed({ name: "One", key: "x", model: { name: "One", baseUrl: "https://a.example/v1", model: "a" } }),
+  ];
+  check("A: edit refuses another model's name (any case), a key with clearKey, an unknown model, a bad field, a non-boolean clearKey and an extra field (6 of 6)",
+    refused.every((r) => !r.ok), JSON.stringify(refused.map((r) => r.ok || r.why.slice(0, 40))));
+  check("A: an edit of another model leaves the active choice where it was", (() => { const r2 = ed({ name: "Two", model: { name: "Deux", baseUrl: "https://b.example/v1", model: "b" } }); return r2.ok && r2.reg.active === "One" && r2.reg.models[1].name === "Deux"; })());
+}
 const round = m.parseRegistry(JSON.stringify(reg));
 check("A: the stored file reads back to the same registry", round.ok && JSON.stringify(round.reg) === JSON.stringify(reg));
 const tampered = m.parseRegistry(JSON.stringify({ ...reg, active: "ghost" }));
@@ -187,6 +210,14 @@ check("E: addChange -- trims, leaves an empty key out, and sends one add", okAdd
 check("E: addChange -- an empty name, URL or model id is caught before a round trip", ["name", "baseUrl", "model"].every((k) => !T.addChange({ ...{ name: "a", baseUrl: "https://x/v1", model: "m", key: "" }, [k]: "" }).ok));
 check("E: every preset's base URL passes the door's own check", T.PRESETS.length >= 5 && T.PRESETS.every((p) => m.checkBaseUrl(p.baseUrl).ok));
 const mv = T.modelsView(m.publicView(reg));
+check("E: editForm starts from the row's fields with the key field empty, and editChange keeps, replaces or clears the key",
+  (() => {
+    const row = { name: "One", baseUrl: "https://a.example/v1", modelId: "a" };
+    const fm = T.editForm(row);
+    const keep = T.editChange("One", fm), repl = T.editChange("One", { ...fm, key: "abcdefgh1234" }), clr = T.editChange("One", { ...fm, clearKey: true }), both = T.editChange("One", { ...fm, key: "abcdefgh1234", clearKey: true });
+    return fm.key === "" && fm.clearKey === false && fm.model === "a" && keep.ok && !("key" in keep.change.model) && !("clearKey" in keep.change)
+      && repl.ok && repl.change.model.key === "abcdefgh1234" && clr.ok && clr.change.clearKey === true && !both.ok && !T.editChange("One", { ...fm, name: " " }).ok;
+  })());
 check("E: modelsView -- rows from the door's public view, the key as its tail only", mv.ok && mv.rows.length === reg.models.length && mv.rows.length === 2 && mv.rows[1].key === "no key" && mv.rows[0].key === `key …${PLANTED.slice(-4)}` && mv.rows[0].active === true && !JSON.stringify(mv).includes(PLANTED));
 check("E: modelsView -- a body that is not the list is no list, never a guessed one", T.modelsView({ models: "x" }).ok === false && T.modelsView(null).ok === false);
 
@@ -356,6 +387,18 @@ try {
   r = await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free" } });
   check("T: a removed model's test is forgotten -- added again, it reads untested",
     r.status === 200 && ((r.body.models ?? []).find((m) => m.name === "Busy") ?? {}).lastTest === null, JSON.stringify(r.body.models).slice(0, 300));
+  // Edit in place through the door (ADR-1350 Amendment 3): the key kept on disk, never in the response, the test forgotten.
+  t = await post("/api/models/test", { name: "Fake" });
+  r = await post("/api/models/set", { op: "edit", name: "Fake", model: { name: "Fake", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/owner-model-2:free" } });
+  const edited = (r.body.models ?? []).find((m) => m.name === "Fake") ?? {};
+  check("E2: an edit through the door changes the model id, keeps the stored key, forgets the last test, and returns no key",
+    t.status === 200 && t.body.ok === true && r.status === 200 && edited.model === "fake/owner-model-2:free" && edited.hasKey === true && edited.lastTest === null
+    && readFileSync(modelsFile, "utf8").includes(PLANTED) && !JSON.stringify(r.body).includes(PLANTED) && r.body.active === "Fake",
+    JSON.stringify({ t: t.status, r: r.status, edited }).slice(0, 300));
+  r = await post("/api/models/set", { op: "edit", name: "Fake", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/owner-model:free" } });
+  check("E2: an edit to another model's name is refused by the door (400 BAD_MODEL)", r.status === 400 && r.body.error === "BAD_MODEL", JSON.stringify(r.body).slice(0, 200));
+  r = await post("/api/models/set", { op: "edit", name: "Fake", model: { name: "Fake", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/owner-model:free" } });
+  check("E2: the edit back restores the model the rest of this suite asks", r.status === 200 && ((r.body.models ?? []).find((m) => m.name === "Fake") ?? {}).model === "fake/owner-model:free");
   check("B: the planted key appears in NO door response (every body this suite read)", bodies.length >= 7 && bodies.every((b) => !b.includes(PLANTED)), `bodies=${bodies.length}`);
   const grep = (needle) => spawnSync("git", ["grep", "-l", "--untracked", "--no-exclude-standard", "-F", needle], { cwd: REPO, encoding: "utf8" });
   const g0 = grep(PLANTED);
@@ -375,6 +418,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 85;
+const EXPECTED = 93;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);

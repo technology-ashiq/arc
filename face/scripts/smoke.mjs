@@ -1056,7 +1056,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
   "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings",
-  "hq-settings-menu", "hq-settings-test", "hq-settings-voice", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
+  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1265,6 +1265,20 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const line = () => val(P, "(function () { var e = document.querySelector('[data-test-line]'); return e ? e.getAttribute('data-test-line') + '|' + e.textContent : ''; })()");
       const ok = tested && (await until(async () => /^ok\|.*answered in [0-9.]+ s/.test(String(await line())), 30000, 250));
       record("hq-settings-test", ok, `the test line read ${JSON.stringify(String(await line()).slice(0, 160))}`);
+      // Edit in place (Amendment 3): rename the model, read the row back still answering, then rename it back.
+      const rowName = () => val(P, "(function () { var r = document.querySelector('[data-model-row][data-model-active] .truncate'); return r ? r.textContent : ''; })()");
+      const rename = async (to) => {
+        if (!(await click(P, "[data-model-row][data-model-active] [data-model-edit]"))) return false;
+        const focused = await until(async () => (await val(P, "(function () { var i = document.querySelector('[data-edit-field=name]'); if (!i) return false; i.focus(); i.select(); return document.activeElement === i; })()")) === true, capMs);
+        if (!focused) return false;
+        await P.send("Input.insertText", { text: to });
+        if (!(await click(P, "[data-edit-save]"))) return false;
+        return until(async () => (await count(P, "[data-model-editing]")) === 0 && String(await rowName()) === `${to} · answering`, capMs);
+      };
+      const original = String(await rowName()).replace(/ · answering$/, "");
+      const renamed = menu && original !== "" && (await rename(`${original} edited`));
+      const restored = renamed && (await rename(original));
+      record("hq-settings-edit", Boolean(renamed && restored), `the row read ${JSON.stringify(String(await rowName()).slice(0, 80))} (was ${JSON.stringify(original.slice(0, 40))}); renamed=${Boolean(renamed)} restored=${Boolean(restored)}`);
       const voice = menu && (await click(P, '[data-settings-tab="voice"]')) && (await until(async () => (await count(P, '[data-settings-section="voice"] [data-voice-switch]')) === 1, capMs));
       record("hq-settings-voice", voice, "the Voice section did not open with its switch");
       // A page, not a popup (Amendment 2): its own address, drawn in the main area in place of the room, no modal over it,
@@ -1276,7 +1290,7 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       await press(P, ESCAPE);
       const back = await until(settingsGone, capMs);
       record("hq-settings-page", asPage && back, `open: ${asPage ? "a page" : "not a page"} at ${JSON.stringify(pageHash)}; closed: ${back ? "the room is back" : "the page stayed or the address kept view=settings"}`);
-    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-voice", "hq-settings-page"]);
+    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page"]);
     // The rail's Settings link (owner, 2026-10-05: "menu laye add pannirlaama") opens the same page, and is not a room.
     // It starts from a clean room, so a page left open by the step before cannot pass it (attack 12a0307 L2), and every
     // condition is judged and named on its own (L3, B6, B3).
