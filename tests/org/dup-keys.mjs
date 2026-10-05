@@ -3,7 +3,7 @@
 // run through face-sections --check and face-coverage on a full copy of this tree. Prints "RAN dup-keys N checks";
 // exits 1 on any failure.
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,21 +26,25 @@ for (const [g, run] of Object.entries(gates)) {
 
 /** Duplicate the FIRST `"key": value,` line at two-space-or-deeper indent, so the parsed value is unchanged. */
 function duplicateOneKey(text) {
+  // CRLF kept as it is: a Windows checkout ends each line in a CR, and a regex anchored at the comma missed them all.
   const lines = text.split("\n");
-  const i = lines.findIndex((l) => /^\s{4,}"[^"]+": ("[^"]*"|\d+|true|false|null),$/.test(l));
+  const i = lines.findIndex((l) => /^\s{4,}"[^"]+": ("[^"]*"|\d+|true|false|null),\r?$/.test(l));
   if (i < 0) return null;
   lines.splice(i, 0, lines[i]);
   return { text: lines.join("\n"), key: /"([^"]+)"/.exec(lines[i])[1] };
 }
 
 const tmp = mkdtempSync(join(tmpdir(), "org-dup-keys-"));
+// Only a missing path is "absent"; any other copy error is a broken fixture, said out loud.
+const copyOr = (fn, what) => { try { fn(); } catch (e) { if (e.code !== "ENOENT") { ok(false, `the fixture could not copy ${what}`, e.message); } } };
+try {
 for (const file of ["expected-set.json", "room-copy.json", "rooms.generated.json"]) {
   const root = join(tmp, file.replace(/\W/g, "-"));
   for (const d of [".claude/scripts", "initiatives/face", "products", "processes", "org", "face", "docs", ".claude/agents", ".claude/commands", ".claude/skills", ".claude/rules", "engine", ".github"]) {
-    try { cpSync(join(REPO, d), join(root, d), { recursive: true, filter: (s) => !/node_modules|[\\/]dist[\\/]/.test(s) }); } catch { /* absent on this tree */ }
+    copyOr(() => cpSync(join(REPO, d), join(root, d), { recursive: true, filter: (s) => !/node_modules|[\\/]dist[\\/]/.test(s) }), d);
   }
   for (const f of ["ventures.yaml", "hq.policy.yaml", "PORTFOLIO.md", "CLAUDE.md", "sync-to-project.sh"]) {
-    try { writeFileSync(join(root, f), readFileSync(join(REPO, f))); } catch { /* absent */ }
+    copyOr(() => writeFileSync(join(root, f), readFileSync(join(REPO, f))), f);
   }
   const p = join(root, CONTRACTS, file);
   const original = readFileSync(p, "utf8");
@@ -52,10 +56,16 @@ for (const file of ["expected-set.json", "room-copy.json", "rooms.generated.json
   for (const [g, run] of Object.entries(gates)) {
     const r = run(root);
     const out = `${r.stdout}${r.stderr}`;
-    ok(r.status !== 0, `${g} fails on ${file} with "${mut.key}" twice`, `passed with a duplicate key: ${out.slice(-300)}`);
+    // A number and not 0: a gate killed by the timeout has status null, which is a hang, not a refusal.
+    ok(typeof r.status === "number" && r.status !== 0, `${g} fails on ${file} with "${mut.key}" twice`, `status ${r.status} signal ${r.signal}: ${out.slice(-300)}`);
     ok(out.includes(file) && /duplicate/i.test(out), `${g} names ${file} and the duplicate`, out.slice(-300));
   }
 }
 
+} finally {
+  try { rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }
+}
+
 console.log(`RAN dup-keys ${checks} checks, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+// exitCode, never exit(): exit() right after a burst of logs can cut piped stdout on Windows.
+process.exitCode = failed ? 1 : 0;

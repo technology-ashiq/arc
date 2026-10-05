@@ -1,0 +1,53 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/face-coverage.mjs:418",
+      "breaking_input": "A face contract file (e.g. expected-set.json) whose duplicate key is inside a JSON string value, e.g. `{\"a\":\"\\\"b\\\":1,\\\"b\\\":2\"}` — assertNoDuplicateKeys may only scan tokens, not strings, so the check could flag a false duplicate or miss a real key",
+      "why": "assertNoDuplicateKeys is imported but its exact behavior is unverified; if it naively regexes for `\"key\":` it can mis-parse string contents, causing false failures (denial of service) or false passes on valid files",
+      "fix": "Verify assertNoDuplicateKeys parses the JSON with a duplicate-detecting parser, not regex; add a fixture with a duplicate-looking string value"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-sections.mjs:53",
+      "breaking_input": "A file path with an underscore or dot, e.g. `room-copy.json`, is passed to assertNoDuplicateKeys as the second argument — if the function expects a basename it may strip wrongly, but worse, the `p.split(/[\\\\/]/).pop()` on Windows with `C:\\...` works; on a file named `room-copy.json` with no duplicate it's fine. Real issue: the check runs only on three files, not on any future contract JSON, so a duplicate in another file still passes both gates",
+      "why": "ADR-1630 scopes only the three files; the defect pattern is 'validate one read, use another' — the gates still read other JSON files (e.g. products manifest) without the check, so the same silent last-wins bug recurs for any other contract file the lanes add",
+      "fix": "Apply assertNoDuplicateKeys in every JSON read within the two gates, or add a shared readJson wrapper and use it everywhere"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "tests/org/dup-keys.mjs:34",
+      "breaking_input": "The duplicateOneKey regex requires the duplicated line to end with a comma and the value to be a literal string/number/bool/null. If the first duplicate-able key in the real file has a multi-line value or a `:` inside a nested object, the regex finds no key and the test returns null, making the 'vacuous-pass guard' fail — but the guard is `ok(mut !== null)`, and the loop then continues, so a file with no match still increments checks and may pass if the prior control already passed",
+      "why": "The fixture can silently skip a file if the regex doesn't match, weakening the test to not actually exercise that file; this matches 'a test asserts it RAN before asserting what it printed' — it may run but skip a mutant",
+      "fix": "Make duplicateOneKey robust to any JSON by cloning a top-level key with a real parser, and assert at least one mutant per file was created"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "tests/org/dup-keys.mjs:41-51",
+      "breaking_input": "The fixture copies the repo tree with cpSync but filters out `dist` and `node_modules`; if any of the gates' scripts depend on a file that lives in a directory not in the copy list (e.g. `lib/` or `tests/`), the copied tree is incomplete and the gate fails for reasons unrelated to the duplicate key, making the test flaky in CI",
+      "why": "The copy list is an explicit denylist of directories; a missing dependency directory causes false 'FAIL' results, matching the pattern 'every scratch or fixture tree that stubs a file a walker imports rather than lists'",
+      "fix": "Copy the entire repo minus only the known-generated dirs, or assert the gates succeed on the copied tree before mutating"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "tests/org/dup-keys.mjs:50",
+      "breaking_input": "The final `process.exit(failed ? 1 : 0)` occurs immediately after console.log output; when piped to a consumer that closes early (e.g. `| head`), stdout can be truncated and the RAN line lost, but more importantly the test's own assertion in the .bats file checks `== *\", 0 failed\"*` — if the process is killed by EPIPE this loop can exit non-zero, failing the bats test for the wrong reason",
+      "why": "Matches 'setting exitCode fixed truncation, but an early-closing reader still crashed the CLI on EPIPE' — the test itself is a CLI whose output can truncate",
+      "fix": "Handle EPIPE on stdout or write the RAN line to stderr"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "tests/org-dup-keys.bats:7",
+      "breaking_input": "The bats test asserts `[[ \"$output\" == *\"RAN dup-keys \"* ]]` — if a gate's stdout already contains 'RAN dup-keys ' from a prior run stubbed in the tree, the assertion passes without the fixture actually running",
+      "why": "A string match on stdout can be spoofed by any copied file; the fixture writes nothing to prove it ran beyond the RAN line",
+      "fix": "Include a nonce or a unique marker derived from the fixture's own run, or check the fixture's exit code and stderr length"
+    }
+  ]
+}

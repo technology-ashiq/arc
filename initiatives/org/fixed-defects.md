@@ -71,3 +71,8 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **The Write/Edit tool turned typed backslash-u escapes into the real invisible characters in seven files** — escaped back from code points, and every changed file is scanned for literal invisibles before commit, Cycle 20 build — *every source file that names an invisible character*
 - **arc-run's role block called hasOwnProperty on a doc that an earlier guard treats as possibly falsy** — guarded, the missing-process path reports it, Cycle 20 attack 83b4d22 B1 — *every new block placed after a guard that admits a null*
 - **org-judge resolved --root/--spine-dir against cwd for reads but the emit child (cwd root) resolved them again** — both made absolute before any use, Cycle 20 attack 83b4d22 B2 — *every path handed to a child that runs in another cwd*
+- **A fixture's line regex anchored at `,$` missed every line of a CRLF checkout** — `\r?$`, Cycle 20 Phase 04 attack 2655193 B1 — *every per-line regex over a file git may check out with CRLF*
+- **A fixture's bare catch on copy turned EACCES into "absent" and blamed the gate** — only ENOENT is absent, any other copy error fails the fixture by name, Phase 04 attack B3/L4 — *every bare catch around a fixture's setup*
+- **A scratch tree with no cleanup leaked three repo copies per run** — rmSync in finally, Phase 04 attack B2 — *every mkdtemp in a test*
+- **A spawned gate killed by its timeout (status null) counted as "refused"** — require a numeric non-zero status, Phase 04 attack B5 — *every `status !== 0` check on spawnSync*
+- **One strict-JSON helper pasted into two gates** — `readStrictJson` exported once from core/json-strict.mjs, Phase 04 attack B7 — *every helper copied between two gates*

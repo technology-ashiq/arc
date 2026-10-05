@@ -21,7 +21,7 @@
 import { readFileSync, existsSync, readdirSync, statSync, lstatSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assertNoDuplicateKeys } from "./json-strict.mjs";
+import { readStrictJson as strictJson } from "./json-strict.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = join(HERE, "..", "..", "..");
@@ -1011,12 +1011,6 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
 
 // Through the duplicate-key check first: JSON.parse is last-wins, and main once held PLAN-launch twice while this
 // gate passed (ADR-1630).
-function strictJson(p) {
-  const text = readFileSync(p, "utf8");
-  assertNoDuplicateKeys(text, p.split(/[\\/]/).pop());
-  return JSON.parse(text);
-}
-
 function loadContract(repo) {
   const p = join(repo, "initiatives", "face", "contracts", "expected-set.json");
   if (!existsSync(p)) throw new Error(`expected-set.json not found at ${p} -- Phase 00 freezes it`);
