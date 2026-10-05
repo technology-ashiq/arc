@@ -11,6 +11,8 @@
 //       --bundle points the same check at another copy (the failing control's scratch copy).
 //   pair       --root R --id ID --from X --to Y --from-arm TIER --to-arm TIER
 //       Copy variant-X/thesis.txt byte-for-byte to variant-Y and record the pair. Needs the seal.
+//   arms       --root R --id ID
+//       Print every variant letter pairs.json names, through the same validation as pair-guard.
 //   pair-guard --root R --id ID --variant V
 //       Run by `compose` before it arms. No pairs file: a no-op. Otherwise the bundle must still
 //       match the seal and, if V is paired, both theses must still hash as recorded.
@@ -308,10 +310,17 @@ function report(argv) {
   console.log(`design-explore exp-a1: formula gain half ${gain ? "MET" : "NOT MET"} (${rec.formula.gain}); ${gain ? "promotion still needs the owner's explicit cost/time acceptance" : "no promotion"}`);
 }
 
+function arms(argv) {
+  const o = parse(argv, new Set(["--root", "--id"]));
+  const pairs = loadPairs(o["--root"], o["--id"]);
+  console.log(pairs.pairs.flatMap((p) => [p.from, p.to]).join(" "));
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === "seal") seal(rest);
 else if (cmd === "seal-check") sealCheck(rest);
 else if (cmd === "pair") pair(rest);
 else if (cmd === "pair-guard") pairGuard(rest);
+else if (cmd === "arms") arms(rest);
 else if (cmd === "exp-a1") report(rest);
-else fail("usage: design-expa1.mjs seal|seal-check|pair|pair-guard|exp-a1 --root R --id ID ...");
+else fail("usage: design-expa1.mjs seal|seal-check|pair|pair-guard|arms|exp-a1 --root R --id ID ...");

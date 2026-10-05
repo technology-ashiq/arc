@@ -291,6 +291,28 @@ EOF
   [[ "$output" == *"'variant-dd'"*"refused"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 14 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"; false; }
+@test "attack 22632d7: a vanished arm or a linked variant is refused, and selfreview counts the paired d" {
+  _fixture
+  run bash "$(_explore)" seal ex1
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run bash "$(_explore)" pair ex1 --from a --to d --from-arm balanced-workhorse --to-arm high-judgment
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '<!doctype html><title>c</title><main><section data-arc-surface="product"><h1>Case</h1></section></main>\n' > docs/design/explore/ex1/variant-a/index.html
+  cp docs/design/explore/ex1/variant-a/index.html docs/design/explore/ex1/variant-d/index.html
+  # The count the original defect got wrong: the paired d is one of the variants judged.
+  run bash "$(_explore)" selfreview ex1
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"of 2 variant(s)"* ]] || { echo "the paired d was not counted: $output"; false; }
+  mv docs/design/explore/ex1/variant-d "$BATS_TEST_TMPDIR/d-moved"
+  run bash "$(_explore)" surfaces ex1
+  [ "$status" -eq 1 ] || { echo "a deleted arm read as no arm: $output"; false; }
+  [[ "$output" == *"names variant-d and no such directory exists"* ]] || { echo "$output"; false; }
+  printf 'not a dir\n' > docs/design/explore/ex1/variant-d
+  run bash "$(_explore)" surfaces ex1
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"'variant-d' is not a real directory"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 15 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 15 -- a @test was silently dropped"; false; }
 }

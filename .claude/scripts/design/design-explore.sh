@@ -66,14 +66,29 @@ VARIANTS="a b c"
 # variant from the gates (attack c9094cd B1-B3, B5).
 if [ -f "$EX/pairs.json" ] || [ -f "$ROOT/initiatives/design/evidence/phase-04/seal-$ID.json" ]; then
   for _vd in "$EX"/variant-*; do
-    [ -d "$_vd" ] || continue
+    [ -e "$_vd" ] || [ -L "$_vd" ] || continue
     _to="${_vd##*/variant-}"
     case "$_to" in
       [abcdefghijklmnopqrstuvwxyz]) ;;
       *) echo "design-explore: '${_vd##*/}' in a sealed or paired explore is not variant-<letter> -- refused, never skipped" >&2; exit 1;;
     esac
+    # A link or a plain file in a variant's place is refused, not skipped (attack 22632d7 B3).
+    if [ -L "$_vd" ] || [ ! -d "$_vd" ]; then
+      echo "design-explore: '${_vd##*/}' is not a real directory -- refused, never skipped" >&2; exit 1
+    fi
     case " $VARIANTS " in *" $_to "*) ;; *) VARIANTS="$VARIANTS $_to";; esac
   done
+  # Every arm pairs.json names must still be on disk: deleting a variant's directory must not
+  # read as "no such arm" (attack 22632d7 B1). Parsed by node, so a reformat cannot hide a row.
+  if [ -f "$EX/pairs.json" ]; then
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- a paired explore needs it to read pairs.json" >&2; exit 1; }
+    _arms="$(node "$DESIGN_DIR/design-expa1.mjs" arms --root "$ROOT" --id "$ID")" || exit 1
+    for _to in $_arms; do
+      case " $VARIANTS " in *" $_to "*) ;; *)
+        echo "design-explore: pairs.json names variant-$_to and no such directory exists -- an arm that vanished is refused, never dropped" >&2; exit 1;;
+      esac
+    done
+  fi
 fi
 
 case "$CMD" in
