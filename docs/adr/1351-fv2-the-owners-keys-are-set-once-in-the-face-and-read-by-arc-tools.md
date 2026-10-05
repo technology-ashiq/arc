@@ -53,3 +53,7 @@ vaika mudiyum ... key : value".
 - The models registry keeps its per-model keys (ADR-1350): a model's key belongs to that endpoint, a named key to the
   tools. Pointing a model at a named key is a later choice, not this phase.
 - The store is a second private file to back up; the face says where it lives.
+- The values are plaintext at a known path, readable by any process running as the owner -- the same exposure as a
+  user environment variable or `models.json`, with owner-only modes where the OS has them. That is the price of "set
+  once, read by every tool"; encryption at rest would need a secret the tools hold, which moves the problem rather
+  than removing it (attack 13c0c77 B6; revisit if the owner asks for it).

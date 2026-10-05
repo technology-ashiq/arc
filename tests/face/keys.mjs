@@ -39,7 +39,7 @@ const check = (name, cond, detail = "") => {
 
 // ── A: the store's decisions ──
 check("A: keys.mjs loaded its decisions (vacuous-pass guard)",
-  ["applyKeyChange", "publicKeys", "parseStore", "resolveKey", "storePath", "loadStore", "saveStore", "emptyStore"].every((k) => typeof K[k] === "function"));
+  ["applyKeyChange", "publicKeys", "parseStore", "resolveKey", "explainKey", "storePath", "loadStore", "saveStore", "emptyStore"].every((k) => typeof K[k] === "function"));
 let s = K.applyKeyChange(K.emptyStore(), { op: "add", name: "OPENROUTER_API_KEY", value: PLANTED });
 check("A: add stores a key", s.ok && s.store.keys.length === 1 && s.store.keys[0].name === "OPENROUTER_API_KEY" && s.store.keys[0].value === PLANTED, JSON.stringify(s.ok ? s.store.keys.map((k) => k.name) : s.why));
 const one = s.store;
@@ -100,6 +100,16 @@ try {
   check("F: saved outside the repo and read back whole, with no temp file left", at.ok && saved.ok && loaded.ok && loaded.store.keys[0].value === PLANTED && fs.readdirSync(dirname(keysFile)).length === 1,
     JSON.stringify({ at: at.ok, saved: saved.ok, loaded: loaded.ok, files: existsSync(dirname(keysFile)) ? fs.readdirSync(dirname(keysFile)) : [] }));
   check("F: resolveKey with no store given reads the file", K.resolveKey("OPENROUTER_API_KEY", { env: {} }) === PLANTED);
+  // A store that cannot be read is named, never read as "not set" (attack 13c0c77 B2); an empty file is an empty store (B7).
+  writeFileSync(keysFile, "{ torn");
+  const torn = K.explainKey("OPENROUTER_API_KEY", { env: {} });
+  writeFileSync(keysFile, "");
+  const empty = K.loadStore(REPO);
+  check("F: a torn keys file is named by explainKey, and an empty file reads as an empty store",
+    torn.value === null && /not JSON/.test(String(torn.why)) && empty.ok && empty.store.keys.length === 0, JSON.stringify({ torn, empty: empty.ok }));
+  process.env.ARC_KEYS_FILE = "relative/keys.json";
+  const rel = K.storePath(null);
+  check("F: a relative ARC_KEYS_FILE is refused by name, for the door and for a tool alike (attack 13c0c77 B5)", !rel.ok && /absolute/.test(rel.why) && !K.storePath(REPO).ok, JSON.stringify(rel));
 } finally {
   if (prev === undefined) delete process.env.ARC_KEYS_FILE; else process.env.ARC_KEYS_FILE = prev;
 }
@@ -192,6 +202,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor: a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 32;
+const EXPECTED = 34;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);

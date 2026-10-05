@@ -14,7 +14,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, realpathSync, unlinkSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 export const SCHEMA = 1;
 export const MAX_KEYS = 50;
@@ -104,18 +104,29 @@ export function parseStore(text) {
  * @returns {string | null}
  */
 export function resolveKey(name, from = {}) {
+  return explainKey(name, from).value;
+}
+
+/**
+ * resolveKey with the reason when there is no value: a bad name, or a store that could not be read. A corrupt or
+ * unreadable store is never read as an empty one, so a tool can say why instead of "not set" (attack 13c0c77 B2).
+ * @param {string} name @param {{ env?: Record<string, string | undefined>, store?: KeyStore | null }} [from]
+ * @returns {{ value: string | null, why: string | null }}
+ */
+export function explainKey(name, from = {}) {
   const env = from.env ?? process.env;
   const n = cleanName(name);
-  if (!n) return null;
+  if (!n) return { value: null, why: `${JSON.stringify(String(name))} is not a key name (capital letters, digits and _)` };
   const fromEnv = env[n];
-  if (typeof fromEnv === "string" && fromEnv.length > 0) return fromEnv;
+  if (typeof fromEnv === "string" && fromEnv.length > 0) return { value: fromEnv, why: null };
   let store = from.store;
   if (store === undefined) {
     const got = loadStore(null);
-    store = got.ok ? got.store : null;
+    if (!got.ok) return { value: null, why: got.why };
+    store = got.store;
   }
   const hit = store ? store.keys.find((k) => k.name.toLowerCase() === n.toLowerCase()) : undefined;
-  return hit ? hit.value : null;
+  return hit ? { value: hit.value, why: null } : { value: null, why: `${n} is not set in the environment or in the keys set in the face` };
 }
 
 // ---------- the file ----------
@@ -127,6 +138,9 @@ export function resolveKey(name, from = {}) {
  */
 export function storePath(repo) {
   const raw = process.env.ARC_KEYS_FILE;
+  // Absolute only: a relative path resolves against each process's own cwd, so the door would write one file and a
+  // tool started elsewhere read another (attack 13c0c77 B5).
+  if (raw && raw.length && !isAbsolute(raw)) return { ok: false, why: `ARC_KEYS_FILE must be an absolute path, not ${JSON.stringify(raw)}` };
   const path = resolve(raw && raw.length ? raw : join(homedir(), ".arc-private", "keys", "keys.json"));
   if (repo === null) return { ok: true, path };
   const real = (/** @type {string} */ p) => { try { return realpathSync(p); } catch { return resolve(p); } };
@@ -147,6 +161,9 @@ export function loadStore(repo) {
   if (!existsSync(p.path)) return { ok: true, store: emptyStore(), path: p.path };
   let text;
   try { text = readFileSync(p.path, "utf8"); } catch (e) { return { ok: false, why: `the keys file could not be read (${/** @type {any} */ (e).code ?? "error"})` }; }
+  // An empty file (a crash between create and write, or a hand truncation) is an empty store, not a dead one the face
+  // cannot reset (attack 13c0c77 B7).
+  if (text.trim() === "") return { ok: true, store: emptyStore(), path: p.path };
   const parsed = parseStore(text);
   return parsed.ok ? { ...parsed, path: p.path } : parsed;
 }
@@ -161,7 +178,15 @@ export function saveStore(path, store) {
   try {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(tmp, JSON.stringify(store, null, 2) + "\n", { mode: 0o600, flag: "wx" });
-    renameSync(tmp, path);
+    // Windows refuses a rename over a file another process holds open for a moment (a tool reading its key, a virus
+    // scan): retried a few times on those codes only, for about a second in all (attack 13c0c77 B1).
+    for (let i = 0; ; i++) {
+      try { renameSync(tmp, path); break; } catch (e) {
+        const code = /** @type {any} */ (e).code;
+        if (i >= 8 || !["EPERM", "EBUSY", "EACCES"].includes(code)) throw e;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 * (i + 1));
+      }
+    }
     return { ok: true };
   } catch (e) {
     try { unlinkSync(tmp); } catch { /* never written */ }

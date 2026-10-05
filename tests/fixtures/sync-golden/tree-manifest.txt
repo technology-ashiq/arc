@@ -193,7 +193,7 @@
 .claude/scripts/engine/drivers/codex.mjs	0a04d47015db8bab31a9815f9d59e96107f000b39c596624ea9b0576b4e6d145
 .claude/scripts/engine/drivers/codex.sh	2d8d510fd2cb5336008688277164b6b6fe43b51dbfeeec919274506b4a095c97
 .claude/scripts/engine/drivers/common.mjs	7c5d5cb660feb246d325d0ab6cc66d09bf5c8bc4a89b64ed783f843b7e2ccc65
-.claude/scripts/engine/drivers/generic-api.mjs	18c235ba13e0b29c664e7085f198eecf8ea58663efaab18e3c9f9f00106929d1
+.claude/scripts/engine/drivers/generic-api.mjs	a12fc58b557c999841abfecfd4926c1b322be50c0c4534e7fdbe74dd0903d6fe
 .claude/scripts/engine/drivers/generic-api.sh	50310f43d1e33cc33f92ca4b223f3302db621e8f6ceaa301eb61fae740787049
 .claude/scripts/engine/drivers/hermes.mjs	46912efe9226d53883d9016034987cb599490411796cdaf7dbe86a2fb2422cb0
 .claude/scripts/engine/drivers/hermes.sh	a55394c48940fe4ce47106ee10c7858ebc43ec1c9245ccae7f6a3c5deaf265af
@@ -274,7 +274,7 @@
 .claude/scripts/hq/lib/jobs/scheduler-os.mjs	4fefc52277e981aa206abfee43414cbde67edadea86f7a40ced1b0708df55851
 .claude/scripts/hq/lib/jobs/scheduler-task.ps1	f18b06fb9a4167778ef515c5ee917139e1af248a92bf4db6ea55e3d32c9dd3fb
 .claude/scripts/hq/lib/jobs/schema.mjs	312a3ae673b8e6141b689d8029679f4e45cac386dc6c341753a147fad03491fb
-.claude/scripts/hq/lib/keys.mjs	82471f264c5374f467a48fc6bac93b19c3f60cdd4230c4935fcb463ada075e65
+.claude/scripts/hq/lib/keys.mjs	a5112cd7225134437e21d61793aa2a70783b4dee73a7b76f8e53761265a10655
 .claude/scripts/hq/lib/ledger/costs.mjs	353c4a67cadcbc1b11f69807b17370634f046af2834a254e21956db5a4c20c68
 .claude/scripts/hq/lib/ledger/kill-distance.mjs	3ba724b5bdcce46193d1376c09551e1d38a1e9ce2b90f2636aa32ac1da6af05b
 .claude/scripts/hq/lib/ledger/kill-panel.mjs	8387cc9b2d8de20831a5aa4958b61a13366527fafd90431f2f405efcdd6a3be5

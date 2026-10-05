@@ -14,12 +14,15 @@
  */
 
 import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
-import { resolveKey } from "../../hq/lib/keys.mjs";
+import { explainKey } from "../../hq/lib/keys.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
 // The key, by the owner's keys store (ADR-1351): ARC_LLM_KEY_NAME names which stored key to use (OPENROUTER_API_KEY);
-// without it, ARC_LLM_API_KEY as always. resolveKey reads the environment first, so a set variable is never overridden.
-const BEARER = resolveKey(process.env.ARC_LLM_KEY_NAME || "ARC_LLM_API_KEY") || "";
+// without it, ARC_LLM_API_KEY as always.
+// explainKey reads the environment first, so a set variable is never overridden; with no value it says why (a store
+// that could not be read is named, never read as "not set", attack 13c0c77 B2).
+const KEY = explainKey(process.env.ARC_LLM_KEY_NAME || "ARC_LLM_API_KEY");
+const BEARER = KEY.value || "";
 // The router pins the model; ARC_LLM_MODEL is only a fallback for an UNROUTED run, and
 // an unrouted run is recorded as unpinned rather than quietly using whatever env says.
 const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
@@ -96,7 +99,7 @@ await runDriver("generic-api", async ({ processName, input }) => {
   if (!ENDPOINT || !BEARER || !MODEL) {
     // Named, not guessed. An absent endpoint is a setup fact the operator must see, and
     // "not configured" must never be reported as "the model answered badly".
-    throw new Error("ARC_LLM_ENDPOINT, ARC_LLM_API_KEY (or ARC_LLM_KEY_NAME naming a key set in the face) and ARC_LLM_MODEL must all be set (see phase-02-spec, Your-setup)");
+    throw new Error(`ARC_LLM_ENDPOINT, ARC_LLM_API_KEY (or ARC_LLM_KEY_NAME naming a key set in the face) and ARC_LLM_MODEL must all be set (see phase-02-spec, Your-setup)${!BEARER && KEY.why ? ` -- the key: ${KEY.why}` : ""}`);
   }
 
   // THE PROCESS BODY IS THE QUESTION, and until ADR-0226 this driver never sent it: the request

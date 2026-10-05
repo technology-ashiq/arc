@@ -199,7 +199,8 @@ load 'test_helper'
 @test "the owner's keys: set once in the face, never returned, the environment wins, the driver reads them" {
   # Phase 12 (REQ-16, ADR-1351). tests/face/keys.mjs drives the real door and arc-run's generic-api driver against
   # tests/face/fake-llm.mjs -- CI never calls a real provider, and no key leaves the sandbox.
-  run node "$ARC_ROOT/tests/face/keys.mjs"
+  # 3>&- : the door and the fake provider are long-lived children; holding bats' fd 3 would hang the file (B3).
+  run node "$ARC_ROOT/tests/face/keys.mjs" 3>&-
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- suite did not finish: $output"; false; }
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
