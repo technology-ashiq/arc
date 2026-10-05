@@ -83,6 +83,29 @@ switch (scenario) {
     repo().branches = { "arc/preview-check": [repo().commits[0]] };
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
     break;
+  case "closed-pr":
+    // The owner closed the probe PR: the re-run reopens it, never opens a second.
+    await adapter.scaffold(ctxFor());
+    repo().pulls[0].state = "closed";
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.prs = repo().pulls.length;
+    out.state = repo().pulls[0].state;
+    break;
+  case "merged-pr":
+    await adapter.scaffold(ctxFor());
+    Object.assign(repo().pulls[0], { state: "closed", merged_at: "2026-10-05T12:00:00Z" });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.prs = repo().pulls.length;
+    break;
+  case "owner-pr":
+    // An open PR from the branch with the owner's own title is theirs: launch neither claims it nor opens a second.
+    await adapter.scaffold(ctxFor());
+    Object.assign(repo().pulls[0], { title: "my real work", body: "x" });
+    reported.length = 0;
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    out.prs = repo().pulls.length;
+    out.claimed = reported.some((r) => r.kind === "github-pr");
+    break;
   case "no-access":
     github.store.delete(FULL);
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));

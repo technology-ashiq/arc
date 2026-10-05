@@ -75,12 +75,21 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     }
     if (rest === "pulls" && method === "GET") {
       const h = url.searchParams.get("head");
-      return json(200, r.pulls.filter((p) => p.state === (url.searchParams.get("state") || "open") && (!h || `${login}:${p.head}` === h)));
+      const st = url.searchParams.get("state") || "open";
+      return json(200, r.pulls.filter((p) => (st === "all" || p.state === st) && (!h || `${login}:${p.head}` === h)));
+    }
+    const pm = rest.match(/^pulls\/(\d+)$/);
+    if (pm && method === "PATCH") {
+      const pr = r.pulls.find((p) => String(p.number) === pm[1]);
+      if (!pr) return err(404, "Not Found");
+      if (pr.merged_at) return err(422, "Cannot reopen a merged pull request");
+      Object.assign(pr, body);
+      return json(200, pr);
     }
     if (rest === "pulls" && method === "POST") {
       if (!head(body.head)) return err(422, "Validation Failed: head does not exist");
       if (r.pulls.some((p) => p.head === body.head && p.state === "open")) return err(422, "A pull request already exists");
-      const pr = { number: r.pulls.length + 1, state: "open", head: body.head, base: body.base, title: body.title };
+      const pr = { number: r.pulls.length + 1, state: "open", head: body.head, base: body.base, title: body.title, body: body.body, merged_at: null };
       r.pulls.push(pr);
       return json(201, pr);
     }

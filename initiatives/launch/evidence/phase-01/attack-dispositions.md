@@ -22,3 +22,9 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 - L1 [high] (non-main branch) -> already debt D12 (repo, ci, hosting, environments all assume `main`).
 - L6 [medium] REJECTED -- a preview must be on `*.vercel.app`; another suffix is not this slot's proof.
 - L8 [medium] fixed as `*-if-ours` teardown actions; L10 fixed (READY without endpoints is malformed, not UNSCANNED).
+
+## attack 8a7fb7f r2 (slice 5)
+
+- L2/B3/B4 fixed (PR in any state). L3 (default branch) stays D12 across all four GitHub writers -- one fix for all, when the trigger fires.
+- Forged-trailer findings (guessable `slug@slot@provider`) -> debt D19: ownership markers are not secrets; an owner who forges one owns the outcome.
+- Fine-grained PAT write 403/404 surfaces as an uncoded GitHub error naming the status -- a refusal, not a pass; left as is.

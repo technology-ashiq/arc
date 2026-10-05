@@ -435,3 +435,12 @@ arm() {
   arm environments no-access
   [ "$(j 'o.scaffold.code + " " + o.creates')" = "NO_ACCESS 0" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: a closed preview PR is reopened, a merged one refuses, an owner's PR is never claimed" {
+  arm environments closed-pr
+  [ "$(j 'o.scaffold.ok + " " + o.prs + " " + o.state')" = "true 1 open" ] || { echo "$DONE"; false; }
+  arm environments merged-pr
+  [ "$(j 'o.scaffold.code + " " + o.prs')" = "PR_MERGED 1" ] || { echo "$DONE"; false; }
+  arm environments owner-pr
+  [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
+}

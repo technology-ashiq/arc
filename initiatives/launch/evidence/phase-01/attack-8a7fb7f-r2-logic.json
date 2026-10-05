@@ -1,0 +1,130 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:83-90",
+      "breaking_input": "Two concurrent applies for the same venture both GET the ref and see 404, then both POST git/refs; GitHub answers 422 'Reference already exists' for the second. The first run's PUT then succeeded, so the branch is launch's, but the second scaffold throws an uncoded github error.",
+      "why": "Ref creation and file commit are separate non-atomic calls. The killed-run half-state is healed, but a concurrent or racing apply can still hit the 422 before the code can re-read the ref and see the branch as launch's. The twin pattern is 'every scaffold with two creates: what is recorded if the second fails?'",
+      "fix": "Create the branch and tagged commit atomically (PUT contents with branch name so GitHub creates the ref), or on POST/PUT 422 refetch the ref and continue if its head carries the slot trailer.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:99-106",
+      "breaking_input": "A re-run after the owner or GitHub closed the launch PR while the launch branch still exists and still carries the trailer. scaffold queries only state=open, finds no PR, and POSTs a second 'arc launch: preview check' PR for the same head.",
+      "why": "The one-standing-PR invariant of ADR-1728 is broken after any close: a re-run creates a second PR. The contract test 'twice' only asserts prs == 1 for two applies with no close in between, so the defect is invisible to the suite. GitHub itself allows a new PR for a head whose previous PR is closed.",
+      "fix": "Query pulls with state=all and head=owner:arc/preview-check; if a closed PR with that head exists, reopen it or refuse with a coded error instead of creating a second PR.",
+      "twin_of": "A rehearsal's gate-3 refusal was terminal on the first run but a re-run read the recorded approval id as pending -> every state the runner treats as terminal: does every re-entry path honour it?"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:83-90",
+      "breaking_input": "A repo with default branch 'master' (linked through the Vercel project), so GET /git/ref/heads/main 404s; scaffold throws an uncoded github error and the environments slot can never prove previews for that venture.",
+      "why": "The branch source and PR base are hard-coded to main. The disposition records this as already-covered debt D12, but the defect still exists in the changed file: a fresh venture whose repo default is master or trunk fails with an unhandled 404 rather than a coded refusal, and verify cannot run.",
+      "fix": "Read default_branch from GET /repos/{full} and use it for the ref and the PR base; refuse with a coded error when absent.",
+      "twin_of": "Upstream entries were coerced with String(), so a null id became the hostname \"null\" -> every value one adapter hands another through state"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:113-118",
+      "breaking_input": "A Vercel preview deployment created via the Vercel API or GitHub App where meta has githubCommitRef: 'arc/preview-check' but no githubCommitSha key, while the READY preview of the branch head exists.",
+      "why": "probe filters deployments by x.meta.githubCommitSha === sha only, so a deployment whose metadata omits the sha (using the documented legacy ref field) is never found, and verify permanently reports 'no preview deployment of <sha> yet'. This is the same pattern as 'verify took any X as the proof' inverted: the proof exists but is refused because the wrong key is required.",
+      "fix": "Match deployments also by meta.githubCommitRef === 'arc/preview-check' (with org/repo when present), and prefer the sha match when both exist.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:90-96",
+      "breaking_input": "A fine-grained PAT with repo metadata read but no contents write: the repo GET succeeds, so NO_ACCESS is not thrown, then the PUT contents fails with an uncoded 403/404.",
+      "why": "The NO_ACCESS fix reads the repo once and only distinguishes repo visibility, not write capability. A token that can read the repo but cannot write the branch or contents passes the gate and then dies with an uncoded GitHub error. The same holds for a fine-grained token whose contents read is denied so GET commits returns 404 on the else path (L5's sibling).",
+      "fix": "Map 403/404 on the create/write paths to coded BAD_ACCESS/TOKEN as well, not only on the initial repo read.",
+      "twin_of": "A 404 from a token without access read as \"absent, create it\" -> every check-then-create keyed on a 404"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:83-90",
+      "breaking_input": "A branch named arc/preview-check that an owner created at main's head, and which launch has recorded because an earlier killed run created a ref of the same name first; main has not moved since.",
+      "why": "The condition tip === base && recorded adopts the branch without checking that its head or first commit is launch's. If the owner created their own branch at the same base after launch recorded the half-made ref, launch PUTs its file onto the owner's branch and reports it as launch's. The unrecorded-branch-at-main test only covers the unrecorded case; the recorded case is the dangerous twin of the same pattern.",
+      "fix": "Store and compare the recorded base SHA from the original create, and only finish when the branch head still equals the recorded base; otherwise refuse FOREIGN_BRANCH.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it -> every \"unchanged, so skip\" path that still reports a resource"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:108-112",
+      "breaking_input": "A re-run after the owner manually closed the launch PR; the launch branch still exists with the trailer. scaffold finds no open PR and POSTs a new PR creating a second PR for the same head (duplicate of L2).",
+      "why": "This is a duplicate finding of L2; omitted from the final list to keep the report distinct.",
+      "fix": "See L2."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:120-121",
+      "breaking_input": "A READY preview deployment whose url host is longer than 200 characters (long project/slug combination), while the URL is genuinely a valid *.vercel.app preview.",
+      "why": "probe validates d.url only after say(d.url, 200), so a valid but long host is truncated and then fails the regex, reporting a healthy preview as having no vercel.app URL. The valuation order is validate-after-truncate; the prior L6 was rejected only for the 'other suffix' half, not for the cap half.",
+      "fix": "Validate the untruncated d.url with the regex, and cap only the stored evidence string.",
+      "twin_of": "The sanitiser missed U+061C and the zero-width marks, and capped by UTF-16 units -> every sanitiser and every .slice(0, n) on display text"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:85-89",
+      "breaking_input": "An SSL Labs READY result where an endpoint has grade 'A' and hstsPolicy.status 'present' but maxAge: 0 — a real Strict-Transport-Security: max-age=0 header that disables HSTS.",
+      "why": "The check requires only status === 'present' and never inspects maxAge. SSL Labs reports a policy as present even with max-age=0, so a domain that actively disables HSTS is verified as A-with-HSTS, proving a tls slot the domain does not have.",
+      "fix": "Require hstsPolicy.maxAge > 0 (and decide whether includeSubDomains is required) in addition to status 'present'.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:93-99",
+      "breaking_input": "An SSL Labs READY response where endpoints is present but is a JSON object (e.g. {'0': {...}}) rather than an array; the probe returns {ok:false, reason:'ssllabs answered READY without an endpoints list'}.",
+      "why": "The disposition claims L10 was fixed (READY without endpoints is malformed, not UNSCANNED), but returning a hard ok:false for a malformed response records a verdict about the site's TLS posture when the scanner did answer with a wrong shape. The proper state is UNSCANNED(malformed), not verified-false. The same inverse trust boundary persists: a shape-changing response is treated as a site verdict.",
+      "fix": "Return `UNSCANNED(\"ssllabs READY returned a non-list endpoints\")` and include the shape in the reason, rather than a bare ok:false.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:60-62",
+      "breaking_input": "A Vercel project whose linked repo field is org/.. (trailing dot on the repo name or a '..' segment), which the regex /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\\/[A-Za-z0-9._-]{1,100}$/ accepts.",
+      "why": "The repo segment allows any leading dot after the first character and allows '..'. A path like org/.. normalizes to /repos/org/../ -> /repos/, sending the GITHUB_TOKEN to a different API path than the repo that was validated. The validations are regex-shaped but not actual path containment checks.",
+      "fix": "Reject repo segments that are '.' or '..', and reject names beginning with a dot or hyphen; require the first character to be alphanumeric or underscore.",
+      "twin_of": "The adapter path was data the runner trusted: providers/x/../../tmp/evil.mjs ran -> every path built from a registry value"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:131-139",
+      "breaking_input": "A teardown run after the owner merged the launch PR and deleted the branch, or after the owner retitled and took over the PR. teardown still returns close-pr-if-ours and delete-branch-if-ours for every recorded resource.",
+      "why": "teardown maps recorded resources to steps without re-reading the PR or branch. The 'if-ours' check is deferred to the executor, so the adapter emits a close-pr step for a PR launch may no longer own, and a delete-branch step for a branch the owner merged. The ADR's own contract says a PR launch did not create is refused, but teardown never looks.",
+      "fix": "teardown should re-read the PR and branch head, verify the trailer/ownership marker and open state, and omit or refuse steps for resources launch no longer owns.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:102-106",
+      "breaking_input": "An SSL Labs READY response where one endpoint has a grade string containing an ESC or newline (e.g. 'A\\nforged'). The failure branch passes `say(e.grade, 4)` into the reason (safe), but the success branch stores `grades: eps.map(e => e.grade)` raw.",
+      "why": "Provider-supplied grade strings go raw into verify evidence on the ok:true path. Evidence is printed or stored, so a forged line or terminal escape can land there even though the same file uses say() for failure reasons. The grade is also uncapped.",
+      "fix": "Map success grades through say(e.grade, 4) before storing, and filter to grades actually in GOOD.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:76-81",
+      "breaking_input": "A GITHUB_TOKEN that is well-formed but belongs to a user or bot without read access to the repo, while Vercel's project link points at a repo the token cannot see.",
+      "why": "The NO_ACCESS branch is keyed on the repo read 404, which is correct for absent-vs-invisible, but it reports NO_ACCESS for a repo that simply does not exist as well, so a misspelled repo name in the Vercel link is reported as a token permission problem. The message tells the owner to grant access to a repo that may not exist in that org.",
+      "fix": "Distinguish NOT_FOUND (repo not in the org namespace) from NO_ACCESS (unauthenticated/forbidden-like 404) by reading the authenticated user or the response headers, and report the repo name in the refusal.",
+      "twin_of": "Any 403 with the right words became PLAN_LIMIT -> every classifier keyed on message text: is it also keyed on the request?"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:157-162",
+      "breaking_input": "Between apply and teardown the owner merges the preview PR and pushes real work onto arc/preview-check. teardown still returns the steps close-pr-if-ours then delete-branch-if-ours for the recorded ids.",
+      "why": "The round-1 teardown fix (L8/B5) only renamed the action strings. No changed file implements a run-time re-read of the PR or branch head or a trailer check. The same executor already runs other adapters' steps, and it is not in this diff. If it does not know these names, it either refuses every step, which strands the PR and branch, or it maps them by prefix to the unconditional delete. Teardown itself still decides from recorded ids alone. The suffix claims a guarantee the code does not provide.",
+      "fix": "Implement the `*-if-ours` executors, or make each step carry the trailer and head SHA recorded at apply. The executor must re-read the PR and branch, compare, and skip on mismatch. Add a contract test where the branch gains an owner commit before teardown and nothing is deleted.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:84-86",
+      "breaking_input": "An earlier run created arc/preview-check at main's head and recorded it, then was killed before the PUT. Before the re-run, any commit lands on main, so tip !== base. The branch head is still the old main commit with no trailer.",
+      "why": "The half-made branch is recognised only when tip === main's CURRENT head. Once main has advanced, the condition is false and the else path throws FOREIGN_BRANCH on launch's own recorded branch, forever. This is the round-1 wedge, narrowed but not closed. No test covers main advancing.",
+      "fix": "Treat a recorded branch as half-made when it has no commits ahead of main. Use GET compare main...BRANCH and require ahead_by === 0, or check that its head is an ancestor of main's head. Then finish the PUT.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign -> every two-step create: is the half-made state recognisable as ours?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:92-95",
+      "breaking_input": "Case 1: the owner closes the preview PR but the branch stays. A re-run queries state=open only, finds none and POSTs a second PR. Case 2: the owner merges or squashes the PR and the branch stays ours. A re-run POSTs pulls and gets 422 'No commits between', an uncoded error.",
+      "why": "Round-1 L4 and B8 were not fixed and are not in the dispositions. Only open PRs are consulted, so a closed PR yields a duplicate and a merged one wedges scaffold on every re-run. This breaks the ADR's one standing PR invariant.",
+      "fix": "List with state=all for the head. Report an existing PR in any state. If it is closed and unmerged, reopen it via PATCH state=open. If it is merged, refuse with a coded error or recreate the branch from main with a fresh commit.",
+      "twin_of": "A rehearsal's gate-3 refusal was terminal on the first run but a re-run read the recorded approval id as pending -> every state the runner treats as terminal: does every re-entry path honour it?"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:93-96",
+      "breaking_input": "The branch is launch's. The owner opens their own PR from arc/preview-check, or retitles launch's PR, before scaffold runs. The open PR for owner:arc/preview-check is found, not created.",
+      "why": "Round-1 B3 is not fixed. The found PR is reported as {kind:'github-pr'} with no check that launch created it, so the exit plan will close a PR launch never opened. The ADR says a PR launch did not create is refused, but the code only gates on the branch.",
+      "fix": "Call ctx.report for the PR only on the POST path. For a found PR, verify its title and body match launch's and that it was not opened by someone else, or refuse with a coded error.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:32-33,88-91,119-120",
+      "breaking_input": "The owner or a bot pushes one fix commit onto launch's arc/preview-check. The newest commit then has no trailer. A forged commit message containing the exact line Arc-Launch-Tag with the guessable slug@slot@provider tag is accepted as launch's.",
+      "why": "Round-1 B4 is not fixed. Ownership is decided by the newest commit's message alone, with a predictable trailer. A legitimate branch becomes FOREIGN_BRANCH after any push, and verify turns ok:false forever. A forged trailer is trusted.",
+      "fix": "Decide ownership from the branch's first commit after main, or from a head SHA recorded in resources. Optionally add a per-run nonce to the trailer.",
+      "twin_of": "Ownership trailers were matched by prefix and by newest commit only -> every trailer or marker check"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:50",
+      "breaking_input": "The Vercel project's link.repo is '..' or '.', so full = 'org/..'. The regex [A-Za-z0-9._-]{1,100} accepts it.",
+      "why": "Round-1 B6 is not fixed. fetch normalises /repos/org/../git/ref/heads/main to /repos/git/ref/heads/main. Requests carrying GITHUB_TOKEN go to a path other than the validated repo, and the repo-access precheck passes on a different endpoint. The interpolated segments are also not encoded.",
+      "fix": "Reject repo segments equal to '.' or '..'. Require the repo's first character to be alphanumeric or underscore, and apply encodeURIComponent to each segment.",
+      "twin_of": "The adapter path was data the runner trusted: `providers/x/../../tmp/evil.mjs` ran -> every path built from a registry value"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:92-96",
+      "breaking_input": "SSL Labs answers READY at the top level, but one endpoint has statusMessage 'Unable to connect to the server' with no grade and no details.",
+      "why": "Round-1 B10 is not fixed. That endpoint falls into `bad` and is reported as a verdict, 'grade none, no HSTS', instead of UNSCANNED. A scanner-side failure is recorded as a statement about the site's TLS posture.",
+      "fix": "Treat an endpoint with no grade and a statusMessage other than 'Ready' as UNSCANNED(reason). Reserve the grade/HSTS failure for endpoints that were actually graded.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    }
+  ]
+}

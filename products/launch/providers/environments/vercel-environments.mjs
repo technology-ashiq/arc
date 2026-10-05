@@ -7,6 +7,7 @@ const VERCEL = "https://api.vercel.com";
 const GITHUB = "https://api.github.com";
 const BRANCH = "arc/preview-check";
 const FILE = ".arc/preview-check.md";
+const TITLE = "arc launch: preview check";
 const BODY = "Opened by arc launch (environments slot) so every venture has one live preview. Never merge it.\n";
 
 const refuse = (code, message) => Object.assign(new Error(message), { code });
@@ -98,10 +99,18 @@ export async function scaffold(ctx) {
   }
   ctx.report({ kind: "github-branch", id: `${full}:${BRANCH}` });
 
+  // One standing PR for the life of the venture (ADR-1728), found in ANY state: a closed one is reopened, never
+  // duplicated; a merged one means the owner merged the probe, which refuses (attack 8a7fb7f L2/B3). Only a PR with
+  // launch's exact title and body is launch's; anything else from that head is the owner's and is not claimed (B4).
   const [owner] = full.split("/");
-  const open = await gh(ctx, "GET", `/repos/${full}/pulls?state=open&head=${encodeURIComponent(`${owner}:${BRANCH}`)}`);
-  let pr = list(open.body)[0];
-  if (!pr) pr = (await gh(ctx, "POST", `/repos/${full}/pulls`, { title: "arc launch: preview check", head: BRANCH, base: "main", body: BODY })).body;
+  const all = await gh(ctx, "GET", `/repos/${full}/pulls?state=all&head=${encodeURIComponent(`${owner}:${BRANCH}`)}`);
+  const prs = list(all.body);
+  const theirs = prs.filter((x) => !(x.title === TITLE && x.body === BODY));
+  let pr = prs.find((x) => x.title === TITLE && x.body === BODY);
+  if (pr && pr.merged_at) throw refuse("PR_MERGED", `${full}#${pr.number}, the preview-check PR, was merged; it is a standing probe and is never merged -- revert it and delete ${BRANCH}`);
+  if (!pr && theirs.some((x) => x.state === "open")) throw refuse("FOREIGN_PR", `${full} has an open PR from ${BRANCH} that launch did not open`);
+  if (pr && pr.state === "closed") pr = (await gh(ctx, "PATCH", `/repos/${full}/pulls/${pr.number}`, { state: "open" })).body;
+  if (!pr) pr = (await gh(ctx, "POST", `/repos/${full}/pulls`, { title: TITLE, head: BRANCH, base: "main", body: BODY })).body;
   if (!pr || typeof pr.number !== "number") throw new Error(`github returned no pull request for ${full}:${BRANCH}`);
   ctx.report({ kind: "github-pr", id: `${full}#${pr.number}` });
   return { files: [], resources: [{ kind: "github-branch", id: `${full}:${BRANCH}` }, { kind: "github-pr", id: `${full}#${pr.number}` }], notes: [] };
