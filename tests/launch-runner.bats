@@ -220,9 +220,12 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
 }
 
 @test "launch-runner: an adapter sees its depends_on slots' recorded resources, and only those (ADR-1725)" {
+  # slow holds resources too and after-probe does not depend on it: its ids must stay out of the view.
+  run node "$(L)" apply slow --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
   run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   run env FAKE_PRINT_UPSTREAM=1 node "$(L)" apply after-probe --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *'FAKE_UPSTREAM {"probe":[{"kind":"fake","id":"r1-1"},{"kind":"fake","id":"r2-2"}]}'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'FAKE_UPSTREAM {"probe":[{"kind":"fake","id":"r1-3"},{"kind":"fake","id":"r2-4"}]}'* ]] || { echo "$output"; false; }
 }

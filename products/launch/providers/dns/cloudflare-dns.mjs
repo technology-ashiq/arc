@@ -7,10 +7,14 @@ const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,6
 
 const bare = (h) => String(h || "").trim().toLowerCase().replace(/\.$/, "");
 const refuse = (code, message) => Object.assign(new Error(message), { code });
+// Provider and resolver text reaches the runner's reason and the board: controls, bidi and line separators are dropped
+// and the length capped, so a hostile answer cannot forge or hide a line (attack 74c7f5a B4).
+const SKIP = (n) => n < 0x20 || (n >= 0x7f && n < 0xa0) || (n >= 0x202a && n <= 0x202e) || (n >= 0x2066 && n <= 0x2069) || n === 0x2028 || n === 0x2029 || n === 0x200e || n === 0x200f;
+const say = (v, cap = 120) => [...String(v)].filter((c) => !SKIP(c.codePointAt(0))).join("").slice(0, cap);
 
 function hostName(value, what) {
   const h = bare(value);
-  if (!HOST.test(h)) throw refuse("BAD_TARGET", `${what} ${JSON.stringify(String(value).slice(0, 80))} is not a plain hostname`);
+  if (!HOST.test(h)) throw refuse("BAD_TARGET", `${what} ${JSON.stringify(say(value, 80))} is not a plain hostname`);
   return h;
 }
 
@@ -30,7 +34,7 @@ async function cf(ctx, method, path, body) {
   let json = null;
   try { json = await res.json(); } catch { json = null; }
   if (!res.ok || !json || json.success !== true) {
-    const errs = ((json && json.errors) || []).map((e) => `${e.code}: ${e.message}`).join("; ");
+    const errs = ((json && json.errors) || []).slice(0, 3).map((e) => `${say(e.code, 12)}: ${say(e.message)}`).join("; ");
     throw new Error(`cloudflare ${method} ${path.split("?")[0]} -> ${res.status}${errs ? ` (${errs})` : ""}`);
   }
   return json.result;
@@ -58,9 +62,11 @@ export async function scaffold(ctx) {
   const zone = await zoneOf(ctx, name);
   const records = await cf(ctx, "GET", `/zones/${zone.id}/dns_records?name=${encodeURIComponent(name)}`);
   const mine = (records || []).filter((r) => r.comment === ctx.tag);
+  // ANY other record at the name refuses, TXT and MX included: a CNAME may not share its name with another record
+  // (RFC 1034 3.6.2), so there is no type that could coexist with the one launch writes (attack 74c7f5a B6).
   const foreign = (records || []).filter((r) => r.comment !== ctx.tag);
   if (foreign.length)
-    throw refuse("FOREIGN_RECORD", `${name} already has ${foreign.map((r) => `${r.type} ${r.id}`).join(", ")} not tagged ${ctx.tag}; launch never edits a record it did not create`);
+    throw refuse("FOREIGN_RECORD", `${name} already has ${foreign.slice(0, 5).map((r) => `${say(r.type, 10)} ${say(r.id, 40)}`).join(", ")} not tagged ${ctx.tag}; launch never edits a record it did not create`);
   let rec = mine[0];
   if (!rec) {
     rec = await cf(ctx, "POST", `/zones/${zone.id}/dns_records`, { type: "CNAME", name, content: to, ttl: 1, proxied: false, comment: ctx.tag });
@@ -72,12 +78,15 @@ export async function scaffold(ctx) {
   return { files: [], resources: [{ kind: "dns-record", id: `${zone.id}/${rec.id}` }], notes: [] };
 }
 
+// An already-aborted signal never fires "abort" again, so it is checked first (attack 74c7f5a B1).
 const wait = (ms, signal) => new Promise((res, rej) => {
-  const t = setTimeout(res, ms);
-  if (signal) signal.addEventListener("abort", () => { clearTimeout(t); rej(refuse("ABORTED", "slot timeout reached")); }, { once: true });
+  if (signal && signal.aborted) return rej(refuse("ABORTED", "slot timeout reached"));
+  const onAbort = () => { clearTimeout(t); rej(refuse("ABORTED", "slot timeout reached")); };
+  const t = setTimeout(() => { if (signal) signal.removeEventListener("abort", onAbort); res(); }, ms);
+  if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
-const cnames = (answer) => ((answer && answer.Answer) || []).filter((a) => a.type === 5).map((a) => bare(a.data));
+const cnames = (answer) => ((answer && answer.Answer) || []).filter((a) => a && a.type === 5).slice(0, 8).map((a) => bare(say(a.data, 253)));
 
 // Asked of two public resolvers, never of Cloudflare's API: the record existing is not the name resolving.
 export async function verify(ctx) {
@@ -91,7 +100,7 @@ export async function verify(ctx) {
     if (seen.google.includes(to) && seen.cloudflare.includes(to))
       return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, ...seen } };
   }
-  return { ok: false, reason: `${name} CNAME not ${to} at both resolvers (google: ${seen.google.join(",") || "none"}; cloudflare: ${seen.cloudflare.join(",") || "none"})` };
+  return { ok: false, reason: `${name} CNAME not ${to} at both resolvers (google: ${say(seen.google.join(",")) || "none"}; cloudflare: ${say(seen.cloudflare.join(",")) || "none"})` };
 }
 
 export async function teardown(ctx) {

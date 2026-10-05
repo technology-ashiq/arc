@@ -80,3 +80,36 @@ j() { node -e 'const o=JSON.parse(process.argv[1]);console.log(String(eval(proce
   dns upstream-frozen
   [ "$(j 'o.frozen')" = "true" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: dns flips its own orange-cloud record to grey in place" {
+  dns proxied
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.length + " " + o.records[0].proxied')" = "1 false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a TXT record at the name also refuses (a CNAME shares its name with nothing)" {
+  dns foreign-txt
+  [ "$(j 'o.scaffold.code')" = "FOREIGN_RECORD" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.length + " " + o.records[0].type')" = "1 TXT" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: malformed upstream entries are dropped, never coerced to a hostname" {
+  dns malformed-upstream
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.join(",")')" = "abc123.vercel-dns-017.com" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an already-aborted slot timeout stops the verify poll at once" {
+  dns aborted-verify
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.code')" = "ABORTED" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.ms < 5000')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a hostile provider error is stripped of line breaks and bidi and capped" {
+  dns hostile-error
+  [ "$(j 'o.scaffold.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"-> 403 (1: evilFAKE LINE xxx"* ]] || { echo "$DONE"; false; }
+  [ "$(j '/[\n‮]/.test(o.scaffold.message)')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.scaffold.message.length < 260')" = "true" ] || { echo "$DONE"; false; }
+}

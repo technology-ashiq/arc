@@ -234,7 +234,9 @@ function parseSeq(ctx, indent, depth) {
       continue;
     }
     checkFlow(rest, line.n);
-    if (/^[^\s:][^:]*:(\s|$)/.test(rest)) {
+    // A quoted item is a scalar even when its text holds `: ` -- `- "deploy with githubDeployment: 1"` was read as a
+    // one-key mapping whose key kept its opening quote (launch catalog, 2026-10-05).
+    if (/^[^\s:"'][^:]*:(\s|$)/.test(rest)) {
       const virt = indent + 2;
       logical.splice(ctx.i, 0, { ...line, indent: virt, text: rest, content: rest });
       out.push(parseMap(ctx, virt, depth + 1));

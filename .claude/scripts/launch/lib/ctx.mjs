@@ -40,10 +40,12 @@ export function confinedPath(root, rel) {
 const PROBE_HOSTS = ["dns.google", "cloudflare-dns.com"];
 
 // `upstream` holds what the runner recorded for this slot's own depends_on slots, nothing wider (ADR-1725). Each value
-// is another adapter's output: the reader validates it before using it.
+// is another adapter's output: the reader validates it before using it. An entry without string kind and id is dropped,
+// never coerced -- `String(null)` handed a reader the hostname "null" (attack 74c7f5a B2).
 function freezeUpstream(upstream) {
+  const good = (r) => r && typeof r === "object" && typeof r.kind === "string" && typeof r.id === "string";
   return Object.freeze(Object.fromEntries(Object.entries(upstream || {}).map(([s, rs]) =>
-    [s, Object.freeze((rs || []).map((r) => Object.freeze({ kind: String(r.kind), id: String(r.id) })))])));
+    [s, Object.freeze((Array.isArray(rs) ? rs : []).filter(good).map((r) => Object.freeze({ kind: r.kind, id: r.id })))])));
 }
 
 export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [] }) {

@@ -98,3 +98,13 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *'FAIL [hosts]'*'host "com" is not a bare hostname'* ]] || { echo "$output"; false; }
 }
+
+@test "launch-lint: a quoted exit criterion holding a colon stays a sentence; an unquoted one is refused" {
+  run node --input-type=module -e 'const { loadCatalog } = await import(process.argv[1]); const h = loadCatalog().find((s) => s.id === "hosting"); console.log("HOSTING " + JSON.stringify(h.exit_criteria));' "$ARC_ROOT/.claude/scripts/launch/lib/catalog.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *'HOSTING ["git-triggered deploy with githubDeployment: 1"]'* ]] || { echo "$output"; false; }
+  node -e 'const fs=require("fs");const s=fs.readFileSync(process.argv[1],"utf8");const t=s.replace("- \"git-triggered deploy with githubDeployment: 1\"","- git-triggered deploy with githubDeployment: 1");if(t===s)process.exit(3);fs.writeFileSync(process.argv[2],t)' "$ARC_ROOT/products/launch/launch.slots.yaml" "$BATS_TEST_TMPDIR/c.yaml" || { echo "fixture edit did not land"; false; }
+  run node "$(LINT)" --catalog "$BATS_TEST_TMPDIR/c.yaml"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"FAIL [exit-criteria] hosting"* ]] || { echo "$output"; false; }
+}
