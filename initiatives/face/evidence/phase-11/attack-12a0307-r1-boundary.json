@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/src/App.tsx:113 (view initial state and onHash setView)",
+      "breaking_input": "Load `/#/lane&view=settings` (or `#view=settings`) while the surface is the front door, or press Exit from the Settings page and then ENTER HQ again. `view` is seeded from the hash and set in onHash regardless of surface, and `exit()` is not shown clearing it.",
+      "why": "The door never draws Settings, so `view` stays 'settings' as hidden state. The next entry into the workroom opens the Settings page instead of the room. The address and the screen can disagree, which breaks the one-address-one-view claim of Amendment 2. `door-no-settings` only counts DOM controls on the door, so it cannot see this.",
+      "fix": "Drop `view` unless the surface is hq, in the initial state and in onHash. Call setView(null) in exit() and wherever the surface leaves hq. Add a smoke check that an exit then re-enter lands on the room.",
+      "twin_of": "A mode entered on a truthy value, sharing a run with another -> enter a mode on the flag; a per-surface rule must be a decision, not a comment"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/App.tsx:386-394 (openSettings/closeSettings)",
+      "breaking_input": "With no room open, shownId is null, so openSettings builds `buildHash('', ...)`, i.e. `#/&view=settings`. closeSettings, when history.state is null, replaces the address with `buildHash('', ...)`, i.e. `#/`. parseHash reads the empty `/` segment as room \"\" and onHash then runs setRoomId(\"\").",
+      "why": "An empty-string room id is written into the address and read back as a room named \"\". The workroom then shows the unknown-room state instead of home, and the clean address after close is not clean. This is a malformed id treated as a value, not refused, and the writer's output does not match the grammar the reader accepts.",
+      "fix": "When shownId is null, build the hash without a room part. Have buildHash refuse an empty room, and have parseHash map an empty room to null.",
+      "twin_of": "Every `buildHash(` call site passes the whole address state; grep the call sites, not the function"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs rail-settings step (the final `press ESCAPE` / `until`)",
+      "breaking_input": "Rail Settings opens the page, but Escape or close does not return to the room. The `until` result is discarded.",
+      "why": "The step records pass or fail before it closes the page, and nothing checks the page actually closed. The next step (palette on the workroom) then runs on top of the open Settings page, so a failure there is blamed on the palette. `hq-settings-page` checks the close and `rail-settings` does not, so the two checks are not twins.",
+      "fix": "Assert after the Escape that `view=settings` is gone from the hash and that the settings section count is 0. Fold that into the rail-settings verdict, or fail the following step by name.",
+      "twin_of": "A filter on one event of a pair applies to its twin"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/src/App.tsx:386-394 (history.state flag survives reload) and smoke.mjs hq-settings-page",
+      "breaking_input": "Open Settings so it is pushed, then reload. history.state still reads `{settings:true}` on the reloaded entry. Now arrive on that entry as the first one in a tab, for example by duplicating or restoring a session. closeSettings calls history.back() and leaves the app or the tab's history instead of closing the page.",
+      "why": "`pushed` is read from persisted history.state, not from this document having pushed the entry. After a reload, or on a restored session entry, the flag is true although no earlier room entry exists in this document's history. Back then lands on a foreign or previous page, or does nothing, and `view` stays set.",
+      "fix": "Track the push in a module-level ref for this document only, or fall back to replaceState when history.length is 1 or when no hashchange follows within a short window. Smoke should cover reload then close.",
+      "twin_of": "A reload proven by the OLD document -> prove a navigation by something the old page cannot have"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face-browser.bats:410-428 (mutant control)",
+      "breaking_input": "A smoke run with one check deleted prints `expected=29 ran=29 ok=29`. The only 'a check deleted' mutant left is `expected=27 ran=27`.",
+      "why": "The off-by-one negative control was rewritten to 27 against a floor of 30, a gap of three. A verdict that compared against `>= 29` or a stale constant of 28 would still pass the suite. The control no longer pins the exact count.",
+      "fix": "Use expected=29 ran=29 ok=29 as the deleted-check mutant, and add an expected=31 case.",
+      "twin_of": "The mutant is the negative control; write the check it fails"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs rail-settings record detail",
+      "breaking_input": "The page opens but the link has data-room, or the page does not open and the link also has data-room. The detail string reads \"the link carries a data-room\" whenever `page` is truthy and \"opened no page\" otherwise, regardless of `notRoom`.",
+      "why": "The failure message names a cause the failing branch does not prove. If the page did not open and the link also has data-room, only the first cause is reported. Detail text bound for a parsed log must name only what the failure proves.",
+      "fix": "Build the detail from both booleans separately, for example `${page ? '' : 'no page; '}${notRoom ? '' : 'link carries data-room'}`.",
+      "twin_of": "A failure message names only what its failure proves"
+    }
+  ]
+}

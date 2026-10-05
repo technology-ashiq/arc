@@ -4,6 +4,7 @@
 // lives inside a .tsx is a branch nobody tests. Routing and the keyboard model are exactly
 // the kind of thing that breaks quietly and is never noticed in a screenshot, so they live
 // here where a node test can hold them.
+import { HQ_PART } from "./mode.mjs";
 
 // There is no HOME constant here any more. The room the shell opens on is the served registry's
 // to say (registry.mjs homeRoom, face v2 Phase 02): the shell names no room.
@@ -73,7 +74,7 @@ export function parseHash(hash) {
  * Build the fragment for a room, carrying the token AND the scrub through so navigating never
  * drops either. A scrubbed view that reverted to live the moment you changed room would make
  * the time machine useless for the thing it is for: reading one past day across the company.
- * @param {string} room
+ * @param {string | null} room  none (or blank) writes the workroom's home
  * @param {string | null} [token]
  * @param {string | null} [asOf]
  * @param {string | null} [at]  where the Reference room opens (REFERENCE_AT), dropped if it is not one
@@ -81,7 +82,9 @@ export function parseHash(hash) {
  * @returns {string}
  */
 export function buildHash(room, token = null, asOf = null, at = null, view = null) {
-  const parts = [`/${encodeURIComponent(room)}`];
+  // No room is the workroom on its home, written as the workroom's own part: `#/` would read back as a room named ""
+  // (attack 12a0307 B2).
+  const parts = [typeof room === "string" && room.trim() ? `/${encodeURIComponent(room)}` : HQ_PART];
   if (token) parts.push(`token=${encodeURIComponent(token)}`);
   if (typeof asOf === "string" && ISO_DAY.test(asOf)) parts.push(`asof=${asOf}`);
   if (typeof at === "string" && REFERENCE_AT.test(at)) parts.push(`at=${encodeURIComponent(at)}`);

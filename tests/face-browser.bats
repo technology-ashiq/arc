@@ -417,8 +417,11 @@ heading_verdict() {
   [ "$status" -ne 0 ] || { echo "a pass that died after three checks passed: $output"; false; }
   run frontdoor_verdict "smoke: front-door mood=dark expected=30 ran=30 ok=29 warp-held=3/3 failed=webgl-off-enter" dark
   [ "$status" -ne 0 ] || { echo "a failed guard passed: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=27 ran=27 ok=27 warp-held=3/3 failed=none" dark
+  # One check fewer and one more, each against the pinned count -- not a gap of three (attack 12a0307 B5).
+  run frontdoor_verdict "smoke: front-door mood=dark expected=29 ran=29 ok=29 warp-held=3/3 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a smoke with a check deleted passed: $output"; false; }
+  run frontdoor_verdict "smoke: front-door mood=dark expected=31 ran=31 ok=31 warp-held=3/3 failed=none" dark
+  [ "$status" -ne 0 ] || { echo "a smoke with an unpinned check added passed: $output"; false; }
   run frontdoor_verdict "smoke: front-door mood=dark expected=30 ran=30 ok=30 warp-held=1/1 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a pass that crossed once passed: $output"; false; }
   run frontdoor_verdict "smoke: front-door mood=dark expected=30 ran=30 ok=30 warp-held=0/3 failed=none" dark

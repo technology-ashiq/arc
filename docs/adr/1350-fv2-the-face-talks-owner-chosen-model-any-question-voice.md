@@ -52,7 +52,7 @@ Filed as REQ-15 / Phase 11, before the dogfood (Phase 08). Appetite +1.5d (total
 "sari thaniya irunthalum, seperate page ah vaikalama ?" -- even kept apart from the rooms, as a separate page.
 
 1. **A page in the workroom, not a room.** Settings draws in the workroom's main area in place of a room, at its own
-   address (`#hq&view=settings`), so it can be reloaded, bookmarked and left with Back. It is not a room in the rail's groups, not served
+   address (`#/lane&view=settings` over the lane room, `#hq&view=settings` over the home), so it can be reloaded, bookmarked and left with Back. It is not a room in the rail's groups, not served
    by `/api/rooms`, and not a surface: the workroom stays the one surface besides the front door (ADR-1349), so
    `face-coverage`'s room and surface counts do not move.
 2. **Three ways in.** HQ's header Settings, a Settings link at the foot of the rail (below the rooms, not counted with

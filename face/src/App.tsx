@@ -112,7 +112,12 @@ export default function App() {
   // HQ's Settings page (Phase 10, ADR-1350; Amendment 2): the owner's models and the voice. A workroom page at its own
   // address (`view=settings`), so the address bar is its truth, like a room's; the voice switch is held here so the
   // door's bar and the workroom's dock both follow it at once.
-  const [view, setView] = useState<'settings' | null>(() => parseHash(window.location.hash).view)
+  // Only the workroom has pages: a `view` in a front-door address is dropped (attack 12a0307 B1).
+  const [view, setView] = useState<'settings' | null>(() => (modeOf(window.location.hash) === 'hq' ? parseHash(window.location.hash).view : null))
+  // Whether THIS document pushed the open page's history entry, and whether a close is already on its way back. Kept in
+  // memory, never in history.state: that survives a reload or a restored tab, where going back would leave the app
+  // (attack 12a0307 B4), and it only changes once the pop lands, so a second close would go back twice (L1).
+  const settingsEntry = useRef<'none' | 'pushed' | 'closing'>('none')
   const [voiceOn, setVoiceOn] = useState(() => { try { return readVoicePref(window.localStorage) } catch { return false } })
   const speech = useMemo(() => voiceSupport(window), [])
   const setVoice = useCallback((on: boolean) => { setVoiceOn(on); try { writeVoicePref(window.localStorage, on) } catch { /* private mode: this page only */ } }, [])
@@ -271,7 +276,9 @@ export default function App() {
       else if (next === 'hq') setRoomId(null)
       setAsOf(h.asOf)
       setAt(h.at)
-      setView(h.view)
+      const nextView = next === 'hq' ? h.view : null
+      setView(nextView)
+      if (nextView !== 'settings') settingsEntry.current = 'none'
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -383,13 +390,14 @@ export default function App() {
   const settingsOn = view === 'settings'
   const openSettings = () => {
     if (settingsOn) return
-    window.history.pushState({ settings: true }, '', buildHash(shownId ?? '', token, asOf, at, 'settings'))
+    window.history.pushState(null, '', buildHash(roomId, token, asOf, at, 'settings'))
+    settingsEntry.current = 'pushed'
     setView('settings')
   }
   const closeSettings = () => {
-    const pushed = (window.history.state as { settings?: unknown } | null)?.settings === true
-    if (pushed) { window.history.back(); return }
-    window.history.replaceState(null, '', buildHash(shownId ?? '', token, asOf, at))
+    if (settingsEntry.current === 'closing') return
+    if (settingsEntry.current === 'pushed') { settingsEntry.current = 'closing'; window.history.back(); return }
+    window.history.replaceState(null, '', buildHash(roomId, token, asOf, at))
     setView(null)
   }
   // A template is not a room you can open; asking for it by URL is answered like any unknown id.

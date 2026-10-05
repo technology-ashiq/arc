@@ -1252,6 +1252,8 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const n = await count(P, "[data-hq-settings], [data-models-panel], [data-ask-settings]");
       record("door-no-settings", n === 0, `the door shows ${n} settings control(s)`);
     }, ["door-no-settings"]);
+    // The Settings page is gone and the room is back: no panel, no `view=settings` in the address, no settings section.
+    const settingsGone = async () => (await count(P, "[data-models-panel]")) === 0 && !/view=settings/.test(String(await hash(P))) && (await count(P, 'main section[data-render="settings"]')) === 0;
     // Phase 11 (REQ-15, ADR-1350 Amendments 1 and 2): one Settings page inside HQ -- Models and Voice -- and a model Test that
     // reads ok and its seconds off the page. The harness's door holds one model, the fake provider, so a test passes.
     await step(async () => {
@@ -1272,17 +1274,22 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
         && (await count(P, '[role="dialog"][aria-modal="true"]')) === 0;
       const pageHash = redactSecrets(String(await hash(P)), [token]);
       await press(P, ESCAPE);
-      const back = await until(async () => (await count(P, "[data-models-panel]")) === 0 && !/view=settings/.test(String(await hash(P))) && (await count(P, 'main section[data-render="settings"]')) === 0, capMs);
+      const back = await until(settingsGone, capMs);
       record("hq-settings-page", asPage && back, `open: ${asPage ? "a page" : "not a page"} at ${JSON.stringify(pageHash)}; closed: ${back ? "the room is back" : "the page stayed or the address kept view=settings"}`);
     }, ["hq-settings-menu", "hq-settings-test", "hq-settings-voice", "hq-settings-page"]);
     // The rail's Settings link (owner, 2026-10-05: "menu laye add pannirlaama") opens the same page, and is not a room.
+    // It starts from a clean room, so a page left open by the step before cannot pass it (attack 12a0307 L2), and every
+    // condition is judged and named on its own (L3, B6, B3).
     await step(async () => {
-      const clicked = await click(P, "[data-rail-settings]");
-      const page = clicked && (await until(async () => (await count(P, 'main section[data-render="settings"] [data-models-panel]')) === 1 && /view=settings/.test(String(await hash(P))), capMs));
+      const clean = await settingsGone();
+      const clicked = clean && (await click(P, "[data-rail-settings]"));
+      const page = Boolean(clicked) && (await until(async () => (await count(P, 'main section[data-render="settings"] [data-models-panel]')) === 1 && /view=settings/.test(String(await hash(P))), capMs));
       const notRoom = (await count(P, "[data-rail-settings][data-room]")) === 0;
-      record("rail-settings", Boolean(page) && notRoom, clicked ? (page ? "the link carries a data-room" : "the rail's Settings opened no page") : "no visible [data-rail-settings] in the rail");
       await press(P, ESCAPE);
-      await until(async () => (await count(P, "[data-models-panel]")) === 0, capMs);
+      const back = page && (await until(settingsGone, capMs));
+      const why = !clean ? "the page was still open before the click" : !clicked ? "no visible [data-rail-settings] in the rail"
+        : [page ? "" : "the rail's Settings opened no page", notRoom ? "" : "the link carries a data-room", !page || back ? "" : "Escape did not bring the room back"].filter(Boolean).join("; ");
+      record("rail-settings", clean && page && notRoom && back, why || "the link opened the page, carries no data-room, and Escape brought the room back");
     }, ["rail-settings"]);
     await step(async () => {
       await val(P, "document.activeElement && document.activeElement.blur && document.activeElement.blur()");

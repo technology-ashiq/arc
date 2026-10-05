@@ -452,6 +452,9 @@ const pageHash = shell.buildHash("lane", "tok", "2026-10-05", null, "settings");
 const pageBack = shell.parseHash(pageHash);
 check("the Settings page round-trips with its room, token and day", pageBack.view === "settings" && pageBack.room === "lane" && pageBack.token === "tok" && pageBack.asOf === "2026-10-05", pageHash);
 check("a room address carries no view", shell.parseHash(shell.buildHash("lane", "tok")).view === null);
+// No room is the workroom's home, written as its own part: `#/` read back as a room named "" (attack 12a0307 B2).
+const homePage = shell.buildHash(null, "tok", null, null, "settings");
+check("the Settings page on the home writes the workroom's part, never #/", homePage === "#hq&token=tok&view=settings" && shell.parseHash(homePage).room === null && shell.buildHash("", null) === "#hq", homePage);
 check("an unknown view is dropped both ways", shell.parseHash("#/lane&view=evil").view === null && !/view=/.test(shell.buildHash("lane", null, null, null, /** @type {any} */ ("evil"))));
 
 // A concept homed in a room that does not exist is a result that opens nothing. face-coverage
