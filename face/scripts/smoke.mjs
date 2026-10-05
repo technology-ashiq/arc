@@ -1056,7 +1056,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
   "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings",
-  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
+  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-keys", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1259,8 +1259,8 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     await step(async () => {
       await go(P, `#hq&${tokenPart}`);
       const opened = (await inWorkroom(P)) && (await click(P, "[data-hq-settings]"));
-      const menu = opened && (await until(async () => (await count(P, "[data-models-panel] [data-settings-tab]")) === 2 && (await count(P, '[data-settings-section="models"]')) === 1, capMs));
-      record("hq-settings-menu", menu, opened ? "Settings opened without both sections (Models, Voice)" : "no visible [data-hq-settings] in the workroom");
+      const menu = opened && (await until(async () => (await count(P, "[data-models-panel] [data-settings-tab]")) === 3 && (await count(P, '[data-settings-section="models"]')) === 1, capMs));
+      record("hq-settings-menu", menu, opened ? "Settings opened without its three sections (Models, Voice, Keys)" : "no visible [data-hq-settings] in the workroom");
       const tested = menu && (await until(async () => (await count(P, "[data-model-test]")) > 0, capMs)) && (await click(P, "[data-model-test]"));
       const line = () => val(P, "(function () { var e = document.querySelector('[data-test-line]'); return e ? e.getAttribute('data-test-line') + '|' + e.textContent : ''; })()");
       const ok = tested && (await until(async () => /^ok\|.*answered in [0-9.]+ s/.test(String(await line())), 30000, 250));
@@ -1281,6 +1281,19 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       record("hq-settings-edit", Boolean(renamed && restored), `the row read ${JSON.stringify(String(await rowName()).slice(0, 80))} (was ${JSON.stringify(original.slice(0, 40))}); renamed=${Boolean(renamed)} restored=${Boolean(restored)}`);
       const voice = menu && (await click(P, '[data-settings-tab="voice"]')) && (await until(async () => (await count(P, '[data-settings-section="voice"] [data-voice-switch]')) === 1, capMs));
       record("hq-settings-voice", voice, "the Voice section did not open with its switch");
+      // Keys (Phase 12, ADR-1351): add a key, read its tail, replace it, remove it -- and its value is in no page text.
+      const KEYV = ["smoke", "value", "0123456789abcdef", "k1"].join("-");
+      const KEYV2 = ["smoke", "value", "fedcba9876543210", "k2"].join("-");
+      const shown = () => val(P, "(function () { var r = document.querySelector('[data-key-row=SMOKE_TEST_KEY] [data-key-shown]'); return r ? r.textContent : ''; })()");
+      const typeInto = async (sel, text) => (await val(P, `(function () { var i = document.querySelector(${JSON.stringify(sel)}); if (!i) return false; i.focus(); return document.activeElement === i; })()`)) === true && (await P.send("Input.insertText", { text }), true);
+      const keysTab = menu && (await click(P, '[data-settings-tab="keys"]')) && (await until(async () => (await count(P, '[data-settings-section="keys"] [data-key-add]')) === 1, capMs));
+      const added = keysTab && (await typeInto("[data-key-name]", "SMOKE_TEST_KEY")) && (await typeInto("[data-key-value]", KEYV)) && (await click(P, "[data-key-add]"))
+        && (await until(async () => String(await shown()) === `…${KEYV.slice(-4)}`, capMs));
+      const replaced = added && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-replace]")) && (await typeInto("[data-key-replace-value]", KEYV2)) && (await click(P, "[data-key-replace-save]"))
+        && (await until(async () => String(await shown()) === `…${KEYV2.slice(-4)}`, capMs));
+      const noValue = !String(await val(P, "document.body.innerText")).includes("0123456789abcdef") && !String(await val(P, "document.body.innerText")).includes("fedcba9876543210");
+      const removed = replaced && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-remove]")) && (await until(async () => (await count(P, "[data-key-row=SMOKE_TEST_KEY]")) === 0, capMs));
+      record("hq-settings-keys", Boolean(keysTab && added && replaced && noValue && removed), `keys tab=${Boolean(keysTab)} added=${Boolean(added)} replaced=${Boolean(replaced)} value-hidden=${noValue} removed=${Boolean(removed)} (row read ${JSON.stringify(String(await shown()))})`);
       // A page, not a popup (Amendment 2): its own address, drawn in the main area in place of the room, no modal over it,
       // and closing it brings the room back with the address clean.
       const asPage = menu && /(^|&)view=settings(&|$)/.test(String(await hash(P)).replace(/^#/, ""))
@@ -1290,7 +1303,7 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       await press(P, ESCAPE);
       const back = await until(settingsGone, capMs);
       record("hq-settings-page", asPage && back, `open: ${asPage ? "a page" : "not a page"} at ${JSON.stringify(pageHash)}; closed: ${back ? "the room is back" : "the page stayed or the address kept view=settings"}`);
-    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page"]);
+    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-keys", "hq-settings-page"]);
     // The rail's Settings link (owner, 2026-10-05: "menu laye add pannirlaama") opens the same page, and is not a room.
     // It starts from a clean room, so a page left open by the step before cannot pass it (attack 12a0307 L2), and every
     // condition is judged and named on its own (L3, B6, B3).

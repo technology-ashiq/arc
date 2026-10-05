@@ -196,6 +196,20 @@ load 'test_helper'
   [ "$status" -eq 0 ] || { echo "the guard failed a clean run whose ok lines name mutants that FAIL"; false; }
 }
 
+@test "the owner's keys: set once in the face, never returned, the environment wins, the driver reads them" {
+  # Phase 12 (REQ-16, ADR-1351). tests/face/keys.mjs drives the real door and arc-run's generic-api driver against
+  # tests/face/fake-llm.mjs -- CI never calls a real provider, and no key leaves the sandbox.
+  run node "$ARC_ROOT/tests/face/keys.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- suite did not finish: $output"; false; }
+  ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
+  [[ "$output" == *"ok A: keys.mjs loaded its decisions (vacuous-pass guard)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok A: MUTANT CONTROL -- a view that echoes the record FAILs the same check"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok R: MUTANT CONTROL -- a store-first resolver FAILs the environment-wins check"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok G: with ARC_LLM_API_KEY unset, the driver sent the stored key named by ARC_LLM_KEY_NAME"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok D: the planted values appear in NO door response (every body this suite read)"* ]] || { echo "$output"; false; }
+}
+
 @test "the face talks: the owner's model registry, the key never returned, labelled answers, receipted runs" {
   # Phase 10 (REQ-14, ADR-1350). tests/face/talk.mjs drives the real door, arc-run and generic-api against
   # tests/face/fake-llm.mjs -- CI never calls a real provider.

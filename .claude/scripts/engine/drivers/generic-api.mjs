@@ -14,9 +14,12 @@
  */
 
 import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
+import { resolveKey } from "../../hq/lib/keys.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
-const API_KEY = process.env.ARC_LLM_API_KEY || "";
+// The key, by the owner's keys store (ADR-1351): ARC_LLM_KEY_NAME names which stored key to use (OPENROUTER_API_KEY);
+// without it, ARC_LLM_API_KEY as always. resolveKey reads the environment first, so a set variable is never overridden.
+const BEARER = resolveKey(process.env.ARC_LLM_KEY_NAME || "ARC_LLM_API_KEY") || "";
 // The router pins the model; ARC_LLM_MODEL is only a fallback for an UNROUTED run, and
 // an unrouted run is recorded as unpinned rather than quietly using whatever env says.
 const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
@@ -47,7 +50,7 @@ async function callOnce(body, capMs) {
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${API_KEY}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${BEARER}` },
       body: JSON.stringify(body),
       signal: ctl.signal,
     });
@@ -90,10 +93,10 @@ function fromSse(text) {
 await runDriver("generic-api", async ({ processName, input }) => {
   if (TIMEOUT_BAD) throw new Error(`ARC_LLM_TIMEOUT_MS=${JSON.stringify(TIMEOUT_RAW)} is not a per-attempt cap from 1000 to 3600000 ms -- refused, not used`);
   if (REASONING_BAD) throw new Error(`ARC_LLM_REASONING=${JSON.stringify(REASONING_RAW)} is not "off" or unset -- refused, not used`);
-  if (!ENDPOINT || !API_KEY || !MODEL) {
+  if (!ENDPOINT || !BEARER || !MODEL) {
     // Named, not guessed. An absent endpoint is a setup fact the operator must see, and
     // "not configured" must never be reported as "the model answered badly".
-    throw new Error("ARC_LLM_ENDPOINT, ARC_LLM_API_KEY and ARC_LLM_MODEL must all be set (see phase-02-spec, Your-setup)");
+    throw new Error("ARC_LLM_ENDPOINT, ARC_LLM_API_KEY (or ARC_LLM_KEY_NAME naming a key set in the face) and ARC_LLM_MODEL must all be set (see phase-02-spec, Your-setup)");
   }
 
   // THE PROCESS BODY IS THE QUESTION, and until ADR-0226 this driver never sent it: the request
