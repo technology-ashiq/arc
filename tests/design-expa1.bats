@@ -302,7 +302,7 @@ EOF
   # The count the original defect got wrong: the paired d is one of the variants judged.
   run bash "$(_explore)" selfreview ex1
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"of 2 variant(s)"* ]] || { echo "the paired d was not counted: $output"; false; }
+  [[ "$output" == *"of 4 variant(s)"* ]] || { echo "the paired d was not counted (a b c dirs + d = 4; unfixed reads 3): $output"; false; }
   mv docs/design/explore/ex1/variant-d "$BATS_TEST_TMPDIR/d-moved"
   run bash "$(_explore)" surfaces ex1
   [ "$status" -eq 1 ] || { echo "a deleted arm read as no arm: $output"; false; }
