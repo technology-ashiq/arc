@@ -1266,9 +1266,9 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const ok = tested && (await until(async () => /^ok\|.*answered in [0-9.]+ s/.test(String(await line())), 30000, 250));
       record("hq-settings-test", ok, `the test line read ${JSON.stringify(String(await line()).slice(0, 160))}`);
       // Edit in place (Amendment 3): rename the model, read the row back still answering, then rename it back.
-      const rowName = () => val(P, "(function () { var r = document.querySelector('[data-model-row]:not([data-model-editing]) .truncate'); return r ? r.textContent : ''; })()");
+      const rowName = () => val(P, "(function () { var r = document.querySelector('[data-model-row][data-model-active] .truncate'); return r ? r.textContent : ''; })()");
       const rename = async (to) => {
-        if (!(await click(P, "[data-model-edit]"))) return false;
+        if (!(await click(P, "[data-model-row][data-model-active] [data-model-edit]"))) return false;
         const focused = await until(async () => (await val(P, "(function () { var i = document.querySelector('[data-edit-field=name]'); if (!i) return false; i.focus(); i.select(); return document.activeElement === i; })()")) === true, capMs);
         if (!focused) return false;
         await P.send("Input.insertText", { text: to });

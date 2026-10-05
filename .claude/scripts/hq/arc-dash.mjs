@@ -866,10 +866,15 @@ function apiModelsChange(ctx, body) {
   const saved = models.saveRegistry(got.path, step.reg);
   if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);
   // A test measured against the old URL or model id is not the edited model's: forgotten under both names (Amendment 3).
+  // Both names come from the registries applyChange matched, not rebuilt from the body (attack 0087028 B1).
   if (body.op === "edit") {
     const tests = testsOf(ctx);
-    tests.delete(String(body.name).trim().toLowerCase());
-    if (body.model && typeof body.model.name === "string") tests.delete(body.model.name.trim().toLowerCase());
+    const was = models.findModel(got.reg, body.name);
+    if (was) {
+      tests.delete(was.name.toLowerCase());
+      const now = step.reg.models[got.reg.models.indexOf(was)];
+      if (now) tests.delete(now.name.toLowerCase());
+    }
   }
   return { mode: ctx.mode, ...models.withTests(models.publicView(step.reg), testsOf(ctx)) };
 }

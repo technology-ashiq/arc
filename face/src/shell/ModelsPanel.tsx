@@ -74,14 +74,16 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
     void settle(door.setModels(c.change))
   }
 
-  const onSave = (ev: FormEvent) => {
+  const onSave = async (ev: FormEvent) => {
     ev.preventDefault()
     if (!editing) return
     const c = editChange(editing.name, editing.form)
     if (!c.ok) { setProblem(c.why); return }
-    // As with an add, a typed key leaves this page once and is not kept in the form.
-    setEditing(null)
-    void settle(door.setModels(c.change))
+    // The form closes only when the door accepts the edit: a refusal (a taken name, a bad URL) leaves it open with what
+    // was typed, so nothing has to be typed again (attack 0087028 B4).
+    setBusy(true)
+    setProblem(null)
+    try { setView(modelsView(await door.setModels(c.change))); setEditing(null) } catch (err) { setProblem(refusalOf(err).human) } finally { setBusy(false) }
   }
   const editField = (k: 'name' | 'baseUrl' | 'model' | 'key') => (e: { target: { value: string } }) => setEditing((x) => (x ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))
 
@@ -150,7 +152,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
               {!loading && view.rows.length === 0 ? <li className="text-[12.5px]" style={{ color: 'var(--text-3)' }}>No model yet. Add one below.</li> : null}
               {view.rows.map((r) => editing && editing.name === r.name ? (
                 <li key={r.name} data-model-row data-model-editing className="px-3 py-3" style={{ border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)' }}>
-                  <form onSubmit={onSave} className="flex flex-col gap-2" aria-label={`Edit ${r.name}`}>
+                  <form onSubmit={(e) => void onSave(e)} className="flex flex-col gap-2" aria-label={`Edit ${r.name}`}>
                     <label className="sr-only" htmlFor="edit-name">Name</label>
                     <input id="edit-name" data-edit-field="name" value={editing.form.name} onChange={editField('name')} placeholder="a name you will recognise" className={field} style={fieldStyle} />
                     <label className="sr-only" htmlFor="edit-url">Base URL</label>
@@ -172,7 +174,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
                   </form>
                 </li>
               ) : (
-                <li key={r.name} data-model-row className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2" style={{ border: `1px solid ${r.active ? 'var(--accent)' : 'var(--line-1)'}`, borderRadius: 'var(--r-sm)' }}>
+                <li key={r.name} data-model-row data-model-active={r.active ? '' : undefined} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2" style={{ border: `1px solid ${r.active ? 'var(--accent)' : 'var(--line-1)'}`, borderRadius: 'var(--r-sm)' }}>
                   <div className="min-w-0 flex-1">
                     <div className="text-[13.5px] truncate" style={{ fontWeight: 600, color: 'var(--text-1)' }}>{r.name}{r.active ? ' · answering' : ''}</div>
                     <div className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{r.where} · {r.key}</div>
