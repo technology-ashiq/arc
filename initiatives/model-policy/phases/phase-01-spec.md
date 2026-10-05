@@ -7,11 +7,11 @@
 **Branch:** `feat/arc-model-policy-profiles`
 
 ## Exit criteria (Definition of Done)
-- [ ] `hq/lib/face/reads.mjs` `routerRead` serves each class's `profile` and each tier pin's `profile`, plus `model` + `gateway_host` resolved read-only from the store (or `missing: true`); never `key`, never the base-URL path
-- [ ] `face/src/modules/kernel/model-policy/fold.mjs` renders `profile → model @ host` (or `profile (not on this machine)`) in the tier table and the process-routes table; `View.tsx` unchanged unless a column is added
-- [ ] A face test plants a recognisable key in a fixture store and proves it is in no `/api/model-policy` body; fold test covers resolved / missing / plain-pin rows
-- [ ] The face lane's three Settings items (cost, "used by", remove guard — ADR-1803) handed over as one paste-ready `/arc-change --lane face` prompt, recorded in `evidence/phase-01/face-handoff.md`
-- [ ] Wiki regenerated (`wiki-build --write`) and PORTFOLIO row in step with PROGRESS in the same PR; CI green per job; tracker updated
+- [x] `hq/lib/face/reads.mjs` `routerRead` serves each class's `profile` and each tier pin's `profile`, plus `model` + `gateway_host` resolved read-only from the store (or `missing: true`); never `key`, never the base-URL path
+- [x] `face/src/modules/kernel/model-policy/fold.mjs` renders `profile → model @ host` (or `profile (not on this machine)`) in the tier table and the process-routes table; `View.tsx` unchanged unless a column is added
+- [x] A face test plants a recognisable key in a fixture store and proves it is in no `/api/model-policy` body; fold test covers resolved / missing / plain-pin rows
+- [x] The face lane's three Settings items (cost, "used by", remove guard — ADR-1803) handed over as one paste-ready `/arc-change --lane face` prompt, recorded in `evidence/phase-01/face-handoff.md`
+- [x] Wiki regenerated (`wiki-build --write`) and PORTFOLIO row in step with PROGRESS in the same PR; CI green per job; tracker updated
 
 ## Verification plan
 - **Test command:** CI `arc-ci` — the face suites that cover `/api/model-policy` and the model-policy fold (`tests/face/*.mjs` via their bats wrappers), plus Phase 00's suites. Never on this box.
