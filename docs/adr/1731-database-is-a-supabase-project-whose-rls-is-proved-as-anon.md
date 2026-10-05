@@ -26,8 +26,10 @@ Option 2. The project is named after the venture slug in the token's only organi
 picked); region follows `profile.region` (`in` → `ap-south-1`). A project of that name already present is recorded as
 `supabase-project-found` and left out of the exit plan. scaffold then runs one migration through
 `POST /v1/projects/{ref}/database/query`: table `launch_probe` with RLS enabled and NO policy, one row inserted as the
-owner role. verify asks the same endpoint, as `anon` inside one transaction, how many rows it can see: 0 while the owner
-role sees 1 is the proof that RLS denies unless a policy grants. The down half (`drop table launch_probe`) is the exit
+owner role. verify counts the rows as the owner role through the same endpoint (1), and reads the table the way the
+venture's app will: PostgREST at `<ref>.supabase.co` with the project's public anon key, read per verify and never stored
+(0 rows). That pair is the proof that RLS denies unless a policy grants. The row gains `supabase.co`. (A role switch
+inside a Management API request was the first form; it left the session's transaction and role open.) The down half (`drop table launch_probe`) is the exit
 plan's step.
 
 ## Consequences

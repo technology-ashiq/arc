@@ -28,3 +28,7 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 - L2/B3/B4 fixed (PR in any state). L3 (default branch) stays D12 across all four GitHub writers -- one fix for all, when the trigger fires.
 - Forged-trailer findings (guessable `slug@slot@provider`) -> debt D19: ownership markers are not secrets; an owner who forges one owns the outcome.
 - Fine-grained PAT write 403/404 surfaces as an uncoded GitHub error naming the status -- a refusal, not a pass; left as is.
+
+## attack cc949ef r1 / 8a0ae88 r2 (slice 8)
+
+- All high and medium fixed in two rounds. Logic surface: round 1 RUN FAILED, round 2 NOT RUN.

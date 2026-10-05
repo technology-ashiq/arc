@@ -22,6 +22,10 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
       out = [];
       if (/^(begin|commit|set local role anon)$/i.test(stmt)) continue;
       if (/^select count\(\*\)::int as n from pg_tables/i.test(stmt)) out = [{ n: p.tables.launch_probe ? 1 : 0 }];
+      else if (/^select \(count\(\*\) = 1 and bool_and\(id = 1 and note = 'owner-only'\)\)::int as n/i.test(stmt)) {
+        const rows = (p.tables.launch_probe || { rows: [] }).rows;
+        out = [{ n: rows.length === 1 && rows[0].id === 1 && (rows[0].note || "owner-only") === "owner-only" ? 1 : 0 }];
+      }
       else if (/^create table if not exists public\.launch_probe/i.test(stmt)) p.tables.launch_probe = p.tables.launch_probe || { rls: false, rows: [] };
       else if (/^alter table public\.launch_probe enable row level security/i.test(stmt)) p.tables.launch_probe.rls = true;
       else if (/^insert into public\.launch_probe/i.test(stmt)) { const t = p.tables.launch_probe; if (!t.rows.some((r) => r.id === 1)) t.rows.push({ id: 1 }); }
@@ -38,6 +42,17 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
 
   async function fetch(input, init = {}) {
     const url = new URL(String(input));
+    // PostgREST at <ref>.supabase.co with the anon key: RLS on and no policy answers [] to anon, as the real one does.
+    const rest = url.hostname.match(/^([a-z0-9]{20})\.supabase\.co$/);
+    if (rest) {
+      const proj = store.find((x) => x.id === rest[1]);
+      calls.push(`GET ${url.hostname}${url.pathname}`);
+      if (!proj) return err(404, "project not found");
+      if ((init.headers || {}).apikey !== `anon-key-${proj.id}`) return err(401, "Invalid API key");
+      const t = proj.tables.launch_probe;
+      if (!t) return err(404, "relation does not exist");
+      return json(200, t.rls && !rlsOff && !policy ? [] : t.rows.map((r) => ({ id: r.id })));
+    }
     if (url.hostname !== "api.supabase.com") throw new Error(`fake supabase: unexpected host ${url.hostname}`);
     const method = String(init.method || "GET").toUpperCase();
     calls.push(`${method} ${url.pathname}`);
@@ -61,6 +76,8 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
       if (proj.status === "COMING_UP" && ++proj.polls >= becomeHealthy) proj.status = "ACTIVE_HEALTHY";
       return json(200, { id: proj.id, name: proj.name, status: proj.status });
     }
+    m = p.match(/^\/projects\/([a-z0-9]{20})\/api-keys$/);
+    if (m && method === "GET") return store.some((x) => x.id === m[1]) ? json(200, [{ name: "anon", api_key: `anon-key-${m[1]}` }, { name: "service_role", api_key: `service-key-${m[1]}` }]) : err(404, "project not found");
     m = p.match(/^\/projects\/([a-z0-9]{20})\/database\/query$/);
     if (m && method === "POST") {
       const proj = store.find((x) => x.id === m[1]);

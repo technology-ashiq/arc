@@ -492,6 +492,7 @@ arm() {
   [ "$(j 'o.records.every(r => r.endsWith(" false"))')" = "true" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.dmarc')" == "v=DMARC1; p=quarantine;"* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.resend.com + dns.google + cloudflare-dns.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.join(",")')" = "MX send.sandbox.automemory.ai false,TXT _dmarc.sandbox.automemory.ai false,TXT resend._domainkey.sandbox.automemory.ai false,TXT send.sandbox.automemory.ai false" ] || { echo "$DONE"; false; }
   [ "$(j 'o.teardown.filter(s => s === "delete-if-tagged").length + " " + o.teardown.slice(-1)[0]')" = "4 delete-domain" ] || { echo "$DONE"; false; }
 }
 
@@ -527,4 +528,16 @@ arm() {
 @test "launch-contract: email finds its domain past the first page instead of creating a second" {
   arm email paged
   [ "$(j 'o.scaffold.ok + " " + o.domains + " " + o.kind')" = "true 151 resend-domain-found" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: database verify reads as anon through PostgREST, and a probe table killed before recording is resumed" {
+  arm database fresh
+  [ "$(j 'o.verify.answerer')" = "api.supabase.com + fixtureref0000000001.supabase.co" ] || { echo "$DONE"; false; }
+  arm database killed-before-record
+  [ "$(j 'o.scaffold.ok + " " + o.kinds.join(",")')" = "true supabase-project,db-probe-table" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner CNAME at a name email needs refuses before any record is written" {
+  arm email owner-cname
+  [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 0" ] || { echo "$DONE"; false; }
 }

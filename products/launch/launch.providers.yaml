@@ -257,8 +257,9 @@ providers:
       - SUPABASE_ACCESS_TOKEN
     hosts:
       - api.supabase.com
+      - supabase.co
     credentials:
-      scope: "project create in one organization"
+      scope: "project create in one organization; reads the probe as anon through PostgREST (ADR-1731)"
     adapter: providers/database/supabase.mjs
     digest: null
     approved_by: ashiq

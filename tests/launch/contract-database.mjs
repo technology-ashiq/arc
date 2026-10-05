@@ -79,6 +79,15 @@ switch (scenario) {
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
     out.rls = sb.store[0].tables.launch_probe.rls;
     break;
+  case "killed-before-record": {
+    // UP ran and the worker died before reporting the table: the re-run recognises the probe's exact shape.
+    await adapter.scaffold(ctxNow());
+    const i = reported.findIndex((r) => r.kind === "db-probe-table");
+    reported.splice(i, 1);
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.kinds = reported.map((r) => r.kind);
+    break;
+  }
   case "policy-recorded":
     // The policy check refuses after UP: the table it just made is already recorded, so the exit plan drops it.
     sb.store.length = 0;

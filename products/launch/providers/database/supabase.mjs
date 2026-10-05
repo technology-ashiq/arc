@@ -13,7 +13,8 @@ const UP = [
 ].join("\n");
 // The query endpoint answers with the LAST statement's rows, so the select is last and the transaction is left to end
 // with the request (a trailing commit would answer with no rows, attack cc949ef B4).
-const AS_ANON = "begin; set local role anon; select count(*)::int as n from public.launch_probe;";
+// A table launch made and was killed before recording: exactly the probe's one row, nothing else (attack 8a0ae88 B5).
+const IS_PROBE = "select (count(*) = 1 and bool_and(id = 1 and note = 'owner-only'))::int as n from public.launch_probe;";
 const EXISTS = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename = 'launch_probe';";
 const AS_OWNER = "select count(*)::int as n from public.launch_probe;";
 const POLICIES = "select count(*)::int as n from pg_policies where schemaname = 'public' and tablename = 'launch_probe';";
@@ -95,8 +96,10 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 
 // Bounded at 7 minutes, under the runner's 10-minute stale-lock window: a slower project start is a failed attempt the
 // next apply resumes (the project is already this slot's resource), never a held lock (attack cc949ef B1).
+// The bound is wall-clock, not a poll count: slow answers count against it too (attack 8a0ae88 B4).
 async function healthy(ctx, ref) {
-  for (let i = 0; i < 14; i++) {
+  const until = Date.now() + 7 * 60 * 1000;
+  for (let i = 0; i < 14 && Date.now() < until; i++) {
     if (i) await wait(30000, ctx.signal);
     const p = await sb(ctx, "GET", `/projects/${ref}`);
     const st = say(p.body && p.body.status, 30);
@@ -133,7 +136,7 @@ export async function scaffold(ctx) {
   // A launch_probe table launch did not create is the owner's: it is never altered or written to (attack cc949ef B3).
   const tid = `${ref}:public.launch_probe`;
   const exists = count(await query(ctx, ref, EXISTS)) === 1;
-  if (exists && !ctx.resources.some((r) => r.kind === "db-probe-table" && r.id === tid))
+  if (exists && !ctx.resources.some((r) => r.kind === "db-probe-table" && r.id === tid) && count(await query(ctx, ref, IS_PROBE)) !== 1)
     throw refuse("PROBE_TABLE_FOREIGN", "public.launch_probe already exists and launch did not create it; it is not touched");
   await query(ctx, ref, UP);
   // Recorded the moment it exists, before the policy check that may refuse (attack cc949ef B2).
@@ -154,10 +157,25 @@ async function probe(ctx) {
   if (st === "INACTIVE" || st === "PAUSED") return { ok: false, reason: `PAUSED(supabase project ${ref} is ${st})` };
   if (st !== "ACTIVE_HEALTHY") return { ok: false, reason: `supabase project ${ref} is ${st || "unknown"}` };
   const owner = count(await query(ctx, ref, AS_OWNER));
-  const anon = count(await query(ctx, ref, AS_ANON));
   if (owner < 1) return { ok: false, reason: "the owner role sees no probe row; the probe cannot tell denial from emptiness" };
-  if (anon !== 0) return { ok: false, reason: `anon reads ${anon} probe row(s): RLS is not denying` };
-  return { ok: true, answerer: "api.supabase.com", evidence: { project: ref, ownerRows: owner, anonRows: anon } };
+  // anon reads the way the venture's app will: PostgREST with the project's public anon key. No role switch inside a
+  // Management API session, which left a transaction (and the anon role) open for later queries (attack 8a0ae88 B2).
+  // The anon key is the publishable key and is read per verify, never stored.
+  const keys = list((await sb(ctx, "GET", `/projects/${ref}/api-keys`)).body);
+  const anonKey = (keys.find((k) => k.name === "anon" && typeof k.api_key === "string") || {}).api_key;
+  if (!anonKey) return { ok: false, reason: "supabase returned no anon key for the project" };
+  let rest;
+  try {
+    rest = await ctx.fetch(`https://${ref}.supabase.co/rest/v1/launch_probe?select=id`, { method: "GET", headers: { apikey: anonKey, authorization: `Bearer ${anonKey}`, "user-agent": "arc-launch" } });
+  } catch (e) {
+    if (e && e.code) throw e;
+    return { ok: false, reason: "postgrest transport error" };
+  }
+  let rows = null;
+  try { rows = await rest.json(); } catch { rows = null; }
+  if (rest.status !== 200 || !Array.isArray(rows)) return { ok: false, reason: `postgrest answered ${rest.status} for the probe read as anon` };
+  if (rows.length !== 0) return { ok: false, reason: `anon reads ${rows.length} probe row(s): RLS is not denying` };
+  return { ok: true, answerer: `api.supabase.com + ${ref}.supabase.co`, evidence: { project: ref, ownerRows: owner, anonRows: 0 } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

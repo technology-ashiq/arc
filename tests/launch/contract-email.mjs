@@ -74,6 +74,12 @@ switch (scenario) {
     out.domains = resend.store.length;
     out.kind = (reported.find((r) => r.kind.startsWith("resend-domain")) || {}).kind || null;
     break;
+  case "owner-cname":
+    // The owner's CNAME at send.<domain> blocks every record launch wants there: refused before any write.
+    cloudflare.records.push({ id: "own-1", zone: "zone-1", type: "CNAME", name: `send.${D}`, content: "elsewhere.example.net", proxied: false, comment: null });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.written = mine().length;
+    break;
   case "unverified":
     // The domain exists but its records were removed: Resend does not verify, and neither does the slot.
     await adapter.scaffold(ctxNow());

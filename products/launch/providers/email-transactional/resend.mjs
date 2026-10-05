@@ -69,12 +69,15 @@ async function zoneOf(ctx, name) {
 
 // Resend's records, validated: a name under the brand domain, a known type, a value of bounded length. The provider's
 // answer is another party's text and decides what launch writes to DNS.
-function wanted(domain, records) {
+// Names are read by one rule (attack 8a0ae88 B1): a name ending in the zone's apex is absolute; `@` is the apex; any
+// other is relative to the ZONE apex, the way Resend lists them (`send.sandbox` under automemory.ai). Guessing against the
+// brand domain doubled a subdomain into `send.sandbox.sandbox.automemory.ai`.
+function wanted(domain, apex, records) {
   const out = [];
   for (const r of list(records)) {
     const type = String(r.type || r.record || "").toUpperCase();
     const rawName = bare(r.name);
-    const name = rawName === domain || rawName.endsWith(`.${domain}`) ? rawName : rawName ? `${rawName}.${domain}` : "";
+    const name = rawName === "@" ? apex : rawName === apex || rawName.endsWith(`.${apex}`) ? rawName : rawName ? `${rawName}.${apex}` : "";
     const content = String(r.value || "").trim();
     const priority = r.priority === undefined || r.priority === null ? undefined : Number(r.priority);
     if (!TYPES.has(type)) throw refuse("BAD_RECORD", `resend listed a ${say(type, 10)} record; only TXT, CNAME and MX are written`);
@@ -116,16 +119,20 @@ export async function scaffold(ctx) {
   ctx.report({ kind, id: dom.id });
 
   const detail = (await rs(ctx, "GET", `/domains/${encodeURIComponent(dom.id)}`)).body;
-  const recs = wanted(domain, detail && detail.records);
   const zone = await zoneOf(ctx, domain);
+  const recs = wanted(domain, bare(zone.name), detail && detail.records);
   // Every conflict is found BEFORE anything is written: a refusal half-way would leave Resend a partial record set
   // (attack cc949ef B6). One DMARC and one SPF per name is the rule a resolver enforces: a same-policy record launch
   // did not create is the owner's, and is refused rather than doubled.
   const plan = [];
   for (const want of recs) {
-    const existing = list(await cf(ctx, "GET", `/zones/${zone.id}/dns_records?type=${want.type}&name=${encodeURIComponent(want.name)}`));
-    const mine = existing.find((r) => r.comment === ctx.tag);
-    const foreign = existing.filter((r) => r.comment !== ctx.tag && (want.type !== "TXT" || policyOf(r.content) === policyOf(want.content)));
+    // Read by NAME, every type: a CNAME shares its name with nothing, so any record there conflicts with one, and a CNAME
+    // there conflicts with anything. Launch's own record matches on type and content (or SPF/DMARC policy), so two
+    // wanted records at one name never claim the same existing one (attack 8a0ae88 B6).
+    const existing = list(await cf(ctx, "GET", `/zones/${zone.id}/dns_records?name=${encodeURIComponent(want.name)}`));
+    const same = (r) => r.type === want.type && (want.type !== "TXT" ? true : policyOf(want.content) ? policyOf(r.content) === policyOf(want.content) : unquote(r.content) === want.content);
+    const mine = existing.find((r) => r.comment === ctx.tag && same(r));
+    const foreign = existing.filter((r) => r.comment !== ctx.tag && (want.type === "CNAME" || r.type === "CNAME" || (r.type === want.type && (want.type !== "TXT" || (policyOf(want.content) && policyOf(r.content) === policyOf(want.content))))));
     if (!mine && foreign.length)
       throw refuse("FOREIGN_RECORD", `${want.name} already has a ${want.type} record launch did not create; launch does not write over it`);
     plan.push({ want, mine });

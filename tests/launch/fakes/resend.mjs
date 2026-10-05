@@ -3,18 +3,21 @@
 // cannot pass by asserting verification into being. It replaces only the transport; other hosts go to `inner`.
 //   records     what Resend lists for a new domain (TXT/CNAME/MX)
 //   domains     seed domains [{ id, name }]
-export function makeResend({ cloudflare, inner, token = "re_fixture_token_0123456789", records = null, domains = [] } = {}) {
+export function makeResend({ cloudflare, inner, token = "re_fixture_token_0123456789", records = null, domains = [], zoneApex = "automemory.ai" } = {}) {
   const store = domains.map((d) => ({ status: "not_started", ...d }));
   const calls = [];
   let n = 0;
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const err = (status, message) => json(status, { statusCode: status, name: "error", message });
+  // Names RELATIVE to the zone apex, as Resend lists them: `send.sandbox` for sandbox.automemory.ai under automemory.ai.
+  const rel = (name) => (name.endsWith(`.${zoneApex}`) ? name.slice(0, -(zoneApex.length + 1)) : name);
+  const abs = (n) => (n === zoneApex || n.endsWith(`.${zoneApex}`) ? n : `${n}.${zoneApex}`);
   const listed = (name) => records || [
-    { record: "SPF", name: `send.${name}`, type: "MX", value: "feedback-smtp.us-east-1.amazonses.com", priority: 10 },
-    { record: "SPF", name: `send.${name}`, type: "TXT", value: "v=spf1 include:amazonses.com ~all" },
-    { record: "DKIM", name: `resend._domainkey.${name}`, type: "TXT", value: "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDfixture" },
+    { record: "SPF", name: `send.${rel(name)}`, type: "MX", value: "feedback-smtp.us-east-1.amazonses.com", priority: 10 },
+    { record: "SPF", name: `send.${rel(name)}`, type: "TXT", value: "v=spf1 include:amazonses.com ~all" },
+    { record: "DKIM", name: `resend._domainkey.${rel(name)}`, type: "TXT", value: "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDfixture" },
   ];
-  const present = (d) => d.records.every((r) => cloudflare.records.some((x) => x.type === r.type && x.name === r.name && String(x.content) === r.value));
+  const present = (d) => d.records.every((r) => cloudflare.records.some((x) => x.type === r.type && x.name === abs(r.name) && String(x.content) === r.value));
 
   async function fetch(input, init = {}) {
     const url = new URL(String(input));
