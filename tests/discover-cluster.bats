@@ -15,6 +15,8 @@ hunt_recorded() {
   node "$(CLI)" hunt --niche "invoice reminders" --query "invoice reminders" --query "chasing late payments" --query "invoicing software pain" --offline-fixture "$(FX recorded/hn.json)" --out "$1"
 }
 
+idem_for() { node -e 'process.stdout.write(require("crypto").createHash("sha256").update("decision.recorded|" + process.argv[1]).digest("hex"))' "$1"; }
+
 setup() {
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   mkdir -p "$ARC_SPINE_ROOT"
@@ -81,7 +83,7 @@ setup() {
   ask=$(node "$(EVENT)" emit approval.requested --strict --process discover@0.1.0 --payload-file "$(FX reject-request.json)" | tail -1)
   [[ "$ask" =~ ^[0-9A-HJKMNP-TV-Z]{26}$ ]] || { echo "approval.requested not recorded: $ask"; false; }
   printf '{"decides":"%s","verdict":"reject","reason":"fixture reject"}' "$ask" > "$BATS_TEST_TMPDIR/dec.json"
-  dec=$(node "$(EVENT)" emit decision.recorded --strict --payload-file "$BATS_TEST_TMPDIR/dec.json" | tail -1)
+  dec=$(node "$(EVENT)" emit decision.recorded --strict --payload-file "$BATS_TEST_TMPDIR/dec.json" --idem "$(idem_for "$ask")" | tail -1)
   [[ "$dec" =~ ^[0-9A-HJKMNP-TV-Z]{26}$ ]] || { echo "decision.recorded not recorded: $dec"; false; }
   run --separate-stderr node "$ARC_ROOT/tests/discover/probe.mjs" rejects
   [[ "$output" == *"RAN rejects"* ]] || { echo "$stderr"; false; }

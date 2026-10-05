@@ -23,13 +23,20 @@
 
 None declared.
 
-## Scripts (5)
+## Scripts (8)
 
 - [`.claude/scripts/discover/arc-discover.mjs`](../../../.claude/scripts/discover/arc-discover.mjs)
 - [`.claude/scripts/discover/lib/cluster.mjs`](../../../.claude/scripts/discover/lib/cluster.mjs)
+- [`.claude/scripts/discover/lib/export.mjs`](../../../.claude/scripts/discover/lib/export.mjs)
+- [`.claude/scripts/discover/lib/judge.mjs`](../../../.claude/scripts/discover/lib/judge.mjs)
 - [`.claude/scripts/discover/lib/normalize.mjs`](../../../.claude/scripts/discover/lib/normalize.mjs)
+- [`.claude/scripts/discover/lib/score.mjs`](../../../.claude/scripts/discover/lib/score.mjs)
 - [`.claude/scripts/discover/lib/spine.mjs`](../../../.claude/scripts/discover/lib/spine.mjs)
 - [`.claude/scripts/discover/miners/hn.mjs`](../../../.claude/scripts/discover/miners/hn.mjs)
+
+## Files (1)
+
+- [`products/discover/score.yaml`](../../../products/discover/score.yaml)
 
 ## Source
 

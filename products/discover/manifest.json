@@ -15,11 +15,16 @@
   "scripts": [
     ".claude/scripts/discover/arc-discover.mjs",
     ".claude/scripts/discover/lib/cluster.mjs",
+    ".claude/scripts/discover/lib/export.mjs",
+    ".claude/scripts/discover/lib/judge.mjs",
     ".claude/scripts/discover/lib/normalize.mjs",
+    ".claude/scripts/discover/lib/score.mjs",
     ".claude/scripts/discover/lib/spine.mjs",
     ".claude/scripts/discover/miners/hn.mjs"
   ],
-  "files": [],
+  "files": [
+    "products/discover/score.yaml"
+  ],
   "docs": [],
   "face": {
     "room": "lane",

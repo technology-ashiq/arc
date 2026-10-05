@@ -28,5 +28,5 @@ ADR century 1900–1999; ADR-1900..1912 written at kickoff, 1913–1914 at the P
 
 ## Now
 
-**Current position:** Phase 00 in build on `feat/discover-birth` — birth rows written (manifest, CATALOG, expected-set, planned-rooms, PORTFOLIO, `/arc-hunt` stub), `tests/discover-birth.bats` red-first.
-**Next step:** merge origin/main → face-sections + wiki + sync golden in one commit → `/arc-attack` → one push → CI per job → merge → ruling receipt from the main clone.
+**Current position:** Phase 00 birth PR #343 on CI. Phases 01–03 code built on `feat/discover-p01` (stacked on the birth branch) as ONE build PR — owner instruction 2026-10-06 "complete all phase", and every live step (mini-hunt, council, real hunt) needs merged main anyway, so one CI cycle buys the fakes-first proof of all three phases. End-to-end smoke on a scratch spine: hunt → score → judge → propose → decision → export accepted by launch `loadProfile`.
+**Next step:** attack the build PR (one pass over 01–03), fix, push once after #343 merges; then from the main clone: ruling receipt, live mini-hunt, council on the two finalists (spend needs the owner OK), propose, the owner stamp, export, and the phases close in order.

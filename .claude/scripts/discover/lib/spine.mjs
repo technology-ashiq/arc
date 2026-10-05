@@ -49,6 +49,33 @@ export async function readRejects() {
   return out;
 }
 
+export const WEIGHTS_GATE = "discover-weights";
+
+/** Is `decision` an approve of a discover-weights request carrying exactly `sha`? (DIS-C) */
+export async function weightsApproved(decision, sha) {
+  const dec = (await read("decision.recorded")).find((ev) => ev.id === decision);
+  if (!dec || (dec.payload || {}).verdict !== "approve") return false;
+  const ask = (await read("approval.requested")).find((ev) => ev.id === dec.payload.decides);
+  return Boolean(ask && ask.payload && ask.payload.gate === WEIGHTS_GATE && ask.payload.weights_sha256 === sha);
+}
+
+/** council.verdict receipts keyed by question_hash (ADR-1910: the hash is the only thread). */
+export async function verdictsByHash(hashes) {
+  const want = new Set(hashes);
+  const out = new Map();
+  for (const ev of await read("council.verdict")) {
+    const p = ev.payload || {};
+    if (want.has(p.question_hash) && !out.has(p.question_hash)) out.set(p.question_hash, { receipt: ev.id, session_id: p.session_id, call: p.call, confidence: p.confidence });
+  }
+  return out;
+}
+
+/** The decision that decides `requestId`, or null while it is still open. */
+export async function decisionFor(requestId) {
+  const ev = (await read("decision.recorded")).find((e) => (e.payload || {}).decides === requestId);
+  return ev ? { id: ev.id, verdict: ev.payload.verdict, reason: ev.payload.reason } : null;
+}
+
 /** Emit one event; returns its ULID or throws UNRECEIPTED with arc-event's own reason. */
 export function emit(kind, payload, { idem } = {}) {
   const args = [ARC_EVENT, "emit", kind, "--strict", "--process", PROCESS, "--payload", JSON.stringify(payload)];
