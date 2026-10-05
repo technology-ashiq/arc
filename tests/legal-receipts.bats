@@ -507,6 +507,24 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   [[ "$output" != *"FULL-BLOB"* ]]
 }
 
+@test "legal receipts: a field no page prints gets NO print of its own in the committed ledger" {
+  # Round-1 boundary attack B1: a per-field digest of a value no page shows is a guess-and-confirm
+  # oracle in a public repo. Such a field moves only the one folded print, and is never named.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/$LEDGER_REL" "run.facts_fields.refund_window_days"
+  [ "$status" -eq 0 ]
+  [ "${#output}" -eq 64 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/$LEDGER_REL" "run.facts_fields.payment_model"
+  [ "$status" -eq 9 ]
+  [[ "$output" == *"no such field"* ]]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" stores_third_party_client_data false
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"facts.(fields no page prints): changed"* ]]
+  [[ "$output" != *"facts.stores_third_party_client_data"* ]]
+}
+
 @test "legal receipts: a re-publish against a record with no field prints WARNs full-blob" {
   _published
   run node "$ARC_ROOT/tests/legal-probe.mjs" strip-field-prints "$SANDBOX/$LEDGER_REL"

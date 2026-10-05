@@ -30,7 +30,7 @@ import { planDigest, expectLine, staleReason, emitReceipt, withExclusiveLock } f
 import { query, spineRoot } from "../hq/spine.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
-  backdatingErrors, semanticDiff, factsFieldPrints, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
+  backdatingErrors, semanticDiff, factsFieldPrints, printedFactPaths, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
   verifyPublished, VERIFY_INTACT, VERIFY_TAMPERED,
 } from "./lib/receipts.mjs";
 
@@ -359,6 +359,8 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
   const pages = [];
   const findings = [];
   const notAuthored = [];
+  // Every token any page read, so the receipt prints per field only what a page shows (B1).
+  const usedTokens = new Set();
 
   for (const pageDef of pagesDoc.pages) {
     const tmplName = `${pageDef.id}.tmpl.md`;
@@ -376,6 +378,7 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
       if (e instanceof TemplateError) throw new Fail(2, `${tmplName}: ${e.message}`);
       throw e;
     }
+    for (const e of ctx.used) usedTokens.add(e);
 
     const route = effectiveRoutes[pageDef.id];
     const header = [
@@ -441,7 +444,8 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
     payment_model: facts.payment_model,
     facts_sha256: factsSha,
     // Per-field prints, so a re-publish names WHICH value moved (REQ-06's semantic diff).
-    facts_fields: factsFieldPrints(facts),
+    // effective_date is printed by the page header, not by a token, so it is named here.
+    facts_fields: factsFieldPrints(facts, new Set([...printedFactPaths(usedTokens), "effective_date"])),
     effective_date: facts.effective_date,
     grievance_windows: windows,
     pages: pages.map(({ text, ...rest }) => rest),
@@ -533,16 +537,27 @@ function publishedRecord(venture) {
 /**
  * The re-publish diff, printed the same way at propose (BEFORE the human reads) and at publish.
  * Shown only at publish, it reached the reviewer after the stamp, when it could no longer help.
+ * Written synchronously, like the digest line after it: an async write lost on a closed pipe would
+ * leave a reviewer reading a plan with its diff missing (B5). Returns false when it could not write.
  */
 function printSemanticDiff(diff) {
-  console.log("this is a RE-publish. What changed:");
-  console.log(`  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`);
+  const out = ["this is a RE-publish. What changed:",
+    `  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`];
   if (diff.changed_facts)
-    for (const f of diff.changed_facts) console.log(`  facts.${f.field}: ${f.change}`);
+    for (const f of diff.changed_facts) out.push(`  facts.${f.field}: ${f.change}`);
+  else if (diff.facts_changed)
+    // Said whether or not a clause also moved: a clause line must not stand in for the facts (B2).
+    out.push("  facts: changed, field not nameable (the published record predates field prints)");
   for (const c of diff.clause_changes)
-    console.log(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
-  if (diff.templates_changed) console.log("  template set: changed");
-  if (diff.opaque_rechange) console.error(`WARN consistency:-:-:${diff.opaque_reason}`);
+    out.push(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
+  if (diff.templates_changed) out.push("  template set: changed");
+  try {
+    writeSync(1, out.join("\n") + "\n");
+    if (diff.opaque_rechange) writeSync(2, `WARN consistency:-:-:${diff.opaque_reason}\n`);
+  } catch {
+    return false;
+  }
+  return true;
 }
 
 async function proposeMain(args) {
@@ -606,7 +621,10 @@ async function proposeMain(args) {
     console.log(`set ${payload.template_set}@${payload.template_set_sha}`);
     console.log(`payload ${sha}`);
     const previous = publishedRecord(payload.venture);
-    if (previous && previous.run && Array.isArray(previous.run.pages)) printSemanticDiff(semanticDiff(previous.run, run));
+    if (previous && previous.run && Array.isArray(previous.run.pages) && !printSemanticDiff(semanticDiff(previous.run, run))) {
+      console.error("the re-publish diff could not be printed whole, so nothing can be bound to it - run it again with stdout open");
+      return 2;
+    }
     if (dryRun) {
       // A PLAN NOBODY COULD READ WHOLE IS NOT A PLAN: piped through `head`, the digest line was lost while the exit still
       // said 0 (PR 5c round-1 shell attack, the leads twin). Written synchronously; a failed write is a refusal.

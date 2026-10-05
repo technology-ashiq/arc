@@ -441,25 +441,48 @@ export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveD
   return errs;
 }
 
+/** The key every field no page prints is folded under. Not a dotted path, so no field can be named it. */
+export const UNPRINTED_FIELDS = "(fields no page prints)";
+
 /**
- * One fingerprint per facts FIELD, keyed by its dotted path, so a re-publish can name which value
- * moved without the receipt carrying the value. The receipt is committed to arc, which is public,
- * and a venture's facts hold the operator's name and address before any page is live. A
- * fingerprint of a value the published page prints anyway reveals nothing the page does not.
- * Arrays are one field: a reordered sub-processor list is a change the reviewer should see.
- * @param {object} facts @returns {Record<string,string>}
+ * One fingerprint per PRINTED facts field, keyed by its dotted path, so a re-publish can name which
+ * value moved without the receipt carrying the value. The receipt is committed to arc, which is
+ * public. A per-field print of a value no page shows would be a guess-and-confirm oracle for it
+ * (round-1 boundary attack, B1), so only fields a template interpolated get their own print; every
+ * other field is folded into ONE print over all of them together -- no weaker than the whole-file
+ * `facts_sha256` the receipt already carries, and still enough to say "a field no page prints moved".
+ * Arrays and empty mappings are one field: a reordered sub-processor list is a change to see.
+ * @param {object} facts @param {Set<string>} printed dotted paths the templates read
+ * @returns {Record<string,string>}
  */
-export function factsFieldPrints(facts) {
-  const out = {};
+export function factsFieldPrints(facts, printed) {
+  // A null-prototype map, so a `__proto__` key is a field like any other rather than dropped (B4).
+  const out = Object.create(null);
+  const hidden = [];
+  const isPlain = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
+    && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
   const walk = (node, path) => {
-    if (node !== null && typeof node === "object" && !Array.isArray(node)) {
+    // Only plain mappings are descended into: a Date or Map has no own keys and would vanish (B3).
+    if (isPlain(node) && Object.keys(node).length) {
       for (const k of Object.keys(node).sort()) walk(node[k], path ? `${path}.${k}` : k);
       return;
     }
-    out[path] = bytesHash(`${path}|${JSON.stringify(node === undefined ? null : node)}`);
+    const value = JSON.stringify(node === undefined ? null : node);
+    if (printed.has(path)) out[path] = bytesHash(`${path}|${value}`);
+    else hidden.push([path, value]);
   };
   walk(facts, "");
+  if (hidden.length) out[UNPRINTED_FIELDS] = bytesHash(JSON.stringify(hidden));
   return out;
+}
+
+/** The facts paths a page's template tokens read, from the renderer's `used` set. */
+export function printedFactPaths(usedExprs) {
+  const paths = new Set();
+  for (const e of usedExprs)
+    for (const prefix of ["facts.", "label.", "list."])
+      if (e.startsWith(prefix)) paths.add(e.slice(prefix.length));
+  return paths;
 }
 
 /**
@@ -480,8 +503,9 @@ export function semanticDiff(previousRun, currentRun) {
   if (before && after && typeof before === "object" && typeof after === "object") {
     changedFacts = [];
     for (const field of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
-      if (!(field in before)) changedFacts.push({ field, change: "added" });
-      else if (!(field in after)) changedFacts.push({ field, change: "removed" });
+      // Own keys only: `in` would find `constructor` on a plain record (B4).
+      if (!Object.hasOwn(before, field)) changedFacts.push({ field, change: "added" });
+      else if (!Object.hasOwn(after, field)) changedFacts.push({ field, change: "removed" });
       else if (before[field] !== after[field]) changedFacts.push({ field, change: "changed" });
     }
   }
