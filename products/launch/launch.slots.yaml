@@ -225,6 +225,7 @@ slots:
     verify: orm-probe
     depends_on:
       - database
+      - frontend
     gate: none
     approval: false
     timeout: 300

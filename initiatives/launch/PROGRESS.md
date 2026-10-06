@@ -40,8 +40,8 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 **Current position:** Phase 01, fakes-first. Merged: read verbs (#322), dns (#323, ADR-1725), repo + ci (#326,
 ADR-1726), hosting + gate-2 hold (#327, ADR-1727), environments + tls (#329, ADR-1728), secrets (#336, ADR-1729).
 No real provider called.
-**Next step:** slice 7 release + frontend (#340, ADR-1730): the day-3 kill path in code. Open beside it: database +
-email #344, backend + orm #345. Then auth · authz · tenancy. Real runs wait on the tokens below.
+**Next step:** open in order: release + frontend #340 (ADR-1730), database + email #344 (ADR-1731/1732), backend + orm
+#345 (ADR-1733, stacked on #340). Then auth · authz · tenancy. Real runs wait on the tokens below.
 
 **Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
 a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the

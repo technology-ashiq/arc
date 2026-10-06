@@ -161,10 +161,12 @@ async function probe(ctx) {
   let last = `no run of arc-ci for main's head ${sha.slice(0, 7)} yet`;
   for (let i = 0; i < 13; i++) {
     if (i) await wait(20000, ctx.signal);
-    const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&head_sha=${sha}&per_page=1`, undefined, { allow: [404] });
+    const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&head_sha=${sha}&per_page=30`, undefined, { allow: [404] });
     if (runs.status === 200 && !(runs.body && Array.isArray(runs.body.workflow_runs)))
       return { ok: false, reason: "github answered the runs list without a workflow_runs array" };
-    const run = runs.status === 200 ? list(runs.body.workflow_runs).find((r) => r.head_sha === sha && typeof r.id === "number") : null;
+    // Every run for the head: a cancelled or skipped re-run must not mask a green one (attack 3a6350b B2, twin).
+    const forHead = runs.status === 200 ? list(runs.body.workflow_runs).filter((r) => r.head_sha === sha && typeof r.id === "number") : [];
+    const run = forHead.find((r) => r.status === "completed" && r.conclusion === "success") || forHead.find((r) => r.status !== "completed") || forHead[0] || null;
     if (!run) continue;
     if (run.status !== "completed") { last = `run ${run.id} for ${sha.slice(0, 7)} is still ${say(run.status, 20)}`; continue; }
     const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);

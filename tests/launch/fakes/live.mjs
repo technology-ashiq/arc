@@ -3,7 +3,7 @@
 // fake, so a test cannot pass by asserting the page into being. Everything else routes to the wrapped fetch.
 //   scores      Lighthouse scores (0-100) per category PageSpeed returns
 //   pagespeed   an HTTP status PageSpeed answers instead (429, 500), or "unreachable"
-export function makeLive({ github, full, domain, inner, scores = { performance: 98, accessibility: 100, "best-practices": 100, seo: 100 }, pagespeed = 200 } = {}) {
+export function makeLive({ github, full, domain, inner, scores = { performance: 98, accessibility: 100, "best-practices": 100, seo: 100 }, pagespeed = 200, healthBody = null } = {}) {
   const calls = [];
   const html = (s, body) => new Response(body, { status: s, headers: { "content-type": "text/html" } });
   const json = (s, body) => new Response(JSON.stringify(body), { status: s, headers: { "content-type": "application/json" } });
@@ -18,6 +18,14 @@ export function makeLive({ github, full, domain, inner, scores = { performance: 
     calls.push(`${url.hostname}${url.pathname}`);
     if (url.hostname === domain) {
       if (!serving()) return html(404, "<h1>404: NOT_FOUND</h1>");
+      // /api/health answers only once the route file is on main, with what the route would answer.
+      if (url.pathname === "/api/health") {
+        const route = github.store.get(full).files["app/api/health/route.js"];
+        if (!route) return html(404, "<h1>404: NOT_FOUND</h1>");
+        const src = Buffer.from(route.content, "base64").toString("utf8");
+        const version = (src.match(/version: "([^"]+)"/) || [])[1] || "";
+        return json(200, healthBody || { ok: true, service: "venture", version });
+      }
       const layout = Buffer.from(github.store.get(full).files["app/layout.js"].content, "base64").toString("utf8");
       const gen = (layout.match(/generator: "([^"]+)"/) || [])[1] || "";
       return html(200, `<!DOCTYPE html><html lang="en"><head><meta name="generator" content="${gen}"/></head><body><main>shell</main></body></html>`);
