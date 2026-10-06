@@ -167,6 +167,7 @@ if [ "$MODE" = "explore" ]; then
   case "$ROUTE" in
     *:*) _explore_route_refuse "A URL or a drive path is never an explore page.";;
     docs/design/explore/*/variant-?/?*) ;;
+    docs/design/explore/*/rival-*/?*) ;;
     *) _explore_route_refuse "The route is not a page inside a variant directory.";;
   esac
   # `*` in a case pattern crosses `/`, so each part is taken apart and checked on its own.
@@ -180,7 +181,13 @@ if [ "$MODE" = "explore" ]; then
   esac
   case "$_er_variant" in
     variant-[abcdefghijklmnopqrstuvwxyz]) ;;
-    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter>.";;
+    # A rival draft (Phase 07, ADR-1422): its vendored copy, in a gitignored rival-<provider>/ dir,
+    # is served and recorded exactly like a variant -- one render path, the renderer never learns more.
+    rival-*)
+      case "${_er_variant#rival-}" in
+        ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _explore_route_refuse "The rival directory must be rival-<lowercase kebab provider>.";;
+      esac;;
+    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter> or rival-<provider>.";;
   esac
   case "/$EXPLORE_PAGE/" in
     *//*|*/./*|*/../*) _explore_route_refuse "The page is not a plain path inside the variant.";;

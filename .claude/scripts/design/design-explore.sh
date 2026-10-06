@@ -20,6 +20,7 @@
 #   design-explore.sh compose-done <id> --variant <x> [--brief <path>]
 #                                                 # release it, then run the composer gates
 #   design-explore.sh render <id>                 # one shared render command, all variants
+#   design-explore.sh rival <id> [--provider stitch] [--viewport WxH]  # a rival draft, vendored + rendered (Phase 07)
 #   design-explore.sh status <id>                 # where this explore stands
 #   design-explore.sh surfaces|coverage|selfreview <id>   # the REQ-03 / REQ-02b gates
 #   design-explore.sh jury <id> --n N --seed S --rubric <path> --ref <sha16> [--ref ...] [--control <v>] [--viewport WxH]
@@ -45,7 +46,7 @@ shift 2>/dev/null || true
 shift 2>/dev/null || true
 
 if [ -z "$CMD" ] || [ -z "$ID" ]; then
-  echo "design-explore: usage: design-explore.sh {init|check|compose|compose-done|render|status|surfaces|coverage|selfreview} <explore-id> [--variant <x>] [--brief <path>]" >&2
+  echo "design-explore: usage: design-explore.sh {init|check|compose|compose-done|render|rival|status|surfaces|coverage|selfreview} <explore-id> [--variant <x>] [--brief <path>]" >&2
   exit 1
 fi
 # Characters spelled out, not `a-z`: a bracket range resolves through the locale's
@@ -873,6 +874,42 @@ EOF
       bash "$DESIGN_DIR/design-render.sh" "$page" --mode explore --session "$ID--variant-$v" $RFLAGS || rc=1
     done
     exit "$rc"
+    ;;
+
+  rival)
+    # Phase 07 (ADR-1409, ADR-1422): one rival draft for this explore brief, vendored into the
+    # gitignored rival-<provider>/ dir, then rendered by the SAME renderer into the same session
+    # shape a variant uses. The adapter prints its one status line; a COULD-NOT-DRAFT is exit 3 and
+    # nothing is rendered, so the jury leaves the rival out by name.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the rival adapter needs it" >&2; exit 1; }
+    PROVIDER="stitch"
+    RFLAGS=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --provider)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          PROVIDER="$2"; shift 2;;
+        --viewport|--media)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          RFLAGS="$RFLAGS $1 $2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    case "$PROVIDER" in
+      ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: --provider must be lowercase kebab" >&2; exit 1;;
+    esac
+    BRIEF_LINE="$(grep '^brief=' "$EX/explore.txt" 2>/dev/null | head -1)"
+    BRIEF_ID="${BRIEF_LINE#brief=docs/design/briefs/}"
+    BRIEF_ID="${BRIEF_ID%/brief.md}"
+    case "$BRIEF_ID" in
+      ""|-*|*/*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: explore.txt names no brief under docs/design/briefs/<id>/brief.md" >&2; exit 1;;
+    esac
+    node "$DESIGN_DIR/design-rival.mjs" draft --brief "$BRIEF_ID" --run "$ID" --provider "$PROVIDER" || exit $?
+    # RFLAGS is a deliberately word-split flag list, built only from values the loop above validated.
+    # shellcheck disable=SC2086
+    bash "$DESIGN_DIR/design-render.sh" "docs/design/explore/$ID/rival-$PROVIDER/index.html" --mode explore --session "$ID--rival-$PROVIDER" $RFLAGS
+    exit $?
     ;;
 
   status)

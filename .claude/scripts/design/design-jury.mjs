@@ -2,11 +2,15 @@
 // design-explore.sh `jury` and `jury-check`; there was no runner before this, so the contract's
 // "the runner collects the rankings" named something that did not exist.
 //
-//   deal  --root R --id ID --n N --seed S [--viewport WxH] --ref <sha16> [--ref ...]
+//   deal  --root R --id ID --n N --seed S [--viewport WxH] --ref <sha16> [--ref ...] [--rival <provider> ...]
 //         The variants' latest renders at one viewport (bytes re-hashed against their metas) plus
 //         >=1 screen from the brief's reference pack (each bound to its sources.md row), dealt as
 //         item-a.. under a seeded shuffle. The key goes to .claude/state (never committed), written
 //         once: a second deal is refused, because a re-deal after seeing rankings is a re-roll.
+//         --rival (Phase 07, ADR-1409/1422): the rival's vendored draft at rival-<provider>/, rendered by
+//         the same renderer into the same session shape, dealt under the same opaque labels. Its kind lives
+//         only in the key. A rival that could not draft is named on a printed line and left out -- the
+//         count must then be declared without it, so an arc-only jury is never a silent one.
 //   check --root R --id ID
 //         Every docs/design/explore/<id>/ranking-*.md against the key: one ranked line of exactly
 //         N distinct known items, reference-position left unset, one Why heading per adjacent pair.
@@ -93,7 +97,7 @@ function exploreOf(root, id) {
 }
 
 function deal(argv) {
-  const o = parse(argv, new Set(["--root", "--id", "--n", "--seed", "--viewport", "--ref", "--rubric", "--control"]), new Set(["--ref"]));
+  const o = parse(argv, new Set(["--root", "--id", "--n", "--seed", "--viewport", "--ref", "--rubric", "--control", "--rival"]), new Set(["--ref", "--rival"]));
   const root = o["--root"];
   if (!root) fail("--root is required");
   const ex = exploreOf(root, o["--id"]);
@@ -120,7 +124,9 @@ function deal(argv) {
   // Variants: every variant-<x>/ with an index.html, its highest-iter render at this viewport.
   const variants = readdirSync(ex.dir).filter((d) => /^variant-[a-z]$/.test(d) && existsSync(join(ex.dir, d, "index.html"))).sort();
   if (variants.length < 2) fail(`a jury ranks at least two variants; ${variants.length} found`);
-  for (const v of variants) {
+  // The highest-iter render of one dir at this viewport, re-hashed against its meta. Variants and rivals
+  // go through this one reader, so a rival cannot arrive by a path the variants do not take.
+  const latestRender = (v) => {
     const sess = join(root, ".claude", "state", "design", "renders", `${basename(ex.dir)}--${v}`);
     const metas = existsSync(sess) ? readdirSync(sess).filter((f) => f.endsWith(".json")) : [];
     let best = null;
@@ -137,7 +143,36 @@ function deal(argv) {
     inside(file, sess, `${v}'s render ${best.m.png}`);
     const bytes = readFileSync(file);
     if (sha256(bytes) !== best.m.screenshot_sha256) fail(`${v}'s render bytes no longer match its meta; render again`);
-    items.push({ kind: control === v.slice(-1) ? "control" : "variant", source: v, path: file, sha256: best.m.screenshot_sha256, ext: extname(file).toLowerCase() });
+    return { file, sha: best.m.screenshot_sha256 };
+  };
+  for (const v of variants) {
+    const r = latestRender(v);
+    items.push({ kind: control === v.slice(-1) ? "control" : "variant", source: v, provenance: "arc", path: r.file, sha256: r.sha, ext: extname(r.file).toLowerCase() });
+  }
+  // Rivals: each --rival is one provider whose adapter DRAFTED into rival-<provider>/. Provenance comes from
+  // the adapter receipt, never from the dir name, so the Phase 08 packager has a record to refuse on.
+  const rivals = o["--rival"] ?? [];
+  const seenRival = new Set();
+  let rivalsLeftOut = 0;
+  for (const p of rivals) {
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(p)) fail(`--rival takes a provider name, got '${p}'`);
+    if (seenRival.has(p)) fail(`--rival ${p} given twice`);
+    seenRival.add(p);
+    const recFile = join(root, ".claude", "state", "design", "rivals", ex.brief, basename(ex.dir), p, "receipt.json");
+    let rec = null;
+    if (existsSync(recFile)) {
+      try { rec = JSON.parse(readRegular(recFile, `the ${p} receipt`).toString("utf8")); } catch { rec = null; }
+    }
+    const page = join(ex.dir, `rival-${p}`, "index.html");
+    if (!rec || rec.status !== "DRAFTED" || !existsSync(page)) {
+      const log = join(root, ".claude", "state", "design", "rivals", ex.brief, basename(ex.dir), "status.log");
+      const last = existsSync(log) ? readFileSync(log, "utf8").split(/\r?\n/).filter((l) => l.split("\t")[1] === p).pop() : undefined;
+      console.log(clean(`design-explore jury: rival ${p} LEFT OUT -- ${last ? last.split("\t").slice(2).join(" ") : "it never drafted for this explore"}; the deal is arc-only for it`));
+      rivalsLeftOut++;
+      continue;
+    }
+    const r = latestRender(`rival-${p}`);
+    items.push({ kind: "rival", source: `rival-${p}`, provenance: `rival:${p}@${String(rec.sdk ?? "").replace(/[^A-Za-z0-9@./_-]/g, "").slice(0, 60)}`, path: r.file, sha256: r.sha, ext: extname(r.file).toLowerCase() });
   }
   // References: each --ref is one pack image, bound to a provenance row in the brief's sources.md.
   const packDir = join(root, ".claude", "state", "design", "refpacks", ex.brief);
@@ -158,11 +193,12 @@ function deal(argv) {
     if (!rows.split(/\r?\n/).some((l) => l.startsWith("|") && l.split("|").map((c) => c.trim()).includes(full))) {
       fail(`--ref ${r} has no provenance row in ${sourcesMd}; an unattributed screen never enters a jury`);
     }
-    items.push({ kind: "reference", source: basename(file, ext), path: file, sha256: full, ext });
+    items.push({ kind: "reference", source: basename(file, ext), provenance: "reference", path: file, sha256: full, ext });
   }
   if (control !== null && !items.some((i) => i.kind === "control")) fail(`--control ${control}: there is no variant-${control} to mark`);
   if (!items.some((i) => i.kind === "variant")) fail("every variant is the control; a jury needs at least one arc variant");
-  if (items.length !== n) fail(`--n ${n} was declared, and ${items.length} items are dealt (${variants.length} variants and ${refs.length} reference(s)); the count is a contract, so name it right`);
+  const rivalCount = items.filter((i) => i.kind === "rival").length;
+  if (items.length !== n) fail(`--n ${n} was declared, and ${items.length} items are dealt (${variants.length} variants and ${refs.length} reference(s)${rivals.length ? `, ${rivalCount} rival(s)${rivalsLeftOut ? `, ${rivalsLeftOut} left out` : ""}` : ""}); the count is a contract, so name it right`);
   if (n > LABELS.length) fail(`at most ${LABELS.length} items`);
 
   // Fisher-Yates under the seed.
@@ -185,7 +221,7 @@ function deal(argv) {
     const file = `${label}${it.ext}`;
     copyFileSync(it.path, join(itemsDir, file));
     if (sha256(readFileSync(join(itemsDir, file))) !== it.sha256) fail(`${label} did not copy byte for byte`);
-    key.items.push({ label, file, kind: it.kind, source: it.source, sha256: it.sha256 });
+    key.items.push({ label, file, kind: it.kind, source: it.source, provenance: it.provenance, sha256: it.sha256 });
   });
   const body = `${JSON.stringify(key, null, 2)}\n`;
   // Written once: `wx` refuses if another deal got there first.
@@ -333,12 +369,35 @@ function unblind(argv) {
   if (!(Date.parse(sc.scored) <= Date.parse(at))) fail("the score's timestamp is not before this unblinding");
   const rows = key.items.map((i) => ({ label: i.label, kind: i.kind, source: i.source, score: sc.scores[i.label] }));
   const best = (kind) => rows.filter((r) => r.kind === kind).reduce((m, r) => (m === null || r.score > m.score ? r : m), null);
-  const arc = best("variant"), ctl = best("control"), ref = best("reference");
+  const arc = best("variant"), ctl = best("control"), ref = best("reference"), riv = best("rival");
   const bar = ctl ? { arc: arc.score, control: ctl.score, beats: arc.score > ctl.score } : null;
-  writeOnce(join(ex.jury, "unblind.json"), { id: key.id, unblinded: at, scored: sc.scored, rows, bestArc: arc, bestControl: ctl, bestReference: ref, bar }, "the unblinding");
+  // rival-beats-all-arc (the second ADR-1411 sealed prediction), recorded WHICHEVER way it lands: by the
+  // owner blind score, and across the panel valid rankings (the rival above every arc variant).
+  let rivalRate = null;
+  if (riv) {
+    const arcLabels = new Set(key.items.filter((i) => i.kind === "variant").map((i) => i.label));
+    const rivLabels = new Set(key.items.filter((i) => i.kind === "rival").map((i) => i.label));
+    let res = null;
+    try { res = JSON.parse(readFileSync(join(ex.jury, "result.json"), "utf8")); } catch { res = null; }
+    const valid = (res && Array.isArray(res.rankings) ? res.rankings : []).filter((r) => r && r.valid && Array.isArray(r.ranked));
+    const beats = valid.filter((r) => {
+      const rp = r.ranked.findIndex((x) => rivLabels.has(x));
+      const ap = r.ranked.findIndex((x) => arcLabels.has(x));
+      return rp >= 0 && ap >= 0 && rp < ap;
+    }).length;
+    rivalRate = { owner: { rival: riv.score, bestArc: arc.score, rivalBeatsAllArc: riv.score > arc.score }, jury: { beats, of: valid.length } };
+  }
+  writeOnce(join(ex.jury, "unblind.json"), { id: key.id, unblinded: at, scored: sc.scored, rows, bestArc: arc, bestControl: ctl, bestReference: ref, bestRival: riv, bar, rivalBeatsAllArc: rivalRate }, "the unblinding");
   // The key and the score are files on disk; what they carry is printed as text, never as terminal control (S4 attack B3).
   for (const r of rows) console.log(clean(`design-explore unblind: ${r.label} = ${r.kind} ${r.source} -- ${r.score}/100`));
   console.log(clean(`design-explore unblind: best arc ${arc.score}${ctl ? `, plain-prompt control ${ctl.score} (${bar.beats ? "arc beats it" : "arc does NOT beat it"})` : ", no control in this deal"}${ref ? `, reference ${ref.score}` : ""}`));
+  if (rivalRate) {
+    console.log(clean(`design-explore unblind: rival-beats-all-arc -- owner ${rivalRate.owner.rivalBeatsAllArc ? "YES" : "no"} (rival ${riv.score} vs best arc ${arc.score}), jury ${rivalRate.jury.beats} of ${rivalRate.jury.of} valid ranking(s)`));
+    if (rivalRate.owner.rivalBeatsAllArc) console.log("design-explore unblind: a rival win routes to design-director for a NEW thesis; its markup is never copied (Phase 07)");
+    const payload = JSON.stringify({ lens: "design", what: "rival-beats-all-arc", explore: key.id, unblinded: at, ...rivalRate });
+    const em = spawnSync("bash", [join(root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", "note.logged", "--payload", payload], { encoding: "utf8" });
+    console.log(`design-explore unblind: note.logged receipt ${em.status === 0 ? "emitted" : `NOT emitted (${clean(String(em.stderr || em.error || "").split("\n").find(Boolean) || `exit ${em.status}`).slice(0, 160)})`}`);
+  }
 }
 
 function catchRate(argv) {

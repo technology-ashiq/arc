@@ -66,8 +66,8 @@ red-first on CI; the adapter and the jury change are new code, the rest is a run
   opaque item naming as every variant, and its kind is written only to the sealed key, never to the
   juror's input. Provenance (`arc` / `rival:stitch@<version>` / `reference`) is recorded on every
   render for Phase 08's packager. After `unblind`, **rival-beats-all-arc** is computed and written
-  to the spine either way, on an existing kind (`decision.recorded`, payload `rival_beats_all_arc`
-  true/false); the spine's closed kind list is not extended. A provider failure mid-cycle prints the
+  to the spine either way, on an existing kind (`note.logged`, the one the owner score already rides, payload `rival-beats-all-arc`
+  with the owner and jury results); the spine's closed kind list is not extended. A provider failure mid-cycle prints the
   status line and runs arc-only. A win routes to the director for a NEW thesis, never a copy.
 - **S5 -- the live run.** One LexOS explore: arc x3 + Stitch + 1 pack reference (+ the plain-prompt
   control when the run is every 3rd), N=7 jury, the owner opens every render himself, then
