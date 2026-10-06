@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:108",
+      "breaking_input": "The owner edits db/schema.js on main so it is byte-different from launch's, then CI turns green. Later, scaffold re-runs and sees the file differ with a non-launch newest commit, so it throws FOREIGN_FILE. Separately, in verify, the owner's commit lands after launch's, and oursAt reads head's file plus the newest commit for that path only. A later owner commit touching only db/schema.test.js or an unrelated file keeps both launch files 'ours', while the CI run read is for the new head. The run is green over an owner's package.json that removed drizzle-orm or the test script.",
+      "why": "verify pairs launch's two files with green CI at head, but the files' ownership says nothing about the rest of the tree that CI actually ran. The CI answer can be green because the owner changed package.json (e.g. test script set to a no-op), so green CI no longer proves launch's schema type-checked. This is the 'some green run' half of the pair check.",
+      "fix": "Also require package.json at head to still carry the shell's trailer and exact bytes, or require the CI run's head commit to be the one whose tree contains launch's exact files and a manifest whose test script is node --test.",
+      "twin_of": "A verify proved \"some file at that path\" and \"some green run\", not launch's file under that run -> every verify that pairs a file with an outside answer: is the file still launch's?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:128",
+      "breaking_input": "The runs endpoint is paged with per_page=1 and filtered by head_sha. A re-run or workflow_dispatch of arc-ci for the same head creates a second run. The newest run (the single one returned) is a fresh in_progress re-run, while an earlier run for the same sha was green. Or the first run is cancelled and the single returned run is that cancelled one.",
+      "why": "per_page=1 returns only one run per head. A cancelled or skipped run for the head masks a green one, and verify reports red or 'still running' forever until another run supersedes. The code takes whichever single run GitHub returns first and has no way to see siblings. It reads 'the latest X' without asking which of several runs for that sha counts.",
+      "fix": "Request per_page=30 and choose the newest completed run for the head, or evaluate all runs for the sha and accept when the latest completed one is green. Report cancelled as its own reason.",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on -> every verify that reads \"the latest X\": the latest for WHAT?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:100",
+      "breaking_input": "scaffold writes files with ctx.write BEFORE the GitHub blob/tree/commit/PATCH calls. The PATCH of refs/heads/main returns 422 (a concurrent push from the other slot, since backend and orm both depend only on frontend and can run in parallel), or any POST throws.",
+      "why": "ctx.write has already put lib/contract.js and app/api/health/route.js into the local venture root for a commit that never landed. The local tree then holds files the remote lacks, and nothing is reported. The write is not undone and the re-run's ctx.write overwrites it with the same bytes, but a local venture tree that other slots or the owner read in between is inconsistent with main. The previous round dismissed this as 'no unmerged commit recorded', which addresses the report, not the local write.",
+      "fix": "Call ctx.write only after the ref PATCH succeeds, and serialize backend and orm by making orm depend on backend so they never race on the same head.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:127",
+      "breaking_input": "The Vercel deployment of the new commit has not finished building. The domain still serves the previous deployment, whose /api/health answered the exact same shape and the same version string 0.1.0, because the route file was committed earlier by an earlier backend run and only the lib/contract.js content changed. Or the owner's custom domain points at a different project that serves its own route returning ok,service:venture,version:0.1.0.",
+      "why": "The live answer is constant (VERSION is pinned, 0.1.0) and carries no commit identity. So the probe matches the file at main head and then a live answer that cannot tell which deployment produced it. A deployment of a different commit, or another project on the domain, is indistinguishable.",
+      "fix": "Have the route also answer the commit sha (VERCEL_GIT_COMMIT_SHA) and have the probe compare it to main head, or check the Vercel deployment's sha through the hosting API before accepting the live answer.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/orm/drizzle.mjs:130",
+      "breaking_input": "The runs response has status 200 but body.workflow_runs contains a run whose head_sha matches while the filter's branch=main is satisfied by a pull_request run. The venture's arc-ci.yml runs on pull_request events, and GitHub reports a PR merge-ref run with head_sha equal to the PR head, which can equal main's head after a fast-forward merge.",
+      "why": "The poll accepts any run for the sha on branch main without checking event. A PR-triggered run for the same sha counts as the CI of main's head, though it ran against the merge ref, not main's tree on a push.",
+      "fix": "Filter runs by event=push (or accept push and workflow_dispatch only) and assert run.head_branch is main.",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on -> every verify that reads \"the latest X\": the latest for WHAT?"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/orm/drizzle.mjs:118",
+      "breaking_input": "The poll loop runs up to 8 iterations of wait(30000) with fetches, so up to about 210 s plus request time, inside a 300 s slot. Each iteration makes 1 or 2 GitHub calls; with a slow API (10 s each) the loop passes 300 s, the slot's abort fires, and wait throws ABORTED, which verify rethrows.",
+      "why": "A poll loop whose worst-case wall time is not bounded by a deadline can run into the slot timeout, so the failure surfaces as a thrown ABORTED, not a not-ok answer. This was logged as D22, but the loop still has no total deadline check, unlike the Supabase healthy() fix applied this slice.",
+      "fix": "Track a deadline (for example 240 s from start) and return a not-ok 'still running' answer when it passes, instead of relying on the slot abort.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:60",
+      "breaking_input": "The frontend upstream resource id is 'owner/name:sha' and repo() takes String(id).split(':')[0]. A ctx.upstream.frontend entry whose id is 'owner/name' followed by a path-like suffix such as 'owner/name?x=1:abc' fails the regex and is refused, but 'Owner/Name' with upper-case letters in the name part fails the lower-case-only name class [a-z][a-z0-9-]*, so a repo whose name has an upper-case letter or underscore or dot (valid on GitHub) is refused with BAD_UPSTREAM.",
+      "why": "The repo-name pattern is narrower than GitHub's grammar (letters of either case, digits, dot, underscore, hyphen). A venture repo named with a dot or underscore wedges both slots on a BAD_UPSTREAM that is not a defect of the input.",
+      "fix": "Accept [A-Za-z0-9._-]{1,100} for the name part, still rejecting '..' and a leading dot, or document that launch only creates lower-case hyphenated names and assert that at the creating slot.",
+      "twin_of": "The adapter path was data the runner trusted -> every path built from a registry value"
+    }
+  ]
+}

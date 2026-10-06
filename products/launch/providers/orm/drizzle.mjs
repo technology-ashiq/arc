@@ -104,7 +104,6 @@ export async function scaffold(ctx) {
   }
   let sha = head;
   if (changed.length) {
-    for (const path of changed) ctx.write(path, FILES[path]);
     const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
     const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
     if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}`);
@@ -119,6 +118,9 @@ export async function scaffold(ctx) {
     sha = c.body ? String(c.body.sha) : "";
     if (!SHA.test(sha)) throw new Error(`github returned no commit for ${full}`);
     await gh(ctx, "PATCH", `/repos/${full}/git/refs/heads/main`, { sha, force: false });
+    // The local copy is written only once the commit is on main, so the venture root never holds files the repo lacks
+    // (attack 3a6350b B3).
+    for (const path of changed) ctx.write(path, FILES[path]);
   }
   ctx.report({ kind: "orm-schema", id: `${full}:${sha}` });
   return { files: Object.keys(FILES), resources: [{ kind: "orm-schema", id: `${full}:${sha}` }], notes: [] };
@@ -142,10 +144,12 @@ async function probe(ctx) {
   let last = `no arc-ci run for ${head.slice(0, 7)} yet`;
   for (let i = 0; i < 8; i++) {
     if (i) await wait(30000, ctx.signal);
-    const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&head_sha=${head}&per_page=1`, undefined, [404]);
+    const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/arc-ci.yml/runs?branch=main&head_sha=${head}&per_page=30`, undefined, [404]);
     // No arc-ci workflow at all is an answer, not a wait (attack 3f04230 B2).
     if (runs.status === 404) return { ok: false, reason: `${full} has no arc-ci workflow (the ci slot writes it)` };
-    const run = runs.status === 200 && runs.body ? list(runs.body.workflow_runs).find((r) => r.head_sha === head && typeof r.id === "number") : null;
+    // Every run for the head, newest first: a cancelled or skipped re-run must not mask a green one (attack 3a6350b B2).
+    const forHead = runs.status === 200 && runs.body ? list(runs.body.workflow_runs).filter((r) => r.head_sha === head && typeof r.id === "number") : [];
+    const run = forHead.find((r) => r.status === "completed" && r.conclusion === "success") || forHead.find((r) => r.status !== "completed") || forHead[0] || null;
     if (!run) continue;
     if (run.status !== "completed") { last = `run ${run.id} is still ${say(run.status, 20)}`; continue; }
     const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);

@@ -62,6 +62,7 @@ import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
 import { askOffline } from "./lib/face/ask-offline.mjs";
 // Phase 10 (REQ-14, ADR-1350): the owner's models, kept on the door; no route ever returns a key.
 import * as models from "./lib/face/models.mjs";
+import * as keys from "./lib/keys.mjs";
 // Phase 04's read routes (REQ-06). The handlers live beside the door; THIS file keeps the one route table.
 import * as reads from "./lib/face/reads.mjs";
 import { apiReference } from "./lib/face/reference/route.mjs";
@@ -159,7 +160,7 @@ const STATUS = Object.freeze({
   PHASES_OUTSIDE: 403,
   // Phase 10 (ADR-1350): a model change the registry refuses is the caller's to fix; a models file the door cannot
   // place or read is a precondition, never a silent empty list.
-  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, MODEL_FAILED: 502, TEST_BUSY: 429,
+  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, BAD_KEY: 400, KEYS_UNAVAILABLE: 503, MODEL_FAILED: 502, TEST_BUSY: 429,
   DECISION_REFUSED: 502,
   // Phase 04 (REQ-06). A file a route parses that is not on this tree is a precondition, like REGISTRY_ABSENT; a
   // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
@@ -879,6 +880,25 @@ function apiModelsChange(ctx, body) {
   return { mode: ctx.mode, ...models.withTests(models.publicView(step.reg), testsOf(ctx)) };
 }
 
+// ---------- the owner's keys (Phase 12, REQ-16, ADR-1351) ----------
+// Any NAME : value the owner sets once in the face, read by arc's tools through resolveKey. GET shows names and a tail
+// only; POST takes ONE change (add · replace · remove) and answers with the same view, so no request reads a value back.
+function apiKeys(ctx) {
+  const got = keys.loadStore(ctx.repo);
+  if (!got.ok) throw new DashError("KEYS_UNAVAILABLE", got.why);
+  return { mode: ctx.mode, ...keys.publicKeys(got.store) };
+}
+
+function apiKeysChange(ctx, body) {
+  const got = keys.loadStore(ctx.repo);
+  if (!got.ok) throw new DashError("KEYS_UNAVAILABLE", got.why);
+  const step = keys.applyKeyChange(got.store, body);
+  if (!step.ok) throw new DashError("BAD_KEY", step.why);
+  const saved = keys.saveStore(got.path, step.store);
+  if (!saved.ok) throw new DashError("KEYS_UNAVAILABLE", saved.why);
+  return { mode: ctx.mode, ...keys.publicKeys(step.store) };
+}
+
 // ---------- testing a model (Phase 11, REQ-15, ADR-1350 Amendment 1) ----------
 // Each model's last test lives in this door's memory for as long as it runs: never on disk, and never a key (a result
 // is ok, seconds, a plain cause and a time). Keyed by the context, so two doors in one process never share results.
@@ -991,6 +1011,9 @@ const ROUTES = Object.freeze([
   { method: "POST", path: "/api/models/set", mutates: true, spineEffect: "none", handler: (ctx, url, tail, body) => apiModelsChange(ctx, body) },
   // Phase 11 (REQ-15, ADR-1350 Amendment 1): one probe question to a named model, receipted like an answer.
   { method: "POST", path: "/api/models/test", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiModelsTest(ctx, body) },
+  // Phase 12 (REQ-16, ADR-1351): the owner's named keys -- a second file write outside the repo, no spine write.
+  { method: "GET", path: "/api/keys", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return apiKeys(ctx); } },
+  { method: "POST", path: "/api/keys/set", mutates: true, spineEffect: "none", handler: (ctx, url, tail, body) => apiKeysChange(ctx, body) },
   { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
   // Phase 05 (REQ-07, ADR-1339): the WORK door. `plan` runs an op's dry run, which writes nothing (the per-op fixture
   // holds the spine byte-identical across every plan); `apply` runs the owning lane's own CLI, which writes that

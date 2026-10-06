@@ -1,0 +1,69 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:17",
+      "breaking_input": "main's tree holds `apps/web/.env.production.local` or `.env.local.bak` (two or more dot segments after `.env`). ENV_FILE allows exactly one `(\\.[A-Za-z0-9_-]+)?` group, and `[A-Za-z0-9_-]` excludes the dot, so neither path matches.",
+      "why": "The no-key-in-git half of verify passes with real secrets committed. `.env.production.local` is the standard Next.js and dotenv-flow name. The leaked fixture only tests `.env.local`, so the test never exercises this shape. Case is also exact, so `.ENV` or `.Env` on a case-insensitive checkout is missed too.",
+      "fix": "Match `(^|/)\\.env(\\.[^/]+)*$` case-insensitively. Treat only a final segment of example, sample or template as safe, and add `.env.production.local` and `.ENV` as leak fixtures."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:87",
+      "breaking_input": "`.env.example` is larger than 1 MB, or is a directory or submodule path. The GitHub contents API then returns `content: \"\"` with `encoding: \"none\"`, or an array body.",
+      "why": "`unb64(cur.body.content)` yields `\"\"` and `contract()` returns `[]`. verify then reports ok with `names: 0` and never checks any key. Validating one read (status 200) and using another (an empty body) turns a failed read into a vacuous pass. The same hole lets scaffold skip the PUT.",
+      "fix": "Refuse unless `body.type === \"file\"` and `body.encoding === \"base64\"` and `content` is a non-empty string or `size` is 0. Otherwise return BAD_CONTRACT."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:103",
+      "breaking_input": "The runner is killed after the PUT to `/contents/.env.example` returns 201 and before `ctx.report({kind:\"github-file\"})` runs.",
+      "why": "The file is committed with the Arc-Launch-Tag trailer but nothing is recorded. On re-run `readContract` finds the file and treats it as the venture's own. Teardown never removes it, and ownership is lost. This is the same pattern as a resource reported only after a later call succeeds.",
+      "fix": "Report the pending resource before the PUT, with a state the exit plan can verify, or on re-run recognise a file whose last commit carries our tag and claim it."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:143",
+      "breaking_input": "The owner edits `.env.example` and adds names after launch committed the template. Teardown still emits `delete-if-unchanged` for `repo:.env.example`.",
+      "why": "The recorded resource carries only a path, with no blob sha and no commit sha. 'Unchanged' has nothing to compare against, so an executor either deletes the owner's edited contract or cannot honour the step. Teardown decides from the path alone, with no ownership re-check at run time.",
+      "fix": "Record the blob sha returned by the PUT in the resource. The step carries `expected_sha`, and the executor deletes only on a match."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:111",
+      "breaking_input": "A `.env` with real keys is committed and later deleted, or lives on a non-main branch or in history. Only the tip tree of `main` is listed.",
+      "why": "verify reports `keyFilesInGit: 0` and ok. The key is still readable in history and on other branches. The exit criterion 'no key in git' is only proven for one tree.",
+      "fix": "Narrow the claim in the evidence and reason text to 'main tip tree', or also check open branches and the repo's default branch. Name the limit in `evidence`."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:63",
+      "breaking_input": "The Vercel project answer links a repo named `..` or `.`. The repo regex permits it, giving `/repos/org/../contents/.env.example`.",
+      "why": "The URL parser normalises dot segments, so the request goes to a different GitHub path than the one validated. This is a path built from data that is validated as one string and requested as another.",
+      "fix": "Reject repo names that are `.` or `..` or that start or end with a dot. Encode each segment with encodeURIComponent."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:73",
+      "breaking_input": "`.env.example` lines such as `export FOO=`, `FOO=\"\"`, or `FOO= # set by owner`, all valid dotenv.",
+      "why": "The first is BAD_CONTRACT. The second and third are refused as VALUE_IN_GIT because the trailing text counts as a value. A normal venture example file permanently fails verify or scaffold. The same parser also ignores a subdirectory `.env.example`, which TEMPLATE_FILE whitelists without checking for values.",
+      "fix": "Accept an optional `export `, treat `\"\"`, `''` and a trailing ` #comment` as empty, and state in the ADR that only the root file is the contract."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/launch/contract-secrets.mjs:86",
+      "breaking_input": "An adapter regression that echoes the env body into a thrown error message on a failure path. The `placed` and `missing` scenarios never fail, so `out` never carries a message.",
+      "why": "`valueSeen` scans only `out`, and the only paths that put adapter text into `out` are non-throwing ones. The test titled 'never carries a value' cannot fail for the leak that matters, which is an error or reason built from a response body. `decryptAsked` also checks only the query param name `decrypt`.",
+      "fix": "Add a scenario where the env endpoint returns a 500 whose body contains MARKER, and where the project env answer is malformed. Assert MARKER is absent from the reason and the message. Fail the fake on any decrypt-like header or param."
+    }
+  ]
+}

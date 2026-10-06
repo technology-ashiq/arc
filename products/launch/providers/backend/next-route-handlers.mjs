@@ -108,7 +108,6 @@ export async function scaffold(ctx) {
   }
   let sha = head;
   if (changed.length) {
-    for (const path of changed) ctx.write(path, FILES[path]);
     const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
     const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
     if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}`);
@@ -123,6 +122,9 @@ export async function scaffold(ctx) {
     sha = c.body ? String(c.body.sha) : "";
     if (!SHA.test(sha)) throw new Error(`github returned no commit for ${full}`);
     await gh(ctx, "PATCH", `/repos/${full}/git/refs/heads/main`, { sha, force: false });
+    // The local copy is written only once the commit is on main, so the venture root never holds files the repo lacks
+    // (attack 3a6350b B3).
+    for (const path of changed) ctx.write(path, FILES[path]);
   }
   ctx.report({ kind: "backend-route", id: `${full}:${sha}` });
   return { files: Object.keys(FILES), resources: [{ kind: "backend-route", id: `${full}:${sha}` }], notes: [] };

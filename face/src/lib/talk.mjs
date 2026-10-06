@@ -272,3 +272,42 @@ export function modelsView(raw) {
     }));
   return { ok: true, active: typeof b.active === "string" ? b.active : null, rows };
 }
+
+// ── the owner's keys (Phase 12, REQ-16, ADR-1351) ──
+
+/** A key name the page accepts: the door's own grammar, so a name the door refuses never makes a round trip. */
+export const KEY_NAME_RE = /^[A-Z][A-Z0-9_]{1,63}$/;
+
+/** The add form, and the replace form (a name fixed, a new value): both start empty, and a value never comes back. */
+export function emptyKeyForm() {
+  return { name: "", value: "" };
+}
+
+/**
+ * The one change a Keys form sends, or why it is not ready. A name is upper-cased as typed is not trusted to be: the
+ * page sends exactly the name the owner will see listed.
+ * @param {"add" | "replace"} op @param {{ name: string, value: string }} form
+ * @returns {{ ok: true, change: { op: "add" | "replace", name: string, value: string } } | { ok: false, why: string }}
+ */
+export function keyChange(op, form) {
+  const name = String(form?.name ?? "").trim();
+  const value = String(form?.value ?? "").trim();
+  if (!KEY_NAME_RE.test(name)) return { ok: false, why: "A key name is capital letters, digits and _ , starting with a letter (like OPENROUTER_API_KEY)." };
+  if (value.length < 8) return { ok: false, why: "Paste the key's value (8 characters or more)." };
+  if (/\s/.test(value)) return { ok: false, why: "A key's value has no spaces; check the paste." };
+  return { ok: true, change: { op, name, value } };
+}
+
+/**
+ * The keys list as the page shows it, from GET /api/keys: a name and "…abcd" or "set", never a value. Anything not
+ * that shape is no list, never a guessed one.
+ * @param {unknown} raw
+ */
+export function keysView(raw) {
+  const b = raw && typeof raw === "object" ? /** @type {Record<string, unknown>} */ (raw) : null;
+  if (!b || !Array.isArray(b.keys)) return { ok: false, rows: [] };
+  const rows = b.keys
+    .filter((k) => k && typeof k === "object" && typeof k.name === "string")
+    .map((k) => ({ name: String(k.name), shown: typeof k.tail === "string" ? `…${k.tail}` : "set" }));
+  return { ok: true, rows };
+}
