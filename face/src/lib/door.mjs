@@ -241,6 +241,9 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/models/set": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
   // Phase 11 (REQ-15): one probe question to a named model; the answer is the same redacted view with each last test.
   "/api/models/test": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
+  // Phase 12 (REQ-16, ADR-1351): the owner's named keys -- names and a tail only, one change per write.
+  "/api/keys": read(),
+  "/api/keys/set": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
   // Phase 05 (REQ-07, ADR-1339): the work door. No module declares these in its `routes` -- the host's ops dock
   // reaches them through the methods below, for the ops a module names in its ops.mjs.
   "/api/ops": read(),
@@ -420,6 +423,9 @@ export class Door {
   models() { return this.call("/api/models"); }
   /** @param {{ op: "add" | "activate" | "remove" | "edit", [k: string]: unknown }} change */
   setModels(change) { return this.call("/api/models/set", { method: "POST", body: change }); }
+  keys() { return this.call("/api/keys"); }
+  /** @param {{ op: "add" | "replace" | "remove", name: string, value?: string }} change */
+  setKeys(change) { return this.call("/api/keys/set", { method: "POST", body: change }); }
   /** @param {string} name */
   testModel(name) { return this.call("/api/models/test", { method: "POST", body: { name } }); }
 

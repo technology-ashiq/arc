@@ -444,3 +444,70 @@ arm() {
   arm environments owner-pr
   [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: secrets writes the names-only template once and claims only the file it wrote" {
+  arm secrets fresh
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.commits + " " + o.kinds.join(",")')" = "1 github-file,env-contract" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.vercel.com + api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete-if-unchanged" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets names what the owner must place, and passes once it is set for production" {
+  arm secrets missing
+  [ "$(j 'o.kinds.join(",")')" = "env-contract" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false owner places for production: DATABASE_URL" ] || { echo "$DONE"; false; }
+  arm secrets preview-only
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  arm secrets placed
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets never asks Vercel to decrypt and never carries a value" {
+  arm secrets placed
+  [ "$(j 'o.decryptAsked + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a key file in git fails verify; the template variants do not" {
+  arm secrets leaked
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false key file in git (main tip tree): apps/web/.env.local" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a template that carries a value or a line that is not NAME= is refused" {
+  arm secrets value-in-template
+  [ "$(j 'o.scaffold.code')" = "VALUE_IN_GIT" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" != *"has-a-value"* ]] || { echo "$DONE"; false; }
+  arm secrets bad-line
+  [[ "$(j 'o.verify.reason')" == "BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
+  arm secrets truncated
+  [[ "$(j 'o.verify.reason')" == *"too large to list"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: multi-segment and upper-case env files are keys in git; a .x.example is a template" {
+  arm secrets leaked-shapes
+  [ "$(j 'o.verify.reason')" = "key file in git (main tip tree): apps/web/.env.production.local" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verifyUpper.reason')" = "key file in git (main tip tree): .ENV" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a contract that is a directory or too large to read is refused, never read as empty" {
+  arm secrets contract-not-a-file
+  [[ "$(j 'o.dir.ok + " " + o.dir.reason')" == "false BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.big.ok + " " + o.big.reason')" == "false BAD_CONTRACT: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a kill after the template PUT is recovered by its trailer, and the file is pinned to its blob sha" {
+  arm secrets killed-after-put
+  [ "$(j 'o.kinds.join(",")')" = "github-file,env-contract" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.fileId')" =~ ^technology-ashiq/arc-sandbox:\.env\.example@[0-9a-f]{40}$ ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: *.env and .envrc are keys in git too" {
+  arm secrets more-shapes
+  [ "$(j 'o.suffix.reason')" = "key file in git (main tip tree): config/prod.env" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.envrc.reason')" = "key file in git (main tip tree): .envrc" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a path built to backtrack the key-file check answers at once" {
+  arm secrets pathological
+  [ "$(j 'o.verify.ok + " " + (o.ms < 2000)')" = "true true" ] || { echo "$DONE"; false; }
+}
