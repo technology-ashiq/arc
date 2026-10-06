@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page whose `document.documentElement.dataset.surfaceTrail` contains multiple `hq@` entries, e.g. 'hq@0 hq@10', where the last one is not the most recent (a stale trailing entry written out of order).",
+      "why": "The selector `pop()` takes the last `hq@` entry in the string, assuming the trail is in chronological order. If the trail is ever appended out of order or contains a stale final entry, the wait uses the wrong reference time, and `unmountWaitOver` may end early or late relative to the app's real surface transition.",
+      "fix": "Parse all `hq@` entries and choose the maximum timestamp (or the one that corresponds to the most recent surface event), and validate that the parsed number is finite."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page whose `surfaceTrail` contains an `hq@` entry with an out-of-range or negative number, e.g. 'hq@-5' or 'hq@1e309'.",
+      "why": "`Number(t.slice(3))` can produce `Infinity` or a number that makes `sincePageMs` huge, causing the wait to end immediately even though the stage is still mounted and the page timer never started properly. Conversely, a NaN (from malformed `hq@abc`) would be caught by `Number.isFinite`, but `Infinity` passes that check.",
+      "fix": "Validate that the parsed timestamp is a finite non-negative number within a sensible range (e.g., less than UNMOUNT_WALL_CAP_MS) before using it."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "face/scripts/cdp.mjs:418",
+      "breaking_input": "A read function that throws an error with `code` set to `'EACCES'` transiently, but also throws `'EACCES'` permanently (e.g., the file is genuinely inaccessible).",
+      "why": "The catch treats `EACCES` as 'held' forever, retrying until the cap even when the file will never become readable. The cap eventually throws a generic timeout instead of the real permission error, hiding the cause and wasting up to 30s.",
+      "fix": "Distinguish transient sharing violations from permanent access errors: on Windows the EBUSY/EPERM are the transient ones; EACCES should likely be treated as a real error (or retried only for a short bounded period)."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1166",
+      "breaking_input": "A page that never records `hq@` in its `surfaceTrail` but does take the surface (e.g., a different trail format, or the trail is cleared).",
+      "why": "The comment says `sincePageMs` is -1 while the page has not recorded `hq@`, which never ends the wait by clock. However, the only other exit is `stages === 0` or the 30s wall cap. If the stage stays mounted but the page did record the surface in a way the regex misses (e.g., 'hq@' split across the trail with a space or different casing), the wait goes to the cap and FAILs even though the stage left promptly.",
+      "fix": "Make the detection of the page's surface transition more robust: also read the page's own state (e.g., `data-surface` attribute) and treat an explicit 'took surface' marker as the reference even if the trail entry is absent."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1166-1177",
+      "breaking_input": "A page whose `performance.now()` clock is subject to drift or is reset (e.g., after a navigation or a large time jump) between when `hq@` was recorded and when `pageSince()` is called.",
+      "why": "The wait compares `performance.now()` at the moment of polling with `Number(t.slice(3))`, which was recorded earlier on the same clock. If the page navigates/reloads (changing the performance timeline), the subtraction yields a huge or negative value, and `Number.isFinite` may pass but the value is meaningless, ending the wait prematurely or delaying it.",
+      "fix": "Store the `hq@` timestamp and the page's `performance.timeOrigin` together, and recompute the elapsed time in a way that survives navigation (e.g., use a monotonic clock that persists, or re-read the surface state directly)."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page that writes `hq@` multiple times and the last one is a later timestamp but with a large gap that is longer than the real window (e.g., the trail is never pruned and contains an old `hq@` from a previous crossing).",
+      "why": "On a page that has multiple crossings without a fresh navigation, the trail may keep stale `hq@` entries. The code takes only the last one, which could be from a previous crossing if the current crossing's entry is written later but the string order is not guaranteed. This can make the wait think the window started much earlier than it did, ending the wait while the stage is still unmounting.",
+      "fix": "Clear or rotate the trail when a new surface is taken, or choose the `hq@` entry with the timestamp closest to the current time rather than the last in the string."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1170-1176",
+      "breaking_input": "A page that uses uppercase `HQ@` or a trailing newline in the dataset.",
+      "why": "The indexOf and slice are case-sensitive and don't trim. If the page's recording code uses a different case or includes whitespace, the expression yields -1 and the wait never ends by the page clock, only by the wall cap, which can turn a green run red on a slow machine.",
+      "fix": "Use a case-insensitive match and trim whitespace around each token; also assert in tests that the page's recorded format matches the parser's expectation."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "face/scripts/cdp.mjs:421",
+      "breaking_input": "A read function that throws an error with no `code` property (e.g., a generic Error) on a transient condition that should be retried.",
+      "why": "The code only retries EBUSY/EPERM/EACCES; any other error (including a transient sharing violation with a different code, or a `TypeError` from the injected read) propagates immediately, defeating the purpose of the retry and failing the wait.",
+      "fix": "Broaden the retry set to include Windows-specific sharing violations (e.g., `ELOCKED`, `EBUSY`, `EPERM`, `EACCES`, and possibly `ENOLCK`) and treat genuinely permanent errors like EISDIR as throw."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1166-1177",
+      "breaking_input": "A page whose `hq@` entry is recorded but the stage removal takes longer than the sum of STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS, on a loaded machine, even though the page's own clock is correct.",
+      "why": "The new rule ends the wait as soon as the page's window has passed, regardless of whether the stage is actually gone. If the unmount genuinely takes longer on hardware (e.g., GC pause after the window), the check FAILs even though the app is fine, recreating the class of false negatives the change tried to fix.",
+      "fix": "Add a small additional margin after the page window, or combine the page-clock condition with a short final poll for stage=0 before declaring failure."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page where `performance.now()` returns a value that is not aligned with `Date.now()` and the `hq@` timestamp is recorded using `Date.now()` instead of `performance.now()`.",
+      "why": "The page clock is read via `performance.now()` in the injected function, but the trail's `hq@` may have been written using a different time base (e.g., `Date.now()`). The subtraction then compares apples to oranges, yielding a huge offset that can end the wait immediately or never.",
+      "fix": "Ensure the recording and the reading use the same clock; have `hq@` store `performance.now()` at the moment of transition."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page whose `surfaceTrail` contains a malformed entry like `hq@` with no digits (e.g., because the app crashed mid-write).",
+      "why": "`t.slice(3)` returns an empty string, and `Number('')` is 0, which is finite. `sincePageMs` then equals `performance.now() - 0` which is large and immediately ends the wait, even though the stage is still mounted.",
+      "fix": "Reject entries that do not match a strict digits pattern (e.g., `/^hq@\\d+$/`); treat anything else as 'no record'."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page that records `hq@` but its `surfaceTrail` is reset or overwritten between the `hq@` entry and the poll call (e.g., another surface event clears the trail).",
+      "why": "The code reads the trail each poll, so if the trail is cleared after the address changed but before the wait polls, `pageSince()` returns -1 and the wait only ends at the wall cap, even if the stage left quickly. The test then FAILs falsely.",
+      "fix": "Capture the `hq@` timestamp once at the moment the crossing is detected (after the address change) rather than re-reading the trailing state repeatedly."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1175",
+      "breaking_input": "A page that uses a different field name or namespace for the trail (e.g., `data-surface-trail` is not present because the app is an older build).",
+      "why": "The code relies on a specific data attribute. If the app version being tested doesn't set it, the wait never recognizes the page's clock and falls back to the wall cap, turning every crossing into a 30s wait and possibly a false FAIL if the stage doesn't unmount within that arbitrary cap.",
+      "fix": "Fall back to a stable page-computed surface flag (e.g., `document.documentElement.dataset.surface` or a global) and make the test assert that the feature exists before using it."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "face/scripts/cdp.mjs:421",
+      "breaking_input": "A read function that returns `null` or `undefined` without throwing (e.g., a stub read in tests) while the file exists.",
+      "why": "The code sets `text = null` on error but does not handle a read that returns a falsy value with no error. `text` remains `null`, so the branch is skipped and the wait continues, but a production read returning `undefined` (e.g., a misconfigured custom read) would be silently treated as 'not yet' forever instead of failing.",
+      "fix": "After `read()`, if `text` is `null` or `undefined` and no error was thrown, treat it as a read failure and throw a named error."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1170",
+      "breaking_input": "A page that records `hq@` with a fractional part, e.g. 'hq@123.45', or with a leading plus sign 'hq@+123'.",
+      "why": "`Number(t.slice(3))` accepts both, so the comparison works, but the test's mutant control and documentation say the format is an integer (`performance.now()` returns a float but the trail may store an integer). If the trail stores a float, the check still works; however, a malicious or buggy page could supply a negative or out-of-range numeric that passes the finite check but represents an absurd time; the code doesn't clamp it to a sane range.",
+      "fix": "Require the entry to be a non-negative integer within the crossing's own lifetime; reject values larger than, say, the wall cap plus the page's longest recorded hold."
+    }
+  ]
+}

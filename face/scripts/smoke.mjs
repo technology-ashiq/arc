@@ -1068,6 +1068,63 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
  */
 export const UNMOUNT_MARGIN_MS = 8000;
 /**
+ * The most the harness waits on one crossing, on its own clock: the page-clock window above plus the longest main-thread
+ * hold seen before the page took the surface (10.8 s on macOS, 2026-10-05), with room. A page that never records `hq@`
+ * still ends here and FAILs.
+ */
+export const UNMOUNT_WALL_CAP_MS = 30000;
+/**
+ * Whether a crossing's unmount wait is over: the stage is gone, or the PAGE's own clock says the window has passed since
+ * it took the workroom surface. `sincePageMs` is -1 while the page has not recorded `hq@`, which never ends the wait.
+ * @param {number} stages @param {number} sincePageMs
+ */
+export function unmountWaitOver(stages, sincePageMs) {
+  return stages === 0 || (Number.isFinite(sincePageMs) && sincePageMs >= STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS);
+}
+
+const TRAIL_ENTRY = /^(door|hq)@(\d+(?:\.\d+)?)$/;
+/** @param {unknown} trail */
+function trailEntries(trail) {
+  return String(trail ?? "").split(" ").map((x) => TRAIL_ENTRY.exec(x.trim())).filter(Boolean).map((m) => ({ surface: m[1], t: Number(m[2]) }));
+}
+
+/**
+ * How long ago, on the page's clock, the page took the workroom surface for THIS crossing, or -1 if it has not yet.
+ * Only the trail's last entry counts, and only if it is `hq@` and newer than every entry the trail held before the
+ * crossing (`baseline`): the trail keeps earlier crossings, and a stale `hq@` read as "long ago" ended the wait at once in
+ * exactly the slow case (attack 0e39c72 L1, L6, B1). A malformed or out-of-range time is -1, never a number (L2).
+ * @param {unknown} trail @param {unknown} nowMs @param {unknown} baseline the trail as it was before the crossing
+ */
+export function sinceCrossing(trail, nowMs, baseline) {
+  const all = trailEntries(trail);
+  const last = all[all.length - 1];
+  if (!last || last.surface !== "hq") return -1;
+  const before = trailEntries(baseline).reduce((m, e) => Math.max(m, e.t), -1);
+  const now = Number(nowMs);
+  if (!(last.t > before) || !Number.isFinite(now) || now < last.t) return -1;
+  return now - last.t;
+}
+
+/**
+ * The whole unmount wait, the one the smoke runs: poll `probe` until unmountWaitOver says done, or UNMOUNT_WALL_CAP_MS of
+ * harness time pass. `probe` answers `{ stages, trail, now }` from the page. Exported so tests/face/front-door.mjs drives
+ * THIS loop with a scripted page, not a copy of its rule (attack 0e39c72 B2).
+ * @param {() => Promise<{ stages: number, trail: string, now: number }>} probe @param {string} baseline
+ * @param {{ capMs?: number, pollMs?: number, wait?: (ms: number) => Promise<void> }} [opts]
+ * @returns {Promise<{ stages: number, sincePageMs: number, polls: number }>}
+ */
+export async function waitForUnmount(probe, baseline, { capMs = UNMOUNT_WALL_CAP_MS, pollMs = 150, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const started = Date.now();
+  let polls = 0;
+  for (;;) {
+    const p = await probe();
+    polls++;
+    const since = sinceCrossing(p.trail, p.now, baseline);
+    if (unmountWaitOver(p.stages, since) || Date.now() - started >= capMs) return { stages: p.stages, sincePageMs: since, polls };
+    await wait(pollMs);
+  }
+}
+/**
  * The shortest hold that is a warp: the fly-through is 1.6 s (WARP_IN_S) and the stage is kept STAGE_UNMOUNT_MS. A stage
  * that left in under 1.5 s did not fly through. Written here, not read from mode.mjs, so a changed constant there cannot
  * move the bar with it.
@@ -1149,14 +1206,25 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     const ESCAPE = { key: "Escape", code: "Escape", vk: 27 };
     /** Cross from the door and judge the crossing: the hash reaches the workroom, then the stage is gone. */
     const cross = async (page, name, unmountName, act) => {
+      // The trail as it stands before this crossing: only an hq@ newer than all of it is this crossing's (attack 0e39c72 B1).
+      const baseline = String(await val(page, "document.documentElement.dataset.surfaceTrail || ''"));
       const acted = await act();
       const reached = acted && (await until(async () => String(await hash(page)).startsWith("#hq"), 5000));
       if (reached) report.crossings++;
       record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
       if (!reached) { record(unmountName, false, "never crossed"); return; }
       const crossedAt = Date.now();
+      // The stage's unmount timer starts when the PAGE takes the workroom surface, not when the address changed: on a
+      // loaded runner software WebGL held the main thread 6-10 s between the two (macOS, 2026-10-04/05: hash at ~1 s,
+      // `hq@` in the trail at 7.5-10.8 s), so a window counted from the address ran out before the timer had started.
+      // The window is counted on the page's own clock from its `hq@` entry; a stage that never leaves still FAILs at
+      // the cap, and the harness never waits more than UNMOUNT_WALL_CAP_MS in all.
+      const probe = async () => {
+        const c = JSON.parse(String(await val(page, "JSON.stringify({ trail: document.documentElement.dataset.surfaceTrail || '', now: performance.now() })")));
+        return { stages: await count(page, "[data-stage]"), trail: c.trail, now: c.now };
+      };
       await sleep(STAGE_UNMOUNT_MS);
-      await until(async () => (await count(page, "[data-stage]")) === 0, UNMOUNT_MARGIN_MS, 150);
+      await waitForUnmount(probe, baseline);
       const stages = await count(page, "[data-stage]");
       const opened = await inWorkroom(page);
       // The warp is judged from what the page recorded, not from a read that races it: a read "right after" the crossing
