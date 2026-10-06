@@ -1,0 +1,44 @@
+{
+  "phase": "01",
+  "commit": "948cc92fef19ca72b3cd1146640b645576b472a7",
+  "short": "948cc92f",
+  "generated": "2026-10-06T18:53:33Z",
+  "files": [
+    {
+      "name": "attack-3f82dad-r1-boundary.json",
+      "sha256": "d41783b80e2dfa1c693cd5f2469b90cf5ebd508ddf9115868fc5a27e3791ff0d"
+    },
+    {
+      "name": "attack-3f82dad-r1-logic.json",
+      "sha256": "cfa55cc9417c90acfd2a2c1b434543f224215c7ca609f8a9959d204714530031"
+    },
+    {
+      "name": "attack-cef0d6e-r1-boundary.json",
+      "sha256": "5e884d4dcebf3059c10428c00886fba4bf20f087654d47700f5c32d1bd18af3d"
+    },
+    {
+      "name": "attack-e28fcf1-r1-boundary.json",
+      "sha256": "613be4d32a96af10d1dac32e11ecc8db3450b9f6cbf3e2edc4a91f5b6484443b"
+    },
+    {
+      "name": "bundle.md",
+      "sha256": "94b40e8b3613c47d9c2da797cb336b8cb3e3e2c69d1224ac7843fe8f0da53360"
+    },
+    {
+      "name": "fixture-publish-ledger.json",
+      "sha256": "0304a4689b7a0c7ef728eea15e6fe492e1e0cd09a576763d30d7030da37dfd21"
+    },
+    {
+      "name": "fixture-publish.txt",
+      "sha256": "493da7488a4dbc1daf476734adff9cc496d9edba1dcfabe1f96f1bca5d214101"
+    },
+    {
+      "name": "fixture-verify.txt",
+      "sha256": "277ac2b1bb612a1ff0f5f64293f225f165535d0781c7e7c1bd8c936a203d2921"
+    },
+    {
+      "name": "text-panel-round-2.md",
+      "sha256": "16cb9f79d7cee6537d71e7228f7ab0bb46243847ba4c9ab44058de773d2e5f68"
+    }
+  ]
+}
