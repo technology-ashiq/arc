@@ -482,7 +482,9 @@ arm() {
 
 @test "launch-contract: a query answer that is not a rows array is a not-ok answer" {
   arm database object-shape
-  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false error: supabase database/query answered without a rows array" ]] || { echo "$DONE"; false; }
+  # The first query of scaffold already meets the bad shape, so the refusal is scaffold's, and verify is still not ok.
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.message')" = "false supabase database/query answered without a rows array" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: email writes Resend's records plus DMARC quarantine once, grey cloud, and verifies" {
