@@ -1,0 +1,101 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:57-70",
+      "breaking_input": "hq.policy.yaml missing or unreadable at test runtime; grep -c exits 1 or prints 0 and the assertion `[ \"$output\" = \"0\" ]` passes",
+      "why": "The grep on a missing or unreadable file yields an error on stderr and 0 on stdout; the test ignores the grep status and stderr, so 'no process:discover row' is certified even though the file was never read. This is the validator-reads-one-thing-uses-another pattern.",
+      "fix": "After asserting the file exists (already done), run `run --separate-stderr grep -c ...`; assert `$status -eq 0` and `[ -z \"$stderr\" ]` before believing `$output`; also assert the output is the literal \"0\"."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:26-31,41-56",
+      "breaking_input": "planned-rooms.json or manifest.json is corrupt JSON or unreadable; node -e exits non-zero but the test's `[ \"$output\" = \"solid\" ]` or `[ \"$output\" = \"mapped\" ]` fails with a misleading message rather than treating the unreadable input as COULD NOT SCAN",
+      "why": "The primary room-state test and the manifest test check status 0 but do not assert that stderr is empty; a corrupted JSON that causes node to emit a parse error and exit 1 could still be caught by the status check, but the tests fail with the wrong message and, worse, there is no negative-path assertion that an unreadable input must FAIL rather than report a success-like answer. The negative arm for room_state now throws on `{nope:1}` but the manifest arm has no such guard.",
+      "fix": "Assert `[ -z \"$stderr\" ]` in every positive probe and add a negative arm where a corrupted manifest must cause the check to fail, not report a clean state."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:58-61",
+      "breaking_input": "A process file named `discoverX` or `hunt-discover` exists in processes/ — the grep `^discover` returns 0 and the test passes, leaving the ungoverned process invisible to the tripwire",
+      "why": "The ADR-1913 tripwire greps only filename prefixes exactly equal to 'discover'; a file named 'discover-x' is caught but 'discoverx' or 'discover-extra' would be missed because they still start with 'discover', while a file named e.g. 'x-discover' escapes entirely. The test reads a different (weaker) surface than the policy intent: it should flag any process whose content declares `process:discover`, not just a name prefix.",
+      "fix": "Validate the process files' content (i.e. grep for `process:discover` inside each `.process.yaml`) and refuse any such process without a governing policy row; also anchor the filename match to `^discover` only when the intent is a name prefix, but better, look for the process label in the YAML."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:20-24",
+      "breaking_input": "A bats file that contains a line in a here-doc or a comment starting with `@test \"discover-birth: ` — the count assertion `declared -eq 9` still compares to the literal, but a file with an injected fake @test line that never runs would make the declared count 9 while the runtime registered count differs; conversely if the count is wrong the check fails, so this is a weak but noted gap in the pattern (f)",
+      "why": "The test counts `grep -c '^@test \"discover-birth: '` over the whole file, so any line in a comment, string, or heredoc that starts with that literal inflates the declared count. The runtime comparison (`BATS_TEST_NAMES`) catches a mismatch, but only if the grep matches a line that is not a real test; the check does not guarantee that every counted line is an executable test, which is exactly defect pattern (f).",
+      "fix": "Use `grep -c '^@test \"discover-birth: '` but also strip comment blocks and heredocs, or better, assert that the count matches the number of `@test` functions the runner actually sees, which is already the second half; the gap is only that a fake line in a comment would raise both counts equally and pass silently."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:34-39,44-49",
+      "breaking_input": "A planned-rooms.json that is an array with zero entries — the room_state helper throws and the test fails; a variant with a `rooms` key but `rooms: []` throws too, so empty is refused; however a file with `rooms: null` throws and the status non-zero path is covered. No further finding here beyond the prior L5 fix that was applied.",
+      "why": "The prior finding L5 was fixed: the helper now throws on a missing or empty rooms list, and the mutant arm asserts the throw. No new defect found in this specific code path.",
+      "fix": "none"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:64-72",
+      "breaking_input": "`node \"$cli\" $args` with `args` containing an empty string (e.g. `node cli \"\"`) — `$args` splits on the empty third element, but when args is exactly `\"\"` the for loop runs once with `args` being an empty string, and `$args` unquoted expands to nothing; the test still passes for the empty case, but the `frobnicate --out y` case is fine. The real gap: the test runs from a foreign cwd but never verifies that the realpath guard is what refused (e.g. a broken NODE_PATH that makes the import throw would still exit 2 only if someone sets it intentionally). The refusal test now asserts the exact message and no stdout, which closes prior L4/L8.",
+      "why": "The stub test now covers three argument shapes and asserts the exact stderr message plus empty stdout, which is a real strengthening. The residual gap is that a module-level throw (e.g. import error) would produce a stack trace, not the exact message, so the test cannot distinguish 'guard refused' from 'import threw with a stderr that coincidentally contains the message' — but a stack trace would not equal the exact string, so that is closed. No new high finding.",
+      "fix": "none; the test is now adequate."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:57-70",
+      "breaking_input": "The negative arm for the ungoverned-process check — there is no negative arm that plants a process:discover row and asserts the test fails; the check only asserts the row is absent when no process file exists, but if a process:discover row appears in the policy file with no backing process, the third grep would catch it and fail; that is a one-direction tripwire, so a mutant row is never proven to make it red",
+      "why": "Red-first by mutant arm is stated in the plan, but for the ADR-1913 test there is no negative arm that mutates hq.policy.yaml to add a `process:discover` row and asserts the test FAILS. Without that, the test could be vacuous in the opposite direction (e.g. the grep pattern with a single quote mismatch would always return 0). The test needs a mutant arm for the policy row absence, mirroring the room and catalog arms.",
+      "fix": "Add a negative test that copies hq.policy.yaml, inserts the `\"process:discover\":` block, runs the same grep, and asserts the non-zero count and the failure message; this proves the check can go red."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:77-80",
+      "breaking_input": "The CATALOG grep `^const CATALOG = \\[.*\"discover\"` matches only if the array is on one line; if the array is reformatted across multiple lines (like the manifest handles), the regex misses and the test fails, which is a false-negative only; the anchor is correct for the current one-line format but brittle to a legitimate reformat",
+      "why": "The anchored grep matches the structure's own line and now proves membership, which fixes prior B2. The residual weakness is brittleness if the CATALOG array is ever reformatted to multi-line, but that would fail loudly (it would report missing) rather than pass vacuously, so it is acceptable.",
+      "fix": "None needed; it is a loud failure, not a silent one."
+    },
+    {
+      "id": "L9",
+      "severity": "high",
+      "where": ".claude/commands/arc-hunt.md:10-14",
+      "breaking_input": "/arc-hunt \"$(touch /tmp/pwned)\" or /arc-hunt `id` — the command doc still tells the model to run `node ... arc-discover.mjs hunt \"$ARGUMENTS\"` with $ARGUMENTS interpolated into a double-quoted shell string",
+      "why": "The prior finding B1 flagged this exact injection: $ARGUMENTS is substituted textually into a double-quoted bash string before the shell parses it, so a niche containing a quote, backtick, or `$(` reaches the shell. The fixed-defects.md claims this was fixed by 'free text goes through a file written by the Write tool, never argv', but the committed command doc still contains the vulnerable line `node .claude/scripts/discover/arc-discover.mjs hunt \"$ARGUMENTS\"` — the fix was not applied; the doc only adds a comment telling the model to write to a file but then ignores that and still uses the argv interpolation. This is a log-sync defect: the claimed fix never landed.",
+      "fix": "Replace the command body with a step that actually uses the file: first Write nichen.txt, then run `node ... hunt --niche-file .claude/state/discover/niche.txt`; do not keep the `\"$ARGUMENTS\"` line. Provide the file-reading flag in the CLI stub so the doc and code agree."
+    },
+    {
+      "id": "L10",
+      "severity": "high",
+      "where": "initiatives/discover/phases/phase-00-spec.md:68-70",
+      "breaking_input": "The Phase 00 spec still instructs: `.claude/commands/arc-hunt.md: ... body runs node .claude/scripts/discover/arc-discover.mjs hunt \"$ARGUMENTS\"` — the spec itself codifies the shell interpolation, contradicting the defense in ADR-1904 / fixed-defects B1 and the command doc's own cautionary comment",
+      "why": "This is a twin of the hostile-text-interpolation pattern: the spec, which is the instruction the model follows when building the command, explicitly requires the vulnerable argv interpolation. Even if the command doc were fixed, the spec remains as the source that would reintroduce it in a regeneration. The spec is authoritative for the implementation and must be corrected, not just the command doc.",
+      "fix": "Change the spec line to direct the command to write the niche to a file via the Write tool and pass `--niche-file`, never `$ARGUMENTS` in a shell string; add a validation requirement on the CLI to refuse any niche not matching a strict grammar."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "initiatives/discover/fixed-defects.md:20-24",
+      "breaking_input": "The fixed-defects.md claims 'user text interpolated into a command doc's shell line — $ARGUMENTS inside double quotes — fixed in arc-hunt.md (B1) — free text goes through a file written by the Write tool, never argv', but the actual arc-hunt.md still contains the vulnerable interpolation",
+      "why": "The defect ledger records a fix that was never merged: the command doc still has `node ... hunt \"$ARGUMENTS\"`. A future attacker or maintainer reading fixed-defects.md will believe the pattern is closed and skip checking it; this is a false-claim in the ledger that actively misdirects future adversarial passes.",
+      "fix": "Actually apply the file-based approach to arc-hunt.md (and to phase-00-spec.md), then update fixed-defects.md only after the fixing diff is in the same PR; have a test assert the command doc contains no `\"$ARGUMENTS\"` in a shell line."
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:64-72",
+      "breaking_input": "`node \"$cli\" $args` when args is `frobnicate --out y` runs fine, but the test never asserts that the stub refuses a niche that is a command substitution or backtick string — the stub is not tested against hostile text, so the realpath guard and the exact message are tested but not the injection resistance of the eventual file-based path",
+      "why": "The stub test covers the refusal message but does not exercise a hostile argument value; for the stub that is arguably fine since it never uses the value, but the command doc test (L9) is where the injection lives. Still, this test should include at least one argument containing `$(...)` and a backtick to prove the CLI treats it as data, not executed text, once the file-based flow exists.",
+      "fix": "Add a case with `args` containing a backtick or `$(...)` and assert the stub still exits 2 with the exact message and no stdout; after Phase 01, ensure the file-read path treats the content as data."
+    }
+  ]
+}

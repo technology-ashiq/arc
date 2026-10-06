@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/commands/arc-hunt.md:10",
+      "breaking_input": "/arc-hunt invoice\" ; touch pwned ; echo \" (or a niche containing $(...) or a backtick). $ARGUMENTS is substituted textually into a double-quoted bash string before the shell parses it.",
+      "why": "A niche with a double quote, `$(`, or a backtick closes or expands the quoted string, and the shell runs the rest. The project's own rule forbids backtick and `$` inside a double-quoted embedded string. The allowed-tools prefix `Bash(node .claude/scripts/discover/arc-discover.mjs:*)` does not stop injection after the quote. Phase 01 will feed this argument into a miner that makes network calls.",
+      "fix": "Don't interpolate $ARGUMENTS into the command line. Have the command write the niche to a file with the Write tool and pass `--niche-file <path>`, or pass it via an env var with a single-quoted heredoc. The CLI should also validate the niche against a strict grammar and refuse anything else with exit 2.",
+      "twin_of": "hostile text interpolated into a shell, eval or yaml string"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:62",
+      "breaking_input": "Remove \"discover\" from the CATALOG array while any other \"discover\" string stays in arc-products.mjs (a comment, a lookup table, an error message). `grep -q '\"discover\"'` still passes.",
+      "why": "The grep matches anywhere in the file, not inside the CATALOG array, so it can pass without the catalog entry. This is the vacuous-pass class, and there is no negative arm for it unlike the room and policy checks.",
+      "fix": "Extract the CATALOG array with node (or a regex anchored on `const CATALOG = [`) and assert membership. Add a mutant arm that runs the same check on a copy with the entry removed and asserts it fails.",
+      "twin_of": "a test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:55",
+      "breaking_input": "Run the test where `$ARC_ROOT/processes` is missing or unreadable, or ARC_ROOT is wrong, so `ls` fails. `grep -c` then counts 0 lines of empty input and prints \"0\", and the trailing `|| true` swallows the failure.",
+      "why": "The check passes vacuously: it never asserts that `processes/` was listed. A scan that cannot read its input reports a clean result, which is the opposite of `COULD NOT SCAN`.",
+      "fix": "First assert `[ -d \"$ARC_ROOT/processes\" ]` and that it holds at least one `*.process.yaml` (14 today). Then check for a `discover*` file with `compgen -G` or a glob instead of `ls | grep`.",
+      "twin_of": "(g) a scan that cannot read its input reports `COULD NOT SCAN`, never an empty result"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:18",
+      "breaking_input": "`node .claude/scripts/discover/arc-discover` (no extension), or `node -` with the script on stdin. argv[1] is then a path that does not exist as given.",
+      "why": "`realpathSync(process.argv[1])` throws ENOENT synchronously at module top level. The CLI dies with a stack trace and exit 1 instead of the documented exit 2 refusal. The guard only protects against a missing argv[1], not an unresolvable one.",
+      "fix": "Wrap both realpath calls in a try/catch that falls back to false, or compare resolved paths via a helper that never throws.",
+      "twin_of": "(a) realpath-both-sides main guard in `arc-discover.mjs` and every CLI-shaped file"
+    }
+  ]
+}
