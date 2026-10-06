@@ -3,6 +3,7 @@
 // later slot builds, so the e2e is proven by checkout-portal -> webhooks-ledger -> refunds. A live key refuses before
 // any call: this slot never reaches past gate 3 (ADR-1720).
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 
 const API = "https://api.razorpay.com/v1";
 const AMOUNT = 100;
@@ -44,14 +45,18 @@ async function rz(ctx, method, path, body, { allow = [] } = {}) {
   throw new Error(`razorpay ${method} ${path.split("?")[0]} -> ${res.status}${desc}`);
 }
 
-// Razorpay caps receipt at 40 characters; the slug is [a-z0-9-] so the cut never splits a character.
+// Razorpay caps receipt at 40 characters. A slug that fits is used whole; a longer one keeps a prefix plus 12 hex of its
+// sha256, so two long slugs sharing a prefix never share a receipt (attack 1cb6b9a B2).
 function receiptOf(ctx) {
   const slug = String(ctx.profile && ctx.profile.slug || "");
   if (!/^[a-z][a-z0-9-]{1,40}$/.test(slug)) throw refuse("BAD_SLUG", `venture slug ${JSON.stringify(say(slug, 50))} is not [a-z][a-z0-9-]`);
-  return `arc-launch-${slug}`.slice(0, 40);
+  const whole = `arc-launch-${slug}`;
+  if (whole.length <= 40) return whole;
+  return `arc-launch-${slug.slice(0, 16)}-${createHash("sha256").update(slug, "utf8").digest("hex").slice(0, 12)}`;
 }
 
-const ours = (ctx, o) => o && o.notes && typeof o.notes === "object" && !Array.isArray(o.notes) && o.notes.arc_launch_tag === ctx.tag;
+// The tag decides ownership, so an empty tag can never match an order without one (attack 1cb6b9a B3).
+const ours = (ctx, o) => typeof ctx.tag === "string" && ctx.tag.length > 0 && o && o.notes && typeof o.notes === "object" && !Array.isArray(o.notes) && o.notes.arc_launch_tag === ctx.tag;
 
 export function envContract() {
   return ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
@@ -60,7 +65,11 @@ export function envContract() {
 export async function scaffold(ctx) {
   const receipt = receiptOf(ctx);
   keys(ctx);
-  const found = list((await rz(ctx, "GET", `/orders?receipt=${encodeURIComponent(receipt)}&count=100`)).body?.items).filter((o) => o.receipt === receipt);
+  // An answer without an items array is unreadable, not empty: reading it as "absent" would create a second order
+  // (attack 1cb6b9a B1, twin of the check-then-create rule).
+  const listed = (await rz(ctx, "GET", `/orders?receipt=${encodeURIComponent(receipt)}&count=100`)).body;
+  if (!listed || !Array.isArray(listed.items)) throw new Error("razorpay answered the order list without an items array; nothing was created");
+  const found = list(listed.items).filter((o) => o.receipt === receipt);
   const mine = found.filter((o) => ours(ctx, o) && typeof o.id === "string");
   let order = mine[0] || null;
   if (!order) {
@@ -79,7 +88,11 @@ async function probe(ctx) {
   const rec = ctx.resources.filter((r) => r.kind === "razorpay-test-order");
   if (rec.length !== 1 || !/^order_[A-Za-z0-9]{6,40}$/.test(rec[0].id)) return { ok: false, reason: `state records ${rec.length} usable razorpay-test-order resources; verify needs exactly one` };
   const r = await rz(ctx, "GET", `/orders/${encodeURIComponent(rec[0].id)}`, undefined, { allow: [400, 404] });
-  if (r.status !== 200 || !r.body || r.body.id !== rec[0].id) return { ok: false, reason: `razorpay has no order ${rec[0].id} for these keys` };
+  // Only Razorpay's own "does not exist" (or a 404) means absent; any other 400 is reported as itself (attack 1cb6b9a B6).
+  const desc = r.body && r.body.error && typeof r.body.error.description === "string" ? r.body.error.description : "";
+  if (r.status === 404 || (r.status === 400 && /does not exist/i.test(desc))) return { ok: false, reason: `razorpay has no order ${rec[0].id} for these keys` };
+  if (r.status !== 200) return { ok: false, reason: `razorpay GET /orders/${rec[0].id} -> ${r.status}: ${say(desc)}` };
+  if (!r.body || r.body.id !== rec[0].id) return { ok: false, reason: `razorpay answered order ${rec[0].id} with another id` };
   if (!ours(ctx, r.body)) return { ok: false, reason: `order ${rec[0].id} does not carry this slot's tag` };
   if (r.body.amount !== AMOUNT || r.body.currency !== CURRENCY) return { ok: false, reason: `order ${rec[0].id} is ${say(r.body.amount, 12)} ${say(r.body.currency, 6)}, not ${AMOUNT} ${CURRENCY}` };
   return { ok: true, answerer: "api.razorpay.com", evidence: { order: rec[0].id, mode: "test", amount: AMOUNT, currency: CURRENCY, status: say(r.body.status, 20) } };
@@ -99,5 +112,5 @@ export async function verify(ctx) {
 
 // Razorpay cannot delete an order, and a test-mode order moves no money: nothing to undo.
 export async function teardown(ctx) {
-  return { steps: ctx.resources.filter((r) => r.kind === "razorpay-test-order").map((r, i) => ({ order: i + 1, action: "none (test-mode order, Razorpay keeps it)", resource: r.id })) };
+  return { steps: ctx.resources.filter((r) => r.kind === "razorpay-test-order").map((r, i) => ({ order: i + 1, action: "none (test-mode order, Razorpay keeps it)", resource: say(r.id, 60) })) };
 }

@@ -23,15 +23,18 @@ const seedOrders = {
   "foreign-order": [{ id: "order_Owner0000000001", receipt: RECEIPT, notes: {} }],
   "found-mine": [{ id: "order_Mine00000000001", receipt: RECEIPT, notes: { arc_launch_tag: TAG } }],
 }[scenario] || [];
-const rz = makeRazorpay({ orders: seedOrders });
+const rzOpts = {
+  "list-no-items": { listShape: "no-items" },
+}[scenario] || {};
+const rz = makeRazorpay({ orders: seedOrders, ...rzOpts });
 globalThis.fetch = rz.fetch;
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-payment-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctxNow = (env = { RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET }) => makeCtx({
-  profile: { slug: "arc-sandbox" }, board: {}, slot: { id: "payment-test" }, row,
-  root: ROOT, resources: reported, upstream: {}, tag: TAG, attempt: 1, signal: undefined, env,
+const ctxNow = (env = { RAZORPAY_KEY_ID: KEY_ID, RAZORPAY_KEY_SECRET: KEY_SECRET }, { slug = "arc-sandbox", tag = TAG } = {}) => makeCtx({
+  profile: { slug }, board: {}, slot: { id: "payment-test" }, row,
+  root: ROOT, resources: reported, upstream: {}, tag, attempt: 1, signal: undefined, env,
   report: (r) => { if (!reported.some((x) => x.kind === r.kind && x.id === r.id)) reported.push(r); },
 });
 const attempt = async (fn) => { try { return { ok: true, value: await fn() }; } catch (e) { return { ok: false, code: e.code || null, message: e.message }; } };
@@ -97,6 +100,31 @@ switch (scenario) {
     out.verify = await adapter.verify(ctxNow());
     out.calls = rz.calls.length;
     break;
+  case "list-no-items":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.creates = creates();
+    break;
+  case "long-slugs": {
+    // Two 41-character slugs sharing their first 29 characters must not share a receipt.
+    const a = "a".repeat(29) + "-venture-one", b = "a".repeat(29) + "-venture-two";
+    await adapter.scaffold(ctxNow(undefined, { slug: a, tag: `${a}@payment-test@razorpay` }));
+    out.second = await attempt(() => adapter.scaffold(ctxNow(undefined, { slug: b, tag: `${b}@payment-test@razorpay` })));
+    out.receipts = rz.store.map((o) => o.receipt);
+    out.creates = creates();
+    break;
+  }
+  case "empty-tag":
+    rz.store.push({ id: "order_Owner0000000002", entity: "order", amount: 100, currency: "INR", status: "created", receipt: RECEIPT, notes: {} });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow(undefined, { tag: "" })));
+    out.creates = creates();
+    break;
+  case "verify-400-other": {
+    await adapter.scaffold(ctxNow());
+    const bad = makeRazorpay({ orders: rz.store, fetchError: { status: 400, description: "Bad request: the server is busy" } });
+    globalThis.fetch = bad.fetch;
+    out.verify = await adapter.verify(ctxNow());
+    break;
+  }
   default:
     console.error(`unknown scenario ${scenario}`);
     process.exit(1);

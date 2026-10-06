@@ -750,3 +750,23 @@ arm() {
   [ "$(j 'o.verify.ok + " " + o.calls')" = "false 0" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.reason')" == *"verify needs exactly one"* ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: payment-test reads an order list without items as unreadable, never as absent (attack 1cb6b9a B1)" {
+  arm payment list-no-items
+  [ "$(j 'o.scaffold.ok + " " + o.creates')" = "false 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"without an items array; nothing was created"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: two long slugs sharing a prefix get different receipts, both 40 characters or fewer (attack 1cb6b9a B2)" {
+  arm payment long-slugs
+  [ "$(j 'o.second.ok + " " + o.creates + " " + (o.receipts[0] !== o.receipts[1])')" = "true 2 true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.receipts.every(r => r.length <= 40)')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an empty tag never adopts an untagged order, and a 400 that is not absence is reported as itself (attack 1cb6b9a B3, B6)" {
+  arm payment empty-tag
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "FOREIGN_ORDER 0" ] || { echo "$DONE"; false; }
+  arm payment verify-400-other
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"-> 400: Bad request: the server is busy"* ]] || { echo "$DONE"; false; }
+}

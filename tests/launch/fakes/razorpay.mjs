@@ -1,7 +1,9 @@
 // In-memory Razorpay orders API (test mode). Basic auth must be the fixture key id and secret; orders filter by receipt
 // the way the real list does; amounts are paise. It replaces only the transport; other hosts go to `inner`.
-//   orders   seed orders [{ id, receipt, amount, currency, notes }]
-export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [] } = {}) {
+//   orders        seed orders [{ id, receipt, amount, currency, notes }]
+//   listShape     "no-items" answers the order list 200 without an items array (a proxy or an API change)
+//   fetchError    { status, description } answers every single-order GET with it
+export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null } = {}) {
   const store = orders.map((o) => ({ entity: "order", amount: 100, currency: "INR", status: "created", notes: {}, ...o }));
   const calls = [];
   let n = 0;
@@ -20,6 +22,7 @@ export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecr
     if (method === "GET" && p === "/v1/orders") {
       const receipt = url.searchParams.get("receipt");
       const items = store.filter((o) => receipt === null || o.receipt === receipt);
+      if (listShape === "no-items") return json(200, { entity: "collection", count: items.length });
       return json(200, { entity: "collection", count: items.length, items });
     }
     if (method === "POST" && p === "/v1/orders") {
@@ -31,6 +34,7 @@ export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecr
     }
     const m = p.match(/^\/v1\/orders\/([^/]+)$/);
     if (m && method === "GET") {
+      if (fetchError) return err(fetchError.status, fetchError.description);
       const o = store.find((x) => x.id === decodeURIComponent(m[1]));
       return o ? json(200, o) : err(400, "The id provided does not exist");
     }
