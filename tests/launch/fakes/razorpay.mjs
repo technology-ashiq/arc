@@ -3,7 +3,8 @@
 //   orders        seed orders [{ id, receipt, amount, currency, notes }]
 //   listShape     "no-items" answers the order list 200 without an items array (a proxy or an API change)
 //   fetchError    { status, description } answers every single-order GET with it
-export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null } = {}) {
+//   ignoreReceipt the list ignores the receipt filter and pages every order (count + skip), newest first
+export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null, ignoreReceipt = false } = {}) {
   const store = orders.map((o) => ({ entity: "order", amount: 100, currency: "INR", status: "created", notes: {}, ...o }));
   const calls = [];
   let n = 0;
@@ -21,6 +22,11 @@ export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecr
     const p = url.pathname;
     if (method === "GET" && p === "/v1/orders") {
       const receipt = url.searchParams.get("receipt");
+      const count = Number(url.searchParams.get("count") || 10), skip = Number(url.searchParams.get("skip") || 0);
+      if (ignoreReceipt) {
+        const page = [...store].reverse().slice(skip, skip + count);
+        return json(200, { entity: "collection", count: page.length, items: page });
+      }
       const items = store.filter((o) => receipt === null || o.receipt === receipt);
       if (listShape === "no-items") return json(200, { entity: "collection", count: items.length });
       return json(200, { entity: "collection", count: items.length, items });

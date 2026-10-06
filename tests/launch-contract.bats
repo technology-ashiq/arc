@@ -770,3 +770,8 @@ arm() {
   [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.reason')" == *"-> 400: Bad request: the server is busy"* ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: payment-test finds its order past the first page when the list ignores the receipt filter (attack da7f2e0 B1)" {
+  arm payment ignored-filter
+  [ "$(j 'o.scaffold.ok + " " + o.creates + " " + o.lists + " " + o.reported.join(",")')" = "true 0 2 order_Mine00000000001" ] || { echo "$DONE"; false; }
+}

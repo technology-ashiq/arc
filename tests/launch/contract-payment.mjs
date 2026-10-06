@@ -22,9 +22,13 @@ const KEY_SECRET = "fixtureSecret0123456789ab";
 const seedOrders = {
   "foreign-order": [{ id: "order_Owner0000000001", receipt: RECEIPT, notes: {} }],
   "found-mine": [{ id: "order_Mine00000000001", receipt: RECEIPT, notes: { arc_launch_tag: TAG } }],
+  // launch's order is the oldest; 150 newer orders of other receipts push it to the second page.
+  "ignored-filter": [{ id: "order_Mine00000000001", receipt: RECEIPT, notes: { arc_launch_tag: TAG } },
+    ...Array.from({ length: 150 }, (_, i) => ({ id: `order_Other${String(i).padStart(10, "0")}`, receipt: `shop-${i}`, notes: {} }))],
 }[scenario] || [];
 const rzOpts = {
   "list-no-items": { listShape: "no-items" },
+  "ignored-filter": { ignoreReceipt: true },
 }[scenario] || {};
 const rz = makeRazorpay({ orders: seedOrders, ...rzOpts });
 globalThis.fetch = rz.fetch;
@@ -99,6 +103,12 @@ switch (scenario) {
   case "verify-no-record":
     out.verify = await adapter.verify(ctxNow());
     out.calls = rz.calls.length;
+    break;
+  case "ignored-filter":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.creates = creates();
+    out.lists = rz.calls.filter((c) => c === "GET /v1/orders").length;
+    out.reported = reported.map((r) => r.id);
     break;
   case "list-no-items":
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));

@@ -66,10 +66,16 @@ export async function scaffold(ctx) {
   const receipt = receiptOf(ctx);
   keys(ctx);
   // An answer without an items array is unreadable, not empty: reading it as "absent" would create a second order
-  // (attack 1cb6b9a B1, twin of the check-then-create rule).
-  const listed = (await rz(ctx, "GET", `/orders?receipt=${encodeURIComponent(receipt)}&count=100`)).body;
-  if (!listed || !Array.isArray(listed.items)) throw new Error("razorpay answered the order list without an items array; nothing was created");
-  const found = list(listed.items).filter((o) => o.receipt === receipt);
+  // (attack 1cb6b9a B1, twin of the check-then-create rule). Every page is read: a filter the API ignores, or more than
+  // one page of orders, must still find launch's own (attack da7f2e0 B1).
+  const found = [];
+  for (let page = 0; ; page++) {
+    if (page >= 50) throw refuse("TOO_MANY_ORDERS", "razorpay lists more than 5000 orders for this receipt query; launch does not search further");
+    const listed = (await rz(ctx, "GET", `/orders?receipt=${encodeURIComponent(receipt)}&count=100&skip=${page * 100}`)).body;
+    if (!listed || !Array.isArray(listed.items)) throw new Error("razorpay answered the order list without an items array; nothing was created");
+    found.push(...list(listed.items).filter((o) => o.receipt === receipt));
+    if (found.some((o) => ours(ctx, o)) || listed.items.length < 100) break;
+  }
   const mine = found.filter((o) => ours(ctx, o) && typeof o.id === "string");
   let order = mine[0] || null;
   if (!order) {
