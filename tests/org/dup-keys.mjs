@@ -31,7 +31,8 @@ function treeCopy(root) {
   mkdirSync(root, { recursive: true });
   const tar = spawnSync("git", ["-C", REPO, "archive", "--format=tar", "HEAD"], { maxBuffer: 1024 * 1024 * 1024 });
   if (tar.status !== 0) return `git archive: ${String(tar.stderr).slice(0, 200)}`;
-  const x = spawnSync("tar", ["-xf", "-", "-C", root], { input: tar.stdout, maxBuffer: 64 * 1024 * 1024 });
+  // cwd, never `-C <abs path>`: MSYS tar on the Windows leg read "C:\..." as host:path and refused it.
+  const x = spawnSync("tar", ["-xf", "-"], { cwd: root, input: tar.stdout, maxBuffer: 64 * 1024 * 1024 });
   return x.status === 0 ? null : `tar: ${String(x.stderr).slice(0, 200)}`;
 }
 
