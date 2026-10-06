@@ -30,7 +30,7 @@ import { planDigest, expectLine, staleReason, emitReceipt, withExclusiveLock } f
 import { query, spineRoot } from "../hq/spine.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
-  backdatingErrors, semanticDiff, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
+  backdatingErrors, semanticDiff, factsFieldPrints, printedFactPaths, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
   verifyPublished, VERIFY_INTACT, VERIFY_TAMPERED,
 } from "./lib/receipts.mjs";
 
@@ -359,6 +359,8 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
   const pages = [];
   const findings = [];
   const notAuthored = [];
+  // Every token any page read, so the receipt prints per field only what a page shows (B1).
+  const usedTokens = new Set();
 
   for (const pageDef of pagesDoc.pages) {
     const tmplName = `${pageDef.id}.tmpl.md`;
@@ -376,6 +378,7 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
       if (e instanceof TemplateError) throw new Fail(2, `${tmplName}: ${e.message}`);
       throw e;
     }
+    for (const e of ctx.used) usedTokens.add(e);
 
     const route = effectiveRoutes[pageDef.id];
     const header = [
@@ -440,6 +443,9 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
     // Carried so the checklist can decide activation applicability without re-parsing facts.
     payment_model: facts.payment_model,
     facts_sha256: factsSha,
+    // Per-field prints, so a re-publish names WHICH value moved (REQ-06's semantic diff).
+    // effective_date is printed by the page header, not by a token, so it is named here.
+    facts_fields: factsFieldPrints(facts, new Set([...printedFactPaths(usedTokens), "effective_date"])),
     effective_date: facts.effective_date,
     grievance_windows: windows,
     pages: pages.map(({ text, ...rest }) => rest),
@@ -522,6 +528,82 @@ function writeStagedInto(staged, out, payloadText) {
   return { touched };
 }
 
+/**
+ * The previous published record for a venture from the committed ledger: `{ record, sha }`, both
+ * null when nothing was published, or `{ problem }` when a ledger file exists and cannot be used.
+ * Unreadable is never "none" -- that would show a reviewer a re-publish as a first publish, the
+ * guard-skipped-when-its-input-is-absent class publish already refuses as PREVIOUS_UNREADABLE (B1).
+ */
+function publishedRecord(venture) {
+  const file = join(PRODUCT, "published", venture + ".json");
+  if (!existsSync(file)) return { record: null, sha: null };
+  let text, record;
+  try { text = readFileSync(file, "utf8"); record = JSON.parse(text); }
+  catch (e) { return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and cannot be read (${e && e.code ? e.code : "not JSON"}).` }; }
+  if (!record || !record.run || !Array.isArray(record.run.pages)
+      || !record.run.pages.every((p) => p && typeof p.page === "string" && (p.clauses === undefined || Array.isArray(p.clauses))))
+    return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and carries no usable run, so what changed cannot be shown.` };
+  return { record, sha: bytesHash(text) };
+}
+
+/**
+ * A name read from the ledger, printed so it can only ever be one inert ASCII token on one line.
+ * JSON.stringify alone escapes only code points below 0x20, so C1 controls, bidi overrides and
+ * line separators reached the reviewer's terminal raw; every non-printable-ASCII code point is
+ * escaped here (round-1 boundary, B2 twice).
+ */
+const shown = (s) => (/^[A-Za-z0-9_.()\- ]+$/.test(String(s))
+  ? String(s)
+  : JSON.stringify(String(s)).replace(/[^\x20-\x7e]/gu, (c) => [...c].map((u) => {
+    const cp = u.codePointAt(0);
+    return cp > 0xffff ? `\\u{${cp.toString(16)}}` : `\\u${cp.toString(16).padStart(4, "0")}`;
+  }).join("")));
+
+/**
+ * Every byte, or false. writeSync may write part of a buffer to a slow pipe, and on a pipe Node
+ * has made non-blocking it throws EAGAIN when the pipe is merely full: that is retried, bounded,
+ * so a slow consumer is not reported as a refusal. Anything else (EPIPE, a closed fd) is.
+ */
+function writeAll(fd, text) {
+  const buf = Buffer.from(text, "utf8");
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  let off = 0;
+  let waits = 0;
+  while (off < buf.length) {
+    try {
+      const n = writeSync(fd, buf, off, buf.length - off);
+      if (!n) return false;
+      off += n;
+      waits = 0;
+    } catch (e) {
+      if (!e || e.code !== "EAGAIN" || ++waits > 200) return false;
+      Atomics.wait(pause, 0, 0, 25);
+    }
+  }
+  return true;
+}
+
+/**
+ * The re-publish diff, printed the same way at propose (BEFORE the human reads) and at publish.
+ * Shown only at publish, it reached the reviewer after the stamp, when it could no longer help.
+ * Written synchronously, like the digest line after it: an async write lost on a closed pipe would
+ * leave a reviewer reading a plan with its diff missing (B5). Returns false when it could not write.
+ */
+function printSemanticDiff(diff) {
+  const out = ["this is a RE-publish. What changed:",
+    `  effective_date ${shown(diff.effective_date.from)} -> ${shown(diff.effective_date.to)}`];
+  if (diff.changed_facts)
+    for (const f of diff.changed_facts) out.push(`  facts.${shown(f.field)}: ${f.change}`);
+  else if (diff.facts_changed)
+    // Said whether or not a clause also moved: a clause line must not stand in for the facts.
+    out.push("  facts: changed, field not nameable (the published record predates field prints)");
+  for (const c of diff.clause_changes)
+    out.push(`  ${shown(c.page)}: +${c.added.map(shown).join(",") || "-"} -${c.removed.map(shown).join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
+  if (diff.templates_changed) out.push("  template set: changed");
+  if (!writeAll(1, out.join("\n") + "\n")) return false;
+  return diff.opaque_rechange ? writeAll(2, `WARN consistency:-:-:${diff.opaque_reason}\n`) : true;
+}
+
 async function proposeMain(args) {
   if (!args.venture) { console.error(`propose needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`propose needs --out DIR\n\n${usage()}`); return 2; }
@@ -558,7 +640,9 @@ async function proposeMain(args) {
       return 2;
     }
 
-    const payload = approvalPayload(run);
+    const prior = publishedRecord(args.venture);
+    if (prior.problem) { console.error(`propose refuses: ${prior.problem} Nothing was written.`); return 2; }
+    const payload = approvalPayload(run, prior.sha);
     const errs = validateApprovalPayload(payload);
     if (errs.length) {
       console.error("the approval payload this build produced is itself invalid:\n  - " + errs.join("\n  - "));
@@ -582,6 +666,10 @@ async function proposeMain(args) {
     console.log(`facts ${payload.facts_sha256} (from ${factsFrom})`);
     console.log(`set ${payload.template_set}@${payload.template_set_sha}`);
     console.log(`payload ${sha}`);
+    if (prior.record && !printSemanticDiff(semanticDiff(prior.record.run, run))) {
+      console.error("the re-publish diff could not be printed whole, so nothing can be bound to it - run it again with stdout open");
+      return 2;
+    }
     if (dryRun) {
       // A PLAN NOBODY COULD READ WHOLE IS NOT A PLAN: piped through `head`, the digest line was lost while the exit still
       // said 0 (PR 5c round-1 shell attack, the leads twin). Written synchronously; a failed write is a refusal.
@@ -781,13 +869,27 @@ async function publishMain(args) {
   const ledgerDir = join(PRODUCT, "published");
   const ledgerFile = join(ledgerDir, args.venture + ".json");
   const hadPrevious = existsSync(ledgerFile);
-  const previous = hadPrevious ? readJson(ledgerFile) : null;
+  // ONE read: the bytes hashed for PREVIOUS_MOVED are the bytes the diff and NON_MONOTONIC use.
+  // Two reads let the approval match newer bytes while the checks ran on older ones.
+  let previousText = null;
+  if (hadPrevious) {
+    try { previousText = readFileSync(ledgerFile, "utf8"); }
+    catch (e) { throw new Fail(3, `cannot read ${ledgerFile}: ${e.message}`); }
+  }
+  let previous = null;
+  if (previousText !== null) { try { previous = JSON.parse(previousText); } catch { previous = {}; } }
+  // The ledger as the human's diff saw it, against the ledger as it stands now.
+  const previousSha = previousText !== null ? bytesHash(previousText) : "none";
+  const previousMoved = approved.previous_published_sha256 !== previousSha
+    ? [`PREVIOUS_MOVED: the approval was read against ${shown(String(approved.previous_published_sha256).slice(0, 12))} as the previous publish, and the ledger now holds ${previousSha.slice(0, 12)}. Another publish landed in between, so the diff the human read is not this one. Propose again.`]
+    : [];
 
   const approvedSets = existsSync(join(PRODUCT, "approved-sets.json")) ? readJson(join(PRODUCT, "approved-sets.json")) : null;
 
   const problems = [
     ...templateSetApprovalErrors({ approvedSets, templateSet: fresh.template_set, sha: fresh.template_set_sha }),
     ...found.problems,
+    ...previousMoved,
     ...(decision ? verifyDecision(decision, approved, args.request) : []),
     ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: listPagesRecursively(args.dir) }),
     ...backdatingErrors({
@@ -807,14 +909,11 @@ async function publishMain(args) {
     return 2;
   }
 
-  let diff = null;
-  if (previous && previous.run && Array.isArray(previous.run.pages)) {
-    diff = semanticDiff(previous.run, fresh);
-    console.log("this is a RE-publish. What changed:");
-    console.log(`  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`);
-    for (const c of diff.clause_changes)
-      console.log(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
-    if (diff.opaque_rechange) console.error(`WARN consistency:-:-:${diff.opaque_reason}`);
+  const diff = previous && previous.run && Array.isArray(previous.run.pages) ? semanticDiff(previous.run, fresh) : null;
+  // Propose refuses when its diff cannot be printed; publish now does too, before any record is written (B3).
+  if (diff && !printSemanticDiff(diff)) {
+    console.error("publish REFUSED: the re-publish diff could not be printed whole - nothing was written");
+    return 2;
   }
 
   writeFileSync(join(args.dir, "_published.json"), JSON.stringify({
@@ -1028,7 +1127,7 @@ function bumpTemplatesMain(args) {
 function checklistMain(args) {
   if (!args.venture) { console.error(`checklist needs --venture NAME\n\n${usage()}`); return 2; }
 
-  const { run } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
+  const { run, pages: rendered } = renderVenture({ ventureName: args.venture, outDir: null, ventureDir: args["venture-dir"] });
   const providerPages = renderInputs(run.template_set).data["provider-pages.json"];
   if (!providerPages) throw new Fail(3, "products/legal/data/provider-pages.json is missing");
 
@@ -1041,6 +1140,7 @@ function checklistMain(args) {
     facts: { payment_model: run.payment_model },
     routes,
     evidence,
+    pages: Object.fromEntries(rendered.map((p) => [p.page, { text: p.text, output_sha256: p.output_sha256 }])),
   });
 
   if (errs.length) {

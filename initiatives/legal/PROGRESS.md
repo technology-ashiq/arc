@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-legal (Cycle 14, opened 2026-08-12)
-phase: 00
+phase: 01
 appetite: 5d
-burn: 0d
-blocked-on: —
+burn: 3.5d
+blocked-on: owner — fixture publish stamp via arc-inbox (Phase 01) and five LexOS facts (Phase 03)
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -64,6 +64,39 @@ a tracker reading 55% when the truth was 75%, set before the last phase was buil
 recomputed.
 
 ## Now
+
+**Position (2026-10-06):** Phase 01 OPEN, Phase 02 built, Phase 03 blocked on the owner.
+
+The tracker said `phase: 00 · burn: 0d` for seven weeks while Phases 01 and 02 were built on top
+of it. Re-read against the specs on 2026-10-06, each phase had one exit criterion that was never
+met, and both are now built in PR #341:
+
+- **Phase 01** — the re-publish semantic diff returned a constant empty field list and printed
+  only at publish, after the stamp. It now names the moved field at propose, binds the ledger it
+  diffed against (`PREVIOUS_MOVED`), and WARNs `FULL-BLOB` when nothing can be named.
+- **Phase 02** — a reachability PASS needed no served evidence at all. It now needs an excerpt of
+  the served body and the page hash it matched, and every PASS is labelled `self-attested, not
+  fetched`.
+
+Bundles: `evidence/phase-01/bundle.md` (new) and the 2026-10-06 addendum in
+`evidence/phase-02/bundle.md`. Low attack findings: `debt-ledger.md`.
+
+**What closes Phase 01, in order:** merge #341 → from the canonical clone, raise a fresh fixture
+`legal.publish` request on the merged engine (the one raised 2026-10-06, `01M46QX0KG8CB77HSX9AEE638E`,
+predates the `previous_published_sha256` key and is left undecided on purpose) → **the owner stamps
+it with `arc-inbox approve`** → publish → verify both ids in `events/` and absent from
+`_quarantine/` → `/arc-phase-done 01`, then `/arc-phase-done 02`.
+
+**What Phase 03 needs from the owner:** five facts in `~/.arc-private/legal/lexos/facts.yaml`
+(legal name as on the PAN, geographic address, grievance postal address, `pricing.period`,
+`effective_date`), a read and stamp of the seven rendered pages, and a gazette re-check of the DPDP
+Rule 3 commencement. Secondary sources (Sept 2026) still put it at 13-May-2027 with the MeitY
+compression proposal un-gazetted, so ADR-1206's revisit trigger has not fired; the primary fetch
+did not return the commencement text, so assumptions-ledger row 2 stays a human check.
+
+---
+
+_Kickoff record, 2026-08-13, kept for the receipts:_
 
 **Position:** kickoff **APPROVED 2026-08-13** — `decision.recorded` `01KZVM9TR488384Q7CR8P2N271`,
 verdict `approve`, verified on the canonical spine and not quarantined. The owner approved in
