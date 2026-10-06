@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/org/dup-keys.mjs:36",
+      "breaking_input": "Run the fixture on a Windows checkout with core.autocrlf=true. Every contract file then has CRLF line endings.",
+      "why": "The fixture splits on \"\\n\", so each line keeps a trailing \"\\r\". The regex ends in `,$`, which does not match a line ending \"\\r\". duplicateOneKey returns null, the vacuous-pass guard fires, and the test goes red on exactly the Windows leg. Defect pattern: autocrlf / CRLF handling.",
+      "fix": "Split on /\\r?\\n/ and re-join with the file's own EOL, or let the regex tolerate \\r with `,\\r?$`.",
+      "twin_of": "`--chart --check` compared raw bytes, so an autocrlf checkout read as a hand edit"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/org/dup-keys.mjs:30",
+      "breaking_input": "Any run. mkdtempSync creates a temp dir holding three full copies of .claude/scripts, docs, initiatives/face and more. Nothing ever removes it, and a SIGTERM from a CI cancel leaves it behind too.",
+      "why": "There is no rmSync, no try/finally and no signal handler, so every run leaks three trees. Docs and scripts can be tens of MB.",
+      "fix": "Wrap the loop in try/finally with rmSync(tmp, {recursive:true, force:true}), open the try right after mkdtemp, and add a SIGTERM/SIGINT handler.",
+      "twin_of": "The self-test cleaned its scratch tree on SIGINT only; a CI cancel sends SIGTERM"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/org/dup-keys.mjs:41",
+      "breaking_input": "cpSync of a directory fails with EACCES, ENAMETOOLONG (long Windows temp path) or EMFILE, for example for .claude/scripts.",
+      "why": "The bare `catch { /* absent on this tree */ }` swallows every copy error, so the scratch tree is silently incomplete. The gates then fail for an unrelated reason such as a missing parser import. `r.status !== 0` passes, and the name check (`out.includes(file)` plus /duplicate/i) can be satisfied by unrelated text that mentions the file or the word \"duplicate\". The mutant arms pass without ever exercising the new check.",
+      "fix": "Only skip when !existsSync(src). Rethrow any other error. Add a control run of both gates on the unmutated scratch copy, so the copy is proven good before the mutants run.",
+      "twin_of": "`treeScripts` swallowed every read error, so EACCES or EIO shrank the script inventory in silence"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/org/dup-keys.mjs:60",
+      "breaking_input": "Many FAIL lines are printed, then the final \"RAN dup-keys N checks, M failed\" line, then process.exit(failed ? 1 : 0). The bats `run` reads stdout through a pipe.",
+      "why": "process.exit straight after a burst of console.log can truncate piped stdout on Windows. The \"RAN dup-keys \" assertion in the bats file would then report that the fixture never ran.",
+      "fix": "Set process.exitCode and let the process drain, instead of calling process.exit.",
+      "twin_of": "The test probe exited with `process.exit(1)` right after a burst of output"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/org/dup-keys.mjs:14",
+      "breaking_input": "A gate child hits its spawnSync timeout. status is null and r.error is ETIMEDOUT.",
+      "why": "`r.status !== 0` is true for null, so a hung gate counts as 'failed on the duplicate'. Only the output-name check backs it up, and a truncated stdout can still contain the file name. The worst-case wall time is about 2×(120s+300s) for the controls plus 6 mutant runs, with no stated ceiling against the bats or job timeout.",
+      "fix": "Require typeof r.status === 'number' and !r.error before accepting a non-zero exit. Budget the total and state it.",
+      "twin_of": "The self-test spawned each arm with no timeout, so one hung child held the whole suite until the CI job limit"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:1012",
+      "breaking_input": "A contract file saved by Notepad with a UTF-8 BOM and containing a duplicate key.",
+      "why": "strictJson hands the BOM-prefixed text to assertNoDuplicateKeys and then to JSON.parse. If the scanner is not BOM-aware, the first key is misread, which is the known BOM pattern. A duplicate of the first key could also slip past, and the error would surface as a parse error rather than a duplicate error.",
+      "fix": "Strip a leading U+FEFF once in strictJson, before both the scan and the parse.",
+      "twin_of": "A UTF-8 BOM (Notepad) became part of the first key and failed a card for an invisible byte"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:1012",
+      "breaking_input": "Edit strictJson in one of the two files and not the other.",
+      "why": "The identical strictJson helper is pasted into face-coverage.mjs and face-sections.mjs, so it can drift. Its basename derivation `p.split(/[\\\\/]/).pop()` is also hand-restated in both. A fix applied in one file leaves the other open, which is the twin-fix recurrence this lane keeps hitting.",
+      "fix": "Export one `readJsonStrict(path)` from json-strict.mjs and import it in both gates.",
+      "twin_of": "The emitter's \": \" guard copied one misread by hand and could miss a sibling"
+    }
+  ]
+}

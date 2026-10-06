@@ -421,6 +421,8 @@ export class Door {
   /** @param {string} q */
   ask(q) { return this.call("/api/ask", { method: "POST", body: { q } }); }
   models() { return this.call("/api/models"); }
+  /** The router's provider profiles, read for Settings' "used by" (ADR-1350 Amendment 4). */
+  modelPolicy() { return this.call("/api/model-policy"); }
   /** @param {{ op: "add" | "activate" | "remove" | "edit", [k: string]: unknown }} change */
   setModels(change) { return this.call("/api/models/set", { method: "POST", body: change }); }
   keys() { return this.call("/api/keys"); }

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // json-strict.mjs — see what JSON.parse hides: duplicate object keys.
 //
 // `JSON.parse` is last-wins, so a manifest whose BYTES contain a forbidden value can lint clean
@@ -85,4 +86,15 @@ export function assertNoDuplicateKeys(text, where = "input") {
     if (c === ",") { const top = stack[stack.length - 1]; expectKey = !!top && top.type === "obj"; i++; continue; }
     i++;
   }
+}
+
+/**
+ * Read a JSON file through the duplicate-key check, then parse it. The face contract gates read their files here
+ * (ADR-1630): main once held PLAN-launch twice in expected-set.json while both gates passed.
+ * @param {string} path @returns {unknown}
+ */
+export function readStrictJson(path) {
+  const text = readFileSync(path, "utf8");
+  assertNoDuplicateKeys(text, String(path).split(/[\\/]/).pop());
+  return JSON.parse(text);
 }

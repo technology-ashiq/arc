@@ -192,10 +192,25 @@ export function testLine(t) {
 
 // ── the models form ──
 
-/** @typedef {{ name: string, baseUrl: string, model: string, key: string }} ModelForm */
+/** @typedef {{ name: string, baseUrl: string, model: string, key: string, costIn: string, costOut: string, currency: "USD" | "INR" }} ModelForm */
 /** @returns {ModelForm} */
 export function emptyForm() {
-  return { name: "", baseUrl: "", model: "", key: "" };
+  return { name: "", baseUrl: "", model: "", key: "", costIn: "", costOut: "", currency: "USD" };
+}
+
+/**
+ * The cost a form declares, or none, or why not (ADR-1350 Amendment 4): both prices blank is no cost; one blank, a word or
+ * a negative is refused here, before a round trip. The door checks again and its word is final.
+ * @param {{ costIn?: string, costOut?: string, currency?: string }} form
+ * @returns {{ ok: true, cost: { input: number, output: number, currency: "USD" | "INR" } | null } | { ok: false, why: string }}
+ */
+export function costOf(form) {
+  const a = String(form.costIn ?? "").trim(), b = String(form.costOut ?? "").trim();
+  if (!a && !b) return { ok: true, cost: null };
+  const input = Number(a), output = Number(b);
+  const price = (/** @type {string} */ t, /** @type {number} */ n) => t !== "" && Number.isFinite(n) && n >= 0 && n <= 10000;
+  if (!price(a, input) || !price(b, output)) return { ok: false, why: "A cost is two prices per million tokens, input and output, each from 0 to 10000 -- or leave both empty." };
+  return { ok: true, cost: { input, output, currency: form.currency === "INR" ? "INR" : "USD" } };
 }
 
 /** Starting points the owner can pick and then edit: the form fills in, and nothing is sent until it is added. */
@@ -222,16 +237,20 @@ export function addChange(form) {
   if (!name) return { ok: false, why: "Give the model a name." };
   if (!baseUrl) return { ok: false, why: "Give the provider's base URL." };
   if (!model) return { ok: false, why: "Give the model id the provider uses." };
-  return { ok: true, change: { op: "add", model: key ? { name, baseUrl, model, key } : { name, baseUrl, model } } };
+  const c = costOf(f);
+  if (!c.ok) return c;
+  return { ok: true, change: { op: "add", model: { name, baseUrl, model, ...(key ? { key } : {}), ...(c.cost ? { cost: c.cost } : {}) } } };
 }
 
 /**
  * A row's edit form, filled from what the door shows: the name, URL and model id. The key field starts empty -- the
  * page never has the key -- and empty means keep it (ADR-1350 Amendment 3).
- * @param {{ name: string, baseUrl: string, modelId: string }} row
+ * @param {{ name: string, baseUrl: string, modelId: string, cost?: { input: number, output: number, currency: "USD" | "INR" } | null }} row
  */
 export function editForm(row) {
-  return { name: row.name, baseUrl: row.baseUrl, model: row.modelId, key: "", clearKey: false };
+  const c = row.cost ?? null;
+  return { name: row.name, baseUrl: row.baseUrl, model: row.modelId, key: "", clearKey: false,
+    costIn: c ? String(c.input) : "", costOut: c ? String(c.output) : "", currency: c ? c.currency : /** @type {"USD" | "INR"} */ ("USD") };
 }
 
 /**
@@ -265,6 +284,9 @@ export function modelsView(raw) {
       baseUrl: String(m.baseUrl ?? ""),
       modelId: String(m.model ?? ""),
       hasKey: m.hasKey === true,
+      // A declared price, shown as declared -- never as a measured one (ADR-1350 Amendment 4).
+      cost: costView(m.cost),
+      costText: costText(costView(m.cost)),
       where: `${String(m.model ?? "")} · ${String(m.baseUrl ?? "")}`,
       key: m.hasKey === true ? (typeof m.keyTail === "string" ? `key …${m.keyTail}` : "key set") : "no key",
       active: m.name === b.active,
@@ -310,4 +332,43 @@ export function keysView(raw) {
     .filter((k) => k && typeof k === "object" && typeof k.name === "string")
     .map((k) => ({ name: String(k.name), shown: typeof k.tail === "string" ? `…${k.tail}` : "set" }));
   return { ok: true, rows };
+}
+
+
+/** "$0.04 in · $0.5 out per M tokens (declared)", or "" with no cost. @param {ReturnType<typeof costView>} c */
+function costText(c) {
+  if (!c) return "";
+  const sign = c.currency === "INR" ? "₹" : "$";
+  return `${sign}${c.input} in · ${sign}${c.output} out per M tokens (declared)`;
+}
+
+/** A served cost, or null when it is not one. @param {unknown} raw */
+function costView(raw) {
+  const c = raw && typeof raw === "object" ? /** @type {Record<string, unknown>} */ (raw) : null;
+  if (!c || typeof c.input !== "number" || typeof c.output !== "number" || (c.currency !== "USD" && c.currency !== "INR")) return null;
+  return { input: c.input, output: c.output, currency: /** @type {"USD" | "INR"} */ (c.currency) };
+}
+
+/**
+ * Who uses each owner model, from GET /api/model-policy (ADR-1350 Amendment 4): the tiers whose `generic-api` pin names
+ * it, and the classes whose generic-api attempt reaches it -- by their own `profile:` or through their tier. Keyed by the
+ * lowercased name, as the store matches names. A body that is not that shape is no answer, never a guessed one.
+ * @param {unknown} raw @returns {{ ok: boolean, by: Map<string, string[]>, unroutable: string[] }}
+ */
+export function usedByOf(raw) {
+  const b = raw && typeof raw === "object" ? /** @type {Record<string, any>} */ (raw) : null;
+  /** @type {Map<string, string[]>} */
+  const by = new Map();
+  if (!b || !Array.isArray(b.tiers) || !Array.isArray(b.classes)) return { ok: false, by, unroutable: [] };
+  const add = (/** @type {unknown} */ name, /** @type {string} */ where) => {
+    if (typeof name !== "string" || !name) return;
+    const k = name.toLowerCase();
+    const list = by.get(k) ?? [];
+    if (!list.includes(where)) list.push(where);
+    by.set(k, list);
+  };
+  for (const t of b.tiers) for (const m of Array.isArray(t?.models) ? t.models : []) if (m?.profile && m.profile.missing !== true) add(m.profile.profile, `tier ${t.tier}`);
+  for (const c of b.classes) if (c?.profile && c.profile.missing !== true) add(c.profile.profile, c.profile.from === "tier" ? `class ${c.name} (via its tier)` : `class ${c.name}`);
+  const unroutable = Array.isArray(b.unroutable) ? b.unroutable.filter((/** @type {unknown} */ n) => typeof n === "string") : [];
+  return { ok: true, by, unroutable };
 }
