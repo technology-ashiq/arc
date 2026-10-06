@@ -32,6 +32,13 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 ## attack cc949ef r1 / 8a0ae88 r2 (slice 8)
 
 - All high and medium fixed in two rounds. Logic surface: round 1 RUN FAILED, round 2 NOT RUN.
+## attack 5e06edf r1 / d931e53 r2 (slice 7)
+
+- 5e06edf B1/B2/B3 fixed. d931e53 B1 fixed (release also requires vercel.json to hold hosting's exact bytes).
+- d931e53 B2 [medium] REJECTED by design (ADR-1730): in the real order, release runs before any app exists, so every
+  production build of the lift commit errors; release's receipt is "production now builds, not skipped". Serving is
+  frontend's proof, and frontend's verify (live 200 + Lighthouse) catches a broken build.
+- Logic: round 1 failed its output contract (empty `fix`), round 2 NOT RUN.
 ## attack 14d5374 r1 (slice 6)
 
 - The first run (7f15855) never reached a model: arc-run's input scanner refused a credential-shaped fixture value; renamed in 14d5374, pre-scanned clean.

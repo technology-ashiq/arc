@@ -1,0 +1,104 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/org/lib/skill-source.mjs:35",
+      "breaking_input": "github:owner/repo/dir/SKILL.md@<40hex> where a path segment is a Windows device name, e.g. github:acme/kit/con/SKILL.md@<sha>, or a segment ending in a dot or space such as \"foo.\"",
+      "why": "parseSource accepts any [A-Za-z0-9._-]+ segment. The fake source joins these into fixtureRoot paths, and the real source builds the URL path from them. con, nul, aux and the like open as devices on Windows (hang or wrong read). A segment of only dots like \"...\" passes SEG_RE and is not rejected.",
+      "fix": "Reject Windows device names and all-dot segments in parseSource, as the name grammars now do.",
+      "twin_of": "A skill or agent named con/nul/aux/com1/lpt1 passed the name grammar -> every name grammar that becomes a path segment"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/lib/skill-source.mjs:57",
+      "breaking_input": "skill-import ... --source real with a path segment containing '?' or '#' encoded as nothing: path \"a/b\" is fine, but owner/repo/path is interpolated into the gh api endpoint with no encoding; a repo or path segment such as \"x.y\" is fine yet a path of \"SKILL.md\" under a segment \"%2e%2e\" cannot pass SEG_RE, so the real hole is the argument itself: the endpoint begins with 'repos/', but an owner segment beginning with a letter is fine while gh api treats an argument beginning with '-' as a flag; segments starting with '-' are refused, but the ref value is not.",
+      "why": "The ref is checked as 40 hex, so it is safe. The remaining weakness is that nothing bounds the response before parse beyond maxBuffer, and a directory path returns a JSON array. The array case is handled by the j.type check, so this is low impact.",
+      "fix": "No change required beyond keeping the type check; add a test for a directory response.",
+      "twin_of": ""
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-own.mjs:main (cardPath scan)",
+      "breaking_input": "org/roles/<dept> entry on main that is a file, or a --role value matching two departments, e.g. the same role id carded under two dept directories",
+      "why": "The loop takes the first department whose path returns text and stops. A duplicate id in a second department is never reported, so the rewrite can land on the wrong card. mainDirNames also returns file names as departments, so a stray file triggers a baseText on a path under a file.",
+      "fix": "Scan all departments, refuse if more than one card matches, and filter to directories.",
+      "twin_of": "An id already carded in ANOTHER department slipped past wx"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/org/skill-import.mjs:main (cardPath scan)",
+      "breaking_input": "a role id carded in two department directories on main",
+      "why": "Same first-match scan as org-own. The skill is bound to whichever department sorts first and the other card is silently left alone.",
+      "fix": "Collect every match and refuse on more than one.",
+      "twin_of": "An id already carded in ANOTHER department slipped past wx"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-own.mjs:main and skill-import.mjs:main (REPO fixed)",
+      "breaking_input": "Run org-own.mjs or skill-import.mjs from a linked worktree: REPO is derived from the script location, so the spine used by emitReceipt is the worktree's, which spineRoot refuses, and the emit fails after the branch is already written",
+      "why": "The branch is written before the approval is emitted. beforeRef pre-judges the approval, but a spine that cannot be written still fails afterwards, leaving a branch with no approval. The exit is 1 and says so, but the owner is left with an orphan branch and a re-run is refused as the branch exists.",
+      "fix": "Resolve and probe the spine writability before writeProposal, or document the recovery step in the error.",
+      "twin_of": "`--hire` ... a hire the gate then refused was left written -> every read-modify-write that validates after writing"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:roleSeat persona (mkdtempSync)",
+      "breaking_input": "Interrupt arc-run --trial-seat with SIGINT/SIGTERM after the persona dir is created",
+      "why": "Cleanup is on exit only; a signal skips it. Recorded as debt row 6, but the twin pattern is a listed fixed defect and the fix was not applied here.",
+      "fix": "Add SIGINT and SIGTERM handlers that remove the dir and exit.",
+      "twin_of": "The self-test cleaned its scratch tree on SIGINT only; a CI cancel sends SIGTERM"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-judge.mjs:main (readTeam / teamStems)",
+      "breaking_input": "org/teams/con.team.yaml, or a directory or symlink named x.team.yaml",
+      "why": "teamStems takes every listing entry with no lstat, grammar or device-name check, and readTeam opens it. This is the /api/org defect left unfixed here (debt row 7).",
+      "fix": "Filter with lstat().isFile(), the stem grammar and the device-name exclusion.",
+      "twin_of": "/api/org opened every `*.team.yaml` the listing returned, including `con.team.yaml` and a directory or symlink with that name"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:roleSeat (personaFile write)",
+      "breaking_input": "A trial agent file of several MB, or a TMP that is a symlinked or shared directory",
+      "why": "The persona is read whole and written to a temp file, then read again by every driver and put into argv or stdin. There is no size cap, so an oversized agent body inflates the prompt with no refusal. On the claude-code driver a prompt over the OS argument limit fails late.",
+      "fix": "Cap the persona size at the point it is read and refuse above the cap.",
+      "twin_of": ""
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-own.mjs:ownCard (hire splice)",
+      "breaking_input": "A hired card whose `hire:` block contains a blank line or a comment at column 0 before its indented fields, or with `hire:` followed by an inline mapping `hire: {runtime: x}`",
+      "why": "The block end is found with /^\\s/ on the next line, so a blank line or a column-0 comment ends the block early. The leftover indented lines then become part of the next key, and the re-parse equality check refuses with a misleading message, or a blank-line-bearing block deletes less than it should.",
+      "fix": "Treat blank and comment lines as part of the block, or refuse an inline mapping by name.",
+      "twin_of": "A UTF-8 BOM (Notepad) became part of the first key and failed a card for an invisible byte"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/agent-scaffold.mjs:planScaffold (spineRefusal path)",
+      "breaking_input": "planScaffold called with a repo whose .claude/scripts/hq/arc-event.mjs is absent (a consumer or scratch tree)",
+      "why": "The refusal check now spawns join(repo, '.claude/scripts/hq/arc-event.mjs') instead of the module constant. A missing file makes spineRefusal fail, and the scaffold reports an approval refusal that blames the spine, not the missing emitter.",
+      "fix": "Check the emitter exists first and name it in the refusal.",
+      "twin_of": ""
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-own.mjs:main (today)",
+      "breaking_input": "--dry-run at 23:59 UTC, apply with the printed --expect after 00:00 UTC",
+      "why": "The date is in the card text, so the plan digest changes at UTC midnight and a correct apply is refused as stale. Recorded as debt row 7 but not fixed.",
+      "fix": "Carry the date in the printed expect token, or use a date-free history line.",
+      "twin_of": ""
+    }
+  ]
+}
