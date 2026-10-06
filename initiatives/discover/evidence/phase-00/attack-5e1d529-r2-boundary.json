@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/commands/arc-hunt.md:8",
+      "breaking_input": "/arc-hunt with a niche containing a backtick, `$(`, or a double quote. The heading line `Hunt: **$ARGUMENTS**` is substituted textually, and the allowed-tools line has `Bash(node ...:*)` which permits arbitrary trailing args.",
+      "why": "The prior fix moved the niche to a file for the command line, but the Write tool step relies on the model transcribing the niche verbatim. The niche is also echoed in prose. If the model runs the bash block with the niche still on argv (for example copying `$ARGUMENTS` into the node line), the old injection is back, because the `Bash(node ...:*)` allowlist is a prefix match and does not constrain the arguments. Also the CLI stub ignores `--niche-file` and never validates a niche grammar, though the doc claims 'the CLI also refuses a niche outside its grammar'. That claim is untrue in the diff: the stub refuses everything with exit 2, so no grammar exists and no test pins it.",
+      "fix": "Remove the false claim, or implement the grammar check in arc-discover.mjs now and add a bats arm that passes a hostile niche file and asserts exit 2 with a grammar-specific message, distinct from 'not built yet'. Tighten allowed-tools to the exact `hunt --niche-file .claude/state/discover/niche.txt` form.",
+      "twin_of": "user text interpolated into a command doc's shell line -> free text goes through a file written by the Write tool, never argv"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:79-87",
+      "breaking_input": "The 'no ungoverned process' test uses `run grep -c ... <(ls ...)`. On a CRLF checkout, a `processes` dir holding a file whose name carries odd characters, or on a runner where process substitution is unavailable, grep reads nothing. `grep -c 'process.yaml$'` returns exit 1 with output 0 when no lines match, and `run` swallows the status.",
+      "why": "`grep -c` exits 1 on a zero count and `run` hides it, so the `[ \"$output\" = \"0\" ]` checks for `^discover` cannot distinguish 'scanned and found none' from a failed scan. The preceding guard counts only `process.yaml$` with an unescaped dot, so any file ending in `processXyaml` counts. The reliability of the scan rests on one positive-count arm. The `^discover` arm does not assert the status was 0 or 1 rather than 2, so grep error (status 2) with output empty compares `[ \"\" = \"0\" ]` and fails loudly, which is fine, but status 2 with output 0 on some builds passes.",
+      "fix": "Use a bash glob: `shopt -s nullglob; files=(\"$ARC_ROOT\"/processes/*.process.yaml); [ ${#files[@]} -gt 0 ]` and `compgen -G \"$ARC_ROOT/processes/discover*\"` expecting failure. Assert grep status explicitly with `[ \"$status\" -le 1 ]`.",
+      "twin_of": "a scan that cannot read its input reports `COULD NOT SCAN`, never an empty result"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:94-103",
+      "breaking_input": "`for args in \"hunt x\" \"\" \"frobnicate --out y\"` with unquoted `$args` and `cd \"$BATS_TEST_TMPDIR\"` run inside a loop in the test body. With an empty `args`, `node \"$cli\"` runs with no verb; a verb or niche containing a glob character would expand against the temp dir.",
+      "why": "The test changes cwd inside the test shell and never restores it, so later assertions or teardown run from the temp dir. It also never exercises the case the prior B1 fix introduced: a `--niche-file` flag with a missing or empty value (pattern c), nor a nonexistent argv[1] path (pattern a, the B4 fix), so neither fix has a regression arm.",
+      "fix": "Run each case in a subshell `( cd \"$BATS_TEST_TMPDIR\" && node ... )`. Add arms: `hunt --niche-file` (empty value), `hunt --niche-file --out x` (flag eaten), and `node .claude/scripts/discover/arc-discover` (extensionless) expecting exit 2 and not a stack trace.",
+      "twin_of": "a flag with a missing or empty value is refused and never consumes the next flag (`--out`, `--offline-fixture`)"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:20-24",
+      "breaking_input": "`node .claude/scripts/discover/arc-discover.mjs hunt x` invoked through a Windows junction or a path differing only by case/8.3 short name. realpathSync normalizes both sides, but a failure of either call returns false, so the stub silently does nothing and exits 0.",
+      "why": "The try/catch converts any realpath failure into 'not main', and then the process exits 0 with no output. A caller that treats exit 0 as success (the command doc says 'Exit 2 means the verb refused') will read a silent no-op as a completed hunt. This is the same shape as a fake whose failure answer equals the success answer.",
+      "fix": "When argv[1] is set but cannot be resolved, write a one-line diagnostic to stderr and set exitCode 2 instead of silently returning false.",
+      "twin_of": "a main guard whose realpath throws at module top level -> wrap it: a throw means not-main"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "initiatives/discover/evidence/phase-00/attack-8bb1a72-r1-boundary.json",
+      "breaking_input": "Committed evidence file whose `breaking_input` strings contain `$(...)`, a backtick and a `touch pwned` payload, placed in the repo and later read by a tool that interpolates evidence text.",
+      "why": "Hostile-looking strings are committed as repo files. They are safe as data, but nothing in the diff shows the evidence directory is excluded from the secret and command scanners, and the untracked `attack-5e1d529-r2-logic.json` shows artifacts from later rounds accumulating by name pattern without a staging guard.",
+      "fix": "Stage evidence by explicit path only, and keep a pinned test that no script reads `initiatives/discover/evidence/**` as shell input.",
+      "twin_of": "hostile fixture text lives in files, never in a shell string or a bats test name"
+    }
+  ]
+}

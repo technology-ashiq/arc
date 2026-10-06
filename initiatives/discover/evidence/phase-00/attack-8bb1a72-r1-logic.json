@@ -1,0 +1,77 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:57-70",
+      "breaking_input": "grep returns 0 matches when the file is absent — `grep -c '\\\"process:discover\\\":'` on a deleted hq.policy.yaml outputs 0, and the `[ \"$output\" = \"0\" ]` check passes",
+      "why": "The 'adds no ungoverned process' test asserts the absence of a string by grepping a file that may not exist or whose read fails. A grep on a missing file prints an error to stderr and 0 to stdout, so the test cannot distinguish 'no row exists' from 'file unreadable' — a vacuum that certifies a check that never read its target. This is the validator-reads-one-thing-uses-another pattern: the assertion ignores the grep exit status and stderr.",
+      "fix": "Run grep with the file's existence checked first and assert `$status != 0`; capture stderr and fail on any message.",
+      "twin_of": "a validator in one read path and a different, weaker read in the other"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:20-24",
+      "breaking_input": "A file containing a line '@test ' in a comment or string (e.g. a hostile fixture or a test description) inflates the declared count",
+      "why": "The test registers `declared` by `grep -c '^@test '` over the whole file. Any line starting `@test ` anywhere — including inside a here-doc, a comment block, or a fixture file that gets appended — changes the expected count, and the assertion `[ \"$declared\" -eq 7 ]` would fail or, worse, accept a file with extra fake @test lines that never run. The bat runner later only executes @test functions, so a mismatch is caught, but the check 'every test in the file is registered' is weakened by counting comments/strings.",
+      "fix": "Parse only lines that are actual test definitions (e.g. use `grep -c '^@test \"'` plus a structural parser), and ensure the count reflects only executable declarations.",
+      "twin_of": "(f) hostile fixture text lives in files, never in a shell string or a bats test name; ASCII-only test names; every bats file asserts its own test COUNT"
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:41-56",
+      "breaking_input": "A malicious manifest with `face.room='lane'` but also containing a `face.plannedRooms` or a `face.served` flag that conflicts — the test reads only `room` and ignores the ring value in the face contract",
+      "why": "The manifest test only checks `name === 'discover' && face.room === 'lane'`. It never verifies `ring`, `stations`, `kinds`, or that the room is actually served by the face contract. A manifest that maps to `lane` but sets `face.ring:'money'` or drops the required `kinds` would still pass, violating ADR-1914/REQ-10's real acceptance (face-coverage checks the full room contract). This is a weaker read than face-coverage.",
+      "fix": "Assert `face.ring === 'factory'` and that the manifest's `kinds`/`stations` match the generic lane room's expectations, or delegate entirely to face-coverage.",
+      "twin_of": "a validator in one read path and a different, weaker read in the other"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": "tests/discover-birth.bats:64-66",
+      "breaking_input": "Running `node .claude/scripts/discover/arc-discover.mjs hunt x` from a directory where a realpath or import error occurs (e.g. NODE_PATH overridden, missing file) — the test only checks exit 2 and stderr contains 'not built yet'",
+      "why": "The stub refusal test accepts exit 2 AND the message 'not built yet'. If the script crashes with an unhandled exception it still exits non-zero (often 1, but a process.exit(2) on any error would also exit 2), and stderr could accidentally contain 'not built yet' from an echo in a wrapper. More concretely, the test does not assert that the guard for 'realpath both sides' is what refused; it only checks the message. A broken script that always prints 'not built yet' and exits 2 regardless of the verb would pass, making the 'refuses every verb until Phase 01' guarantee untested.",
+      "fix": "Assert run from multiple cwd values and that a non-hunt verb also exits 2 with the same message, then assert the exact guard (e.g. stderr contains 'not built yet — Phase 01').",
+      "twin_of": "(a) realpath-both-sides main guard in `arc-discover.mjs` and every CLI-shaped file"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:33-39",
+      "breaking_input": "A `planned-rooms.json` that is valid JSON but uses a top-level object with a different key than `rooms` (e.g. `{ \"entries\": [...] }`) — the `node -e` falls back to `list.some(...)` on an empty array since `Array.isArray(r)` and `r.rooms` both false, returning 'solid'",
+      "why": "The negative-arm room test's `node -e` assumes the JSON is either an array or has a `rooms` key. If the file structure changes (or a malicious/edited file uses a different container key), `list` becomes undefined and `.some` throws -> node exits non-zero -> `run` captures empty `$output`, then `[ \"$output\" = \"planned\" ]` fails, and the check would think the room is solid when the file was unreadable. This is a 'could-not-read returns success' pattern for the planned-room check.",
+      "fix": "Guarantee the parse succeeds: `run room_state \"$copy\"` then assert the node process status is 0 before checking the string; also make the JS robust to missing container keys (fail loudly).",
+      "twin_of": "(g) a scan that cannot read its input reports `COULD NOT SCAN`, never an empty result"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:58-61",
+      "breaking_input": "A discover process file with a name not starting with 'discover' (e.g. `processes/discover-hunt.process.yaml` has a typo `discoverx`) — the grep -c '^discover' returns 0 and the test passes",
+      "why": "The 'adds no ungoverned process' check greps for process filenames starting exactly with 'discover' after `grep -c '^discover' || true`. A file named `discover-extra` or one that is symlinked with a different name would evade this and still exist without a policy row. The intent (ADR-1913) is that no discover process is ungoverned, so a file whose basename starts with 'discover' but is misspelled is a gap, and more importantly this check looks only in `$ARC_ROOT/processes`, not recursively or in other policy-governing locations.",
+      "fix": "List all process files that contain a 'process:discover' label or whose content assigns the discover name, not just filename prefix.",
+      "twin_of": "a validator in one read path and a different, weaker read in the other"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/discover-birth.bats:26-31",
+      "breaking_input": "When `node` is not in PATH or the JSON file is corrupt, `room_state` writes nothing to stdout; the test `[ \"$output\" = \"solid\" ]` fails, but the failure message is 'discover still listed...' rather than a read/report failure",
+      "why": "The primary room-state test conflates 'room is solid' with 'the check could not read the file at all'. A missing or corrupt planned-rooms.json makes node emit an error to stderr and exit non-zero, which is indistinguishable in the bats capture from a legitimately solid state only if we also checked status — but the test doesn't. This is exactly defect pattern (g): a scanner that cannot read input reports a success-like answer. The negative arm shares the same flaw.",
+      "fix": "Before comparing `$output`, assert `$status` is 0, and require stderr to be empty in the success branch.",
+      "twin_of": "(g) a scan that cannot read its input reports `COULD NOT SCAN`, never an empty result"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "tests/discover-birth.bats:64-66",
+      "breaking_input": "Passing an argument like `hunt --help` or an empty string as the niche — the stub accepts any arguments and always exits 2, so no validation of the verb or argument is surfaced, meaning the refusal is not per-verb",
+      "why": "The stub test runs only `hunt x`. It does not verify that `hunt` with no arguments, with extra flags, or with an unknown verb all exit 2 with the same message. The spec (phase-00) says 'Every verb prints not built yet', so the test should sample at least two verbs and an unknown verb to prove the guard, not just one happy path.",
+      "fix": "Add cases: `arc-discover.mjs`, `arc-discover.mjs hunt` (no args), `arc-discover.mjs bogus`, all asserting exit 2 and the exact message.",
+      "twin_of": "(c) a flag with a missing or empty value is refused and never consumes the next flag"
+    }
+  ]
+}

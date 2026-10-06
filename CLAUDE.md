@@ -168,7 +168,7 @@
 - **GENERATED commands** → `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` are compiled
   from `processes/*.process.yaml` (engine Cycle 6, ADR-0201/0202). **Do not edit them** — the next
   regeneration deletes the edit. Change the process file, routed through `/arc-change`, then
-  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 25
+  `node .claude/scripts/engine/arc-compile.mjs --write --all --target claude-code`. The other 26
   commands are still hand-written and unaffected.
 - Company board       → `PORTFOLIO.md` (every lane in priority order — a view, not the truth)
 - Lanes / workspaces  → `.claude/rules/lanes.md` (`--lane` is the ONLY way to name a lane)
