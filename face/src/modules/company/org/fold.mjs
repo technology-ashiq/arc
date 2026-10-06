@@ -38,7 +38,7 @@ import { unescapeDoorText } from "../../../lib/door.mjs";
 /**
  * The roles, scorecards and teams section (org Cycle 19, ADR-1624/1625): every value as /api/org served it. The fold
  * maps and words; it never counts a receipt or re-tests a seat -- the producer's own flags decide (twin-fix retro).
- * @typedef {{ key: string, id: string, title: string, state: string, seat: string, origin: string }} RoleRow
+ * @typedef {{ key: string, id: string, title: string, state: string, seat: string, origin: string, who: string, whoTone: "sits" | "none" | "disagrees" }} RoleRow
  * @typedef {{ key: string, role: string, seat: string, isVerdict: boolean, verdict: string, why: string, due: string, line: string }} ScoreRow
  * @typedef {{ key: string, venture: string, stage: string, valid: boolean, status: string, seats: string, findings: string[] }} TeamRow
  * @typedef {object} OrgView
@@ -80,6 +80,26 @@ export function receiptsLine(r) {
 }
 
 /**
+ * Who sits one role, in words, from the binds the card holds as /api/org served them (face Phase 13, ADR-1352). Named as
+ * the chart names them (an agent by name, `skill:`, a script's file name, `process:`), with the tier when it has one. A
+ * vacant role says so; a card whose seat and binds disagree is named as that, never drawn as filled or as empty.
+ * @param {Record<string, unknown>} r  one served role row
+ * @returns {{ who: string, whoTone: "sits" | "none" | "disagrees" }}
+ */
+export function whoSits(r) {
+  const b = isObj(r["binds"]) ? /** @type {Record<string, unknown>} */ (r["binds"]) : {};
+  const list = (/** @type {unknown} */ v) => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
+  const names = [...list(b["agents"]), ...list(b["skills"]).map((s) => `skill:${s}`), ...list(b["scripts"]).map((s) => s.split("/").pop() || s),
+    ...(str(b["process"]) ? [`process:${str(b["process"])}`] : [])];
+  const seat = str(r["seat"]);
+  const tier = str(b["tier"]);
+  if (seat === "vacant") return names.length ? { who: `vacant, yet the card binds ${names.join(", ")} -- its seat and binds disagree`, whoTone: "disagrees" } : { who: "no one sits this role", whoTone: "none" };
+  if (seat === "human") return { who: names.length ? `a person, with ${names.join(", ")}` : "a person sits this role", whoTone: "sits" };
+  if (!names.length) return { who: `the ${seat || "unnamed"} seat binds no one -- its seat and binds disagree`, whoTone: "disagrees" };
+  return { who: `sits: ${names.join(", ")}${tier ? ` · ${tier}` : ""}`, whoTone: "sits" };
+}
+
+/**
  * @param {Payload} p  the /api/org payload, or a refusal the fold made itself
  * @returns {OrgView}
  */
@@ -105,7 +125,7 @@ export function foldOrg(p) {
     const dd = /** @type {Record<string, unknown>} */ (d);
     const roles = (Array.isArray(dd["roles"]) ? dd["roles"] : []).filter(isObj).map((r, j) => {
       const rr = /** @type {Record<string, unknown>} */ (r);
-      return { key: `${i}-${j}-${str(rr["id"])}`, id: str(rr["id"]), title: str(rr["title"]), state: str(rr["state"]), seat: str(rr["seat"]), origin: str(rr["origin"]) };
+      return { key: `${i}-${j}-${str(rr["id"])}`, id: str(rr["id"]), title: str(rr["title"]), state: str(rr["state"]), seat: str(rr["seat"]), origin: str(rr["origin"]), ...whoSits(rr) };
     });
     return { key: `${i}-${str(dd["dept"])}`, name: str(dd["name"]) || str(dd["dept"]), roles };
   });

@@ -58,6 +58,38 @@ try {
     check("roles: the door's escaping is undone once, so a title reads as written", F.foldOrg(ok(amp)).departments[0].roles[0].title === "R&D <lead>", F.foldOrg(ok(amp)).departments[0].roles[0].title);
   }
 
+  // ---- who sits each role (face Phase 13, REQ-17, ADR-1352) ----
+  {
+    const served = body.chart.departments.flatMap((d) => d.roles);
+    check("who: the real /api/org body carries every role's binds as the card holds them (vacuous-pass guard)",
+      served.length > 0 && served.every((r) => r.binds && Array.isArray(r.binds.agents)), served.filter((r) => !r.binds).map((r) => r.id).join(","));
+    const o = F.foldOrg(ok(body));
+    const rows = o.departments.flatMap((d) => d.roles);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const staffed = served.find((r) => r.seat === "agent" && r.binds.agents.length > 0);
+    const vacant = served.find((r) => r.seat === "vacant");
+    check("who: a staffed agent seat names its agents and its tier", !!staffed && byId.get(staffed.id).whoTone === "sits"
+      && staffed.binds.agents.every((a) => byId.get(staffed.id).who.includes(a)) && byId.get(staffed.id).who.includes(staffed.binds.tier), staffed ? byId.get(staffed.id).who : "no staffed seat");
+    check("who: a vacant seat says so in words", !!vacant && byId.get(vacant.id).who === "no one sits this role" && byId.get(vacant.id).whoTone === "none", vacant ? byId.get(vacant.id).who : "no vacant seat");
+    check("who: every served role gets a line (none drawn blank)", rows.every((r) => r.who.length > 0));
+    const lying = clone(body);
+    const lv = lying.chart.departments.flatMap((d) => d.roles).find((r) => r.seat === "vacant");
+    lv.binds.agents = ["researcher"];
+    const lr = F.foldOrg(ok(lying)).departments.flatMap((d) => d.roles).find((r) => r.id === lv.id);
+    check("who: a vacant seat that binds an agent is named as a disagreement, never drawn as filled or empty", lr.whoTone === "disagrees" && /disagree/.test(lr.who) && lr.who.includes("researcher"), lr.who);
+    const empty = clone(body);
+    const ev = empty.chart.departments.flatMap((d) => d.roles).find((r) => r.seat === "agent");
+    ev.binds = { agents: [], skills: [], scripts: [], process: null, tier: null };
+    const er = F.foldOrg(ok(empty)).departments.flatMap((d) => d.roles).find((r) => r.id === ev.id);
+    check("who: an agent seat that binds no one is named as a disagreement", er.whoTone === "disagrees" && /binds no one/.test(er.who), er.who);
+    // MUTANT: a fold that read "sits" off the seat word alone would draw the lying vacant card as filled or empty.
+    const mutant = (r) => (r.seat === "vacant" ? "none" : "sits");
+    check("who: MUTANT CONTROL -- a tone read off the seat alone misses the disagreement", mutant(lv) !== lr.whoTone);
+    const noBinds = clone(body);
+    delete noBinds.chart.departments.flatMap((d) => d.roles).find((r) => r.seat === "vacant").binds;
+    check("who: a row with no binds at all still reads in words, never a crash", F.foldOrg(ok(noBinds)).departments.flatMap((d) => d.roles).every((r) => typeof r.who === "string" && r.who.length > 0));
+  }
+
   // ---- scores ----
   {
     const o = F.foldOrg(ok(body));

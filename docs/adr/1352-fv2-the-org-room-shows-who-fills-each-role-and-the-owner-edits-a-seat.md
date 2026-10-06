@@ -27,15 +27,22 @@ card on a proposal branch off `main` and emits `approval.requested`, with `--dry
 assign mode (`--role ROLE --seat SEAT --agents a,b` with the same pair), so the face shells the same script a hand-run
 calls (ADR-1326).
 
-- **What it writes:** only `seat` and `binds` of ONE card; every other line stays byte-identical (the card says "edit
-  by hand; `org-catalog --draft` never overwrites"). A history line names the change, as `org-own` does.
-- **Where:** a new proposal branch, then one `approval.requested`. Never `main`, never the owner's checkout.
-- **`binds.tier` is never typed.** It is derived from the bound agents' own frontmatter, as `org-catalog` and
-  `org-own` derive it. Because no person types it, a seat edit is not a tier change under ADR-0069. A derived tier that
-  would differ from the card's current tier is shown in the plan and needs the owner's approval like any other change.
+- **What it writes:** only `seat`, `binds.agents` and `binds.tier` of ONE card; every other line stays byte-identical
+  (the card says "edit by hand; `org-catalog --draft` never overwrites"), so no history line is added -- the commit
+  message and the approval carry the change. `org/CHART.md` and `org/chart.json` are re-rendered from the cards on the
+  same branch, because `org-catalog --chart --check` fails a stale chart in CI.
+- **Which seats:** only an `own` card whose seat is `agent` or `vacant`, set to `agent` or `vacant`. A script, skill,
+  process, human or partial seat, and a hired card, stay hand edits (or hire-to-own).
+- **Where:** a new proposal branch `feat/face-org-seat-<role>`, then one `approval.requested` (gate `org-seat`). Never
+  `main`, never the owner's checkout. One seat proposal is open at a time, because each rewrites the shared chart.
+- **`binds.tier` is never typed.** It is derived from the bound agents' own `model:`, as `org-catalog` derives it.
+  Agents on two tiers are refused, never averaged. Because no person types it, a seat edit is not a tier change under
+  ADR-0069. A derived tier that differs from the card's current one is shown in the plan and needs the owner's approval
+  like any other change.
 - **Refusals, before any file or event**, using the checks `org-coverage.mjs` already fails on in CI: a named agent
-  with no `.claude/agents/<name>.md`; a card id duplicated across departments; seat and binds that disagree (a staffed
-  seat with empty binds, a vacant seat with binds).
+  with no `.claude/agents/<name>.md`; a card id duplicated across departments; seat and binds that disagree (an agent
+  seat with no agents, a vacant seat with agents, skills, scripts or a process, a legitimised seat made vacant); an
+  agent the change would leave in no role (REQ-01); an agent named like a model (`MODEL_RE`).
 
 ## Options considered
 
@@ -50,5 +57,8 @@ calls (ADR-1326).
 - `org-own.mjs` is the org lane's file. This PR edits it under org's rules (ADR-1601, ADR-1629) and the PR names it;
   the org lane's session is told in the handoff.
 - No new spine kind (ADR-0026): the op emits `approval.requested`, as `org.lane-status` does.
+- The op is the first born after Phase 05's day-1 probe. That probe and its residue file are sealed evidence
+  (`arc-evidence verify 5` hashes both), so `tests/face/work-door.mjs` names `org.seat-assign` with this ADR in its
+  `AFTER_PROBE` list instead of writing into the bundle.
 - A new door op is a gate-shaped surface: two fresh attackers (logic and boundary) through `/arc-attack` before the
   push, and the wiki regenerated in the same PR.

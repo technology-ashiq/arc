@@ -70,6 +70,8 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
 }
 
 const NOTE = { fontFamily: UI, color: 'var(--text-3)' }
+// Who sits a role: a lookup by the fold's tone, so the View holds no branch of its own (ADR-1320).
+const WHO_COLOUR = { sits: 'var(--text-2)', none: 'var(--text-3)', disagrees: 'var(--amber)' } as const
 
 // The roles, scorecards and teams (org Cycle 19, ADR-1624): every line as fold() worded it.
 function OrgSection({ o }: { o: OrgView }) {
@@ -89,6 +91,7 @@ function OrgSection({ o }: { o: OrgView }) {
                   <div key={r.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-2 py-[5px] text-[12.5px] leading-[18px]" style={{ borderBottom: '1px solid var(--line-1)' }}>
                     <span className="min-w-0 break-words" style={{ fontFamily: UI, color: 'var(--text-1)' }}>{r.title} <span style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{r.id}</span></span>
                     <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{r.state} · {r.seat}</span>
+                    <span data-role-who={r.whoTone} className="col-span-2 min-w-0 break-words text-[11.5px] leading-[16px]" style={{ fontFamily: MONO, color: WHO_COLOUR[r.whoTone] }}>{r.who}</span>
                   </div>
                 ))}
               </div>
