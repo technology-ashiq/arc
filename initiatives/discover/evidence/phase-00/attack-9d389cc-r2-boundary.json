@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdExport (stage / yamlPath)",
+      "breaking_input": "Export where launch loadProfile accepts the staged yaml, then the second writeFileSync (hunt.md) fails with a non-EEXIST error (ENOSPC, EACCES, EPERM on Windows because an AV scanner holds the file). The catch runs unlinkSync(yamlPath) which itself can throw (file locked by Windows indexer/AV) and mask the original error.",
+      "why": "Rollback unlinkSync is unguarded. If it throws, the original error is lost and yaml is left orphaned without its hunt.md. The next export is then refused with 'already exists - never overwritten', so the approved venture is stranded. Also, the yaml is visible to launch's loader between the first and second write, so a concurrent reader sees a venture with no evidence file.",
+      "fix": "Wrap unlinkSync in try/catch and report both errors. Write hunt.md first with 'wx', then yaml with 'wx', rolling back hunt.md. Or write both to a staging dir and link them in.",
+      "twin_of": "check-then-write on a file that must never be overwritten -> exclusive create (`wx`) is the check; undo the first file if the second fails"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdHunt, cmdScore, cmdJudge, cmdVerdicts, cmdPropose (writeFileSync into dir)",
+      "breaking_input": "--in points to a directory that is a junction/symlink planted after inDir() ran (or an --out dir whose child records.ndjson, clusters.json, scores.json, judge.json or proposal.json is a pre-planted symlink pointing outside the roots, e.g. to a file in the user's home).",
+      "why": "ensureDir re-confines only the directory. inDir() confines once via confine() and never re-checks the real path, and the file writes follow a pre-existing symlinked file. writeFileSync without 'wx' on an existing symlink overwrites its target outside the confinement. This is the same 'confined once, written through a link' pattern fixed only for the hunt out-dir and ventures dir.",
+      "fix": "Use one helper that realpaths and re-confines the final file path (or opens with O_NOFOLLOW / lstat rejects symlinks) before every write. Apply it in score, judge, verdicts and propose, not just hunt.",
+      "twin_of": "a path confined once, then written through a later-created link -> re-confine the REAL path after mkdir, before the first write"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:confine (roots) + cmdExport stage",
+      "breaking_input": "--ventures-dir /tmp/x (any dir under os.tmpdir()) on a shared machine, or an --out under tmpdir where another local user pre-created the dir; also the stage dir name discover-export-<pid>-<Date.now()> is predictable.",
+      "why": "tmpdir() is a confinement root, so venture.yaml for launch can be written to world-writable temp. The stage dir is created with a predictable name and mkdirSync recursive succeeds if an attacker pre-created it. loadProfile then reads yaml from a directory an attacker can swap files in between the writeFileSync and loadProfile (validate one read, use another). The accepted bytes are not the bytes later written to yamlPath only if the attacker races the stage.",
+      "fix": "Use mkdtempSync for the stage, as emit() already does. Drop tmpdir from the roots for --ventures-dir, or require the repo root there.",
+      "twin_of": "a validator in one read path and a different, weaker read in the other"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/lib/spine.mjs:emit",
+      "breaking_input": "emit succeeds in arc-event (event recorded) but the child is SIGKILLed by the 60 s timeout before printing the ULID, or stdout last line is a warning rather than the ULID. A hunt with 40 new records on a slow disk or Windows AV exceeds 60 s for one spawn.",
+      "why": "A timeout yields r.status null, so UNRECEIPTED is thrown although the event may already be on the spine. The retry message claims 'nothing is doubled', but idea.captured has an idem key while run.completed, approval.requested and judge's run.completed carry none. A rerun of propose after a timed-out success emits a second approval.requested for the same winner, and the owner can then approve either one while export reads only the one in proposal.json.",
+      "fix": "Give approval.requested and run.completed deterministic idem keys, or on timeout re-read the spine for the idem before failing. Treat a timeout as unknown, not as not recorded.",
+      "twin_of": "a fake whose right answer equals the failure's answer"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdJudge --run",
+      "breaking_input": "arc-run exits 0 and prints several receipt_id values (a nested step's receipt first, the council session's last), or prints one inside a quoted payload echo. The regex .match() takes the FIRST occurrence.",
+      "why": "The first receipt_id in stdout is recorded as the council receipt for the finalist. The prior finding B5 asked for the LAST receipt_id to be parsed, and the fix changed only killSignal. The wrong receipt is stored in judge.json and shown as the council result. The 3.6e6 ms timeout per finalist is still unbounded in total, and SIGKILL on Windows kills only the node child, not arc-run's bash/model grandchildren, which are orphaned and keep spending.",
+      "fix": "Parse all matches and take the last (or parse the JSON object properly). On win32 kill the tree with taskkill /T /F, and enforce an overall deadline across finalists.",
+      "twin_of": "background jobs need a deadline + check-ins"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:realBase / confine",
+      "breaking_input": "--out on a path whose existing ancestor is a Windows 8.3 short-name or differently-cased form, or one drive letter root when REPO is on E: and tmpdir on C:; resolve() of a path like E:foo (drive-relative).",
+      "why": "realBase calls cur.slice(dirname(cur).length + 1) to compute the tail. For a path with a trailing separator, or a root such as 'E:\\\\', dirname(cur) equals cur's parent differently and the slice mis-cuts the segment name, producing a wrong tail that is then joined to the realpath. The tail component can be silently altered, so the confined path differs from the intended path (validate one, use another).",
+      "fix": "Use path.basename(cur) for the tail segment, and normalise trailing separators before the loop.",
+      "twin_of": "(d) one confinement function for `--offline-fixture` / `--out` paths; no other `resolve()` on external data"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdHunt (--offline-fixture, --niche-file)",
+      "breaking_input": "--offline-fixture pointing at a FIFO, a device, or a multi-GB file; or a fixture file inside repo that is invalid JSON.",
+      "why": "The niche-file got a stat/size check after B10, but the twin --offline-fixture path still does existsSync + readFileSync + JSON.parse with no isFile or size cap. A FIFO blocks forever. A malformed JSON throws a raw SyntaxError and exits 1 with the message 'ERROR: Unexpected token', not a refusal naming the file. The same applies to readJson for every --in artifact (prior B8 'wrap parse errors in a Refusal' was not applied).",
+      "fix": "Share one readBounded(path, maxBytes) helper that checks isFile and size and wraps JSON.parse in a Refusal naming the file; use it for fixture, weights, and every readJson.",
+      "twin_of": "a scan that cannot read its input reports COULD NOT SCAN, never an empty result"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/discover/lib/spine.mjs:emit (tmp payload dir)",
+      "breaking_input": "writeFileSync(file, ...) throws (disk full, tmpdir unwritable) after mkdtempSync succeeded.",
+      "why": "The try/finally that removes the temp dir only wraps spawnSync. If writeFileSync throws, the mkdtemp directory leaks, and the raw ENOSPC exits 1 with an unlabelled message. A hunt with many records leaks one dir per failing emit.",
+      "fix": "Move writeFileSync inside the try block, so the finally always cleans up.",
+      "twin_of": "a rename across volumes -> write in place, never rename across a mount"
+    }
+  ]
+}

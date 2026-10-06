@@ -1,0 +1,55 @@
+{
+  "name": "discover",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq",
+    "council",
+    "growth",
+    "launch"
+  ],
+  "commands": [
+    ".claude/commands/arc-hunt.md"
+  ],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/discover/arc-discover.mjs",
+    ".claude/scripts/discover/lib/cluster.mjs",
+    ".claude/scripts/discover/lib/export.mjs",
+    ".claude/scripts/discover/lib/judge.mjs",
+    ".claude/scripts/discover/lib/normalize.mjs",
+    ".claude/scripts/discover/lib/score.mjs",
+    ".claude/scripts/discover/lib/spine.mjs",
+    ".claude/scripts/discover/miners/hn.mjs"
+  ],
+  "files": [
+    "products/discover/score.yaml"
+  ],
+  "docs": [],
+  "face": {
+    "room": "lane",
+    "ring": "factory",
+    "kinds": [
+      "kickoff.done",
+      "phase.closed"
+    ],
+    "sanctioned": [],
+    "stations": [
+      "PLAN table",
+      "header",
+      "kickoff trail",
+      "phase 0",
+      "phase-done"
+    ],
+    "concepts": [
+      "50% tripwire",
+      "REQ",
+      "appetite / burn",
+      "assumptions ledger",
+      "evidence bundle",
+      "machine header",
+      "pre-mortem",
+      "steel thread"
+    ]
+  }
+}
