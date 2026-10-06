@@ -859,11 +859,31 @@ function apiModels(ctx) {
   return { mode: ctx.mode, ...models.withTests(models.publicView(got.reg), testsOf(ctx)) };
 }
 
-function apiModelsChange(ctx, body) {
+/**
+ * The remove guard (ADR-1350 Amendment 4): a record engine/router.yaml names cannot be removed or renamed away, or a
+ * routed run would fail at preflight (ADR-1801). Asked only of a change that drops a name the store held; a router that
+ * cannot be read refuses the change rather than allowing it. Exported so tests/face/talk.mjs runs this function against a
+ * tree whose router names a profile -- the route calls it and nothing else.
+ * @param {{ repo: string }} ctx @param {any} before @param {any} after @param {any} body
+ * @returns {Promise<{ code: "BAD_MODEL" | "MODELS_UNAVAILABLE", why: string } | null>}
+ */
+export async function routedRefusal(ctx, before, after, body) {
+  const named = body && (body.op === "remove" || body.op === "edit") ? models.findModel(before, body.name) : null;
+  const gone = named && !models.findModel(after, named.name) ? named.name : null;
+  if (!gone) return null;
+  const r = await reads.routerProfileRefs(ctx);
+  if (!r.ok) return { code: "MODELS_UNAVAILABLE", why: r.why };
+  const rows = r.refs.filter((x) => x.name.toLowerCase() === gone.toLowerCase()).map((x) => x.where);
+  return rows.length ? { code: "BAD_MODEL", why: `${gone} is routed by engine/router.yaml (${rows.join(", ")}); change those rows first, then ${body.op === "remove" ? "remove" : "rename"} it` } : null;
+}
+
+async function apiModelsChange(ctx, body) {
   const got = models.loadRegistry(ctx.repo);
   if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
   const step = models.applyChange(got.reg, body);
   if (!step.ok) throw new DashError("BAD_MODEL", step.why);
+  const refused = await routedRefusal(ctx, got.reg, step.reg, body);
+  if (refused) throw new DashError(refused.code, refused.why);
   const saved = models.saveRegistry(got.path, step.reg);
   if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);
   // A test measured against the old URL or model id is not the edited model's: forgotten under both names (Amendment 3).

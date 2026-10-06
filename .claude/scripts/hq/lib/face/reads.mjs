@@ -342,6 +342,39 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 /** A free-text receipt field, as text the wire may carry. @param {{ repo: string }} ctx @param {unknown} v */
 const text = (ctx, v) => (typeof v === "string" ? scrub(v, ctx.repo) : "");
 
+/**
+ * Where engine/router.yaml NAMES an owner model as a provider profile (ADR-1350 Amendment 4, ADR-1800/1802): each tier
+ * pin `generic-api: profile:<name>` and each class row's own `profile: <name>`, through router-row.mjs's grammar. The
+ * Settings remove guard reads it; a router that cannot be read is a refusal the caller must honour, never "no refs".
+ * @param {{ repo: string, root?: string }} ctx
+ * @returns {Promise<{ ok: true, refs: { name: string, where: string }[] } | { ok: false, why: string }>}
+ */
+export async function routerProfileRefs(ctx) {
+  try {
+    const { parseYamlSubset } = await lib("../../../engine/yaml-subset.mjs");
+    const { profileRef, PROFILE_DRIVER } = await lib("../../../engine/router-row.mjs");
+    const f = fileAt(ctx, "engine/router.yaml");
+    const parsed = parseYamlSubset(f.text);
+    if (!parsed.ok) return { ok: false, why: "engine/router.yaml could not be parsed, so whether a model is routed is unknown" };
+    const router = obj(parsed.value);
+    /** @type {{ name: string, where: string }[]} */
+    const refs = [];
+    for (const [tier, pins] of Object.entries(obj(router.models))) {
+      const p = profileRef(obj(pins)[PROFILE_DRIVER] ?? null);
+      if (p) refs.push({ name: p, where: `tier ${tier}` });
+    }
+    const rows = Object.entries(obj(router.classes));
+    if (Object.hasOwn(router, "default")) rows.push(["default", router.default]);
+    for (const [cls, raw] of rows) {
+      const r = obj(raw);
+      if (Object.hasOwn(r, "profile") && typeof r.profile === "string" && r.profile) refs.push({ name: r.profile, where: `class ${cls}` });
+    }
+    return { ok: true, refs };
+  } catch (e) {
+    return { ok: false, why: `engine/router.yaml could not be read (${/** @type {any} */ (e).code ?? "error"}), so whether a model is routed is unknown` };
+  }
+}
+
 // ---------- engine/router.yaml: /api/engine, /api/model-policy, /api/roster ----------
 async function routerRead(ctx) {
   const { parseYamlSubset } = await lib("../../../engine/yaml-subset.mjs");
