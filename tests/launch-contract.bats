@@ -473,6 +473,105 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: database creates one project in the venture's region and proves RLS as anon" {
+  arm database fresh
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.projects + " " + o.region + " " + o.kinds.join(",")')" = "1 ap-south-1 supabase-project,db-probe-table" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.ownerRows + " " + o.verify.evidence.anonRows')" = "true 1 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "drop-table (down migration),pause-then-delete-project" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the generated database password is long and goes nowhere but Supabase" {
+  arm database fresh
+  [ "$(j 'o.passLen + " " + o.passLeaked')" = "64 false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: RLS that lets anon read, or a policy on the probe, never verifies" {
+  arm database rls-off
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false anon reads 1 probe row(s): RLS is not denying" ] || { echo "$DONE"; false; }
+  arm database policy
+  [ "$(j 'o.scaffold.code')" = "PROBE_HAS_POLICY" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: database refuses two organizations and an unknown region, creating nothing" {
+  arm database two-orgs
+  [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  arm database bad-region
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_REGION 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner's project is found, not owned, and a paused one is PAUSED" {
+  arm database found
+  [ "$(j 'o.kinds[0] + " " + o.teardown.join(",")')" = "supabase-project-found drop-table (down migration)" ] || { echo "$DONE"; false; }
+  arm database paused
+  [[ "$(j 'o.verify.reason')" == "PAUSED("* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a query answer that is not a rows array is a not-ok answer" {
+  arm database object-shape
+  # The first query of scaffold already meets the bad shape, so the refusal is scaffold's, and verify is still not ok.
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.message')" = "false supabase database/query answered without a rows array" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: email writes Resend's records plus DMARC quarantine once, grey cloud, and verifies" {
+  arm email fresh
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.domains + " " + o.records.length + " " + o.status')" = "1 4 verified" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.every(r => r.endsWith(" false"))')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.dmarc')" == "v=DMARC1; p=quarantine;"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.resend.com + dns.google + cloudflare-dns.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.join(",")')" = "MX send.sandbox.automemory.ai false,TXT _dmarc.sandbox.automemory.ai false,TXT resend._domainkey.sandbox.automemory.ai false,TXT send.sandbox.automemory.ai false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.filter(s => s === "delete-if-tagged").length + " " + o.teardown.slice(-1)[0]')" = "4 delete-domain" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: email never writes over the owner's DMARC, and refuses records outside the domain or of other types" {
+  arm email owner-dmarc
+  [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 0" ] || { echo "$DONE"; false; }
+  arm email outside-zone
+  [ "$(j 'o.scaffold.code + " " + o.written')" = "BAD_RECORD 0" ] || { echo "$DONE"; false; }
+  arm email bad-type
+  [ "$(j 'o.scaffold.code + " " + o.written')" = "BAD_RECORD 0" ] || { echo "$DONE"; false; }
+  arm email owner-other-txt
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: email verify is not ok when Resend has not verified" {
+  arm email unverified
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false resend failed;"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner's launch_probe table is never altered, and a refusal after UP still records the table" {
+  arm database owner-probe-table
+  [ "$(j 'o.scaffold.code + " " + o.rls')" = "PROBE_TABLE_FOREIGN false" ] || { echo "$DONE"; false; }
+  arm database policy-recorded
+  [ "$(j 'o.scaffold.code + " " + o.kinds.join(",")')" = "PROBE_HAS_POLICY supabase-project,db-probe-table" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a slow Supabase start is a resumable refusal inside the lock window" {
+  arm database slow-start
+  [ "$(j 'o.scaffold.code + " " + o.kinds.join(",")')" = "PROJECT_NOT_READY supabase-project" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"apply again to resume"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: email finds its domain past the first page instead of creating a second" {
+  arm email paged
+  [ "$(j 'o.scaffold.ok + " " + o.domains + " " + o.kind')" = "true 151 resend-domain-found" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: database verify reads as anon through PostgREST, and a probe table killed before recording is resumed" {
+  arm database fresh
+  [ "$(j 'o.verify.answerer')" = "api.supabase.com + fixtureref0000000001.supabase.co" ] || { echo "$DONE"; false; }
+  arm database killed-before-record
+  [ "$(j 'o.scaffold.ok + " " + o.kinds.join(",")')" = "true supabase-project,db-probe-table" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner CNAME at a name email needs refuses before any record is written" {
+  arm email owner-cname
+  [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 0" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: release asks for deploy-prod-first before it writes anything" {
   arm release unapproved
   [ "$(j 'o.release.code')" = "APPROVAL_PENDING" ] || { echo "$DONE"; false; }
