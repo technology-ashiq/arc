@@ -1,10 +1,10 @@
 # PROGRESS.md — org v2.1 "the four ORG-R holds"
 
-status: LIVE
+status: IDLE
 cycle: arc-org (Cycle 20, opened 2026-10-05)
 phase: 04
 appetite: 3d
-burn: 1d
+burn: 1.25d
 blocked-on: —
 depends-on: —
 
@@ -17,7 +17,7 @@ depends-on: —
 | 01 | `org-judge.mjs` head-judge emission (ORG-O) | 0.5d | ✅ 2026-10-05 |
 | 02 | `skill-import.mjs` + `lib/skill-vet.mjs` (pinned, vetted, proposal branch) | 0.6d | ✅ 2026-10-05 |
 | 03 | `org-own.mjs` hire-to-own over `agent-scaffold` | 0.5d | ✅ 2026-10-05 |
-| 04 | duplicate-key check in the face contract gates | 0.25d | ⏳ |
+| 04 | duplicate-key check in the face contract gates | 0.25d | ✅ 2026-10-06 |
 
 ## Done log
 
@@ -28,10 +28,11 @@ depends-on: —
   - 03: `planScaffold` extracted; `org-own.mjs`. Live: the real card refuses NOT_HIRED/NO_HIRE/NO_TIER (no hired seat exists today).
   - Attack: boundary x2 (bc27378: 1 high 2 med; 83b4d22: 2 med), all fixed; logic NOT RUN (deepseek non-JSON, GLM timeout) -> debt row 7. Also fixed main's duplicate `PLAN-launch` key.
   - 1 day vs 2.35d appetite. amendments: 1 (ADR-1626 persona-on-trial-only) · reopened: n · t-to-phase0: 0 days (kickoff 2026-10-05).
+- **Phase 04 ✅ 2026-10-06** (added by /arc-change from retro 2026-10-05 row 4, ADR-1630) -- PR #339 (squash `6552a0b1`), CI run 37459603738 19/19 green, ubuntu-20 TAP 4150 ok / 0 not ok incl. `dup-keys`. face-sections and face-coverage read the face contracts through `readStrictJson`; the 2026-10-05 shape (PLAN-launch twice) is refused by name. Attack 2655193: logic ran (deepseek, 24 s) and boundary; mediums fixed, rest debt row 8. CI then caught two fixture defects (partial scratch tree, MSYS `tar -C`), both fixed. Also repaired the PROGRESS header the #331 close had corrupted. ~0.25d vs 0.25d. amendments: 0 · reopened: n.
 
-**Appetite burn:** 1 of 3 days used (33%; tripwire 50% not reached, every phase done).
+**Appetite burn:** 1.25 of 3 days used (42%; tripwire 50% not reached, every phase done).
 
 ## Now
 
-**Current position:** Cycle 20 reopened 2026-10-06 for one phase by `/arc-change` (retro 2026-10-05 row 4, ADR-1630, REQ-06).
-**Next step:** Phase 04 -- `tests/org/dup-keys.mjs` expected failure first, then the two gate edits (phase-04-spec).
+**Current position:** Cycle 20 sealed again 2026-10-06 after Phase 04 (retro rows already in docs/retro-log.md 2026-10-05; Phase 04 was that retro's own row 4). Lane IDLE.
+**Next step:** none queued. Owner: stamp the kickoff and five phase approvals (`arc-inbox approve`). A new org cycle starts by `/arc-kickoff --lane org`.

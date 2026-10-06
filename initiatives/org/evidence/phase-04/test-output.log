@@ -1,0 +1,7 @@
+CI run 37459603738 @ 17d8d1d1 (PR #339 head, merged 6552a0b1): 19/19 success; ubuntu-20 TAP ok=4150 not-ok=0
+ok 3423 dup-keys: face-sections and face-coverage fail by name on each contract file holding a key twice
+--- live demo (main)
+face-sections: every face: section matches the contract (20 mapped, 0 unmapped by design); registry in sync (37 rooms)
+face-coverage exit=0
+--- real-system: the 2026-10-05 shape
+es-dup.json: duplicate object key "PLAN-launch" — JSON.parse is last-wins, so one of the two values is invisible
