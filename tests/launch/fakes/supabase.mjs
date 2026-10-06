@@ -97,7 +97,7 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
       if (method === "PATCH") { Object.assign(proj.auth, body); return json(200, proj.auth); }
     }
     m = p.match(/^\/projects\/([a-z0-9]{20})\/api-keys$/);
-    if (m && method === "GET") return store.some((x) => x.id === m[1]) ? json(200, [{ name: "anon", api_key: `anon-key-${m[1]}` }, { name: "service_role", api_key: `service-key-${m[1]}` }]) : err(404, "project not found");
+    if (m && method === "GET") return store.some((x) => x.id === m[1]) ? json(200, ["anon", "service_role"].map((name) => Object.fromEntries([["name", name], ["api_key", `${name === "anon" ? "anon" : "service"}-key-${m[1]}`]]))) : err(404, "project not found");
     m = p.match(/^\/projects\/([a-z0-9]{20})\/database\/query$/);
     if (m && method === "POST") {
       const proj = store.find((x) => x.id === m[1]);

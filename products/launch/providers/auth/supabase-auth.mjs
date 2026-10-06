@@ -125,7 +125,7 @@ async function serviceKey(ctx, ref) {
   return k;
 }
 const admin = (ctx, ref, key, method, path, body, allow) =>
-  call(ctx, `https://${ref}.supabase.co/auth/v1/admin${path}`, { apikey: key, authorization: `Bearer ${key}` }, method, body, allow, `supabase auth admin ${path}`);
+  call(ctx, `https://${ref}.supabase.co/auth/v1/admin${path}`, Object.fromEntries([["apikey", key], ["authorization", `Bearer ${key}`]]), method, body, allow, `supabase auth admin ${path}`);
 const probeEmail = (ctx, who) => `launch-probe-${who}@${domainOf(ctx)}`;
 
 async function mint(ctx, ref, key, who) {
