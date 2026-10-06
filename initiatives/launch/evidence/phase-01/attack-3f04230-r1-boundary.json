@@ -1,0 +1,67 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:117",
+      "breaking_input": "The owner replaces db/schema.js on main with their own file, or deletes db/schema.test.js, and arc-ci goes green. probe() only checks that db/schema.js exists at head (404 means not found). It never compares the content to FILES, never checks that the test file exists, and never checks the commit trailer.",
+      "why": "The comment says \"main's head holds this exact schema\", but verify passes for any file at that path. Green CI over a different schema, or with the test file missing, is accepted as launch's typed schema. This is a \"some X exists\" verify that does not ask whether it is the X this slot made.",
+      "fix": "In probe, decode the contents body at head and require it to equal FILES[\"db/schema.js\"]. Also require db/schema.test.js to exist at head, or accept the owner's file only with the trailer check scaffold uses.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:121",
+      "breaking_input": "The venture's arc-ci.yml triggers only on pull_request and workflow_dispatch, as arc's own CI does. The direct push to main by scaffold then creates no run. Alternatively the workflow is named differently, so /actions/workflows/arc-ci.yml/runs returns 404.",
+      "why": "verify can never succeed, because it polls for a run that is never created. The 404 is swallowed through allow=[404], so the reason is a misleading \"no arc-ci run for <sha> yet\". The fake GitHub creates a run on every main push, so the tests never exercise this assumption about the real trigger.",
+      "fix": "Have verify check that the venture's workflow triggers on push to main, or dispatch the workflow when no run exists. Report a 404 on the workflow as \"arc-ci.yml absent\" rather than as pending. Add a fixture where a push creates no run.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:119",
+      "breaking_input": "Windows and macOS legs of a fresh venture take longer than 4 minutes to install and test. verify polls 8 times at 30s intervals, about 210s of waiting plus API call time, against a slot timeout of 300.",
+      "why": "A healthy run that is still in_progress when the budget ends makes the slot verify not-ok. The reason says \"still in_progress\", but the outcome is a failed slot that needs a rerun. The budget is shorter than a realistic three-OS install-and-test cycle.",
+      "fix": "Size the poll budget to the real CI duration, for example about 15 minutes with the slot timeout raised to match. Report the timeout as pending, not failed. Keep the total under withLock's 10-minute stale threshold, or renew the lock."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:127",
+      "breaking_input": "The domain answers 200 JSON with exactly {ok,service:\"venture\",version} from an older deployment, from a different project on the domain, or from an owner-written route. launch's commit has not been deployed, or was never made.",
+      "why": "verify checks only the shape of the live answer. It does not check that app/api/health/route.js at main head is launch's file, that the deployment serves that commit, or that a version came from this route. The check passes without anything of launch's being live. This is verify matching \"the X\" by shape instead of identity.",
+      "fix": "Make verify also read route.js at main head and compare it to FILES (or require the trailer). Compare the probe answer's version to the route's version. Optionally require the Vercel deployment sha to equal head.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:97",
+      "breaking_input": "The owner already has app/api/health/route.js and lib/contract.js, byte-identical to FILES, committed by themselves. Nothing changes, so the function skips every file, then reports {kind:\"backend-route\", id:`${full}:${head}`}.",
+      "why": "An identical file is claimed as launch's resource without asking who committed it. This is the same as the existing twin. orm has the same flaw, because it reports orm-schema when all files are unchanged.",
+      "fix": "On the identical-content path, check the newest commit's trailer before reporting the resource. Otherwise report nothing, or add a note.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it -> every \"unchanged, so skip\" path that still reports a resource"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:103",
+      "breaking_input": "backend and orm both depend on frontend, so they can run in parallel. Both read the same head, and the second non-forced PATCH of refs/heads/main fails with 422 non-fast-forward. Its blobs and commit are already created.",
+      "why": "The second slot fails with no in-attempt retry. If the loser's earlier ctx.write calls already happened, local files were written for a commit that never landed. The check and the write span separate reads, and the head is not re-read.",
+      "fix": "On a 422 from the ref PATCH, re-read head and redo the checks, or serialize the slots (make orm depend on backend). Do ctx.write only after the PATCH succeeds.",
+      "twin_of": "frontend checked files at one main head and committed on a later one -> every check-then-write across separate reads"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/orm/drizzle.mjs:37",
+      "breaking_input": "upstream.frontend holds a frontend-shell resource, but the frontend slot failed after recording it. upstream.database holds a db-probe-table that was recorded before its policy check failed.",
+      "why": "repo() trusts the existence of upstream resources and does not check that the producer slot is in a healthy state. A schema describing a table that failed RLS is committed anyway.",
+      "fix": "Have repo() require that the upstream slots are verified or ok, or have the runner exclude resources from failed dependencies.",
+      "twin_of": "upstream handed an adapter resources from a dependency that had failed after recording them -> every value passed between slots: is its producer's state checked?"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:93",
+      "breaking_input": "Hosting wrote vercel.json with its trailer. The owner then commits a vercel.json with their own rewrites and no trailer. release runs with approval. `list(log.body).some(...)` finds hosting's older commit in the 100-commit history and passes. The content is not the `{}` lifted form, so the PUT overwrites the owner's config with `{}`.",
+      "why": "Ownership is tested as 'any of the last 100 commits on the path carries hosting's trailer', not 'the newest one does'. This is the twin of 'Ownership trailers were matched by newest commit only' and of 'a PUT replaced the owner's setting'.",
+      "fix": "Require the newest commit on vercel.json (`log.body[0]`) to carry hosting's trailer, or check that the current content is exactly hosting's hold text, before lifting. Refuse with FOREIGN_FILE otherwise.",
+      "twin_of": "Ownership trailers were matched by prefix and by newest commit only -> every trailer or marker check"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:13",
+      "breaking_input": "The shell is committed and the production build fails for a real reason (bad next version, build error). Vercel reports the tagged commit as ERROR. `BUILT` contains ERROR, so release verify returns ok:true.",
+      "why": "ERROR is accepted so the empty-main case passes, but it also accepts a genuine failed build once main holds an app. The deployment state does not separate 'hold skipped it' (CANCELED) from 'the build ran and broke'. The slot is verified on a state that proves little.",
+      "fix": "Accept ERROR only when the tagged commit's tree has no package.json. Otherwise require READY. Alternatively, make the CANCELED-versus-ran distinction explicit and keep ERROR out of the success set.",
+      "twin_of": "verify took any git deployment of the repo as the proof -> every \"some X exists\" verify: is it the X this slot made?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:109",
+      "breaking_input": "Between the per-path ownership checks (lines ~96-108) and the `git/ref/heads/main` read, the owner pushes a commit that edits app/page.js. The head and base tree are read afterwards, so the new tree is built on the owner's commit. The shell blob replaces their page, and the fast-forward PATCH succeeds because the parent is the fresh head.",
+      "why": "The ownership check reads `contents?ref=main` at one moment, but the write is based on a later head read. This is check-then-act across two reads, with no re-validation against `head`.",
+      "fix": "Read the head sha first and run every contents and commits check with `ref=<head sha>`. Build the commit on that same head so the force:false PATCH rejects any movement.",
+      "twin_of": "validate one read, use another -> every check-then-load pair"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:56",
+      "breaking_input": "A Vercel project whose `link.type` is \"github\" but whose `link.org` and `link.repo` are missing returns `undefined/undefined`. The pattern `[A-Za-z0-9](...)/[A-Za-z0-9._-]{1,100}` accepts it, and GitHub calls then go to `/repos/undefined/undefined/...`.",
+      "why": "Interpolating missing fields with `${}` yields a string that passes the regex, and the failure reads as an opaque 404 instead of a refusal. The twin pattern is a null id becoming the hostname \"null\". The repo is also taken from Vercel's link here, while frontend uses upstream.repo, and nothing checks that the two agree.",
+      "fix": "Check that `link.org` and `link.repo` are non-empty strings before interpolating. Compare the result with upstream.repo.",
+      "twin_of": "Upstream entries were coerced with `String()`, so a `null` id became the hostname \"null\" -> every value one adapter hands another through state"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:84",
+      "breaking_input": "The owner or another tool creates an annotated `launch-release-1` tag. `git/ref/tags/launch-release-1` returns the tag object's sha. `GET /commits/<tag object sha>` returns 404, which `gh` throws as an uncoded Error out of scaffold. The same path in probe is caught only generically.",
+      "why": "The ref's `object.type` is not checked, so a foreign annotated tag produces a raw transport-style error instead of the FOREIGN_TAG refusal. It is also unclear whether a lightweight tag launch made, then moved, is detected.",
+      "fix": "Check `object.type === \"commit\"`. Treat any other type, or a 404 on the commit lookup, as FOREIGN_TAG.",
+      "twin_of": "A 404 from a token without access read as \"absent, create it\" -> every check-then-create keyed on a 404"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:166",
+      "breaking_input": "The live domain answers 200 with a multi-gigabyte or never-ending body. `await res.text()` buffers all of it before the `.slice(0, 200000)`. On the non-200 branch the body is never consumed or cancelled, so up to five retries leak sockets.",
+      "why": "The size cap is applied after the read, so it does not bound memory. A hostile or misconfigured host can stall or exhaust the verify, which has a 300 s slot timeout.",
+      "fix": "Read a capped stream, for example a reader that stops at 200 KB. Call `res.body?.cancel()` on every non-200 response.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    }
+  ]
+}

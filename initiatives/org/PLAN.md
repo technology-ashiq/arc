@@ -38,6 +38,7 @@ branch; and a hired seat becomes an own agent with one command.
 | REQ-03 | A head's verdict on a worker's handed-off artifact lands on the spine, and only where ORG-O allows | `org-judge.mjs` over a sandbox spine + team emits exactly one `review.completed` with `role`, `subject_role`, `subject_receipt`, `verdict`, and `org-review --role WORKER --json` over the same sandbox spine shows the verdict counted against the worker (`independentTally` and `scorecard` both read it, `--audit` still exits 0); six mutants each refuse by name with zero events written: receipt not `handoff.ready`, worker not under that head, head's department with <2 staffed workers, head judging itself, second verdict on the same receipt, a reason that is not one line or over 2000 bytes (`tests/org/judge.mjs`) | 01 | validated |
 | REQ-04 | A public skill reaches a role only pinned, vetted, and on a proposal branch | `skill-import.mjs` with the FAKE source: a clean fixture skill → a proposal branch holding `.claude/skills/imported/NAME/SKILL.md` + the card's `binds.skills` line + provenance + the golden/manifest lines, then `approval.requested`; the fixture asserts what `product-lint` and the sync-golden gate check: the branch's golden lines hash the branch's own bytes, the org manifest maps both files, and the face contract homes `skill:NAME`; each ToxicSkills fixture (unpinned ref, injection phrase, pipe-to-shell, credential read, bidi/zero-width char, oversize, name collision) → BLOCK listing every failed condition, no branch, no event (`tests/org/skill-import.mjs`) | 02 | validated |
 | REQ-05 | A hired seat becomes an own agent in one reviewable branch | `org-own.mjs` over a fixture `hired` card → one proposal branch holding every file `planScaffold` returns (agent file, sync golden, `expected-set.json`, product manifest, plus `rooms.generated.json` and sibling manifests when derived) AND the card with `origin: own`, `hire: null`, new agent first in `binds.agents`, one `history:` line; refuses an `own` card, a taken agent name, and a card with no `binds.tier` (`tests/org/own.mjs`) | 03 | validated |
+| REQ-06 | A key two lanes both add to a face contract file fails CI by name instead of passing silently | each gate FAILs on every face contract file it reads when that file holds a duplicate key, naming the file (face-sections: `expected-set.json`, `room-copy.json` by duplicate key, `rooms.generated.json` as registry drift; face-coverage: `expected-set.json`, `rooms.generated.json`), on an exact copy of the committed tree where both gates first pass clean (fixture `tests/org/dup-keys.mjs`) | 04 | validated |
 
 ## Appetite
 3 days, one session per day. A constraint, not an estimate.
@@ -89,6 +90,7 @@ flowchart TB
 | 1627 | head-judge emission is a deterministic emitter, not a new engine process | accepted |
 | 1628 | skill import is SHA-pinned, refuse-by-default vetted, lands only on a proposal branch (one-way) | accepted |
 | 1629 | hire-to-own is one command over `agent-scaffold`'s proposal writer | accepted |
+| 1630 | the face contract gates read their JSON through the duplicate-key check | accepted |
 
 ## Non-negotiables
 - Nothing in this cycle writes to the owner's checkout or to `main`: every card or skill change is a proposal
@@ -192,3 +194,4 @@ other item reads. Phases 1–3 each add one org command on top.
 | 01 | `org-judge.mjs` head-judge emission (ORG-O) | 0.5d | phase-00 |
 | 02 | `skill-import.mjs` + `lib/skill-vet.mjs` (pinned, vetted, proposal branch) | 0.6d | phase-00 |
 | 03 | `org-own.mjs` hire-to-own over `agent-scaffold` | 0.5d | phase-00 |
+| 04 | duplicate-key check in the face contract gates (retro 2026-10-05 row 4, via /arc-change) | 0.25d | none |

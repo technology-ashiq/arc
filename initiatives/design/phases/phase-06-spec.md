@@ -31,7 +31,30 @@ retrieval, failure behaviour — on one fixture, before any adapter code exists 
 
 ## Verification plan
 
-Coarse — refined via `/arc-change` when the phase starts. The ordering assertion is the phase's
+Refined 2026-10-06 via `/arc-change`. **Owner 2026-10-06: Stitch (Google) goes first** -- free,
+and its terms carry only the generic competing-product clause; v0's performance-testing clause is
+avoided. **Terms clearance recorded** on the spine before any live call: `approval.requested`
+`01M46ZJ3K02JXSD7HHDXNHNJF1` (gate `rival-terms`) decided `approve` by `decision.recorded`, emitted
+from the main clone. Four slices:
+
+- **S1 -- the clearance receipt (done above).** Its ULID is copied into `evidence/phase-06/` so the
+  ordering check can read it: the decision's timestamp must precede every outbound Stitch request.
+- **S2 -- the quarantined spike.** A scratch script OUTSIDE the repo tree (the scratchpad), pinned to
+  `@google/stitch-sdk@0.3.5` (re-verified with `npm view` on 2026-10-06), reading `STITCH_API_KEY`.
+  One fixture: the LexOS case-workspace brief's interaction model as the prompt. It records
+  provider version, request and output schema, and retrieves the screen's HTML. **Nothing from the
+  spike is committed except its receipt** (`evidence/phase-06/spike-receipt.md`: version, request
+  shape, output schema, timings, hashes) -- no draft, no screenshot (non-negotiable).
+- **S3 -- self-containment.** The retrieved HTML is rendered twice by `design-render.sh`: network
+  open, and network blocked. Equal hashes = self-contained; unequal = that provider does not proceed
+  to Phase 07, and the receipt says so. Failure behaviour is observed, not assumed: a bad key and the
+  rate-limit or quota answer are recorded with their real shapes.
+- **S4 -- the ordering check.** `git log` proves the spike receipt's commit precedes any adapter
+  file; no adapter is committed in this phase at all.
+
+**Outcome 2026-10-06:** S2 ran live (`STITCH_API_KEY` from the face key store); S3 FAILED self-containment (Tailwind runtime + Google Fonts from CDNs) -- the PLAN assumption fired. Owner chose to vendor the assets at fetch time ([ADR-1422](../../../docs/adr/1422-a-rival-draft-is-vendored-at-fetch-and-the-transform-is-declared.md)); the vendoring adapter is Phase 07 work. Rate-limit and quota shapes were not reached on the free tier in one run and are not claimed. Receipt: [`evidence/phase-06/spike-receipt.md`](../evidence/phase-06/spike-receipt.md).
+
+The coarse plan this replaces: the ordering assertion is the phase's
 real gate: the spike receipt's timestamp must precede the first adapter commit, and that is
 checked in git, not asserted in prose. Self-containment is proved by the offline/online hash
 pair. The terms clearance is proved by the `decision.recorded` receipt existing on the spine

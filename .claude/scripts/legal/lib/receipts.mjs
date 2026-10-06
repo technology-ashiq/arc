@@ -65,12 +65,16 @@ export const APPROVAL_KEYS = [
   "template_set_sha",
   "effective_date",
   "pages",
+  // The ledger record the re-publish diff was computed against, or "none" for a first publish.
+  // The human approves the diff they read; a publish that landed in between would make publish
+  // compute a different one with no refusal (round-1 boundary attack, B4).
+  "previous_published_sha256",
 ];
 
 const PAGE_KEYS = ["page", "output_sha256"];
 
 /** Build the approval-request payload from a completed run. Deterministic: pages are sorted. */
-export function approvalPayload(run) {
+export function approvalPayload(run, previousPublishedSha = null) {
   return {
     subject: APPROVAL_SUBJECT,
     venture: run.venture,
@@ -78,6 +82,7 @@ export function approvalPayload(run) {
     template_set: run.template_set,
     template_set_sha: run.template_set_sha,
     effective_date: run.effective_date,
+    previous_published_sha256: previousPublishedSha ?? "none",
     pages: [...run.pages]
       .map((p) => ({ page: p.page, output_sha256: p.output_sha256 }))
       .sort((a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : 0)),
@@ -104,6 +109,9 @@ export function validateApprovalPayload(payload) {
     errs.push("template_set_sha is not a sha256 hex digest");
   if (payload.effective_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(payload.effective_date)))
     errs.push("effective_date is not an ISO date");
+  if (payload.previous_published_sha256 !== undefined && payload.previous_published_sha256 !== "none"
+      && !/^[0-9a-f]{64}$/.test(String(payload.previous_published_sha256)))
+    errs.push('previous_published_sha256 is neither "none" nor a sha256 hex digest');
 
   if (payload.pages !== undefined) {
     if (!Array.isArray(payload.pages) || !payload.pages.length) {
@@ -441,6 +449,67 @@ export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveD
   return errs;
 }
 
+/** The key every field no page prints is folded under. Not a dotted path, so no field can be named it. */
+export const UNPRINTED_FIELDS = "(fields no page prints)";
+
+/**
+ * One fingerprint per PRINTED facts field, keyed by its dotted path, so a re-publish can name which
+ * value moved without the receipt carrying the value. The receipt is committed to arc, which is
+ * public. A per-field print of a value no page shows would be a guess-and-confirm oracle for it
+ * (round-1 boundary attack, B1), so only fields a template interpolated get their own print; every
+ * other field is folded into ONE print over all of them together -- no weaker than the whole-file
+ * `facts_sha256` the receipt already carries, and still enough to say "a field no page prints moved".
+ * Arrays and empty mappings are one field: a reordered sub-processor list is a change to see.
+ * @param {object} facts @param {Set<string>} printed dotted paths the templates read
+ * @returns {Record<string,string>}
+ */
+export function factsFieldPrints(facts, printed) {
+  // A null-prototype map, so a `__proto__` key is a field like any other rather than dropped (B4).
+  const out = Object.create(null);
+  const hidden = [];
+  const isPlain = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
+    && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
+  const walk = (node, path) => {
+    // Only plain mappings are descended into: a Date or Map has no own keys and would vanish (B3).
+    if (isPlain(node) && Object.keys(node).length) {
+      for (const k of Object.keys(node).sort()) {
+        // A dot in a key collides with a nested path (`{"a.b"}` and `{a:{b}}`), and the loser's
+        // change would never be named. The facts parser yields no such key; refused, not assumed.
+        if (k.includes(".")) throw new Error(`facts key "${k}" contains a dot, which collides with a nested path`);
+        walk(node[k], path ? `${path}.${k}` : k);
+      }
+      return;
+    }
+    // A Map, Set or Date stringifies to a constant, so a change to it could never be named. The
+    // facts parser yields none; refused rather than printed as a print that cannot move.
+    if (node !== null && typeof node === "object" && !Array.isArray(node) && !isPlain(node))
+      throw new Error(`facts field "${path}" is not a plain value (${Object.prototype.toString.call(node)}), so a change to it cannot be fingerprinted`);
+    const value = JSON.stringify(node === undefined ? null : node);
+    if (printed.has(path)) out[path] = bytesHash(`${path}|${value}`);
+    else hidden.push([path, value]);
+  };
+  walk(facts, "");
+  if (hidden.length) out[UNPRINTED_FIELDS] = bytesHash(JSON.stringify(hidden));
+  return out;
+}
+
+// Composite tokens print several facts fields at once; each must name them, or a change to a price
+// the page shows reads as "a field no page prints moved".
+const COMPOSITE_TOKENS = {
+  "table.pricing": ["pricing.plan_names", "pricing.plan_amounts_inr", "pricing.period"],
+};
+
+/** The facts paths a page's template tokens read, from the renderer's `used` set. */
+export function printedFactPaths(usedExprs) {
+  const paths = new Set();
+  for (const e of usedExprs) {
+    for (const prefix of ["facts.", "label.", "list."])
+      if (e.startsWith(prefix)) paths.add(e.slice(prefix.length));
+    for (const p of COMPOSITE_TOKENS[e] || []) paths.add(p);
+  }
+  return paths;
+}
+
 /**
  * What actually changed between the published version and this one, in the terms a human
  * approving it needs: which facts values moved, and which clauses appeared or disappeared.
@@ -451,7 +520,20 @@ export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveD
  * reassuring empty list.
  */
 export function semanticDiff(previousRun, currentRun) {
-  const changedFacts = [];
+  // null, not [], when the published record predates field prints: "no field changed" and "cannot
+  // tell which field changed" must never print the same.
+  const before = previousRun.facts_fields;
+  const after = currentRun.facts_fields;
+  let changedFacts = null;
+  if (before && after && typeof before === "object" && typeof after === "object") {
+    changedFacts = [];
+    for (const field of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
+      // Own keys only: `in` would find `constructor` on a plain record (B4).
+      if (!Object.hasOwn(before, field)) changedFacts.push({ field, change: "added" });
+      else if (!Object.hasOwn(after, field)) changedFacts.push({ field, change: "removed" });
+      else if (before[field] !== after[field]) changedFacts.push({ field, change: "changed" });
+    }
+  }
   const prevPages = new Map((previousRun.pages || []).map((p) => [p.page, p]));
   const curPages = new Map((currentRun.pages || []).map((p) => [p.page, p]));
 
@@ -470,7 +552,11 @@ export function semanticDiff(previousRun, currentRun) {
 
   const factsMoved = previousRun.facts_sha256 !== currentRun.facts_sha256;
   const templatesMoved = previousRun.template_set_sha !== currentRun.template_set_sha;
-  const opaque = factsMoved && !clauseChanges.length;
+  // Opaque = the facts moved and the diff can name neither a field nor a clause. With field prints
+  // on both sides a facts move always names a field, so this fires only on a record written
+  // before them -- the one case left where re-approving means signing a blob.
+  // A clause move does not name the facts change, so it no longer suppresses the warning.
+  const opaque = factsMoved && !(changedFacts && changedFacts.length);
 
   return {
     facts_changed: factsMoved,
@@ -481,7 +567,7 @@ export function semanticDiff(previousRun, currentRun) {
     // The honest warning. Recorded as data rather than printed prose so a test can assert it.
     opaque_rechange: opaque,
     opaque_reason: opaque
-      ? "the facts hash moved but no clause appeared or disappeared, so the change is in a VALUE the pages interpolate. Re-approving this without reading the rendered bytes is a signature, not a review."
+      ? "the facts hash moved but neither a facts field nor a clause can be named, so this is a FULL-BLOB re-approval. Re-approving it without reading the rendered bytes is a signature, not a review."
       : null,
   };
 }

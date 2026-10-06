@@ -66,7 +66,12 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const r = github.store.get(`${proj.link.org}/${proj.link.repo}`);
       const after = r ? r.commits.slice(proj.linkedAt) : [];
       const sha = url.searchParams.get("sha");
-      const prod = after.filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: "CANCELED", target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
+      // Production state per commit, as Vercel answers it: held by vercel.json (ADR-1727) -> skipped (CANCELED); built
+      // with an app on main -> READY; built with no app yet -> ERROR. The hold and app flags are what the GitHub fake records.
+      const all = r ? r.commits : [];
+      const stateOf = (c) => { const upto = all.slice(0, all.indexOf(c) + 1); const h = upto.filter((x) => typeof x.hold === "boolean").pop(); return h && h.hold === false ? (upto.some((x) => x.app) ? "READY" : "ERROR") : "CANCELED"; };
+      const target = url.searchParams.get("target");
+      const prod = (target && target !== "production" ? [] : after).filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: stateOf(c), target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
       // Every branch commit is a preview, READY unless previewState says otherwise, at a vercel.app URL.
       const previews = proj.previewDeploymentsDisabled ? [] : Object.entries((r && r.branches) || {}).flatMap(([b, cs]) => cs.slice(1).filter((c) => !sha || c.sha === sha)
         .map((c) => ({ uid: `dpl_prev_${c.sha.slice(0, 8)}`, readyState: previewState, target: null, url: `arc-sandbox-git-${b.replace(/[^a-z0-9]/g, "-")}.vercel.app`, meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha, githubCommitRef: b } })));

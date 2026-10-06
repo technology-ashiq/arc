@@ -1,0 +1,139 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:123-130",
+      "breaking_input": "GITHUB_TOKEN set to a string containing a CR or LF inside the 20+ alnum/underscore run, e.g. 'abc\\n1234567890123456789'",
+      "why": "tokenOf() trims() the raw value and tests the shape, but the value that is actually placed in the `authorization` header is the untrimmed original with its interior CR/LF (trim only strips ends). fetch() rejects a header containing a CR/LF and its TypeError message quotes the header value, leaking the token into the returned error text that verify() then echoes via say(). The defect pattern 'A token with a CR reached a fetch header' is present verbatim.",
+      "fix": "Reject any token containing characters outside [A-Za-z0-9_] after trim, not just the whole-string test; Build the header from the trimmed value, not the raw one.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:126-132 and products/launch/providers/backend/next-route-handlers.mjs:126-132",
+      "breaking_input": "Two backend scaffolds run concurrently; each reads the same main head, commits, and PATCHes with force:false; one PATCH gets 422 (stale ref), but its ctx.report() already recorded the commit as a backend-route resource, so both commits exist and 'backend' reports two resources",
+      "why": "The scaffold's read-head, build-commit, PATCH pattern is check-then-write across two separate reads of main head. If the second scaffold's PATCH fails, the commit exists unrecorded; if it succeeds, two commits land. The defect pattern 'frontend checked files at one main head and committed on a later one' and 'A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit' are both present.",
+      "fix": "After the PATCH, re-read the ref and confirm the recorded sha; on 422, do not report a resource the commit was not merged; or use compare-and-swap with a retry that re-reads files at the new head.",
+      "twin_of": "frontend checked files at one main head and committed on a later one"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:118-124",
+      "breaking_input": "The owner opens a PR that modifies db/schema.js but the PR is not merged; main's head does not contain that file, so the contents GET returns 404 and verify reports 'holds no db/schema.js', which is correct, but if owner creates a branch with the file and merges it while verify probes, verify may see a commit without the Arc-Launch trailer and break out; the right failure mode is that orm's commit, once collided, re-runs with changed list empty because the owner's file is identical by content and was committed by the owner on a later head, so changed=[] and scaffold reports the owner's commit as orm's resource id.",
+      "why": "The scaffold only checks the trailer when the current file differs from FILES[path]. If the owner has already committed exactly the same bytes, utf8(b.content)===text so it `continue`s without any ownership check, then reports `${full}:${sha}` as orm-schema even though the file was committed by the owner. Twin of 'An identical file was claimed as launch's without asking who committed it'.",
+      "fix": "When the file content equals the target, still verify the last commit touching that path carries our trailer before claiming the resource; also record ownership at commit time, not at report time.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:118-125",
+      "breaking_input": "The owner's route file differs from FILES only by a trailing newline or a comment line, and the most recent commit touching it is an owner commit with no Arc-Launch-Tag; the scaffold correctly throws FOREIGN_FILE, but if the owner's file is byte-identical to FILES the `continue` path skips the trailer check and reports the owner's commit as backend's resource (same pattern as L3).",
+      "why": "Identical-content skip claims ownership without verifying who committed.",
+      "fix": "Always check the trailer on the file's most recent commit regardless of equality; if content matches but the trailer is absent, still treat as foreign on the first run, or at least do not report as ours.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": "products/launch/providers/orm/drizzle.mjs:115-118",
+      "breaking_input": "After the orm scaffold PATCH succeeds, an owner force-pushes main to a different tree without db/schema.js; orm's verify then reports 'holds no db/schema.js', which is correct. But if the owner force-pushes a tree that still contains db/schema.js with the identical bytes, the verify reports ok:true citing the owner's new head, so the slot claims green for a schema it did not write.",
+      "why": "verify() only checks that the file exists at the current head and that some arc-ci run for that head is green; it never checks that the committing trailer belongs to our tag. Twin of 'verify matched the preview by branch sha without asking whose branch it was' and 'The sha-matched proof was searched in a fixed page'.",
+      "fix": "In verify, fetch the last commit touching db/schema.js at head and require the Arc-Launch-Tag trailer line matches our tag before calling it green.",
+      "twin_of": "verify matched the preview by branch sha without asking whose branch it was"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:126-130",
+      "breaking_input": "ctx.upstream.frontend contains a resource with kind 'frontend-shell' but id 'owner/other:sha' where owner/other validates; this is taken as the shell repo and backend commits the health contract into a repo the venture does not own, potentially overwriting unrelated code if a file happens to match.",
+      "why": "repo() filters only on kind, not on the id matching the shell this launch created; a forged or stale upstream entry with a valid-looking repo id is trusted. Twin of 'upstream handed an adapter resources from a dependency that had failed after recording them' (producer state unchecked) and 'A resource reported only after a later call succeeded'.",
+      "fix": "Cross-check the upstream shell id against the resource recorded by frontend's scaffold (same tag), and verify the repo belongs to the venture's org before writing.",
+      "twin_of": "upstream handed an adapter resources from a dependency that had failed after recording them"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:138-140 and orm drizzle.mjs:132-134",
+      "breaking_input": "GITHUB_TOKEN is a 40-char hex string that passes the shape check but is actually a GitHub API key for a different account; the adapter commits to a repo it has no access to, and fetch returns 404, which the contents GET treats as 'absent, create it', then the POST blob/commit/ref operations 401 and throw an uncaught error.",
+      "why": "The 404-on-contents path is treated as 'file absent' without checking whether the 404 came from missing access vs genuinely absent; a token without access to the repo reads as 'create', then the create fails with a coded error that verify() may convert to an answer but the scaffold throws. Twin of 'A 404 from a token without access read as \"absent, create it\"'.",
+      "fix": "On a 404 from contents GET, also verify the repo is readable by listing the repo (or checking the auth user) before treating it as missing; distinguish 404 (absent) from 403/401 (no access).",
+      "twin_of": "A 404 from a token without access read as \"absent, create it\""
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:118-124 (backend twin at 126-132)",
+      "breaking_input": "After the orm scaffold commits, an owner edits db/schema.test.js with a tiny change, and their commit message includes a line that happens to equal the Arc-Launch-Tag trailer (e.g., copies it from a prior commit). The re-run scaffold sees the file differs, finds the trailer on the owner commit (owner copied the line), and commits over the owner's file, reporting it as orm's.",
+      "why": "hasLine() only checks that the message contains a trimmed line equal to the trailer; it does not verify the commit is by arc or that the trailer appeared in the original scaffold commit. Twin of 'Ownership trailers were matched by prefix and by newest commit only' and 'Ownership was a marker found anywhere in a user-editable description'.",
+      "fix": "Bind ownership to the author (e.g., require the commit author's login matches the configured app/user) and to the exact original commit sha, not a copyable trailer line.",
+      "twin_of": "Ownership trailers were matched by prefix and by newest commit only"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:107-110 and orm/drizzle.mjs:107-110",
+      "breaking_input": "ctx.upstream.frontend contains an entry with id 'technology-ashiq/arc-sandbox:sha' but the `kind` is 'frontend-shell' from a PREVIOUS run whose tag differs; the scaffold uses repo()'s last matching entry and commits new files on top without checking the tag, so a stale upstream from an older launch can write into the wrong repo or lineage.",
+      "why": "repo() does not compare the resource's id/kind against the current tag; any old frontend-shell entry is accepted. Twin of 'A resource reported only after a later call succeeded...' and 'verify took any git deployment of the repo as the proof'.",
+      "fix": "Confirm the upstream shell resource was produced in the same attempt/tag (e.g., store the tag in the resource and compare).",
+      "twin_of": "verify took any git deployment of the repo as the proof"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "tests/launch/fakes/live.mjs:21-28",
+      "breaking_input": "In the real live probe, the route answers with a valid version but the content-type header is 'application/problem+json' or the body has extra whitespace; the probe only matches /^application\\/json\\b/ and JSON.parse tolerates whitespace, so this passes in the real world but the fake forces content-type application/json, masking a real mismatch that CI would catch, weakening the contract test.",
+      "why": "The fake's json() always sets application/json, so the test never exercises the probe's content-type check with a non-JSON type. Twin of 'A test titled \"only those\" had nothing it could have leaked' (fixture does not contain the failure it claims to guard).",
+      "fix": "Make the fake's health response support an arbitrary content-type (e.g., healthContentType) and add a scenario that answers with text/plain to exercise the not-JSON branch.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "tests/launch/contract-app.mjs:52-56",
+      "breaking_input": "The 'red-ci' scenario sets runConclusions [success, failure, success] and the fake's PATCH handler pushes a run with those conclusions, but the run's branch is set to 'main' and head_sha to the new commit; verify polls /actions/runs with branch=main&head_sha; the test passes. However, if the runConclusions array length is not exactly 3 or the schema changes, the fake silently supplies 'success' for missing legs and a red CI would be reported green in the test, weakening the guard.",
+      "why": "The fake defaults every missing / failure conclusion to 'success' unless explicitly overridden; a run with one leg absent (e.g., a run with 2 jobs) would read as green in the fake even though verify expects 3 legs and would mark the absent leg red in production. Twin of '`errors || []` trusted the provider to send an array of objects'.",
+      "fix": "In the fake, only use runConclusions when its length matches LEGS; otherwise produce a conclusion that makes the test fail loudly; also assert the run's job count is 3.",
+      "twin_of": "`errors || []` trusted the provider to send an array of objects"
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:130-136",
+      "breaking_input": "The probe polls up to 8 times waiting for an arc-ci run, but the run's jobs may be reported before conclusions are set (status 'in_progress'); the fake marks them 'completed' immediately, so the test passes, but in production, jobs can show 'in_progress' with no conclusion; verify's `byName.get(n) !== \"success\"` treats 'in_progress' as red and reports it as a failure immediately, instead of waiting for those jobs to conclude.",
+      "why": "The verify checks `run.status !== 'completed'` on the run, but does not wait for job-level `status`; a run that is completed can still have jobs pending conclusion, and the code returns red without retrying. Twin of 'A poll that ran out reported \"no run\" while a run was still going' and 'A sleep listened for abort...'.",
+      "fix": "Also poll while any job has status 'in_progress' or 'queued', only treating the run as terminal when all three legs have a conclusion.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:123-130",
+      "breaking_input": "If GITHUB_TOKEN is longer than the allowed 20+ and contains an underscore, the shape regex passes, but GitHub rejects tokens with certain characters; more importantly, the token is placed directly into a header string `Bearer ${t}` and fetch() may lowercase or normalize; but the real risk is that tokenOf() uses `.trim()` which removes leading/trailing whitespace, but the returned t is the trimmed value; the untrimmed value never reaches the header, so the CR/LF in L1 is actually only reachable if the CR/LF is interior, which the shape regex `^[A-Za-z0-9_]{20,}$` would reject because it only matches whole-string.",
+      "why": "Reconsider: L1 is not reachable because the shape regex `^[A-Za-z0-9_]{20,}$` rejects any CR/LF, so the token reaching the header is always safe. The defect pattern 'A token with a CR reached a fetch header' does not apply here because the guard is a whole-string character whitelist, not just a shape prefix/suffix check.",
+      "fix": "No fix needed; remove this finding."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": "products/launch/providers/backend/next-route-handlers.mjs:112-117",
+      "breaking_input": "The FILES content includes a JSON string `JSON.stringify(SERVICE)` inside the zod literal; SERVICE is a constant 'venture', so no injection. However, the `version: \"0.1.0\"` inside the route handler is hard-coded; the verify probes the live route and requires a string version; if the owner changes the route to answer a different version, the probe still passes because it only checks `typeof version === 'string'` and truthy, not that version matches the committed one.",
+      "why": "The contract does not pin the exact version, so the probe's 'exact shape' claim is weakened: it checks keys/strictness but not the actual version value, so an answer with a different version string passes. Twin of 'the exit criterion \"typed schema generated\" needs an answerer outside the repo' but here the answerer is weaker than the commit.",
+      "fix": "Commit the version into the contract object and have the probe assert that the live version equals the committed version (or store it in the resource and compare).",
+      "twin_of": "verify took any git deployment of the repo as the proof"
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": "products/launch/providers/orm/drizzle.mjs:118-124",
+      "breaking_input": "A branch is created on the shell repo with db/schema.js containing launch's exact bytes, and the branch is merged to main by the owner without the Arc-Launch trailer; the orm scaffold re-run sees the file content equal to FILES and takes the `continue` path, then PATCHes nothing and reports the owner's merge commit sha as orm-schema, claiming a resource the owner created.",
+      "why": "Identical content skip, as in L3/L4. This is the twin of the same pattern; consolidate but keep as separate finding because it names a different entry (the merge path).",
+      "fix": "Same as L3: check the trailer on the file's last commit even when content matches, and only report when a commit carrying the trailer is the one that added it.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    }
+  ]
+}
