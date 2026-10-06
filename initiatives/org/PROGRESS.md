@@ -1,4 +1,4 @@
-✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |✅ 2026-10-05 |# PROGRESS.md — org v2.1 "the four ORG-R holds"
+# PROGRESS.md — org v2.1 "the four ORG-R holds"
 
 status: LIVE
 cycle: arc-org (Cycle 20, opened 2026-10-05)

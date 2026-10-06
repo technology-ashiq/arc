@@ -183,7 +183,7 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 |---|---|
 | Version | 1.0.0 |
 | Requires | — |
-| Required by | [absorb](absorb.md), [council](council.md), [design](design.md), [develop](develop.md), [docs](docs.md), [engine](engine.md), [evolve](evolve.md), [git](git.md), [growth](growth.md), [hq](hq.md), [launch](launch.md), [leads](leads.md), [legal](legal.md), [memory](memory.md), [org](org.md), [plan](plan.md), [qa](qa.md), [review](review.md) |
+| Required by | [absorb](absorb.md), [council](council.md), [design](design.md), [develop](develop.md), [discover](discover.md), [docs](docs.md), [engine](engine.md), [evolve](evolve.md), [git](git.md), [growth](growth.md), [hq](hq.md), [launch](launch.md), [leads](leads.md), [legal](legal.md), [memory](memory.md), [org](org.md), [plan](plan.md), [qa](qa.md), [review](review.md) |
 | Lane | — |
 | Face room | toolbelt (ring factory) |
 
