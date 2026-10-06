@@ -29,7 +29,7 @@ const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", com
 const vercel = makeVercel({ github });
 const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz" });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: (i, o) => supabase.fetch(i, o).catch(() => vercel.fetch(i, o)) });
-const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored" });
+const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail" });
 // Route by host: Supabase hosts to its fake (through the venture fake for auth admin), the rest down the chain.
 globalThis.fetch = async (input, init) => {
   const h = new URL(String(input)).hostname;
@@ -196,6 +196,27 @@ switch (scenario) {
     out.verify = await A.plans.mod.verify(ctxFor("plans"));
     out.planRows = supabase.store[0].tables.org_plans.rows.length;
     break;
+  case "plans-reports-fail":
+    // The pro read answers 500: verify is not ok, and the probe org is back on free.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    out.verify = await A.plans.mod.verify(ctxFor("plans"));
+    out.finalPlans = supabase.store[0].tables.org_plans.rows.map((r) => r.plan);
+    break;
+  case "replaced-tables": {
+    // launch recorded its tables; the owner then replaced them with their own, unmarked. A re-run never adopts them.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    supabase.store[0].tables.org_plans = { rls: false, rows: [{ org: "x", plan: "enterprise" }] };
+    out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
+    out.planRls = supabase.store[0].tables.org_plans.rls;
+    supabase.store[0].tables.orgs = { rls: false, rows: [{ id: "y", name: "real customer" }] };
+    out.authz = await attempt(() => A.authz.mod.scaffold(ctxFor("authz")));
+    out.orgRls = supabase.store[0].tables.orgs.rls;
+    break;
+  }
   case "plans-no-upstream":
     out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
     break;

@@ -28,7 +28,7 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
       return { rows: [] };
     }
     // The plans verify's upsert: one org id (a uuid) and one of two plans, nothing else is modelled.
-    const up = String(sql).match(/^insert into public.org_plans (org_id, plan) values ('([0-9a-f-]{36})', '(free|pro)') on conflict (org_id) do update set plan = excluded.plan, updated_at = now();$/);
+    const up = String(sql).match(/^insert into public\.org_plans \(org_id, plan\) values \('([0-9a-f-]{36})', '(free|pro)'\) on conflict \(org_id\) do update set plan = excluded\.plan, updated_at = now\(\);$/);
     if (up) {
       if (!p.tables.org_plans) return { error: "relation \"public.org_plans\" does not exist" };
       const rows = p.tables.org_plans.rows;

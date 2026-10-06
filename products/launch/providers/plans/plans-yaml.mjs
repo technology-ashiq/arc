@@ -275,7 +275,11 @@ export async function scaffold(ctx) {
   domainOf(ctx);
   // A table of this name launch did not create is the venture's own: never altered (the probe-table rule, ADR-1731).
   const tid = `${ref}:public.org_plans`;
-  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid) && count(await query(ctx, ref, OURS)) !== 1)
+  // Every table of these names that exists must carry launch's marker, recorded or not: a recorded id is not an
+  // ownership check, since the owner may have replaced the table since (attack d1dc8eb B3). A half-made run of
+  // launch's own migration still resumes, because each table it made carries the marker.
+  const have = count(await query(ctx, ref, TABLES));
+  if (have > 0 && count(await query(ctx, ref, OURS)) !== have)
     throw refuse("TABLES_FOREIGN", "public.org_plans already exists and launch did not create it");
   await query(ctx, ref, MIGRATION);
   ctx.report({ kind: "db-tables", id: tid });
@@ -314,11 +318,18 @@ async function probe(ctx) {
   const key = await serviceKey(ctx, ref);
   const a = await signIn(ctx, domain, ref, key, "a");
   const org = await ownOrg(ctx, domain, a, "launch-probe-a");
-  await setPlan(ctx, ref, org, "pro");
-  const pro = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
+  let pro;
+  let down;
+  try {
+    await setPlan(ctx, ref, org, "pro");
+    pro = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
+  } finally {
+    // Whatever the pro read did -- an error status, a transport failure, the slot timeout -- the probe org goes back to
+    // free, so no verify leaves it on pro for the next one to start from.
+    await setPlan(ctx, ref, org, "free");
+  }
   if (pro.status !== 200) return { ok: false, reason: `the probe org on pro read /api/reports with ${pro.status}, not 200` };
-  await setPlan(ctx, ref, org, "free");
-  const down = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
+  down = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
   if (down.status !== 403) return { ok: false, reason: `the probe org downgraded to free read /api/reports with ${down.status}, not 403` };
   return { ok: true, answerer: `${domain} + ${ref}.supabase.co`, evidence: { pro: 200, downgraded: 403 } };
 }
@@ -337,6 +348,6 @@ export async function verify(ctx) {
 
 // The plan table goes before authz drops orgs; the committed files are the venture's to keep.
 export async function teardown(ctx) {
-  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop org_plans (down migration; before authz drops orgs)", resource: say(r.id, 80) }));
+  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop org_plans if it still carries the arc-launch plans marker (down migration; before authz drops orgs)", resource: say(r.id, 80) }));
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
 }

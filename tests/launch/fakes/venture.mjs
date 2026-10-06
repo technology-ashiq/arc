@@ -5,7 +5,8 @@
 //   siteUrlNeeded   /auth/confirm works only once the project's site_url is the venture's (the auth slot sets it)
 //   leakCrossTenant the orgs read ignores membership -- a broken RLS -- so authz must fail
 //   ignorePlan      the reports route ignores the plan -- a gate that does not follow the data -- so plans must fail
-export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false } = {}) {
+//   reportsFail     the reports route answers 500 on pro -- verify must still leave the probe org on free
+export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false, reportsFail = false } = {}) {
   const inner = live.fetch;
   const users = new Map(); // email -> { id, email }
   const links = new Map(); // hash -> email
@@ -93,6 +94,7 @@ export function makeVenture({ github, supabase, live, full, domain, siteUrlNeede
       if (!member(org, who.id)) return json(403, { error: "not a member of this org" });
       const row = tables().org_plans.rows.find((r) => r.org === org);
       const plan = row ? row.plan : "free";
+      if (reportsFail && plan === "pro") return json(500, { error: "read failed" });
       if (!ignorePlan && plan !== "pro") return json(403, { error: "plan does not include reports", plan });
       return json(200, { plan, reports: [] });
     }

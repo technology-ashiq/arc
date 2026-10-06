@@ -820,7 +820,7 @@ arm() {
   [ "$(j 'o.verify.ok + " " + o.verify.evidence.pro + " " + o.verify.evidence.downgraded')" = "true 200 403" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verifyAgain.ok + " " + o.finalPlans.join(",")')" = "true free" ] || { echo "$DONE"; false; }
   [ "$(j 'o.kinds.join(",")')" = "db-tables,plans-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.join(",")')" = "drop org_plans (down migration; before authz drops orgs)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "drop org_plans if it still carries the arc-launch plans marker (down migration; before authz drops orgs)" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a gated route that ignores the plan never verifies (ADR-1737)" {
@@ -841,4 +841,16 @@ arm() {
   [ "$(j 'o.planRows')" = "0" ] || { echo "$DONE"; false; }
   arm login plans-no-upstream
   [ "$(j 'o.plans.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a failed pro read still leaves the probe org on free (attack d1dc8eb B2)" {
+  arm login plans-reports-fail
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false the probe org on pro read /api/reports with 500, not 200" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.finalPlans.join(",")')" = "free" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a table the owner swapped in after launch recorded its own is never adopted, in plans and authz (attack d1dc8eb B3)" {
+  arm login replaced-tables
+  [ "$(j 'o.plans.code + " " + o.planRls')" = "TABLES_FOREIGN false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.authz.code + " " + o.orgRls')" = "TABLES_FOREIGN false" ] || { echo "$DONE"; false; }
 }
