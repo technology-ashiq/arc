@@ -520,7 +520,8 @@ arm() {
   arm app bad-health
   [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"answers outside the contract (keys: debug,ok,service,version)" ]] || { echo "$DONE"; false; }
   arm app before-backend
-  [[ "$(j 'o.backendVerify.reason')" == *"answered 404"* ]] || { echo "$DONE"; false; }
+  # Before backend has run, its files are not on main: verify says so before it ever asks the live site.
+  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"lib/contract.js is not launch's file" ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: orm verify names a red leg, and orm refuses without the database's probe table" {
