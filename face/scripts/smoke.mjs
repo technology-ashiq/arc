@@ -1056,7 +1056,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
   "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings",
-  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-keys", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
+  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-profile", "hq-settings-voice", "hq-settings-keys", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1347,6 +1347,12 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       const renamed = menu && original !== "" && (await rename(`${original} edited`));
       const restored = renamed && (await rename(original));
       record("hq-settings-edit", Boolean(renamed && restored), `the row read ${JSON.stringify(String(await rowName()).slice(0, 80))} (was ${JSON.stringify(original.slice(0, 40))}); renamed=${Boolean(renamed)} restored=${Boolean(restored)}`);
+      // Router profiles (ADR-1350 Amendment 4): the active row says who uses it (this tree's router names no profile, so
+      // "no router class"), and the add form offers a declared cost.
+      const usedLine = String(await val(P, "(function () { var r = document.querySelector('[data-model-row][data-model-active] [data-model-used-by]'); return r ? r.textContent.trim() : '(none)'; })()"));
+      const usedOk = menu && (await until(async () => /^used by: /.test(String(await val(P, "(function () { var r = document.querySelector('[data-model-row][data-model-active] [data-model-used-by]'); return r ? r.textContent.trim() : ''; })()"))), capMs));
+      const costFields = (await count(P, '[data-cost-fields="model"] [data-cost-in]')) === 1 && (await count(P, '[data-cost-fields="model"] [data-cost-out]')) === 1;
+      record("hq-settings-profile", Boolean(usedOk && costFields), `used-by line ${JSON.stringify(usedLine.slice(0, 80))}; add-form cost fields=${costFields}`);
       const voice = menu && (await click(P, '[data-settings-tab="voice"]')) && (await until(async () => (await count(P, '[data-settings-section="voice"] [data-voice-switch]')) === 1, capMs));
       record("hq-settings-voice", voice, "the Voice section did not open with its switch");
       // Keys (Phase 12, ADR-1351): add a key, read its tail, replace it, remove it -- and its value is in no page text.
@@ -1379,7 +1385,7 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       await press(P, ESCAPE);
       const back = await until(settingsGone, capMs);
       record("hq-settings-page", asPage && back, `open: ${asPage ? "a page" : "not a page"} at ${JSON.stringify(pageHash)}; closed: ${back ? "the room is back" : "the page stayed or the address kept view=settings"}`);
-    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-keys", "hq-settings-page"]);
+    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-profile", "hq-settings-voice", "hq-settings-keys", "hq-settings-page"]);
     // The rail's Settings link (owner, 2026-10-05: "menu laye add pannirlaama") opens the same page, and is not a room.
     // It starts from a clean room, so a page left open by the step before cannot pass it (attack 12a0307 L2), and every
     // condition is judged and named on its own (L3, B6, B3).

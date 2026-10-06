@@ -342,6 +342,55 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 /** A free-text receipt field, as text the wire may carry. @param {{ repo: string }} ctx @param {unknown} v */
 const text = (ctx, v) => (typeof v === "string" ? scrub(v, ctx.repo) : "");
 
+/**
+ * Where engine/router.yaml NAMES an owner model as a provider profile (ADR-1350 Amendment 4, ADR-1800/1802): each tier
+ * pin `generic-api: profile:<name>` and each class row's own `profile: <name>`, through router-row.mjs's grammar. The
+ * Settings remove guard reads it; a router that cannot be read is a refusal the caller must honour, never "no refs".
+ * @param {{ repo: string, root?: string }} ctx
+ * @returns {Promise<{ ok: true, refs: { name: string, where: string }[] } | { ok: false, why: string }>}
+ */
+export async function routerProfileRefs(ctx) {
+  try {
+    const { parseYamlSubset } = await lib("../../../engine/yaml-subset.mjs");
+    const { profileRef, PROFILE_DRIVER } = await lib("../../../engine/router-row.mjs");
+    const f = fileAt(ctx, "engine/router.yaml");
+    const parsed = parseYamlSubset(f.text);
+    if (!parsed.ok) return { ok: false, why: "engine/router.yaml could not be parsed, so whether a model is routed is unknown" };
+    // A shape this function cannot read is a refusal, never "no references": a list or a scalar where a mapping belongs
+    // read as an empty mapping and let a routed record be removed (attack 61af78b B2).
+    const isMap = (/** @type {unknown} */ v) => v !== null && typeof v === "object" && !Array.isArray(v);
+    const unreadable = (/** @type {string} */ at) => ({ ok: /** @type {const} */ (false), why: `engine/router.yaml's ${at} is not the shape the router reads, so whether a model is routed is unknown` });
+    const router = parsed.value;
+    if (!isMap(router)) return unreadable("top level");
+    /** @type {{ name: string, where: string }[]} */
+    const refs = [];
+    if (Object.hasOwn(router, "models")) {
+      if (!isMap(router.models)) return unreadable("`models`");
+      for (const [tier, pins] of Object.entries(router.models)) {
+        if (!isMap(pins)) return unreadable(`\`models.${tier}\``);
+        // Every driver's pin, not only generic-api's: router-row faults a profile on another driver, but it still names
+        // the record (attack 61af78b B3).
+        for (const [driver, value] of Object.entries(pins)) {
+          const p = profileRef(value);
+          if (p) refs.push({ name: p, where: driver === PROFILE_DRIVER ? `tier ${tier}` : `tier ${tier} (${driver})` });
+        }
+      }
+    }
+    if (Object.hasOwn(router, "classes") && !isMap(router.classes)) return unreadable("`classes`");
+    const rows = Object.entries(obj(router.classes));
+    if (Object.hasOwn(router, "default")) rows.push(["default", router.default]);
+    for (const [cls, raw] of rows) {
+      if (!isMap(raw)) return unreadable(`class \`${cls}\``);
+      if (!Object.hasOwn(raw, "profile")) continue;
+      if (typeof raw.profile !== "string" || !raw.profile.trim()) return unreadable(`class \`${cls}\`'s profile`);
+      refs.push({ name: raw.profile, where: `class ${cls}` });
+    }
+    return { ok: true, refs };
+  } catch (e) {
+    return { ok: false, why: `engine/router.yaml could not be read (${/** @type {any} */ (e).code ?? "error"}), so whether a model is routed is unknown` };
+  }
+}
+
 // ---------- engine/router.yaml: /api/engine, /api/model-policy, /api/roster ----------
 async function routerRead(ctx) {
   const { parseYamlSubset } = await lib("../../../engine/yaml-subset.mjs");
