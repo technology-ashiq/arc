@@ -36,3 +36,11 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
   production build of the lift commit errors; release's receipt is "production now builds, not skipped". Serving is
   frontend's proof, and frontend's verify (live 200 + Lighthouse) catches a broken build.
 - Logic: round 1 failed its output contract (empty `fix`), round 2 NOT RUN.
+## attack 14d5374 r1 (slice 6)
+
+- The first run (7f15855) never reached a model: arc-run's input scanner refused a credential-shaped fixture value; renamed in 14d5374, pre-scanned clean.
+- B1/B2/B3/B4 fixed; B5 narrowed in the claim and carried as D20. Logic surface timed out.
+
+## attack 07bcb38 r2 (slice 6)
+
+- B1 [high] fixed (linear last-segment check). B2 fixed (`*.env`, `.envrc`). B3 -> D20 (values in non-contract templates). Logic NOT RUN (no in-range round 1).

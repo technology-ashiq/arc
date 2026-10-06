@@ -1,4 +1,4 @@
-// ModelsPanel.tsx -- HQ's Settings page (face v2 Phase 10, REQ-14, ADR-1350; Phase 11, REQ-15, Amendments 1 and 2),
+// ModelsPanel.tsx -- HQ's Settings page (face v2 Phase 10, REQ-14, ADR-1350; Phase 11, REQ-15, Amendments 1-3; Keys: Phase 12, ADR-1351),
 // drawn in the workroom's main area at `view=settings`, opened from the workroom header and from ⌘K.
 //
 // Two sections. MODELS: the owner adds the model the face answers with -- any OpenAI-compatible endpoint, free or paid,
@@ -18,10 +18,11 @@ type ModelForm = ReturnType<typeof emptyForm>
 type EditForm = ReturnType<typeof editForm>
 import { refusalOf } from '../lib/ask.mjs'
 import type { Door } from '../lib/door.mjs'
+import KeysSection from './KeysSection'
 import { MONO, UI } from '../ui/kit'
 
 type View = ReturnType<typeof modelsView>
-type Section = 'models' | 'voice'
+type Section = 'models' | 'voice' | 'keys'
 
 const field = 'w-full min-h-[38px] px-3 text-[13px] bg-transparent outline-none placeholder:text-(--text-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)'
 const fieldStyle = { color: 'var(--text-1)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-sm)' }
@@ -139,6 +140,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
         <div role="tablist" aria-label="Settings sections" className="flex gap-2 mb-4">
           {tab('models', 'Models')}
           {tab('voice', 'Voice')}
+          {tab('keys', 'Keys')}
         </div>
 
         {section === 'models' ? (
@@ -210,7 +212,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
               <button type="submit" disabled={busy} className="self-start text-[13px] h-[36px] px-4 rounded-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)" style={{ fontWeight: 600, color: 'var(--bg-0)', background: 'var(--accent)' }}>add</button>
             </form>
           </section>
-        ) : (
+        ) : section === 'voice' ? (
           <section data-settings-section="voice" aria-label="Voice">
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" data-voice-switch checked={voiceOn} disabled={!voiceAvailable} onChange={(e) => onVoice(e.target.checked)} />
@@ -236,6 +238,8 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
               </div>
             ) : null}
           </section>
+        ) : (
+          <KeysSection door={door} />
         )}
         {problem ? <p role="alert" className="mt-3 text-[12.5px]" style={{ color: 'var(--red)' }}>{problem}</p> : null}
       </div>

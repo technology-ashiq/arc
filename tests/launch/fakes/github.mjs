@@ -134,6 +134,9 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       r.pulls.push(pr);
       return json(201, pr);
     }
+    // main's tree: every path in r.files plus any in r.extraPaths (files the venture holds that no test wrote).
+    if (method === "GET" && rest === "git/trees/main")
+      return json(200, { truncated: !!r.truncated, tree: [...Object.keys(r.files), ...(r.extraPaths || [])].map((path) => ({ path, type: "blob" })) });
     const cm = rest.match(/^contents\/(.+)$/);
     if (cm && method === "PUT" && body.branch && body.branch !== "main") {
       if (!r.branches[body.branch]) return err(404, "Branch not found");
@@ -149,7 +152,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
         const idx = r.commits.findIndex((c) => c.sha === at);
         if (idx >= 0 && !r.commits.slice(0, idx + 1).some((c) => c.files && c.files[cm[1]])) return err(404, "Not Found");
       }
-      if (method === "GET") return f ? json(200, { type: "file", path: cm[1], sha: f.sha, content: f.content, encoding: "base64" }) : err(404, "Not Found");
+      if (method === "GET") return f ? json(200, (f.dir ? [{ path: `${cm[1]}/x`, type: "file" }] : f.big ? { type: "file", path: cm[1], sha: f.sha, content: "", encoding: "none" } : { type: "file", path: cm[1], sha: f.sha, content: f.content, encoding: "base64" })) : err(404, "Not Found");
       if (method === "PUT") {
         if (f && body.sha !== f.sha) return err(409, `${cm[1]} does not match ${body.sha}`);
         if (!f && body.sha) return err(422, "sha was supplied for a file that does not exist");
