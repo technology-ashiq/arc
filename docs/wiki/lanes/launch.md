@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (34)
+## Decisions (35)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -62,6 +62,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1731`](../../../docs/adr/1731-database-is-a-supabase-project-whose-rls-is-proved-as-anon.md) | `database` is a Supabase project whose RLS is proved by reading as `anon` | accepted | 2026-10-06 |
 | [`1732`](../../../docs/adr/1732-email-writes-its-own-dns-records-on-the-dns-provider.md) | `email-transactional` writes its own DNS records on the DNS provider | accepted | 2026-10-06 |
 | [`1733`](../../../docs/adr/1733-the-shell-owns-the-dependency-manifest-later-slots-add-files.md) | The shell owns the venture's dependency manifest; later slots add files, and CI is their typed check | accepted | 2026-10-06 |
+| [`1736`](../../../docs/adr/1736-payment-test-proves-test-mode-keys-with-one-tagged-order.md) | payment-test proves test-mode keys with one tagged order; the purchase is checkout's | accepted | 2026-10-07 |
 
 ## Source
 

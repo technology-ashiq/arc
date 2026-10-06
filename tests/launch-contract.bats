@@ -707,3 +707,46 @@ arm() {
   arm secrets pathological
   [ "$(j 'o.verify.ok + " " + (o.ms < 2000)')" = "true true" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: payment-test makes one tagged INR 1 test order, finds it again, and verify fetches it back (ADR-1736)" {
+  arm payment twice
+  [ "$(j 'o.first + " " + o.second + " " + o.creates + " " + o.orders')" = "true true 1 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.order.amount + " " + o.order.currency + " " + o.order.receipt + " " + o.order.tagged')" = "100 INR arc-launch-arc-sandbox true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "razorpay-test-order" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.notes[0]')" == *"checkout-portal -> webhooks-ledger -> refunds"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.mode')" = "true api.razorpay.com test" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "none (test-mode order, Razorpay keeps it)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a live Razorpay key refuses before any call, in scaffold and in verify (gate 3 never crossed)" {
+  arm payment live-key
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "LIVE_KEY 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "LIVE_KEY: "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: malformed Razorpay keys refuse before any call and are never printed" {
+  arm payment bad-key
+  [ "$(j 'o.scaffold.code + " " + o.calls + " " + o.leaked')" = "BAD_TOKEN 0 false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.badId.code')" = "BAD_TOKEN" ] || { echo "$DONE"; false; }
+  arm payment wrong-pair
+  [[ "$(j 'o.scaffold.message')" == *"-> 401: The api key provided is invalid"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates')" = "0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an order with launch's receipt but not its tag is never adopted; launch's own is found, not doubled" {
+  arm payment foreign-order
+  [ "$(j 'o.scaffold.code + " " + o.creates + " " + o.reported')" = "FOREIGN_ORDER 0 0" ] || { echo "$DONE"; false; }
+  arm payment found-mine
+  [ "$(j 'o.scaffold.ok + " " + o.creates + " " + o.reported.join(",")')" = "true 0 order_Mine00000000001" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: payment-test verify is not ok for a changed amount, a lost tag, a missing order, or no record" {
+  arm payment verify-tampered
+  [[ "$(j 'o.amount.ok + " " + o.amount.reason')" == "false order "*" is 50000 INR, not 100 INR" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.untagged.ok + " " + o.untagged.reason')" == "false order "*" does not carry this slot's tag" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.missing.ok + " " + o.missing.reason')" == "false razorpay has no order "* ]] || { echo "$DONE"; false; }
+  arm payment verify-no-record
+  [ "$(j 'o.verify.ok + " " + o.calls')" = "false 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"verify needs exactly one"* ]] || { echo "$DONE"; false; }
+}
