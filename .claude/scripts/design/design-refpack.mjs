@@ -45,9 +45,10 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DEFAULT_UA, EXIT, fakeTransport, parseHttpUrl, preflight, realTransport } from "./design-robots.mjs";
@@ -248,11 +249,35 @@ const MCP_SEARCH = {
     endpoint: "https://21st.dev/api/mcp", tool: "search", header: "x-api-key", credential: "API_KEY_21ST",
     args: (q, want) => ({ query: q, type: "component", limit: want }),
   },
+  // shadcn's registry MCP runs locally over stdio, keyless, pinned (`npm view shadcn version` =
+  // 4.21.2 on 2026-10-06). It answers in prose only, so its items are parsed from the list lines
+  // the live server printed. The command is a constant: the query travels as JSON on stdin and
+  // never reaches a shell.
+  shadcn: {
+    transport: "stdio", pkg: "shadcn@4.21.2", name: "shadcn", serverArgs: ["mcp"], label: "stdio:shadcn@4.21.2",
+    tool: "search_items_in_registries", parse: "shadcn-prose",
+    args: (q, want) => ({ registries: ["@shadcn"], query: q, limit: want }),
+  },
 };
-const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request"];
+
+// shadcn's prose list: `- card (registry:ui) [@shadcn]`, one item per line.
+const SHADCN_ITEM = /^\s*-\s+([a-z0-9][a-z0-9-]{0,63})\s+\((registry:[a-z-]{1,32})\)\s+\[@[a-z0-9-]{1,64}\]/;
+function shadcnItems(result) {
+  const out = [];
+  for (const t of searchText(result)) for (const line of t.split(/\r?\n|(?=\s-\s+[a-z0-9-]+\s+\(registry:)/)) {
+    const m = SHADCN_ITEM.exec(line);
+    if (m) out.push({ name: m[1], type: m[2] });
+  }
+  return out.slice(0, MCP_MAX_RESULTS);
+}
+const MCP_SEAMS = ["--registry", "--mcp-fixture", "--record-request", "--mcp-stdio-server"];
 const MCP_DEADLINE_MS = 30000;
 const MCP_MAX_BYTES = 2 * 1024 * 1024;
 const MCP_MAX_RESULTS = 50;
+const MCP_MAX_JUNK = 20;
+// One budget for a whole stdio query: a cold npx download is charged to it, once.
+const MCP_STDIO_BUDGET_MS = process.env.ARC_DESIGN_OFFLINE === "1" && /^[1-9][0-9]{3,5}$/.test(process.env.ARC_DESIGN_MCP_BUDGET_MS ?? "") ? Number(process.env.ARC_DESIGN_MCP_BUDGET_MS) : 150000;
+const LF = String.fromCharCode(10);
 // Built from code points, not escapes: an editor turned a typed escape for U+2028 into the real
 // character once, which ends a regex literal mid-line.
 const SCRUB_CTRL = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(0x1f) + String.fromCharCode(0x7f, 0x85, 0x2028, 0x2029) + "]+", "g");
@@ -330,7 +355,8 @@ async function query(argv) {
   const seamed = seamGuard(o, MCP_SEAMS);
   const fake = o["--mcp-fixture"] != null;
   // A seam (a scratch registry, a request recorder) never drives the real, keyed network (attack fc30f54 B5).
-  if (seamed && !fake) fail(1, "a test seam needs --mcp-fixture: a scratch registry or a recorder never sends a real request");
+  const fakeServer = o["--mcp-stdio-server"] != null;
+  if (seamed && !fake && !fakeServer) fail(1, "a test seam needs --mcp-fixture or --mcp-stdio-server: a scratch registry or a recorder never sends a real request");
   let fixture = null;
   if (fake) {
     try { fixture = JSON.parse(readFileSync(resolve(o["--mcp-fixture"]), "utf8")); } catch (e) { fail(1, "--mcp-fixture is unreadable: " + field(e.message)); }
@@ -353,14 +379,21 @@ async function query(argv) {
   if (String(src.access) !== "mcp") fail(2, `refused: --query is for an mcp source; '${id}' has access: ${field(src.access)}`);
   const adapter = Object.hasOwn(MCP_SEARCH, id) ? MCP_SEARCH[id] : null;
   if (!adapter) fail(2, `refused: source '${id}' has no search adapter here; its search tool is not guessed`);
-  const ep = new URL(adapter.endpoint);
-  if (ep.protocol !== "https:" || ep.port || ep.username) fail(2, "refused: a keyed MCP endpoint is https on its default port, with no userinfo");
+  const stdio = adapter.transport === "stdio";
+  // The fake server seam stands in for a LOCAL stdio server only; on an https source it would leave the network path real.
+  if (fakeServer && !stdio) fail(1, "--mcp-stdio-server stands in for a local stdio source only; " + id + " is reached over https");
+  if (fakeServer && fake) fail(1, "--mcp-stdio-server and --mcp-fixture are two fakes; give one");
+  // A stdio server is local and keyless: it has no endpoint to bind, and it may hold no credential.
+  if (stdio && String(src.auth) !== "none") fail(2, "refused: a stdio MCP source is keyless; source " + id + " has auth: " + field(src.auth));
+  const ep = stdio ? null : new URL(adapter.endpoint);
+  if (ep && (ep.protocol !== "https:" || ep.port || ep.username)) fail(2, "refused: a keyed MCP endpoint is https on its default port, with no userinfo");
   const hosts = asList(src.hosts).map((h) => String(h).toLowerCase());
-  if (!hostAllowed(ep.hostname, hosts)) fail(2, `refused: ${ep.hostname} is not one of source '${id}' hosts [${hosts.join(", ")}]`);
+  if (ep && !hostAllowed(ep.hostname, hosts)) fail(2, `refused: ${ep.hostname} is not one of source '${id}' hosts [${hosts.join(", ")}]`);
+  const where = ep ? shown(ep) : adapter.label;
 
   const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", brief);
   mkdirSync(stateDir, { recursive: true });
-  const via = fake ? "fixture" : "network";
+  const via = fake || fakeServer ? "fixture" : "network";
   // The key never lands in a reason, the log or the console, even when the server echoes it (attack fc30f54 B7).
   let key = null;
   // Only a key long enough to be a key: a one-letter key would scrub that letter out of every word.
@@ -370,7 +403,7 @@ async function query(argv) {
     const tight = String(t).replace(SCRUB_CTRL, "");
     return key && key.length >= 8 ? tight.split(key).join("<key>") : String(t);
   };
-  const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(shown(ep))}\t${verdict}\t${field(scrub(reason))}\n`);
+  const record = (verdict, reason) => appendFileSync(join(stateDir, "availability.log"), `${new Date().toISOString()}\t${id}\t${via}\t${field(where)}\t${verdict}\t${field(scrub(reason))}\n`);
   const couldNot = (reason) => { record("COULD-NOT-SCAN", reason); fail(EXIT.UNREADABLE, `COULD-NOT-SCAN ${id} -- ${field(scrub(reason))}`); };
 
   // 2. credential: the registry names arc's secret, the adapter names the upstream header. Only
@@ -388,16 +421,17 @@ async function query(argv) {
   const post = async (body, extra) => {
     const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", ...extra };
     if (key) headers[adapter.header] = key;
-    appendFileSync(join(stateDir, "attempts.log"), `${new Date().toISOString()}\t${id}\t${via}\tPOST\t${field(shown(ep))}\t${field(body.method)}\n`);
+    appendFileSync(join(stateDir, "attempts.log"), `${new Date().toISOString()}\t${id}\t${via}\tPOST\t${field(where)}\t${field(body.method)}\n`);
     if (fake) {
       if (recPath) {
         const shownHeaders = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k, v === key ? `sha256:${createHash("sha256").update(v).digest("hex").slice(0, 16)}` : v]));
-        appendFileSync(recPath, JSON.stringify({ url: ep.href, headers: shownHeaders, body }) + "\n");
+        appendFileSync(recPath, JSON.stringify({ url: where, headers: shownHeaders, body }) + "\n");
       }
       const r = fixture && fixture[body.method];
       if (!r) return { status: 0, error: `no fixture answer for ${body.method}` };
       return { status: r.status ?? 200, session: r.session ?? null, text: typeof r.body === "string" ? r.body : JSON.stringify(r.body) };
     }
+    if (stdio) return stdioPost(body);
     try {
       const res = await fetch(ep.href, { method: "POST", headers, body: JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(MCP_DEADLINE_MS) });
       // Read under a byte cap: a body that never ends is COULD-NOT-SCAN, never a hang (attack fc30f54 B2).
@@ -423,18 +457,128 @@ async function query(argv) {
     return r;
   };
 
+  // One local server per run (attacks fc97161, 13edb77). The pinned package is installed ONCE into
+  // a private, gitignored directory and its entry point is spawned directly under this node: no
+  // shell, no npx wrapper, so the server is the direct child and there is no grandchild to orphan.
+  // It runs with a private HOME/APPDATA (the owner's key store, .npmrc and caches are out of
+  // reach), an allow-listed environment and an empty cwd that is removed afterwards. One budget
+  // covers the whole query; the byte cap kills the server; 'close' (streams drained) ends it; a
+  // second reply for one id or a run of non-JSON lines is COULD-NOT-SCAN.
+  let child = null, buf = "", outBytes = 0, junk = 0, broken = null, closed = null, runDir = null;
+  const waiting = new Map(), answered = new Set(), doubled = new Set();
+  const budgetEnd = Date.now() + MCP_STDIO_BUDGET_MS;
+  const failAll = (why) => {
+    if (!broken) broken = why;
+    for (const w of waiting.values()) w({ status: 0, error: why });
+    waiting.clear();
+    stopChild();
+  };
+  const privateEnv = () => {
+    runDir = mkdtempSync(join(tmpdir(), "arc-mcp-"));
+    const home = join(runDir, "home");
+    mkdirSync(join(home, "AppData", "Roaming"), { recursive: true });
+    mkdirSync(join(home, "AppData", "Local"), { recursive: true });
+    // Two empty files: npm refuses one file loaded as both the user and the global config.
+    writeFileSync(join(runDir, "npmrc-user"), "");
+    writeFileSync(join(runDir, "npmrc-global"), "");
+    const keep = ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP"];
+    const env = Object.fromEntries(keep.filter((k) => process.env[k] != null).map((k) => [k, process.env[k]]));
+    Object.assign(env, {
+      HOME: home, USERPROFILE: home, APPDATA: join(home, "AppData", "Roaming"), LOCALAPPDATA: join(home, "AppData", "Local"),
+      npm_config_registry: "https://registry.npmjs.org/", npm_config_ignore_scripts: "true",
+      npm_config_userconfig: join(runDir, "npmrc-user"), npm_config_globalconfig: join(runDir, "npmrc-global"),
+      npm_config_cache: join(ROOT, ".claude", "state", "design", "mcp", "npm-cache"),
+    });
+    if (o["--mcp-stdio-server"] != null) for (const [k, v] of Object.entries(process.env)) if (/^FAKE_MCP_[A-Z_]{1,32}$/.test(k)) env[k] = v;
+    return env;
+  };
+  // The pinned package, installed once. Its entry point is read from its own package.json and
+  // must stay inside the install directory.
+  const serverEntry = (env) => {
+    if (o["--mcp-stdio-server"] != null) return resolve(o["--mcp-stdio-server"]);
+    const dir = join(ROOT, ".claude", "state", "design", "mcp", adapter.pkg.replace(/[^abcdefghijklmnopqrstuvwxyz0123456789.@-]/gi, "_"));
+    const pj = join(dir, "node_modules", adapter.name, "package.json");
+    if (!existsSync(pj)) {
+      const cli = [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"), join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")].find((p) => existsSync(p));
+      if (!cli) return null;
+      mkdirSync(dir, { recursive: true });
+      const left = Math.max(1000, budgetEnd - Date.now());
+      const r = spawnSync(process.execPath, [cli, "install", "--prefix", dir, "--ignore-scripts", "--no-audit", "--no-fund", "--no-save", adapter.pkg], { cwd: runDir, env, stdio: "ignore", windowsHide: true, timeout: left });
+      if (r.error || r.status !== 0 || !existsSync(pj)) return null;
+    }
+    let bin;
+    try { const p = JSON.parse(readFileSync(pj, "utf8")); bin = typeof p.bin === "string" ? p.bin : p.bin && p.bin[adapter.name]; } catch { return null; }
+    const entry = resolve(dirname(pj), String(bin ?? ""));
+    return bin && entry.startsWith(resolve(dirname(pj)) + sep) && existsSync(entry) ? entry : null;
+  };
+  const startChild = () => {
+    const env = privateEnv();
+    const entry = serverEntry(env);
+    if (!entry) return failAll("the pinned " + adapter.pkg + " could not be installed or has no entry point; the local server cannot start");
+    const args = o["--mcp-stdio-server"] != null ? [entry] : [entry, ...adapter.serverArgs];
+    child = spawn(process.execPath, args, { cwd: runDir, env, shell: false, stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
+    closed = new Promise((r) => child.on("close", r));
+    child.on("error", (e) => failAll("the local server did not start: " + e.message));
+    // 'close', not 'exit': it fires after stdout is drained, so a reply written just before exit is read first.
+    child.on("close", (code) => failAll("the local server exited (code " + code + ") before answering"));
+    child.stdin.on("error", (e) => failAll("the local server closed its input: " + (e.code ?? e.message)));
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (d) => {
+      outBytes += Buffer.byteLength(d);
+      if (outBytes > MCP_MAX_BYTES) return failAll("the reply passed " + MCP_MAX_BYTES + " bytes");
+      buf += d;
+      let i;
+      while ((i = buf.indexOf(LF)) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let m; try { m = JSON.parse(line); } catch { m = undefined; }
+        if (!m || typeof m !== "object") { if (++junk > MCP_MAX_JUNK) failAll("the local server printed more than " + MCP_MAX_JUNK + " lines that are not JSON-RPC"); continue; }
+        if (m.method !== undefined || m.id === undefined) continue;
+        if (answered.has(m.id)) { doubled.add(m.id); continue; }
+        answered.add(m.id);
+        if (waiting.has(m.id)) { waiting.get(m.id)({ status: 200, text: line }); waiting.delete(m.id); }
+      }
+    });
+  };
+  const stdioPost = (body) => new Promise((done) => {
+    if (!child && !broken) startChild();
+    if (broken) return done({ status: 0, error: broken });
+    if (child.exitCode !== null || !child.stdin.writable) return done({ status: 0, error: "the local server is not running" });
+    child.stdin.write(JSON.stringify(body) + LF);
+    if (body.id === undefined) return done({ status: 202, text: "" });
+    const left = budgetEnd - Date.now();
+    if (left <= 0) return done({ status: 0, error: "the " + MCP_STDIO_BUDGET_MS / 1000 + " s budget for this query ran out" });
+    const t = setTimeout(() => { waiting.delete(body.id); done({ status: 0, error: "no answer within the " + MCP_STDIO_BUDGET_MS / 1000 + " s budget" }); }, left);
+    waiting.set(body.id, (r) => { clearTimeout(t); done(r); });
+  });
+  // The server is the direct child, so killing it ends it; the result is checked, never assumed.
+  function stopChild() {
+    if (child && child.exitCode === null && child.signalCode === null) { try { child.kill("SIGKILL"); } catch { /* already gone */ } }
+    if (runDir) { try { rmSync(runDir, { recursive: true, force: true }); } catch { /* best effort */ } }
+  }
+  // Stop the server, wait for its streams to drain, THEN judge doubled replies (attack 13edb77 B5).
+  const finishStdio = async () => {
+    if (!child) return;
+    stopChild();
+    await Promise.race([closed, new Promise((r) => setTimeout(r, 5000))]);
+    if (doubled.size) couldNot("the local server answered one request twice");
+  };
+  process.on("exit", stopChild);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, () => { stopChild(); process.exit(130); });
+
   const init = await step({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "arc-design-refpack", version: "1" } } }, {});
   if (init.session != null && !/^[A-Za-z0-9._:-]{1,128}$/.test(init.session)) couldNot("initialize: the server sent a session id outside the header grammar");
   const session = init.session ? { "mcp-session-id": init.session } : {};
   await post({ jsonrpc: "2.0", method: "notifications/initialized" }, session);
   const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: adapter.args(q, want) } }, session);
+  // Two replies for one id on stdio are an answer this builder will not choose between (attack fc97161 B6).
+  if (stdio && !fake) await finishStdio();
   const reply = rpcReply(call.text, 2);
   if (!reply) couldNot("tools/call: no reply carried this request id");
   if (!reply.error && (reply.method !== undefined || reply.result === undefined || reply.result === null)) couldNot("tools/call: the reply carries no result");
   if (reply.result && reply.result.isError === true) couldNot("tools/call: the tool reported an error: " + searchText(reply.result).join(" ").slice(0, 200));
   if (reply.error) couldNot(`tools/call: ${field(reply.error.message ?? "error")}`);
   const say = (t) => console.log(field(scrub(t)));
-  const items = searchItems(reply.result);
+  const items = adapter.parse === "shadcn-prose" ? shadcnItems(reply.result) : searchItems(reply.result);
   const n = Math.min(items.length, want);
   const short = items.length < want ? `; SHORT -- asked for ${want}, got ${items.length}` : "";
   record("ANSWERED", `results ${n} of ${want}${short}`);
@@ -485,10 +629,11 @@ async function summary(argv) {
     if (cns.length) notes.push(`COULD-NOT-SCAN ${cns.length} (${field(cns[cns.length - 1][5])})`);
     let head;
     if (mine.length === 0) head = "NOT-ASKED -- active, and this run never queried it";
-    else if (mcp.length) head = `ANSWERED ${field(mcp[mcp.length - 1])}`;
+    // Every answer of the run, not only the last: a later empty query must not erase an earlier hit.
+    else if (mcp.length) head = `ANSWERED ${mcp.map(field).join(" | ")}`;
     else head = `ANSWERED ${rows}/${count("ALLOW") + count("DISALLOW") + cns.length} screen(s) added/asked`;
     const live = mine.some((f) => f[2] !== "fixture");
-    const said = (mcp.length && !/^results 0 /.test(mcp[mcp.length - 1])) || rows > 0;
+    const said = mcp.some((r) => !/^results 0 /.test(r)) || rows > 0;
     // A fixture-only source answered a test, not this run: it is never counted live (attack ce85db5 B8).
     const ok = said && live;
     if (said && !live) fixtureOnly++;

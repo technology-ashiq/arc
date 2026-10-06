@@ -201,7 +201,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/design/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/design/PROGRESS.md)
 
-## Decisions (22)
+## Decisions (23)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -229,6 +229,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1419`](../../../docs/adr/1419-the-composer-read-and-write-boundaries-bind-only-a-ui-composer-caller.md) | The composer read and write boundaries bind only a ui-composer caller | accepted | 2026-09-26 |
 | [`1420`](../../../docs/adr/1420-the-curator-bash-and-webfetch-are-bounded-by-the-composer-boundary-hook.md) | The curator's Bash and WebFetch are bounded by the composer boundary's hook | accepted | 2026-09-26 |
 | [`1421`](../../../docs/adr/1421-exp-a1-composer-seat-stays-balanced-workhorse-inside-the-new-regime.md) | EXP-A1: the composer seat stays balanced-workhorse inside the new regime | accepted | 2026-10-05 |
+| [`1422`](../../../docs/adr/1422-a-rival-draft-is-vendored-at-fetch-and-the-transform-is-declared.md) | A rival draft's remote assets are vendored at fetch time, and the transform declares what it destroys | accepted | 2026-10-06 |
 
 ## Source
 
