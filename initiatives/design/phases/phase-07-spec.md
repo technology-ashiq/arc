@@ -40,7 +40,46 @@ own renderer and unlabelled — and whichever way it lands, the result is a rece
 
 ## Verification plan
 
-Coarse — refined via `/arc-change` when the phase starts. Blindness is proved adversarially: a
+Refined 2026-10-07 via `/arc-change`. One rival (Stitch, cleared in Phase 06). Five slices, each
+red-first on CI; the adapter and the jury change are new code, the rest is a run:
+
+- **S1 -- the Stitch adapter, fake first.** `design-rival.mjs` implements PLAN's
+  `rival_draft(brief) -> {html, version}` on the driver/adapter split of ADR-0203: a pure
+  function maps the brief to a request and an answer to a result; one transport does I/O. The fake
+  transport replays the Phase 06 screen fixture. **Failure test (owed by the Phase 06 amendment):**
+  the observed bad-key shape (`UNKNOWN_ERROR` + JSON-RPC `isError`), a synthetic rate-limit and a
+  synthetic quota answer each become one printed `rival stitch: COULD-NOT-DRAFT (<reason>)` line,
+  never a crash and never a silent skip. A missing `STITCH_API_KEY` is the same line, reason
+  `no key`. The key is read through `keys.mjs`, never printed, never in argv.
+- **S2 -- the real transport.** `@google/stitch-sdk@0.3.5` pinned after `npm view`, installed once
+  into a private directory under `.claude/state/design/` (the shadcn pattern from Phase 05: no
+  `npx`, no repo `package.json` change, nothing committed). Contract check against the real
+  service: one generate on the LexOS brief returns HTML whose schema matches the Phase 06 receipt.
+- **S3 -- vendoring at fetch (ADR-1422).** The adapter downloads every remote asset the draft
+  names, from the three allow-listed hosts only, https only, byte-capped, sha256 recorded, and
+  rewrites only `src`/`href` targets; the markup diff is recorded. Any other host is left
+  unresolved and NAMED, and that draft leaves the jury. Proved on the fake by a draft naming a
+  fourth host; proved for real by the offline render hashing the same as the open one (the check
+  Phase 06 failed). Vendored copies live under `.claude/state/`, never in git.
+- **S4 -- the rival enters the jury blind.** `design-jury.mjs` gains `--rival <path>`: the item is
+  rendered by arc's own renderer from the vendored copy, joins the seeded shuffle under the same
+  opaque item naming as every variant, and its kind is written only to the sealed key, never to the
+  juror's input. Provenance (`arc` / `rival:stitch@<version>` / `reference`) is recorded on every
+  render for Phase 08's packager. After `unblind`, **rival-beats-all-arc** is computed and written
+  to the spine either way, on an existing kind (`decision.recorded`, payload `rival_beats_all_arc`
+  true/false); the spine's closed kind list is not extended. A provider failure mid-cycle prints the
+  status line and runs arc-only. A win routes to the director for a NEW thesis, never a copy.
+- **S5 -- the live run.** One LexOS explore: arc x3 + Stitch + 1 pack reference (+ the plain-prompt
+  control when the run is every 3rd), N=7 jury, the owner opens every render himself, then
+  `unblind` and the rival rate receipted.
+
+**Blindness gate:** after S4, a fresh agent is given only the juror's input directory and asked
+which item is the rival; if it names it from filenames, ordering, metadata or EXIF, the phase does
+not close. (Pixel style is the thing judged and is not a leak.) Two fresh attackers (logic on the
+ranking path and the rate recorder, boundary on file naming, ordering and the vendoring fetch) run
+on the S3+S4 PR.
+
+The coarse plan this replaces: Blindness is proved adversarially: a
 fresh agent is given the jury's input directory and asked to identify which item is the rival —
 if it can, from filenames, ordering, metadata or markup fingerprints, the blinding has failed and
 the phase does not close. Degradation is proved by running with the provider's key removed and
