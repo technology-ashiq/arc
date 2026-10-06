@@ -58,6 +58,14 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 
 - The round-2 job was reaped by the memory monitor after it wrote both results. Boundary 7 (B2/B3 fixed, B1 -> D24, B4 -> D25); logic 0.
 
+## attack 53e3c6c r1 (slice 11, ADR-1735)
+
+- Boundary: B1/B2/B3 all low -> debt D28.
+- Logic (deepseek-v4-flash fallback; the qwen free run failed): L6/L14 fixed in the ADR (explicit `required` is the
+  default, stated). L1/L2/L3/L4 REJECTED: every scaffold and verify asks GitHub for protection again, so a plan that
+  allows protection takes the normal path (`absent-ruling-no-limit` pins it). L5 REJECTED: other errors refuse by
+  name by design. L7-L13 and L15 say no defect themselves. No critical/high/medium stands, so no round 2.
+
 ## attack aadcd0c r1 (slice 10)
 
 - The first run (80f0f5e) was refused by arc-run's input scanner on credential-shaped header literals in four files; rewritten with Object.fromEntries, input pre-scanned clean.
