@@ -173,7 +173,7 @@ export function tierOfAgents(agents, texts) {
   const per = agents.map((n) => {
     const text = texts.get(n);
     if (typeof text !== "string") stop(2, `NO_AGENT: "${n}" has no file in .claude/agents/ on main`);
-    const fm = text.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---/);
+    const fm = text.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/);
     const m = fm && fm[1].match(/^model:\s*([A-Za-z0-9._-]+)\s*$/m);
     return [n, (m && MODEL_TIER[m[1].toLowerCase()]) || "balanced-workhorse"];
   });
@@ -203,7 +203,14 @@ function setBindsList(lines, from, key, items) {
  * @returns {{ text: string, was: { seat: string, agents: string[], tier: string | null } }}
  */
 export function assignCard(raw, { seat, agents, tier }) {
-  const text = String(raw).replace(/^[﻿]/, "").split("\r\n").join("\n");
+  // The card keeps its own bytes: a BOM and a CRLF card come back as they were, only the three values changed
+  // (attack a0bc939 B1 -- a Windows-edited card rewritten whole to LF is every line changed, not three).
+  const src = String(raw);
+  const bom = src.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const body = bom ? src.slice(1) : src;
+  const crlf = body.includes("\r\n");
+  if (crlf && /(^|[^\r])\n/.test(body)) stop(2, "MIXED_EOL: the role card mixes CRLF and LF line endings -- fix it by hand first");
+  const text = crlf ? body.split("\r\n").join("\n") : body;
   const before = parseYamlSubset(text);
   if (!before.ok || !before.value || typeof before.value !== "object") stop(2, "the role card on main does not parse");
   const c = before.value;
@@ -239,7 +246,7 @@ export function assignCard(raw, { seat, agents, tier }) {
   want.binds.agents = agents;
   want.binds.tier = tier;
   if (!after.ok || JSON.stringify(after.value) !== JSON.stringify(want)) stop(2, "rewriting the card changed something else -- refusing");
-  return { text: out, was };
+  return { text: bom + (crlf ? out.split("\n").join("\r\n") : out), was };
 }
 
 const decode = (buf, what) => {
@@ -260,7 +267,7 @@ async function readMainWorld() {
     for (const p of (await ls("org/roles")).filter((x) => /^org\/roles\/[^/]+\/[^/]+\.role\.yaml$/.test(x)).sort()) {
       const [, , dept, file] = p.split("/");
       const text = await show(p);
-      const parsed = parseYamlSubset(text.replace(/^[﻿]/, "").split("\r\n").join("\n"));
+      const parsed = parseYamlSubset(text.replace(/^[\uFEFF]/, "").split("\r\n").join("\n"));
       if (!parsed.ok || !parsed.value || typeof parsed.value !== "object") stop(2, `${p} on main does not parse, so the chart cannot be rendered -- fix it first`);
       cards.push({ path: p, dept, stem: file.slice(0, -".role.yaml".length), text, card: parsed.value });
     }
@@ -270,6 +277,9 @@ async function readMainWorld() {
 }
 
 let written = false;
+
+/** Whether a local branch ref exists -- git's own answer; a failure to look is an error, never "no". */
+const branchExists = (branch) => withGitReader(REPO, async (read) => (await read(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], { ok: [0, 1] })).status === 0);
 
 async function assignMain(argv) {
   const a = parseAssignArgs(argv);
@@ -293,7 +303,7 @@ async function assignMain(argv) {
   const orphans = set.was.agents.filter((n) => !a.agents.includes(n) && !elsewhere.has(n));
   if (orphans.length) stop(2, `ORPHAN_AGENT: ${orphans.join(", ")} would sit in no role -- org-coverage fails that (REQ-01); seat them elsewhere first`);
   // The chart is rendered from the cards and CI's --chart --check fails a stale one: it moves on the same branch.
-  const newCard = parseYamlSubset(set.text).value;
+  const newCard = parseYamlSubset(set.text.replace(/^\uFEFF/, "").split("\r\n").join("\n")).value;
   const model = chartModel({ cards: w.cards.map((x) => ({ card: x === hit ? newCard : x.card })) });
   const files = [{ path: hit.path, content: set.text }];
   const md = renderChart(model), json = JSON.stringify(model, null, 2) + "\n";
@@ -302,7 +312,9 @@ async function assignMain(argv) {
   const allow = files.map((f) => f.path);
   const branch = proposalBranch("org-seat", a.role);
   // ONE OPEN SEAT PROPOSAL: every one rewrites the shared chart, so two merged in turn conflict there (the board twin).
-  const openOf = async () => [...new Set((await Promise.all(["org/chart.json", hit.path].map((path) => openProposalsChanging({ repo: REPO, prefix: "feat/face-org-seat-", path })))).flat())].sort();
+  // Every org writer's proposal, not only this mode's: hire-to-own rewrites a card too (attack a0bc939 B3).
+  const ORG_PREFIXES = ["feat/face-org-seat-", "feat/face-org-own-"];
+  const openOf = async () => [...new Set((await Promise.all(ORG_PREFIXES.flatMap((prefix) => ["org/chart.json", hit.path].map((path) => openProposalsChanging({ repo: REPO, prefix, path }))))).flat())].sort();
   const open = await openOf();
   if (open.length) stop(2, `a seat proposal is already open (${open.join(", ")}), and it holds the chart this one would rewrite -- merge or delete it first`);
   const checked = await checkProposal({ repo: REPO, branch, paths: allow, allow, base: w.base });
@@ -352,8 +364,15 @@ async function assignMain(argv) {
     const again = await openOf();
     if (again.length) stop(2, `a seat proposal was opened while this one was planned (${again.join(", ")}) -- nothing was written`);
     await requested();
-    const wr = await writeProposal({ repo: REPO, branch, files, allow, base: w.base, message,
-      beforeRef: () => { const no = spineRefusal(arcEvent, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) stop(2, `the spine would refuse the request, so no branch was written: ${no}`); } });
+    let wr;
+    try {
+      wr = await writeProposal({ repo: REPO, branch, files, allow, base: w.base, message,
+        beforeRef: () => { const no = spineRefusal(arcEvent, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags }); if (no) stop(2, `the spine would refuse the request, so no branch was written: ${no}`); } });
+    } catch (e) {
+      // A throw after update-ref still left a branch (attack a0bc939 B2): ask the ref, then say so.
+      if (await branchExists(branch)) { written = true; stop(1, `the branch ${branch} IS written, and then this failed: ${e && e.message ? e.message : e}`); }
+      throw e;
+    }
     written = true;
     process.stdout.write(`org-own: wrote ${branch} at ${wr.commit.slice(0, 12)} off main ${wr.base.slice(0, 12)}\n`);
     const got = emitReceipt(arcEvent, "approval.requested", approval, { cwd: REPO, env: spineEnv, flags: emitFlags, timeoutMs: 60_000 });

@@ -48,6 +48,12 @@ ok(r.text === want, "only seat, binds.agents and binds.tier change -- every othe
 ok(r.was.seat === "vacant" && r.was.agents.length === 0 && r.was.tier === null, "the card's seat before the change is reported", JSON.stringify(r.was));
 const back = assignCard(r.text, { seat: "vacant", agents: [], tier: null });
 ok(back.text === VACANT, "vacating the seat again gives the original card back, byte for byte", back.text);
+// A Windows-edited card keeps its CRLF and its BOM: only the three values change (attack a0bc939 B1).
+const BOM = String.fromCharCode(0xfeff);
+const winCard = BOM + VACANT.split("\n").join("\r\n");
+const winOut = assignCard(winCard, { seat: "agent", agents: ["alpha", "gamma"], tier: "balanced-workhorse" }).text;
+ok(winOut === BOM + want.split("\n").join("\r\n"), "a CRLF card with a BOM comes back CRLF with its BOM, only seat and binds changed", JSON.stringify(winOut.slice(0, 40)));
+ok(/MIXED_EOL/.test(refusal(() => assignCard(VACANT.replace("\n", "\r\n"), { seat: "agent", agents: ["alpha"], tier: "balanced-workhorse" }))), "a card mixing CRLF and LF is refused, never half-converted");
 ok(/NOT_OWN/.test(refusal(() => assignCard(VACANT.replace("origin: 'own'", "origin: 'hired'"), { seat: "agent", agents: ["alpha"], tier: "balanced-workhorse" }))), "a hired card is refused NOT_OWN");
 ok(/SEAT_BY_HAND/.test(refusal(() => assignCard(VACANT.replace("seat: 'vacant'", "seat: 'script'"), { seat: "agent", agents: ["alpha"], tier: "balanced-workhorse" }))), "a script seat is a hand edit");
 ok(/SEAT_BINDS_DISAGREE/.test(refusal(() => assignCard(card("p", "e-engineering", "agent", ["alpha"], "balanced-workhorse").replace("  process: null", "  process: 'council-convene'"), { seat: "vacant", agents: [], tier: null }))), "vacating a seat that still binds a process is refused");
@@ -134,6 +140,18 @@ ok(appr.length === 1 && appr[0].payload.gate === "org-seat" && appr[0].payload.a
   && JSON.stringify(appr[0].payload.agents) === JSON.stringify(["alpha", "gamma"]) && appr[0].payload.role === "seat-probe", "one approval, gated org-seat, the tier derived", JSON.stringify(appr.map((e) => e.payload)));
 const second = tool("--role", "staffed-probe", "--seat", "agent", "--agents", "alpha,gamma", "--dry-run");
 ok(second.status === 2 && /already open/.test(second.stderr), "a second seat proposal is refused while one is open (both rewrite the chart)", `${second.status} ${second.stderr}`);
+// Another org writer's open proposal holds the chart too: hire-to-own's branch blocks a seat change (attack a0bc939 B3).
+g("branch", "-D", branch);
+const ownTree = g("rev-parse", `main^{tree}`).stdout.trim();
+const ownBlob = spawnSync("git", ["hash-object", "-w", "--stdin"], { cwd: repo, input: "{}\n", encoding: "utf8" }).stdout.trim();
+const idx = join(tmp, "own-index");
+const gi = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8", env: { ...process.env, GIT_INDEX_FILE: idx } });
+gi("read-tree", ownTree); gi("update-index", "--add", "--cacheinfo", `100644,${ownBlob},org/chart.json`);
+const ownCommit = g("commit-tree", gi("write-tree").stdout.trim(), "-p", mainBefore, "-m", "an open hire-to-own proposal").stdout.trim();
+g("update-ref", "refs/heads/feat/face-org-own-probe", ownCommit);
+const blocked = tool("--role", "staffed-probe", "--seat", "agent", "--agents", "alpha,gamma", "--dry-run");
+ok(blocked.status === 2 && /already open \(feat\/face-org-own-probe\)/.test(blocked.stderr), "an open hire-to-own proposal on the chart blocks a seat proposal", `${blocked.status} ${blocked.stderr}`);
+g("branch", "-D", "feat/face-org-own-probe");
 const again = tool("--role", "seat-probe", "--seat", "agent", "--agents", "alpha,gamma", "--dry-run");
 ok(again.status === 2 && events().length === 1, "the same change is not requested twice", `${again.status} ${again.stderr}`);
 ok(existsSync(join(spine, "events")), "the spine the tool wrote is the one this fixture reads (vacuous-pass guard)");
