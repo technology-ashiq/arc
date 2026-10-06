@@ -1,0 +1,20 @@
+{
+  "phase": "01",
+  "commit": "465c32684f3f0ce1dc5c029145ac57694e2b8612",
+  "short": "465c3268",
+  "generated": "2026-10-06T19:57:41Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "913e5a95f26a223e104fd121441cd77089fd9de1f5c156779ad9efb7bc06d21b"
+    },
+    {
+      "name": "live-clusters.json",
+      "sha256": "6d40daaa2deaaf20d9fdb7c021c8d041d04257df19f20273021cafc1d2bd63e2"
+    },
+    {
+      "name": "live-judge.json",
+      "sha256": "776127a4ad576a5c2685b83854a320e52888117eb1a3ff2064e3c755a58ae11a"
+    }
+  ]
+}

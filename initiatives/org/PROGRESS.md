@@ -35,4 +35,4 @@ depends-on: —
 ## Now
 
 **Current position:** Cycle 20 sealed again 2026-10-06 after Phase 04 (retro rows already in docs/retro-log.md 2026-10-05; Phase 04 was that retro's own row 4). Lane IDLE.
-**Next step:** none queued. Owner: stamp the kickoff and five phase approvals (`arc-inbox approve`). A new org cycle starts by `/arc-kickoff --lane org`.
+**Next step:** none queued. All six owner stamps are recorded on the spine (kickoff + phases 00-03 on 2026-10-05, phase 04 on 2026-10-07); nothing waits on the owner. A new org cycle starts by `/arc-kickoff --lane org`.
