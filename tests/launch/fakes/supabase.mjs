@@ -17,14 +17,23 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
   // Answers with the LAST statement's rows only, as the real endpoint does: a trailing `commit` answers [].
   function run(p, sql) {
     // A launch migration runs whole (its function bodies hold semicolons); the marker line says which one.
-    const mig = String(sql).match(/^-- arc-launch migration: (authz|tenancy)/);
+    const mig = String(sql).match(/^-- arc-launch migration: (authz|tenancy|plans)/);
     if (mig) {
-      if (mig[1] === "tenancy" && !p.tables.orgs) return { error: "relation \"public.orgs\" does not exist" };
-      for (const t of mig[1] === "authz" ? ["orgs", "memberships"] : ["invites"]) {
+      if (mig[1] !== "authz" && !p.tables.orgs) return { error: "relation \"public.orgs\" does not exist" };
+      for (const t of { authz: ["orgs", "memberships"], tenancy: ["invites"], plans: ["org_plans"] }[mig[1]]) {
         p.tables[t] = p.tables[t] || { rls: !rlsOff, rows: [] };
         // `comment on table` in the migration: launch's ownership marker on each table it made.
         if (String(sql).includes(`comment on table public.${t} is 'arc-launch ${mig[1]}'`)) p.tables[t].comment = `arc-launch ${mig[1]}`;
       }
+      return { rows: [] };
+    }
+    // The plans verify's upsert: one org id (a uuid) and one of two plans, nothing else is modelled.
+    const up = String(sql).match(/^insert into public.org_plans (org_id, plan) values ('([0-9a-f-]{36})', '(free|pro)') on conflict (org_id) do update set plan = excluded.plan, updated_at = now();$/);
+    if (up) {
+      if (!p.tables.org_plans) return { error: "relation \"public.org_plans\" does not exist" };
+      const rows = p.tables.org_plans.rows;
+      const row = rows.find((r) => r.org === up[1]);
+      if (row) row.plan = up[2]; else rows.push({ org: up[1], plan: up[2] });
       return { rows: [] };
     }
     const ours = String(sql).match(/tablename in \(([^)]*)\) and obj_description\(\('public\.' \|\| t\.tablename\)::regclass\) = '([^']+)';/);

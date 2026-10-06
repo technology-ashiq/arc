@@ -4,7 +4,8 @@
 // cookies a probe must carry back exactly as a browser does. Other hosts, and the site while it is not serving, go to `live`.
 //   siteUrlNeeded   /auth/confirm works only once the project's site_url is the venture's (the auth slot sets it)
 //   leakCrossTenant the orgs read ignores membership -- a broken RLS -- so authz must fail
-export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false } = {}) {
+//   ignorePlan      the reports route ignores the plan -- a gate that does not follow the data -- so plans must fail
+export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false } = {}) {
   const inner = live.fetch;
   const users = new Map(); // email -> { id, email }
   const links = new Map(); // hash -> email
@@ -84,6 +85,16 @@ export function makeVenture({ github, supabase, live, full, domain, siteUrlNeede
       if (!who) return json(401, { error: "not signed in" });
       const o = tables().orgs.rows.find((x) => x.id === om[1] && (leakCrossTenant || member(x.id, who.id)));
       return o ? json(200, { id: o.id, name: o.name }) : json(403, { error: "not a member of this org" });
+    }
+    if (route === "/api/reports" && method === "GET" && served("app/api/reports/route.js") && tables().org_plans) {
+      if (!who) return json(401, { error: "not signed in" });
+      const org = url.searchParams.get("org") || "";
+      if (!/^[0-9a-f-]{36}$/.test(org)) return json(400, { error: "not an org id" });
+      if (!member(org, who.id)) return json(403, { error: "not a member of this org" });
+      const row = tables().org_plans.rows.find((r) => r.org === org);
+      const plan = row ? row.plan : "free";
+      if (!ignorePlan && plan !== "pro") return json(403, { error: "plan does not include reports", plan });
+      return json(200, { plan, reports: [] });
     }
     if (route === "/api/invites" && method === "POST" && served("app/api/invites/route.js") && tables().invites) {
       if (!who) return json(401, { error: "not signed in" });

@@ -812,3 +812,33 @@ arm() {
   [ "$(j 'o.auth.ok')" = "true" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.env')" == "# mine, kept as is"*"SERVICE_SECRET_NAME_11="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: plans commits once, and verify proves pro opens /api/reports and a downgrade closes it (ADR-1737)" {
+  arm login plans
+  [ "$(j 'o.before.ok')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.plans.ok + " " + o.plansAgain.ok + " " + o.commits + " " + o.files.join(",") + " " + o.rls')" = "true true 1 true,true,true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.pro + " " + o.verify.evidence.downgraded')" = "true 200 403" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verifyAgain.ok + " " + o.finalPlans.join(",")')" = "true free" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "db-tables,plans-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "drop org_plans (down migration; before authz drops orgs)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a gated route that ignores the plan never verifies (ADR-1737)" {
+  arm login plans-ignored
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false the probe org downgraded to free read /api/reports with 200, not 403" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: plans never alters an org_plans table it did not create, and resumes its own" {
+  arm login plans-foreign-table
+  [ "$(j 'o.plans.code + " " + o.rows.join(",")')" = "TABLES_FOREIGN enterprise" ] || { echo "$DONE"; false; }
+  arm login plans-killed-after-migration
+  [ "$(j 'o.plans.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: plans verify names an owner's rewrite of the route and changes no plan; no upstream refuses" {
+  arm login plans-owner-edited
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false app/api/reports/route.js at "* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.planRows')" = "0" ] || { echo "$DONE"; false; }
+  arm login plans-no-upstream
+  [ "$(j 'o.plans.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
