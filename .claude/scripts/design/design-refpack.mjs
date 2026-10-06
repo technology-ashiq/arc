@@ -496,7 +496,7 @@ async function query(argv) {
   // must stay inside the install directory.
   const serverEntry = (env) => {
     if (o["--mcp-stdio-server"] != null) return resolve(o["--mcp-stdio-server"]);
-    const dir = join(ROOT, ".claude", "state", "design", "mcp", adapter.pkg.replace(/[^a-z0-9.@-]/gi, "_"));
+    const dir = join(ROOT, ".claude", "state", "design", "mcp", adapter.pkg.replace(/[^abcdefghijklmnopqrstuvwxyz0123456789.@-]/gi, "_"));
     const pj = join(dir, "node_modules", adapter.name, "package.json");
     if (!existsSync(pj)) {
       const cli = [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"), join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")].find((p) => existsSync(p));
