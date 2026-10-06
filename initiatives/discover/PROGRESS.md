@@ -28,5 +28,5 @@ ADR century 1900–1999; ADR-1900..1912 written at kickoff, 1913–1914 at the P
 
 ## Now
 
-**Current position:** Phase 00 birth PR #343 on CI. Phases 01–03 code built on `feat/discover-p01` (stacked on the birth branch) as ONE build PR — owner instruction 2026-10-06 "complete all phase", and every live step (mini-hunt, council, real hunt) needs merged main anyway, so one CI cycle buys the fakes-first proof of all three phases. End-to-end smoke on a scratch spine: hunt → score → judge → propose → decision → export accepted by launch `loadProfile`.
-**Next step:** attack the build PR (one pass over 01–03), fix, push once after #343 merges; then from the main clone: ruling receipt, live mini-hunt, council on the two finalists (spend needs the owner OK), propose, the owner stamp, export, and the phases close in order.
+**Current position:** Phase 00 birth merged (#343, `8d296874`). Receipts on the canonical spine: `kickoff.done` `01M47ZCQMHWB54E808DEZXGJH6`, ruling `approval.requested` `01M47ZCQW6XF5ZEWF4QGS1XFRH`. The audit memo is NOT LOCATABLE. Phases 01–03 code is in the build PR on `feat/discover-p01`, which also carries the Phase 00 close evidence (one CI run instead of two).
+**Next step:** build PR → CI → merge. Then from the main clone: the live mini-hunt (Phase 01), the council on the finalists (Phase 02, spend needs the owner OK), and propose → owner stamp → export → real hunt (Phase 03). The owner stamps the ruling (`arc-inbox approve 01M47ZCQW6XF5ZEWF4QGS1XFRH`) before `/arc-phase-done 00`.
