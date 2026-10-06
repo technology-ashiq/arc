@@ -24,7 +24,7 @@ protection)`. The first real `ci` apply on `arc-sandbox` (2026-10-07, receipt `0
 
 ## Decision
 
-Option 3. `venture.yaml` may carry `ci_protection: absent-plan`. Leaving it out means `required`, and any other value
+Option 3. `venture.yaml` may carry `ci_protection: absent-plan`. Leaving it out, or writing `required`, means required; any other value
 refuses `BAD_RULING` before any call. The ruling takes effect only when GitHub itself answers the protection call
 with its plan limit:
 
