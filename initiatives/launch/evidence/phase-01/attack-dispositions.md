@@ -29,6 +29,10 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 - Forged-trailer findings (guessable `slug@slot@provider`) -> debt D19: ownership markers are not secrets; an owner who forges one owns the outcome.
 - Fine-grained PAT write 403/404 surfaces as an uncoded GitHub error naming the status -- a refusal, not a pass; left as is.
 
+## attack cc949ef r1 / 8a0ae88 r2 (slice 8)
+
+- All high and medium fixed in two rounds. Logic surface: round 1 RUN FAILED, round 2 NOT RUN.
+
 ## attack 5e06edf r1 / d931e53 r2 (slice 7)
 
 - 5e06edf B1/B2/B3 fixed. d931e53 B1 fixed (release also requires vercel.json to hold hosting's exact bytes).
@@ -40,6 +44,7 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 ## attack 3f04230 r1 (slice 9)
 
 - B1/B2/B4/L3/L4/L5/L12/L14/L15 fixed. L1 REJECTED: the header is built from the trimmed, shape-checked token, so no CR/LF can reach it. L2 REJECTED: a 422 on the non-forced ref update throws before the report, so no unmerged commit is recorded. L6/L8/L9 -> D19 (guessable markers). B3 (three-OS CI longer than the slot timeout) -> D22. L10 -> D23.
+
 ## attack 14d5374 r1 (slice 6)
 
 - The first run (7f15855) never reached a model: arc-run's input scanner refused a credential-shaped fixture value; renamed in 14d5374, pre-scanned clean.
@@ -52,3 +57,11 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 ## attack 3a6350b r2 (slice 9)
 
 - The round-2 job was reaped by the memory monitor after it wrote both results. Boundary 7 (B2/B3 fixed, B1 -> D24, B4 -> D25); logic 0.
+
+## attack 53e3c6c r1 (slice 11, ADR-1735)
+
+- Boundary: B1/B2/B3 all low -> debt D28.
+- Logic (deepseek-v4-flash fallback; the qwen free run failed): L6/L14 fixed in the ADR (explicit `required` is the
+  default, stated). L1/L2/L3/L4 REJECTED: every scaffold and verify asks GitHub for protection again, so a plan that
+  allows protection takes the normal path (`absent-ruling-no-limit` pins it). L5 REJECTED: other errors refuse by
+  name by design. L7-L13 and L15 say no defect themselves. No critical/high/medium stands, so no round 2.

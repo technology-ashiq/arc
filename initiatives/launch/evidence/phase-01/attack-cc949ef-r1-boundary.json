@@ -1,0 +1,76 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/database/supabase.mjs:104",
+      "breaking_input": "A fresh project takes 8 to 12 minutes to reach ACTIVE_HEALTHY. healthy() polls up to 24 times at 30 s each, so scaffold holds the slot lock for up to 12 minutes plus the queries.",
+      "why": "withLock treats a holder older than ten minutes as a reused pid and breaks the lock. A second apply or verify then enters while the first is still creating the project, and both run scaffold against the same slug. This is the stated twin of the hosting-apply-runs-fifteen-minutes defect, and the adapter's 12-minute wait exceeds the same 10-minute stale threshold.",
+      "fix": "Cap the in-lock wait below the stale threshold, or return a pending answer and let a later attempt resume. Alternatively heartbeat the lock during the poll. Add a contract case that asserts worst-case scaffold wall time is under the stale threshold.",
+      "twin_of": "`withLock` treats a holder older than ten minutes as a reused pid and breaks its lock, while a hosting apply may run fifteen -> any other caller of `withLock` with a long critical section"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "products/launch/providers/database/supabase.mjs:117-122",
+      "breaking_input": "Scaffold runs UP, then the POLICIES query returns 1, or its request hits a 5xx or a timeout. The adapter throws before ctx.report({kind:\"db-probe-table\"}).",
+      "why": "The table is created and RLS is enabled by UP, but it is recorded only after the policy check. A failure in between leaves an unrecorded table that the exit plan never drops. This is the stated twin of reporting a resource only after a later call succeeds.",
+      "fix": "Report db-probe-table immediately after UP succeeds, before the policy check. Better, determine whether the table pre-existed (to_regclass before UP) and report it only when this slot created it.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": "products/launch/providers/database/supabase.mjs:117-123",
+      "breaking_input": "The owner's existing project has its own table public.launch_probe holding real data, or with RLS off. UP runs `create table if not exists`, `alter table ... enable row level security` and an insert on that table. The adapter then reports db-probe-table, and teardown emits drop-table for it.",
+      "why": "The check-then-create reports the CHECK, not the CREATE. launch alters the owner's table, turns on RLS, which can break the owner's app, and plans to drop it at exit. The exit step does not re-check ownership at run time.",
+      "fix": "Probe to_regclass('public.launch_probe') first. If the table pre-exists and launch has not recorded it, refuse with PROBE_TABLE_FOREIGN. Report db-probe-table only when this run created it, and make the drop step re-verify that the table is the probe shape (id, note, one row 'owner-only') before dropping.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:12",
+      "breaking_input": "AS_ANON = \"begin; set local role anon; select count(*)::int as n ...; commit;\" sent through the Management API database/query endpoint.",
+      "why": "A multi-statement body returns only the result of the final statement. Here that is `commit`, which has no rows, so count() throws \"answered without a count\" and verify always reports not-ok against the real API. The in-memory fake returns the select's row regardless of statement order, so the green tests do not show this. If the endpoint instead wraps the body in its own transaction, the nested begin/commit may warn or error.",
+      "fix": "Put the select last and omit the explicit commit (`begin; set local role anon; select ...;`, or `set local role anon; select ...;`). Make the fake return only the last statement's rows. Better, send the role switch and the select as one statement, for example a CTE.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/email-transactional/resend.mjs:112",
+      "breaking_input": "An owner with more than one page of Resend domains (the list endpoint is paginated, 20 by default). The venture's domain is beyond the first page.",
+      "why": "`GET /domains` is read once and searched for the name. A miss leads to POST /domains, which returns 422 \"already exists\" and wedges scaffold. verify reports \"resend has no domain\" even though it exists. This is the stated twin of searching a fixed page of a paged list.",
+      "fix": "Follow pagination (has_more, after cursor) until the name is found or the list is exhausted. Alternatively treat a 422 on create as a signal to re-list with paging.",
+      "twin_of": "The sha-matched proof was searched in a fixed page of recent deployments -> every \"find the one we made\" inside a paged list"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/email-transactional/resend.mjs:119-143",
+      "breaking_input": "Resend returns SPF, DKIM, MX and the DMARC record in order, and the zone already holds an owner DMARC at _dmarc.<domain> (the owner-dmarc scenario). Three records are written, then FOREIGN_RECORD is thrown on the last one. Or the owner's SPF-style TXT blocks the second record after the first has been written.",
+      "why": "The conflict check is interleaved with writes, so a refusal leaves a half-applied DNS state (the test itself pins \"FOREIGN_RECORD 3\"). Resend sees an incomplete record set, and a re-run after the owner fixes things carries stale tagged records. The same applies to a cloudflare 5xx midway.",
+      "fix": "Read and validate every record's conflict first (a plan pass), refuse before any write, and only then write. Report each record as soon as it is created.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/email-transactional/resend.mjs:113-116",
+      "breaking_input": "Worker is killed after POST /domains succeeds and before ctx.report. The re-run finds the domain by name, sees no resend-domain resource, and records it as `resend-domain-found`.",
+      "why": "Launch's own domain is then left out of the exit plan. This is the same window as D18, introduced here for a new provider (and for the Supabase project create, line 108).",
+      "fix": "Mark launch-made domains in a durable way. Resend domains have no description, so record the intent (a pending-create entry with the name) before the POST, and treat a name matching a pending intent as ours.",
+      "twin_of": "A worker killed between Vercel's project-create answer and the synchronous `report()` leaves launch's own project recorded as `-found` on the re-run"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/email-transactional/resend.mjs:56",
+      "breaking_input": "Resend lists a record with the apex name \"@\", or a relative name containing an upper-case label, or a trailing-dot name. `bare()` lowercases and strips the dot, but \"@\" becomes \"@.<domain>\".",
+      "why": "The name fails HOST and the whole scaffold is refused with BAD_RECORD. If instead \"@\" were accepted, the record would be written to the wrong name. A relative name that already ends with the domain's label sequence (for example, \"send.<domain>\" given as a relative name for a sub-subdomain) is not disambiguated, so the append rule (`endsWith`) can treat a relative label \"x.<domain-label>\" as already absolute.",
+      "fix": "Map \"@\" to the apex explicitly. Treat Resend names as relative to the domain unless they have a trailing dot, rather than guessing with endsWith."
+    }
+  ]
+}
