@@ -19,7 +19,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     const c = { sha: sha(), message, files };
     r.commits.push(c);
     r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha, branch: "main", pending: pendingPolls,
-      jobs: LEGS.map((os, i) => ({ name: `test (${os})`, conclusion: (runConclusions && runConclusions[i]) || "success" })) });
+      jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
     return c;
   }
 
@@ -88,6 +88,9 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       for (const e of p.entries) r.files[e.path] = { sha: e.sha, content: Buffer.from(r.blobs[e.sha], "utf8").toString("base64") };
       p.c.app = p.entries.some((e) => e.path === "package.json");
       r.commits.push(p.c);
+      // A push to main runs arc-ci, like any other commit (ADR-1733's orm verify reads it).
+      r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: p.c.sha, branch: "main", pending: pendingPolls,
+        jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
       return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
     }
     r.tags = r.tags || {};
@@ -193,7 +196,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     if (method === "GET" && rest === "actions/workflows/arc-ci.yml/runs") {
       const branch = url.searchParams.get("branch"), head = url.searchParams.get("head_sha");
       const hits = r.runs.filter((x) => (!branch || (x.branch || "main") === branch) && (!head || x.head_sha === head));
-      const shown = hits.slice(0, 1).map(({ jobs, pending, ...run }) => (pending > 0 ? { ...run, status: "in_progress" } : run));
+      const shown = hits.slice(0, Number(url.searchParams.get("per_page") || 30)).map(({ jobs, pending, ...run }) => (pending > 0 ? { ...run, status: "in_progress" } : run));
       for (const x of hits.slice(0, 1)) if (x.pending > 0) x.pending--;
       return json(200, { total_count: hits.length, workflow_runs: shown });
     }
