@@ -542,6 +542,8 @@ arm() {
 @test "launch-contract: an owner CNAME at a name email needs refuses before any record is written" {
   arm email owner-cname
   [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 0" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: release asks for deploy-prod-first before it writes anything" {
   arm release unapproved
   [ "$(j 'o.release.code')" = "APPROVAL_PENDING" ] || { echo "$DONE"; false; }
