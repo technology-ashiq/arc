@@ -52,7 +52,7 @@ from the main clone. Four slices:
 - **S4 -- the ordering check.** `git log` proves the spike receipt's commit precedes any adapter
   file; no adapter is committed in this phase at all.
 
-**Blocked on the owner:** `STITCH_API_KEY` (free, stitch.withgoogle.com). S1 is done without it.
+**Outcome 2026-10-06:** S2 ran live (`STITCH_API_KEY` from the face key store); S3 FAILED self-containment (Tailwind runtime + Google Fonts from CDNs) -- the PLAN assumption fired. Owner chose to vendor the assets at fetch time ([ADR-1422](../../../docs/adr/1422-a-rival-draft-is-vendored-at-fetch-and-the-transform-is-declared.md)); the vendoring adapter is Phase 07 work. Rate-limit and quota shapes were not reached on the free tier in one run and are not claimed. Receipt: [`evidence/phase-06/spike-receipt.md`](../evidence/phase-06/spike-receipt.md).
 
 The coarse plan this replaces: the ordering assertion is the phase's
 real gate: the spike receipt's timestamp must precede the first adapter commit, and that is
