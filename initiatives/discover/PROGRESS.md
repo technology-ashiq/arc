@@ -28,5 +28,5 @@ ADR century 1900–1999; ADR-1900..1912 written at kickoff, 1913–1914 at the P
 
 ## Now
 
-**Current position:** Phase 00 in build on `feat/discover-birth` — birth rows written (manifest, CATALOG, expected-set, planned-rooms, PORTFOLIO, `/arc-hunt` stub), `tests/discover-birth.bats` red-first.
-**Next step:** merge origin/main → face-sections + wiki + sync golden in one commit → `/arc-attack` → one push → CI per job → merge → ruling receipt from the main clone.
+**Current position:** Phase 00 birth merged (#343, `8d296874`). Receipts on the canonical spine: `kickoff.done` `01M47ZCQMHWB54E808DEZXGJH6`, ruling `approval.requested` `01M47ZCQW6XF5ZEWF4QGS1XFRH`. The audit memo is NOT LOCATABLE. Phases 01–03 code is in the build PR on `feat/discover-p01`, which also carries the Phase 00 close evidence (one CI run instead of two).
+**Next step:** build PR → CI → merge. Then from the main clone: the live mini-hunt (Phase 01), the council on the finalists (Phase 02, spend needs the owner OK), and propose → owner stamp → export → real hunt (Phase 03). The owner stamps the ruling (`arc-inbox approve 01M47ZCQW6XF5ZEWF4QGS1XFRH`) before `/arc-phase-done 00`.

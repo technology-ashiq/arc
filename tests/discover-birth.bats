@@ -94,16 +94,15 @@ room_state() {
   [ "$output" = "1" ] || { echo "discover missing from the CATALOG array"; false; }
 }
 
-@test "discover-birth: every verb of the stub refuses with its exact message, from any cwd" {
-  local cli="$ARC_ROOT/.claude/scripts/discover/arc-discover.mjs" args
-  for args in "hunt x" "" "frobnicate --out y"; do
-    cd "$BATS_TEST_TMPDIR"
-    # shellcheck disable=SC2086
-    run --separate-stderr node "$cli" $args
-    [ "$status" -eq 2 ] || { echo "[$args] status $status: $stderr"; false; }
-    [ "$stderr" = "arc-discover: not built yet — Phase 01" ] || { echo "[$args] stderr: $stderr"; false; }
-    [ -z "$output" ] || { echo "[$args] stdout not empty: $output"; false; }
-  done
+@test "discover-birth: the CLI refuses an unknown or missing verb with its exact message, from any cwd" {
+  local cli="$ARC_ROOT/.claude/scripts/discover/arc-discover.mjs"
+  cd "$BATS_TEST_TMPDIR"
+  run --separate-stderr node "$cli" frobnicate --out y
+  [ "$status" -eq 2 ] || { echo "status $status: $stderr"; false; }
+  [ "$stderr" = 'arc-discover: unknown verb "frobnicate"' ] || { echo "stderr: $stderr"; false; }
+  [ -z "$output" ] || { echo "stdout not empty: $output"; false; }
+  run --separate-stderr node "$cli"
+  [ "$status" -eq 2 ] && [ "$stderr" = "arc-discover: a verb is required: hunt | score | judge | verdicts | propose | export" ] || { echo "[no verb] $status $stderr"; false; }
 }
 
 @test "discover-birth: band 1900 is discover's" {

@@ -25,3 +25,12 @@ not only where it was fixed (twin-fix rule). One line per pattern: `pattern — 
 - **the spec that instructs the defect** (phase-00-spec told the builder to run `hunt "$ARGUMENTS"` after the doc was fixed) — phase-00-spec.md (5e1d529 L10) — *a fix lands in the instruction that would regenerate the bug, not only in the artifact*
 - **an allowlist prefix that permits any trailing argv** (`Bash(node …arc-discover.mjs:*)`) — arc-hunt.md (5e1d529 B1) — *allow the exact command line, nothing after it*
 - **a one-direction absence check** (row absent passes; a planted row was never proven to fail) — discover-birth.bats ADR-1913 test (5e1d529 L7) — *every absence check carries a mutant that plants the thing*
+- **a path confined once, then written through a later-created link** — arc-discover.mjs ensureDir (dfe58d2 B1) — *re-confine the REAL path after mkdir, before the first write*
+- **check-then-write on a file that must never be overwritten** (existsSync then rename/write) — arc-discover.mjs export (dfe58d2 B2) — *exclusive create (`wx`) is the check; undo the first file if the second fails*
+- **a rename across volumes** (stage in os.tmpdir, target in the repo) — arc-discover.mjs export (dfe58d2 B3) — *write in place, never rename across a mount*
+- **an `@file` argument handed to anything an MSYS wrapper might front** — arc-discover.mjs judge --run (dfe58d2 B4) — *inline the value or use a file flag*
+- **a JSON payload on argv** — lib/spine.mjs emit (dfe58d2 B6) — *always --payload-file*
+- **a fix applied to one input path and not its twin** (`--niche-file` size/type check, missing on `--offline-fixture`) — arc-discover.mjs (9d389cc B7) — *every user-named file gets the same stat gate*
+- **a rollback that can throw over the error it is rolling back** — arc-discover.mjs export (9d389cc B1) — *guard the undo; append its failure to the original*
+- **an API newer than the oldest CI node** (`String.prototype.toWellFormed`, Node 20+, on the Node 18 leg) — lib/normalize.mjs (#350 CI) — *check every new built-in against Node 18; walk code units by number*
+- **a negated letter range** (`[^a-z0-9]`, locale-collation dependent) — lib/judge.mjs (#350 CI, portability.bats) — *spell the set out; never a negated range*
