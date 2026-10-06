@@ -1415,10 +1415,15 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     await step(async () => {
       // The room only: the hash keeps its token and every other part, so the door still answers this tab.
       await val(P, "(function () { var h = location.hash.replace(/^#/, '').split('&').filter(function (p) { return p && p.charAt(0) !== '/' && p.indexOf('view=') !== 0; }); h.unshift('/org'); location.hash = '#' + h.join('&'); return true; })()");
+      // The room first, on the room-settle cap: /api/org reads every card and the spine, and a slow leg (macOS light,
+      // CI 37542775954) answered after the 15 s step cap -- then the rows, each named when they are missing.
+      const roomId = () => val(P, "(function () { var s = document.querySelector('section[data-room]'); return s ? s.getAttribute('data-room') : ''; })()");
+      const inRoom = await until(async () => (await roomId()) === "org", SETTLE_CAP_MS);
       const tones = async () => [await count(P, '[data-role-who="sits"]'), await count(P, '[data-role-who="none"]')];
-      const seen = await until(async () => { const [s, n] = await tones(); return s > 0 && n > 0; }, capMs);
+      const seen = inRoom && (await until(async () => { const [s, n] = await tones(); return s > 0 && n > 0; }, SETTLE_CAP_MS));
       const [s, n] = await tones();
-      record("org-who", seen, `sits=${s} none=${n} at ${JSON.stringify(redactSecrets(String(await hash(P)), [token]))}`);
+      const page = seen ? "" : ` room=${JSON.stringify(await roomId())} text=${JSON.stringify(redactSecrets(String(await val(P, "(function () { var s = document.querySelector('section[data-room]'); return s ? s.innerText.slice(0, 240) : ''; })()")), [token]))}`;
+      record("org-who", Boolean(seen), `sits=${s} none=${n} at ${JSON.stringify(redactSecrets(String(await hash(P)), [token]))}${page}`);
     }, ["org-who"]);
     record("healthy-no-exception", healthy.exceptions.length === 0, healthy.exceptions.slice(0, 3).join(" | "));
     await close(P);
