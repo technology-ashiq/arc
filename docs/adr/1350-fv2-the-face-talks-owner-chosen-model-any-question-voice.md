@@ -82,3 +82,23 @@ choice.
 
 Filed inside Phase 11 (still open), REQ-15's acceptance gains "edited in place". About 0.5d inside Phase 11's 1.5d; the
 total stays 38.5d.
+
+## Amendment 4 (2026-10-06, owner) — a model's cost, who uses it, and a guard on removing it
+
+**Why.** model-policy v2 lets the router name an owner model as a provider profile (ADR-1800..1802) and filed three
+Settings items to this lane (ADR-1803), handed over as one `/arc-change` the owner pasted on 2026-10-06.
+
+1. **Cost on a record.** A model record may carry `cost: { input, output, currency }` -- the price per million tokens,
+   numbers from 0 to 10000, currency `USD` or `INR`. It is optional, set and cleared on the add and edit forms, and every
+   view of it says `cost_source: "declared"`: a price the owner typed, never a measured one (ADR-0069 block b: absent
+   data is never estimated).
+2. **Used by.** Each row lists the router tiers that pin it (`generic-api: profile:<name>`) and the classes whose
+   `generic-api` attempt reaches it (their own `profile:`, or their tier's), inverted from `GET /api/model-policy`'s
+   `profile` objects. A record the router grammar cannot name (`unroutable`) says so.
+3. **Remove guard.** `POST /api/models/set` refuses to remove a record `engine/router.yaml` names, and refuses to rename
+   one, naming every tier and class row that refers to it (`BAD_MODEL`). The router grammar is
+   `engine/router-row.mjs`'s (`PROFILE_DRIVER`, `PROFILE_PREFIX`, `profileRef`), imported, never copied. A router file
+   that cannot be read refuses the remove rather than allowing it.
+
+Filed inside Phase 11 (still open); REQ-15's acceptance gains the three items. Appetite +0.5d (Phase 11 1.5d to 2d,
+total 40.5d to 41d).
