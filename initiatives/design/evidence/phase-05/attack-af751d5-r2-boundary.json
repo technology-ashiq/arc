@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:551 (main, mcp access gate)",
+      "breaking_input": "A registry row with `access: mcp`, `allowed_use` containing reference-pack, and `hosts: []`, `hosts: \"\"` or `hosts: null`, run with `--url`, `--robots-file` and `--fixture`. A row for an mcp source with no search adapter, such as shadcn, takes the same path.",
+      "why": "Prior finding B4 is not fixed. The new gate refuses only `src.hosts === undefined`. An empty or wrongly-typed `hosts` gets past it, and the image-URL binding then depends on downstream code that this diff neither shows nor tests. The fetch path is also now open to every mcp row, whether or not it has a MCP_SEARCH adapter. This is the same shape as 'an absent field read as some other value and allowed'.",
+      "fix": "For mcp rows require `asList(src.hosts).length > 0`, every entry passing the host grammar, and a MCP_SEARCH adapter. Add a test where `hosts: []` is refused with its reason asserted.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:300 (searchItems cap)",
+      "breaking_input": "`--want 4` against a server that ignores `limit` and returns 50 valid-looking results, each with a name.",
+      "why": "Prior finding B3 is only partly fixed. The cap is MCP_MAX_RESULTS (50), not `want`. The count can still exceed what was asked for, giving 'answered 50 of 4', and the server still sets how many items enter the run. Items are sliced before they are filtered, so 50 empty objects ahead of real hits push the real ones out of the window.",
+      "fix": "Slice to min(want, MCP_MAX_RESULTS) after filtering. If the server returns more than `want`, label that as an anomaly.",
+      "twin_of": "A keyed request whose deadline, size and reply count were the server's to choose -> a deadline and a byte cap on every remote body, exactly one reply per id, a grammar on every echoed header"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:~248 (args: limit: want)",
+      "breaking_input": "`--want 1000000000`, or a non-integer or zero value if `--want` is not validated upstream.",
+      "why": "The `want` value goes into the keyed request unclamped. This is a free-text-style channel on the keyed request, and the cap is applied only to the reply.",
+      "fix": "Clamp `limit` to an integer in 1..MCP_MAX_RESULTS, or refuse a `want` outside that range.",
+      "twin_of": "\"Read-only\" tools left ungoverned beside free-text channels -> scope every tool an agent holds, and cap every free-text value it can send out."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:292 and tests/design-refpack-mcp.bats",
+      "breaking_input": "A reply `{\"result\":{\"isError\":true,\"structuredContent\":{\"results\":[{\"name\":\"x\"}]}}}`.",
+      "why": "The structuredContent branch returns before any other code in searchItems runs. If the isError check lives anywhere other than before the searchItems call, a tool-level error that carries a results array is counted as an answer. The new tests do not pin this combination, so a regression would pass unseen. The fix for prior finding B2 covered empty objects only, not the isError half.",
+      "fix": "Add a bats case with isError true plus a non-empty structuredContent.results and assert COULD-NOT-SCAN. If the check is not already ahead of searchItems, add it there.",
+      "twin_of": "A tool-level error read as zero results -> a reply needs a result and no method; isError is COULD-NOT-SCAN"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:300 (name filter)",
+      "breaking_input": "A result whose `name` is only control characters or U+2028 (not stripped by `.trim()`), or `id: \"\\u0000\"`.",
+      "why": "The hit test uses `.trim()` on the raw text, but the printer scrubs control characters afterwards. A name that is empty after scrubbing is still counted as a hit. This is 'emptiness checked before sanitising'.",
+      "fix": "Run the scrub on the name or id first, then test it for emptiness.",
+      "twin_of": "Emptiness checked before sanitising -> validate the value that will be written, after every transform."
+    }
+  ]
+}

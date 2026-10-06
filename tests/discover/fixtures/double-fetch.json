@@ -1,0 +1,14 @@
+{
+ "responses": [
+  {
+   "query": "invoice reminders",
+   "status": 200,
+   "body": "{\"hits\":[{\"objectID\":\"201\",\"title\":\"Freelancer invoice reminders tool\",\"points\":5,\"num_comments\":3,\"created_at_i\":1700000201},{\"objectID\":\"202\",\"title\":\"Invoice reminder automation for freelancers\",\"points\":5,\"num_comments\":3,\"created_at_i\":1700000202}]}"
+  },
+  {
+   "query": "freelancer invoices",
+   "status": 200,
+   "body": "{\"hits\":[{\"objectID\":\"201\",\"title\":\"Freelancer invoice reminders tool\",\"points\":5,\"num_comments\":3,\"created_at_i\":1700000201},{\"objectID\":\"202\",\"title\":\"Invoice reminder automation for freelancers\",\"points\":5,\"num_comments\":3,\"created_at_i\":1700000202}]}"
+  }
+ ]
+}

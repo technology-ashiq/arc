@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/discover/arc-discover.mjs:confine/realBase",
+      "breaking_input": "--out /tmp/link/../x or a path where a symlink inside the repo/tmp points outside; or --out under a not-yet-existing tail containing '..' segments. Also on Windows, a path on a different drive with a case/8.3 short-name variant (e.g. C:\\PROGRA~1) resolves differently from realpathSync(root).",
+      "why": "realBase resolves only the nearest existing ancestor, then appends unresolved tail. resolve() normalizes '..' first so tail is safe, but a tail component that is created later as a symlink/junction (TOCTOU) or Windows short-name vs long-name mismatch makes relative() comparisons wrong. The later mkdirSync/writeFileSync use the original unresolved `out` rather than the confined `abs`, so the validated path is not the used path (validate one, use another). Here confine returns abs but callers use that returned value, which is fine for --out; however the check on `rel.startsWith('..')` rejects legit names like '..foo' (false refusal) and a directory literally named '..x' inside the repo is refused.",
+      "fix": "Use path.relative then test rel === '..' || rel.startsWith('..' + sep); realpath the full path after mkdir and re-verify containment before writing.",
+      "twin_of": "(d) one confinement function"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdExport",
+      "breaking_input": "Two concurrent `export` runs for the same slug, or a --ventures-dir pointing at a dir where yamlPath does not exist but is created between the existsSync check and renameSync.",
+      "why": "existsSync check then writeFileSync(huntPath) then renameSync(yaml) is a TOCTOU; renameSync overwrites an existing destination on POSIX (and on Windows Node uses replace semantics), silently clobbering an approved venture the code claims is 'never overwritten'. huntPath is written with writeFileSync (no 'wx' flag), so it also overwrites.",
+      "fix": "Create hunt file with flag 'wx' and link/rename yaml with an exclusive create (copyFileSync with COPYFILE_EXCL); clean up hunt file on failure.",
+      "twin_of": "a validator in one read path and a different, weaker read in the other"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdExport (stage)",
+      "breaking_input": "Export where launch loadProfile throws after huntPath is written: write order is huntPath written, then renameSync. If renameSync fails (cross-device: stage is in os.tmpdir(), ventures dir on another volume, e.g. repo on E: and temp on C:)",
+      "why": "renameSync across drives throws EXDEV on Windows/Linux. The repo lives on E: (per memory) while tmpdir is on C:, so every real export fails after hunt.md has already been written, leaving an orphan .hunt.md that makes the next attempt refuse with 'already exists'. Tests pass only because both are on the same volume in CI.",
+      "fix": "Write yaml with copyFileSync/writeFileSync into the destination (exclusive), not rename across volumes; write hunt.md after yaml succeeds or remove it on failure.",
+      "twin_of": "a fake whose right answer equals the failure's answer"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdJudge --run",
+      "breaking_input": "--input `@${input}` with a path containing spaces or other characters, e.g. --in 'C:\\Users\\Some User\\out'; arc-run receives '@C:\\...' argument",
+      "why": "Passes a @file arg to arc-run, which per project memory is subject to MSYS bash expanding @file args as response files and word-splitting paths on Windows. A --in dir with a space breaks the input path.",
+      "fix": "Pass the path via env var or a path without spaces/@ prefix as the memory note msys-bash-expands-at-file-args prescribes.",
+      "twin_of": "user text interpolated into a command doc's shell line"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdJudge --run",
+      "breaking_input": "arc-run child that hangs for >1h per finalist, or the child writes receipt_id JSON to stdout among other output; spawnSync timeout 3,600,000 ms per finalist x 2 finalists, no killSignal set",
+      "why": "A 2-hour worst-case blocking spawnSync with default SIGTERM; on Windows the child tree (arc-run spawning bash/models) is not killed by SIGTERM, leaving orphans. Also the regex takes the first receipt_id in stdout, which may belong to a nested/other event rather than the council session.",
+      "fix": "Set killSignal SIGKILL, bound total deadline, use taskkill tree on win32, parse the last receipt_id.",
+      "twin_of": "(b) no process.exit after fetch / background jobs need deadline"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/lib/spine.mjs:emit",
+      "breaking_input": "payload whose JSON exceeds the Windows command-line limit (~32k chars), e.g. approval.requested with long cluster_tokens, or idea.captured with a 512-byte title times many; passed via --payload argv",
+      "why": "JSON payload passed as argv: on Windows over-long args fail with ENAMETOOLONG/E2BIG, surfacing as UNRECEIPTED; and quotes/special chars in titles rely on Node's CreateProcess escaping through possible bash shims. Tests use --payload-file for exactly this reason, but production uses argv.",
+      "fix": "Write payload to a temp file and use --payload-file.",
+      "twin_of": "user text interpolated into a command doc's shell line -> free text goes through a file"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdHunt --emit",
+      "breaking_input": "Hunt with --emit interrupted (or emit failing) midway through N idea.captured emits: some emitted, no run.completed; rerun",
+      "why": "capturedIds is read once, then emits happen one spawn each with no failure isolation; a thrown UNRECEIPTED after partial emits leaves records written to disk and some events captured but exit 1 with no run.completed. Also all-or-nothing is not claimed, yet clusters.json/records.ndjson are written before emits, so output dir and spine disagree.",
+      "fix": "Emit run.completed with outcome partial in a finally, or emit before writing artifacts.",
+      "twin_of": "(g) a scan that cannot read its input reports COULD NOT SCAN"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdHunt/cmdScore writes",
+      "breaking_input": "Writing records.ndjson/clusters.json/scores.json/judge.json directly with writeFileSync into a dir another process reads (propose/export) while hunt re-runs; killed mid-write",
+      "why": "Non-atomic writes: a crash leaves truncated JSON that readJson later parses with a raw SyntaxError (exit 1, no refusal message). Also JSON.parse errors on a corrupt clusters.json are not wrapped as COULD NOT SCAN.",
+      "fix": "Write to temp + rename in the same dir; wrap parse errors in a Refusal naming the file.",
+      "twin_of": "(g)"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:isMain/top-level await",
+      "breaking_input": "Import of arc-discover.mjs by a test while process.argv[1] is the same realpath (e.g. node -e importing it by symlink)",
+      "why": "`if (isMain()) process.exitCode = await main(...)` with a rejected main (an exception thrown outside the try, e.g. in parseArgs on a non-string) yields an unhandled rejection with a stack trace and exit code 1 rather than the documented codes; main's catch covers only the verb call.",
+      "fix": "Wrap the whole of main body in try/catch.",
+      "twin_of": "a main guard whose realpath throws at module top level"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/discover/arc-discover.mjs:cmdHunt (--niche-file)",
+      "breaking_input": "--niche-file pointing at a FIFO, a device (e.g. a path under tmp to a named pipe) or a multi-GB file",
+      "why": "existsSync + readFileSync with no size or type check; a FIFO blocks forever, a huge file is read entirely into memory before the 60-char grammar rejects it.",
+      "fix": "statSync, require isFile and size <= 1KB before reading.",
+      "twin_of": "(g)"
+    }
+  ]
+}
