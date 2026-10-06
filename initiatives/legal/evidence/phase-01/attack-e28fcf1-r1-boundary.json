@@ -1,0 +1,104 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:writeAll (used by printSemanticDiff)",
+      "breaking_input": "`arc-legal propose --venture V --out D | slow-consumer` (a CI log collector or `tee` to a stalled disk) on a re-publish with a long diff. Earlier `console.log` calls have already initialised process.stdout, which puts a POSIX pipe into non-blocking mode. A bare `fs.writeSync(1, ...)` into a full pipe then throws EAGAIN.",
+      "why": "The round-1 B3 fix handled only partial writes. A bare `catch { return false }` turns a transient EAGAIN into 'could not be printed whole', so propose and publish refuse at exit 2 on a healthy run. Writing through the same fd with a different mechanism than the preceding `console.log` lines also leaves the line order against the earlier plan lines unproven.",
+      "fix": "Retry EAGAIN a bounded number of times, with a short sleep via Atomics.wait. Refuse only on EPIPE or other errors. Route the preceding plan lines through the same writer.",
+      "twin_of": "one-line-stands-in-for-another"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:shown",
+      "breaking_input": "A tampered ledger `facts_fields` key, page id or clause id such as \"x\\u009b2J\" (an 8-bit CSI), or \"\\u202eenilno\" (a bidi override), or one containing U+2028/U+0085. It is absent from the fresh run, so it prints as `facts.<key>: removed`.",
+      "why": "The allow-regex rejects it, but the fallback JSON.stringify escapes only code points below 0x20. C1 controls, bidi overrides and line separators are emitted raw into the terminal the reviewer reads before stamping. A bidi override visually reorders or hides the real diff lines. The round-1 B2 fix is therefore incomplete.",
+      "fix": "After JSON.stringify, escape every code point outside printable ASCII as \\uXXXX. Or refuse the diff when a name contains anything beyond the allowed ASCII set.",
+      "twin_of": "guard-inspects-the-object-not-the-output"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~858 (previousMoved)",
+      "breaking_input": "_approval.json in --dir carries previous_published_sha256 set to \"\\u001b[2J\" plus filler, or any 12 characters with control codes.",
+      "why": "`String(approved.previous_published_sha256).slice(0,12)` is printed into the PREVIOUS_MOVED refusal without `shown`. The value comes from a file in a caller-chosen directory, and the problems list prints it before the chain check discards the file. This is the same terminal-injection class that `shown` was added for, left open one function away.",
+      "fix": "Print it through `shown`, or accept only /^[0-9a-f]{64}$/ and print the literal \"malformed\" otherwise.",
+      "twin_of": "guard-inspects-the-object-not-the-output"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~851-853 (publishMain)",
+      "breaking_input": "Another publish for the same venture lands between `readJson(ledgerFile)` and `readFileSync(ledgerFile)`. This needs the ledger read to be outside the exclusive lock.",
+      "why": "The diff is computed from one read, and previousSha, which is compared to the approved sha, from a second. The approval can match the newer bytes while the printed diff and the NON_MONOTONIC check use the older record. This is validate-one-read, use-another, and a twin of guard-keyed-to-a-caller-chosen-location.",
+      "fix": "Read the ledger once, then JSON.parse and hash that same text. Confirm the whole block runs under withExclusiveLock.",
+      "twin_of": "trusts-one-recorded-value"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/lib/checklist.mjs:reachabilityCheck",
+      "breaking_input": "An operator never opens the URL. They paste any 40 or more characters from their own committed terms.mdx as served_excerpt. They copy matched_output_sha256 from _run.json, then set outcome PASS.",
+      "why": "The excerpt is verified only against the committed page, never against anything served. A placeholder or soft-404 passes whenever the operator copies from the repo. The helper `served-evidence` builds its 'served' evidence from the committed .mdx, which shows the check cannot distinguish fabricated evidence from real. The 200-only hole is only moved, not closed.",
+      "fix": "Have the checklist verb fetch the URL itself with a bounded timeout and a redirect cap. Match the fetched body, or record the fetched body's sha256 and final URL in the evidence. Or label the PASS 'self-attested' in the rendered row.",
+      "twin_of": "vacuous-by-construction"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/legal/lib/checklist.mjs:flat / reachabilityCheck",
+      "breaking_input": "A correct live page rendered from the .mdx. The operator copies served text spanning a markdown link `[Refunds](/refunds)`, an `&amp;`, a curly quote, a list marker, or a table row. The committed side keeps `[Refunds](/refunds)` and ASCII quotes.",
+      "why": "`flat` strips only `*_#`>` and whitespace. Real served HTML differs from the .mdx in link syntax, entities, smart quotes and list or table punctuation, so a correct page turns into a false FAIL. The tests only copy from the .mdx itself, so none of this is exercised.",
+      "fix": "Normalise both sides: strip link targets, decode entities, fold quotes and dashes, and drop table pipes and list markers. Add a test using an HTML-shaped excerpt.",
+      "twin_of": "false-positive-on-correct-input"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/legal/lib/checklist.mjs:~156",
+      "breaking_input": "A provider-pages row with no `page` field. The evidence is {\"outcome\":\"PASS\",\"note\":\"200 OK\"}.",
+      "why": "The evidence requirement is gated on `outcome === \"PASS\" && row.page`. A row without `page` still passes on a status alone, which is the exact hole this change closes. A check that disappears when its input is absent is check-optional-by-omission.",
+      "fix": "Require served evidence for every reachability row. If a row legitimately has no page, make that an explicit schema flag and refuse the PASS otherwise.",
+      "twin_of": "check-optional-by-omission"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:publishedRecord and the publish ledgerFile join",
+      "breaking_input": "`--venture ../x` or `--venture NUL` with a --venture-dir. A case variant such as `Fixture-Gateway-GST` on Windows or macOS also resolves another spelling's ledger, and its diff prints.",
+      "why": "`join(PRODUCT,\"published\",venture+\".json\")` followed by existsSync and readFileSync has no confinement, reserved-device or exact-case check. This depends on whether proposeMain validates the venture name before this point. Round-1 B7 for this read was not addressed in the diff. A reserved name such as `con` can block reading a device on Windows.",
+      "fix": "Validate the venture against the name grammar and the Windows reserved-name list. Confirm the resolved path stays under published/ and matches a readdirSync entry exactly.",
+      "twin_of": "path-from-the-record-not-confined"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "initiatives/legal/evidence/fixed-defect-list.md (rows 33-36) and fixed-defects.md",
+      "breaking_input": "The new rows are numbered 36, 35, 34 and 33. Phase 02 rows 36, 35, 34 and 33 already exist in the same table, so each number is used twice.",
+      "why": "The carried-defect list is the attacker's memory, and `build-attack-input.mjs` reads it. If it keys or dedupes by row number, four carried patterns collide with unrelated ones and silently drop. The generated fixed-defects.md repeats the duplicate ids. Nothing asserts that row ids are unique.",
+      "fix": "Renumber the new rows from the highest existing id. Add a uniqueness check on row ids in the generator.",
+      "twin_of": "derived-check-that-compares-two-literals"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/legal/lib/receipts.mjs:factsFieldPrints",
+      "breaking_input": "(a) A facts leaf that is a Map or Set, whose JSON.stringify is \"{}\", so changing its contents changes no print. A BigInt leaf makes JSON.stringify throw an uncaught TypeError mid-render. (b) Facts {\"a.b\":1} against {a:{b:1}}, where both write out[\"a.b\"] and one is overwritten.",
+      "why": "The defect row claims that everything non-plain is now a leaf, but a Map leaf still hashes to a constant. The dotted-path collision from the earlier round-1 B6 is still open, because paths are still joined with \".\".",
+      "fix": "Serialise leaves with a replacer that handles Map, Set and BigInt. Encode the path as JSON.stringify of the segment array, or refuse keys containing \".\" at the schema.",
+      "twin_of": "walk-drops-what-it-cannot-enumerate"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~380 (usedTokens from ctx.used) and receipts.mjs:printedFactPaths",
+      "breaking_input": "A template token such as `facts.private_note` that sits in a non-selected branch, a false guard, or a skipped clause, and is recorded in ctx.used when read rather than when emitted.",
+      "why": "The allowlist is keyed on tokens read, not tokens emitted. If the renderer records `used` on evaluation, a low-entropy private field gets its own unsalted digest in the public ledger although no page shows it. The round-1 B5 finding was not addressed in the diff, and no test puts a token inside a false guard.",
+      "fix": "Build the printed set from tokens actually interpolated into emitted text. Add a test with a token inside a false guard and assert it folds under the unprinted print.",
+      "twin_of": "fingerprint-is-an-oracle"
+    }
+  ]
+}

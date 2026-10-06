@@ -66,14 +66,42 @@ export function guardVersionIn(text) {
   return m ? m[1] : null;
 }
 
+/** Shortest served excerpt accepted: long enough that a homepage or a soft-404 cannot hold it by chance. */
+export const MIN_EXCERPT = 40;
+
+// Whitespace and markdown emphasis differ between the committed .mdx and a served HTML body, and
+// neither carries meaning for "is this the approved page", so both sides drop them before matching.
+const flat = (s) => String(s).replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * A reachability PASS is a claim about what a URL SERVES, so it must carry what was served: an
+ * excerpt of the body, and the `output_sha256` of the committed page it was matched against. A
+ * `200` alone passes a placeholder, a soft-404 and a redirect to the homepage alike.
+ * Returns `{ error }` to refuse the evidence, `{ fail }` to turn the row FAIL, or `{}`.
+ */
+export function reachabilityCheck(recorded, page) {
+  const excerpt = typeof recorded.served_excerpt === "string" ? flat(recorded.served_excerpt) : "";
+  if (excerpt.length < MIN_EXCERPT)
+    return { error: `PASS needs served_excerpt: at least ${MIN_EXCERPT} characters of the body the URL served. A status code alone passes a placeholder, a soft-404 and a homepage redirect alike.` };
+  if (!/^[0-9a-f]{64}$/.test(String(recorded.matched_output_sha256 ?? "")))
+    return { error: "PASS needs matched_output_sha256: the output_sha256 of the committed page the excerpt was matched against." };
+  if (!page) return { error: "the checklist has no rendered page to match the excerpt against." };
+  if (recorded.matched_output_sha256 !== page.output_sha256)
+    return { fail: `the evidence was matched against page ${recorded.matched_output_sha256.slice(0, 12)}..., and the committed page is now ${page.output_sha256.slice(0, 12)}.... Re-check the live URL against the page as it stands.` };
+  if (!flat(page.text).includes(excerpt))
+    return { fail: "the served excerpt is not in the approved page. The URL answered, with something else: a placeholder, a soft-404 or a redirect." };
+  return {};
+}
+
 /**
  * Build the checklist rows. Nothing is hardcoded: every row comes from `provider-pages.json`,
  * and the renderer's only job is to decide applicability and carry recorded evidence in.
  *
- * `evidence` maps a row id to `{ outcome, note }` -- what a human recorded. Absent means
- * NOT-CHECKED, which is the honest default and the one the cut made necessary.
+ * `evidence` maps a row id to `{ outcome, note, served_excerpt?, matched_output_sha256? }` --
+ * what a human recorded. Absent means NOT-CHECKED, which is the honest default and the one the
+ * cut made necessary. `pages` maps a page id to `{ text, output_sha256 }` as rendered now.
  */
-export function buildChecklist({ providerPages, facts, routes, evidence = {} }) {
+export function buildChecklist({ providerPages, facts, routes, evidence = {}, pages = {} }) {
   const errs = [];
   const rows = [];
 
@@ -93,8 +121,10 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {} }) 
       errs.push(`checklist row "${row.id}" has no source_url. A requirement stated with no evidence link is the thing this product exists not to print.`);
       continue;
     }
-    if (!row.id || !row.what) {
-      errs.push(`a checklist row is missing an id or a description: ${JSON.stringify(row).slice(0, 80)}`);
+    // `page` is required too: the served-evidence check keys on it, and a row without one would
+    // pass on a status code alone -- the check vanishing when its input is absent.
+    if (!row.id || !row.what || !row.page) {
+      errs.push(`a checklist row is missing an id, a description or a page: ${JSON.stringify(row).slice(0, 80)}`);
       continue;
     }
 
@@ -125,6 +155,14 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {} }) 
       note = recorded.note || "";
       if (outcome === "NOT-APPLICABLE" && !note)
         errs.push(`row "${row.id}" is NOT-APPLICABLE with no reason. "It does not apply" without a reason is unfalsifiable, and it is the outcome an operator would reach for to clear a row they had not done.`);
+      if (outcome === "PASS" && row.page) {
+        const r = reachabilityCheck(recorded, Object.hasOwn(pages, row.page) ? pages[row.page] : null);
+        if (r.error) { errs.push(`row "${row.id}": ${r.error}`); continue; }
+        if (r.fail) { outcome = "FAIL"; note = r.fail; }
+        // Nothing here fetched the URL (the probe arm is cut #1), so the excerpt proves only that
+        // a human pasted text from the approved page. Said on the row, never left implied (B5).
+        else note = `self-attested, not fetched: ${note}`;
+      }
     } else if (recorded) {
       errs.push(`row "${row.id}" records outcome "${recorded.outcome}", which is not one of ${OUTCOMES.join(" / ")}`);
       continue;

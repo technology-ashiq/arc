@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "receipts.mjs:factsFieldPrints (walk leaf detection)",
+      "breaking_input": "Facts include a field that is a Map or Set, e.g. `derived.tags = new Set(['a'])`. Its JSON.stringify is `{}` regardless of contents, so changing the set's contents changes no print. Also a BigInt leaf makes JSON.stringify throw an uncaught TypeError mid-render, aborting propose with a stack trace instead of exit 2.",
+      "why": "The fix claims every non-plain object is a leaf, but a Map/Set leaf hashes to a constant, so a change to it is invisible. The dotted-path collision remains open: `{\"a.b\":1}` vs `{a:{b:1}}` both write out['a.b'], one overwriting the other. `walk-drops-what-it-cannot-enumerate` is not fully fixed.",
+      "fix": "Serialize leaves with a replacer that handles Map, Set, and BigInt. Encode the path as JSON.stringify of the segment array to avoid collisions.",
+      "twin_of": "walk-drops-what-it-cannot-enumerate"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "arc-legal.mjs:printedFactPaths (usedTokens)",
+      "breaking_input": "A template token `facts.private_note` sits inside a `when=`-false clause or a non-selected branch, or appears in a guard expression. The renderer records it in ctx.used as read, though no emitted page shows its value. The field then gets its own unsalted per-field digest in the public ledger.",
+      "why": "The printed set is keyed on tokens read, not tokens emitted. A low-entropy private value gets a guess-and-confirm digest in the public repo, reopening `fingerprint-is-an-oracle`. No test places a token inside a false guard.",
+      "fix": "Build the printed set from tokens actually interpolated into emitted text, for example by recording only in the interpolation step. Add a test with a token inside a false guard and assert it folds under the unprinted print.",
+      "twin_of": "fingerprint-is-an-oracle"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "checklist.mjs:reachabilityCheck (revealed by round-1 B5)",
+      "breaking_input": "An operator never opens the URL. They paste any 40+ characters from the committed terms.mdx as served_excerpt and copy matched_output_sha256 from _run.json, then set outcome PASS. The checklist accepts it as PASS (marked self-attested).",
+      "why": "The excerpt is verified only against the committed page, never against anything served. `evidence-claims-more-than-it-proves` only labels it, but the underlying vacuous-by-construction hole remains: a placeholder or soft-404 passes when the operator copies from the repo. The test helper `served-evidence` builds its 'served' excerpt from the committed .mdx, so the check cannot distinguish fabricated evidence from real.",
+      "fix": "Have the checklist verb fetch the URL itself with a bounded timeout and redirect cap, matching the fetched body. Or require evidence of a fetch (final URL, fetched sha) rather than human-pasted text.",
+      "twin_of": "vacuous-by-construction"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "checklist.mjs:buildChecklist PASS gate (row.page guard)",
+      "breaking_input": "A provider-pages row has no `page` field. The evidence is `{\"outcome\":\"PASS\",\"note\":\"200 OK\"}`. The check is gated on `outcome === \\\"PASS\\\" && row.page`, so it passes without served evidence.",
+      "why": "A row without a page still passes on a status code alone, the exact hole the change closes. The check disappears when its input is absent — `check-optional-by-omission`.",
+      "fix": "Require served evidence for every reachability row, or model a row with no page explicitly and refuse a PASS without evidence.",
+      "twin_of": "check-optional-by-omission"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "receipts.mjs:semanticDiff (opaque when changedFacts null + clause moved)",
+      "breaking_input": "The previous published record has no facts_fields (a pre-print record). The new run moves `refund_window_days` AND moves a clause, so clauseChanges is non-empty. The diff prints the clause line, but no facts line and no WARN.",
+      "why": "changedFacts is null, so `if (diff.changed_facts)` prints nothing, and the opaque test is `factsMoved && !clauseChanges.length` — false here. `one-line-stands-in-for-another` is not fully fixed; the reviewer sees a clause change and cannot tell 'no facts field moved' from 'cannot tell which field moved'. The full-blob warning is suppressed in exactly the case it was written for.",
+      "fix": "When changedFacts is null and facts_changed is true, print the line `facts: changed, field not nameable (record predates field prints)` independently of whether a clause moved.",
+      "twin_of": "one-line-stands-in-for-another"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "arc-legal.mjs:previousMoved (control bytes printed raw)",
+      "breaking_input": "_approval.json carries previous_published_sha256 set to `\\u001b[2J` plus filler (any string). The refusal prints `String(approved.previous_published_sha256).slice(0,12)` raw into the problems list before the chain check rejects the file.",
+      "why": "The value comes from a caller-chosen --dir and is printed without `shown`, reopening the terminal-injection class `shown` was added for. A bidi or CSI control can hide or reorder the refusal the reviewer reads.",
+      "fix": "Print it through `shown`, or require /^[0-9a-f]{64}$/ and print 'malformed' otherwise.",
+      "twin_of": "guard-inspects-the-object-not-the-output"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "arc-legal.mjs:publishMain (validate-one-read-use-another)",
+      "breaking_input": "Another publish for the same venture lands between `readJson(ledgerFile)` (line ~869) and `readFileSync(ledgerFile)` (line ~873), with the read outside the exclusive lock. The diff is computed from the older record, previousSha from the newer bytes.",
+      "why": "The approval can match the newer bytes while the printed diff and the NON_MONOTONIC comparison use the older record. The two reads are not atomic; nothing binds the human's diff to the ledger used for previousSha.",
+      "fix": "Read the ledger file once (bytes), JSON.parse and hash that same text. Run the whole publish block under withExclusiveLock.",
+      "twin_of": "trusts-one-recorded-value"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "receipts.mjs:factsFieldPrints / printedFactPaths (printed set misses non-facts field)",
+      "breaking_input": "A template interpolates `label.somePrivateField` or `list.somePrivate` while the corresponding facts field is the actual private value. printedFactPaths folds the label/list path as printed, but the facts value behind it is not named; if the facts value is low-entropy yet not printed (e.g. used only to drive a branch), it stays under UNPRINTED_FIELDS — which is correct — but if the value IS effectively printed through the label, the digest still leaks it. More concretely: a token `facts.private` under a false guard.",
+      "why": "The printed set is built only from the used-token prefixes facts./label./list., so any facts field that is read but never emitted (guard evaluation, skipped branch) is folded — good — but the guard relies on the renderer recording `used` on interpolation, which is not proven; round-1 B5 noted no test places a token inside a false guard. The oracle leak through `label.` is also unproven: a label whose underlying value is a private facts field would be printed (label text) and the facts value digest would be folded, but the label text itself is already in the public page, so no new oracle — yet the pattern `fingerprint-is-an-oracle` twin remains for any field folded only because the renderer records reads, not emissions.",
+      "fix": "Prove and ensure ctx.used records only interpolated tokens; add a test with a token inside a false guard.",
+      "twin_of": "fingerprint-is-an-oracle"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "receipts.mjs:factsFieldPrints (dotted-path collision)",
+      "breaking_input": "Facts `{\"a.b\":1}` against `{a:{b:1}}` both write out['a.b']; one is overwritten so a change to the loser is never named. Also a key equal to the sentinel text `(fields no page prints)` collides with the folded print.",
+      "why": "The walk joins paths with '.', which can appear in a key; two distinct fields overwrite the same entry. `walk-drops-what-it-cannot-enumerate`'s collision half was left unfixed.",
+      "fix": "Encode the path as JSON.stringify of the segment array, or refuse facts keys containing '.' at schema validation, and reserve the sentinel key name.",
+      "twin_of": "walk-drops-what-it-cannot-enumerate"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "arc-legal.mjs:proposeMain (publishedRecord unguarded)",
+      "breaking_input": "`products/legal/published/<venture>.json` is truncated mid-write (invalid JSON). propose throws uncaught, exit code is a stack trace rather than the defined 2.",
+      "why": "publishedRecord calls JSON.parse without try/catch; the PREVIOUS_UNREADABLE handling only covers failures of the two-phase read but the parse throw escapes. The round-1 B1 finding noted this and the diff's `publishedRecord` still has no try/catch around readFileSync/JSON.parse.",
+      "fix": "Wrap the read and parse in try/catch and return `{problem}` with exit 2, exactly like the unreadable-text case.",
+      "twin_of": "guard-skipped-when-its-input-is-absent"
+    }
+  ]
+}
