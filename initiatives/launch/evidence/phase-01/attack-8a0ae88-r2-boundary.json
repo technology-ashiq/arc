@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/email-transactional/resend.mjs:56",
+      "breaking_input": "brand.domain is sandbox.automemory.ai, a subdomain of the Cloudflare zone automemory.ai. Resend lists record names relative to the zone apex, for example send.sandbox and resend._domainkey.sandbox. Neither equals nor ends with .sandbox.automemory.ai.",
+      "why": "wanted() guesses absolute versus relative with endsWith, so these names become send.sandbox.sandbox.automemory.ai. launch writes records to the wrong names and Resend never verifies. The fake always returns fully qualified names, so the tests cannot show this. A bare \"@\" still becomes \"@.<domain>\", which fails closed (the unfixed round-1 B8).",
+      "fix": "Decide by an explicit rule: a name with a trailing dot is absolute; anything else is relative to the zone apex, with \"@\" mapped to the apex. Add a fake that returns apex-relative names for a subdomain.",
+      "twin_of": "every path built from data: slugs, ids, file names"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:15",
+      "breaking_input": "AS_ANON is `begin; set local role anon; select ...;` with no commit or rollback. The endpoint does not wrap the request in its own transaction and pools the connection. The next verify's AS_OWNER query lands on that connection, still inside an open transaction with role anon.",
+      "why": "The open transaction leaks the anon role to later queries. The owner count reads 0, giving a false \"owner role sees no probe row\", or a later UP fails. The fake skips begin/commit, so the leak is unmodelled.",
+      "fix": "Close the transaction in the same request without changing the last statement's result shape. Alternatively prove denial without a role switch, for example has_table_privilege('anon', ...) together with a pg_policies count.",
+      "twin_of": "every fake: does it model the provider's answer shape, or the one the code wished for?"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:81",
+      "breaking_input": "profile.region is the string \"constructor\" or \"toString\".",
+      "why": "REGION[...] is an inherited property lookup. It returns the Object or Function constructor, which is truthy, so the BAD_REGION check passes. JSON.stringify then drops the function value and the project is created with no region, in the provider default.",
+      "fix": "Use Object.hasOwn(REGION, key), or a Map.",
+      "twin_of": "`typeof null === \"object\"` let `\"slots\": null` past the state shape guard"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:104",
+      "breaking_input": "Each GET /projects/{ref} takes 20 s because the API is slow or throttled, or each request is held open. healthy() runs 14 iterations of a 30 s wait plus the request, about 11 minutes.",
+      "why": "The fix bounds the iteration count, not wall-clock time. 14×(30+20) s exceeds the 10-minute stale-lock window, so a second apply can break the lock mid-create. sb() has no per-request timeout. resend probe() has the same shape: 8 polls plus 4 DoH calls each, with no total deadline.",
+      "fix": "Compute a deadline at entry (Date.now() + 6 min) and check it every iteration, including before each request. Give each fetch its own AbortSignal.timeout.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:117-120",
+      "breaking_input": "The worker is killed, or the connection drops after the server committed UP, before ctx.report({kind:\"db-probe-table\"}). On re-run EXISTS returns 1 and no db-probe-table resource is recorded.",
+      "why": "The re-run refuses PROBE_TABLE_FOREIGN on launch's own table. The slot wedges permanently, because the only recovery is the owner dropping the table by hand. This is the half-made state not being recognisable as ours.",
+      "fix": "Record an intent (report) before running UP, or let the table carry a marker row. For example, treat a table that has exactly the probe shape and one 'owner-only' row as ours.",
+      "twin_of": "every two-step create: is the half-made state recognisable as ours?"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/email-transactional/resend.mjs:138-150",
+      "breaking_input": "Resend lists two records with the same type and name, such as two TXT at one name or two MX with different priorities. Alternatively, the owner holds a TXT at a name where Resend wants a CNAME.",
+      "why": "The plan reads existing by type and name only. On a re-run both wanted records find the same `mine`, so the second PATCH overwrites the first and they flap. A foreign record of a different type at the same name is invisible to the type-filtered lookup, so the CNAME POST fails after earlier records are already written, and the partial-write state returns. An MX whose priority differs from the wanted value is not patched, because only content is compared.",
+      "fix": "Match `mine` on type, name and content, or on type, name and priority. Query by name only and refuse any non-tagged record that conflicts by type rules before the first write.",
+      "twin_of": "A batch of DNS writes refused on its last record after writing the others"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/email-transactional/resend.mjs:112-113",
+      "breaking_input": "The worker is killed after POST /domains (or Supabase POST /projects) returns and before ctx.report runs. The re-run finds the domain or project by name and records it as -found.",
+      "why": "launch's own resource is left out of the exit plan. This is the unfixed round-1 B7, a new instance of D18, and it is not entered in the debt ledger for these two providers.",
+      "fix": "Write a pending-create intent to state before the POST and treat a matching name as ours. Or add these providers to D18's debt entry with a trigger.",
+      "twin_of": "A worker killed between Vercel's project-create answer and the synchronous `report()` leaves launch's own project recorded as `-found` on the re-run"
+    }
+  ]
+}
