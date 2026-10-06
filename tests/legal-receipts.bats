@@ -684,6 +684,19 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   [[ "$output" == *"facts.refund_window_days: changed"* ]]
 }
 
+@test "legal receipts: a venture-dir ledger naming ANOTHER venture is refused, not read as history" {
+  # A venture-dir ledger is keyed to the directory; the record's own venture field binds the name.
+  _arc_legal_sandbox
+  mkdir -p "$SANDBOX/venture"
+  cp "$SANDBOX/tests/fixtures/legal/ventures/fixture-gateway-gst/facts.yaml" \
+     "$SANDBOX/tests/fixtures/legal/ventures/fixture-gateway-gst/pins.yaml" "$SANDBOX/venture/"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" write "$SANDBOX/venture/published.json" '{"venture":"someone-else","run":{"pages":[]}}'
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" propose --venture fixture-gateway-gst --venture-dir "$SANDBOX/venture" --out "$SANDBOX/vout" --dry-run
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"belongs to \"someone-else\""* ]]
+}
+
 @test "legal receipts: a fixture venture name outside the grammar is refused before the ledger path" {
   _arc_legal_sandbox
   run node "$ARC_LEGAL_CLI" propose --venture "CON" --out "$SANDBOX/o" --dry-run
