@@ -754,3 +754,20 @@ arm() {
   arm login tenancy-before-authz-verify
   [[ "$(j 'o.tenancyVerify.ok + " " + o.tenancyVerify.reason')" == "false UPSTREAM_MISSING: the probe org launch-probe-a does not exist"* ]] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: auth keeps the owner's redirect URLs and template, and refuses a template that lands elsewhere" {
+  arm login owner-auth-config
+  [ "$(j 'o.auth.ok + " " + o.allow + " " + o.kept')" = "true https://staging.example.com/**,https://sandbox.automemory.ai/** true" ] || { echo "$DONE"; false; }
+  arm login owner-template-elsewhere
+  [ "$(j 'o.auth.code')" = "TEMPLATE_FOREIGN" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the login half never alters a Supabase project database only found" {
+  arm login found-project
+  [ "$(j 'o.auth.code')" = "UPSTREAM_FOREIGN_PROJECT" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a kill after the authz migration is resumed by the tables' launch marker" {
+  arm login killed-after-migration
+  [ "$(j 'o.authz.ok')" = "true" ] || { echo "$DONE"; false; }
+}

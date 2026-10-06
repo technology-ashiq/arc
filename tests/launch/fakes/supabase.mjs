@@ -20,8 +20,17 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
     const mig = String(sql).match(/^-- arc-launch migration: (authz|tenancy)/);
     if (mig) {
       if (mig[1] === "tenancy" && !p.tables.orgs) return { error: "relation \"public.orgs\" does not exist" };
-      for (const t of mig[1] === "authz" ? ["orgs", "memberships"] : ["invites"]) p.tables[t] = p.tables[t] || { rls: !rlsOff, rows: [] };
+      for (const t of mig[1] === "authz" ? ["orgs", "memberships"] : ["invites"]) {
+        p.tables[t] = p.tables[t] || { rls: !rlsOff, rows: [] };
+        // `comment on table` in the migration: launch's ownership marker on each table it made.
+        if (String(sql).includes(`comment on table public.${t} is 'arc-launch ${mig[1]}'`)) p.tables[t].comment = `arc-launch ${mig[1]}`;
+      }
       return { rows: [] };
+    }
+    const ours = String(sql).match(/tablename in \(([^)]*)\) and obj_description\(\('public\.' \|\| t\.tablename\)::regclass\) = '([^']+)';/);
+    if (ours) {
+      const names = ours[1].split(",").map((x) => x.trim().replace(/^'|'$/g, ""));
+      return { rows: [{ n: names.filter((t) => p.tables[t] && p.tables[t].comment === ours[2]).length }] };
     }
     const inList = String(sql).match(/from pg_tables where schemaname = 'public' and tablename in \(([^)]*)\)( and rowsecurity)?;/);
     if (inList) {

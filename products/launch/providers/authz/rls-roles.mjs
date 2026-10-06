@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 // ---- shared by auth, authz and tenancy (ADR-1734). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SBAPI = "https://api.supabase.com/v1";
@@ -77,8 +78,12 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   }
   for (const [path, make] of Object.entries(SHARED || {})) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
-    const now = cur.status === 404 ? "" : cur.body && cur.body.type === "file" && typeof cur.body.content === "string" ? utf8(cur.body.content) : null;
-    if (now === null) throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file`);
+    // A shared file is extended only when it decodes whole and round-trips: anything else is rewritten by nothing
+    // (attack aadcd0c B2).
+    const b = cur.body;
+    const now = cur.status === 404 ? "" : b && b.type === "file" && b.encoding === "base64" && typeof b.content === "string" ? utf8(b.content) : null;
+    if (now === null || (cur.status !== 404 && Buffer.from(now, "utf8").toString("base64") !== String(b.content).replace(/s/g, "")))
+      throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain UTF-8 file launch can extend`);
     const next = make(now);
     if (next !== now) changed[path] = next;
   }
@@ -205,7 +210,12 @@ const MIGRATION = [
   'create or replace function public.create_org(org_name text) returns uuid language plpgsql security definer set search_path = public as $$ declare oid uuid; begin if auth.uid() is null then raise exception \'not signed in\'; end if; insert into public.orgs (name) values (org_name) returning id into oid; insert into public.memberships (org_id, user_id, role) values (oid, auth.uid(), \'owner\'); return oid; end $$;',
   'revoke all on function public.create_org(text) from public;',
   'grant execute on function public.create_org(text) to authenticated;',
+  'comment on table public.orgs is \'arc-launch authz\';',
+  'comment on table public.memberships is \'arc-launch authz\';',
 ].join("\n").replaceAll("%DEF%", SQL_DEF);
+// Tables carry launch's comment, so a kill between the migration and the report is recognised as launch's own on the
+// re-run (attack aadcd0c B3, the twin of database's probe-table resume).
+const OURS = "select count(*)::int as n from pg_tables t where schemaname = 'public' and tablename in ('orgs', 'memberships') and obj_description(('public.' || t.tablename)::regclass) = 'arc-launch authz';";
 const TABLES = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('orgs', 'memberships');";
 const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('orgs', 'memberships') and rowsecurity;";
 const FILES = {
@@ -279,7 +289,7 @@ export async function scaffold(ctx) {
   domainOf(ctx);
   // Tables of these names launch did not create are the venture's own: never altered (the probe-table rule, ADR-1731).
   const tid = `${ref}:public.orgs+public.memberships`;
-  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid))
+  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid) && count(await query(ctx, ref, OURS)) !== 2)
     throw refuse("TABLES_FOREIGN", "public.orgs or public.memberships already exists and launch did not create it");
   await query(ctx, ref, MIGRATION);
   ctx.report({ kind: "db-tables", id: tid });

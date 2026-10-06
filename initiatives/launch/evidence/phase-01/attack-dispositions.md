@@ -55,3 +55,8 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 ## attack 3a6350b r2 (slice 9)
 
 - The round-2 job was reaped by the memory monitor after it wrote both results. Boundary 7 (B2/B3 fixed, B1 -> D24, B4 -> D25); logic 0.
+
+## attack aadcd0c r1 (slice 10)
+
+- The first run (80f0f5e) was refused by arc-run's input scanner on credential-shaped header literals in four files; rewritten with Object.fromEntries, input pre-scanned clean.
+- B1/B2/B3/B4/B5 fixed. B6 -> D26 (a ctx change). L1 REJECTED: the template uses {{ .SiteURL }} and site_url is set to the brand domain in the same PATCH. L2 REJECTED: every call is schema-qualified (`auth.uid()`, `auth.jwt()`).

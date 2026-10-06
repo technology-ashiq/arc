@@ -100,6 +100,33 @@ switch (scenario) {
     out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
     out.env = text(".env.example");
     break;
+  case "owner-auth-config": {
+    // The owner's redirect URL and own magic-link template that already lands on /auth/confirm: both kept.
+    const mine = "<p>Hello! <a href=\"{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink\">sign in</a></p>";
+    supabase.store[0].auth = { site_url: "http://localhost:3000", uri_allow_list: "https://staging.example.com/**", mailer_templates_magic_link_content: mine };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.allow = supabase.store[0].auth.uri_allow_list;
+    out.kept = supabase.store[0].auth.mailer_templates_magic_link_content === mine;
+    break;
+  }
+  case "owner-template-elsewhere":
+    supabase.store[0].auth = { site_url: "http://localhost:3000", mailer_templates_magic_link_content: "<p>{{ .Token }}</p>" };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    break;
+  case "found-project": {
+    // database only found the project: the login half refuses to touch it.
+    const i = state.database.findIndex((r) => r.kind === "supabase-project");
+    state.database[i] = { kind: "supabase-project-found", id: state.database[i].id };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    break;
+  }
+  case "killed-after-migration":
+    // The authz migration ran and the worker died before reporting the tables: the re-run recognises its marker.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    state.authz.splice(state.authz.findIndex((r) => r.kind === "db-tables"), 1);
+    out.authz = await attempt(() => A.authz.mod.scaffold(ctxFor("authz")));
+    break;
   case "tenancy-before-authz-verify":
     await A.auth.mod.scaffold(ctxFor("auth"));
     await A.authz.mod.scaffold(ctxFor("authz"));

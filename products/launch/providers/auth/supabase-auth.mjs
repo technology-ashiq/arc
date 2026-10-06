@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 // ---- shared by auth, authz and tenancy (ADR-1734). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SBAPI = "https://api.supabase.com/v1";
@@ -77,8 +78,12 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   }
   for (const [path, make] of Object.entries(SHARED || {})) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
-    const now = cur.status === 404 ? "" : cur.body && cur.body.type === "file" && typeof cur.body.content === "string" ? utf8(cur.body.content) : null;
-    if (now === null) throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file`);
+    // A shared file is extended only when it decodes whole and round-trips: anything else is rewritten by nothing
+    // (attack aadcd0c B2).
+    const b = cur.body;
+    const now = cur.status === 404 ? "" : b && b.type === "file" && b.encoding === "base64" && typeof b.content === "string" ? utf8(b.content) : null;
+    if (now === null || (cur.status !== 404 && Buffer.from(now, "utf8").toString("base64") !== String(b.content).replace(/s/g, "")))
+      throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain UTF-8 file launch can extend`);
     const next = make(now);
     if (next !== now) changed[path] = next;
   }
@@ -275,6 +280,8 @@ function upstreamOf(ctx) {
   if (!repoShape(full)) throw refuse("UPSTREAM_MISSING", "frontend reported no shell repo; the auth routes are written beside it");
   const projects = list(ctx.upstream && ctx.upstream.database).filter((r) => r.kind === "supabase-project" || r.kind === "supabase-project-found");
   if (projects.length !== 1 || !REF.test(String(projects[0].id))) throw refuse("UPSTREAM_MISSING", "database reported no single Supabase project");
+  // A project launch only found is the owner's: its auth, users and schema are not launch's to change (attack aadcd0c B5).
+  if (projects[0].kind !== "supabase-project") throw refuse("UPSTREAM_FOREIGN_PROJECT", "the Supabase project is the owner's (found, not created); the login half does not alter it");
   return { full, ref: String(projects[0].id) };
 }
 
@@ -290,8 +297,17 @@ export async function scaffold(ctx) {
   const conf = (await sb(ctx, "GET", `/projects/${ref}/config/auth`)).body || {};
   const now = typeof conf.site_url === "string" ? conf.site_url.replace(/\/$/, "") : "";
   if (now && now !== site && !/^http:\/\/localhost(:\d+)?$/.test(now)) throw refuse("SITE_URL_FOREIGN", `the project's site URL is ${say(now, 80)}; launch does not repoint it`);
-  await sb(ctx, "PATCH", `/projects/${ref}/config/auth`, { site_url: site, uri_allow_list: `${site}/**`, mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE });
-  ctx.report({ kind: "auth-config", id: `${ref}:site_url=${site}` });
+  // Extended, never replaced (attack aadcd0c B1): the owner's redirect URLs stay in the allow-list, and a magic-link
+  // template the owner wrote is kept when it already lands on /auth/confirm, refused when it does not.
+  const allow = String(conf.uri_allow_list || "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (!allow.includes(`${site}/**`)) allow.push(`${site}/**`);
+  const tpl = typeof conf.mailer_templates_magic_link_content === "string" ? conf.mailer_templates_magic_link_content : "";
+  const stock = !tpl || tpl.includes("{{ .ConfirmationURL }}");
+  if (!stock && !tpl.includes("/auth/confirm?token_hash={{ .TokenHash }}")) throw refuse("TEMPLATE_FOREIGN", "the project's magic-link email is the owner's own and does not land on /auth/confirm; launch does not rewrite it");
+  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}) };
+  await sb(ctx, "PATCH", `/projects/${ref}/config/auth`, patch);
+  // What it was, so the exit plan can put it back.
+  ctx.report({ kind: "auth-config", id: `${ref}:site_url=${site}:was=${say(now || "(none)", 80)}` });
   // .env.example is shared (ADR-1729): this slot adds its names, never a value, and never removes a line.
   const sha = await commitFiles(ctx, full, FILES, {
     ".env.example": (text) => {

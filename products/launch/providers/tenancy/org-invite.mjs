@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 // ---- shared by auth, authz and tenancy (ADR-1734). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SBAPI = "https://api.supabase.com/v1";
@@ -77,8 +78,12 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   }
   for (const [path, make] of Object.entries(SHARED || {})) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
-    const now = cur.status === 404 ? "" : cur.body && cur.body.type === "file" && typeof cur.body.content === "string" ? utf8(cur.body.content) : null;
-    if (now === null) throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file`);
+    // A shared file is extended only when it decodes whole and round-trips: anything else is rewritten by nothing
+    // (attack aadcd0c B2).
+    const b = cur.body;
+    const now = cur.status === 404 ? "" : b && b.type === "file" && b.encoding === "base64" && typeof b.content === "string" ? utf8(b.content) : null;
+    if (now === null || (cur.status !== 404 && Buffer.from(now, "utf8").toString("base64") !== String(b.content).replace(/s/g, "")))
+      throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain UTF-8 file launch can extend`);
     const next = make(now);
     if (next !== now) changed[path] = next;
   }
@@ -192,7 +197,7 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 const SQL_DEF = ["de", "fault"].join("");
 const MIGRATION = [
   '-- arc-launch migration: tenancy',
-  'create table if not exists public.invites (id uuid primary key %DEF% gen_random_uuid(), org_id uuid not null references public.orgs(id) on delete cascade, email text not null, token text not null unique %DEF% encode(gen_random_bytes(24), \'hex\'), invited_by uuid not null references auth.users(id), accepted_at timestamptz, created_at timestamptz not null %DEF% now());',
+  'create table if not exists public.invites (id uuid primary key %DEF% gen_random_uuid(), org_id uuid not null references public.orgs(id) on delete cascade, email text not null, token text not null unique %DEF% encode(gen_random_bytes(24), \'hex\'), invited_by uuid not null references auth.users(id) on delete cascade, accepted_at timestamptz, created_at timestamptz not null %DEF% now());',
   'alter table public.invites enable row level security;',
   'drop policy if exists invites_owner_read on public.invites;',
   'create policy invites_owner_read on public.invites for select using (exists (select 1 from public.memberships m where m.org_id = invites.org_id and m.user_id = auth.uid() and m.role = \'owner\'));',
@@ -202,7 +207,11 @@ const MIGRATION = [
   'revoke all on function public.accept_invite(text) from public;',
   'grant execute on function public.create_invite(uuid, text) to authenticated;',
   'grant execute on function public.accept_invite(text) to authenticated;',
+  'comment on table public.invites is \'arc-launch tenancy\';',
 ].join("\n").replaceAll("%DEF%", SQL_DEF);
+// Tables carry launch's comment, so a kill between the migration and the report is recognised as launch's own on the
+// re-run (attack aadcd0c B3, the twin of database's probe-table resume).
+const OURS = "select count(*)::int as n from pg_tables t where schemaname = 'public' and tablename in ('invites') and obj_description(('public.' || t.tablename)::regclass) = 'arc-launch tenancy';";
 const TABLES = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('invites');";
 const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('invites') and rowsecurity;";
 const FILES = {
@@ -259,7 +268,7 @@ export async function scaffold(ctx) {
   const { full, ref } = upstreamOf(ctx, "authz");
   domainOf(ctx);
   const tid = `${ref}:public.invites`;
-  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid))
+  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid) && count(await query(ctx, ref, OURS)) !== 1)
     throw refuse("TABLES_FOREIGN", "public.invites already exists and launch did not create it");
   await query(ctx, ref, MIGRATION);
   ctx.report({ kind: "db-tables", id: tid });
