@@ -1,0 +1,28 @@
+# discover scoring weights -- OWNER-OWNED (ADR-1903, DIS-C). Block style only (ADR-0200).
+#
+# Changing a weight: emit an approval.requested with gate discover-weights carrying the new
+# weights_sha256, have the owner approve it in arc-inbox, then set weights + weights_sha256 +
+# decision (that decision's ULID) here in one commit. The scorer refuses a weight whose sha was not
+# updated, and a decision the spine does not hold as an approved discover-weights request.
+weights:
+  pain_frequency: 40
+  money_signal: 30
+  buildability_2w: 20
+  moat_hint: 10
+weights_sha256: 5fa2e0e480c3582d3bbf7baa5f68eecd4034988e0f51910f8fabd1ceff26b4ca
+decision: kickoff-ADR-1903
+
+# The council's 90-day question names this signal (ADR-1910).
+council_signal: its first paying customer
+
+# The venture profile values an approved idea is exported with (ADR-1905). Owner-owned like the
+# weights: the exporter never invents a value, and the approval reason may override any of them
+# as key=value (type, region, payment_model, tenancy, ai, honesty_class).
+venture_defaults:
+  type: saas-b2b
+  region: global
+  payment_model: gateway
+  tenancy: multi
+  ai: false
+  compliance:
+    - gdpr

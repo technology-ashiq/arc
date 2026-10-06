@@ -1,0 +1,8 @@
+{
+ "responses": [
+  {
+   "status": 429,
+   "body": "{\"message\":\"rate limited\"}"
+  }
+ ]
+}
