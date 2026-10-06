@@ -861,28 +861,34 @@ function apiModels(ctx) {
 
 /**
  * The remove guard (ADR-1350 Amendment 4): a record engine/router.yaml names cannot be removed or renamed away, or a
- * routed run would fail at preflight (ADR-1801). Asked only of a change that drops a name the store held; a router that
- * cannot be read refuses the change rather than allowing it. Exported so tests/face/talk.mjs runs this function against a
- * tree whose router names a profile -- the route calls it and nothing else.
- * @param {{ repo: string }} ctx @param {any} before @param {any} after @param {any} body
- * @returns {Promise<{ code: "BAD_MODEL" | "MODELS_UNAVAILABLE", why: string } | null>}
+ * routed run would fail at preflight (ADR-1801). `refs` is reads.routerProfileRefs's answer, read BEFORE the registry
+ * is loaded, so the load, this check and the save run with no await between them: an await there let two changes load
+ * the same registry and the second save erase the first (attack 61af78b B1). A router that could not be read refuses.
+ * Names compare as the store compares them -- trimmed, case-folded (B4). Exported so tests/face/talk.mjs runs this exact
+ * function; the route calls it and nothing else.
+ * @param {{ ok: true, refs: { name: string, where: string }[] } | { ok: false, why: string } | null} refs
+ * @param {any} before @param {any} after @param {any} body
+ * @returns {{ code: "BAD_MODEL" | "MODELS_UNAVAILABLE", why: string } | null}
  */
-export async function routedRefusal(ctx, before, after, body) {
+export function routedRefusal(refs, before, after, body) {
   const named = body && (body.op === "remove" || body.op === "edit") ? models.findModel(before, body.name) : null;
   const gone = named && !models.findModel(after, named.name) ? named.name : null;
   if (!gone) return null;
-  const r = await reads.routerProfileRefs(ctx);
-  if (!r.ok) return { code: "MODELS_UNAVAILABLE", why: r.why };
-  const rows = r.refs.filter((x) => x.name.toLowerCase() === gone.toLowerCase()).map((x) => x.where);
+  if (!refs) return { code: "MODELS_UNAVAILABLE", why: "the router was not read, so whether a model is routed is unknown" };
+  if (!refs.ok) return { code: "MODELS_UNAVAILABLE", why: refs.why };
+  const key = (/** @type {string} */ n) => n.trim().toLowerCase();
+  const rows = refs.refs.filter((x) => key(x.name) === key(gone)).map((x) => x.where);
   return rows.length ? { code: "BAD_MODEL", why: `${gone} is routed by engine/router.yaml (${rows.join(", ")}); change those rows first, then ${body.op === "remove" ? "remove" : "rename"} it` } : null;
 }
 
 async function apiModelsChange(ctx, body) {
+  // The router is read first, only for a change that can drop a name; everything after it is synchronous (B1).
+  const refs = body && typeof body === "object" && (body.op === "remove" || body.op === "edit") ? await reads.routerProfileRefs(ctx) : null;
   const got = models.loadRegistry(ctx.repo);
   if (!got.ok) throw new DashError("MODELS_UNAVAILABLE", got.why);
   const step = models.applyChange(got.reg, body);
   if (!step.ok) throw new DashError("BAD_MODEL", step.why);
-  const refused = await routedRefusal(ctx, got.reg, step.reg, body);
+  const refused = routedRefusal(refs, got.reg, step.reg, body);
   if (refused) throw new DashError(refused.code, refused.why);
   const saved = models.saveRegistry(got.path, step.reg);
   if (!saved.ok) throw new DashError("MODELS_UNAVAILABLE", saved.why);

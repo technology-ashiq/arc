@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { startFakeLlm, GHOST_ID, scriptedAnswer, questionOf } from "./fake-llm.mjs";
 import { judgeModelAnswer, GENERAL_LABEL, ARC_LABEL, UNVERIFIED_LABEL, routedRefusal } from "../../.claude/scripts/hq/arc-dash.mjs";
 import { formatIst } from "../../.claude/scripts/hq/lib/canonical.mjs";
+import { routerProfileRefs } from "../../.claude/scripts/hq/lib/face/reads.mjs";
 import { unescapeDoorText } from "../../face/src/lib/door.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -287,7 +288,8 @@ check("C0: the fake reads the question out of the generic-api prompt and scripts
     let gr = m.emptyRegistry();
     for (const n of ["Routed-A", "Routed-B", "Free-C"]) gr = m.applyChange(gr, { op: "add", model: { name: n, baseUrl: "https://g.example/v1", model: "g" } }).reg;
     const ctxG = { repo: tree };
-    const guard = async (body) => { const st = m.applyChange(gr, body); return st.ok ? routedRefusal(ctxG, gr, st.reg, body) : { code: "STEP", why: st.why }; };
+    // The two calls the route makes, in its order: the router read, then the synchronous guard (attack 61af78b B1).
+    const guard = async (body) => { const refs = await routerProfileRefs(ctxG); const st = m.applyChange(gr, body); return st.ok ? routedRefusal(refs, gr, st.reg, body) : { code: "STEP", why: st.why }; };
     const tierRef = await guard({ op: "remove", name: "routed-a" });
     const classRef = await guard({ op: "remove", name: "Routed-B" });
     check("G: removing a record a tier pin or a class row names is refused, naming the row (any case)",
@@ -296,8 +298,21 @@ check("C0: the fake reads the question out of the generic-api prompt and scripts
     const reUrl = await guard({ op: "edit", name: "Routed-B", model: { name: "Routed-B", baseUrl: "https://h.example/v1", model: "h" } });
     check("G: renaming a routed record is refused; editing its URL or model id is not", renamed?.code === "BAD_MODEL" && /rename/.test(renamed.why) && reUrl === null, JSON.stringify([renamed, reUrl]));
     check("G: an unrouted record removes freely (vacuous-pass guard: the same tree refuses the routed ones above)", (await guard({ op: "remove", name: "Free-C" })) === null);
-    const blind = await routedRefusal({ repo: join(tree, "absent") }, gr, m.applyChange(gr, { op: "remove", name: "Free-C" }).reg, { op: "remove", name: "Free-C" });
+    const blind = routedRefusal(await routerProfileRefs({ repo: join(tree, "absent") }), gr, m.applyChange(gr, { op: "remove", name: "Free-C" }).reg, { op: "remove", name: "Free-C" });
     check("G: a router that cannot be read refuses the remove (MODELS_UNAVAILABLE), never allows it", blind?.code === "MODELS_UNAVAILABLE", JSON.stringify(blind));
+    // A router of the wrong shape is unreadable, not "no references" (attack 61af78b B2); a profile pinned on another
+    // driver still names the record (B3).
+    const shapes = [["classes:", "  - x"], ["models: 5"], ["classes:", "  attack-diff:", "    profile: 5"], ["models:", "  balanced-workhorse: x"]];
+    const shapeVerdicts = [];
+    for (const lines of shapes) {
+      fs.writeFileSync(join(tree, "engine", "router.yaml"), [...lines, ""].join("\n"));
+      shapeVerdicts.push((await routerProfileRefs(ctxG)).ok === false);
+    }
+    check(`G: a router of the wrong shape refuses rather than reading as no references (${shapes.length} of ${shapes.length})`, shapeVerdicts.every(Boolean), JSON.stringify(shapeVerdicts));
+    fs.writeFileSync(join(tree, "engine", "router.yaml"), ["models:", "  cheap-scan:", "    claude-code: profile:Free-C", ""].join("\n"));
+    const otherDriver = await guard({ op: "remove", name: "Free-C" });
+    check("G: a profile pinned on another driver still names the record, and a padded name is the same name", otherDriver?.code === "BAD_MODEL" && /tier cheap-scan \(claude-code\)/.test(otherDriver.why)
+      && routedRefusal({ ok: true, refs: [{ name: " free-c ", where: "class x" }] }, gr, m.applyChange(gr, { op: "remove", name: "Free-C" }).reg, { op: "remove", name: "Free-C" })?.code === "BAD_MODEL", JSON.stringify(otherDriver));
   } finally {
     try { rmSync(tree, { recursive: true, force: true }); } catch { /* temp */ }
   }
@@ -435,6 +450,17 @@ try {
   r = await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free" } });
   check("T: a removed model's test is forgotten -- added again, it reads untested",
     r.status === 200 && ((r.body.models ?? []).find((m) => m.name === "Busy") ?? {}).lastTest === null, JSON.stringify(r.body.models).slice(0, 300));
+  // Two changes in flight at once both land: the guard's router read comes before the load, so no await sits between
+  // a load and its save (attack 61af78b B1).
+  const pair = await Promise.all([
+    post("/api/models/set", { op: "add", model: { name: "Twin-1", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/twin:free" } }),
+    post("/api/models/set", { op: "add", model: { name: "Twin-2", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/twin:free" } }),
+  ]);
+  const afterPair = await j("/api/models", { headers: H });
+  const names = (afterPair.body.models ?? []).map((x) => x.name);
+  check("B: two adds in flight at once both land -- neither save erases the other", pair.every((x) => x.status === 200) && names.includes("Twin-1") && names.includes("Twin-2"), JSON.stringify(names));
+  await post("/api/models/set", { op: "remove", name: "Twin-1" });
+  await post("/api/models/set", { op: "remove", name: "Twin-2" });
   // Edit in place through the door (ADR-1350 Amendment 3): the key kept on disk, never in the response, the test forgotten.
   t = await post("/api/models/test", { name: "Fake" });
   r = await post("/api/models/set", { op: "edit", name: "Fake", model: { name: "Fake", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/owner-model-2:free" } });
@@ -466,6 +492,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 102;
+const EXPECTED = 105;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);
