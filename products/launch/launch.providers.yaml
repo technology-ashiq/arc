@@ -217,10 +217,14 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.github.com
+      - www.googleapis.com
     credentials:
-      scope: "none -- probes the live site"
+      scope: "commits the shell to the venture repo; probes the live site and PageSpeed (ADR-1726, ADR-1730)"
     adapter: providers/frontend/nextjs-shell.mjs
     digest: null
     approved_by: ashiq

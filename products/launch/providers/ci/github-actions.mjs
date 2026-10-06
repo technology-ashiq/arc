@@ -36,7 +36,8 @@ const WORKFLOW = [
   "          node-version: 20",
   "      - name: test",
   "        shell: bash",
-  "        run: if [ -f package.json ]; then npm ci && npm test --if-present; else echo no package.json yet; fi",
+  // `npm ci` needs a lockfile, which the shell (ADR-1730) does not ship: install without one until the venture adds it.
+  "        run: if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi && npm test --if-present; else echo no package.json yet; fi",
   "",
 ].join("\n");
 

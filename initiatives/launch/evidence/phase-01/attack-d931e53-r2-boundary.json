@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:100",
+      "breaking_input": "A contributor, or a squash-merge description, commits their own vercel.json to main with a message containing a line equal to `Arc-Launch-Tag: arc-sandbox@hosting@vercel`. It is now the newest commit on the file. release runs after approval, `hasLine` matches that forged line, and the PUT overwrites their config with `{}`. frontend/nextjs-shell.mjs:101 accepts the same forged trailer on app/page.js and commits the shell over it.",
+      "why": "The B1 fix moved ownership from 'any commit' to 'the newest commit', but it still reads a free-text line anyone can type. Nothing checks the commit author or the current content. This is the defect pattern 'ownership was a marker found anywhere in user-editable text', now applied to commit messages.",
+      "fix": "Before lifting, require the file content to be exactly the hold text hosting wrote, and only then lift. Optionally also check the commit's author/committer identity. In frontend, compare the content to a known shell or to the hash recorded in state, not just the trailer.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description -> every ownership test on free text"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:155",
+      "breaking_input": "Real flow: release tags the lift commit, and main holds no package.json at that sha because frontend runs later. Any ERROR on that deployment, such as a bad project setting, a missing env var or a broken Vercel config, takes the `pkg.status === 404` path and returns ok:true. The package.json check only fires when the owner already had an app before the lift.",
+      "why": "The B2 fix is dead code in the thread this slice builds. The new `broken-app` test passes only because it moves the tag onto the frontend shell commit, which the real flow never tags. So the test does not exercise the production path, and ERROR is still accepted as a receipt for most failures.",
+      "fix": "Accept ERROR only when the deployment's build log or error code is 'no framework detected' / 'no Next.js version found'. Otherwise require READY. Rewrite the test to tag the lift commit and fail the build there.",
+      "twin_of": "A deploy receipt accepted ERROR, which also accepts a real broken build -> every \"accept state X for the empty case\": does X also mean failure later?"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:98",
+      "breaking_input": "The owner's repo already has identical app/page.js, app/layout.js and package.json, committed by them. Every path hits `utf8(have) === text` and continues with no trailer check. `!changed.length` then reports a `frontend-shell` resource with id `<full>:<head>`, which is the current head and not a commit launch made.",
+      "why": "An 'unchanged, so skip' path still reports a resource as launch's, and the id points at a commit launch did not write. Teardown is empty today, but ownership records feed the exit plan.",
+      "fix": "On the unchanged path, report only if the newest commit on each path carries launch's trailer. Otherwise return no resources, with a note that the files were already present.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it -> every \"unchanged, so skip\" path that still reports a resource"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:55",
+      "breaking_input": "(a) Vercel's `link` is `{type:\"github\"}` with no org or repo, giving `undefined/undefined`, which the regex accepts. (b) `link.repo` is `..`, and `/repos/org/../git/ref/...` is normalised by fetch to the wrong path. (c) The Vercel project links to repo X while `upstream.repo` is Y: release lifts X and frontend commits to Y.",
+      "why": "This was prior B4 and it is not fixed. Interpolating missing fields yields a string that passes the regex. The `.` and `..` segments are allowed. release and frontend take their repo from two different sources and never compare them.",
+      "fix": "Require `link.org` and `link.repo` to be non-empty strings and reject names made only of dots. Refuse when the linked repo differs from upstream.repo.",
+      "twin_of": "Upstream entries were coerced with `String()`, so a `null` id became the hostname \"null\" -> every value one adapter hands another through state"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:82",
+      "breaking_input": "An annotated `launch-release-1` tag exists. `git/ref/tags/...` returns the tag object's sha, and `GET /commits/<tag object sha>` returns 422 or 404. scaffold throws an uncoded Error instead of FOREIGN_TAG, and verify reports a generic `error:`.",
+      "why": "This was prior B5 and it is not fixed. `object.type` is never checked, so a foreign annotated tag does not take the refusal path.",
+      "fix": "Treat `object.type !== \"commit\"`, or a failed commit lookup, as FOREIGN_TAG in both scaffold and probe.",
+      "twin_of": "A 404 from a token without access read as \"absent, create it\" -> every check-then-create keyed on a 404"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:166",
+      "breaking_input": "The live domain answers 200 with an endless or multi-gigabyte body. `await res.text()` buffers all of it before `.slice(0, 200000)`. On non-200 answers the body is never cancelled, so five retries leave sockets open.",
+      "why": "This was prior B6 and it is not fixed. The cap is applied after the read, so it bounds nothing.",
+      "fix": "Read through a reader capped at 200 KB, and call `res.body?.cancel()` on every non-200 response.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:166",
+      "breaking_input": "The live domain accepts the TCP connection and never answers. `ctx.fetch` gets no `signal`, so the slot timeout (300 s for frontend) only surfaces inside `wait()`. A hung `fetch` stalls until the runner kills the worker, and the poll's reason is lost. The release probe's vercel/github calls (arc-ship-release.mjs:150) have the same gap.",
+      "why": "The abort signal is honoured only in the sleep, not in the network calls. This is the same class as the already-fixed sleep that swallowed the timeout.",
+      "fix": "Pass `signal: ctx.signal` (and a per-request timeout) to every `ctx.fetch` in the probes.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll -> every wait, retry or poll loop in an adapter or the runner"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/launch.providers.yaml:218",
+      "breaking_input": "A venture profile with `brand.domain: \"acme.example\"`. `domainOf` accepts it, but the row's `hosts` allowlist holds only sandbox.automemory.ai, so `ctx.fetch` refuses and verify returns `error: ...` with no hint that the allowlist is the cause.",
+      "why": "The adapter validates the domain against a hostname grammar while the boundary enforces a fixed host. The two disagree for every venture except the sandbox.",
+      "fix": "Refuse in `domainOf` when the domain is not in the row's declared hosts, with an explicit reason. Or have the registry derive the host from the profile.",
+      "twin_of": "ctx.fetch checked only the first URL and let fetch follow redirects to a host nobody checked -> every allowlist checked once on an input that the callee may replace (redirects, retries, resolved names)"
+    }
+  ]
+}
