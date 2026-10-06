@@ -117,7 +117,7 @@ list_distribution() {
 # asked on the door and answered with the label the door wrote, and no settings control on the door (Phase 10, ADR-1350), and both guards
 # (WebGL refused, a stage that throws) showing the fallback with ENTER HQ still opening the workroom. The count is
 # pinned here, so a check deleted from smoke.mjs shows as a short run rather than a clean one.
-FRONT_DOOR_CHECKS=32
+FRONT_DOOR_CHECKS=33
 frontdoor_verdict() {
   local out="$1" mood="$2" line
   case "$mood" in dark|light) ;; *) echo "no mood named (dark|light), got '$mood'"; return 1 ;; esac
@@ -410,23 +410,23 @@ heading_verdict() {
 }
 
 @test "face-browser: MUTANT CONTROL -- the front-door verdict refuses a short run, a failed check, a wrong mood and no line" {
-  local good="smoke: front-door mood=dark expected=32 ran=32 ok=32 warp-held=3/3 failed=none"
+  local good="smoke: front-door mood=dark expected=33 ran=33 ok=33 warp-held=3/3 failed=none"
   run frontdoor_verdict "$good" dark
   [ "$status" -eq 0 ] || { echo "the front-door verdict refused the clean line: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=32 ran=3 ok=3 warp-held=0/0 failed=none" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=33 ran=3 ok=3 warp-held=0/0 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a pass that died after three checks passed: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=32 ran=32 ok=31 warp-held=3/3 failed=webgl-off-enter" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=33 ran=33 ok=32 warp-held=3/3 failed=webgl-off-enter" dark
   [ "$status" -ne 0 ] || { echo "a failed guard passed: $output"; false; }
   # One check fewer and one more, each against the pinned count -- not a gap of three (attack 12a0307 B5).
-  run frontdoor_verdict "smoke: front-door mood=dark expected=31 ran=31 ok=31 warp-held=3/3 failed=none" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=32 ran=32 ok=32 warp-held=3/3 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a smoke with a check deleted passed: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=33 ran=33 ok=33 warp-held=3/3 failed=none" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=34 ran=34 ok=34 warp-held=3/3 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a smoke with an unpinned check added passed: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=32 ran=32 ok=32 warp-held=1/1 failed=none" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=33 ran=33 ok=33 warp-held=1/1 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a pass that crossed once passed: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=32 ran=32 ok=32 warp-held=0/3 failed=none" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=33 ran=33 ok=33 warp-held=0/3 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a workroom that unmounted the stage with no warp passed: $output"; false; }
-  run frontdoor_verdict "smoke: front-door mood=dark expected=32 ran=32 ok=32 warp-held=1/3 failed=none" dark
+  run frontdoor_verdict "smoke: front-door mood=dark expected=33 ran=33 ok=33 warp-held=1/3 failed=none" dark
   [ "$status" -ne 0 ] || { echo "a warp held on one crossing of three passed: $output"; false; }
   run frontdoor_verdict "$good" light
   [ "$status" -ne 0 ] || { echo "light passed on a dark line: $output"; false; }

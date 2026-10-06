@@ -485,6 +485,175 @@ _verify() {
   [ "$VERIFY_STATUS" -eq 3 ]
 }
 
+# ---------------------------------------------------------------------------------------------
+# The re-publish. Phase 01's exit criteria ask for a semantic diff the human reads BEFORE the stamp
+# and a date law that holds across publishes, not only on the first one.
+# ---------------------------------------------------------------------------------------------
+
+LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
+
+@test "legal receipts: a RE-propose names the facts field that moved, before anyone approves" {
+  _published
+  [ -f "$SANDBOX/$LEDGER_REL" ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"receipt: approval.requested"* ]]
+  [[ "$output" == *"this is a RE-publish"* ]]
+  [[ "$output" == *"facts.refund_window_days: changed"* ]]
+  # One field moved, so exactly one is named: a diff that lists every field is a blob again.
+  [ "$(printf '%s\n' "$output" | grep -c '^  facts\.')" -eq 1 ]
+  [[ "$output" != *"FULL-BLOB"* ]]
+}
+
+@test "legal receipts: a field no page prints gets NO print of its own in the committed ledger" {
+  # Round-1 boundary attack B1: a per-field digest of a value no page shows is a guess-and-confirm
+  # oracle in a public repo. Such a field moves only the one folded print, and is never named.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/$LEDGER_REL" "run.facts_fields.refund_window_days"
+  [ "$status" -eq 0 ]
+  [ "${#output}" -eq 64 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/$LEDGER_REL" "run.facts_fields.payment_model"
+  [ "$status" -eq 9 ]
+  [[ "$output" == *"no such field"* ]]
+  # payment_model only steers clause guards; no token prints it. The mutation must also pass the
+  # schema -- the first cut flipped stores_third_party_client_data, which the schema refuses while
+  # client-matter categories are listed, so propose died before the diff was ever printed.
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" payment_model mor
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"facts.(fields no page prints): changed"* ]]
+  [[ "$output" != *"facts.payment_model"* ]]
+}
+
+@test "legal receipts: a price the pricing TABLE prints is named, not folded" {
+  # table.pricing prints three facts fields through one token. Before it named them, a changed
+  # price read as "a field no page prints moved" on the page that prints it.
+  _published
+  for k in pricing.period pricing.plan_names pricing.plan_amounts_inr; do
+    run node "$ARC_ROOT/tests/legal-probe.mjs" field-print "$SANDBOX/$LEDGER_REL" "$k"
+    [ "$status" -eq 0 ]
+    [ "${#output}" -eq 64 ]
+  done
+}
+
+@test "legal receipts: a token only inside a SKIPPED clause gets no print of its own" {
+  # fixture-mor-gst carries a gstin, and both clauses that print it are guarded to invoice_kind
+  # gst, which a merchant-of-record venture is not. Tokens resolve only inside clauses whose guard
+  # holds, so the printed set is what the pages emit, not what the facts hold.
+  _arc_legal_sandbox
+  ARC_LEGAL_CLI="$ARC_LEGAL_CLI" _arc_legal_render "fixture-mor-gst" >/dev/null
+  run grep -c '^gstin:' "$SANDBOX/tests/fixtures/legal/ventures/fixture-mor-gst/facts.yaml"
+  [ "$output" -eq 1 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$ARC_LEGAL_OUT/_run.json" "facts_fields.gstin"
+  [ "$status" -eq 9 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$ARC_LEGAL_OUT/_run.json" "facts_fields.refund_window_days"
+  [ "$status" -eq 0 ]
+  [ "${#output}" -eq 64 ]
+}
+
+@test "legal receipts: an UNREADABLE ledger refuses propose rather than reading as a first publish" {
+  _published
+  printf '{"run":' > "$SANDBOX/$LEDGER_REL"
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"PREVIOUS_UNREADABLE"* ]]
+  [ ! -f "$SANDBOX/out2/_approval.json" ]
+}
+
+@test "legal receipts: a ledger field name carrying a line break prints as ONE quoted token" {
+  # A tampered ledger key must not forge a diff line the reviewer reads before stamping.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" ledger-field "$SANDBOX/$LEDGER_REL" 'x\n  facts.effective_date: unchanged'
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'facts."x\n  facts.effective_date: unchanged": removed'* ]]
+  [ "$(printf '%s\n' "$output" | grep -c '^  facts\.effective_date: unchanged')" -eq 0 ]
+}
+
+@test "legal receipts: a ledger field name carrying a bidi override prints escaped, not raw" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" ledger-field "$SANDBOX/$LEDGER_REL" 'x\u202eenilno'
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'facts."x\u202eenilno": removed'* ]]
+  [ "$(printf '%s' "$output" | LC_ALL=C grep -c $'\xe2\x80\xae')" -eq 0 ]
+}
+
+@test "legal receipts: PREVIOUS_MOVED -- a publish landing after the human read the diff is refused" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  # Another publish lands: the ledger bytes move after the diff was read.
+  printf '\n' >> "$SANDBOX/$LEDGER_REL"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out2/_approval.json" "$SANDBOX/d2.json" approve "2026-08-14T00:00:00Z"
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out2" \
+    --request "$(_decides "$SANDBOX/d2.json")" >"$SANDBOX/pub2.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub2.txt"
+  [[ "$output" == *"PREVIOUS_MOVED"* ]]
+  [ ! -f "$SANDBOX/out2/_published.json" ]
+}
+
+@test "legal receipts: a re-publish against a record with no field prints WARNs full-blob" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" strip-field-prints "$SANDBOX/$LEDGER_REL"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"this is a RE-publish"* ]]
+  [[ "$output" == *"WARN consistency"*"FULL-BLOB"* ]]
+}
+
+@test "legal receipts: NON_MONOTONIC -- a re-publish moving effective_date backwards is refused" {
+  # The first publish carries 2026-08-13. The second is decided on 2026-08-01, so BACKDATED cannot
+  # be what refuses it: only the ledger's previous date can.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" effective_date 2026-08-12
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out2/_approval.json" "$SANDBOX/d2.json" approve "2026-08-01T00:00:00Z"
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out2" \
+    --request "$(_decides "$SANDBOX/d2.json")" >"$SANDBOX/pub2.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub2.txt"
+  [[ "$output" == *"NON_MONOTONIC"* ]]
+  [[ "$output" != *"BACKDATED"* ]]
+  [ ! -f "$SANDBOX/out2/_published.json" ]
+}
+
+@test "legal receipts: a re-publish moving effective_date FORWARD publishes" {
+  # The positive control for the refusal above: without it NON_MONOTONIC could be passing because
+  # every second publish is broken.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" effective_date 2026-08-20
+  [ "$status" -eq 0 ]
+  run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out2/_approval.json" "$SANDBOX/d2.json" approve "2026-08-14T00:00:00Z"
+  [ "$status" -eq 0 ]
+  PUBLISH_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out2" \
+    --request "$(_decides "$SANDBOX/d2.json")" >"$SANDBOX/pub2.txt" 2>&1 || PUBLISH_STATUS=$?
+  [ "$PUBLISH_STATUS" -eq 0 ]
+  run cat "$SANDBOX/pub2.txt"
+  [[ "$output" == *"facts.effective_date: changed"* ]]
+  [[ "$output" == *"published "*" page(s)"* ]]
+}
+
 @test "legal receipts: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"

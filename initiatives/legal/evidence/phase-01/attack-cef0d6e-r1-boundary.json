@@ -1,0 +1,64 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:531-535 (publishedRecord) and :623",
+      "breaking_input": "products/legal/published/<venture>.json is truncated mid-write, or holds valid JSON with no `run` key or a non-array `run.pages`. Run `arc-legal propose --venture <venture> --out DIR`.",
+      "why": "publishedRecord calls readJson with no try/catch, so truncated JSON throws uncaught and propose exits with a stack trace instead of the CLI's defined 2. In the second case `previous && previous.run && Array.isArray(...)` is false, so propose prints no 're-publish' notice and no refusal at all. The reviewer approves a re-publish believing it is a first publish. The round-1 B6 finding on this read was not fixed. This is also a twin of guard-skipped-when-its-input-is-absent: an unreadable previous state is treated as 'no previous state'. Publish has its own handling for an unreadable previous record (PREVIOUS_UNREADABLE), and propose does not.",
+      "fix": "Catch the parse error in publishedRecord and return a refusal with exit 2. When a ledger file exists but its `run.pages` is unusable, refuse at propose with the same PREVIOUS_UNREADABLE outcome publish uses. Do not skip the diff.",
+      "twin_of": "guard-skipped-when-its-input-is-absent"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~550 (printSemanticDiff) with receipts.mjs semanticDiff",
+      "breaking_input": "The committed ledger's run.facts_fields has a key such as \"x\\n  facts.effective_date: unchanged\\n\" or one containing ESC[2J, and the fresh run lacks that key. The diff prints `facts.<key>: removed` with the key raw. The same goes for `page` and clause ids from the previous record.",
+      "why": "Field names from the previous record are printed straight to the terminal the reviewer reads before stamping. A tampered or merged ledger entry can forge extra diff lines, hide the real ones, or clear the screen. This is guard-inspects-the-object-not-the-output: the field name is trusted as data but rendered as text.",
+      "fix": "Print field names through JSON.stringify or strip control characters. Alternatively accept only keys matching /^[A-Za-z0-9_.()\\- ]+$/ from the previous record and refuse the diff otherwise."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~553 (printSemanticDiff writeSync) and :853-854 (publish)",
+      "breaking_input": "(a) A large diff written to a slow pipe: writeSync(1, big) returns fewer bytes than the string length. (b) `arc-legal publish ... | head -0` or a closed stdout.",
+      "why": "(a) The writeSync return value is ignored, so a partial write returns true and the diff the reviewer reads is truncated while the comment promises it is whole. (b) publishMain calls `printSemanticDiff(diff)` and discards the false result, so publish proceeds to write _published.json with the diff unseen. Propose treats the same failure as a refusal, so the two verbs are inconsistent. Earlier console.log lines, if queued asynchronously, can also be overtaken by the synchronous diff and reorder the plan.",
+      "fix": "Loop on writeSync until all bytes are written, and treat EAGAIN with a bounded retry. In publish, treat a false return as exit 2 before writing the record. Route the earlier plan lines through the same synchronous writer."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:623-627 (propose) vs :853 (publish)",
+      "breaking_input": "Propose prints the diff against ledger state L1 and the reviewer stamps. Another publish for the same venture then lands, moving the ledger to L2. Publish runs.",
+      "why": "Propose reads the ledger without the exclusive lock publish takes. The approval binds only the payload digest, not the previous record the diff was computed against. Publish therefore recomputes a different diff than the one the human read, with no refusal. 'What the human read' and 'what is being published against' can diverge silently.",
+      "fix": "Put the previous record's digest (sha of the ledger entry) into the approval payload and refuse at publish if it moved. Alternatively read the ledger under the lock at propose."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:361-381 (usedTokens), receipts.mjs printedFactPaths",
+      "breaking_input": "A template token such as `facts.private_note` sits inside a `when=`-false clause or a non-selected branch, or is read only in a guard expression. `ctx.used` records reads, not output. The field gets its own unsalted per-field digest in the public ledger although no rendered page shows its value.",
+      "why": "The B1 fix keys the 'printed' set on tokens read. If the renderer adds to `used` while evaluating guards or skipped clauses, a low-entropy private value gets a guess-and-confirm digest in the public repo. This is the same fingerprint-is-an-oracle class, reopened through the allowlist.",
+      "fix": "Build the printed set from tokens actually emitted into page text, for example by recording in the interpolation step only. Add a test with a token inside a false guard and assert it is folded.",
+      "twin_of": "fingerprint-is-an-oracle"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/legal/lib/receipts.mjs:~459-470 (walk path join)",
+      "breaking_input": "Facts `{\"a.b\": 1}` and `{a:{b:1}}`, or a key equal to the sentinel text, collide on the dotted path `a.b`.",
+      "why": "Two distinct fields write the same `out[path]`, so one is overwritten. A change to the loser is never named. The round-1 B3 collision case was left unfixed, and only the Date/Map half was closed.",
+      "fix": "Encode the path as JSON.stringify of the segment array. Or refuse facts keys containing '.' at schema validation."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:531-533",
+      "breaking_input": "`--venture CON`, `aux` or `nul`, or a case variant such as `Fixture-Gateway-GST`, on Windows or macOS.",
+      "why": "`join(PRODUCT,'published',venture+'.json')` with existsSync resolves a reserved device name on Windows (con.json is the CON device). On a case-insensitive filesystem it resolves another spelling's ledger and prints that venture's diff. The path is built from a name with no confinement or exact-case check here.",
+      "fix": "Validate the venture against the lane-name grammar, reject reserved device names, and require an exact-case match against readdirSync of the published directory.",
+      "twin_of": "path-from-the-record-not-confined"
+    }
+  ]
+}

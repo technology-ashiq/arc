@@ -1,0 +1,53 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/legal/lib/receipts.mjs:444-462 (factsFieldPrints), arc-legal.mjs:444",
+      "breaking_input": "Facts hold low-entropy fields that no page prints, such as a phone number, a PIN code, a boolean, or a short name. An attacker clones the public arc repo, reads run.facts_fields in the committed ledger, and tries candidates. Each candidate is hashed as `path|JSON.stringify(value)` and compared to the stored digest. The path is known from the key and the hash is unsalted.",
+      "why": "The comment argues a fingerprint reveals nothing the page does not. That is false for any field the pages do not interpolate. It is also false before a page is live, which the comment itself names as the case for operator name and address. A bare hash of a guessable value is a reversible commitment. It puts owner PII into a public repo, which the project's own rule forbids.",
+      "fix": "Fingerprint with an HMAC under a per-venture secret kept outside the repo, for example in ~/.arc-private. Or record prints only for fields that pages interpolate. Or record only a field-changed flag that carries no digest of the value."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~540 (printSemanticDiff) with receipts.mjs semanticDiff",
+      "breaking_input": "The previous published record has no facts_fields and the new facts change refund_window_days. The change also moves one clause, so clauseChanges is non-empty.",
+      "why": "changedFacts is null, so opaque is false (clauseChanges is non-empty) and the `if (diff.changed_facts)` guard prints nothing. The reviewer sees only the clause line. They cannot tell \"no facts field moved\" from \"cannot tell which field moved\", though the comment says these must never look the same. The blob-signing warning is suppressed in exactly the case it was written for.",
+      "fix": "When changedFacts is null and facts_changed is true, print an explicit line such as `facts: changed, field not nameable (record predates field prints)`. Do this independently of whether a clause moved."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/lib/receipts.mjs:452-461",
+      "breaking_input": "A facts parser returns a non-plain object for a field: a Date from an unquoted YAML date, or a Map. Or a field is `{}`. Or two keys collide on a dotted path: `{\"a.b\":1}` against `{a:{b:1}}`.",
+      "why": "A Date or Map is an object and not an array, so Object.keys returns [] and the walk records no entry. The field is silently absent from both sides, so a change to it is invisible and the diff reports no change. An empty object does the same. Dotted-key collisions overwrite one another. Facts can then move while changedFacts stays empty, and the opaque warning fires without naming anything.",
+      "fix": "Recurse only into plain objects, checking the prototype is Object.prototype or null. Record leaf non-plain values through JSON.stringify. Record `{}` as a leaf. Join paths with a separator that cannot appear in a key, or encode the path as a JSON array."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/legal/lib/receipts.mjs:454, 478-481",
+      "breaking_input": "A facts field is named `__proto__`, `constructor` or `toString`.",
+      "why": "`out[\"__proto__\"] = string` on a plain object is silently dropped. The `field in before` test also matches inherited Object.prototype members. A field absent on one side is then misread as present, so a change goes unreported or is classed wrongly.",
+      "fix": "Build `out` with Object.create(null) and use Object.hasOwn(before, field) in place of `in`."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~605-608 (proposeMain)",
+      "breaking_input": "`arc-legal propose --dry-run ... | head -3`, or stdout closed early, on a re-propose with several changed facts.",
+      "why": "printSemanticDiff writes through async console.log, which is async on Windows pipes. The digest line below is written by synchronous writeSync, which the existing comment says is needed so the plan is readable whole. The diff is exactly what the human must read before approving, but a closed pipe or reordering can drop it or push it after the digest while the exit stays 0.",
+      "fix": "Write the diff lines with synchronous writes, as the digest line does. Treat a failed write as a refusal."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/legal/arc-legal.mjs:~527 (publishedRecord)",
+      "breaking_input": "The committed ledger file is truncated or contains invalid JSON, or the venture name differs from the ledger name only by case on Windows or macOS.",
+      "why": "existsSync followed by readJson is not guarded, so a corrupt ledger throws an uncaught exception in propose and the exit code is not the CLI's defined 2. propose also reads the ledger without the exclusive lock publish takes. A case variant of the venture name resolves to another venture's ledger on a case-insensitive filesystem and prints that venture's diff.",
+      "fix": "Catch the parse error and return a defined refusal with exit 2. Validate the venture name against the lane-name grammar and require an exact-case match on the directory entry."
+    }
+  ]
+}

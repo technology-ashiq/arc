@@ -91,3 +91,23 @@ test green. A record with NO label asks the same question honestly, and that is 
 - **`publish-gate.mjs` still has no dedicated CI step** — `.github/` is write-denied here, so it
   runs inside the bats step. A publish target still turns the build red; the clear label is what
   is lost.
+
+## Addendum, 2026-10-06 -- the criterion this bundle did not meet
+
+The bundle above was written 2026-08-15 and the tracker never flipped. Re-read against the spec at
+close, one criterion was unbuilt: **a reachability row's recorded evidence must include an excerpt
+of the SERVED body matched against the committed page's `output_sha256`.** The checklist accepted
+`{"outcome":"PASS"}` alone.
+
+Built in PR #341 (`lib/checklist.mjs` `reachabilityCheck`):
+
+- a PASS with no `served_excerpt` (40+ characters) or no `matched_output_sha256` is REFUSED, exit 2;
+- an excerpt that is not in the approved page (placeholder, soft-404, homepage redirect) turns the
+  row FAIL; so does evidence matched against an older page version;
+- a row with no `page` is refused, so the check cannot vanish when its input is absent;
+- every surviving PASS is printed `self-attested, not fetched`, because nothing fetched the URL --
+  the probe arm is designated cut #1 and the honest label is the only thing standing in for it.
+
+Fixtures: `legal-checklist.bats` +5. The honest gaps listed above are unchanged; two attack lows
+on this code (excerpt may match the header; HTML entities not normalised, failing closed) are in
+`initiatives/legal/debt-ledger.md`.
