@@ -312,7 +312,9 @@ export async function scaffold(ctx) {
   const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}) };
   await sb(ctx, "PATCH", `/projects/${ref}/config/auth`, patch);
   // What it was, so the exit plan can put it back.
-  ctx.report({ kind: "auth-config", id: `${ref}:site_url=${site}:was=${say(now || "(none)", 80)}` });
+  // Recorded once, from the first apply: a re-run sees launch's own site URL and must not record it as "what it was"
+  // (attack 6a5c24e B3) -- the earlier record is the one the exit plan restores.
+  if (!ctx.resources.some((r) => r.kind === "auth-config")) ctx.report({ kind: "auth-config", id: `${ref}:site_url=${site}:was=${say(now || "(none)", 80)}` });
   // .env.example is shared (ADR-1729): this slot adds its names, never a value, and never removes a line.
   const sha = await commitFiles(ctx, full, FILES, {
     ".env.example": (text) => {
@@ -363,5 +365,8 @@ export async function verify(ctx) {
 // The probe user goes; the routes are venture code and stay with the repo.
 export async function teardown(ctx) {
   const steps = [{ action: "delete-probe-users (launch-probe-a/b/c)", resource: (ctx.resources.find((r) => r.kind === "supabase-ref") || {}).id || "unknown" }];
+  // The site URL goes back to what the first apply found, if it still points at launch's (re-checked at run time).
+  const cfg = ctx.resources.find((r) => r.kind === "auth-config");
+  if (cfg) steps.push({ action: "restore-site-url-if-unchanged", resource: cfg.id });
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
 }

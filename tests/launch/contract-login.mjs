@@ -74,6 +74,7 @@ switch (scenario) {
     out.commits = ["auth:", "authz:", "tenancy:"].map((p) => repo().commits.filter((c) => (c.message || "").startsWith(p)).length);
     out.kinds = { auth: state.auth.map((r) => r.kind), authz: state.authz.map((r) => r.kind), tenancy: state.tenancy.map((r) => r.kind) };
     out.teardown = (await A.authz.mod.teardown(ctxFor("authz"))).steps.map((s) => s.action);
+    out.authTeardown = (await A.auth.mod.teardown(ctxFor("auth"))).steps.map((s) => s.action);
     break;
   }
   case "leak":
