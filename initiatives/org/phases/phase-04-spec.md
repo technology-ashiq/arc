@@ -12,13 +12,13 @@
 - Sync golden and wiki regenerated in the same commit. Added through /arc-change, 2026-10-06.
 
 ## Exit criteria (Definition of Done)
-- [ ] each gate FAILs on every face contract file it reads with one duplicate key, naming the file (face-coverage never reads room-copy.json; face-sections catches a registry duplicate as drift)
-- [ ] both gates pass on main's real contracts
-- [ ] tests added & green on CI (`tests/org/dup-keys.mjs` from a bats file)
-- [ ] live demo run + output checked
-- [ ] contract tests: n/a — no external dependency
-- [ ] `/arc-attack` boundary surface once on the local commit before push
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] each gate FAILs on every face contract file it reads with one duplicate key, naming the file (face-coverage never reads room-copy.json; face-sections catches a registry duplicate as drift)
+- [x] both gates pass on main's real contracts
+- [x] tests added & green on CI (`tests/org/dup-keys.mjs` from a bats file)
+- [x] live demo run + output checked
+- [x] contract tests: n/a — no external dependency
+- [x] `/arc-attack` boundary surface once on the local commit before push
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 - **Test command:** `node tests/org/dup-keys.mjs` (a scratch copy of the contracts with one key duplicated per file).
