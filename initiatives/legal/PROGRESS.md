@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-legal (Cycle 14, opened 2026-08-12)
-phase: 01
+phase: 03
 appetite: 5d
-burn: 3.5d
-blocked-on: owner — fixture publish stamp via arc-inbox (Phase 01) and five LexOS facts (Phase 03)
+burn: 4d
+blocked-on: owner — five LexOS facts and a DPDP Rule 3 gazette check (Phase 03)
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -19,8 +19,8 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — three core pages end to end: schema, render, three lints, hash fixtures, two-surface adversarial pass, text attack panel | 2d | ✅ 2026-08-13 |
-| 01 | The full set and its receipts — remaining four pages, scenario fixtures, completeness over seven, inbox wiring, hash-chain enforcement | 1.5d | in progress |
-| 02 | Guards and governance — `--verify`, generated venture CI guard, pins + `--bump-templates`, template-edit approval, checklist renderer (all rows manual — probe automation cut at kickoff) | 0.5d | pending |
+| 01 | The full set and its receipts — remaining four pages, scenario fixtures, completeness over seven, inbox wiring, hash-chain enforcement | 1.5d | ✅ 2026-10-07 |
+| 02 | Guards and governance — `--verify`, generated venture CI guard, pins + `--bump-templates`, template-edit approval, checklist renderer (all rows manual — probe automation cut at kickoff) | 0.5d | ✅ 2026-10-07 |
 | 03 | The real render — LexOS real facts, approval, commit into its tree, integration handoff, evidence bundle, retro | 1d | pending |
 
 ## Done-log
@@ -42,12 +42,46 @@ Closed against every exit criterion, with three things worth naming rather than 
 
 Appetite: 2d budgeted, closed inside it.
 
+**Phase 01 — closed 2026-10-07.** A decision approves bytes, and a re-publish shows what moved
+before anyone signs it. Evidence: `initiatives/legal/evidence/phase-01/bundle.md` (manifest verified).
+
+- **Built 2026-08-13/14, left open for seven weeks** with one criterion unmet: the semantic diff
+  returned a constant empty field list and printed after the stamp. Built in PR #341 (`5e9f9e63`).
+- **CI green at `37af2cfb`, 19 of 19 jobs, read per-JOB.** Two reds on the way, both real: a test
+  whose mutant the schema refused before the diff ran, and a wiki count stale against a main that
+  had moved during the run.
+- **The real approval round-trip refused once, correctly.** The owner's first stamp
+  (`01M49827H07TBPT40AZWGMCV34`) was refused as BACKDATED because the fixture still carried its
+  August effective date. The second (`01M498QE6KV4T17YESB7DV18WX`) published 7 pages, verify INTACT.
+  Every id is in `events/` and absent from `_quarantine/`.
+- **Attackers:** four boundary passes and one logic pass, 1+1 high and 16 medium fixed, lows in
+  `debt-ledger.md`. They had run with no carried defect list for the whole lane until 2026-10-06.
+- `legal-receipts.bats` 31 → 42 tests. amendments: 0 · reopened: n.
+
+Appetite: 1.5d budgeted, ~2d spent (over by ~0.5d, mostly the attack rounds and the late gap).
+
+**Phase 02 — closed 2026-10-07.** A page that drifts from its receipt is detectable without arc,
+a template edit cannot reach a venture silently, and the checklist asks for what a URL served.
+Evidence: `initiatives/legal/evidence/phase-02/bundle.md` plus its 2026-10-06 addendum.
+
+- Built 2026-08-14/15. One criterion was unmet until PR #341: a reachability PASS needed no served
+  evidence. It now needs an excerpt plus the matched page hash, and says `self-attested, not
+  fetched` on the row, because the probe arm is cut #1.
+- `legal-checklist.bats` 10 → 14, `legal-pins.bats` 19. amendments: 0 · reopened: n.
+
+Appetite: 0.5d budgeted, ~0.5d spent.
+
 ## Appetite burn
 
-**~3d of 5d used (60%).** Re-derived at this close, not carried forward: Phase 00 closed inside
-its 2d, and Phase 01 has spent roughly 1d of its 1.5d with the receipts half now built and the
-adversarial pass on it still running. Phases 02 and 03 hold 1.5d between them against a 2d
-remainder, so the position is tight but not yet over.
+**~4d of 5d used (80%).** Re-derived at the 2026-10-07 close: Phase 00 2d, Phase 01 ~2d (0.5d
+over), Phase 02 ~0.5d. Phase 03 holds 1d against a 1d remainder, so there is no slack left. The
+next overrun is a scope cut inside Phase 03 (the integration handoff stays a document; nothing is
+wired into LexOS), not an extension.
+
+_Previous reading, 2026-08-15:_ **~3d of 5d used (60%).** Phase 00 closed inside
+its 2d, and Phase 01 had spent roughly 1d of its 1.5d with the receipts half built and the
+adversarial pass on it still running. Phases 02 and 03 held 1.5d between them against a 2d
+remainder.
 
 The kill tripwire was **2.5d if Phase 00 is not closed**. Phase 00 IS closed, so it did not fire.
 The honest read is that the scope grew rather than the estimate slipping: the reader panels
@@ -65,7 +99,12 @@ recomputed.
 
 ## Now
 
-**Position (2026-10-06):** Phase 01 OPEN, Phase 02 built, Phase 03 blocked on the owner.
+**Position (2026-10-07):** Phases 00–02 closed. **Phase 03 OPEN, blocked on the owner:** five
+LexOS facts, a gazette check of the DPDP Rule 3 date, then a read and stamp of the seven real
+pages. **Set LexOS's `effective_date` on or after the day the stamp will land.** The fixture's
+August date was refused as BACKDATED on 2026-10-07, and that cost one stamp.
+
+_Below: the 2026-10-06 note that led to these closes._
 
 The tracker said `phase: 00 · burn: 0d` for seven weeks while Phases 01 and 02 were built on top
 of it. Re-read against the specs on 2026-10-06, each phase had one exit criterion that was never
