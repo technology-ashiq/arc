@@ -108,6 +108,6 @@ Built in PR #341 (`lib/checklist.mjs` `reachabilityCheck`):
 - every surviving PASS is printed `self-attested, not fetched`, because nothing fetched the URL --
   the probe arm is designated cut #1 and the honest label is the only thing standing in for it.
 
-Fixtures: `legal-checklist.bats` +5. The honest gaps listed above are unchanged; two attack lows
+Fixtures: `legal-checklist.bats` +4. The honest gaps listed above are unchanged; two attack lows
 on this code (excerpt may match the header; HTML entities not normalised, failing closed) are in
 `initiatives/legal/debt-ledger.md`.

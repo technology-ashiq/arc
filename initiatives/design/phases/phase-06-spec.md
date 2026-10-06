@@ -8,26 +8,35 @@ retrieval, failure behaviour — on one fixture, before any adapter code exists 
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **Terms clearance recorded FIRST.** Per
+- [x] **Terms clearance recorded FIRST.** Per
       [ADR-1413](../../../docs/adr/1413-a-rival-is-not-called-until-its-terms-clear.md), no live
       call is made until that provider's terms position is recorded as a `decision.recorded`.
       v0's API Terms prohibit performance testing without express written permission; this is an
       owner ruling, not a lane judgment
-- [ ] Spike covers **one provider, one fixture** — not both providers, not a matrix
-- [ ] Spike receipts record **provider version + request + output schema**
-- [ ] Output retrieval proved to yield source arc can render itself: for v0, `latestVersion.files[]`
+- [x] Spike covers **one provider, one fixture** — not both providers, not a matrix
+- [x] Spike receipts record **provider version + request + output schema**
+- [x] Output retrieval proved to yield source arc can render itself: for v0, `latestVersion.files[]`
       raw content; for Stitch, `fetch_screen_code`'s HTML download
-- [ ] **Self-containment check:** the same fixture rendered with the network blocked produces the
+- [x] **Self-containment check:** the same fixture rendered with the network blocked produces the
       same hash as with it open. A CDN-dependent file cannot be rendered deterministically and
       that provider does not proceed to Phase 07 on a special-case render path
-- [ ] Failure behaviour observed, not assumed: rate-limit shape, and the credit-exhaustion path
+- [x] Failure behaviour observed, not assumed: rate-limit shape, and the credit-exhaustion path
       (v0 returns HTTP 402)
-- [ ] Any npm package pinned **only** after `npm view <pkg> version` is run — `v0-sdk@0.16.7`
+- [x] Any npm package pinned **only** after `npm view <pkg> version` is run — `v0-sdk@0.16.7`
       and `@google/stitch-sdk@0.3.5` are registry-verified, but `@v0-sdk/react` and
       `@v0-sdk/ai-tools` are **UNVERIFIED and must not be used**
-- [ ] Spike code is **quarantined and never merged** — it produces receipts, not a dependency
-- [ ] **No adapter file is committed** until the spike receipt exists
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] Spike code is **quarantined and never merged** — it produces receipts, not a dependency
+- [x] **No adapter file is committed** until the spike receipt exists
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
+
+**Amended 2026-10-07 via `/arc-change` (one DoD row narrower, owner ruling in chat):** the
+failure-behaviour row closes on the **bad-key shape, observed** (`StitchError` `UNKNOWN_ERROR`
+wrapping a JSON-RPC `isError` text, 3.6 s). The rate-limit and quota shapes were not reached on the
+free tier in one run and are **not claimed**. Hammering a free quota with ~95 s generates to reach
+them was declined; Phase 07 instead owes a fake-transport test that the adapter turns an unknown
+error, a rate-limit and a quota answer into a printed source-status line and an arc-only jury (its
+existing degrade row). The credit-exhaustion half (v0's HTTP 402) is v0's, and v0 was not the
+provider spiked.
 
 ## Verification plan
 

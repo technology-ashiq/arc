@@ -1,0 +1,44 @@
+{
+  "phase": "00",
+  "commit": "426a1aa8f2ad3ca47e990f55278665ccf40897dc",
+  "short": "426a1aa8",
+  "generated": "2026-10-06T18:48:31Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "b22b10535f530b1c28df68f03c48b3a6a4a3ed8a163190b4ed62712d07006d82"
+    },
+    {
+      "name": "attack-5e1d529-r2-boundary.json",
+      "sha256": "93680a4a7b54c64f2dbf77eb33ad8f7f2a422a3186f567c5893cf2fdccc51d04"
+    },
+    {
+      "name": "attack-5e1d529-r2-logic.json",
+      "sha256": "c557ee4a34422d75fc0b9b000bf3c6ac93a5a7763ce29a555e799d2d281b1df9"
+    },
+    {
+      "name": "attack-8bb1a72-r1-boundary.json",
+      "sha256": "43862a6729aa5cc75b1432da5c989cbd93900a217ff685adff46102815da49ed"
+    },
+    {
+      "name": "attack-8bb1a72-r1-logic.json",
+      "sha256": "c19df19ef8eba72d92bd427d106f77c6929243fe5e267dc8c9349d1a153e4da1"
+    },
+    {
+      "name": "attack-9d389cc-r2-boundary.json",
+      "sha256": "3e2725da9a5a8fd0bcd875d4d90ecea89fd771b69259455f7caa708d3404ef38"
+    },
+    {
+      "name": "attack-dfe58d2-r1-boundary.json",
+      "sha256": "58f8994c0c2c375698964c08ab8961009a0c845ea100e1ea9a30efdf783ab114"
+    },
+    {
+      "name": "attack-dfe58d2-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "market-agent-audit.md",
+      "sha256": "9c856da6433bd26dd3fa55dc4148dcfbbb7dc3ef6faa6edef86c380346daf97b"
+    }
+  ]
+}
