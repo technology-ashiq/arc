@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:141-142",
+      "breaking_input": "Venture with ci_protection: absent-plan on a public repo or paid plan (no plan limit). scaffold catches PLAN_LIMIT, returns protection-absent, but never calls protect. The workflow commits but no protection is ever added, even though GH would grant it. Later verify reads protection and finds it absent, returning not-ok for a legitimate public/paid setup.",
+      "why": "The ruling's logic path (plan limit + absent-plan) returns early in scaffold without ensuring protection was actually impossible. If the repo later becomes public or the plan upgrades, the same ruling still skips protection, violating 'never skips protection GitHub would grant.'",
+      "fix": "In scaffold, after the early return for absent plan limit, add a check that protection is indeed still unavailable (e.g., try protect() again or confirm the plan limit persists). Only return protection-absent if the protect call also fails with PLAN_LIMIT; otherwise, let protect succeed and report normally."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:176-178",
+      "breaking_input": "verify catches a PLAN_LIMIT and rule absent-plan, then sets required = 'ABSENT(plan: private-repo protection)'. The subsequent poll for a green run proceeds without checking that the absent plan actually prevents setting required checks. A later run where GH starts granting protection (plan upgrade) will still be verified as ok with required = ABSENT, even if protection is now possible.",
+      "why": "verify treats a single historic plan-limit answer as permanent, but protection availability can change between runs. The probe does not re-check protection before concluding ok.",
+      "fix": "In verify, after the catch block for PLAN_LIMIT, re-check protection availability (e.g., by calling the same protect/required_status_checks endpoint again). Only record required = ABSENT if protection still unavailable; otherwise, fail with 'main does not require ...' as normal."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:146-147",
+      "breaking_input": "A re-run of scaffold after a prior absent ruling: the ruling function returns 'absent-plan' again, but the reported resource list includes 'protection-absent' from an old run, so the code returns protection-absent again even if plan limit no longer applies (e.g., after plan upgrade). The same 'twin' defect from the prior patterns list (validate one read, use another).",
+      "why": "scaffold catches PLAN_LIMIT once, reports protection-absent, and returns early. On a re-run, ctx.resources still contains the old protection-absent resource, so the code never calls protect() again. A plan upgrade would be missed.",
+      "fix": "In scaffold, after the early return, check if protection is still truly absent by attempting a protect call, even if a prior resource exists. Do not rely on historic resources alone."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:147-148",
+      "breaking_input": "The same verification path in verify: the probe reads protection and catches PLAN_LIMIT. But if the repo becomes public between scaffold and verify, verify will still treat the absence as ABSENT, even though the protection endpoint would now succeed. The test codes for verify in the diff show 'o.verify.evidence.required' = 'ABSENT(...)', but there is no re-check that protection is actually impossible.",
+      "why": "verify's logic assumes the plan limit is permanent, but it can change. No re-check is done.",
+      "fix": "In verify's catch, call the protection endpoint again (with a fresh request) to confirm it still returns PLAN_LIMIT before recording ABSENT. If it succeeds, treat the branch as unprotected and return not-ok."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:143-145",
+      "breaking_input": "scaffold's try-catch around protect catches only PLAN_LIMIT with the right ruling, but does not catch other errors (e.g., 403 with different text, 404, 429). Those errors are rethrown, potentially breaking the scaffold. The prior defect patterns list includes 'Any 403 with the right words became PLAN_LIMIT' and 'verify throws a refusal out of a read-only probe'.",
+      "why": "Only one specific error is handled. Other API errors (rate limit, token expiration, etc.) would propagate as unhandled rejections, failing the scaffold even though the workflow was already committed.",
+      "fix": "In the catch block, handle a broader set of may-be-temporary errors (like 429, 5xx) with a retry or specific message, rather than rethrow. At minimum, log and return a clean failure, not a raw throw."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:140",
+      "breaking_input": "ruling(ctx) returns 'required' by default, but the default case for absent is 'required'. A typo in the venture file 'ci_protection: required' is treated as 'required', same as missing key. No distinction between explicit 'required' and absent, so 'required' is not a valid ADR ruling value (only 'absent-plan' is allowed).",
+      "why": "The ADR describes three possibilities: absent (means default required), absent-plan (the ruling), and any other value -> BAD_RULING. The code treats 'required' as a valid value, but the ADR says leaving it out means required, not setting it explicitly. An explicit 'required' should also be treated as required (benign), but this could be a confusion point.",
+      "fix": "Consider treating any explicit value other than 'absent-plan' as BAD_RULING, including 'required', to prevent silent interpretation of typos. Or document that 'required' is an alias for default."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "products/launch/providers/ci/github-actions.mjs:113-115",
+      "breaking_input": "The ruling function is called unconditionally in scaffold, but the ruling is only meaningful if protect later fails. If the ruling is 'absent-plan' but protect succeeds (no plan limit), the code still records the protection normally. That is fine. But if the ruling is 'absent-plan' and protect succeeds, the ruling has no effect. However, if the ruling is 'absent-plan' and protect fails with a different error (not PLAN_LIMIT), the error is thrown and the ruling is ignored, which is correct. No logic defect here, but the rule's check is wasted.",
+      "why": "No actual vulnerability, but the design creates a confusing path where the ruling is considered even when protection is possible. This is confusing for auditing.",
+      "fix": "Consider moving the ruling check inside the catch block, so it is only evaluated when needed."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:118-122",
+      "breaking_input": "In the catch block, the code returns early with 'protection-absent' resource, but does not update the reported array for the new protection-absent entry. It returns resources that include the old reported items, but the reported list is not pushed for the new protection-absent. The prior 'absent-ruling' test checks 'o.reported.join(...)' and expects 'protection-absent' to be in reported, but the scaffold function itself does not call ctx.report for the new protection-absent entry inside the catch block (it only does so after the catch block). Actually, line 142 calls ctx.report for protection-absent, and then returns resources that include it. So reported IS updated. No defect.",
+      "why": "No actual defect; the code does report the protection-absent resource properly. This is a false positive from prior defect patterns analysis.",
+      "fix": "No fix needed."
+    },
+    {
+      "id": "L9",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:191-195",
+      "breaking_input": "verify's probe catches PLAN_LIMIT and sets required = ABSENT, but does not verify that the workflow was actually committed (scaffold succeeded). If scaffold previously succeeded under absent ruling, verify assumes the workflow exists. But if scaffold failed after committing only the workflow (not protection), verify still proceeds. However, the test for red run (absent-ruling-red) shows verify returns not-ok when a leg is red, so the check on workflow existence is implicit. But if the workflow never existed (e.g., scaffold never ran), verify would still catch PLAN_LIMIT (since the protection call fails) and proceed to poll runs, which would find no runs, and report 'no run' as not-ok. That is correct.",
+      "why": "No direct vulnerability; verify correctly handles the absence of runs.",
+      "fix": "No fix needed."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "tests/launch/contract-ci.mjs:168-175",
+      "breaking_input": "The test for 'absent-ruling-no-limit' sets up a scenario where the GH plan does not limit, so protect succeeds. But the test uses the same 'absent-plan' ruling. This tests that protection is still created. However, the test does not verify that the ruling is ignored (i.e., that the returned resources do not include 'protection-absent'). It only checks 'out.reported' for the kinds 'github-workflow,branch-protection'. But if the ruling caused an early return (which it does not, because protect succeeds), the test would fail. This is fine.",
+      "why": "No actual vulnerability; the test covers the case correctly.",
+      "fix": "No fix needed."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:169-170",
+      "breaking_input": "In probe, after the catch block, the code proceeds to the HEAD check and runs polling. If the catch block set required = ABSENT (a string), the later filter on CHECKS (an array) uses 'required' as a string, not as an array. But required = ABSENT is a string, so later when code does 'CHECKS.filter(c => ...)' it uses CHECKS correctly, but then the evidence includes 'required: ABSENT(plan:...)' as a string. However, the verify evidence shape shows 'required' as a field in the evidence object, not used in the filter. This is fine.",
+      "why": "No actual defect; the filter uses CHECKS, not required.",
+      "fix": "No fix needed."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:211",
+      "breaking_input": "In verify's final return, the evidence includes 'required: ABSENT(plan:...)' as a string. The prior contract test checks that 'o.verify.evidence.required' equals that string. But if subsequent runs change the scenario (e.g., plan upgrade), the verify would still return that string from the cached evidence? No, verify recomputes every time, so it will re-catch the same error. Only if the plan later allows protection, verify will not catch the error (no PLAN_LIMIT), and will proceed to the normal path where 'required' is CHECKS (array). So the evidence is dynamically updated.",
+      "why": "No actual defect; evidence is recomputed each verify.",
+      "fix": "No fix needed."
+    },
+    {
+      "id": "L13",
+      "severity": "high",
+      "where": "products/launch/providers/ci/github-actions.mjs:140-142",
+      "breaking_input": "ruling(ctx) function reads ctx.profile.ci_protection. If the profile is not provided (e.g., in a test or a misconfigured ctx), ctx.profile is undefined, and the function falls back to default 'required'. This is benign. But if ctx.profile is an object that lacks ci_protection, it defaults to 'required'. This is fine. However, the ruling function does not check the type of v: if v is 0, null, or an empty string, the condition `v === undefined || v === null || v === 'required'` is false, so it falls through to the `v === 'absent-plan'` check, which fails, and then throws BAD_RULING. That is correct: empty string is not a valid ruling.",
+      "why": "No actual vulnerability; the rejection of empty string is intentional.",
+      "fix": "No fix needed."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:140",
+      "breaking_input": "The ruling function treats `v === 'required'` as a valid value, but the ADR only lists absent (default) and absent-plan as valid. Explicit 'required' should either be treated as BAD_RULING or as an alias. Currently it's treated as default. This is inconsistent with the ADR specification that 'Leaving it out means required, and any other value refuses BAD_RULING'. A literal 'required' in the YAML would be an 'any other value', so it should be BAD_RULING.",
+      "why": "The code is too permissive: it accepts 'required' as a synonym for default, but the ADR says only absent means default. This could hide a config error.",
+      "fix": "Remove the explicit 'required' case from the default check. If v is 'required', treat it like any other unsupported value and throw BAD_RULING. Or, if 'required' is to be supported, update the ADR to list it."
+    },
+    {
+      "id": "L15",
+      "severity": "critical",
+      "where": "products/launch/providers/ci/github-actions.mjs:112-126",
+      "breaking_input": "scaffold's early return after the catch block only reports 'protection-absent' resource, but it does not ensure that the workflow was actually committed. If protect fails before the commit (because protect is called after the commit in the refactored code? Actually protect is called after the commit, line 124. So the commit is already done. If protect fails, the workflow is already committed and the protection is absent. The next apply will see the existing workflow (unchanged) and re-run protect, which may succeed if plan changed. So this is correct: the workflow is committed unconditionally, protection is skipped. However, this path does not record the 'protection-absent' resource for the purpose of teardown: teardown only deletes the workflow, not protection. That is correct per ADR.",
+      "why": "No actual vulnerability; design is consistent.",
+      "fix": "No fix needed."
+    }
+  ]
+}

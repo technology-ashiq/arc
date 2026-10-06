@@ -27,6 +27,8 @@ const ghOpts = {
   "red-leg": { runConclusions: ["success", "failure", "success"] },
   "plan-limit": { planLimit: true },
   "verify-plan-limit": { planLimit: true },
+  "absent-ruling": { planLimit: true },
+  "absent-ruling-red": { planLimit: true, runConclusions: ["success", "failure", "success"] },
   "still-running": { pendingPolls: 50 },
   "owner-protection": { repos: [{ ...seed, protection: { contexts: ["lint"], strict: true, reviews: { required_approving_review_count: 2 } } }] },
   "owner-protection-no-checks": { repos: [{ ...seed, protection: { contexts: null, reviews: { required_approving_review_count: 2 } } }] },
@@ -37,8 +39,8 @@ globalThis.fetch = gh.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-ci-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctxFor = ({ upstream = { repo: [{ kind: "github-repo", id: FULL }] } } = {}) => makeCtx({
-  profile: { slug: "arc-sandbox" }, board: {}, slot: { id: "ci" }, row,
+const ctxFor = ({ upstream = { repo: [{ kind: "github-repo", id: FULL }] }, profile = { slug: "arc-sandbox" } } = {}) => makeCtx({
+  profile, board: {}, slot: { id: "ci" }, row,
   root: ROOT, resources: reported, upstream, tag: TAG, attempt: 1, signal: undefined,
   env: { GITHUB_TOKEN: TOKEN }, report: (r) => { if (!reported.some((x) => x.id === r.id)) reported.push(r); },
 });
@@ -136,6 +138,37 @@ switch (scenario) {
   case "no-upstream":
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ upstream: {} })));
     break;
+  case "absent-ruling":
+  case "absent-ruling-red": {
+    // GitHub answers the plan limit and the owner ruled absent-plan (ADR-1735): the workflow stands, protection is ABSENT.
+    const ruled = { profile: { slug: "arc-sandbox", ci_protection: "absent-plan" } };
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor(ruled)));
+    out.again = await attempt(() => adapter.scaffold(ctxFor(ruled)));
+    out.reported = reported.map((r) => r.kind + " " + r.id);
+    out.notes = out.scaffold.ok ? out.scaffold.value.notes : [];
+    out.workflowCommits = repo().commits.filter((c) => c.files && c.files[WF]).length;
+    out.verify = await adapter.verify(ctxFor(ruled));
+    out.teardown = await adapter.teardown(ctxFor(ruled));
+    break;
+  }
+  case "absent-ruling-no-limit": {
+    // The plan grants protection: the ruling changes nothing, protection is created, and an unprotected main is not ok.
+    const ruled = { profile: { slug: "arc-sandbox", ci_protection: "absent-plan" } };
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor(ruled)));
+    out.reported = reported.map((r) => r.kind);
+    out.contexts = repo().protection && repo().protection.contexts;
+    out.verify = await adapter.verify(ctxFor(ruled));
+    repo().protection = null;
+    out.unprotected = await adapter.verify(ctxFor(ruled));
+    break;
+  }
+  case "bad-ruling": {
+    const bad = { profile: { slug: "arc-sandbox", ci_protection: "absent" } };
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor(bad)));
+    out.calls = gh.calls.length;
+    out.verify = await attempt(() => adapter.verify(ctxFor(bad)));
+    break;
+  }
   default:
     console.error(`unknown scenario ${scenario}`);
     process.exit(1);

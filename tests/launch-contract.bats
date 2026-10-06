@@ -208,6 +208,34 @@ arm() {
   [[ "$(j 'o.scaffold.message')" == *"ADR-1726: record it"* ]] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: under the owner's absent-plan ruling a plan limit records protection ABSENT and three green legs verify (ADR-1735)" {
+  arm ci absent-ruling
+  [ "$(j 'o.scaffold.ok + " " + o.again.ok + " " + o.workflowCommits')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-workflow technology-ashiq/arc-sandbox:.github/workflows/arc-ci.yml,protection-absent technology-ashiq/arc-sandbox@main" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.notes.join(",")')" = "required checks ABSENT(plan: private-repo protection) (ADR-1735)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.required')" = "true ABSENT(plan: private-repo protection)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.steps.map(s => s.action).join(",")')" = "delete" ] || { echo "$DONE"; false; }
+  arm ci absent-ruling-red
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"test (windows-latest) failure"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the absent-plan ruling never skips protection GitHub would grant (ADR-1735)" {
+  arm ci absent-ruling-no-limit
+  [ "$(j 'o.scaffold.ok + " " + o.reported.join(",")')" = "true github-workflow,branch-protection" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.contexts.join(",")')" = "test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.required.length')" = "true 3" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.unprotected.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.unprotected.reason')" == *"main does not require test (ubuntu-latest)"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a ci_protection value that is not required or absent-plan refuses before any call (ADR-1735)" {
+  arm ci bad-ruling
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_RULING 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "BAD_RULING: "* ]] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: ci refuses a repo upstream that is not owner/name, before any call" {
   arm ci bad-upstream
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_UPSTREAM 0" ] || { echo "$DONE"; false; }

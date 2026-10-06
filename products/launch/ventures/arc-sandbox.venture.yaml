@@ -7,6 +7,8 @@ payment_model: gateway
 tenancy: multi
 ai: false
 honesty_class: rehearsal
+# Owner ruling 2026-10-07: GitHub Free refuses private-repo protection; ci records required checks ABSENT (ADR-1735).
+ci_protection: absent-plan
 compliance:
   - dpdp
   - gst
