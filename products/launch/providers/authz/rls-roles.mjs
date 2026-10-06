@@ -82,7 +82,10 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
     // (attack aadcd0c B2).
     const b = cur.body;
     const now = cur.status === 404 ? "" : b && b.type === "file" && b.encoding === "base64" && typeof b.content === "string" ? utf8(b.content) : null;
-    if (now === null || (cur.status !== 404 && Buffer.from(now, "utf8").toString("base64") !== String(b.content).replace(/s/g, "")))
+    // Base64 compared with whitespace dropped from both sides (the API wraps it in lines); split/join, not a regex, so no
+    // escape can be lost on the way into this file (the defect was a regex that had lost its backslash).
+    const flat = (x) => String(x).split("").filter((ch) => ch.trim() !== "").join("");
+    if (now === null || (cur.status !== 404 && flat(Buffer.from(now, "utf8").toString("base64")) !== flat(b.content)))
       throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain UTF-8 file launch can extend`);
     const next = make(now);
     if (next !== now) changed[path] = next;
@@ -343,6 +346,6 @@ export async function verify(ctx) {
 }
 
 export async function teardown(ctx) {
-  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop-tables (down migration)", resource: r.id }));
+  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop memberships, orgs cascade (down migration; after tenancy drops invites)", resource: r.id }));
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
 }

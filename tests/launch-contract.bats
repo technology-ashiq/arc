@@ -720,7 +720,7 @@ arm() {
   arm login thread
   [ "$(j 'o.authz.ok + " " + o.authzVerify.ok + " " + o.authzVerifyAgain.ok + " " + o.orgs')" = "true true true 2" ] || { echo "$DONE"; false; }
   [ "$(j 'JSON.stringify(o.authzVerify.evidence)')" = '{"own":200,"crossTenant":403}' ] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.join(",")')" = "drop-tables (down migration)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "drop memberships, orgs cascade (down migration; after tenancy drops invites)" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: tenancy -- a stranger cannot invite, A invites C, C joins and is scoped to A's org" {
@@ -770,4 +770,15 @@ arm() {
 @test "launch-contract: a kill after the authz migration is resumed by the tables' launch marker" {
   arm login killed-after-migration
   [ "$(j 'o.authz.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner template built on ConfirmationURL is the owner's, and refuses" {
+  arm login owner-template-confirmation-url
+  [ "$(j 'o.auth.code')" = "TEMPLATE_FOREIGN" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a .env.example whose base64 spans lines is extended, every line kept" {
+  arm login long-env
+  [ "$(j 'o.auth.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.env')" == "# mine, kept as is"*"SERVICE_SECRET_NAME_11="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
 }

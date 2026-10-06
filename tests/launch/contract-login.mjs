@@ -109,6 +109,18 @@ switch (scenario) {
     out.kept = supabase.store[0].auth.mailer_templates_magic_link_content === mine;
     break;
   }
+  case "owner-template-confirmation-url":
+    // An owner template that uses Supabase's own {{ .ConfirmationURL }}: theirs, and it does not land on /auth/confirm.
+    supabase.store[0].auth = { site_url: "http://localhost:3000", mailer_templates_magic_link_content: "<h1>Welcome to us</h1><a href=\"{{ .ConfirmationURL }}\">go</a>" };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    break;
+  case "long-env":
+    // A .env.example long enough that its base64 spans several 60-character lines (and holds lowercase s).
+    repo().files[".env.example"] = { sha: "e".repeat(40), content: Buffer.from(`# mine, kept as is\n${Array.from({ length: 12 }, (_, i) => `SERVICE_SECRET_NAME_${i}=`).join("\n")}\n`).toString("base64") };
+    repo().commits.push({ sha: "e".repeat(40), message: "owner env", files: { ".env.example": "e".repeat(40) } });
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.env = text(".env.example");
+    break;
   case "owner-template-elsewhere":
     supabase.store[0].auth = { site_url: "http://localhost:3000", mailer_templates_magic_link_content: "<p>{{ .Token }}</p>" };
     out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
