@@ -158,7 +158,7 @@ ISO week: a week counted Monday to Sunday with a fixed number, such as 2026-W36.
 |---|---|
 | Version | 1.0.0 |
 | Requires | [core](core.md), [hq](hq.md) |
-| Required by | — |
+| Required by | [discover](discover.md) |
 | Lane | [growth](../lanes/growth.md) |
 | Face room | growth (ring money) |
 

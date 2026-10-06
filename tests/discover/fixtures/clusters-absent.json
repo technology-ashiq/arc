@@ -1,0 +1,65 @@
+{
+ "version": 1,
+ "niche": "invoice reminders",
+ "threshold": 1000,
+ "records": 3,
+ "skipped": {},
+ "untokenized": 0,
+ "clusters": [
+  {
+   "cluster_fp": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "top_tokens": [
+    "invoice",
+    "reminder",
+    "tool"
+   ],
+   "size": 2,
+   "first_ts": 1700000001,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:1",
+     "source_url": "https://news.ycombinator.com/item?id=1",
+     "title": "Invoice reminder tool for freelancers, $29 a month",
+     "engagement": {
+      "points": "ABSENT",
+      "comments": "ABSENT"
+     },
+     "ts": 1700000001
+    },
+    {
+     "source_id": "hn:2",
+     "source_url": "https://news.ycombinator.com/item?id=2",
+     "title": "An invoice reminder app that integrates with your workflow",
+     "engagement": {
+      "points": "ABSENT",
+      "comments": "ABSENT"
+     },
+     "ts": 1700000002
+    }
+   ]
+  },
+  {
+   "cluster_fp": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "top_tokens": [
+    "hardware",
+    "bank"
+   ],
+   "size": 1,
+   "first_ts": 1700000003,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:3",
+     "source_url": "https://news.ycombinator.com/item?id=3",
+     "title": "Bank regulation for hardware startups",
+     "engagement": {
+      "points": 4,
+      "comments": 30
+     },
+     "ts": 1700000003
+    }
+   ]
+  }
+ ]
+}
