@@ -28,7 +28,8 @@ const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$/;
 const KEY_RE = /^[\x21-\x7e]{8,400}$/;
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/** @typedef {{ name: string, baseUrl: string, model: string, key?: string }} ModelRecord */
+/** @typedef {{ input: number, output: number, currency: "USD" | "INR" }} ModelCost */
+/** @typedef {{ name: string, baseUrl: string, model: string, key?: string, cost?: ModelCost }} ModelRecord */
 /** @typedef {{ schema: number, active: string | null, models: ModelRecord[] }} Registry */
 
 /** @returns {Registry} */
@@ -66,7 +67,7 @@ export function endpointOf(baseUrl) {
 export function checkRecord(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return { ok: false, why: "a model is { name, baseUrl, model, key? }" };
   const r = /** @type {Record<string, unknown>} */ (input);
-  for (const k of Object.keys(r)) if (!["name", "baseUrl", "model", "key"].includes(k)) return { ok: false, why: `unknown field "${k}"` };
+  for (const k of Object.keys(r)) if (!["name", "baseUrl", "model", "key", "cost"].includes(k)) return { ok: false, why: `unknown field "${k}"` };
   if (typeof r.name !== "string" || !NAME_RE.test(r.name.trim())) return { ok: false, why: "the name is 1 to 40 letters, digits, spaces, dots, dashes or underscores, starting with a letter or digit" };
   const url = checkBaseUrl(r.baseUrl);
   if (!url.ok) return url;
@@ -77,7 +78,27 @@ export function checkRecord(input) {
     if (typeof r.key !== "string" || !KEY_RE.test(r.key.trim())) return { ok: false, why: "the key is 8 to 400 printable characters with no spaces" };
     record.key = r.key.trim();
   }
+  if (r.cost !== undefined && r.cost !== null) {
+    const c = checkCost(r.cost);
+    if (!c.ok) return c;
+    record.cost = c.cost;
+  }
   return { ok: true, record };
+}
+
+/**
+ * A price the owner declares for a model, per million tokens (ADR-1350 Amendment 4): input and output, 0 to 10000 each,
+ * in USD or INR. It is never measured here, so every view of it says `cost_source: "declared"` (ADR-0069 block b).
+ * @param {unknown} raw @returns {{ ok: true, cost: ModelCost } | { ok: false, why: string }}
+ */
+export function checkCost(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, why: "a cost is { input, output, currency }" };
+  const c = /** @type {Record<string, unknown>} */ (raw);
+  for (const k of Object.keys(c)) if (!["input", "output", "currency"].includes(k)) return { ok: false, why: `a cost has no field "${k}"` };
+  const price = (/** @type {unknown} */ v) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 10000;
+  if (!price(c.input) || !price(c.output)) return { ok: false, why: "a cost per million tokens is a number from 0 to 10000, for input and for output" };
+  if (c.currency !== "USD" && c.currency !== "INR") return { ok: false, why: "a cost's currency is USD or INR" };
+  return { ok: true, cost: { input: /** @type {number} */ (c.input), output: /** @type {number} */ (c.output), currency: c.currency } };
 }
 
 /**
@@ -120,7 +141,8 @@ export function applyChange(reg, body) {
     if (b.clearKey === true && c.record.key !== undefined) return { ok: false, why: "a new key and remove-the-key together: pick one" };
     if (reg.models.some((m) => m !== hit && same(m.name, c.record.name))) return { ok: false, why: `a model named "${c.record.name}" already exists; pick another name` };
     /** @type {ModelRecord} */
-    const next = { name: c.record.name, baseUrl: c.record.baseUrl, model: c.record.model };
+    // The cost is what the form sent: the edit form always carries it, so an absent cost is a cleared one.
+    const next = { name: c.record.name, baseUrl: c.record.baseUrl, model: c.record.model, ...(c.record.cost ? { cost: c.record.cost } : {}) };
     const key = b.clearKey === true ? undefined : c.record.key ?? hit.key;
     if (key !== undefined) next.key = key;
     const models = reg.models.map((m) => (m === hit ? next : m));
@@ -144,6 +166,8 @@ export function publicView(reg) {
       hasKey: typeof m.key === "string",
       // Four characters of a 40-character key tell two keys apart; four of an 8-character key are half of it (b8271c1 B7).
       keyTail: typeof m.key === "string" && m.key.length >= 20 ? m.key.slice(-4) : null,
+      // A price the owner typed, never a measured one (ADR-1350 Amendment 4, ADR-0069 block b).
+      ...(m.cost ? { cost: m.cost, cost_source: "declared" } : {}),
     })),
   };
 }

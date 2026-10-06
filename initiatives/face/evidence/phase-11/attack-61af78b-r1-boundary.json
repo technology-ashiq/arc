@@ -1,0 +1,39 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/arc-dash.mjs:882",
+      "breaking_input": "Two POST /api/models/set requests in flight at once, for example `{op:\"add\",model:A}` and `{op:\"add\",model:B}`, or a remove that needs the router read plus an add. Both run `models.loadRegistry`, and the first one's `await reads.routerProfileRefs(ctx)` (or the `await` of the no-op `routedRefusal` path) yields. The second then loads the same pre-change registry, and whichever saves last overwrites the other's change.",
+      "why": "`apiModelsChange` was synchronous, so load → apply → save could not interleave. The new `await` sits between the load and the save, which opens a lost-update window on the owner's private models.json. A key added in that window can vanish silently.",
+      "fix": "Serialize registry changes with a promise-chain mutex around the whole handler. Alternatively, run the guard first and then load, apply and save in one synchronous block, re-loading after the await and comparing.",
+      "twin_of": "A check and a write with a spawn between them -> a new step between a check and its write is a new race; make the write itself the check."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:362",
+      "breaking_input": "engine/router.yaml where `models:` or `classes:` is present but the wrong shape, such as a list or a scalar, or a class row `profile: 5` or `profile: [a]`. `obj()` returns an empty mapping, or the typeof check skips the row. The function returns `{ok:true, refs:[]}` and the remove of a routed record is allowed.",
+      "why": "A malformed container reads as 'no references' and fails open. The header promises that an unreadable router is a refusal and never 'no refs'.",
+      "fix": "If `models`, `classes` or `default` exists and is not a plain mapping, or a `profile` is present and is not a non-empty string, return `{ok:false, why:...}` naming the key.",
+      "twin_of": "optionalDependencies written as an array made its family silently drop out -> a malformed container is a named finding, never a continue."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:358-372",
+      "breaking_input": "A router class row that carries a fallback attempt row naming a profile, for example `fallback:` or a per-attempt `profile:`. The model-policy body merges these fallback rows into `classes`. Remove the record that only the fallback row names.",
+      "why": "`routerProfileRefs` reads only tier pins, class `profile:` and `default`. It does not read the fallback rows that `/api/model-policy` serves, so the guard and the 'used by' list disagree. The record is removed and the routed fallback then fails preflight.",
+      "fix": "Walk the same rows `routerRead` walks, including the fallback row, or share one extractor between the guard and `/api/model-policy`. Add a fixture with a profile named only in a fallback row."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:872",
+      "breaking_input": "A record named `Routed-A` is routed by `profile:Routed-A`. An edit renames it to `Routed-A ` or to a Unicode-case twin that `findModel` folds differently from `toLowerCase`. Alternatively the router row spells the name with different whitespace.",
+      "why": "Three comparers answer 'same name': `models.findModel` (store), `String.toLowerCase` (the guard) and the router grammar's own `profileRef`/name regex. The guard compares with raw `toLowerCase` and no trim or NFC normalisation, so a rename that the store treats as the same name can slip past, or the reverse.",
+      "fix": "Use the store's own `same()` comparer, exported from models.mjs, for both the 'gone' decision and the router match."
+    }
+  ]
+}

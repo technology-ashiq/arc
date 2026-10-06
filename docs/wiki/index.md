@@ -5,17 +5,17 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 
 | Part | Count | With narrative |
 |---|---|---|
-| [Products](#products) | 19 | 17 |
-| [Lanes](#lanes) | 19 | 17 |
+| [Products](#products) | 20 | 17 |
+| [Lanes](#lanes) | 20 | 17 |
 | [Processes](#processes) | 14 | 0 |
-| [Decisions (ADR bands)](#decisions-adr-bands) | 19 | 0 |
-| [Commands](#commands) | 28 | 0 |
+| [Decisions (ADR bands)](#decisions-adr-bands) | 20 | 0 |
+| [Commands](#commands) | 29 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **145** | **34** |
+| **Total** | **149** | **34** |
 
-Narrative debt: **111 of 145** pages have no narrative yet. ADR headers: 343 of 408 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 361 of 426 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -26,6 +26,7 @@ Narrative debt: **111 of 145** pages have no narrative yet. ADR headers: 343 of 
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 17 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
+| [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 8 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
 | [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 33 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
@@ -49,6 +50,7 @@ Narrative debt: **111 of 145** pages have no narrative yet. ADR headers: 343 of 
 | [bench](lanes/bench.md) | LIVE | arc-bench (Cycle 13, opened 2026-08-12) |
 | [design](lanes/design.md) | LIVE | arc-design v2 (Cycle 16, opened 2026-08-23) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
+| [discover](lanes/discover.md) | LIVE | arc-discover (Cycle 1, opened 2026-10-06) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 7, opened 2026-08-12) |
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
@@ -104,9 +106,10 @@ Narrative debt: **111 of 145** pages have no narrative yet. ADR headers: 343 of 
 | [1300–1399](adr/1300.md) | 52 | 1 |
 | [1400–1499](adr/1400.md) | 22 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
-| [1600–1699](adr/1600.md) | 30 | 0 |
+| [1600–1699](adr/1600.md) | 31 | 0 |
 | [1700–1799](adr/1700.md) | 35 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
+| [1900–1999](adr/1900.md) | 17 | 0 |
 
 ## Commands
 
@@ -129,6 +132,7 @@ Narrative debt: **111 of 145** pages have no narrative yet. ADR headers: 343 of 
 | [/arc-face-module](commands/arc-face-module.md) | Scaffold one face module (module.mjs, fold.mjs, ops.mjs, View.tsx) for a room the door serves, and prove it green on face-pure and face-coverage in the same command. Refuses an id /api/rooms does not serve. |
 | [/arc-fix-issue](commands/arc-fix-issue.md) | Investigate and fix a GitHub issue by number. |
 | [/arc-freeze](commands/arc-freeze.md) | Lock edits to one or more directories -- a deterministic edit-boundary enforced by the PreToolUse hook (freeze-check.sh). The can't-forget version of gstack /freeze. |
+| [/arc-hunt](commands/arc-hunt.md) | Hunt a niche for real pain -- mine HN, normalize, dedupe and cluster into an evidenced shortlist; council judges the finalists and an owner-approved one leaves as a venture.yaml (ADR-1900..1915). |
 | [/arc-kickoff](commands/arc-kickoff.md) | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
 | [/arc-phase-done](commands/arc-phase-done.md) | Close a phase per the build playbook's Definition of Done — or refuse. |
 | [/arc-pr](commands/arc-pr.md) | Open a GitHub PR for the current branch. |

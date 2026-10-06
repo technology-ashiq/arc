@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { X } from '@phosphor-icons/react'
 import {
-  PRESETS, PREVIEW_LINE, RATE_MAX, RATE_MIN, VOICE_NOTE, addChange, editChange, editForm, emptyForm, modelsView, readVoiceChoice, voiceList, voicePick,
+  PRESETS, PREVIEW_LINE, RATE_MAX, RATE_MIN, VOICE_NOTE, addChange, editChange, editForm, emptyForm, modelsView, usedByOf, readVoiceChoice, voiceList, voicePick,
   voiceRate, writeVoiceChoice,
 } from '../lib/talk.mjs'
 type ModelForm = ReturnType<typeof emptyForm>
@@ -23,6 +23,7 @@ import { MONO, UI } from '../ui/kit'
 
 type View = ReturnType<typeof modelsView>
 type Section = 'models' | 'voice' | 'keys'
+type UsedBy = ReturnType<typeof usedByOf>
 
 const field = 'w-full min-h-[38px] px-3 text-[13px] bg-transparent outline-none placeholder:text-(--text-3) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)'
 const fieldStyle = { color: 'var(--text-1)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-sm)' }
@@ -59,6 +60,15 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
 
   useEffect(() => { void settle(door.models()) }, [door, settle])
 
+  // Which router tiers and classes reach each model (ADR-1350 Amendment 4). A failed read shows nothing rather than a
+  // guess: the door's remove guard still refuses a routed record by name.
+  const [usedBy, setUsedBy] = useState<UsedBy>({ ok: false, by: new Map(), unroutable: [] })
+  useEffect(() => {
+    let live = true
+    door.modelPolicy().then((b) => { if (live) setUsedBy(usedByOf(b)) }, () => { /* the model-policy room names the fault */ })
+    return () => { live = false }
+  }, [door, view])
+
   useEffect(() => {
     // Escape leaves an open edit first, and the page only when nothing is being edited.
     const onKey = (ev: KeyboardEvent) => { if (ev.key !== 'Escape') return; if (editing) setEditing(null); else onClose() }
@@ -86,7 +96,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
     setProblem(null)
     try { setView(modelsView(await door.setModels(c.change))); setEditing(null) } catch (err) { setProblem(refusalOf(err).human) } finally { setBusy(false) }
   }
-  const editField = (k: 'name' | 'baseUrl' | 'model' | 'key') => (e: { target: { value: string } }) => setEditing((x) => (x ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))
+  const editField = (k: 'name' | 'baseUrl' | 'model' | 'key' | 'costIn' | 'costOut') => (e: { target: { value: string } }) => setEditing((x) => (x ? { ...x, form: { ...x.form, [k]: e.target.value } } : x))
 
   // A test can take a minute on a busy free model, so it holds its own row, not the whole list.
   const onTest = async (name: string) => {
@@ -161,6 +171,8 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
                     <input id="edit-url" data-edit-field="baseUrl" value={editing.form.baseUrl} onChange={editField('baseUrl')} placeholder="base URL" className={field} style={fieldStyle} />
                     <label className="sr-only" htmlFor="edit-model">Model id</label>
                     <input id="edit-model" data-edit-field="model" value={editing.form.model} onChange={editField('model')} placeholder="model id" className={field} style={fieldStyle} />
+                    <CostFields idPrefix="edit" costIn={editing.form.costIn} costOut={editing.form.costOut} currency={editing.form.currency}
+                      onIn={editField('costIn')} onOut={editField('costOut')} onCurrency={(e) => setEditing((x) => (x ? { ...x, form: { ...x.form, currency: e.target.value === 'INR' ? 'INR' : 'USD' } } : x))} />
                     <label className="sr-only" htmlFor="edit-key">New API key</label>
                     <input id="edit-key" type="password" autoComplete="off" disabled={editing.form.clearKey} value={editing.form.key} onChange={editField('key')} placeholder={r.hasKey ? `leave empty to keep ${r.key}` : 'API key (leave empty for none)'} className={field} style={fieldStyle} />
                     {r.hasKey ? (
@@ -179,6 +191,10 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
                 <li key={r.name} data-model-row data-model-active={r.active ? '' : undefined} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2" style={{ border: `1px solid ${r.active ? 'var(--accent)' : 'var(--line-1)'}`, borderRadius: 'var(--r-sm)' }}>
                   <div className="min-w-0 flex-1">
                     <div className="text-[13.5px] truncate" style={{ fontWeight: 600, color: 'var(--text-1)' }}>{r.name}{r.active ? ' · answering' : ''}</div>
+                    {r.costText ? <div data-model-cost className="text-[11.5px] truncate" style={{ color: 'var(--text-3)' }}>{r.costText}</div> : null}
+                    <div data-model-used-by className="text-[11.5px] truncate" style={{ color: 'var(--text-3)' }}>
+                      {usedBy.unroutable.includes(r.name) ? 'the router cannot name this model (a space in its name)' : (usedBy.by.get(r.name.toLowerCase()) ?? []).length ? `used by: ${(usedBy.by.get(r.name.toLowerCase()) ?? []).join(', ')}` : usedBy.ok ? 'used by: no router class' : ''}
+                    </div>
                     <div className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{r.where} · {r.key}</div>
                     <div data-test-line={r.test.state} className="text-[11.5px] leading-[16px] mt-0.5" style={{ color: testColour[r.test.state] }}>
                       {testing === r.name ? 'testing… (a busy free model can take up to a minute)' : r.test.text}
@@ -189,7 +205,7 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
                     <button type="button" disabled={busy} onClick={() => void settle(door.setModels({ op: 'activate', name: r.name }))} className={small} style={smallStyle}>use</button>
                   )}
                   <button type="button" data-model-edit disabled={busy || testing !== null} aria-label={`Edit ${r.name}`} onClick={() => { setProblem(null); setEditing({ name: r.name, form: editForm(r) }) }} className={small} style={smallStyle}>edit</button>
-                  <button type="button" disabled={busy} aria-label={`Remove ${r.name}`} onClick={() => void settle(door.setModels({ op: 'remove', name: r.name }))} className={small} style={smallStyle}>remove</button>
+                  <button type="button" disabled={busy} aria-label={`Remove ${r.name}`} title={(usedBy.by.get(r.name.toLowerCase()) ?? []).length ? 'the router uses this model -- change those rows first' : undefined} onClick={() => void settle(door.setModels({ op: 'remove', name: r.name }))} className={small} style={smallStyle}>remove</button>
                 </li>
               ))}
             </ul>
@@ -207,6 +223,8 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
               <input id="model-url" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="base URL, e.g. https://openrouter.ai/api/v1" className={field} style={fieldStyle} />
               <label className="sr-only" htmlFor="model-id">Model id</label>
               <input id="model-id" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="model id, e.g. gpt-4o-mini" className={field} style={fieldStyle} />
+              <CostFields idPrefix="model" costIn={form.costIn} costOut={form.costOut} currency={form.currency}
+                onIn={(e) => setForm({ ...form, costIn: e.target.value })} onOut={(e) => setForm({ ...form, costOut: e.target.value })} onCurrency={(e) => setForm({ ...form, currency: e.target.value === 'INR' ? 'INR' : 'USD' })} />
               <label className="sr-only" htmlFor="model-key">API key</label>
               <input id="model-key" type="password" autoComplete="off" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} placeholder="API key (leave empty for a local model)" className={field} style={fieldStyle} />
               <button type="submit" disabled={busy} className="self-start text-[13px] h-[36px] px-4 rounded-full cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)" style={{ fontWeight: 600, color: 'var(--bg-0)', background: 'var(--accent)' }}>add</button>
@@ -243,6 +261,31 @@ export default function ModelsPanel({ door, onClose, voiceOn, onVoice, voiceAvai
         )}
         {problem ? <p role="alert" className="mt-3 text-[12.5px]" style={{ color: 'var(--red)' }}>{problem}</p> : null}
       </div>
+    </div>
+  )
+}
+
+/** The optional declared price per million tokens, input and output, and its currency (ADR-1350 Amendment 4). */
+function CostFields({ idPrefix, costIn, costOut, currency, onIn, onOut, onCurrency }: {
+  idPrefix: string
+  costIn: string
+  costOut: string
+  currency: 'USD' | 'INR'
+  onIn: (e: { target: { value: string } }) => void
+  onOut: (e: { target: { value: string } }) => void
+  onCurrency: (e: { target: { value: string } }) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-cost-fields={idPrefix}>
+      <label className="sr-only" htmlFor={`${idPrefix}-cost-in`}>Input price per million tokens</label>
+      <input id={`${idPrefix}-cost-in`} data-cost-in inputMode="decimal" value={costIn} onChange={onIn} placeholder="price in / M tokens (optional)" className={`${field} flex-1 min-w-[150px]`} style={fieldStyle} />
+      <label className="sr-only" htmlFor={`${idPrefix}-cost-out`}>Output price per million tokens</label>
+      <input id={`${idPrefix}-cost-out`} data-cost-out inputMode="decimal" value={costOut} onChange={onOut} placeholder="price out / M tokens" className={`${field} flex-1 min-w-[150px]`} style={fieldStyle} />
+      <label className="sr-only" htmlFor={`${idPrefix}-cost-currency`}>Currency</label>
+      <select id={`${idPrefix}-cost-currency`} value={currency} onChange={onCurrency} className={field} style={{ ...fieldStyle, background: 'var(--bg-2)', width: 'auto' }}>
+        <option value="USD">USD</option>
+        <option value="INR">INR</option>
+      </select>
     </div>
   )
 }
