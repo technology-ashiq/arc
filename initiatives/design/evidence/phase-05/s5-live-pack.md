@@ -43,3 +43,12 @@ design-refpack summary: 2 of 4 active pack source(s) answered live since 2026-10
 **REQ-07 met: 2 live sources answered in one run, each with its availability line.** collectui is active and
 was not asked (client-rendered, no fetchable screen -- known since 2026-09-27); shadcn is active and has no
 search adapter here, so it reads NOT-ASKED every run rather than being hidden. Both are named, never silent.
+
+## shadcn, wired at the close (2026-10-06)
+
+The real shadcn MCP (`shadcn@4.21.2`, server `shadcn 1.0.0`, local stdio, keyless) lists seven tools;
+the adapter calls only `search_items_in_registries`. It answers in prose, parsed from its list lines.
+Live: `--query card` answered **5 of 5** (card, card-demo, hover-card, skeleton-card, card-with-form);
+`--query timeline` answered **0 of 5, SHORT** -- recorded, not hidden. The same live run exposed a
+summary defect -- a later empty answer erased an earlier hit -- fixed so every answer in the window is
+listed and any hit counts.

@@ -273,6 +273,33 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   [[ "$output" == *"answered 1 of 3"* ]] || { echo "empty objects were counted: $output"; false; }
 }
 
-@test "this file registers the 11 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"; false; }
+@test "shadcn: the prose list is parsed into items, a keyed stdio row is refused, and a later empty answer does not erase an earlier hit" {
+  _mcp_sandbox
+  printf 'sources:\n  - id: shadcn\n    kind:\n      - components\n    access: mcp\n    allowed_use:\n      - reference-pack\n    auth: none\n    cost: free\n    status: active\n    availability: unknown\n    approved_by: ashiq\n    added: 2026-10-05\n' > "$SANDBOX/sh.yaml"
+  # The LIVE shape read off shadcn 4.21.2 on 2026-10-06: prose only, one item per list line.
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Found 60 items matching card in registries @shadcn: Showing items 1-3 of 60:\\n- card (registry:ui) [@shadcn]\\n- card-demo (registry:example) [@shadcn]\\n- hover-card (registry:ui) [@shadcn]\\nMore items available."}]}}}}\n' > "$SANDBOX/fxsh.json"
+  t0="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; sleep 1
+  run node "$(_refpack)" --query "card" --brief lexos --source shadcn --want 3 --mcp-fixture "$SANDBOX/fxsh.json" --registry "$SANDBOX/sh.yaml" --record-request "$SANDBOX/reqsh.jsonl"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"hover-card"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"shadcn answered 3 of 3"* ]] || { echo "the prose list was not parsed: $output"; false; }
+  grep -q '"name":"search_items_in_registries","arguments":{"registries":\["@shadcn"\],"query":"card","limit":3}' "$SANDBOX/reqsh.jsonl" || { cat "$SANDBOX/reqsh.jsonl"; false; }
+  ! grep -qi 'x-api-key' "$SANDBOX/reqsh.jsonl" || { echo "a keyless source sent a key header"; false; }
+  # A later query that finds nothing must not erase the earlier hit in the run summary.
+  printf '{"initialize":{"status":200,"body":{"jsonrpc":"2.0","id":1,"result":{}}},"tools/call":{"status":200,"body":{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"No items found matching timeline in registries @shadcn"}]}}}}\n' > "$SANDBOX/fxsh0.json"
+  run node "$(_refpack)" --query "timeline" --brief lexos --source shadcn --want 3 --mcp-fixture "$SANDBOX/fxsh0.json" --registry "$SANDBOX/sh.yaml"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"answered 0 of 3"* ]] || { echo "$output"; false; }
+  run node "$(_refpack)" --summary --brief lexos --since "$t0" --registry "$SANDBOX/sh.yaml"
+  [[ "$output" == *"availability shadcn [fixture]: ANSWERED results 3 of 3 | results 0 of 3"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"(1 more answered from a fixture only)"* ]] || { echo "the earlier hit was erased: $output"; false; }
+  # A stdio source is keyless: a row giving it a credential is refused before anything starts.
+  sed 's/^    auth: none$/    auth: env\n    credential_ref: API_KEY_21ST/' "$SANDBOX/sh.yaml" > "$SANDBOX/shkey.yaml"
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "card" --brief lexos --source shadcn --want 3 --mcp-fixture "$SANDBOX/fxsh.json" --registry "$SANDBOX/shkey.yaml"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"a stdio MCP source is keyless"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 12 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 12 -- a @test was silently dropped"; false; }
 }
