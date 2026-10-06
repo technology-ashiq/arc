@@ -529,13 +529,28 @@ function writeStagedInto(staged, out, payloadText) {
 }
 
 /**
+ * Where a venture's publish ledger lives (ADR-1214). A venture rendered from a venture directory
+ * keeps it there, beside the facts it was rendered from: arc is public, and the record's per-field
+ * prints of a real operator's name and contact details are a guess-and-confirm oracle until the
+ * pages are live. Fixtures keep theirs in the product, where the suites read it -- with the name
+ * held to the venture grammar first, since it is joined into a path.
+ */
+function ledgerFileFor(venture, ventureDirOverride) {
+  const ventureDir = ventureDirOverride || process.env.ARC_LEGAL_VENTURE_DIR || "";
+  if (ventureDir) return resolve(ventureDir, "published.json");
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(String(venture)))
+    throw new Fail(3, `"${venture}" is not a venture name (lowercase letters, digits and hyphens)`);
+  return join(PRODUCT, "published", venture + ".json");
+}
+
+/**
  * The previous published record for a venture from the committed ledger: `{ record, sha }`, both
  * null when nothing was published, or `{ problem }` when a ledger file exists and cannot be used.
  * Unreadable is never "none" -- that would show a reviewer a re-publish as a first publish, the
  * guard-skipped-when-its-input-is-absent class publish already refuses as PREVIOUS_UNREADABLE (B1).
  */
-function publishedRecord(venture) {
-  const file = join(PRODUCT, "published", venture + ".json");
+function publishedRecord(venture, ventureDirOverride) {
+  const file = ledgerFileFor(venture, ventureDirOverride);
   if (!existsSync(file)) return { record: null, sha: null };
   let text, record;
   try { text = readFileSync(file, "utf8"); record = JSON.parse(text); }
@@ -640,7 +655,7 @@ async function proposeMain(args) {
       return 2;
     }
 
-    const prior = publishedRecord(args.venture);
+    const prior = publishedRecord(args.venture, args["venture-dir"]);
     if (prior.problem) { console.error(`propose refuses: ${prior.problem} Nothing was written.`); return 2; }
     const payload = approvalPayload(run, prior.sha);
     const errs = validateApprovalPayload(payload);
@@ -865,9 +880,8 @@ async function publishMain(args) {
   // machine that happened to publish last. A fresh clone, a CI runner, a worktree or a second
   // operator all saw "nothing published before" and a backwards effective_date went through at
   // exit 0. Row 23 moved this off a caller-chosen DIRECTORY; it was still keyed to a
-  // caller-chosen MACHINE.
-  const ledgerDir = join(PRODUCT, "published");
-  const ledgerFile = join(ledgerDir, args.venture + ".json");
+  // caller-chosen MACHINE. A real venture's ledger lives with its facts instead (ADR-1214).
+  const ledgerFile = ledgerFileFor(args.venture, args["venture-dir"]);
   const hadPrevious = existsSync(ledgerFile);
   // ONE read: the bytes hashed for PREVIOUS_MOVED are the bytes the diff and NON_MONOTONIC use.
   // Two reads let the approval match newer bytes while the checks ran on older ones.
@@ -928,7 +942,7 @@ async function publishMain(args) {
     run: fresh,
   }, null, 2) + "\n", "utf8");
 
-  mkdirSync(ledgerDir, { recursive: true });
+  mkdirSync(dirname(ledgerFile), { recursive: true });
   writeFileSync(ledgerFile, readFileSync(join(args.dir, "_published.json"), "utf8"), "utf8");
 
   console.log(`published ${approved.pages.length} page(s) for ${fresh.venture}`);
