@@ -32,3 +32,5 @@ not only where it was fixed (twin-fix rule). One line per pattern: `pattern — 
 - **a JSON payload on argv** — lib/spine.mjs emit (dfe58d2 B6) — *always --payload-file*
 - **a fix applied to one input path and not its twin** (`--niche-file` size/type check, missing on `--offline-fixture`) — arc-discover.mjs (9d389cc B7) — *every user-named file gets the same stat gate*
 - **a rollback that can throw over the error it is rolling back** — arc-discover.mjs export (9d389cc B1) — *guard the undo; append its failure to the original*
+- **an API newer than the oldest CI node** (`String.prototype.toWellFormed`, Node 20+, on the Node 18 leg) — lib/normalize.mjs (#350 CI) — *check every new built-in against Node 18; walk code units by number*
+- **a negated letter range** (`[^a-z0-9]`, locale-collation dependent) — lib/judge.mjs (#350 CI, portability.bats) — *spell the set out; never a negated range*

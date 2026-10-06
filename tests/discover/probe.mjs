@@ -12,7 +12,7 @@ const out = (s) => process.stdout.write(s + "\n");
 
 const cases = {
   async normalize() {
-    const { normalizeText, normalizeCount, ABSENT } = await lib("lib/normalize.mjs");
+    const { normalizeText, normalizeCount, ABSENT, wellFormed } = await lib("lib/normalize.mjs");
     const cp = (...c) => String.fromCodePoint(...c);
     const checks = [
       ["null", normalizeText(null) === ABSENT],
@@ -20,7 +20,7 @@ const cases = {
       ["newline-flattened", normalizeText("a\nb\r\nc") === "a b c"],
       ["format-chars-gone", !/\p{Cf}/u.test(normalizeText(`x${cp(0x202e)}y${cp(0x200b)}z${cp(0xfeff)}`))],
       ["nul-gone", !normalizeText(`a${cp(0)}b`).includes(cp(0))],
-      ["lone-surrogate-wellformed", normalizeText("a" + String.fromCharCode(0xd800) + "b").isWellFormed()],
+      ["lone-surrogate-wellformed", (() => { const s = normalizeText("a" + String.fromCharCode(0xd800) + "b"); return s === wellFormed(s) && s.includes(String.fromCharCode(0xfffd)); })()],
       ["cap-bytes", new TextEncoder().encode(normalizeText("é".repeat(5000), 100)).length <= 100],
       ["cap-no-split", !normalizeText("é".repeat(5000), 101).includes(cp(0xfffd))],
       ["count-negative", normalizeCount(-1) === ABSENT],
@@ -61,7 +61,8 @@ const cases = {
     const target = base[0];
     const marked = cluster(records, { rejects: [{ receipt: "01TESTRECEIPT0000000000000", tokens: target.top_tokens }] }).clusters;
     const hits = marked.filter((c) => c.previously_rejected === "01TESTRECEIPT0000000000000");
-    out(`marked ${hits.length} target ${hits.some((c) => c.cluster_fp === target.cluster_fp)}`);
+    // A reject marks its own cluster and any near-duplicate of it (Jaccard >= threshold): that is the point.
+    out(`marked ${hits.length >= 1 ? "some" : "none"} target ${hits.some((c) => c.cluster_fp === target.cluster_fp)} unmarked ${marked.length - hits.length > 0}`);
   },
   // Structural facts about a clusters.json, asserted by count before any hash is compared.
   async shape() {

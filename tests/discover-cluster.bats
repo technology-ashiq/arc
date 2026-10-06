@@ -77,7 +77,7 @@ setup() {
 @test "discover-cluster: a cluster matching a reject is marked, through the spine reader" {
   run --separate-stderr node "$ARC_ROOT/tests/discover/probe.mjs" rejectmatch tests/discover/fixtures/recorded/hn.json
   [ "$status" -eq 0 ] && [[ "$output" == *"RAN rejectmatch"* ]] || { echo "$stderr"; false; }
-  [[ "$output" == *"marked 1 target true"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"marked some target true unmarked true"* ]] || { echo "$output"; false; }
   # The writer shape (fixtures/reject-request.json) goes on a scratch spine; the reader must find it.
   local ask dec
   ask=$(node "$(EVENT)" emit approval.requested --strict --process discover@0.1.0 --payload-file "$(FX reject-request.json)" | tail -1)

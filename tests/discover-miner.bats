@@ -110,7 +110,7 @@ setup() {
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--out needs a value"* ]] || { echo "[empty value] $status $stderr"; false; }
   run --separate-stderr node "$(CLI)" hunt --niche "invoice reminders" --offline-fixture "$(FX empty-hits.json)" --out "/proc/../discover-escape"
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--out is outside"* ]] || { echo "[foreign out] $status $stderr"; false; }
-  cp "$(FX hostile.json)" "$BATS_TEST_TMPDIR/niche.txt"
+  head -c 200 "$(FX hostile.json)" > "$BATS_TEST_TMPDIR/niche.txt"
   run --separate-stderr node "$(CLI)" hunt --niche-file "$BATS_TEST_TMPDIR/niche.txt" --offline-fixture "$(FX empty-hits.json)" --out "$BATS_TEST_TMPDIR/out"
   [ "$status" -eq 2 ] && [[ "$stderr" == *"the niche must be"* ]] || { echo "[grammar] $status $stderr"; false; }
   run --separate-stderr node "$(CLI)" frobnicate

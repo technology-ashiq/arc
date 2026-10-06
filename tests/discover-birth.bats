@@ -102,7 +102,7 @@ room_state() {
   [ "$stderr" = 'arc-discover: unknown verb "frobnicate"' ] || { echo "stderr: $stderr"; false; }
   [ -z "$output" ] || { echo "stdout not empty: $output"; false; }
   run --separate-stderr node "$cli"
-  [ "$status" -eq 2 ] && [ "$stderr" = "arc-discover: a verb is required: hunt" ] || { echo "[no verb] $status $stderr"; false; }
+  [ "$status" -eq 2 ] && [ "$stderr" = "arc-discover: a verb is required: hunt | score | judge | verdicts | propose | export" ] || { echo "[no verb] $status $stderr"; false; }
 }
 
 @test "discover-birth: band 1900 is discover's" {

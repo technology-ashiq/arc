@@ -11,7 +11,9 @@ const SLUG_MAX_BASE = 30;
 
 /** niche + cluster_fp -> the candidate slug the exporter will also write (launch's grammar). */
 export function candidateSlug(niche, clusterFp) {
-  let base = niche.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, SLUG_MAX_BASE).replace(/-+$/, "");
+  // The niche grammar already allows only lowercase, digits, space and hyphen, so spaces are the only
+  // thing to replace; spelled out, never a negated letter range (portability.bats locale trap).
+  let base = niche.replace(/[ -]+/g, "-").replace(/^-+|-+$/g, "").slice(0, SLUG_MAX_BASE).replace(/-+$/, "");
   if (!/^[a-z]/.test(base)) base = `v-${base}`;
   return `${base}-${clusterFp.slice(0, 6)}`;
 }
