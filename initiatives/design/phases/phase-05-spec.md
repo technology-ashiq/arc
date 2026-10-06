@@ -8,27 +8,27 @@ run says out loud which sources answered and which did not.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] shadcn MCP wired and answering (already installed on the owner's machine, ₹0)
-- [ ] 21st.dev MCP wired in **search mode only** — hosted `https://21st.dev/api/mcp` with the
+- [x] shadcn MCP wired and answering (already installed on the owner's machine, ₹0)
+- [x] 21st.dev MCP wired in **search mode only** — hosted `https://21st.dev/api/mcp` with the
       `x-api-key` header, or the legacy stdio proxy reading `API_KEY_21ST`. `credential_ref`
       maps arc's secret name to the upstream one; arc's internal name is never sent upstream
-- [ ] 21st.dev's credit-gated `generate` mode stays **out of scope** — free tier is search plus
+- [x] 21st.dev's credit-gated `generate` mode stays **out of scope** — free tier is search plus
       2 installs/day, and generation is paid
-- [ ] Mobbin wired **only if** the owner has opted into Pro by now; otherwise its row stays `off`
+- [x] Mobbin wired **only if** the owner has opted into Pro by now; otherwise its row stays `off`
       and nothing references it
-- [ ] `.mcp.json` edited under the shared-file protocol: `git log origin/main -5 -- .mcp.json`
+- [x] `.mcp.json` edited under the shared-file protocol: `git log origin/main -5 -- .mcp.json`
       run **before** the edit, and the stronger version taken at merge
-- [ ] A real pack built from **≥2 live sources**, each with a per-run `availability` line
-- [ ] `availability` is observed per run and **never hand-set**; `status` and `availability`
+- [x] A real pack built from **≥2 live sources**, each with a per-run `availability` line
+- [x] `availability` is observed per run and **never hand-set**; `status` and `availability`
       stay separate fields so a network failure cannot look like a policy decision
-- [ ] A robots.txt `Disallow` produces a **recorded refusal**, never a silent skip — a scanner
+- [x] A robots.txt `Disallow` produces a **recorded refusal**, never a silent skip — a scanner
       that cannot tell CLEAN from COULD-NOT-SCAN is the failure this repo has already logged
-- [ ] No silent caps: if a source returned fewer screens than asked, the run says so with a count
-- [ ] Two-surface adversarial pass by fresh agents on the availability reporting path
-- [ ] tests added & green **on CI, read per JOB at the branch head SHA**
-- [ ] live demo run + output checked
-- [ ] contract tests green against the **real** implementations for every dep this phase wires
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] No silent caps: if a source returned fewer screens than asked, the run says so with a count
+- [x] Two-surface adversarial pass by fresh agents on the availability reporting path
+- [x] tests added & green **on CI, read per JOB at the branch head SHA**
+- [x] live demo run + output checked
+- [x] contract tests green against the **real** implementations for every dep this phase wires
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 **Amended 2026-10-06 via `/arc-change` (one DoD row narrower, reason on the record):** the
 `.mcp.json` row is closed as **deliberately not edited** rather than edited. Adding 21st.dev there

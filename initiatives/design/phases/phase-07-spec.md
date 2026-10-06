@@ -20,7 +20,14 @@ own renderer and unlabelled — and whichever way it lands, the result is a rece
 - [ ] A rival win **never becomes a copy**: the director assigns a NEW thesis capturing the
       winning direction, and an arc-authored candidate re-enters critique → jury
 - [ ] The run degrades to arc-only with a printed source-status line if a provider fails
-      mid-cycle — never a silent three-item jury
+      mid-cycle — never a silent three-item jury. **Added 2026-10-07 (Phase 06 amendment):** a
+      fake-transport test drives Stitch's observed bad-key shape (`UNKNOWN_ERROR` + `isError`)
+      and a synthetic rate-limit and quota answer through the adapter, since none of the last two
+      was observed live
+- [ ] The rival draft is vendored at fetch time per
+      [ADR-1422](../../../docs/adr/1422-a-rival-draft-is-vendored-at-fetch-and-the-transform-is-declared.md),
+      and the composer seat it competes against stays balanced-workhorse per
+      [ADR-1421](../../../docs/adr/1421-exp-a1-composer-seat-stays-balanced-workhorse-inside-the-new-regime.md)
 - [ ] Provenance recorded on every render, so Phase 08's packager can refuse non-arc items
 - [ ] Two-surface adversarial pass by fresh agents on the blinding mechanism and the
       rival-beats-all-arc recorder — decision logic on the ranking path, shell/OS boundary on
