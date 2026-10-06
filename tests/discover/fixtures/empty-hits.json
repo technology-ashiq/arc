@@ -1,0 +1,8 @@
+{
+ "responses": [
+  {
+   "status": 200,
+   "body": "{\"hits\":[]}"
+  }
+ ]
+}
