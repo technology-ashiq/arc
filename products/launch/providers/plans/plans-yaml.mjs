@@ -318,6 +318,9 @@ async function probe(ctx) {
   const key = await serviceKey(ctx, ref);
   const a = await signIn(ctx, domain, ref, key, "a");
   const org = await ownOrg(ctx, domain, a, "launch-probe-a");
+  // Start from free: a verify the slot timeout cut short could not restore it (the abort also stops the restore), so
+  // the next verify does (attack a9a2ec2 B1).
+  await setPlan(ctx, ref, org, "free");
   let pro;
   let down;
   try {

@@ -8,3 +8,9 @@
   reaches SQL). L5 REJECTED (RLS is checked after every migration run). L4 REJECTED (the slug-built repo name is
   lowercase by the slug grammar). L3/L6-L10 REJECTED (no defect: allow lists are per call and checked, upstream ids
   come from one slot, token shapes are shapes, GitHub contents of a symlink are refused by `type !== "file"`).
+
+## attack a9a2ec2 r2 (slice 2)
+
+- Boundary: B1 [high] fixed (verify starts by setting the probe org to free, so a timed-out run is healed by the next).
+  B2 [high], B3/B4 [medium] -> D31: each needs the owner to forge launch's probe org or ownership marker by hand.
+- Logic: RUN FAILED (output contract: the model named the surface `launch-contract`); two rounds reached, not re-run.
