@@ -15,6 +15,8 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
   const err = (status, message) => json(status, { message, documentation_url: "https://docs.github.com" });
   const view = (full, r) => ({ full_name: full, name: full.split("/")[1], private: r.private, description: r.description, default_branch: "main", archived: !!r.archived });
 
+  // The contents API answers base64 wrapped in 60-character lines with a trailing newline; readers must not care.
+  const wrap64 = (b64) => `${(String(b64).match(/.{1,60}/g) || []).join("\n")}\n`;
   function commit(r, message, files) {
     const c = { sha: sha(), message, files };
     r.commits.push(c);
@@ -155,7 +157,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
         const idx = r.commits.findIndex((c) => c.sha === at);
         if (idx >= 0 && !r.commits.slice(0, idx + 1).some((c) => c.files && c.files[cm[1]])) return err(404, "Not Found");
       }
-      if (method === "GET") return f ? json(200, (f.dir ? [{ path: `${cm[1]}/x`, type: "file" }] : f.big ? { type: "file", path: cm[1], sha: f.sha, content: "", encoding: "none" } : { type: "file", path: cm[1], sha: f.sha, content: f.content, encoding: "base64" })) : err(404, "Not Found");
+      if (method === "GET") return f ? json(200, (f.dir ? [{ path: `${cm[1]}/x`, type: "file" }] : f.big ? { type: "file", path: cm[1], sha: f.sha, content: "", encoding: "none" } : { type: "file", path: cm[1], sha: f.sha, content: wrap64(f.content), encoding: "base64" })) : err(404, "Not Found");
       if (method === "PUT") {
         if (f && body.sha !== f.sha) return err(409, `${cm[1]} does not match ${body.sha}`);
         if (!f && body.sha) return err(422, "sha was supplied for a file that does not exist");

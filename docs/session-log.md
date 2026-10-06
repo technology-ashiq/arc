@@ -682,3 +682,27 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-09-30 23:23 — feat/arc-org-cycle18
 - Last commit: 3e560efe docs(org): record CI 19/19 green at 3d1a29dc
 - Uncommitted files at exit: 3
+
+## 2026-10-05 14:56 — feat/arc-launch-p01-s3
+- Last commit: faccecd4 feat(launch): Phase 01 slice 3 -- github repo + github-actions ci adapters on fakes; writers commit through the GitHub API (ADR-1726)
+- Uncommitted files at exit: 5
+
+## 2026-10-05 16:18 — feat/arc-launch-p01-s4
+- Last commit: 1406e299 feat(launch): Phase 01 slice 4 -- vercel hosting adapter on fakes; gate 2 holds production in the venture repo (ADR-1727)
+- Uncommitted files at exit: 6
+
+## 2026-10-06 01:22 — feat/arc-launch-p01-s7
+- Last commit: 5e06edf0 feat(launch): Phase 01 slice 7 -- release crosses gate 2 and lifts the hold, frontend commits the Next shell and proves the live page (ADR-1730)
+- Uncommitted files at exit: 5
+
+## 2026-10-06 01:28 — feat/arc-launch-p01-s7
+- Last commit: d931e532 fix(launch): attack 5e06edf -- release lifts only a hold still hosting's, ERROR is a receipt only without an app, frontend checks and commits on one head
+- Uncommitted files at exit: 5
+
+## 2026-10-06 02:42 — feat/arc-launch-p01-s8
+- Last commit: cc949efe feat(launch): Phase 01 slice 8 -- database (supabase, RLS proved as anon, ADR-1731) and email (resend writes its own SPF/DKIM/DMARC, ADR-1732) on fakes
+- Uncommitted files at exit: 5
+
+## 2026-10-06 02:52 — feat/arc-launch-p01-s8
+- Last commit: 8a0ae88c fix(launch): attack cc949ef -- bounded Supabase wait, probe table never adopted and recorded at creation, select-last query, paged Resend lookup, DNS conflicts checked before any write
+- Uncommitted files at exit: 5
