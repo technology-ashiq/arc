@@ -1,0 +1,45 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/scripts/smoke.mjs:1177 (pageSince) and :1179",
+      "breaking_input": "The second or third crossing (enter-key-unmount, space-key-unmount) runs in a page whose surface trail already holds an `hq@<t>` entry from an earlier crossing. The page then takes the workroom surface 6-10 s late, as on the loaded macOS runner. pageSince `.pop()`s the OLD `hq@` entry, so sincePageMs is already larger than STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS.",
+      "why": "The new rule only helps when the newest hq@ entry belongs to this crossing. A stale entry from an earlier crossing ends the wait right after the STAGE_UNMOUNT_MS sleep. The stage is still mounted because the page's own timer has not started, so the check reports the same false `held=NaN` FAIL this change was meant to remove. The flake therefore survives on the later crossings. This is the same defect class as 'validate one read, compare another': the entry read is not proven to be the one for this crossing.",
+      "fix": "Before the crossing, record the trail's last `hq@` value (or the count of hq@ entries). In pageSince, return -1 until the newest hq@ entry differs from that baseline, so the window only counts from an entry made by this crossing."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/face/front-door.mjs:393-396",
+      "breaking_input": "Change runFrontDoor to wait on `stages === 0 || sinceAddressMs >= W`, i.e. revert the fix at the call site in smoke.mjs:1179. Every F check still passes.",
+      "why": "The 'MUTANT CONTROL' defines `oldRule` locally and calls it, so `oldRule(1, W)` is true by construction. `!unmountWaitOver(1, W - 9800)` is true for any W below 9800 plus the window. The control never exercises the wiring in runFrontDoor, so it cannot fail for the regression it names. The pageSince script and the until() call are not under test at all. This is the 'tests that could not fail' pattern.",
+      "fix": "Test the wiring: extract the wait into an exported function that takes injected count and pageSince readers and run it against a fake page whose `hq@` entry arrives late. Or assert on the runFrontDoor source that the until predicate calls unmountWaitOver and never Date.now() - crossedAt."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/scripts/cdp.mjs:415-421",
+      "breaking_input": "DevToolsActivePort exists but is unreadable on a POSIX box (mode 000, or a profile dir owned by another user), so readFileSync throws EACCES every poll. On Windows an AV scanner or a permanently held file gives EPERM.",
+      "why": "EACCES and EPERM are treated as 'held, retry'. A permanent permission fault spins for the full 30 s. The timeout message names only `unparsed`, which stays null, so the error reads as 'file absent' or 'timed out' with no mention of the permission error. This is the 'timeout verdict carries no evidence' defect: the verdict is unchanged but the cause is lost.",
+      "fix": "Remember the last held error code and include it in the timeout message. Consider failing fast on EACCES, which does not usually clear, and keep EBUSY and EPERM as retryable."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/scripts/cdp.mjs:415-418",
+      "breaking_input": "Chrome exits or rewrites its profile between `existsSync(file)` and the read, so the read throws ENOENT.",
+      "why": "existsSync then read is a check-then-use race. ENOENT is not in the held list, so it throws out of the wait. The throw escapes before the isDead branch can report 'Chrome exited before DevTools was ready' with the stderr tail, so the real cause is lost. The new try/catch narrowed the retry to three codes but left this window open.",
+      "fix": "Treat ENOENT as 'not yet' inside the poll, since the next loop iteration re-runs the isDead check and gives the real cause. Alternatively drop the existsSync and branch on the read's error code."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face/cdp-client.mjs:804, tests/face/front-door.mjs:399",
+      "breaking_input": "Add or remove a check in either suite without updating the constant: `ran >= 62` and `ran >= 58` are hand-kept numbers. Delete one of the new checks and the suite still passes, because the old floor of 60 or 53 plus the new count leaves room.",
+      "why": "The floors were raised by exactly the number of added checks, so they only catch a check lost in the same edit. A later silent loss of up to the remaining margin passes. This is the 'never hand-keep a count the code can print' twin.",
+      "fix": "Derive the floor from the file's own `check(` count, as the existing debt rows already propose, or assert an exact RAN count against a source-derived number."
+    }
+  ]
+}
