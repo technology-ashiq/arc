@@ -10,6 +10,7 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
   const id = (p) => `${p}_${String(++n).padStart(6, "0")}`;
   const store = new Map(projects.map((p) => [p.name, { id: id("prj"), domains: [], linkedAt: 0, ...p }]));
   const calls = [];
+  let decryptAsked = false;
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const err = (status, code, message) => json(status, { error: { code, message } });
   const byIdOrName = (k) => store.get(k) || [...store.values()].find((p) => p.id === k);
@@ -34,6 +35,15 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
     }
     let m = p.match(/^\/v9\/projects\/([^/]+)$/);
     if (m && method === "GET") { const proj = byIdOrName(m[1]); return proj ? json(200, proj) : err(404, "not_found", "Project not found"); }
+    // The env list carries a value per key, as Vercel's does (encrypted unless decrypt=true); a test asserts the
+    // adapter never asks for decryption and never echoes one.
+    m = p.match(/^\/v10\/projects\/([^/]+)\/env$/);
+    if (m && method === "GET") {
+      const proj = byIdOrName(m[1]);
+      if (!proj) return err(404, "not_found", "Project not found");
+      if (url.searchParams.has("decrypt")) decryptAsked = true;
+      return json(200, { envs: (proj.envs || []).map((e, i) => ({ id: `env_${i}`, key: e.key, target: e.target, type: "encrypted", value: e.value })) });
+    }
     m = p.match(/^\/v9\/projects\/([^/]+)\/domains\/([^/]+)$/);
     if (m && method === "GET") {
       const proj = byIdOrName(m[1]);
@@ -64,5 +74,5 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
     }
     return err(404, "not_found", `fake vercel: ${method} ${p} not modelled`);
   }
-  return { fetch, store, calls };
+  return { fetch, store, calls, get decryptAsked() { return decryptAsked; } };
 }

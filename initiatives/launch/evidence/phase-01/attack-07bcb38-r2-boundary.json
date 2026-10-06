@@ -1,0 +1,61 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:17",
+      "breaking_input": "main holds a path with many dot segments and a slash after them, such as `.env.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a/x`, with 30 to 40 repeats of `.a`. Anyone with write access can commit it.",
+      "why": "The new `(\\.[^/]+)*$` lets `[^/]+` also consume dots, so every dot can either start a new group or sit inside one. The trailing `/x` makes `$` fail, so V8 backtracks through 2^n ways to split the path. The match runs synchronously, so the slot timeout and abort signal cannot fire. verify hangs the whole worker, and the weekly verify hangs with it. TEMPLATE_FILE has the same shape. This is a new hole created by the B1 fix.",
+      "fix": "Use a non-overlapping pattern: split the final path segment on '/' and test `^\\.env(\\.[^.]+)*$` against that segment, or use `[^./]+` inside the group. Cap path length before matching. Add a 40-segment fixture with a timing bound."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:17",
+      "breaking_input": "main's tree holds `config/prod.env`, `secrets.env`, `.envrc`, or `env.production` containing real keys.",
+      "why": "ENV_FILE only matches a final segment that begins with `.env`. Common dotenv names such as `*.env` and `.envrc` pass the no-key-in-git check with real secrets committed. The fix list of real-world names was extended only for `.env.*` shapes. The fixed-defects entry claims every filename pattern was checked.",
+      "fix": "Also match `\\.env$` as a suffix, `.envrc`, and `^env\\.`. Name the remaining limit in evidence. Add each shape as a leak fixture."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:18",
+      "breaking_input": "main holds `deploy/.env.sample` or `.env.template` with real values committed. Or the root `.env.example` is fine but `apps/web/.env.example` holds a real key.",
+      "why": "TEMPLATE_FILE exempts any template-named file anywhere from the leak check, and only the root `.env.example` is parsed for values (`contract()`). A key committed under a template name or in a nested example passes verify. Only the root file is checked for 'names only'.",
+      "fix": "Fetch each template path in the tree (capped) and run `contract()` on it, or fail verify when a template other than the root file carries a non-empty value. State the limit in evidence if the check is skipped."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:73",
+      "breaking_input": "The venture's root `.env.example` contains `export DATABASE_URL=`, `DATABASE_URL=\"\"`, or `DATABASE_URL= # set by owner`.",
+      "why": "Prior finding B7 got no fix, no debt entry and no disposition. The first line is BAD_CONTRACT. The other two are VALUE_IN_GIT. verify then fails permanently on an owner-maintained file that holds no secret.",
+      "fix": "Accept an optional `export `, and treat `\"\"`, `''` and a trailing ` #comment` as empty. Or record the limit in the debt ledger."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:63",
+      "breaking_input": "The Vercel project link answers `repo: \"..\"` (or `.`). The repo regex `[A-Za-z0-9._-]{1,100}` accepts it, so the GET goes to `/repos/org/../contents/.env.example` and is normalised to a different path.",
+      "why": "Prior finding B6 was left unfixed and unrecorded. The string that is validated is not the path that is requested, because dot segments are collapsed before the request.",
+      "fix": "Reject a repo of `.` or `..`, and one starting or ending with a dot. Pass each segment through encodeURIComponent."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/launch/contract-secrets.mjs:86",
+      "breaking_input": "A regression that puts the env response body, which holds MARKER, into a thrown error or a reason on a failure path.",
+      "why": "Prior finding B8 was left unfixed and unrecorded. `valueSeen` scans only `out`. The scenarios that fail do not carry the MARKER-bearing env answer, so 'never carries a value' cannot fail for the leak that matters. `decryptAsked` checks only the `decrypt` query param name.",
+      "fix": "Add a scenario where the env endpoint answers 500 with MARKER in the body and another where it is malformed. Assert MARKER is absent from the reason and the message. Make the fake flag any decrypt-like param or header."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:109",
+      "breaking_input": "The PUT answers 201 without `content.sha`, or the body is not JSON.",
+      "why": "The id becomes `repo:.env.example@unknown`. Teardown then emits `delete-if-unchanged` against a sha that can never match. The file launch wrote is never removed, and nothing says so. This is a fallback that hides a failed read of the answer.",
+      "fix": "After the PUT, re-GET the file and take its blob sha. If that sha is still absent, throw a coded refusal instead of recording `unknown`."
+    }
+  ]
+}
