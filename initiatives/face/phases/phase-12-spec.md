@@ -11,11 +11,11 @@ Why it exists (owner, 2026-10-05): "athe maari API keys la add pannalama, ovvoru
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **A Keys section on the Settings page (ADR-1351 §1):** a third section beside Models and Voice lists every stored key by name with "…abcd" or "set"; **add** takes a name and a value, **replace** a new value, **remove** deletes it. Names are `^[A-Z][A-Z0-9_]{1,63}$`, values 8 to 4000 printable characters with no spaces, at most 50 keys; a duplicate name (any case) is refused.
-- [ ] **Stored outside the repo, never returned (§2, §3):** `~/.arc-private/keys/keys.json` (or `ARC_KEYS_FILE`, refused inside the repo), written atomically. `GET /api/keys` and `POST /api/keys/set` return names, `hasValue` and a tail of a value of 20 or more characters only; a planted value appears in no door response and nowhere in the repo tree. Pure decisions in `.claude/scripts/hq/lib/keys.mjs`, held by `tests/face/keys.mjs`.
-- [ ] **The environment wins, the store fills in (§4):** `resolveKey(name)` returns the process environment's value when set and the store's otherwise; the `generic-api` driver reads `ARC_LLM_API_KEY` through it, or the name in `ARC_LLM_KEY_NAME`. A fixture proves both orders and a mutant that prefers the store FAILs.
-- [ ] **Browser smoke:** Settings → Keys adds a key, reads its tail back, replaces it and removes it, in dark and in light; the value is in no page text.
-- [ ] Two fresh attackers (logic · boundary) -- one round; CI green per job; the owner's live read; `/arc-phase-done 12` from the main clone.
+- [x] **A Keys section on the Settings page (ADR-1351 §1):** a third section beside Models and Voice lists every stored key by name with "…abcd" or "set"; **add** takes a name and a value, **replace** a new value, **remove** deletes it. Names are `^[A-Z][A-Z0-9_]{1,63}$`, values 8 to 4000 printable characters with no spaces, at most 50 keys; a duplicate name (any case) is refused.
+- [x] **Stored outside the repo, never returned (§2, §3):** `~/.arc-private/keys/keys.json` (or `ARC_KEYS_FILE`, refused inside the repo), written atomically. `GET /api/keys` and `POST /api/keys/set` return names, `hasValue` and a tail of a value of 20 or more characters only; a planted value appears in no door response and nowhere in the repo tree. Pure decisions in `.claude/scripts/hq/lib/keys.mjs`, held by `tests/face/keys.mjs`.
+- [x] **The environment wins, the store fills in (§4):** `resolveKey(name)` returns the process environment's value when set and the store's otherwise; the `generic-api` driver reads `ARC_LLM_API_KEY` through it, or the name in `ARC_LLM_KEY_NAME`. A fixture proves both orders and a mutant that prefers the store FAILs.
+- [x] **Browser smoke:** Settings → Keys adds a key, reads its tail back, replaces it and removes it, in dark and in light; the value is in no page text.
+- [x] Two fresh attackers (logic · boundary) -- one round; CI green per job; the owner's live read; `/arc-phase-done 12` from the main clone.
 
 ## Verification plan
 
