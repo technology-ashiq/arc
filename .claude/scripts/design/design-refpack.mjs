@@ -45,7 +45,7 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -254,7 +254,7 @@ const MCP_SEARCH = {
   // the live server printed. The command is a constant: the query travels as JSON on stdin and
   // never reaches a shell.
   shadcn: {
-    transport: "stdio", npx: ["-y", "shadcn@4.21.2", "mcp"], label: "stdio:shadcn@4.21.2",
+    transport: "stdio", pkg: "shadcn@4.21.2", name: "shadcn", serverArgs: ["mcp"], label: "stdio:shadcn@4.21.2",
     tool: "search_items_in_registries", parse: "shadcn-prose",
     args: (q, want) => ({ registries: ["@shadcn"], query: q, limit: want }),
   },
@@ -276,7 +276,7 @@ const MCP_MAX_BYTES = 2 * 1024 * 1024;
 const MCP_MAX_RESULTS = 50;
 const MCP_MAX_JUNK = 20;
 // One budget for a whole stdio query: a cold npx download is charged to it, once.
-const MCP_STDIO_BUDGET_MS = process.env.ARC_DESIGN_OFFLINE === "1" && /^[0-9]{3,6}$/.test(process.env.ARC_DESIGN_MCP_BUDGET_MS ?? "") ? Number(process.env.ARC_DESIGN_MCP_BUDGET_MS) : 150000;
+const MCP_STDIO_BUDGET_MS = process.env.ARC_DESIGN_OFFLINE === "1" && /^[1-9][0-9]{3,5}$/.test(process.env.ARC_DESIGN_MCP_BUDGET_MS ?? "") ? Number(process.env.ARC_DESIGN_MCP_BUDGET_MS) : 150000;
 const LF = String.fromCharCode(10);
 // Built from code points, not escapes: an editor turned a typed escape for U+2028 into the real
 // character once, which ends a regex literal mid-line.
@@ -457,13 +457,14 @@ async function query(argv) {
     return r;
   };
 
-  // One local server per run (attack fc97161). No shell: npm's own npx-cli.js runs under this
-  // node with an args array, so nothing is parsed by cmd.exe or sh. The server runs in a fixed
-  // empty directory with an allow-listed environment -- no owner key, no NODE_OPTIONS, no .npmrc
-  // beside it. Its whole process TREE is killed at the end, so no grandchild outlives the run.
-  // One budget covers the whole decision, with startup grace for a cold npx download; the byte
-  // cap kills the server; a second reply for one id, or a run of non-JSON lines, is COULD-NOT-SCAN.
-  let child = null, buf = "", outBytes = 0, junk = 0, broken = null;
+  // One local server per run (attacks fc97161, 13edb77). The pinned package is installed ONCE into
+  // a private, gitignored directory and its entry point is spawned directly under this node: no
+  // shell, no npx wrapper, so the server is the direct child and there is no grandchild to orphan.
+  // It runs with a private HOME/APPDATA (the owner's key store, .npmrc and caches are out of
+  // reach), an allow-listed environment and an empty cwd that is removed afterwards. One budget
+  // covers the whole query; the byte cap kills the server; 'close' (streams drained) ends it; a
+  // second reply for one id or a run of non-JSON lines is COULD-NOT-SCAN.
+  let child = null, buf = "", outBytes = 0, junk = 0, broken = null, closed = null, runDir = null;
   const waiting = new Map(), answered = new Set(), doubled = new Set();
   const budgetEnd = Date.now() + MCP_STDIO_BUDGET_MS;
   const failAll = (why) => {
@@ -472,25 +473,54 @@ async function query(argv) {
     waiting.clear();
     stopChild();
   };
-  const stdioArgv = () => {
-    // The offline seam: a local fake server script, run by this node. Never on a real run.
-    if (o["--mcp-stdio-server"] != null) return [process.execPath, [resolve(o["--mcp-stdio-server"])]];
-    const cli = [join(dirname(process.execPath), "node_modules", "npm", "bin", "npx-cli.js"), join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npx-cli.js")].find((p) => existsSync(p));
-    return cli ? [process.execPath, [cli, ...adapter.npx]] : null;
+  const privateEnv = () => {
+    runDir = mkdtempSync(join(tmpdir(), "arc-mcp-"));
+    const home = join(runDir, "home");
+    mkdirSync(join(home, "AppData", "Roaming"), { recursive: true });
+    mkdirSync(join(home, "AppData", "Local"), { recursive: true });
+    // Two empty files: npm refuses one file loaded as both the user and the global config.
+    writeFileSync(join(runDir, "npmrc-user"), "");
+    writeFileSync(join(runDir, "npmrc-global"), "");
+    const keep = ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP"];
+    const env = Object.fromEntries(keep.filter((k) => process.env[k] != null).map((k) => [k, process.env[k]]));
+    Object.assign(env, {
+      HOME: home, USERPROFILE: home, APPDATA: join(home, "AppData", "Roaming"), LOCALAPPDATA: join(home, "AppData", "Local"),
+      npm_config_registry: "https://registry.npmjs.org/", npm_config_ignore_scripts: "true",
+      npm_config_userconfig: join(runDir, "npmrc-user"), npm_config_globalconfig: join(runDir, "npmrc-global"),
+      npm_config_cache: join(ROOT, ".claude", "state", "design", "mcp", "npm-cache"),
+    });
+    if (o["--mcp-stdio-server"] != null) for (const [k, v] of Object.entries(process.env)) if (/^FAKE_MCP_[A-Z_]{1,32}$/.test(k)) env[k] = v;
+    return env;
+  };
+  // The pinned package, installed once. Its entry point is read from its own package.json and
+  // must stay inside the install directory.
+  const serverEntry = (env) => {
+    if (o["--mcp-stdio-server"] != null) return resolve(o["--mcp-stdio-server"]);
+    const dir = join(ROOT, ".claude", "state", "design", "mcp", adapter.pkg.replace(/[^a-z0-9.@-]/gi, "_"));
+    const pj = join(dir, "node_modules", adapter.name, "package.json");
+    if (!existsSync(pj)) {
+      const cli = [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"), join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")].find((p) => existsSync(p));
+      if (!cli) return null;
+      mkdirSync(dir, { recursive: true });
+      const left = Math.max(1000, budgetEnd - Date.now());
+      const r = spawnSync(process.execPath, [cli, "install", "--prefix", dir, "--ignore-scripts", "--no-audit", "--no-fund", "--no-save", adapter.pkg], { cwd: runDir, env, stdio: "ignore", windowsHide: true, timeout: left });
+      if (r.error || r.status !== 0 || !existsSync(pj)) return null;
+    }
+    let bin;
+    try { const p = JSON.parse(readFileSync(pj, "utf8")); bin = typeof p.bin === "string" ? p.bin : p.bin && p.bin[adapter.name]; } catch { return null; }
+    const entry = resolve(dirname(pj), String(bin ?? ""));
+    return bin && entry.startsWith(resolve(dirname(pj)) + sep) && existsSync(entry) ? entry : null;
   };
   const startChild = () => {
-    const cmd = stdioArgv();
-    if (!cmd) return failAll("npm's npx-cli.js was not found beside this node; the local server cannot start");
-    const keep = ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA"];
-    const env = Object.fromEntries(keep.filter((k) => process.env[k] != null).map((k) => [k, process.env[k]]));
-    env.npm_config_registry = "https://registry.npmjs.org/";
-    env.npm_config_ignore_scripts = "true";
-    // The offline fake server reads its mode from FAKE_MCP_* -- passed only under that seam.
-    if (o["--mcp-stdio-server"] != null) for (const [k, v] of Object.entries(process.env)) if (/^FAKE_MCP_[A-Z_]{1,32}$/.test(k)) env[k] = v;
-    const cwd = mkdtempSync(join(tmpdir(), "arc-mcp-"));
-    child = spawn(cmd[0], cmd[1], { cwd, env, shell: false, stdio: ["pipe", "pipe", "ignore"], windowsHide: true, detached: process.platform !== "win32" });
+    const env = privateEnv();
+    const entry = serverEntry(env);
+    if (!entry) return failAll("the pinned " + adapter.pkg + " could not be installed or has no entry point; the local server cannot start");
+    const args = o["--mcp-stdio-server"] != null ? [entry] : [entry, ...adapter.serverArgs];
+    child = spawn(process.execPath, args, { cwd: runDir, env, shell: false, stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
+    closed = new Promise((r) => child.on("close", r));
     child.on("error", (e) => failAll("the local server did not start: " + e.message));
-    child.on("exit", (code) => failAll("the local server exited (code " + code + ") before answering"));
+    // 'close', not 'exit': it fires after stdout is drained, so a reply written just before exit is read first.
+    child.on("close", (code) => failAll("the local server exited (code " + code + ") before answering"));
     child.stdin.on("error", (e) => failAll("the local server closed its input: " + (e.code ?? e.message)));
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (d) => {
@@ -520,15 +550,20 @@ async function query(argv) {
     const t = setTimeout(() => { waiting.delete(body.id); done({ status: 0, error: "no answer within the " + MCP_STDIO_BUDGET_MS / 1000 + " s budget" }); }, left);
     waiting.set(body.id, (r) => { clearTimeout(t); done(r); });
   });
+  // The server is the direct child, so killing it ends it; the result is checked, never assumed.
   function stopChild() {
-    if (!child || child.exitCode !== null) return;
-    const pid = child.pid;
-    try {
-      if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-      else process.kill(-pid, "SIGKILL");
-    } catch { try { child.kill("SIGKILL"); } catch { /* already gone */ } }
+    if (child && child.exitCode === null && child.signalCode === null) { try { child.kill("SIGKILL"); } catch { /* already gone */ } }
+    if (runDir) { try { rmSync(runDir, { recursive: true, force: true }); } catch { /* best effort */ } }
   }
+  // Stop the server, wait for its streams to drain, THEN judge doubled replies (attack 13edb77 B5).
+  const finishStdio = async () => {
+    if (!child) return;
+    stopChild();
+    await Promise.race([closed, new Promise((r) => setTimeout(r, 5000))]);
+    if (doubled.size) couldNot("the local server answered one request twice");
+  };
   process.on("exit", stopChild);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, () => { stopChild(); process.exit(130); });
 
   const init = await step({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "arc-design-refpack", version: "1" } } }, {});
   if (init.session != null && !/^[A-Za-z0-9._:-]{1,128}$/.test(init.session)) couldNot("initialize: the server sent a session id outside the header grammar");
@@ -536,7 +571,7 @@ async function query(argv) {
   await post({ jsonrpc: "2.0", method: "notifications/initialized" }, session);
   const call = await step({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: adapter.tool, arguments: adapter.args(q, want) } }, session);
   // Two replies for one id on stdio are an answer this builder will not choose between (attack fc97161 B6).
-  if (stdio && !fake) { await new Promise((r) => setTimeout(r, 50)); if (doubled.size) couldNot("the local server answered one request twice"); }
+  if (stdio && !fake) await finishStdio();
   const reply = rpcReply(call.text, 2);
   if (!reply) couldNot("tools/call: no reply carried this request id");
   if (!reply.error && (reply.method !== undefined || reply.result === undefined || reply.result === null)) couldNot("tools/call: the reply carries no result");
@@ -555,7 +590,6 @@ async function query(argv) {
   }
   if (items.length === 0) for (const t of searchText(reply.result)) say("  (unstructured answer, not counted) " + String(t).slice(0, 200));
   say(`design-refpack query: ${id} answered ${n} of ${want}${short}`);
-  stopChild();
 }
 
 // One availability line per active pack source for a run, read from what the run RECORDED --

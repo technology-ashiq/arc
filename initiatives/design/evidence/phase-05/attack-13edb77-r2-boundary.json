@@ -1,0 +1,93 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:startChild (keep list / env)",
+      "breaking_input": "Run `--query card --source shadcn` on a box where ~/.arc-private/keys/keys.json (the owner's keys store) and ~/.npmrc exist. `keep` passes HOME, USERPROFILE, APPDATA and LOCALAPPDATA to the downloaded package. Any floating transitive dependency of shadcn@4.21.2 can read `$HOME/.arc-private/keys/keys.json` or the npm auth token.",
+      "why": "Only the environment variables were scrubbed. The keyless server still reaches every owner key through the filesystem. The pin covers the top-level package only, so its dependencies resolve to whatever is newest at run time. The test checks that key names are absent from the env and so misses this path. Egress is also ungoverned.",
+      "fix": "Point HOME, USERPROFILE, APPDATA and LOCALAPPDATA at a private temp dir. Set npm_config_cache and npm_config_userconfig to paths inside it, and set npm_config_globalconfig to an empty file. Use a lockfile or `--package-lock-only` integrity for the dependency tree."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:startChild child.on('exit')",
+      "breaking_input": "A server writes its tools/call reply and exits straight away, for example a one-shot server or an npx wrapper that exits after answering. Node can fire 'exit' before the stdout 'data' event is delivered.",
+      "why": "'exit' does not guarantee the stdout stream is drained. failAll resolves the waiter with `exited before answering` and sets `broken` before the real reply is parsed, so a valid answer is reported as COULD-NOT-SCAN. The same race decides which reason appears first when the child dies.",
+      "fix": "Use the 'close' event, which fires after the stdio streams end. Drain buffered lines before declaring the child dead.",
+      "twin_of": "An emptied oversize body passed through as a 2xx -> a capped read is truncated or refused, never handed on empty as a success."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:stopChild / process.on('exit')",
+      "breaking_input": "(a) npx-cli.js (the direct child) exits or crashes first while the shadcn node grandchild keeps running. The 'exit' handler calls failAll -> stopChild, which returns early because `child.exitCode !== null`, so the group is never killed and the grandchild is orphaned on POSIX and Windows. (b) The user presses Ctrl-C or the parent gets SIGTERM mid-query.",
+      "why": "The tree kill only runs while the direct child is alive. On POSIX the child is `detached`, so the terminal's SIGINT no longer reaches it. process.on('exit') does not run on an unhandled signal, so the whole server tree leaks. On Windows taskkill /T needs the parent pid to still exist to walk the tree.",
+      "fix": "Kill the group or tree regardless of exitCode: on POSIX `process.kill(-pid,'SIGKILL')` and swallow ESRCH. Install SIGINT, SIGTERM and SIGHUP handlers that call stopChild and then exit. Do not treat exit of the direct child as proof the tree is gone.",
+      "twin_of": "A local server spawned through a shell, with the parent's whole environment, and only the shell killed -> kill the process tree"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:stopChild",
+      "breaking_input": "taskkill is missing, access denied, or the pid is already gone. spawnSync returns `{status:128, error}` and does not throw.",
+      "why": "The result of spawnSync('taskkill') is never read. The catch that falls back to child.kill only fires on a throw, so a failed tree kill is silent and the orphan survives.",
+      "fix": "Read `r.status` and `r.error`. On a non-zero status or an error, fall back to child.kill('SIGKILL') and report it.",
+      "twin_of": "A subprocess result was ignored -> read status and error of every spawn whose failure matters."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:~552 (doubled check after a 50 ms sleep)",
+      "breaking_input": "A server answers id 2, then sends the duplicate of id 2 (or a doubled id 1) 100 ms or more later, or after tools/call returned.",
+      "why": "The 'exactly one reply per id' rule is enforced only for a 50 ms window. A later duplicate is never seen, because stopChild runs and the stream is dropped. The first reply wins and the second is discarded silently. The check also tests `doubled` only once, at one point.",
+      "fix": "Keep reading until the child is dead. Do not call stopChild until the stream has closed, or check `doubled` after the kill and the 'close' event, and refuse then.",
+      "twin_of": "A keyed request whose deadline, size and reply count were the server's to choose -> exactly one reply per id"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:MCP_STDIO_BUDGET_MS",
+      "breaking_input": "ARC_DESIGN_OFFLINE=1 with ARC_DESIGN_MCP_BUDGET_MS=000 or 0050. `/^[0-9]{3,6}$/` accepts leading zeros, and 000 gives Number 0.",
+      "why": "A budget of 0 means every stdio query is COULD-NOT-SCAN with the message `0 s budget`. The grammar admits a value that names a count with leading zeros.",
+      "fix": "Use `/^[1-9][0-9]{2,5}$/`.",
+      "twin_of": "A number grammar that admits leading zeros -> `[1-9][0-9]*`, never `[0-9]+`, for anything that names or counts."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/design-refpack-mcp.bats (attack fc97161 test) and tests/fixtures/design/fake-mcp-stdio.mjs",
+      "breaking_input": "Delete stopChild's kill, the 2 MiB cap, the utf8 setEncoding, or the mkdtemp cwd. The suite stays green.",
+      "why": "The fake writes FAKE_MCP_PID_OUT but no test sets or reads it, so tree-kill and no-orphan are never asserted. The fake has no oversize mode and no split-multibyte mode, so B4 is untested. The fake is spawned directly, not as a grandchild of a wrapper, so the tree-kill path is never exercised. The `NODE_OPTIONS` assertion is vacuous because the test never sets NODE_OPTIONS in the parent. Nothing checks the cwd or HOME.",
+      "fix": "Add modes `big`, `split` and `spawn-grandchild`. Set FAKE_MCP_PID_OUT and assert every recorded pid is dead afterwards. Export NODE_OPTIONS in the parent and assert it is absent. Assert the child's cwd is not the repo.",
+      "twin_of": "A transport test that drove only the fixture path -> a fake stdio server driven through the real spawn, one mode per failure"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "tests/design-refpack-mcp.bats (loop over exit/silent/double/junk)",
+      "breaking_input": "`exit` mode: the fake exits code 3 at once. The parent's stdin.write can raise EPIPE or ECONNRESET, so `the local server closed its input` can win the race against the 'exit' event. The test then expects `exited (code 3) before answering` and fails intermittently on the Windows leg. Separately, `silent` expects `8 s budget`, which holds only if ARC_DESIGN_OFFLINE=1 is set by _mcp_sandbox. If it is not, the budget is 150 s and the test hangs and mismatches.",
+      "why": "Both assertions depend on which event fires first and on ambient env, not on the code's contract. First-writer-wins `broken` makes the reason nondeterministic.",
+      "fix": "Assert only `COULD-NOT-SCAN shadcn` plus exit 4 for the exit mode. Explicitly `export ARC_DESIGN_OFFLINE=1` in the test. Report the exit code in the closed-input reason too."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:startChild mkdtempSync",
+      "breaking_input": "Run `--query` repeatedly. Each run creates `$TMP/arc-mcp-XXXXXX` and never removes it. The shadcn server and npx can write caches or temp files there.",
+      "why": "The run creates a directory and does not clean it up, so directories accumulate. The same run does not guard against the leak if the process is killed, and `/tmp` is shared on POSIX.",
+      "fix": "Remove the directory with `rmSync(cwd,{recursive:true,force:true})` in stopChild and the exit handler, after the child is dead.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:~357 (seam guard with --mcp-stdio-server)",
+      "breaking_input": "`--mcp-stdio-server fake.mjs --record-request out.jsonl`. The guard accepts the combination, but the recorder is written only inside `if (fake)`, so out.jsonl is never created.",
+      "why": "A seam flag is accepted and silently ignored. A test that reads the recorder would pass or fail without the request ever being recorded.",
+      "fix": "Refuse `--record-request` unless `--mcp-fixture` is given, or record the stdio frames too.",
+      "twin_of": "A test seam that could drive the real, keyed network -> a seam needs the fake transport; a recorder file is created by the run, never appended"
+    }
+  ]
+}
