@@ -151,7 +151,7 @@
 .claude/scripts/design/design-gate.sh	c96126c2df0dcb43eb04883735b84b2603388ef4a13c3019eb001f3f98fc5b10
 .claude/scripts/design/design-jury.mjs	c16626dbff2051e8bb293647de341855b5c070010ed0a0444fd46eb469a7c944
 .claude/scripts/design/design-lint.mjs	f2869e66535fe1e559ccb5197936e9d58d5a385a01c5f5e9c9292a13e359c944
-.claude/scripts/design/design-refpack.mjs	e8c8bd183d2777c43cd4005efbb491afa8c98569549028fbb3280ab6e52b3ad6
+.claude/scripts/design/design-refpack.mjs	d59a103b409d03c64aa3d9104864acdcde9a05336c0f250c91301be18af83a85
 .claude/scripts/design/design-render-serve.mjs	7966125ea76de6120b2408625c6968a1942205c551bfa963efcf597ba43fb3fb
 .claude/scripts/design/design-render.sh	670a1cb0775a422a51510f74b3d4b34c4e583d37644244b1826505ca2c56ecc1
 .claude/scripts/design/design-robots.mjs	c9937f1154e57d0da60fb63b16d4b712168f2871b197a3b57690641288b69da7
@@ -195,7 +195,7 @@
 .claude/scripts/engine/drivers/codex.mjs	0a04d47015db8bab31a9815f9d59e96107f000b39c596624ea9b0576b4e6d145
 .claude/scripts/engine/drivers/codex.sh	2d8d510fd2cb5336008688277164b6b6fe43b51dbfeeec919274506b4a095c97
 .claude/scripts/engine/drivers/common.mjs	7c5d5cb660feb246d325d0ab6cc66d09bf5c8bc4a89b64ed783f843b7e2ccc65
-.claude/scripts/engine/drivers/generic-api.mjs	f239a23743a6b85cfed7ad5032fdb96fe781ff106045779b39b900756b6bf673
+.claude/scripts/engine/drivers/generic-api.mjs	a12fc58b557c999841abfecfd4926c1b322be50c0c4534e7fdbe74dd0903d6fe
 .claude/scripts/engine/drivers/generic-api.sh	50310f43d1e33cc33f92ca4b223f3302db621e8f6ceaa301eb61fae740787049
 .claude/scripts/engine/drivers/hermes.mjs	46912efe9226d53883d9016034987cb599490411796cdaf7dbe86a2fb2422cb0
 .claude/scripts/engine/drivers/hermes.sh	a55394c48940fe4ce47106ee10c7858ebc43ec1c9245ccae7f6a3c5deaf265af
@@ -242,7 +242,7 @@
 .claude/scripts/growth/lib/text.mjs	699f00fb5caf44c43a7e0b082bcf1c07243f42e6b51bda5058c8910dcfdfcf01
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
-.claude/scripts/hq/arc-dash.mjs	a597413bb013736b387278accba12f301066d0e7303a8b33d6816f71ce5aa63c
+.claude/scripts/hq/arc-dash.mjs	aa9305d433e3ea811063ad1975be7795e3afa3aef542fc18983eb825904e862f
 .claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
@@ -276,6 +276,7 @@
 .claude/scripts/hq/lib/jobs/scheduler-os.mjs	4fefc52277e981aa206abfee43414cbde67edadea86f7a40ced1b0708df55851
 .claude/scripts/hq/lib/jobs/scheduler-task.ps1	f18b06fb9a4167778ef515c5ee917139e1af248a92bf4db6ea55e3d32c9dd3fb
 .claude/scripts/hq/lib/jobs/schema.mjs	312a3ae673b8e6141b689d8029679f4e45cac386dc6c341753a147fad03491fb
+.claude/scripts/hq/lib/keys.mjs	a5112cd7225134437e21d61793aa2a70783b4dee73a7b76f8e53761265a10655
 .claude/scripts/hq/lib/ledger/costs.mjs	353c4a67cadcbc1b11f69807b17370634f046af2834a254e21956db5a4c20c68
 .claude/scripts/hq/lib/ledger/kill-distance.mjs	3ba724b5bdcce46193d1376c09551e1d38a1e9ce2b90f2636aa32ac1da6af05b
 .claude/scripts/hq/lib/ledger/kill-panel.mjs	8387cc9b2d8de20831a5aa4958b61a13366527fafd90431f2f405efcdd6a3be5

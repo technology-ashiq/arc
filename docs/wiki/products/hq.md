@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (79)
+## Scripts (80)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -247,6 +247,7 @@ None declared.
 - [`.claude/scripts/hq/lib/jobs/scheduler-os.mjs`](../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs)
 - [`.claude/scripts/hq/lib/jobs/scheduler-task.ps1`](../../../.claude/scripts/hq/lib/jobs/scheduler-task.ps1)
 - [`.claude/scripts/hq/lib/jobs/schema.mjs`](../../../.claude/scripts/hq/lib/jobs/schema.mjs)
+- [`.claude/scripts/hq/lib/keys.mjs`](../../../.claude/scripts/hq/lib/keys.mjs)
 - [`.claude/scripts/hq/lib/ledger/costs.mjs`](../../../.claude/scripts/hq/lib/ledger/costs.mjs)
 - [`.claude/scripts/hq/lib/ledger/kill-distance.mjs`](../../../.claude/scripts/hq/lib/ledger/kill-distance.mjs)
 - [`.claude/scripts/hq/lib/ledger/kill-panel.mjs`](../../../.claude/scripts/hq/lib/ledger/kill-panel.mjs)

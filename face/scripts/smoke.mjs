@@ -1056,7 +1056,7 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
   "pointer-enter", "pointer-unmount",
   "enter-key", "enter-key-unmount", "space-key", "space-key-unmount",
   "exit-to-door", "palette-on-door", "ask-general-label", "ask-arc-label", "door-no-settings",
-  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
+  "hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-keys", "hq-settings-page", "rail-settings", "palette-settings", "healthy-no-exception",
   "webgl-off-fallback", "webgl-off-enter", "webgl-off-no-exception",
   "throwing-stage-fallback", "throwing-stage-enter", "throwing-stage-no-exception",
 ]);
@@ -1067,6 +1067,63 @@ export const FRONT_DOOR_CHECKS = Object.freeze([
  * still FAILs at the cap; the time it took is printed either way.
  */
 export const UNMOUNT_MARGIN_MS = 8000;
+/**
+ * The most the harness waits on one crossing, on its own clock: the page-clock window above plus the longest main-thread
+ * hold seen before the page took the surface (10.8 s on macOS, 2026-10-05), with room. A page that never records `hq@`
+ * still ends here and FAILs.
+ */
+export const UNMOUNT_WALL_CAP_MS = 30000;
+/**
+ * Whether a crossing's unmount wait is over: the stage is gone, or the PAGE's own clock says the window has passed since
+ * it took the workroom surface. `sincePageMs` is -1 while the page has not recorded `hq@`, which never ends the wait.
+ * @param {number} stages @param {number} sincePageMs
+ */
+export function unmountWaitOver(stages, sincePageMs) {
+  return stages === 0 || (Number.isFinite(sincePageMs) && sincePageMs >= STAGE_UNMOUNT_MS + UNMOUNT_MARGIN_MS);
+}
+
+const TRAIL_ENTRY = /^(door|hq)@(\d+(?:\.\d+)?)$/;
+/** @param {unknown} trail */
+function trailEntries(trail) {
+  return String(trail ?? "").split(" ").map((x) => TRAIL_ENTRY.exec(x.trim())).filter(Boolean).map((m) => ({ surface: m[1], t: Number(m[2]) }));
+}
+
+/**
+ * How long ago, on the page's clock, the page took the workroom surface for THIS crossing, or -1 if it has not yet.
+ * Only the trail's last entry counts, and only if it is `hq@` and newer than every entry the trail held before the
+ * crossing (`baseline`): the trail keeps earlier crossings, and a stale `hq@` read as "long ago" ended the wait at once in
+ * exactly the slow case (attack 0e39c72 L1, L6, B1). A malformed or out-of-range time is -1, never a number (L2).
+ * @param {unknown} trail @param {unknown} nowMs @param {unknown} baseline the trail as it was before the crossing
+ */
+export function sinceCrossing(trail, nowMs, baseline) {
+  const all = trailEntries(trail);
+  const last = all[all.length - 1];
+  if (!last || last.surface !== "hq") return -1;
+  const before = trailEntries(baseline).reduce((m, e) => Math.max(m, e.t), -1);
+  const now = Number(nowMs);
+  if (!(last.t > before) || !Number.isFinite(now) || now < last.t) return -1;
+  return now - last.t;
+}
+
+/**
+ * The whole unmount wait, the one the smoke runs: poll `probe` until unmountWaitOver says done, or UNMOUNT_WALL_CAP_MS of
+ * harness time pass. `probe` answers `{ stages, trail, now }` from the page. Exported so tests/face/front-door.mjs drives
+ * THIS loop with a scripted page, not a copy of its rule (attack 0e39c72 B2).
+ * @param {() => Promise<{ stages: number, trail: string, now: number }>} probe @param {string} baseline
+ * @param {{ capMs?: number, pollMs?: number, wait?: (ms: number) => Promise<void> }} [opts]
+ * @returns {Promise<{ stages: number, sincePageMs: number, polls: number }>}
+ */
+export async function waitForUnmount(probe, baseline, { capMs = UNMOUNT_WALL_CAP_MS, pollMs = 150, wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const started = Date.now();
+  let polls = 0;
+  for (;;) {
+    const p = await probe();
+    polls++;
+    const since = sinceCrossing(p.trail, p.now, baseline);
+    if (unmountWaitOver(p.stages, since) || Date.now() - started >= capMs) return { stages: p.stages, sincePageMs: since, polls };
+    await wait(pollMs);
+  }
+}
 /**
  * The shortest hold that is a warp: the fly-through is 1.6 s (WARP_IN_S) and the stage is kept STAGE_UNMOUNT_MS. A stage
  * that left in under 1.5 s did not fly through. Written here, not read from mode.mjs, so a changed constant there cannot
@@ -1149,14 +1206,25 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     const ESCAPE = { key: "Escape", code: "Escape", vk: 27 };
     /** Cross from the door and judge the crossing: the hash reaches the workroom, then the stage is gone. */
     const cross = async (page, name, unmountName, act) => {
+      // The trail as it stands before this crossing: only an hq@ newer than all of it is this crossing's (attack 0e39c72 B1).
+      const baseline = String(await val(page, "document.documentElement.dataset.surfaceTrail || ''"));
       const acted = await act();
       const reached = acted && (await until(async () => String(await hash(page)).startsWith("#hq"), 5000));
       if (reached) report.crossings++;
       record(name, reached, acted ? `the hash stayed ${JSON.stringify(redactSecrets(String(await hash(page)), [token]))}` : "the control was not there to act on");
       if (!reached) { record(unmountName, false, "never crossed"); return; }
       const crossedAt = Date.now();
+      // The stage's unmount timer starts when the PAGE takes the workroom surface, not when the address changed: on a
+      // loaded runner software WebGL held the main thread 6-10 s between the two (macOS, 2026-10-04/05: hash at ~1 s,
+      // `hq@` in the trail at 7.5-10.8 s), so a window counted from the address ran out before the timer had started.
+      // The window is counted on the page's own clock from its `hq@` entry; a stage that never leaves still FAILs at
+      // the cap, and the harness never waits more than UNMOUNT_WALL_CAP_MS in all.
+      const probe = async () => {
+        const c = JSON.parse(String(await val(page, "JSON.stringify({ trail: document.documentElement.dataset.surfaceTrail || '', now: performance.now() })")));
+        return { stages: await count(page, "[data-stage]"), trail: c.trail, now: c.now };
+      };
       await sleep(STAGE_UNMOUNT_MS);
-      await until(async () => (await count(page, "[data-stage]")) === 0, UNMOUNT_MARGIN_MS, 150);
+      await waitForUnmount(probe, baseline);
       const stages = await count(page, "[data-stage]");
       const opened = await inWorkroom(page);
       // The warp is judged from what the page recorded, not from a read that races it: a read "right after" the crossing
@@ -1259,8 +1327,8 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
     await step(async () => {
       await go(P, `#hq&${tokenPart}`);
       const opened = (await inWorkroom(P)) && (await click(P, "[data-hq-settings]"));
-      const menu = opened && (await until(async () => (await count(P, "[data-models-panel] [data-settings-tab]")) === 2 && (await count(P, '[data-settings-section="models"]')) === 1, capMs));
-      record("hq-settings-menu", menu, opened ? "Settings opened without both sections (Models, Voice)" : "no visible [data-hq-settings] in the workroom");
+      const menu = opened && (await until(async () => (await count(P, "[data-models-panel] [data-settings-tab]")) === 3 && (await count(P, '[data-settings-section="models"]')) === 1, capMs));
+      record("hq-settings-menu", menu, opened ? "Settings opened without its three sections (Models, Voice, Keys)" : "no visible [data-hq-settings] in the workroom");
       const tested = menu && (await until(async () => (await count(P, "[data-model-test]")) > 0, capMs)) && (await click(P, "[data-model-test]"));
       const line = () => val(P, "(function () { var e = document.querySelector('[data-test-line]'); return e ? e.getAttribute('data-test-line') + '|' + e.textContent : ''; })()");
       const ok = tested && (await until(async () => /^ok\|.*answered in [0-9.]+ s/.test(String(await line())), 30000, 250));
@@ -1281,6 +1349,27 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       record("hq-settings-edit", Boolean(renamed && restored), `the row read ${JSON.stringify(String(await rowName()).slice(0, 80))} (was ${JSON.stringify(original.slice(0, 40))}); renamed=${Boolean(renamed)} restored=${Boolean(restored)}`);
       const voice = menu && (await click(P, '[data-settings-tab="voice"]')) && (await until(async () => (await count(P, '[data-settings-section="voice"] [data-voice-switch]')) === 1, capMs));
       record("hq-settings-voice", voice, "the Voice section did not open with its switch");
+      // Keys (Phase 12, ADR-1351): add a key, read its tail, replace it, remove it -- and its value is in no page text.
+      const KEYV = ["smoke", "value", "0123456789abcdef", "k1"].join("-");
+      const KEYV2 = ["smoke", "value", "fedcba9876543210", "k2"].join("-");
+      const shown = () => val(P, "(function () { var r = document.querySelector('[data-key-row=SMOKE_TEST_KEY] [data-key-shown]'); return r ? r.textContent : ''; })()");
+      const typeInto = async (sel, text) => (await val(P, `(function () { var i = document.querySelector(${JSON.stringify(sel)}); if (!i) return false; i.focus(); return document.activeElement === i; })()`)) === true && (await P.send("Input.insertText", { text }), true);
+      const keysTab = menu && (await click(P, '[data-settings-tab="keys"]')) && (await until(async () => (await count(P, '[data-settings-section="keys"] [data-key-add]')) === 1, capMs));
+      // Each sub-step is kept, so a failure names where it stopped and what the page said (CI 37346497004: added=false).
+      // The list has been read (its loading line is gone) before anything is typed.
+      const listed = keysTab && (await until(async () => !/reading your keys/.test(String(await val(P, "(function () { var s = document.querySelector('[data-settings-section=keys]'); return s ? s.textContent : ''; })()"))), capMs));
+      const typedName = listed && (await typeInto("[data-key-name]", "SMOKE_TEST_KEY"));
+      const typedValue = typedName && (await typeInto("[data-key-value]", KEYV));
+      const form = String(await val(P, "(function () { var n = document.querySelector('[data-key-name]'), v = document.querySelector('[data-key-value]'), b = document.querySelector('[data-key-add]'); return (n ? n.value : '-') + '|' + (v ? v.value.length : '-') + '|' + (b ? (b.disabled ? 'disabled' : 'enabled') : '-'); })()"));
+      const pressed = typedValue && (await click(P, "[data-key-add]"));
+      const added = pressed && (await until(async () => String(await shown()) === `…${KEYV.slice(-4)}`, capMs));
+      const alertText = () => val(P, "(function () { var a = document.querySelector('[data-settings-section=keys] [role=alert]'); return a ? a.textContent : ''; })()");
+      const addWhy = added ? "" : ` [add stopped: listed=${Boolean(listed)} typedName=${Boolean(typedName)} typedValue=${Boolean(typedValue)} form=${form} pressed=${Boolean(pressed)} alert=${JSON.stringify(String(await alertText()).slice(0, 160))}]`;
+      const replaced = added && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-replace]")) && (await typeInto("[data-key-replace-value]", KEYV2)) && (await click(P, "[data-key-replace-save]"))
+        && (await until(async () => String(await shown()) === `…${KEYV2.slice(-4)}`, capMs));
+      const noValue = !String(await val(P, "document.body.innerText")).includes("0123456789abcdef") && !String(await val(P, "document.body.innerText")).includes("fedcba9876543210");
+      const removed = replaced && (await click(P, "[data-key-row=SMOKE_TEST_KEY] [data-key-remove]")) && (await until(async () => (await count(P, "[data-key-row=SMOKE_TEST_KEY]")) === 0, capMs));
+      record("hq-settings-keys", Boolean(keysTab && added && replaced && noValue && removed), `keys tab=${Boolean(keysTab)} added=${Boolean(added)} replaced=${Boolean(replaced)} value-hidden=${noValue} removed=${Boolean(removed)} (row read ${JSON.stringify(String(await shown()))})${addWhy}`);
       // A page, not a popup (Amendment 2): its own address, drawn in the main area in place of the room, no modal over it,
       // and closing it brings the room back with the address clean.
       const asPage = menu && /(^|&)view=settings(&|$)/.test(String(await hash(P)).replace(/^#/, ""))
@@ -1290,7 +1379,7 @@ export async function runFrontDoor(opts, log = (line) => process.stdout.write(li
       await press(P, ESCAPE);
       const back = await until(settingsGone, capMs);
       record("hq-settings-page", asPage && back, `open: ${asPage ? "a page" : "not a page"} at ${JSON.stringify(pageHash)}; closed: ${back ? "the room is back" : "the page stayed or the address kept view=settings"}`);
-    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-page"]);
+    }, ["hq-settings-menu", "hq-settings-test", "hq-settings-edit", "hq-settings-voice", "hq-settings-keys", "hq-settings-page"]);
     // The rail's Settings link (owner, 2026-10-05: "menu laye add pannirlaama") opens the same page, and is not a room.
     // It starts from a clean room, so a page left open by the step before cannot pass it (attack 12a0307 L2), and every
     // condition is judged and named on its own (L3, B6, B3).
