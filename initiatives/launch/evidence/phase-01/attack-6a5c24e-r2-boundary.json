@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:77 (same shared block in authz/rls-roles.mjs and tenancy/org-invite.mjs)",
+      "breaking_input": "The owner's .env.example is a normal UTF-8 file longer than 45 bytes. GitHub's contents API wraps its base64 with a newline every 60 characters. The round-trip check compares Buffer.from(now).toString('base64') against String(b.content).replace(/s/g, \"\").",
+      "why": "The regex is /s/ (the letter s), not /\\s/, so newlines are never removed and every lowercase 's' in the base64 is deleted. The comparison fails for any real file longer than one base64 line, and also for a short file whose base64 contains an 's'. auth scaffold then always refuses FOREIGN_FILE on a real venture. The fake returns single-line base64 with no 's' in the one fixture, so the test passes by luck. This looks like the known loss of a backslash in a shell-string edit. The decode path just above correctly uses \\s.",
+      "fix": "Strip whitespace with /\\s/g on both sides, or compare decoded bytes to re-encoded bytes after normalising. Make the fake wrap base64 at 60 characters with a trailing newline, and add a fixture whose base64 contains 's'.",
+      "twin_of": "every fake: does it model the provider's answer shape, or the one the code wished for?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:233-236",
+      "breaking_input": "The owner's magic-link template is customised but still contains {{ .ConfirmationURL }}, for example '<p>Hi Acme! <a href=\"{{ .ConfirmationURL }}\">sign in</a></p>' with their own subject.",
+      "why": "`stock` is true when the template merely includes ConfirmationURL, so the owner's custom template and subject are overwritten. Neither previous value is recorded. The fix claims the template is 'set only while stock', but the check cannot tell stock from customised. B1 of the previous round (extend, never replace) is only half closed.",
+      "fix": "Treat the template as stock only when it equals Supabase's default byte for byte (or is empty). Otherwise refuse or keep it. Record the previous subject and template in the auth-config resource.",
+      "twin_of": "A PATCH of the auth config replaced the owner's redirect allow-list and magic-link template"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:239-241 and teardown at :355",
+      "breaking_input": "Run auth scaffold twice. The first run reports an auth-config id ending was=http://localhost:3000. The second sees site_url already equal to the site and reports a second id ending was=https://sandbox.automemory.ai. Alternatively the worker is killed between the PATCH and ctx.report.",
+      "why": "The 'previous site URL recorded so the exit plan can put it back' claim does not hold. teardown() emits only delete-probe-users and has no restore step. Two auth-config resources hold conflicting 'was' values, and the second records launch's own value as the original. A kill after the PATCH leaves the change unrecorded.",
+      "fix": "Report an intent before the PATCH. Record 'was' only when the current site_url is not already launch's. Add a restore step to teardown that re-checks site_url still equals launch's value before reverting.",
+      "twin_of": "every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:355, authz/rls-roles.mjs:346, tenancy/org-invite.mjs:326",
+      "breaking_input": "Teardown runs authz's 'drop-tables' (orgs, memberships) while tenancy's invites table still has a foreign key to public.orgs. Alternatively 'delete-probe-users' runs first.",
+      "why": "The dispositions mark B4 as fixed, but only invited_by got ON DELETE CASCADE. Drop order across slots is not pinned: invites depends on orgs, so a plain drop of orgs fails. delete-probe-users still carries only the project ref and does not name users by the launch-probe-{a,b,c} emails, and nothing says it tolerates absent users.",
+      "fix": "Make tenancy's teardown drop invites, and make authz's drop use cascade or order after tenancy. Give delete-probe-users the emails and an absent-user tolerance.",
+      "twin_of": "every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:81",
+      "breaking_input": "profile.region is \"constructor\" or \"toString\".",
+      "why": "REGION[...] is still an inherited property lookup, so BAD_REGION is skipped and JSON.stringify drops the function value. The project is created in the provider's default region. This was reported twice (8a0ae88 B3, aadcd0c B7) and neither fixed nor ledgered.",
+      "fix": "Use Object.hasOwn(REGION, key) or a Map.",
+      "twin_of": "`typeof null === \"object\"` let `\"slots\": null` past the state shape guard"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/email-transactional/resend.mjs:150",
+      "breaking_input": "launch's own tagged MX record exists with priority 20 and Resend now lists priority 10. Or Resend rotates a DKIM value, so no tagged record matches by content.",
+      "why": "The update compares only content, so the MX priority is never patched. A DKIM rotation does not match `mine` by content, so a new record is POSTed beside the stale tagged one and two DKIM TXT records sit at one name. The b8 finding from the previous round remains open.",
+      "fix": "Compare priority for MX and PATCH on any difference. Match launch's own record by type and name, and update it in place.",
+      "twin_of": "A PATCH that compares only part of the object"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "initiatives/launch/evidence/phase-01/attack-dispositions.md:43-45,63-66; initiatives/launch/debt-ledger.md",
+      "breaking_input": "Read the dispositions after the slice 8 and slice 10 rounds. Slice 8 r2 B3 and B7 are not fixed. Slice 10 r1 B7 (region), B8 (MX priority), B9 (D18 twin for Resend and Supabase create) and B10 (concurrent probe-user use) are never mentioned. Slice 8 says 'all high and medium fixed' while its logic surface was 'RUN FAILED' and 'NOT RUN'.",
+      "why": "Findings were silently dropped rather than fixed, rejected or ledgered. D21 in the ledger is an unrelated scanner issue. The D18 window (a kill between create and report leaves launch's own resource recorded as -found) is reintroduced for Resend and Supabase with no entry. Two slices were merged on one surface only.",
+      "fix": "Disposition every finding. Add ledger rows with triggers for the D18 twins and for the probe-user concurrency. Run the missing logic round for slice 8 before merge.",
+      "twin_of": "A worker killed between Vercel's project-create answer and the synchronous `report()` leaves launch's own project recorded as `-found` on the re-run"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/*/ shared mint() (auth, authz, tenancy); ownOrg in authz/rls-roles.mjs",
+      "breaking_input": "Two verifies for auth, authz or tenancy run at once (verify --all, or a retry overlapping a slow run). Both call generate_link for launch-probe-a@<domain>.",
+      "why": "Supabase keeps one pending magic-link token per user, so the second call invalidates the first and the first run's /auth/confirm answers 401, reported as LOGIN_FAILED. Each slot holds its own lock, so the three verifies are not serialised. ownOrg's list-then-create can make two orgs of the same name.",
+      "fix": "Take one shared probe-user lock across the three slots, or retry LOGIN_FAILED once with a fresh link. Create orgs idempotently.",
+      "twin_of": "Gate check-then-emit ran outside the lock, so two applies made two requests"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:204-210 (shared mint())",
+      "breaking_input": "POST /auth/v1/admin/users answers 422 because the email is invalid or rejected (for example a brand domain Supabase refuses), not because the user already exists.",
+      "why": "Every 422 is accepted as 'already registered'. The following generate_link then fails with 404 'User not found', so the real cause is lost behind an unrelated message.",
+      "fix": "Treat 422 as exists only when the message names an existing user. Otherwise throw with the provider's reason.",
+      "twin_of": "A 404 from a token without access read as \"absent, create it\""
+    }
+  ]
+}

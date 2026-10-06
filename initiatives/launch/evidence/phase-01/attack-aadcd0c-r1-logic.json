@@ -1,0 +1,21 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:251",
+      "breaking_input": "The auth slot's probe calls signIn which follows a 303 redirect from /auth/confirm, but page() uses redirect: 'manual', so the fake's Set-Cookie is absorbed. However, the route files written by launch (app/api/login/route.js) call request.json() which in a real deployment can throw if the body is not JSON, and the probe never tests /api/login. The real app's magic link template uses {{ .SiteURL }} which is the project's site_url; if the owner has a site_url like https://app.example.com and the venture domain is sandbox.automemory.ai, the link embeds the wrong URL and signIn uses domain=brand.domain, so the cookie domain is sandbox.automemory.ai while the template links to app.example.com. The probe then gets a 401 and reports LOGIN_FAILED even though the app is fine.",
+      "why": "The route files are never executed against a real Next server; only the fake impl is used. The magic-link template and the probe's domain are both derived from profile.brand.domain but the site_url check allows a foreign site URL to be patched to site if it was localhost. However, if the project's existing site_url is a real foreign URL, the slot refuses. The real Next server would serve /auth/confirm at the site_url, not at brand.domain, unless the owner maps that. The probe hits brand.domain which may be a different host than site_url. The verify can fail on a correct deployment and falsely report the login half broken.",
+      "fix": "Make the probe follow the site_url for /auth/confirm and /api routes, or write the template with the explicit brand domain, and verify the template's host matches the domain probed."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "products/launch/providers/authz/rls-roles.mjs:211-223",
+      "breaking_input": "The migration creates a function public.is_member as SECURITY DEFINER set search_path = public, but it references auth.uid() inside. The auth schema's uid() function is in the auth schema, and search_path is set to public, so when called as a non-superuser, auth.uid() may resolve to a public.auth schema if the owner has one, or fail. The function is owned by the table owner (postgres), and runs with owner's privileges, but search_path=public means auth is not in the path unless explicitly schema-qualified. The migration uses auth.uid() without qualification; Postgres resolves it via search_path (public), so auth.uid() will not be found unless an auth schema is in the path (it is not, due to set search_path = public). This causes every RLS query to error, making all org reads fail with 500s. The fake never checks this, so tests pass.",
+      "why": "Search path is restricted to public, but auth.uid() lives in the auth schema. Security definer functions must schema-qualify cross-schema references. The same pattern appears in tenancy's create_invite/accept_invite, which call auth.uid() and auth.jwt() without schema qualification, with search_path = public.",
+      "fix": "Set search_path = public, auth or fully qualify auth.uid() as auth.uid() in the SQL strings."
+    }
+  ]
+}

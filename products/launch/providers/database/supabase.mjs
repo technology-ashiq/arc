@@ -166,7 +166,7 @@ async function probe(ctx) {
   if (!anonKey) return { ok: false, reason: "supabase returned no anon key for the project" };
   let rest;
   try {
-    rest = await ctx.fetch(`https://${ref}.supabase.co/rest/v1/launch_probe?select=id`, { method: "GET", headers: { apikey: anonKey, authorization: `Bearer ${anonKey}`, "user-agent": "arc-launch" } });
+    rest = await ctx.fetch(`https://${ref}.supabase.co/rest/v1/launch_probe?select=id`, { method: "GET", headers: Object.fromEntries([["apikey", anonKey], ["authorization", `Bearer ${anonKey}`], ["user-agent", "arc-launch"]]) });
   } catch (e) {
     if (e && e.code) throw e;
     return { ok: false, reason: "postgrest transport error" };
