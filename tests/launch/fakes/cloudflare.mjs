@@ -17,7 +17,8 @@ export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" 
       const hits = records.filter((r) => r.name === name);
       const answer = hits.flatMap((r) => (r.proxied
         ? [{ name: `${name}.`, type: 1, TTL: 300, data: "104.21.0.1" }]
-        : r.type === "CNAME" ? [{ name: `${name}.`, type: 5, TTL: 300, data: `${r.content}.` }] : []));
+        : r.type === "CNAME" ? [{ name: `${name}.`, type: 5, TTL: 300, data: `${r.content}.` }]
+        : r.type === "TXT" && (url.searchParams.get("type") || "A") === "TXT" ? [{ name: `${name}.`, type: 16, TTL: 300, data: JSON.stringify(r.content) }] : []));
       return json(200, { Status: 0, Answer: answer });
     }
     if (url.hostname !== "api.cloudflare.com") throw new Error(`fake cloudflare: unexpected host ${url.hostname}`);
@@ -28,7 +29,7 @@ export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" 
     const m = p.match(/^\/zones\/([^/]+)\/dns_records(?:\/([^/]+))?$/);
     if (!m || !zones.some((z) => z.id === m[1])) return err(404, 7003, "Could not route to the requested resource");
     const body = init.body ? JSON.parse(init.body) : null;
-    if (method === "GET" && !m[2]) return json(200, { success: true, errors: [], result: records.filter((r) => r.zone === m[1] && r.name === url.searchParams.get("name")) });
+    if (method === "GET" && !m[2]) return json(200, { success: true, errors: [], result: records.filter((r) => r.zone === m[1] && r.name === url.searchParams.get("name") && (!url.searchParams.get("type") || r.type === url.searchParams.get("type"))) });
     if (method === "POST" && !m[2]) {
       if (records.some((r) => r.zone === m[1] && r.name === body.name && (r.type === "CNAME" || body.type === "CNAME")))
         return err(400, 81053, "An A, AAAA, or CNAME record with that host already exists.");

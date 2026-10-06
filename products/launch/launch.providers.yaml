@@ -266,8 +266,9 @@ providers:
       - SUPABASE_ACCESS_TOKEN
     hosts:
       - api.supabase.com
+      - supabase.co
     credentials:
-      scope: "project create in one organization"
+      scope: "project create in one organization; reads the probe as anon through PostgREST (ADR-1731)"
     adapter: providers/database/supabase.mjs
     digest: null
     approved_by: ashiq
@@ -307,10 +308,12 @@ providers:
     payment_model: any
     env_keys:
       - RESEND_API_KEY
+      - CLOUDFLARE_API_TOKEN
     hosts:
       - api.resend.com
+      - api.cloudflare.com
     credentials:
-      scope: "domain create + send on one domain"
+      scope: "domain create + send on one domain; writes its own SPF/DKIM/DMARC records on the zone (ADR-1732)"
     adapter: providers/email-transactional/resend.mjs
     digest: null
     approved_by: ashiq

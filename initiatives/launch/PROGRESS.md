@@ -41,7 +41,8 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 ADR-1726), hosting + gate-2 hold (#327, ADR-1727), environments + tls (#329, ADR-1728), secrets (#336, ADR-1729).
 No real provider called.
 **Next step:** open in order: release + frontend #340 (ADR-1730), database + email #344 (ADR-1731/1732), backend + orm
-#345 (ADR-1733, stacked on #340). Then auth · authz · tenancy. Real runs wait on the tokens below.
+#345 (ADR-1733), and slice 10 auth + authz + tenancy (ADR-1734, stacked on #345 and #344) -- every Phase 01 slot is then
+built on fakes. What closes Phase 01 is real: the tokens below, then apply in DAG order and the day-3 curl.
 
 **Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
 a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the
