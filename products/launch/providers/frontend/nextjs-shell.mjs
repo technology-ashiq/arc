@@ -22,8 +22,9 @@ const jsx = (s) => String(s).replace(/[&<>{}"']/g, (c) => `&#${c.charCodeAt(0)};
 
 function files(brand) {
   return {
-    "package.json": `${JSON.stringify({ name: "venture", private: true, scripts: { dev: "next dev", build: "next build", start: "next start" },
-      dependencies: { next: "15.5.4", react: "19.1.1", "react-dom": "19.1.1" } }, null, 2)}\n`,
+    // The one dependency manifest of Phase 01 (ADR-1733): later slots add files and never edit this one.
+    "package.json": `${JSON.stringify({ name: "venture", private: true, type: "module", scripts: { dev: "next dev", build: "next build", start: "next start", test: "node --test" },
+      dependencies: { next: "15.5.4", react: "19.1.1", "react-dom": "19.1.1", zod: "3.25.76", "drizzle-orm": "0.44.5", "@supabase/supabase-js": "2.57.4", "@supabase/ssr": "0.7.0" } }, null, 2)}\n`,
     "app/layout.js": [
       `export const metadata = { title: ${JSON.stringify(brand)}, description: ${JSON.stringify(`${brand} -- coming soon.`)}, generator: ${JSON.stringify(MARK)} };`,
       "",

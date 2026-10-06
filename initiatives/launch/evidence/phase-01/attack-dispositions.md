@@ -41,6 +41,10 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
   frontend's proof, and frontend's verify (live 200 + Lighthouse) catches a broken build.
 - Logic: round 1 failed its output contract (empty `fix`), round 2 NOT RUN.
 
+## attack 3f04230 r1 (slice 9)
+
+- B1/B2/B4/L3/L4/L5/L12/L14/L15 fixed. L1 REJECTED: the header is built from the trimmed, shape-checked token, so no CR/LF can reach it. L2 REJECTED: a 422 on the non-forced ref update throws before the report, so no unmerged commit is recorded. L6/L8/L9 -> D19 (guessable markers). B3 (three-OS CI longer than the slot timeout) -> D22. L10 -> D23.
+
 ## attack 14d5374 r1 (slice 6)
 
 - The first run (7f15855) never reached a model: arc-run's input scanner refused a credential-shaped fixture value; renamed in 14d5374, pre-scanned clean.
@@ -49,3 +53,7 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
 ## attack 07bcb38 r2 (slice 6)
 
 - B1 [high] fixed (linear last-segment check). B2 fixed (`*.env`, `.envrc`). B3 -> D20 (values in non-contract templates). Logic NOT RUN (no in-range round 1).
+
+## attack 3a6350b r2 (slice 9)
+
+- The round-2 job was reaped by the memory monitor after it wrote both results. Boundary 7 (B2/B3 fixed, B1 -> D24, B4 -> D25); logic 0.

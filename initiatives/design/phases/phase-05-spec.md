@@ -30,6 +30,15 @@ run says out loud which sources answered and which did not.
 - [ ] contract tests green against the **real** implementations for every dep this phase wires
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)
 
+**Amended 2026-10-06 via `/arc-change` (one DoD row narrower, reason on the record):** the
+`.mcp.json` row is closed as **deliberately not edited** rather than edited. Adding 21st.dev there
+would put its paid generator and its edit/delete/upload tools in every session's toolset, against
+the owner's search-only ruling; adding shadcn needs a policy capability row in a directory denied to
+the session. Both sources are instead "wired" the same way: refpack's search adapter, with a live
+contract check against the real server (21st.dev over https, shadcn over local stdio, pinned
+`shadcn@4.21.2`). The pre-edit `git log` still ran and is in the evidence.
+
+
 ## Verification plan
 
 Refined 2026-10-05 via `/arc-change`. **Owner 2026-10-05:** add shadcn MCP and 21st.dev (search
