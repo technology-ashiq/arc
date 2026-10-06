@@ -300,6 +300,32 @@ teardown() { _arc_teardown 2>/dev/null || true; }
   [[ "$output" == *"a stdio MCP source is keyless"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 12 tests it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 12 -- a @test was silently dropped"; false; }
+@test "attack fc97161: the REAL stdio transport -- answers, an exiting, silent, doubling or noisy server is COULD-NOT-SCAN, and no owner key reaches it" {
+  _mcp_sandbox
+  printf 'sources:\n  - id: shadcn\n    kind:\n      - components\n    access: mcp\n    allowed_use:\n      - reference-pack\n    auth: none\n    cost: free\n    status: active\n    availability: unknown\n    approved_by: ashiq\n    added: 2026-10-05\n' > "$SANDBOX/sh.yaml"
+  fake="$ARC_ROOT/tests/fixtures/design/fake-mcp-stdio.mjs"
+  [ -s "$fake" ] || { echo "fixture: no fake server"; false; }
+  export ARC_DESIGN_MCP_BUDGET_MS=8000
+  # The control: the spawn path answers and the prose list is parsed.
+  run env FAKE_MCP_MODE=answer FAKE_MCP_ENV_OUT="$SANDBOX/env.txt" STITCH_API_KEY=owner-secret-1 API_KEY_21ST=owner-secret-2 node "$(_refpack)" --query "card" --brief lexos --source shadcn --want 3 --registry "$SANDBOX/sh.yaml" --mcp-stdio-server "$fake"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"shadcn answered 2 of 3; SHORT"* ]] || { echo "$output"; false; }
+  [ -s "$SANDBOX/env.txt" ] || { echo "the fake server never ran -- the spawn path was not driven"; false; }
+  ! grep -q 'STITCH_API_KEY\|API_KEY_21ST\|NODE_OPTIONS' "$SANDBOX/env.txt" || { echo "an owner key reached the local server: $(cat "$SANDBOX/env.txt")"; false; }
+  grep -qx 'npm_config_ignore_scripts' "$SANDBOX/env.txt" || { echo "the pinned npm settings did not reach it"; false; }
+  local m want
+  for m in exit:"exited (code 3) before answering" silent:"no answer within the 8 s budget" double:"answered one request twice" junk:"lines that are not JSON-RPC"; do
+    want="${m#*:}"
+    run env FAKE_MCP_MODE="${m%%:*}" node "$(_refpack)" --query "card" --brief lexos --source shadcn --want 3 --registry "$SANDBOX/sh.yaml" --mcp-stdio-server "$fake"
+    [ "$status" -eq 4 ] || { echo "${m%%:*}: exited $status: $output"; false; }
+    [[ "$output" == *"COULD-NOT-SCAN shadcn"*"$want"* ]] || { echo "${m%%:*}: $output"; false; }
+  done
+  # The fake-server seam never stands in for an https source.
+  run env API_KEY_21ST=k-test-0001 node "$(_refpack)" --query "x" --brief lexos --source 21st-dev --want 3 --mcp-stdio-server "$fake"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"stands in for a local stdio source only"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 13 tests it declares" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || { echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"; false; }
 }

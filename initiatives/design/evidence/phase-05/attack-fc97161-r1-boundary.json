@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:~455 (stdioPost spawn)",
+      "breaking_input": "Run `--query card --source shadcn` with npx missing from PATH, or with a shell that exits 127 straight away. With `shell: true`, a missing command is not a spawn error. The shell exits, and the later `child.stdin.write(...)` raises EPIPE as an 'error' event on `child.stdin`.",
+      "why": "No listener is attached to `child.stdin`, so the EPIPE is an uncaught exception. The tool dies with a stack trace and exit 1. It writes no COULD-NOT-SCAN line to availability.log and prints no named ERR line. There is also no 'exit' or 'close' handler on the child. A server that starts and then crashes leaves its waiters hanging for the full 30 s. `child.on('error')` fires only for spawn failures.",
+      "fix": "Attach `child.stdin.on('error', ...)` and `child.on('exit'/'close', ...)` handlers that resolve every waiter with `{status:0,error}`. Guard each write on `child.exitCode === null && !child.stdin.destroyed`.",
+      "twin_of": "A parser throw left to a stack trace beside two guarded siblings -> every step that can fail answers with a named ERR line."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-refpack.mjs:~475 (stopChild / process.on exit)",
+      "breaking_input": "A normal successful `--query card --source shadcn` run on Windows or POSIX. `spawn` with `shell: true` creates `cmd.exe` or `sh -c` as the direct child, and npx/node run as grandchildren. `stopChild()` calls `child.kill()`, which terminates only the shell.",
+      "why": "The grandchild MCP server survives, orphaned. It still holds the stdout pipe and the parent's stdin pipe, so the parent's event loop does not drain and the CLI can hang after printing its result. On the `fail()` paths the process exits but leaves an orphaned npx server running on every COULD-NOT-SCAN. Unreaped servers accumulate and hold ports and files open.",
+      "fix": "Spawn without a shell: resolve `npx.cmd` / `npx` explicitly with args as an array. On POSIX use `detached: true` and kill the process group (`process.kill(-pid)`). On Windows use `taskkill /T /F /PID`. Also `child.stdin.end()` and `child.unref()` after the answer.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:~455 (spawn options)",
+      "breaking_input": "Run the query with `npm_config_registry` pointing at an attacker registry, `NODE_OPTIONS=--require /tmp/x.js`, or a `.npmrc` / `node_modules/.bin/shadcn` in the process cwd. Alternatively set `API_KEY_21ST` or `STITCH_API_KEY` in the parent environment, as the face keys feature does.",
+      "why": "`spawn` is given no `env` and no `cwd`, so the downloaded package inherits the full environment, including every owner API key. The pinned version is judged from whatever directory the process happens to run in, and ambient npm config can swap the registry. The source is declared keyless, yet it receives all of arc's secrets. Because the stdio path skips the `hosts` allow-list and robots preflight, the child's network egress is ungoverned.",
+      "fix": "Pass a minimal allow-listed `env` (PATH, SystemRoot, HOME/USERPROFILE, a pinned `npm_config_registry`). Set `cwd` to a fixed empty temp directory. Use `--ignore-scripts`/`--prefer-offline` as appropriate.",
+      "twin_of": "A relative command path approved without pinning the working directory -> a path that names a program is judged from the directory it will run in."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:~460-470 (stdout handler)",
+      "breaking_input": "The server emits a multibyte UTF-8 character (for example in a component description) split across two stdout chunks. Separately, a server sends more than 2 MiB and then a valid reply to a later request.",
+      "why": "`buf += d` concatenates Buffers through implicit toString per chunk. A split multibyte character becomes U+FFFD, so JSON that was valid is corrupted or the line is silently dropped (`catch { continue }`) and the waiter times out after 30 s. After the byte cap trips, `outBytes` stays above the limit, so the handler returns early forever. Every later request, such as `tools/call` after `initialize`, then waits out the full deadline with a misleading 'no answer' reason instead of a cap reason. The cap is also cumulative across the whole session, not per reply.",
+      "fix": "Call `child.stdout.setEncoding('utf8')`. On cap breach, kill the child and mark the transport failed so later calls fail at once with the cap reason. Track bytes per line or per reply.",
+      "twin_of": "An emptied oversize body passed through as a 2xx -> a capped read is truncated or refused, never handed on empty as a success."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:~471 (setTimeout per call)",
+      "breaking_input": "Cold `npx -y shadcn@4.21.2 mcp` on a fresh machine, with the package download taking longer than 30 s. Alternatively, a server that answers each of 3 calls in 29 s.",
+      "why": "The deadline is per call, not per decision. The npx download and install time is charged to the first `initialize` request, so a legitimate first run reads as COULD-NOT-SCAN. Worst-case wall time is the sum of every call's 30 s. After a timeout the server keeps running and its late reply is silently discarded.",
+      "fix": "Use one shared step budget for the whole stdio decision, with a longer startup grace for the first reply. On timeout, kill the child.",
+      "twin_of": "A per-call bound with no per-decision bound -> share one step budget across a whole decision; out of steps is UNREADABLE."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:~463 (reply matching)",
+      "breaking_input": "A server replies with two JSON-RPC responses for id 2, or answers `initialize` with a line that carries `id:1` plus both result and error. A server prints non-JSON log lines on stdout, which are silently skipped.",
+      "why": "There is no exactly-one-reply-per-id enforcement. The first line with a matching id wins, and any duplicate is ignored without being flagged. A request id reused across calls could pair a stale reply with the wrong request. Skipped non-JSON lines are not counted and are never surfaced as anything but a timeout.",
+      "fix": "Track answered ids. A second reply for the same id, or a result and error together, is COULD-NOT-SCAN. Count malformed lines and fail past a small limit.",
+      "twin_of": "A keyed request whose deadline, size and reply count were the server's to choose -> a deadline and a byte cap on every remote body, exactly one reply per id, a grammar on every echoed header"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/design-refpack-mcp.bats (new shadcn test)",
+      "breaking_input": "Break `stdioPost` entirely: delete the `spawn` line, or omit the `stdin.on('error')` handler. The new test still passes.",
+      "why": "The test drives only the `--mcp-fixture` path. `if (fake) {...}` returns before `if (stdio) return stdioPost(body)`, so the spawn, framing, deadline, byte cap, kill and orphan code never runs under test. The only evidence for it is a manual live run. The vacuous-pass rule applies: nothing asserts that the stdio code ran. The registered-test-count check does not help either.",
+      "fix": "Add a bats test with a local fake stdio MCP server, a node script that speaks JSON-RPC on stdin/stdout. It must cover a normal answer, a server that exits immediately, a silent server (with a short deadline), an oversize reply, and a check that no child process is left running.",
+      "twin_of": "A test seam that could drive the real, keyed network -> a seam needs the fake transport; a recorder file is created by the run, never appended"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:~383 (stdio auth gate)",
+      "breaking_input": "A registry row for shadcn with `auth: none` but `hosts: [evil.example]`, or `cost: paid`, or an `allowed_use` that the adapter ignores.",
+      "why": "For a stdio adapter every registry-bound check is skipped: the `hosts` check, endpoint pinning, and anything beyond `auth`. The registry therefore constrains nothing about what the local server may contact, and a registry row that is wrong about the source still passes. The `hosts` field is dead for this source while still looking like a control. The record and attempts logs show only the fixed label `stdio:shadcn@4.21.2`, never the actual network target.",
+      "fix": "Refuse a stdio source whose `hosts` is non-empty or mismatched, or require it to be an explicit empty list. State in the attempts log that egress is ungoverned.",
+      "twin_of": "A registry field choosing which secret an endpoint receives -> the adapter pins the credential name; a registry row that names another is refused"
+    }
+  ]
+}
