@@ -445,103 +445,6 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.prs + " " + o.claimed')" = "FOREIGN_PR 1 false" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: release asks for deploy-prod-first before it writes anything" {
-  arm release unapproved
-  [ "$(j 'o.release.code')" = "APPROVAL_PENDING" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.hold')" == *"ignoreCommand"* ]] || { echo "$DONE"; false; }
-  [ "$(j 'o.tags')" = "0" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: the steel thread -- release lifts the hold and tags it once, frontend commits the shell once and the live page passes" {
-  arm release thread
-  [[ "$(j 'o.before.ok + " " + o.before.reason')" == "false https://sandbox.automemory.ai/ answered 404, not 200" ]] || { echo "$DONE"; false; }
-  [ "$(j 'o.release.ok + " " + o.releaseAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.hold.trim() + " " + o.tags.join(",")')" = "{} launch-release-1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.evidence.state')" = "true ERROR" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.hostingAgain.ok + " " + o.holdAfterHosting.trim()')" = "true {}" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.frontend.ok + " " + o.frontendAgain.ok + " " + o.shellCommits')" = "true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.answerer')" = "true sandbox.automemory.ai + www.googleapis.com" ] || { echo "$DONE"; false; }
-  [ "$(j 'Object.values(o.frontendVerify.evidence.scores).every(v => v >= 90)')" = "true" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.release.join(",") + " " + o.kinds.frontend.join(",")')" = "release-commit,github-tag frontend-shell" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: a Lighthouse score under 90 fails, and a PageSpeed quota answer is UNSCANNED" {
-  arm release low-score
-  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.reason')" = "false lighthouse below 90: performance 71" ] || { echo "$DONE"; false; }
-  arm release quota
-  [ "$(j 'o.frontendVerify.reason')" = "UNSCANNED(pagespeed quota (429))" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: frontend never commits over the owner's code, and release never lifts a hold hosting did not place" {
-  arm release owner-code
-  [ "$(j 'o.frontend.code + " " + o.page.trim()')" = "FOREIGN_FILE mine" ] || { echo "$DONE"; false; }
-  arm release foreign-hold
-  [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: release does not lift a vercel.json the owner rewrote after hosting" {
-  arm release owner-rewrote-hold
-  [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: a failed production build of a commit that holds an app is not a release receipt" {
-  arm release broken-app
-  [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build of "*" failed (ERROR) and the commit holds an app" ]] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: a typed hosting trailer over the owner's config does not let release lift it" {
-  arm release forged-hosting-trailer
-  [ "$(j 'o.release.code + " " + o.text')" = 'FOREIGN_FILE {"rewrites":[]}' ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: the shell's manifest carries Phase 01's dependencies and backend/orm never edit it" {
-  arm app thread
-  [ "$(j 'Object.keys(o.pkg.dependencies).sort().join(",")')" = "@supabase/ssr,@supabase/supabase-js,drizzle-orm,next,react,react-dom,zod" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.pkg.scripts.test')" = "node --test" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.pkgUnchanged + " " + o.frontendAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: backend commits the health contract once and the live route answers exactly it" {
-  arm app thread
-  [ "$(j 'o.backend.ok + " " + o.backendAgain.ok + " " + o.commits.backend')" = "true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.backendVerify.ok + " " + o.backendVerify.answerer')" = "true sandbox.automemory.ai" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: orm commits the typed schema once and is verified by arc-ci green on main's head" {
-  arm app thread
-  [ "$(j 'o.orm.ok + " " + o.ormAgain.ok + " " + o.commits.orm')" = "true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.ormVerify.ok + " " + o.ormVerify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.backend.join(",") + " " + o.kinds.orm.join(",")')" = "backend-route orm-schema" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: backend never commits over the owner's route, and an answer outside the contract fails" {
-  arm app owner-route
-  [ "$(j 'o.backend.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
-  arm app bad-health
-  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"answers outside the contract (keys: debug,ok,service,version)" ]] || { echo "$DONE"; false; }
-  arm app before-backend
-  # Before backend has run, its files are not on main: verify says so before it ever asks the live site.
-  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"lib/contract.js is not launch's file" ]] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: orm verify names a red leg, and orm refuses without the database's probe table" {
-  arm app red-ci
-  [[ "$(j 'o.ormVerify.ok + " " + o.ormVerify.reason')" == "false run "*"test (windows-latest) failure" ]] || { echo "$DONE"; false; }
-  arm app no-probe
-  [ "$(j 'o.orm.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: once the owner rewrites the schema or route, green CI and a live 200 are no longer launch's proof" {
-  arm app owner-edits-after
-  [[ "$(j 'o.ormVerify.ok + " " + o.ormVerify.reason')" == "false "*"db/schema.js is not launch's schema file" ]] || { echo "$DONE"; false; }
-  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"is not launch's file" ]] || { echo "$DONE"; false; }
-}
-
-@test "launch-contract: identical bytes the owner committed are not launch's without its trailer" {
-  arm app owner-copy
-  [ "$(j 'o.backend.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
-}
-
 @test "launch-contract: database creates one project in the venture's region and proves RLS as anon" {
   arm database fresh
   [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
@@ -639,6 +542,103 @@ arm() {
 @test "launch-contract: an owner CNAME at a name email needs refuses before any record is written" {
   arm email owner-cname
   [ "$(j 'o.scaffold.code + " " + o.written')" = "FOREIGN_RECORD 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: release asks for deploy-prod-first before it writes anything" {
+  arm release unapproved
+  [ "$(j 'o.release.code')" = "APPROVAL_PENDING" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.hold')" == *"ignoreCommand"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.tags')" = "0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the steel thread -- release lifts the hold and tags it once, frontend commits the shell once and the live page passes" {
+  arm release thread
+  [[ "$(j 'o.before.ok + " " + o.before.reason')" == "false https://sandbox.automemory.ai/ answered 404, not 200" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.release.ok + " " + o.releaseAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hold.trim() + " " + o.tags.join(",")')" = "{} launch-release-1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.evidence.state')" = "true ERROR" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hostingAgain.ok + " " + o.holdAfterHosting.trim()')" = "true {}" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.frontend.ok + " " + o.frontendAgain.ok + " " + o.shellCommits')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.answerer')" = "true sandbox.automemory.ai + www.googleapis.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'Object.values(o.frontendVerify.evidence.scores).every(v => v >= 90)')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.release.join(",") + " " + o.kinds.frontend.join(",")')" = "release-commit,github-tag frontend-shell" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a Lighthouse score under 90 fails, and a PageSpeed quota answer is UNSCANNED" {
+  arm release low-score
+  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.reason')" = "false lighthouse below 90: performance 71" ] || { echo "$DONE"; false; }
+  arm release quota
+  [ "$(j 'o.frontendVerify.reason')" = "UNSCANNED(pagespeed quota (429))" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: frontend never commits over the owner's code, and release never lifts a hold hosting did not place" {
+  arm release owner-code
+  [ "$(j 'o.frontend.code + " " + o.page.trim()')" = "FOREIGN_FILE mine" ] || { echo "$DONE"; false; }
+  arm release foreign-hold
+  [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: release does not lift a vercel.json the owner rewrote after hosting" {
+  arm release owner-rewrote-hold
+  [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a failed production build of a commit that holds an app is not a release receipt" {
+  arm release broken-app
+  [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build of "*" failed (ERROR) and the commit holds an app" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a typed hosting trailer over the owner's config does not let release lift it" {
+  arm release forged-hosting-trailer
+  [ "$(j 'o.release.code + " " + o.text')" = 'FOREIGN_FILE {"rewrites":[]}' ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the shell's manifest carries Phase 01's dependencies and backend/orm never edit it" {
+  arm app thread
+  [ "$(j 'Object.keys(o.pkg.dependencies).sort().join(",")')" = "@supabase/ssr,@supabase/supabase-js,drizzle-orm,next,react,react-dom,zod" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.pkg.scripts.test')" = "node --test" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.pkgUnchanged + " " + o.frontendAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backend commits the health contract once and the live route answers exactly it" {
+  arm app thread
+  [ "$(j 'o.backend.ok + " " + o.backendAgain.ok + " " + o.commits.backend')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.backendVerify.ok + " " + o.backendVerify.answerer')" = "true sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: orm commits the typed schema once and is verified by arc-ci green on main's head" {
+  arm app thread
+  [ "$(j 'o.orm.ok + " " + o.ormAgain.ok + " " + o.commits.orm')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.ormVerify.ok + " " + o.ormVerify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.backend.join(",") + " " + o.kinds.orm.join(",")')" = "backend-route orm-schema" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backend never commits over the owner's route, and an answer outside the contract fails" {
+  arm app owner-route
+  [ "$(j 'o.backend.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  arm app bad-health
+  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"answers outside the contract (keys: debug,ok,service,version)" ]] || { echo "$DONE"; false; }
+  arm app before-backend
+  # Before backend has run, its files are not on main: verify says so before it ever asks the live site.
+  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"lib/contract.js is not launch's file" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: orm verify names a red leg, and orm refuses without the database's probe table" {
+  arm app red-ci
+  [[ "$(j 'o.ormVerify.ok + " " + o.ormVerify.reason')" == "false run "*"test (windows-latest) failure" ]] || { echo "$DONE"; false; }
+  arm app no-probe
+  [ "$(j 'o.orm.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: once the owner rewrites the schema or route, green CI and a live 200 are no longer launch's proof" {
+  arm app owner-edits-after
+  [[ "$(j 'o.ormVerify.ok + " " + o.ormVerify.reason')" == "false "*"db/schema.js is not launch's schema file" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.backendVerify.ok + " " + o.backendVerify.reason')" == "false "*"is not launch's file" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: identical bytes the owner committed are not launch's without its trailer" {
+  arm app owner-copy
+  [ "$(j 'o.backend.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: secrets writes the names-only template once and claims only the file it wrote" {
