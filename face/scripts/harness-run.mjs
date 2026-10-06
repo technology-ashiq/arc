@@ -153,7 +153,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
 
     const doorPort = await freePort();
     door = start("arc-dash", [join(REPO, ".claude", "scripts", "hq", "arc-dash.mjs"), "--spine", spine, "--port", String(doorPort)],
-      { cwd: REPO, env: { ...leadsEnv, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal"), ARC_FACE_MODELS_FILE: modelsFile } });
+      { cwd: REPO, env: { ...leadsEnv, ARC_DASH_TOKEN: token, ARC_DASH_JOURNAL_DIR: join(tmp, "journal"), ARC_FACE_MODELS_FILE: modelsFile, ARC_KEYS_FILE: join(tmp, "private", "keys.json") } });
     const headers = { Authorization: `Bearer ${token}` };
     await waitHttp(`http://127.0.0.1:${doorPort}/api/health`, headers, door, 20000, [token]);
     log(`door: up on ${doorPort}`);
