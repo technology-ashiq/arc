@@ -171,10 +171,12 @@ providers:
     payment_model: any
     env_keys:
       - VERCEL_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - api.vercel.com
+      - api.github.com
     credentials:
-      scope: "env var NAMES list; values are placed by the owner"
+      scope: "env var NAMES list; values are placed by the owner; reads .env.example and the git tree (ADR-1729)"
     adapter: providers/secrets/vercel-env-store.mjs
     digest: null
     approved_by: ashiq
