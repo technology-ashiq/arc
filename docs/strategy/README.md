@@ -12,7 +12,7 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-10-03 — PLAN-launch added: the `launch` lane's venture-factory plan (fixed slot process · pluggable vetted providers · derived recommendation · durable runner), trigger fired by owner ruling 2026-10-03, v1.1 after one same-day owner-brought external review (8/8 accepted) + the same-day "no Nilluvai — rehearsal venture" ruling; `PLAN-cycle3-venture-launch.md` is MARKED as the `launch-kit` slot's Week-3 checklist but does NOT move; 2026-09-29 — PLAN-org added: the `org` lane's company-layer plan (role cards · team manifests · ₹0 dispatcher · org review), trigger fired by owner ruling 2026-09-29, v1.1 after two same-day review rounds; the org-blueprint's §4 chart is MARKED for replacement by its generated chart at P00 exit but does NOT move now; 2026-09-25 — docs Phase 02: `docs/how-it-works.md`, `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` MOVED to `docs/archive/` and stubbed into the generated reference `docs/wiki/index.md` (ADR-1510, REQ-08); 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-10-07 — PLAN-distribute added: the `distribute` lane's plan for arc under verified harnesses (the Claude files stay the source · `.codex/` / `.opencode/` / skills-only rendered from them · every blocking gate enforced at merge-time on a protected `main` · an install that names what it could not place), trigger fired by owner ruling 2026-10-07, v1.2 after one same-day owner-brought external review (9 points, 8 taken, 1 in part) and one same-day source-question round (five-tool scan → Claude-canonical, not SKILL.md); nothing moves — `.codex/` and `.agents/skills/` are resolved inside the lane's P00, not here; 2026-10-03 — PLAN-launch added: the `launch` lane's venture-factory plan (fixed slot process · pluggable vetted providers · derived recommendation · durable runner), trigger fired by owner ruling 2026-10-03, v1.1 after one same-day owner-brought external review (8/8 accepted) + the same-day "no Nilluvai — rehearsal venture" ruling; `PLAN-cycle3-venture-launch.md` is MARKED as the `launch-kit` slot's Week-3 checklist but does NOT move; 2026-09-29 — PLAN-org added: the `org` lane's company-layer plan (role cards · team manifests · ₹0 dispatcher · org review), trigger fired by owner ruling 2026-09-29, v1.1 after two same-day review rounds; the org-blueprint's §4 chart is MARKED for replacement by its generated chart at P00 exit but does NOT move now; 2026-09-25 — docs Phase 02: `docs/how-it-works.md`, `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` MOVED to `docs/archive/` and stubbed into the generated reference `docs/wiki/index.md` (ADR-1510, REQ-08); 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
@@ -20,7 +20,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | `docs/archive/how-arc-works-simple.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/how-arc-works-simple.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
 | `docs/archive/usermanual.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/usermanual.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
 | `docs/archive/blueprint.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/blueprint.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
-| `plans/` (29 files) | **ACTIVE — the operational layer** | Kickoff-ready: 27 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
+| `plans/` (30 files) | **ACTIVE — the operational layer** | Kickoff-ready: 28 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -686,6 +686,51 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     verified only by a restore). **`PLAN-cycle3-venture-launch.md` is NOT superseded** — it is
     marked as the `launch-kit` slot's Week-3 checklist and stays in `plans/`; the fold is decided
     at the Cycle 2 retro, and this table records the move in the drop that makes it.
+
+30. **2026-10-07:** `plans/PLAN-distribute.md` added (`distribute` v1 — arc under verified
+    harnesses: the Claude-dialect files stay the hand-edited source, every other harness
+    directory is rendered from them by the compiler arc already has, every blocking gate is
+    enforced at merge-time on the repository, and an install names what it could not place).
+    **Trigger FIRED by owner ruling 2026-10-07**, recorded on the spine in Phase 0 — the second
+    naming of a gap the 2026-08-12 ECC study measured (`.codex/` a never-installed 23% copy,
+    0 of 13 manifests, never synced) and routed to a `distribute` lane that the Build-out
+    Mandate queue then outranked. Landed at **v1.2** after two same-day rounds. Round 1, an
+    owner-brought external review: nine points, **eight taken, one taken in part** — the title
+    no longer promises "any harness"; enforcement became a three-level contract (tool-time ·
+    commit-time · merge-time) with its own in-file table, because a git hook is one
+    `--no-verify` from silence (**DST-B**); **REQ-09** added (protected `main`, required checks,
+    no direct push — an owner action read back by `doctor --repo`); **REQ-10** added
+    (transactional install); an install manifest, `--dry-run` and refuse-unmanaged-by-default
+    (**DST-E**); an exact `npx github:` + local-tarball invocation contract tested on a clean
+    runner (**DST-H**); a live OpenCode spike moved into P00. Rejected in part: a formal source
+    schema of arc's own. Round 2, the owner's source question (*"commands-a skills-a maathina
+    ipo maari use pannalama?"*): a scan of five tools that ship one workflow to many harnesses
+    (GSD, Every's compound-engineering-plugin, GitHub spec-kit, rulesync, ECC) found **none uses
+    SKILL.md as its source** — two keep the Claude dialect canonical and down-convert, two render
+    from a neutral format of their own, all emit skills as an *output*. v1.1's "skills as source"
+    would have changed every command's invocation model for no portability gain, so **DST-A was
+    rewritten to Claude-canonical**: `.claude/commands` · `.claude/agents` · skills · hooks ·
+    `.mcp.json` are not moved, renamed or reformatted; `arc-compile` renders `.codex/`,
+    `.opencode/` and a `skills-only` bundle as do-not-edit outputs with dirty-diff CI; a per-file
+    `targets:` key (rulesync's one adopted idea); a construct a target cannot express is dropped
+    only where the matrix cell says so and otherwise fails `[unsupported]` by name; **no prose
+    fallback, ever** (spec-kit's, named and refused). The 58-artifact migration phase vanished:
+    **appetite 12.5/14 → 10.5/12 d.** The owner's list is split in-file into **models** (already
+    solved — five `arc-run` drivers, `router.yaml`, ADR-0220, model-policy v2 profiles; untouched,
+    **DST-F**) and **harnesses** (the gap). Decisions **DST-A…K lock at landing, DST-L (code
+    home: `products/distribute` vs `engine`) and DST-M (commit-time mechanism: `core.hooksPath` vs
+    a hook manager) open**, decided at kickoff; ADR century **2000** claimed at kickoff per
+    `PORTFOLIO.md` after a sibling-worktree + remote-branch sweep. The load-bearing ones:
+    **DST-A** (Claude-canonical source, rendered outputs, no prose fallback), **DST-B** (merge-time
+    is the only truth; a git hook is never called the gate), **DST-C** (`engine/harnesses.yaml`
+    declared matrix, dated rows, an undated row never installs), **DST-D** (`.codex/` and
+    `.agents/skills/source-command-*` resolved to rendered-or-deleted in P00 — no third state),
+    **DST-J** (v1 = `claude-code` identity · `codex` as skills · `opencode` · `skills-only`; every
+    other harness a dated `unverified` row). Owner actions named in the gates: OpenCode installed
+    for the P00 spike (ADR-0110 — arc installs nothing); GitHub branch protection on `main`
+    flipped in P01, or A-08 invoked in writing. **Nothing is superseded and nothing moves**:
+    `.codex/` and `.agents/skills/` are tree surfaces, not strategy docs, and their fate is the
+    lane's P00 exit, recorded there.
 
 ## Provenance
 
