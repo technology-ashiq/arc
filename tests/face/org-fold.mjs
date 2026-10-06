@@ -77,6 +77,7 @@ try {
     lv.binds.agents = ["researcher"];
     const lr = F.foldOrg(ok(lying)).departments.flatMap((d) => d.roles).find((r) => r.id === lv.id);
     check("who: a vacant seat that binds an agent is named as a disagreement, never drawn as filled or empty", lr.whoTone === "disagrees" && /disagree/.test(lr.who) && lr.who.includes("researcher"), lr.who);
+    check("who: the fold resolves the colour -- amber for a disagreement, a text token otherwise (the View holds no lookup)", lr.whoColour === "var(--amber)" && byId.get(vacant.id).whoColour === "var(--text-3)" && byId.get(staffed.id).whoColour === "var(--text-2)", `${lr.whoColour} ${byId.get(vacant.id).whoColour}`);
     const empty = clone(body);
     const ev = empty.chart.departments.flatMap((d) => d.roles).find((r) => r.seat === "agent");
     ev.binds = { agents: [], skills: [], scripts: [], process: null, tier: null };

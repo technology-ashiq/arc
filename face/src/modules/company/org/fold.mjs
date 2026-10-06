@@ -38,7 +38,7 @@ import { unescapeDoorText } from "../../../lib/door.mjs";
 /**
  * The roles, scorecards and teams section (org Cycle 19, ADR-1624/1625): every value as /api/org served it. The fold
  * maps and words; it never counts a receipt or re-tests a seat -- the producer's own flags decide (twin-fix retro).
- * @typedef {{ key: string, id: string, title: string, state: string, seat: string, origin: string, who: string, whoTone: "sits" | "none" | "disagrees" }} RoleRow
+ * @typedef {{ key: string, id: string, title: string, state: string, seat: string, origin: string, who: string, whoTone: "sits" | "none" | "disagrees", whoColour: string }} RoleRow
  * @typedef {{ key: string, role: string, seat: string, isVerdict: boolean, verdict: string, why: string, due: string, line: string }} ScoreRow
  * @typedef {{ key: string, venture: string, stage: string, valid: boolean, status: string, seats: string, findings: string[] }} TeamRow
  * @typedef {object} OrgView
@@ -55,6 +55,8 @@ import { unescapeDoorText } from "../../../lib/door.mjs";
  */
 
 const NO_REFUSAL = Object.freeze({ code: "", human: "" });
+// Who sits a role, coloured by its tone: resolved here, so the View draws a value and holds no lookup (face-pure).
+const WHO_COLOUR = Object.freeze({ sits: "var(--text-2)", none: "var(--text-3)", disagrees: "var(--amber)" });
 
 /** The six seat classes of the chart, in the order the counts line names them; `own`/`hired` are origins, not states. */
 export const STATE_CLASSES = Object.freeze([
@@ -125,7 +127,8 @@ export function foldOrg(p) {
     const dd = /** @type {Record<string, unknown>} */ (d);
     const roles = (Array.isArray(dd["roles"]) ? dd["roles"] : []).filter(isObj).map((r, j) => {
       const rr = /** @type {Record<string, unknown>} */ (r);
-      return { key: `${i}-${j}-${str(rr["id"])}`, id: str(rr["id"]), title: str(rr["title"]), state: str(rr["state"]), seat: str(rr["seat"]), origin: str(rr["origin"]), ...whoSits(rr) };
+      const who = whoSits(rr);
+      return { key: `${i}-${j}-${str(rr["id"])}`, id: str(rr["id"]), title: str(rr["title"]), state: str(rr["state"]), seat: str(rr["seat"]), origin: str(rr["origin"]), ...who, whoColour: WHO_COLOUR[who.whoTone] };
     });
     return { key: `${i}-${str(dd["dept"])}`, name: str(dd["name"]) || str(dd["dept"]), roles };
   });
