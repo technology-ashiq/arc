@@ -1,7 +1,8 @@
 // ci slot on GitHub Actions (ADR-1704, ADR-1726). Writes one workflow that runs the venture's tests on three operating
 // systems, commits it through the Contents API (unchanged content is not re-committed), and requires its three checks
 // on main. The repo comes from ctx.upstream.repo (ADR-1725). A plan that refuses branch protection on a private repo is
-// refused by name (ADR-1726), never reported as done.
+// refused by name (ADR-1726), never reported as done -- unless the venture's owner ruled `ci_protection: absent-plan`,
+// and then only when GitHub itself answers with the plan limit (ADR-1735).
 import { Buffer } from "node:buffer";
 
 const API = "https://api.github.com";
@@ -80,6 +81,16 @@ function repo(ctx) {
   return full;
 }
 
+// The owner's ruling on private-repo protection (ADR-1735). Absent means required; anything else is refused before any
+// call, so a typo can never read as "absent".
+const ABSENT = "ABSENT(plan: private-repo protection)";
+function ruling(ctx) {
+  const v = ctx.profile ? ctx.profile.ci_protection : undefined;
+  if (v === undefined || v === null || v === "required") return "required";
+  if (v === "absent-plan") return "absent-plan";
+  throw refuse("BAD_RULING", `venture ci_protection ${JSON.stringify(say(v, 40))} is not required | absent-plan (ADR-1735)`);
+}
+
 const b64 = (text) => Buffer.from(text, "utf8").toString("base64");
 const unb64 = (text) => Buffer.from(String(text || "").replace(/\s/g, ""), "base64").toString("utf8");
 
@@ -97,6 +108,7 @@ async function wroteIt(ctx, full) {
 }
 
 export async function scaffold(ctx) {
+  const rule = ruling(ctx);
   const full = repo(ctx);
   ctx.write(PATH, WORKFLOW);
   const cur = await gh(ctx, "GET", `/repos/${full}/contents/${PATH}?ref=main`, undefined, { allow: [404] });
@@ -112,6 +124,20 @@ export async function scaffold(ctx) {
   // Reported the moment it exists: a protection call that fails next must not leave a commit nothing records
   // (attack faccecd B2).
   ctx.report({ kind: "github-workflow", id: `${full}:${PATH}` });
+  let kind;
+  try {
+    kind = await protect(ctx, full);
+  } catch (e) {
+    // Only GitHub's own plan-limit answer, under the owner's ruling, stands in for protection (ADR-1735).
+    if (!(e && e.code === "PLAN_LIMIT" && rule === "absent-plan")) throw e;
+    ctx.report({ kind: "protection-absent", id: `${full}@main` });
+    return { files: [PATH], resources: [{ kind: "github-workflow", id: `${full}:${PATH}` }, { kind: "protection-absent", id: `${full}@main` }], notes: [`required checks ${ABSENT} (ADR-1735)`] };
+  }
+  ctx.report({ kind, id: `${full}@main` });
+  return { files: [PATH], resources: [{ kind: "github-workflow", id: `${full}:${PATH}` }, { kind, id: `${full}@main` }], notes: [] };
+}
+
+async function protect(ctx, full) {
   // An owner's existing protection is extended, never replaced (attack faccecd B1): the missing checks are ADDED
   // through the contexts endpoint, so their other checks and app bindings stay as they are (attack 2b16424 L6/B3).
   // What launch created and what it only added are recorded apart, so the exit plan removes no owner rule
@@ -134,8 +160,7 @@ export async function scaffold(ctx) {
     // Protection an earlier attempt of this slot created stays launch's on a re-run.
     kind = ctx.resources.some((r) => r.kind === "branch-protection" && r.id === `${full}@main`) ? "branch-protection" : "required-checks";
   }
-  ctx.report({ kind, id: `${full}@main` });
-  return { files: [PATH], resources: [{ kind: "github-workflow", id: `${full}:${PATH}` }, { kind, id: `${full}@main` }], notes: [] };
+  return kind;
 }
 
 const wait = (ms, signal) => new Promise((res, rej) => {
@@ -150,11 +175,19 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 // are reported apart (attack faccecd L2). Thirteen polls, 20 s apart, fit inside the slot's 300 s timeout. Required
 // checks the owner added are theirs to judge (debt D15).
 async function probe(ctx) {
+  const rule = ruling(ctx);
   const full = repo(ctx);
-  const prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection/required_status_checks`, undefined, { allow: [404] });
-  const contexts = prot.status === 200 && prot.body && Array.isArray(prot.body.contexts) ? prot.body.contexts : [];
-  const missing = CHECKS.filter((c) => !contexts.includes(c));
-  if (missing.length) return { ok: false, reason: `main does not require ${missing.join(", ")}` };
+  let required = CHECKS;
+  try {
+    const prot = await gh(ctx, "GET", `/repos/${full}/branches/main/protection/required_status_checks`, undefined, { allow: [404] });
+    const contexts = prot.status === 200 && prot.body && Array.isArray(prot.body.contexts) ? prot.body.contexts : [];
+    const missing = CHECKS.filter((c) => !contexts.includes(c));
+    if (missing.length) return { ok: false, reason: `main does not require ${missing.join(", ")}` };
+  } catch (e) {
+    // A 404 (protection possible, not set) stays not ok above; only the plan's refusal, under the ruling, is ABSENT.
+    if (!(e && e.code === "PLAN_LIMIT" && rule === "absent-plan")) throw e;
+    required = ABSENT;
+  }
   const head = await gh(ctx, "GET", `/repos/${full}/branches/main`);
   const sha = head.body && head.body.commit && typeof head.body.commit.sha === "string" && /^[0-9a-f]{40}$/.test(head.body.commit.sha) ? head.body.commit.sha : null;
   if (!sha) return { ok: false, reason: `${full} main has no readable head commit` };
@@ -173,7 +206,7 @@ async function probe(ctx) {
     const byName = new Map(list(jobs.body && jobs.body.jobs).map((j) => [j.name, j.conclusion]));
     const red = CHECKS.filter((c) => byName.get(c) !== "success");
     if (red.length) return { ok: false, reason: `run ${run.id}: ${red.map((c) => `${c} ${say(byName.get(c) ?? "absent", 20)}`).join(", ")}` };
-    return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: run.id, sha, checks: CHECKS } };
+    return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: run.id, sha, checks: CHECKS, required } };
   }
   return { ok: false, reason: last };
 }
