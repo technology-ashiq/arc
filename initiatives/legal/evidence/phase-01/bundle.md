@@ -34,9 +34,30 @@ criterion, and names the two that were not met until today.
 4. `publish --request 01M46QX0...` before any decision → **exit 2**, `NO_DECISION` and `DECISION_UNDATED`.
 
 That request was raised by the pre-PR-341 engine, so its payload lacks
-`previous_published_sha256` and the current publish would refuse it as a profile violation. It is
-left undecided on purpose. The owner's stamp is taken on a fresh request raised from the merged
-engine; its two event ids are recorded at close.
+`previous_published_sha256`. It is left undecided on purpose.
+
+### The approval round-trip, on the merged engine (2026-10-07)
+
+| Step | Event id | In `events/` | In `_quarantine/` |
+|---|---|---|---|
+| `approval.requested` (fixture effective 2026-08-13) | `01M48WX1AK96C9Q8RZJY7WYMB9` | `2026-10-06.jsonl` | 0 |
+| owner's `decision.recorded`, approve, `arc-inbox@1.0.0` | `01M49827H07TBPT40AZWGMCV34` | yes | 0 |
+| **publish → REFUSED, exit 2**: `BACKDATED: effective_date 2026-08-13 is earlier than the decision (2026-10-07)` | — | | |
+| `approval.requested` (same fixture, effective 2026-10-14) | `01M498H3WKN5SNS9TPHYMY2JZT` | `2026-10-07.jsonl` | 0 |
+| owner's `decision.recorded`, approve, `arc-inbox@1.0.0` | `01M498QE6KV4T17YESB7DV18WX` | yes | 0 |
+| **publish → exit 0**, 7 pages, bound to that decision | — | `fixture-publish.txt` | |
+| **verify → INTACT** | — | `fixture-verify.txt` | |
+
+**The first stamp was refused by the backdating law, on the real spine, with a real human
+decision.** The fixture still carried its August effective date, and nobody looked at it before
+asking for the stamp. It cost the owner one extra approval. It also showed the date law holding
+against the real inbox, not only against the probe's simulated decisions. A real venture's
+effective date must be on or after the day it will be approved.
+
+The ledger record that publish wrote is copied to `fixture-publish-ledger.json` and removed from
+`products/legal/published/` in the main clone. Committing a fixture's ledger there would make
+every later propose of that fixture a re-publish, and the sandboxed suites copy `products/legal/`
+whole.
 
 ## The 2026-10-06 attack rounds
 

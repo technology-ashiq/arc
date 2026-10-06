@@ -6,8 +6,8 @@
   - Run 37378702493: face-module count arm, because CLAUDE.md's hand-written command count was 25 → 26.
 - **Receipts (main clone, canonical spine, `events/2026-10-06.jsonl`):**
   - `kickoff.done` `01M47ZCQMHWB54E808DEZXGJH6`
-  - ruling `approval.requested` `01M47ZCQW6XF5ZEWF4QGS1XFRH` (gate `lane-birth`, ADR-1900). **Awaiting the owner's stamp.**
+  - ruling `approval.requested` `01M47ZCQW6XF5ZEWF4QGS1XFRH` (gate `lane-birth`, ADR-1900), decided by the owner's `decision.recorded` `01M4982PTC62ZM2WF6YWN8KRZR` (verdict `approve`, `arc-inbox@1.0.0`, in `events/2026-10-07.jsonl`).
   - `_quarantine/` was listed at emit time: 13 files from other lanes and earlier dates, with 0 containing `discover@`.
 - **Audit memo:** `market-agent-audit.md`, NOT LOCATABLE (A-01).
 - **Attack:** two rounds on the birth diff, `attack-8bb1a72-*` and `attack-5e1d529-*`. Every high/medium was fixed or rejected with the fixed taxonomy. Lows are in `../../debt-ledger.md`.
-- **Close blocked on:** the owner's `arc-inbox approve 01M47ZCQW6XF5ZEWF4QGS1XFRH`, which is the exit criterion "the owner's decision.recorded found by id".
+- **Close (2026-10-07):** both ruling receipts found by id in `events/` (`2026-10-06.jsonl`, `2026-10-07.jsonl`). `_quarantine/` re-listed at close: 13 files, 0 containing `discover`. Closed through `/arc-phase-done 00 --lane discover`.
