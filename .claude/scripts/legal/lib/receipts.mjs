@@ -493,12 +493,20 @@ export function factsFieldPrints(facts, printed) {
   return out;
 }
 
+// Composite tokens print several facts fields at once; each must name them, or a change to a price
+// the page shows reads as "a field no page prints moved".
+const COMPOSITE_TOKENS = {
+  "table.pricing": ["pricing.plan_names", "pricing.plan_amounts_inr", "pricing.period"],
+};
+
 /** The facts paths a page's template tokens read, from the renderer's `used` set. */
 export function printedFactPaths(usedExprs) {
   const paths = new Set();
-  for (const e of usedExprs)
+  for (const e of usedExprs) {
     for (const prefix of ["facts.", "label.", "list."])
       if (e.startsWith(prefix)) paths.add(e.slice(prefix.length));
+    for (const p of COMPOSITE_TOKENS[e] || []) paths.add(p);
+  }
   return paths;
 }
 

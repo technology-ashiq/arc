@@ -764,6 +764,15 @@ switch (cmd) {
     break;
   }
 
+  /** field-print <published.json> <dotted key> -- run.facts_fields keys are FLAT dotted strings, which `field` would split. */
+  case "field-print": {
+    const [file, key] = rest;
+    const prints = (readJson(file).run || {}).facts_fields;
+    if (!prints || !Object.hasOwn(prints, key)) die(`no such field print: ${key}`);
+    console.log(prints[key]);
+    break;
+  }
+
   /**
    * ledger-field <published.json> <key> -- plant a facts-field print under an arbitrary key, the
    * way a tampered or badly merged ledger would. The key is taken verbatim, escapes decoded, so a

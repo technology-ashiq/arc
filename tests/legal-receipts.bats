@@ -517,12 +517,26 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/$LEDGER_REL" "run.facts_fields.payment_model"
   [ "$status" -eq 9 ]
   [[ "$output" == *"no such field"* ]]
-  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" stores_third_party_client_data false
+  # payment_model only steers clause guards; no token prints it. The mutation must also pass the
+  # schema -- the first cut flipped stores_third_party_client_data, which the schema refuses while
+  # client-matter categories are listed, so propose died before the diff was ever printed.
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" payment_model mor
   [ "$status" -eq 0 ]
   run _arc_legal_propose "fixture-gateway-gst" "$SANDBOX/out2"
   [ "$status" -eq 0 ]
   [[ "$output" == *"facts.(fields no page prints): changed"* ]]
-  [[ "$output" != *"facts.stores_third_party_client_data"* ]]
+  [[ "$output" != *"facts.payment_model"* ]]
+}
+
+@test "legal receipts: a price the pricing TABLE prints is named, not folded" {
+  # table.pricing prints three facts fields through one token. Before it named them, a changed
+  # price read as "a field no page prints moved" on the page that prints it.
+  _published
+  for k in pricing.period pricing.plan_names pricing.plan_amounts_inr; do
+    run node "$ARC_ROOT/tests/legal-probe.mjs" field-print "$SANDBOX/$LEDGER_REL" "$k"
+    [ "$status" -eq 0 ]
+    [ "${#output}" -eq 64 ]
+  done
 }
 
 @test "legal receipts: a token only inside a SKIPPED clause gets no print of its own" {
