@@ -150,6 +150,7 @@ flowchart TB
 | 1010 | LEG-J — the seven kickoff-day decisions | accepted |
 | 1011 | LEG-K — `payment_model` gains a third value, because LexOS is not a merchant | accepted |
 | 1214 | LEG-N — a real venture's publish ledger lives with its facts, not in arc's public tree | accepted |
+| 1215 | LEG-O — template set v3: the privacy notice names its communication link (Rule 3(c), gazette-read) | accepted |
 
 ## Non-negotiables
 
@@ -198,7 +199,7 @@ customers (each firm is its own merchant under LexOS ADR-0003 — a separate bri
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
 | The verified provider page set (5 default + 2 conditional, ADR-1201) is what an activation reviewer actually applies | A real activation review rejects a venture for a page this set does not contain, or a re-check at publish shows the docs list changed again → the pinned `provider-pages.json` is updated and the checklist rows move with it | 2 |
-| Rule-3 and s.5(3) text transcribed from mirrors matches the gazette (ADR-1206 is medium-confidence; both government hosts returned HTTP 403) | A human or unblocked fetch reads the gazette PDF and any itemised requirement differs from the rendered notice block → the privacy template is corrected and every venture on that set re-approves via `--bump-templates` | 3 |
+| Rule-3 and s.5(3) text transcribed from mirrors matches the gazette (ADR-1206 is medium-confidence; both government hosts returned HTTP 403) | A human or unblocked fetch reads the gazette PDF and any itemised requirement differs from the rendered notice block → the privacy template is corrected and every venture on that set re-approves via `--bump-templates` **FIRED 2026-10-07** — read from the MeitY-hosted gazette PDF (G.S.R. 846(E), 13-Nov-2025, HTTP 200): Rule 3 and Rules 5–16 commence eighteen months after publication (13-May-2027), as ADR-1206 says; Rule 3(c) requires the notice to give the communication link to the website or app, and the rendered privacy notice printed none. Template set v3 adds it (ADR-1215); LexOS bumps to v3 | 3 |
 | The operator (LexOS) is GST-unregistered — **CONFIRMED by the owner 2026-08-15**, so `gst_registered: false` for the LexOS render | A GSTIN appears in operating records, or the owner states registered → `gst_registered: true` renders the other branch. The trigger stays LIVE after confirmation: registration is a thing that happens later, and the schema forbids a `gstin` value while the flag is false, so the change fails loudly instead of leaving a page quietly saying the old thing. Both branches are fixture-pinned either way | 3 |
 | A small fiduciary's DPDP duties are covered by the Rule-3 notice + grievance + rights block, with no SDF-class duties | MeitY gazettes the compressed timeline now under consultation, or any SDF class is notified → ADR-1207's lawyer trigger fires early and the template set bumps | 2 |
 | The 5-day appetite holds because the research is banked in ADR-1201/1006 | Phase 0 template authoring passes 2 days with the three core pages not rendering → the kill-criteria path fires (ship 3 core pages' content, bank the engine) | 0 |

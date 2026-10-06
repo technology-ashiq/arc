@@ -41,7 +41,14 @@
     "products/legal/templates/v2/privacy.tmpl.md",
     "products/legal/templates/v2/refund-cancellation.tmpl.md",
     "products/legal/templates/v2/shipping-delivery.tmpl.md",
-    "products/legal/templates/v2/terms.tmpl.md"
+    "products/legal/templates/v2/terms.tmpl.md",
+    "products/legal/templates/v3/about.tmpl.md",
+    "products/legal/templates/v3/contact.tmpl.md",
+    "products/legal/templates/v3/pricing.tmpl.md",
+    "products/legal/templates/v3/privacy.tmpl.md",
+    "products/legal/templates/v3/refund-cancellation.tmpl.md",
+    "products/legal/templates/v3/shipping-delivery.tmpl.md",
+    "products/legal/templates/v3/terms.tmpl.md"
   ],
   "docs": [],
   "face": {
