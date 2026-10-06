@@ -27,8 +27,9 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { startFakeLlm, GHOST_ID, scriptedAnswer, questionOf } from "./fake-llm.mjs";
-import { judgeModelAnswer, GENERAL_LABEL, ARC_LABEL, UNVERIFIED_LABEL } from "../../.claude/scripts/hq/arc-dash.mjs";
+import { judgeModelAnswer, GENERAL_LABEL, ARC_LABEL, UNVERIFIED_LABEL, routedRefusal } from "../../.claude/scripts/hq/arc-dash.mjs";
 import { formatIst } from "../../.claude/scripts/hq/lib/canonical.mjs";
+import { routerProfileRefs } from "../../.claude/scripts/hq/lib/face/reads.mjs";
 import { unescapeDoorText } from "../../face/src/lib/door.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -129,6 +130,17 @@ check("A: MUTANT CONTROL -- a view that echoes the record FAILs the same check",
     refused.every((r) => !r.ok), JSON.stringify(refused.map((r) => r.ok || r.why.slice(0, 40))));
   check("A: an edit of another model leaves the active choice where it was", (() => { const r2 = ed({ name: "Two", model: { name: "Deux", baseUrl: "https://b.example/v1", model: "b" } }); return r2.ok && r2.reg.active === "One" && r2.reg.models[1].name === "Deux"; })());
 }
+// A declared cost (ADR-1350 Amendment 4): optional, checked, shown as declared, read back, and cleared by an edit without it.
+{
+  const priced = add(m.emptyRegistry(), { name: "Priced", baseUrl: "https://p.example/v1", model: "p", cost: { input: 0.04, output: 0.5, currency: "USD" } });
+  const pv = priced.ok ? m.publicView(priced.reg).models[0] : {};
+  check("A: a cost is stored and every view says it is declared, never measured",
+    priced.ok && pv.cost?.input === 0.04 && pv.cost?.currency === "USD" && pv.cost_source === "declared" && m.parseRegistry(JSON.stringify(priced.reg)).ok, JSON.stringify(pv));
+  const badCosts = [{ input: -1, output: 1, currency: "USD" }, { input: 1, output: 10001, currency: "USD" }, { input: 1, output: 1, currency: "EUR" }, { input: "1", output: 1, currency: "USD" }, { input: 1, output: 1, currency: "USD", note: 1 }, [1, 2]];
+  check(`A: a malformed cost is refused (${badCosts.length} of ${badCosts.length})`, badCosts.every((c) => !add(m.emptyRegistry(), { name: "C", baseUrl: "https://p.example/v1", model: "p", cost: c }).ok));
+  const cleared = priced.ok ? m.applyChange(priced.reg, { op: "edit", name: "Priced", model: { name: "Priced", baseUrl: "https://p.example/v1", model: "p" } }) : { ok: false };
+  check("A: an edit without a cost clears it, and a model with no cost shows none", cleared.ok && !("cost" in cleared.reg.models[0]) && !("cost_source" in m.publicView(cleared.reg).models[0]));
+}
 const round = m.parseRegistry(JSON.stringify(reg));
 check("A: the stored file reads back to the same registry", round.ok && JSON.stringify(round.reg) === JSON.stringify(reg));
 const tampered = m.parseRegistry(JSON.stringify({ ...reg, active: "ghost" }));
@@ -218,6 +230,18 @@ check("E: editForm starts from the row's fields with the key field empty, and ed
     return fm.key === "" && fm.clearKey === false && fm.model === "a" && keep.ok && !("key" in keep.change.model) && !("clearKey" in keep.change)
       && repl.ok && repl.change.model.key === "abcdefgh1234" && clr.ok && clr.change.clearKey === true && !both.ok && !T.editChange("One", { ...fm, name: " " }).ok;
   })());
+check("E: the page's cost: both blank is none, a half-filled or negative cost is refused, and the edit form starts from the row's cost",
+  (() => {
+    const blank = T.costOf({ costIn: "", costOut: "" }), half = T.costOf({ costIn: "1", costOut: "" }), neg = T.costOf({ costIn: "-1", costOut: "1" }), inr = T.costOf({ costIn: "0.1", costOut: "2", currency: "INR" });
+    const row = T.modelsView({ active: "P", models: [{ name: "P", baseUrl: "https://p/v1", model: "p", hasKey: false, cost: { input: 0.04, output: 0.5, currency: "USD" }, cost_source: "declared" }] }).rows[0];
+    const fm = T.editForm(row);
+    return blank.ok && blank.cost === null && !half.ok && !neg.ok && inr.ok && inr.cost.currency === "INR" && /\(declared\)$/.test(row.costText) && fm.costIn === "0.04" && fm.costOut === "0.5";
+  })());
+check("E: usedByOf inverts the model-policy body -- tiers, own-profile classes, via-tier classes; a missing profile is not a use",
+  (() => {
+    const u = T.usedByOf({ tiers: [{ tier: "balanced", models: [{ driver: "generic-api", profile: { profile: "A", missing: false } }] }], classes: [{ name: "attack-diff", profile: { profile: "a", from: "class", missing: false } }, { name: "commit-msg", profile: { profile: "A", from: "tier", missing: false } }, { name: "gone", profile: { profile: "Ghost", missing: true } }], unroutable: ["Has Space"] });
+    return u.ok && JSON.stringify(u.by.get("a")) === JSON.stringify(["tier balanced", "class attack-diff", "class commit-msg (via its tier)"]) && !u.by.has("ghost") && u.unroutable[0] === "Has Space" && !T.usedByOf({ tiers: "x" }).ok;
+  })());
 check("E: modelsView -- rows from the door's public view, the key as its tail only", mv.ok && mv.rows.length === reg.models.length && mv.rows.length === 2 && mv.rows[1].key === "no key" && mv.rows[0].key === `key …${PLANTED.slice(-4)}` && mv.rows[0].active === true && !JSON.stringify(mv).includes(PLANTED));
 check("E: modelsView -- a body that is not the list is no list, never a guessed one", T.modelsView({ models: "x" }).ok === false && T.modelsView(null).ok === false);
 
@@ -254,6 +278,45 @@ const bad = ["", "not json", JSON.stringify({ lane: "other", answer: "x", citati
 check("C0: a reply that is not the face-ask contract is refused, never shown (5 of 5)", bad.every((b) => { try { judgeModelAnswer(b, "", ids); return false; } catch (e) { return e.code === "ASK_FAILED"; } }));
 check("C0: the fake reads the question out of the generic-api prompt and scripts each lane",
   questionOf("body\n---\nINPUT (JSON):\n" + JSON.stringify({ q: "Which gate?" }) + "\n") === "Which gate?" && scriptedAnswer("which gate", "X").citations[0] === "X" && scriptedAnswer("boiling", "X").lane === "general");
+
+// ── G: the remove guard (ADR-1350 Amendment 4) -- the function the route calls, on a tree whose router names profiles ──
+{
+  const tree = mkdtempSync(join(tmpdir(), "face-guard-"));
+  try {
+    fs.mkdirSync(join(tree, "engine"), { recursive: true });
+    fs.writeFileSync(join(tree, "engine", "router.yaml"), ["tiers:", "  - balanced-workhorse", "models:", "  balanced-workhorse:", "    generic-api: profile:Routed-A", "classes:", "  attack-diff:", "    tier: balanced-workhorse", "    driver: generic-api", "    profile: routed-b", ""].join("\n"));
+    let gr = m.emptyRegistry();
+    for (const n of ["Routed-A", "Routed-B", "Free-C"]) gr = m.applyChange(gr, { op: "add", model: { name: n, baseUrl: "https://g.example/v1", model: "g" } }).reg;
+    const ctxG = { repo: tree };
+    // The two calls the route makes, in its order: the router read, then the synchronous guard (attack 61af78b B1).
+    const guard = async (body) => { const refs = await routerProfileRefs(ctxG); const st = m.applyChange(gr, body); return st.ok ? routedRefusal(refs, gr, st.reg, body) : { code: "STEP", why: st.why }; };
+    const tierRef = await guard({ op: "remove", name: "routed-a" });
+    const classRef = await guard({ op: "remove", name: "Routed-B" });
+    check("G: removing a record a tier pin or a class row names is refused, naming the row (any case)",
+      tierRef?.code === "BAD_MODEL" && /tier balanced-workhorse/.test(tierRef.why) && classRef?.code === "BAD_MODEL" && /class attack-diff/.test(classRef.why), JSON.stringify([tierRef, classRef]));
+    const renamed = await guard({ op: "edit", name: "Routed-B", model: { name: "Renamed", baseUrl: "https://g.example/v1", model: "g" } });
+    const reUrl = await guard({ op: "edit", name: "Routed-B", model: { name: "Routed-B", baseUrl: "https://h.example/v1", model: "h" } });
+    check("G: renaming a routed record is refused; editing its URL or model id is not", renamed?.code === "BAD_MODEL" && /rename/.test(renamed.why) && reUrl === null, JSON.stringify([renamed, reUrl]));
+    check("G: an unrouted record removes freely (vacuous-pass guard: the same tree refuses the routed ones above)", (await guard({ op: "remove", name: "Free-C" })) === null);
+    const blind = routedRefusal(await routerProfileRefs({ repo: join(tree, "absent") }), gr, m.applyChange(gr, { op: "remove", name: "Free-C" }).reg, { op: "remove", name: "Free-C" });
+    check("G: a router that cannot be read refuses the remove (MODELS_UNAVAILABLE), never allows it", blind?.code === "MODELS_UNAVAILABLE", JSON.stringify(blind));
+    // A router of the wrong shape is unreadable, not "no references" (attack 61af78b B2); a profile pinned on another
+    // driver still names the record (B3).
+    const shapes = [["classes:", "  - x"], ["models: 5"], ["classes:", "  attack-diff:", "    profile: 5"], ["models:", "  balanced-workhorse: x"]];
+    const shapeVerdicts = [];
+    for (const lines of shapes) {
+      fs.writeFileSync(join(tree, "engine", "router.yaml"), [...lines, ""].join("\n"));
+      shapeVerdicts.push((await routerProfileRefs(ctxG)).ok === false);
+    }
+    check(`G: a router of the wrong shape refuses rather than reading as no references (${shapes.length} of ${shapes.length})`, shapeVerdicts.every(Boolean), JSON.stringify(shapeVerdicts));
+    fs.writeFileSync(join(tree, "engine", "router.yaml"), ["models:", "  cheap-scan:", "    claude-code: profile:Free-C", ""].join("\n"));
+    const otherDriver = await guard({ op: "remove", name: "Free-C" });
+    check("G: a profile pinned on another driver still names the record, and a padded name is the same name", otherDriver?.code === "BAD_MODEL" && /tier cheap-scan \(claude-code\)/.test(otherDriver.why)
+      && routedRefusal({ ok: true, refs: [{ name: " free-c ", where: "class x" }] }, gr, m.applyChange(gr, { op: "remove", name: "Free-C" }).reg, { op: "remove", name: "Free-C" })?.code === "BAD_MODEL", JSON.stringify(otherDriver));
+  } finally {
+    try { rmSync(tree, { recursive: true, force: true }); } catch { /* temp */ }
+  }
+}
 
 // ── B: the door ──
 const sandbox = mkdtempSync(join(tmpdir(), "face-talk-"));
@@ -387,6 +450,17 @@ try {
   r = await post("/api/models/set", { op: "add", model: { name: "Busy", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/busy-model:free" } });
   check("T: a removed model's test is forgotten -- added again, it reads untested",
     r.status === 200 && ((r.body.models ?? []).find((m) => m.name === "Busy") ?? {}).lastTest === null, JSON.stringify(r.body.models).slice(0, 300));
+  // Two changes in flight at once both land: the guard's router read comes before the load, so no await sits between
+  // a load and its save (attack 61af78b B1).
+  const pair = await Promise.all([
+    post("/api/models/set", { op: "add", model: { name: "Twin-1", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/twin:free" } }),
+    post("/api/models/set", { op: "add", model: { name: "Twin-2", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/twin:free" } }),
+  ]);
+  const afterPair = await j("/api/models", { headers: H });
+  const names = (afterPair.body.models ?? []).map((x) => x.name);
+  check("B: two adds in flight at once both land -- neither save erases the other", pair.every((x) => x.status === 200) && names.includes("Twin-1") && names.includes("Twin-2"), JSON.stringify(names));
+  await post("/api/models/set", { op: "remove", name: "Twin-1" });
+  await post("/api/models/set", { op: "remove", name: "Twin-2" });
   // Edit in place through the door (ADR-1350 Amendment 3): the key kept on disk, never in the response, the test forgotten.
   t = await post("/api/models/test", { name: "Fake" });
   r = await post("/api/models/set", { op: "edit", name: "Fake", model: { name: "Fake", baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "fake/owner-model-2:free" } });
@@ -418,6 +492,6 @@ try {
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 // Exact, not a floor (attack c50172d B8): a check deleted from this file is a short run, never a clean one.
-const EXPECTED = 93;
+const EXPECTED = 105;
 if (ran !== EXPECTED) console.log(`FAIL the suite ran ${ran} checks, it declares ${EXPECTED}`);
 process.exit(failed === 0 && ran === EXPECTED ? 0 : 1);

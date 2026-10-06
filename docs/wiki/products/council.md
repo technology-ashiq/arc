@@ -174,7 +174,7 @@ append-only: a record you can add to but never rewrite.
 |---|---|
 | Version | 1.0.0 |
 | Requires | [core](core.md) |
-| Required by | — |
+| Required by | [discover](discover.md) |
 | Lane | — |
 | Face room | council-chamber (ring factory) |
 
