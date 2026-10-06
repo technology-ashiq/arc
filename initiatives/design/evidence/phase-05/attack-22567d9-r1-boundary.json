@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/design-refpack-mcp.bats (new test \"pack: an mcp source's preview image is added under its own hosts, and refused off them\")",
+      "breaking_input": "The off-host call passes `--principle p --avoid a`. The on-host call uses a long principle, which suggests a minimum-length rule on principle or avoid text. If that rule exists, the call exits 2 on the short principle before host binding is ever reached.",
+      "why": "The refusal is asserted only by `-eq 2`, with no reason checked. If host binding for mcp sources were deleted, the test would still pass because the short-text rule refuses first. This matches the defect pattern 'a refusal test aimed at a path another rule already refuses'.",
+      "fix": "Use the same long principle and avoid text as the passing call, so only host binding can refuse. Also assert the refusal text names the host or binding.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-refpack.mjs:292 (searchItems structuredContent branch)",
+      "breaking_input": "A tools/call reply of `{\"result\":{\"isError\":true,\"structuredContent\":{\"results\":[{}, {}, {}]}}}`, or `results` holding objects with no name, id, or preview.",
+      "why": "The structuredContent branch returns early. It counts any object as a hit, including empty objects, and it never looks at `isError`. A tool-level error carrying a results array is therefore read as a successful 'answered 3 of N'. The new early return also skips whatever isError handling the content[] path had. Both break the rules 'count structured items only' and 'a tool-level error is COULD-NOT-SCAN'.",
+      "fix": "Check `result.isError` before reading structuredContent and refuse with COULD-NOT-SCAN. Count only results that carry the identifying fields the adapter relies on, such as a string `name` or `id`.",
+      "twin_of": "A tool-level error read as zero results -> a reply needs a result and no method; isError is COULD-NOT-SCAN"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:292 (structuredContent.results, uncapped)",
+      "breaking_input": "A server returns structuredContent.results holding 100000 objects, or objects with very large fields, when `limit` was 4.",
+      "why": "The adapter now sends `limit: want` but does not enforce it on the reply. Results are returned unsliced, so the count can exceed what was asked for. The 'SHORT' logic and the summary line then show an inflated 'answered' count, and the server decides how much data enters the run. This is a server-chosen reply size, the same shape as the 'deadline, size and reply count were the server's to choose' pattern.",
+      "fix": "Slice results to `want`, or refuse when the length exceeds `want`. Cap the number of items kept and the length of every field that is later printed or logged.",
+      "twin_of": "A keyed request whose deadline, size and reply count were the server's to choose -> a deadline and a byte cap on every remote body, exactly one reply per id, a grammar on every echoed header"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-refpack.mjs:~541-546 (main, access gate)",
+      "breaking_input": "A registry row with `access: mcp`, `hosts: []` or `hosts: \"\"`, or an mcp row whose `credential` differs from the pinned adapter, passed to the add flow with `--robots-file` and `--fixture`.",
+      "why": "The new check refuses only `hosts === undefined`. It does not require hosts to be a non-empty list. It also runs outside the 'fake' branch, so it differs from the existing scratch-registry rule that allows omitted hosts. An empty or wrongly-typed `hosts` depends on downstream code to refuse it. In addition, any mcp source with `reference-pack` in allowed_use now reaches the fetch path, including mcp sources that have no search adapter, such as shadcn.",
+      "fix": "Require `asList(src.hosts).length > 0` for mcp sources. Verify that every host entry passes the host grammar before the binding check.",
+      "twin_of": "An absent field read as \"some other value\" and allowed -> an allow list, never a catch-all exit 0."
+    }
+  ]
+}

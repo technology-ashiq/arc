@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/keys.mjs:164",
+      "breaking_input": "On the Windows leg, a generic-api driver (resolveKey -> readFileSync) or a concurrent GET /api/keys has keys.json open at the moment POST /api/keys/set calls renameSync(tmp, path). Windows answers EPERM or EBUSY. An antivirus scan of the new file does the same.",
+      "why": "saveStore makes one rename attempt and turns any errno into KEYS_UNAVAILABLE (503). The owner's add fails on a transient lock, with no retry. This is the Windows concurrent-file-race shape, and the lane's rule is to retry only the race's own signature, bounded by time and jittered.",
+      "fix": "Retry renameSync on EPERM, EBUSY or EACCES only, bounded by time with jitter. Surface the errno if the retry window runs out.",
+      "twin_of": "Every non-zero exit retried as if it were the race / Windows concurrent git object-write race"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:20 and .claude/scripts/hq/lib/keys.mjs:113",
+      "breaking_input": "keys.json holds a truncated or hand-edited row, is a directory, or is unreadable (EACCES). The driver is started with ARC_LLM_KEY_NAME=OPENROUTER_API_KEY and no environment value. resolveKey does `got.ok ? got.store : null` and returns null.",
+      "why": "A corrupt or unreadable store is read the same as an empty one. The driver reports 'ARC_LLM_ENDPOINT, ARC_LLM_API_KEY ... must all be set', which sends the owner to re-add a key the door then refuses with KEYS_UNAVAILABLE. A lowercase ARC_LLM_KEY_NAME also fails cleanName and reads as unset with no name in the message.",
+      "fix": "Have resolveKey/loadStore return the why and let the driver throw it by name. Name an invalid ARC_LLM_KEY_NAME in the error.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/face-dash.bats:199",
+      "breaking_input": "`run node \"$ARC_ROOT/tests/face/keys.mjs\"` with no `3>&-`. The suite spawns a long-lived arc-dash and a fake LLM, which inherit bats fd 3.",
+      "why": "If the suite crashes or times out before dash.kill() reaches the door, which on Windows kills only the direct child, the surviving process holds bats' fd 3 and the shard hangs. That is the known empty-log hang.",
+      "fix": "Use `run node ... 3>&-` as the other long-lived-child tests do.",
+      "twin_of": "A bats `run` that let children inherit fd 3 -> `3>&-` on every `run` that starts a long-lived child"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/face/keys.mjs:187",
+      "breaking_input": "The mutant control writes `.keys-control-<pid>.tmp` into the repo root while other bats shards run concurrently. A SIGKILL or timeout between writeFileSync and the finally leaves the file behind.",
+      "why": "A concurrent tracked/untracked scanner or clean-tree check (tripwire, git status assertions) can see a stray untracked file, so a green suite turns another shard red by shard luck. A killed run leaves the file permanently.",
+      "fix": "Plant the needle in the sandbox and use `git grep --no-index -F` on it. Or only search a copy of the tree. Do not write into the repo root.",
+      "twin_of": "attacker probes write artifacts into the repo / A test reading untracked repo state passes only by shard luck"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/keys.mjs:130",
+      "breaking_input": "ARC_KEYS_FILE=keys.json (relative) is set in the owner's shell. The door starts from cwd A and arc-run from the repo cwd B. resolve(raw) resolves it against each process's own cwd.",
+      "why": "The door writes one file and the driver reads another, so 'key not set' appears after a successful save. With the door's cwd at the repo root, the inside-repo refusal fires instead. The same variable names different files in different processes.",
+      "fix": "Refuse a non-absolute ARC_KEYS_FILE by name in both the door and the reader.",
+      "twin_of": "The door was started from the caller's cwd while the harness read its own repo"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/keys.mjs:6",
+      "breaking_input": "A codex or hermes session child, which has shell tools and an allow-listed env, runs `cat ~/.arc-private/keys/keys.json`.",
+      "why": "Every stored key (OpenRouter, Vercel, GitHub) is now plaintext at a fixed, well-known path readable by any child. Before this change only the allow-listed env variables reached a model-running child. The store defeats the env allow-list.",
+      "fix": "Keep model-running children out of the file. Examples are a per-agent PreToolUse deny on the path, or having only deterministic drivers read it through a resolver the door brokers. At minimum state the exposure in ADR-1351.",
+      "twin_of": "A deny-list env for a model with shell tools -> allow-list the env; never deny-list it"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/keys.mjs:164",
+      "breaking_input": "Power loss or SIGKILL after writeFileSync(tmp) and before or after the rename. There is no fsync. keys.json can be zero-length, or an orphan `keys.json.<hex>.tmp` holding every value in plaintext remains.",
+      "why": "A zero-length file makes parseStore return 'not JSON'. Every GET and POST then answers KEYS_UNAVAILABLE and the face has no way to reset the store. Orphan temp files are never swept.",
+      "fix": "fsync the temp file before the rename. Sweep `*.tmp` older than a minute on load. Let the face replace an unreadable store after explicit confirmation.",
+      "twin_of": "The only proof of an event is never written silently, or left half-written"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/keys.mjs:140",
+      "breaking_input": "On Windows, ARC_KEYS_FILE=C:\\Users\\ASHIQ~1\\orca\\workspaces\\arc\\arc-face-4\\k.json (an 8.3 short name) while the repo is the long name. On macOS, the same path with different letter case.",
+      "why": "The JS realpathSync does not expand 8.3 names, and the fold is applied only on win32. The startsWith comparison misses, so the keys file is accepted inside the repo, one git add from a public repo.",
+      "fix": "Use realpathSync.native. Fold case on darwin as well, or compare by dev/ino.",
+      "twin_of": "A case-insensitive ref shadow -> compare names the way the filesystem does"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1284",
+      "breaking_input": "runFrontDoor is pointed at a door that was not started by harness-run, with no ARC_KEYS_FILE set, for example a dogfood or manual smoke. The hq-settings-keys step adds SMOKE_TEST_KEY to the owner's real ~/.arc-private store. If a step fails before the remove click, it stays there.",
+      "why": "Only harness-run was given the isolated ARC_KEYS_FILE. Any other launcher of the door under smoke, or a failed middle step, writes to and leaves a fake key in the real store.",
+      "fix": "Refuse the keys step unless the door was started with a store outside the owner's home. Or have the step clean up in a finally and the launchers pass ARC_KEYS_FILE.",
+      "twin_of": "Fixed ports in a suite that spawns servers / twin resource gets the same check twice"
+    }
+  ]
+}
