@@ -404,3 +404,10 @@ control: if both go overdue on 2026-08-26, the drill has caught something else a
 incident, not a pass.**
 
 So the capture date is **2026-08-26, after 06:00 IST**, and the drill is 3 days long, not 1.
+
+## 2026-10-07 — closed
+
+The drill fired as computed on 2026-08-26 and the week closed six weeks later, when the lane was
+next resumed. The close — audits over the week, the full 51 days and the 8 restored days, every
+gap graded against the Windows power log, the live-captured needs-you line, and the one
+ARC-SIDE miss on 2026-09-28 — is in `close.md` beside this file.
