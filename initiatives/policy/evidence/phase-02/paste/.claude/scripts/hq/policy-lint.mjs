@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lintPolicy } from "./lib/policy/lint.mjs";
@@ -100,7 +100,10 @@ function main(argv) {
     printDerivedTable(text);
     if (!evidence) return 0;
     // --evidence judges the GOVERNING policy and spine; a verdict about another file would be confident and wrong.
-    if (path !== resolve(ROOT, "hq.policy.yaml")) {
+    // By filesystem identity, not string: Windows names one temp dir two ways (RUNNER~1 vs runneradmin), and a
+    // string compare refused the governing file itself on CI (attack p02 r2 B8, closed).
+    const real = (p) => { try { const r = realpathSync.native(p); return process.platform === "win32" ? r.toLowerCase() : r; } catch { return null; } };
+    if (real(path) === null || real(path) !== real(resolve(ROOT, "hq.policy.yaml"))) {
       process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\n`);
       return 1;
     }
