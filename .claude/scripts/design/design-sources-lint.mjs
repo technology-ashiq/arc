@@ -185,6 +185,27 @@ for (const s of sources) {
   if (Array.isArray(s.allowed_use) && s.allowed_use.includes("link-only") && s.allowed_use.includes("reference-pack")) {
     fail(id, "use-contradiction", "allowed_use carries both link-only and reference-pack -- one says cite but never cache, the other says cache");
   }
+
+  // The spend cap (Phase 08 S3, DoD amended 2026-10-07): a source that costs money may be switched on only
+  // when the policy grants some kind spend above L0. The policy is the owner's file and is READ here, never
+  // written; today every kind holds spend L0, which is the rupees-zero default, so a paid row stays off.
+  if (s.cost !== "free" && (s.status === "active" || s.status === "trial")) {
+    const cap = spendCap();
+    if (cap.why) fail(id, "spend-cap-unreadable", `cost="${s.cost}" with status="${s.status}", and the spend cap cannot be read (${cap.why}) -- a paid source is refused when the cap is unknown`);
+    else if (cap.max === "L0") fail(id, "spend-cap", `cost="${s.cost}" with status="${s.status}", but hq.policy.yaml grants no kind spend above L0 -- the cap is rupees zero until the owner raises it there`);
+  }
+}
+
+// The highest spend level any kind in hq.policy.yaml grants -- {max} or {why}. The policy sits beside the
+// registry at the repo root. Read line by line on the one shape the file uses (`spend: { level: Ln }`), and
+// a file with no spend line at all is unknown, never zero-by-silence.
+function spendCap() {
+  const file = join(dirname(target), "hq.policy.yaml");
+  let text;
+  try { text = readFileSync(file, "utf8"); } catch (e) { return { why: `${basename(file)} ${e.code || "unreadable"}` }; }
+  const levels = [...text.matchAll(/^\s+spend:\s*\{\s*level:\s*(L[0-9])\s*[,}]/gm)].map((m) => m[1]);
+  if (!levels.length) return { why: "no spend grant found in hq.policy.yaml" };
+  return { max: levels.sort().at(-1) };
 }
 
 if (findings.length) {

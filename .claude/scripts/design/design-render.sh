@@ -817,17 +817,30 @@ for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
   [ "$ITER_GIVEN" -eq 1 ] || UNCHANGED="true"
 done
 
+# Provenance (Phase 08 S1, ADR-1410): who authored the pixels, read from the route's own directory and nothing
+# else, so the packager has a record to refuse on. An explore page is arc's only inside variant-<x>; a rival
+# draft and a framed pack screen say what they are. Every other render (a product route, a critique) is arc's.
+PROVENANCE="arc"
+if [ "$MODE" = "explore" ]; then
+  case "${_er_variant:-}" in
+    variant-?) PROVENANCE="arc";;
+    rival-*) PROVENANCE="rival:${_er_variant#rival-}";;
+    ref-*) PROVENANCE="reference";;
+    *) echo "design-render: REFUSED -- no provenance for '${_er_variant:-}'; a render without one is never written." >&2; exit 1;;
+  esac
+fi
+
 # node writes the JSON so the route/url strings are escaped by a real serialiser rather than
 # by printf, which is how a path containing a quote becomes an unparseable meta file.
 if command -v node >/dev/null 2>&1; then
   node -e '
-    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out] = process.argv.slice(1);
+    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out,provenance] = process.argv.slice(1);
     require("fs").writeFileSync(out, JSON.stringify({
       route, url, png: png.replace(/\\/g,"/"),
       screenshot_sha256: sha, viewport: `${vw}x${vh}@1`, recipe,
-      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true",
+      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true", provenance,
     }, null, 2) + "\n");
-  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" \
+  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" "$PROVENANCE" \
     || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 else
   # This branch already emitted a DIFFERENT, smaller object than the node one above -- no url,
@@ -843,8 +856,8 @@ else
     *\"*|*\\*) echo "design-render: REFUSED -- no node on this box, and the route contains a quote or backslash this fallback writer cannot escape safely." >&2
        rm -f "$PNG" "$META" 2>/dev/null; exit 1;;
   esac
-  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s\n}\n' \
-    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" > "$META" \
+  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s,\n  "provenance": "%s"\n}\n' \
+    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" "$PROVENANCE" > "$META" \
     || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 fi
 

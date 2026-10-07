@@ -45,7 +45,7 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -646,8 +646,61 @@ async function summary(argv) {
   console.log(`design-refpack summary: ${answered} of ${active.length} active pack source(s) answered live since ${field(o["--since"])}${fixtureOnly ? ` (${fixtureOnly} more answered from a fixture only)` : ""}`);
 }
 
+// The manual-drop door (Phase 08 S3, REQ-10): a screen the OWNER chose and saved by hand enters the pack
+// attributed, exactly like a fetched one. Nothing is fetched, so robots and the registry do not apply -- the
+// row says so instead. Where it came from (--url) and the principle it teaches are required: an unattributed
+// drop is the thing REQ-10 exists to refuse.
+//   design-refpack.mjs --drop <file> --brief <id> --url <where it came from> --principle <text> --avoid <text>
+const MAX_DROP_BYTES = 16 * 1024 * 1024;
+function drop(argv) {
+  const o = {};
+  for (let i = 0; i < argv.length; i += 2) {
+    const k = argv[i];
+    if (!["--drop", "--brief", "--url", "--principle", "--avoid"].includes(k)) fail(1, "unknown argument '" + field(k) + "' for --drop");
+    if (i + 1 >= argv.length || argv[i + 1] === "") fail(1, k + " needs a value");
+    if (k in o) fail(1, k + " given twice");
+    o[k] = argv[i + 1];
+  }
+  for (const k of ["--brief", "--url", "--principle", "--avoid"]) if (!o[k] || !field(o[k])) fail(1, "--drop needs " + k + " -- a dropped screen without it is unattributed");
+  const brief = o["--brief"];
+  if (!validId(brief)) fail(1, "--brief must match " + ID + " and not be a reserved device name, got '" + field(brief) + "'");
+  const url = parseHttpUrl(o["--url"]);
+  if (!url) fail(1, "--url must be the http(s) address the screen came from, got '" + field(o["--url"]) + "'");
+  const src = resolve(o["--drop"]);
+  let st;
+  try { st = lstatSync(src); } catch (e) { fail(1, "the dropped file cannot be read (" + (e.code || "error") + ")"); }
+  if (st.isSymbolicLink() || !st.isFile()) fail(1, "the dropped file is a link or not a regular file");
+  if (st.size === 0 || st.size > MAX_DROP_BYTES) fail(1, "the dropped file is empty or larger than " + MAX_DROP_BYTES + " bytes");
+  const body = readFileSync(src);
+  const ext = Object.keys(MAGIC).find((e) => MAGIC[e](body));
+  if (!ext) fail(1, "the dropped file is not a png, jpg, gif, webp or avif image by its bytes");
+  const sha = createHash("sha256").update(body).digest("hex");
+  const stateDir = join(ROOT, ".claude", "state", "design", "refpacks", brief);
+  const image = join(stateDir, "manual-" + sha.slice(0, 16) + "." + ext);
+  if (!resolve(image).startsWith(resolve(stateDir) + sep)) fail(1, "refused: the image path left the pack directory");
+  const sourcesMd = join(ROOT, "docs", "design", "refpacks", brief, "sources.md");
+  if (existsSync(sourcesMd) && readFileSync(sourcesMd, "utf8").split(/\r?\n/).some((l) => l.startsWith("|") && (l.split("|")[3] ?? "").trim() === sha)) {
+    fail(1, "this screen is already in the pack (sha " + sha.slice(0, 16) + "); a second row would attribute it twice");
+  }
+  mkdirSync(stateDir, { recursive: true });
+  const existed = existsSync(image);
+  writeFileSync(image, body);
+  try {
+    mkdirSync(dirname(sourcesMd), { recursive: true });
+    if (!existsSync(sourcesMd)) {
+      writeFileSync(sourcesMd, "# Reference pack -- " + brief + "\n\nProvenance only (ADR-1404): the images are cached under `.claude/state/design/refpacks/" + brief + "/` and never committed. Query strings are dropped from every URL.\n\n| url | fetched | sha256 | source | adaptable principle | avoid this |\n|---|---|---|---|---|---|\n", { flag: "wx" });
+    }
+    appendFileSync(sourcesMd, "| " + cell(shown(url) + " (dropped by the owner, not fetched)") + " | " + new Date().toISOString() + " | " + sha + " | " + cell("manual (owner)") + " | " + cell(o["--principle"]) + " | " + cell(o["--avoid"]) + " |\n");
+  } catch (e) {
+    if (!existed) { try { unlinkSync(image); } catch { /* already gone */ } }
+    fail(5, "the provenance row could not be written" + (existed ? "" : ", so the dropped image was removed") + ": " + field(e.message));
+  }
+  console.log("dropped " + field(shown(url)) + " -> " + relative(ROOT, image).split("\\").join("/") + " (sha256 " + sha + "), attributed in " + relative(ROOT, sourcesMd).split("\\").join("/"));
+}
+
 async function main(argv) {
   if (argv[0] === "--check-browse") return checkBrowse(argv);
+  if (argv[0] === "--drop") return drop(argv);
   if (argv[0] === "--query") return query(argv);
   if (argv[0] === "--summary") return summary(argv);
   const o = parseArgs(argv);
