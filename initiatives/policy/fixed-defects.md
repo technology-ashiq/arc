@@ -46,3 +46,14 @@ Cycle 2, Phase 00, attack round 2 (`b6f99ff`; 18 findings: 13 fixed, 2 rejected,
 Rejected in round 2: L4 (a nested payload passes the profile) — `already-covered`: the loader runs the closed-shape validator on every event; L8 (a failed receipt retried next denial breaks once-per-day) — `unsupported`: nothing was sealed, and the sanitizer no longer emits lone surrogates.
 
 Rejected in round 1: L6 (n/a cells keep `last_refusal`: that IS REQ-03's acceptance, and an n/a cell never moves the bar) — `already-covered`; L10 (a deny at L1 is impossible) — `unsupported`: `incident.mjs` documents integrity denies at L1.
+
+Cycle 2, Phase 01, attack round 1 (`0993467`; 17 findings: 11 fixed, 4 rejected, 2 LOW to the debt ledger):
+
+- **The guard's emit inherited the spine selector, so a receipt could seal where the guard did not read** — `ARC_SPINE_ROOT` pinned to the read spine, id read back from its day file (L2/B2) — *the writer/reader twin again: every emit in a reader-driven tool*
+- **The "previous verdict" was any line with the guard's name; an approval sealed before a failed run.completed left no digest, so retries stacked approvals** — previous digest only from sealed guard receipts with a 64-hex digest, from run.completed OR the approval (B3/B4) — *any dedupe key stored only in the LAST of several writes*
+- **A guard run with `--as-of` sealed real receipts and became every cell's audit** — `as_of_overridden` recorded; such runs never audit and dedupe only against their own kind (B5) — *every clock override that reaches a durable write*
+- **The emit failure said only "Command failed: bash"** — the emitter's stderr plus the PowerShell/WSL hint (B1) — *every spawned helper's failure message*
+- **One fold refusal blanked the whole Policy room** — cells served with `evidence: null` and a named `evidence.error` (B7) — *a new optional field must not be able to take down the old required ones*
+- **The door test checked evidence shape, not coherence** — n/a iff L0 or out of scope, BELOW-BAR iff in scope and not fresh, fresh carries an age (L1/L4/L5/L8) — *a test that checks a label without its content*
+
+Rejected in Phase 01 round 1: L7 (`allCells.length > 0 &&` sits INSIDE the assertion, so an empty list already fails) — `unsupported`; L3 (a previous receipt without a digest raises an approval) — `already-covered`: that is the safe direction; L6 (dedupe ignores as_of) — `already-covered`: deduping an unchanged BELOW-BAR set is ADR-0511's design (plan-attacker F6); L9 (a renamed guard process) — `non-actionable`: there is no older guard version.

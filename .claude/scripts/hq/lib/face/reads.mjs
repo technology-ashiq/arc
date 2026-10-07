@@ -564,10 +564,14 @@ export async function apiPolicy(ctx, url) {
   // events and judged against the door's one clock. The door re-derives nothing; the room draws what is served.
   const { foldEvidence } = await lib("../policy-evidence/fold.mjs");
   const asOf = todayIst();
-  let evidence;
+  // A fold that refuses costs the EVIDENCE, never the level table that worked before it existed (attack p01 B7): the
+  // cells are served with `evidence: null` and the body names the refusal, so the room says why instead of going blank.
+  /** @type {{ cells: any[], in_scope: number, below_bar: number } | null} */
+  let evidence = null;
+  let evidenceError = "";
   try { evidence = foldEvidence({ policy, transitions, events, asOf }); }
-  catch (e) { throw refusal(ctx, "SOURCE_INVALID", `the evidence fold refused: ${String(/** @type {Error} */ (e).message).split("\n")[0]}`); }
-  const evidenceOf = new Map(evidence.cells.map((c) => [`${c.subject}|${c.capability}`, c]));
+  catch (e) { evidenceError = `the evidence fold refused: ${String(/** @type {Error} */ (e).message).split("\n")[0]}`; }
+  const evidenceOf = new Map((evidence ? evidence.cells : []).map((c) => [`${c.subject}|${c.capability}`, c]));
   let subjects;
   try {
     subjects = Object.keys(kinds).map((subject) => {
@@ -593,7 +597,8 @@ export async function apiPolicy(ctx, url) {
     levels,
     subjects,
     transitions: transitions.length,
-    evidence: { as_of: asOf, in_scope: evidence.in_scope, below_bar: evidence.below_bar },
+    evidence: evidence ? { as_of: asOf, in_scope: evidence.in_scope, below_bar: evidence.below_bar, error: "" }
+      : { as_of: asOf, in_scope: null, below_bar: null, error: evidenceError },
     ungrantable: Array.isArray(obj(policy).ungrantable_actions) ? obj(policy).ungrantable_actions.map(String) : [],
   }, counts);
 }

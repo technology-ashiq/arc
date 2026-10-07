@@ -392,16 +392,38 @@ _guard_root() { # $1 dir, $2 clean|one
 
 @test "guard: its run.completed is every cell last_audit" {
   local d="$BATS_TEST_TMPDIR/g-audit"; _guard_root "$d" clean || return 1
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 0 ] || { echo "$status $output"; false; }
   run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
   local rid; rid="$(printf "%s" "$output" | awk '{print $NF}')"
   [ -n "$rid" ] && [ "$rid" != "-" ] || { echo "no guard run id: $output"; false; }
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   printf "%s" "$output" > "$BATS_TEST_TMPDIR/g-report.json"
   run node "$FX/spine-probe.mjs" audits "$BATS_TEST_TMPDIR/g-report.json"
   [ "$output" = "AUDITS $rid" ] || { echo "last_audit is not the guard run on every cell: $output vs $rid"; false; }
+}
+
+@test "guard: a run judged against an overridden --as-of is never an audit" {
+  local d="$BATS_TEST_TMPDIR/g-override"; _guard_root "$d" clean || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2020-01-01
+  [ "$status" -eq 0 ] || { echo "$status $output"; false; }
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
+  printf "%s" "$output" > "$BATS_TEST_TMPDIR/o-report.json"
+  run node "$FX/spine-probe.mjs" audits "$BATS_TEST_TMPDIR/o-report.json"
+  [ "$output" = "AUDITS null" ] || { echo "an overridden run became an audit: $output"; false; }
+}
+
+@test "guard: an approval that sealed before a failed run.completed still dedupes the retry" {
+  local d="$BATS_TEST_TMPDIR/g-half"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  [ "$status" -eq 3 ] || { echo "first: $status $output"; false; }
+  # Simulate the half failure: the approval is on the spine, the run.completed is not.
+  local f; for f in "$d/.claude/state/hq/events/"*.jsonl; do grep -v '"run.completed"' "$f" > "$f.tmp"; mv "$f.tmp" "$f"; done
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 0\ APPROVALS\ 1 ]] || { echo "fixture did not build the half failure: $output"; false; }
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  [ "$status" -eq 3 ] && [[ "$output" == *"no new approval"* ]] || { echo "the retry stacked a second approval: $status $output"; false; }
 }
 
 @test "check: usage errors exit 2 and name the problem" {
@@ -414,5 +436,5 @@ _guard_root() { # $1 dir, $2 clean|one
 }
 
 @test "suite count: every test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 64 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 64"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 66 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 66"; false; }
 }

@@ -13,9 +13,9 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { foldEvidence, istDay, isCalendarDay, GUARD_PROCESS } from "./lib/policy-evidence/fold.mjs";
-import { loadEvidenceInputs } from "./lib/policy-evidence/load.mjs";
+import { loadEvidenceInputs, readDayFile } from "./lib/policy-evidence/load.mjs";
 import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 
 const USAGE = "usage: policy-evidence.mjs report [--as-of YYYY-MM-DD] [--json] | check [--as-of YYYY-MM-DD] | guard [--as-of YYYY-MM-DD]";
@@ -64,7 +64,8 @@ function main(argv) {
   }
   if (!inputs) return fail(2, "no hq.policy.yaml at the governing root -- there is no configured level to evidence");
 
-  const asOf = args.asOf ?? istDay(formatIst(nowMs()));
+  const today = istDay(formatIst(nowMs()));
+  const asOf = args.asOf ?? today;
   let r;
   try { r = foldEvidence({ policy: inputs.policy, transitions: inputs.transitions, events: inputs.events, asOf }); }
   catch (e) { return fail(2, `the evidence fold refused: ${String(e && e.message).split("\n")[0]}`); }
@@ -73,7 +74,7 @@ function main(argv) {
     process.stdout.write(JSON.stringify({ ...r, rejected_lines: inputs.rejected, day_files: inputs.dayFiles, events_dir: inputs.eventsDir }, null, 2) + "\n");
     return;
   }
-  if (args.cmd === "guard") return guard(inputs, r);
+  if (args.cmd === "guard") return guard(inputs, r, asOf !== today);
   // The verdict is set BEFORE any output: a reader that closes the pipe early must not turn exit 3 into exit 1.
   if (args.cmd === "check" && r.below_bar > 0) process.exitCode = 3;
   const shown = args.cmd === "check" ? r.cells.filter((c) => c.below_bar) : r.cells;
@@ -96,7 +97,10 @@ function main(argv) {
  *
  * Its run.completed is every cell's `last_audit`. Exit 0 clean · 3 not clean · 1 a receipt could not be sealed.
  */
-function guard(inputs, r) {
+const GUARD_PROCESS_ID = `${GUARD_PROCESS}@1.0.0`;
+const HEX64 = /^[0-9a-f]{64}$/;
+
+function guard(inputs, r, overridden) {
   const all = r.cells;
   const below = all.filter((c) => c.below_bar);
   const clean = all.every((c) => !c.below_bar);
@@ -106,22 +110,30 @@ function guard(inputs, r) {
   const clearable = below.filter((c) => c.state !== "unknown").map(label);
   const digest = sha256Hex(JSON.stringify(below.map((c) => [c.subject, c.capability, c.state, c.reason]).sort()));
 
-  let previous = null;
-  for (const e of inputs.events)
-    if (e.kind === "run.completed" && typeof e.process === "string" && e.process.split("@")[0] === GUARD_PROCESS) previous = e;
-  const previousDigest = previous && previous.payload ? previous.payload.digest : null;
+  // The previous verdict is read only from SEALED receipts of THIS guard with a well-formed digest (attack p01 B3), from
+  // its run.completed OR its approval -- so an approval that sealed before a failed run.completed still dedupes the
+  // retry (p01 B4). A run judged against a back-dated or future --as-of is marked and only ever dedupes against its own
+  // kind: it can neither suppress a real approval nor pose as a real audit (p01 B5).
+  let previousDigest = null;
+  for (const e of inputs.events) {
+    if (e.process !== GUARD_PROCESS_ID || !e.payload || !HEX64.test(String(e.payload.digest))) continue;
+    if (Boolean(e.payload.as_of_overridden) !== overridden) continue;
+    const isRun = e.kind === "run.completed" && (e.outcome === "ok" || e.outcome === "partial");
+    const isApproval = e.kind === "approval.requested" && e.payload.gate === "policy-evidence";
+    if (isRun || isApproval) previousDigest = e.payload.digest;
+  }
 
   if (!clean) process.exitCode = 3;
   let approval = null;
   if (!clean && digest !== previousDigest) {
-    approval = emit(inputs.root, "approval.requested", {
+    approval = emit(inputs, "approval.requested", {
       what: `${below.length} policy cell(s) are BELOW-BAR: their refusal path has no fresh evidence`,
-      gate: "policy-evidence", as_of: r.as_of, no_writer: noWriter, clearable,
+      gate: "policy-evidence", as_of: r.as_of, as_of_overridden: overridden, digest, no_writer: noWriter, clearable,
     }, "fail");
     if (!approval) return;
   }
-  const run = emit(inputs.root, "run.completed", {
-    as_of: r.as_of, in_scope: r.in_scope, below_bar: below.length, digest, approval,
+  const run = emit(inputs, "run.completed", {
+    as_of: r.as_of, as_of_overridden: overridden, in_scope: r.in_scope, below_bar: below.length, digest, approval,
   }, clean ? "ok" : "partial");
   if (!run) return;
   for (const l of [...noWriter.map((x) => `no-writer  ${x}`), ...clearable.map((x) => `clearable  ${x}`)]) process.stdout.write(l + "\n");
@@ -131,18 +143,30 @@ function guard(inputs, r) {
       `${clearable.length} clearable); ${approval ? `approval ${approval}` : "same set as the last guard run, no new approval"}; run ${run}\n`);
 }
 
-/** Seal one receipt through the one writer; on failure, say so and exit 1 -- a guard receipt that vanished is no guard run. */
-function emit(root, kind, payload, outcome) {
+/**
+ * Seal one receipt through the one writer, INTO THE SPINE THAT WAS READ (attack p01 L2/B2): the spine selector is pinned
+ * to the governing root's spine rather than inherited, and the returned id is read back from that spine's day file.
+ * On failure, say so -- with the emitter's own stderr -- and exit 1: a guard receipt that vanished is no guard run.
+ */
+function emit(inputs, kind, payload, outcome) {
   let dir = "";
   try {
     dir = mkdtempSync(join(tmpdir(), "policy-evidence-"));
     const file = join(dir, "payload.json");
     writeFileSync(file, JSON.stringify(payload), "utf8");
-    return execFileSync("bash", [join(root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", kind, "--payload-file", file,
-      "--strict", "--process", `${GUARD_PROCESS}@1.0.0`, "--outcome", outcome],
-    { encoding: "utf8", cwd: root, timeout: 60000, env: { ...process.env, ARC_MODEL: "" } }).trim();
+    const id = execFileSync("bash", [join(inputs.root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", kind, "--payload-file", file,
+      "--strict", "--process", GUARD_PROCESS_ID, "--outcome", outcome],
+    { encoding: "utf8", cwd: inputs.root, timeout: 60000, stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ARC_MODEL: "", ARC_SPINE_ROOT: dirname(inputs.eventsDir) } }).trim().split("\n").pop().trim();
+    const day = istDay(formatIst(nowMs()));
+    const text = readDayFile(join(inputs.eventsDir, `${day}.jsonl`)) || "";
+    if (!text.includes(`"id":"${id}"`)) { fail(1, `${kind} ${id || "(no id)"} is not in ${inputs.eventsDir} -- the receipt did not land where it was read from`); return null; }
+    return id;
   } catch (e) {
-    fail(1, `could not seal ${kind}: ${String(e && e.message).split("\n")[0]}`);
+    const err = String((e && e.stderr) || "").trim().split("\n").pop() || String(e && e.message).split("\n")[0];
+    // The one environment fault worth naming: from PowerShell, a bare `bash` is WSL's, which cannot see this tree.
+    const hint = process.platform === "win32" ? " (start the guard from Git Bash: PowerShell PATH sends `bash` to WSL)" : "";
+    fail(1, `could not seal ${kind}: ${err}${hint}`);
     return null;
   } finally {
     if (dir) try { rmSync(dir, { recursive: true, force: true }); } catch { /* a stale temp dir never costs a receipt */ }

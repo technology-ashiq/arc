@@ -99,7 +99,7 @@ function sealedEvent(line) {
  * capability in its typed denials counts -- the fold's own rule. A forged or junk line matching three fields must not
  * suppress the genuine receipt for the rest of the day (attack r2 B3). Any read failure answers "not sealed".
  */
-export function sealedRefusalToday({ eventsDir, day, actionKind, capability, process: proc }) {
+export function sealedRefusalToday({ eventsDir, day, actionKind, capability, process: proc, decision = "deny", surface = "headless" }) {
   const text = readDayFile(join(eventsDir, `${day}.jsonl`));
   if (text === null) return null;
   const incidents = new Map();
@@ -109,8 +109,11 @@ export function sealedRefusalToday({ eventsDir, day, actionKind, capability, pro
     if (!e) continue;
     if (e.kind === "incident.raised" && e.payload && e.payload.source === "arc-run policy gate") { incidents.set(e.id, e); continue; }
     const p = e.payload;
-    if (e.kind !== "note.logged" || !p || p.subject !== "policy.refusal" || p.decision !== "deny") continue;
+    if (e.kind !== "note.logged" || !p || p.subject !== "policy.refusal" || p.decision !== decision || p.surface !== surface) continue;
     if (p.action_kind !== actionKind || p.capability !== capability || e.process !== proc) continue;
+    // An interactive refusal has no incident behind it to corroborate (ADR-0509 states that residual); it counts
+    // once sealed, valid and matching. A headless one must still name its preceding gate incident.
+    if (surface === "interactive") return e.id;
     const inc = incidents.get(p.incident_ref);
     if (inc && inc.id < e.id && inc.process === e.process && Array.isArray(inc.payload.denials) &&
         inc.payload.denials.some((d) => d && d.capability === p.capability && d.level === p.level)) return e.id;
