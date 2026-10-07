@@ -117,8 +117,10 @@ _verify_root() { # $1 dir: the six LIVE files, the manifest and the verifier, at
   local d="$BATS_TEST_TMPDIR/v-crlf"; _verify_root "$d"
   cd "$d"
   local f; f="$d/hq.policy.yaml"
-  awk '{ printf "%s\r\n", $0 }' "$f" > "$f.crlf" && mv "$f.crlf" "$f"
-  grep -q $'\r' "$f" || { echo "fixture is not CRLF"; false; }
+  # Built and checked in node: Git Bash's grep did not see the CR on the Windows leg (CI: "fixture is not CRLF").
+  node "$FX/crlf.mjs" write "$f"
+  run node "$FX/crlf.mjs" check "$f"
+  [[ "$output" =~ ^CR\ [1-9][0-9]*$ ]] || { echo "fixture is not CRLF: $output"; false; }
   run node initiatives/policy/evidence/phase-02/verify-paste.mjs --pre
   [ "$status" -eq 0 ] && [[ "$output" != *"DIFFERS  hq.policy.yaml"* ]] || { echo "CRLF read as drift: $output"; false; }
 }

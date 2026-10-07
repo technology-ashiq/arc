@@ -67,14 +67,17 @@ edit(".claude/scripts/hq/policy-lint.mjs", [
     " * Exit codes: 0 clean · 1 usage/IO · 2 the file is not law · 3 (--evidence only) law, but a level is BELOW-BAR.\n" +
     " * `--evidence` runs `policy-evidence.mjs check` after the file is law -- BELOW-BAR lives there once (POL-L, ADR-0511).\n"],
   ["import spawnSync", 'import { readFileSync, existsSync } from "node:fs";\n',
-    'import { spawnSync } from "node:child_process";\nimport { readFileSync, existsSync } from "node:fs";\n'],
+    'import { spawnSync } from "node:child_process";\nimport { readFileSync, existsSync, realpathSync } from "node:fs";\n'],
   ["flag parse", '  const args = argv.filter((a) => a !== "--");\n',
     '  const evidence = argv.includes("--evidence");\n  const args = argv.filter((a) => a !== "--" && a !== "--evidence");\n'],
   ["delegate after law",
     "    printDerivedTable(text);\n    return 0;\n",
     "    printDerivedTable(text);\n    if (!evidence) return 0;\n" +
     "    // --evidence judges the GOVERNING policy and spine; a verdict about another file would be confident and wrong.\n" +
-    '    if (path !== resolve(ROOT, "hq.policy.yaml")) {\n' +
+    "    // By filesystem identity, not string: Windows names one temp dir two ways (RUNNER~1 vs runneradmin), and a\n" +
+    "    // string compare refused the governing file itself on CI (attack p02 r2 B8, closed).\n" +
+    "    const real = (p) => { try { const r = realpathSync.native(p); return process.platform === \"win32\" ? r.toLowerCase() : r; } catch { return null; } };\n" +
+    '    if (real(path) === null || real(path) !== real(resolve(ROOT, "hq.policy.yaml"))) {\n' +
     '      process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\\n`);\n' +
     '      return 1;\n    }\n' +
     "    // The delegate judges THIS root: cwd and both selectors pinned, never inherited (attack p02 r2 B1).\n" +
