@@ -1422,6 +1422,7 @@
       "PLAN-design": "strategy",
       "PLAN-develop": "strategy",
       "PLAN-discover": "strategy",
+      "PLAN-distribute": "strategy",
       "PLAN-docs": "strategy",
       "PLAN-engine-process-layer": "strategy",
       "PLAN-evolve": "strategy",

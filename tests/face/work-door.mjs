@@ -151,6 +151,7 @@ const INPUTS = {
   "legal.full-read": { venture: "fixture-gateway-gst" },
   // The company ring (ADR-1343): branch writers, planned where there is a main and refused SIM_EFFECT at apply.
   "org.lane-status": { lane: "face", status: "QUEUED" },
+  "org.seat-assign": { role: "coo-dispatcher", seat: "agent", agents: "researcher" },
   "concepts.define-term": { term: "work door probe", room: "today", station: "needs-you cards" },
 };
 // The ops whose tool refuses its PLAN on this tree, each by its NAMED refusal -- any refusal would pass a sim door that
@@ -162,7 +163,7 @@ const REFUSES_ON_THIS_TREE = new Map([["evolve.open-experiment", /NO_EVOLVE_SECT
   ["leads.daily-send", /no sending_domain configured/]]);
 const PLAN_REFUSAL_IF_ANY = new Map([["scheduler.register-job", /targets Windows/], ["engine-room.driver-switch", /NO_BASE/], ["model-policy.tier-proposal", /NO_BASE/], ["absorb.pin-source", /NO_BASE/], ["absorb.trial", /NO_BASE/],
   ["design-studio.open-brief", /NO_BASE/], ["executor.terminate", /NO_BASE/], ["agents.add-agent", /NO_BASE/], ["factory.switch-profile", /already strict/],
-  ["org.lane-status", /NO_BASE/], ["concepts.define-term", /NO_BASE/]]);
+  ["org.lane-status", /NO_BASE/], ["org.seat-assign", /NO_BASE/], ["concepts.define-term", /NO_BASE/]]);
 check("every registry op is driven by this suite",
   OPS_MOD.OPS.length > 0 && OPS_MOD.OPS.every((o) => Object.hasOwn(INPUTS, o.id)) && Object.keys(INPUTS).length === OPS_MOD.OPS.length,
   OPS_MOD.OPS.map((o) => o.id).join(","));
@@ -186,11 +187,22 @@ check("every registry op is driven by this suite",
   const ids = (rows) => rows.map((r) => r[3].replace(/`/g, "")).filter((x) => x && x !== "RESIDUE");
   const registry = new Set(OPS_MOD.OPS.map((o) => o.id));
   const sameBothWays = (list) => list.length === registry.size && new Set(list).size === list.length && list.every((id) => registry.has(id));
+  // AN OP BORN AFTER THE PROBE: the probe and its residue file are Phase 05's sealed evidence (arc-evidence verify
+  // hashes both), so a later op is named here with the accepted ADR that birthed it, never written into the bundle.
+  // Each must be absent from the residue file and its ADR must be on disk and accepted.
+  const AFTER_PROBE = new Map([["org.seat-assign", "1352"]]);
+  const adrs = readdirSync(join(REPO, "docs", "adr"));
+  const bornOk = [...AFTER_PROBE].every(([id, n]) => {
+    const f = adrs.find((x) => x.startsWith(`${n}-`));
+    return !ids(mapped).includes(id) && !!f && /^\*\*Status:\*\* accepted/m.test(readFileSync(join(REPO, "docs", "adr", f), "utf8"));
+  });
+  check("every op born after the probe is named with an accepted ADR and is not in the sealed residue file", bornOk, [...AFTER_PROBE].map(([id, n]) => `${id}=ADR-${n}`).join(","));
   check("fixture: the probe's ring tables and the residue mapping both parse (vacuous-pass guard)", probeRows.length >= 40 && mapped.length > 0, `${probeRows.length} probe rows, ${mapped.length} mapped`);
   check("every non-SESSION probe verb is a residue-file row, and the counts agree", workVerbs.length === mapped.length, `${workVerbs.length} work verbs, ${mapped.length} rows`);
-  check("the residue file's op ids equal the registry both ways (a verb can neither vanish nor be invented)", sameBothWays(ids(mapped)), ids(mapped).filter((id) => !registry.has(id)).join(",") || [...registry].filter((id) => !ids(mapped).includes(id)).join(","));
+  check("the residue file's op ids, with the ops born after the probe, equal the registry both ways (a verb can neither vanish nor be invented)", sameBothWays([...ids(mapped), ...AFTER_PROBE.keys()]), [...ids(mapped), ...AFTER_PROBE.keys()].filter((id) => !registry.has(id)).join(",") || [...registry].filter((id) => !ids(mapped).includes(id) && !AFTER_PROBE.has(id)).join(","));
   check("MUTANT CONTROL: a mapping with one op dropped is caught", !sameBothWays(ids(mapped).slice(1)));
   check("MUTANT CONTROL: a mapping naming an op the registry does not hold is caught", !sameBothWays([...ids(mapped).slice(1), "invented.verb"]));
+  check("MUTANT CONTROL: the registry with an op born after the probe left unnamed is caught", !sameBothWays(ids(mapped)));
 }
 // HUMAN-RUN OPS APPLY ONLY FROM A CLICK (Phase 05 DoD): close month, the leads send, growth publish and the legal stamp
 // are applied by the door's apply with the owner's confirmation, and by no other path. The click half (apply without the
