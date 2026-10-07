@@ -18,7 +18,7 @@ _sha16s() { node -e 'process.stdout.write(require("crypto").createHash("sha256")
 
 _answer() { printf '%s\n' "$1" > "$BATS_TEST_TMPDIR/answer.json"; }
 _ok_answer() {
-  _answer '{"ok":true,"screen":{"id":"screen0123456789abcdef","projectId":"p1","deviceType":"DESKTOP"},"htmlUrl":"https://contribution.usercontent.google.com/download?c=x","html":"<!doctype html><html><head><link href=\"https://fonts.googleapis.com\" rel=\"preconnect\"/><link href=\"https://fonts.googleapis.com/css2?family=Inter&amp;display=swap\" rel=\"stylesheet\"/><script src=\"https://cdn.tailwindcss.com?plugins=forms\"></script></head><body><h1>Case</h1><a href=\"https://example.org/help\">help</a></body></html>"}'
+  _answer '{"ok":true,"screen":{"id":"screen0123456789abcdef","projectId":"p1","deviceType":"DESKTOP","htmlCode":{"downloadUrl":"https://contribution.usercontent.google.com/download?c=x"}},"htmlUrl":"https://contribution.usercontent.google.com/download?c=x","html":"<!doctype html><html><head><link href=\"https://fonts.googleapis.com\" rel=\"preconnect\"/><link href=\"https://fonts.googleapis.com/css2?family=Inter&amp;display=swap\" rel=\"stylesheet\"/><script src=\"https://cdn.tailwindcss.com?plugins=forms\"></script></head><body><h1>Case</h1><a href=\"https://example.org/help\">help</a></body></html>"}'
 }
 # The recorded asset set: the Tailwind runtime, one Google Fonts stylesheet naming one font file.
 _assets() {
@@ -175,7 +175,7 @@ teardown() { rm -rf "$SANDBOX"; }
 @test "rival: a load from a fourth host is named, and the draft leaves the jury" {
   export STITCH_API_KEY="test-key-0123456789"
   _assets
-  _answer '{"ok":true,"screen":{"id":"s1"},"htmlUrl":"https://contribution.usercontent.google.com/d","html":"<html><head><script src=\"https://cdn.tailwindcss.com?plugins=forms\"></script></head><body><img src=\"https://lh3.googleusercontent.com/x.png\"></body></html>"}'
+  _answer '{"ok":true,"screen":{"id":"s1","htmlCode":{"downloadUrl":"https://contribution.usercontent.google.com/d"}},"htmlUrl":"https://contribution.usercontent.google.com/d","html":"<html><head><script src=\"https://cdn.tailwindcss.com?plugins=forms\"></script></head><body><img src=\"https://lh3.googleusercontent.com/x.png\"></body></html>"}'
   run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
   [ "$status" -eq 3 ]
   [[ "${lines[0]}" == "rival stitch: COULD-NOT-DRAFT (not self-contained (1 unresolved: https://lh3.googleusercontent.com/x.png: host lh3.googleusercontent.com is not an allowed asset host))" ]]
@@ -187,7 +187,7 @@ teardown() { rm -rf "$SANDBOX"; }
 @test "rival: an asset that fails to download, or is plain http, is unresolved -- never a half-online page" {
   export STITCH_API_KEY="test-key-0123456789"
   _assets
-  _answer '{"ok":true,"screen":{"id":"s1"},"htmlUrl":"https://contribution.usercontent.google.com/d","html":"<html><head><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/missing.css\"><script src=\"http://cdn.tailwindcss.com/x.js\"></script></head><body></body></html>"}'
+  _answer '{"ok":true,"screen":{"id":"s1","htmlCode":{"downloadUrl":"https://contribution.usercontent.google.com/d"}},"htmlUrl":"https://contribution.usercontent.google.com/d","html":"<html><head><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/missing.css\"><script src=\"http://cdn.tailwindcss.com/x.js\"></script></head><body></body></html>"}'
   run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
   [ "$status" -eq 3 ]
   [[ "${lines[0]}" == "rival stitch: COULD-NOT-DRAFT (not self-contained (2 unresolved: "* ]]
@@ -201,7 +201,122 @@ teardown() { rm -rf "$SANDBOX"; }
   [ "$status" -eq 1 ]
 }
 
+# ---------- attack 65d01cc round 1 ----------
+
+# An ok answer whose html is $1 (JSON-escaped), bound to its screen's own download URL.
+_html_answer() {
+  _answer "{\"ok\":true,\"screen\":{\"id\":\"s1\",\"htmlCode\":{\"downloadUrl\":\"https://contribution.usercontent.google.com/d\"}},\"htmlUrl\":\"https://contribution.usercontent.google.com/d\",\"html\":\"$1\"}"
+}
+
+@test "rival: a remote load the old reader missed is refused -- unquoted, base, refresh, inline style, svg, entity, protocol-relative (B1)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _assets
+  local n=0 h
+  for h in \
+    '<script src=https://evil.example/x.js></script>' \
+    '<base href=\"https://evil.example/\">' \
+    '<meta http-equiv=\"refresh\" content=\"0;url=https://evil.example/\">' \
+    '<div style=\"background:url(https://evil.example/p.png)\"></div>' \
+    '<svg><image xlink:href=\"https://evil.example/p.png\"/></svg>' \
+    '<img src=\"ht&#x74;ps://evil.example/p.png\">' \
+    '<video poster=\"//evil.example/p.png\"></video>'; do
+    _html_answer "<html><body>$h</body></html>"
+    run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+    [ "$status" -eq 3 ] || { echo "drafted a page that loads evil.example: $h -> $output"; false; }
+    [[ "${lines[0]}" == "rival stitch: COULD-NOT-DRAFT (not self-contained ("* ]] || { echo "wrong refusal for $h: $output"; false; }
+    [ ! -e "$(_page)" ] || { echo "a page was written for $h"; false; }
+    n=$((n + 1))
+  done
+  [ "$n" -eq 7 ]
+}
+
+@test "rival: only the load is rewritten -- the same URL in an anchor and in body text is left alone (B2, L8, L11)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _assets
+  _html_answer '<html><head><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Inter&amp;display=swap\"></head><body><a href=\"https://fonts.googleapis.com/css2?family=Inter&amp;display=swap\">same</a><pre>https://fonts.googleapis.com/css2?family=Inter&amp;display=swap</pre></body></html>'
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  grep -q '<a href="https://fonts.googleapis.com/css2?family=Inter&amp;display=swap">same</a>' "$(_page)" || { echo "the anchor was rewritten: $(cat "$(_page)")"; false; }
+  grep -q '<pre>https://fonts.googleapis.com/css2?family=Inter&amp;display=swap</pre>' "$(_page)" || { echo "body text was rewritten"; false; }
+  grep -qE '<link rel="stylesheet" href="assets/[0-9a-f]{16}\.css">' "$(_page)" || { echo "the load itself was not rewritten"; false; }
+}
+
+@test "rival: an HTML URL on a non-default port, or not the screen's own download, is an unusable answer (B4, L9)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _answer '{"ok":true,"screen":{"id":"s1","htmlCode":{"downloadUrl":"https://contribution.usercontent.google.com:8443/d"}},"htmlUrl":"https://contribution.usercontent.google.com:8443/d","html":"<html></html>"}'
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json"
+  [ "$status" -eq 3 ]
+  [ "${lines[0]}" = "rival stitch: COULD-NOT-DRAFT (unusable answer (the HTML URL names port 8443))" ]
+  _answer '{"ok":true,"screen":{"id":"s1","htmlCode":{"downloadUrl":"https://contribution.usercontent.google.com/mine"}},"htmlUrl":"https://contribution.usercontent.google.com/other","html":"<html></html>"}'
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json"
+  [ "$status" -eq 3 ]
+  [ "${lines[0]}" = "rival stitch: COULD-NOT-DRAFT (unusable answer (the HTML URL is not the screen's own htmlCode download))" ]
+}
+
+@test "rival: a failed re-draft keeps the earlier page, and its record never carries the earlier vendor record (B5, B6, L12)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _ok_answer
+  _assets
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  before="$(_sha "$(_page)")"
+  node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1]));if(r.vendored.page_sha256!==process.argv[2])process.exit(1)' "$(_out)/stitch/receipt.json" "$before" \
+    || { echo "the receipt does not carry the vendored page hash"; false; }
+  _html_answer '<html><body><img src=\"https://lh3.googleusercontent.com/x.png\"></body></html>'
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+  [ "$status" -eq 3 ]
+  [ "$(_sha "$(_page)")" = "$before" ] || { echo "a failed attempt removed or changed the earlier page"; false; }
+  grep -q '"status": "COULD-NOT-DRAFT"' "$(_out)/stitch/receipt.json"
+  [ ! -e "$(_out)/stitch/vendor.json" ] || { echo "the earlier vendor record sits beside a failed receipt"; false; }
+  [ ! -e "$(_out)/stitch/stage" ] || { echo "the staging dir was left behind"; false; }
+}
+
+@test "rival: a rival dir that is a symlink is refused before anything is removed or written through it (B5)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _ok_answer
+  _assets
+  mkdir -p "$SANDBOX/docs/design/explore/r1" "$BATS_TEST_TMPDIR/elsewhere"
+  printf 'keep\n' > "$BATS_TEST_TMPDIR/elsewhere/keep.txt"
+  ln -s "$BATS_TEST_TMPDIR/elsewhere" "$SANDBOX/docs/design/explore/r1/rival-stitch" 2>/dev/null || true
+  [ -L "$SANDBOX/docs/design/explore/r1/rival-stitch" ] || skip "this filesystem made a copy, not a symlink"
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+  [ "$status" -eq 3 ]
+  [[ "${lines[0]}" == *"is a link or not a directory"* ]] || { echo "$output"; false; }
+  [ -f "$BATS_TEST_TMPDIR/elsewhere/keep.txt" ] && [ ! -e "$BATS_TEST_TMPDIR/elsewhere/index.html" ] || { echo "the run wrote or removed through the link"; false; }
+}
+
+@test "rival: a crash inside the attempt is one status line and exit 3, never a stack trace or the usage code (B11)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _ok_answer
+  mkdir -p "$BATS_TEST_TMPDIR/broken"
+  printf 'not json\n' > "$BATS_TEST_TMPDIR/broken/index.json"
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/broken"
+  [ "$status" -eq 3 ] || { echo "a crash exited $status: $output"; false; }
+  [ "${#lines[@]}" -eq 1 ] || { echo "not one line: $output"; false; }
+  [[ "${lines[0]}" == "rival stitch: COULD-NOT-DRAFT (internal error "* ]] || { echo "$output"; false; }
+}
+
+@test "rival: a fake run never opens the owner's key store (L10)" {
+  printf '{"schema":1,"keys":[{"name":"STITCH_API_KEY","value":"store-key-0123456789"}]}\n' > "$BATS_TEST_TMPDIR/keys.json"
+  export ARC_KEYS_FILE="$BATS_TEST_TMPDIR/keys.json"
+  _ok_answer
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json"
+  [ "$status" -eq 3 ]
+  [ "${lines[0]}" = "rival stitch: COULD-NOT-DRAFT (no key)" ] || { echo "a fake run read the key store: $output"; false; }
+}
+
+@test "rival: a font served with a generic type is still named by its bytes (L7)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _ok_answer
+  _assets
+  sed -i 's#"type":"font/woff2"#"type":"application/octet-stream"#' "$BATS_TEST_TMPDIR/assets/index.json"
+  grep -q 'application/octet-stream' "$BATS_TEST_TMPDIR/assets/index.json" || { echo "fixture: the type was not changed"; false; }
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ls "$SANDBOX/docs/design/explore/r1/rival-stitch/assets" | grep -qE '^[0-9a-f]{16}\.woff2$' || { echo "the font was not named .woff2: $(ls "$SANDBOX/docs/design/explore/r1/rival-stitch/assets")"; false; }
+}
+
 @test "rival: the suite registered all of its tests" {
   run grep -c '^@test ' "$BATS_TEST_FILENAME"
-  [ "$output" -eq 14 ]
+  [ "$output" -eq 22 ]
 }

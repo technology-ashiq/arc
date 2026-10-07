@@ -23,7 +23,7 @@
 // answer, --record-request <file> writes the request the transport would have sent (the key as a sha256
 // prefix, so a test can prove where it went without the key being written down).
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -110,6 +110,15 @@ export function readAnswer(provider, answer) {
   if (u.protocol !== "https:") return { why: "the HTML URL is not https" };
   if (u.username || u.password) return { why: "the HTML URL carries credentials" };
   if (!provider.htmlHosts.includes(u.hostname)) return { why: `the HTML is served from ${field(u.hostname).slice(0, 80)}, not a known host` };
+  // The host is checked by name and the port is part of where the bytes come from (attack 65d01cc B4).
+  // Address pinning is out of scope: the hosts are Google's and Tailwind's, and a resolver this box
+  // trusts is the same one every other fetch here trusts.
+  if (u.port !== "") return { why: `the HTML URL names port ${field(u.port).slice(0, 8)}` };
+  // Bound to the screen it came with: the SDK's getHtml() returns the generated screen's own
+  // htmlCode.downloadUrl (stitch-sdk 0.3.5 screen.js), so any other URL on the right host is not this
+  // screen's HTML (attack 65d01cc L9).
+  const own = answer.screen && typeof answer.screen === "object" && answer.screen.htmlCode && typeof answer.screen.htmlCode === "object" ? answer.screen.htmlCode.downloadUrl : undefined;
+  if (typeof own !== "string" || own !== String(answer.htmlUrl)) return { why: "the HTML URL is not the screen's own htmlCode download" };
   return { url: u };
 }
 
@@ -135,20 +144,50 @@ function privateEnv(runDir, extra) {
   return env;
 }
 
+// One hash over every file of an installed tree, path and bytes, in a fixed order; a symlink in the
+// tree is refused (null), since what it points at is not what was installed.
+function treeHash(dir) {
+  const h = createHash("sha256");
+  const walk = (d, rel) => {
+    for (const e of readdirSync(d, { withFileTypes: true }).sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0))) {
+      if (e.name === ".package-lock.json") continue;
+      const p = join(d, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isSymbolicLink()) throw new Error(`a symlink in the install: ${r}`);
+      if (e.isDirectory()) walk(p, r);
+      else if (e.isFile()) h.update(`${r}\0`).update(readFileSync(p)).update("\0");
+    }
+  };
+  try { walk(dir, ""); } catch { return null; }
+  return h.digest("hex");
+}
+
 // The pinned SDK, installed once into a private directory. Its entry is read from its own package.json
-// and must stay inside the install directory. Returns the entry path or null.
+// and must stay inside the install directory. The whole installed tree is hashed at install and
+// re-hashed before every run: the child that receives the key imports only the tree that was installed,
+// never one replaced since (attack 65d01cc B9). An install with no recorded hash is not trusted -- it is
+// removed and installed again. Returns {entry, tree} or null.
 function sdkEntry(provider, runDir) {
   const dir = join(ROOT, ".claude", "state", "design", "rival-sdk", provider.pkg.replace(/[^abcdefghijklmnopqrstuvwxyz0123456789.@-]/gi, "_"));
-  const pkgDir = join(dir, "node_modules", ...provider.name.split("/"));
+  const nm = join(dir, "node_modules");
+  const pkgDir = join(nm, ...provider.name.split("/"));
   const pj = join(pkgDir, "package.json");
-  if (!existsSync(pj)) {
+  const pin = join(dir, "install.json");
+  let recorded = null;
+  try { recorded = JSON.parse(readFileSync(pin, "utf8")).tree_sha256; } catch { recorded = null; }
+  if (!existsSync(pj) || typeof recorded !== "string") {
     const cli = [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"), join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")].find((p) => existsSync(p));
     if (!cli) return null;
+    rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     const r = spawnSync(process.execPath, [cli, "install", "--prefix", dir, "--ignore-scripts", "--no-audit", "--no-fund", "--no-save", provider.pkg],
       { cwd: runDir, env: privateEnv(runDir, {}), stdio: "ignore", windowsHide: true, timeout: INSTALL_DEADLINE_MS });
     if (r.error || r.status !== 0 || !existsSync(pj)) return null;
+    recorded = treeHash(nm);
+    if (!recorded) return null;
+    writeFileSync(pin, JSON.stringify({ pkg: provider.pkg, installedAt: new Date().toISOString(), tree_sha256: recorded }, null, 2) + "\n");
   }
+  if (treeHash(nm) !== recorded) return null;
   let rel;
   try {
     const p = JSON.parse(readFileSync(pj, "utf8"));
@@ -157,19 +196,44 @@ function sdkEntry(provider, runDir) {
     rel = (dot && typeof dot === "object" ? dot.import : dot) ?? p.main;
   } catch { return null; }
   const entry = resolve(pkgDir, String(rel ?? ""));
-  return rel && entry.startsWith(resolve(pkgDir) + sep) && existsSync(entry) ? entry : null;
+  return rel && entry.startsWith(resolve(pkgDir) + sep) && existsSync(entry) ? { entry, tree: recorded } : null;
+}
+
+// The child and everything it started: on Windows a plain kill reaches only the direct process, and a
+// grandchild holding the key and a socket outlived the run (attack 65d01cc B10).
+function killTree(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true, timeout: 10000 });
+  } else {
+    try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { /* gone */ } }
+  }
 }
 
 // The real transport: the child file, the request on stdin, one JSON line back, a hard deadline.
 function childTransport(provider, entry, key, req, runDir) {
   return new Promise((done) => {
     const env = privateEnv(runDir, { [provider.keyName]: key });
-    const child = spawn(process.execPath, [provider.child, entry], { cwd: runDir, env, shell: false, stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
+    // detached on POSIX makes the child a group leader, so the whole group can be killed by -pid.
+    const child = spawn(process.execPath, [provider.child, entry], { cwd: runDir, env, shell: false, stdio: ["pipe", "pipe", "ignore"], windowsHide: true, detached: process.platform !== "win32" });
     let out = "";
-    let settled = false;
-    const finish = (v) => { if (settled) return; settled = true; clearTimeout(timer); try { child.kill(); } catch { /* already gone */ } done(v); };
+    let verdict = null;
+    let closed = false;
+    // The answer is handed back only once the child (and its tree) is gone, so the caller's cleanup of
+    // the run dir never races a process still holding it; a backstop ends the wait if close never comes.
+    let sent = false;
+    const resolveWhenClosed = () => { if (verdict && closed && !sent) { sent = true; clearTimeout(backstop); done(verdict); } };
+    let backstop = null;
+    const finish = (v) => {
+      if (verdict) return;
+      verdict = v;
+      clearTimeout(timer);
+      killTree(child);
+      backstop = setTimeout(() => { closed = true; resolveWhenClosed(); }, 10000);
+      resolveWhenClosed();
+    };
     const timer = setTimeout(() => finish({ ok: false, error: { name: "Timeout", code: "TIMEOUT", message: `no answer within ${DRAFT_DEADLINE_MS} ms (timeout)` } }), DRAFT_DEADLINE_MS);
-    child.on("error", (e) => finish({ ok: false, error: { name: "SpawnError", code: e.code ?? null, message: e.message } }));
+    child.on("error", (e) => { finish({ ok: false, error: { name: "SpawnError", code: e.code ?? null, message: e.message } }); closed = true; resolveWhenClosed(); });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (d) => {
       out += d;
@@ -180,6 +244,8 @@ function childTransport(provider, entry, key, req, runDir) {
       let v;
       try { v = JSON.parse(line ?? ""); } catch { v = undefined; }
       finish(v && typeof v === "object" ? v : { ok: false, error: { name: "NoAnswer", code: "NO_ANSWER", message: "the transport exited without one JSON answer" } });
+      closed = true;
+      resolveWhenClosed();
     });
     child.stdin.on("error", () => { /* reported by close */ });
     child.stdin.end(JSON.stringify(req));
@@ -189,11 +255,7 @@ function childTransport(provider, entry, key, req, runDir) {
 async function download(url) {
   const res = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(60000) });
   if (res.status !== 200) throw Object.assign(new Error(`the HTML download answered ${res.status}`), { code: `HTTP_${res.status}` });
-  const len = Number(res.headers.get("content-length") ?? 0);
-  if (len > MAX_HTML_BYTES) throw Object.assign(new Error("the HTML is larger than the cap"), { code: "TOO_LARGE" });
-  const body = Buffer.from(await res.arrayBuffer());
-  if (body.length > MAX_HTML_BYTES) throw Object.assign(new Error("the HTML is larger than the cap"), { code: "TOO_LARGE" });
-  return body;
+  return readCapped(res, MAX_HTML_BYTES).catch((e) => { throw Object.assign(new Error(e.code === "TOO_LARGE" ? "the HTML is larger than the cap" : e.message), { code: e.code ?? "READ_FAILED" }); });
 }
 
 // ---------- vendoring at fetch (S3, ADR-1422) ----------
@@ -211,57 +273,172 @@ const MAX_TOTAL_ASSET_BYTES = 32 * 1024 * 1024;
 const MAX_ASSETS = 200;
 // Google Fonts answers by user agent; a current desktop Chrome gets woff2, the format a render uses.
 const FONT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-const LOAD_TAGS = /<(script|link|img|source|iframe|video|audio|embed|object|track|input)\b[^>]*>/gi;
-const LOAD_ATTRS = /\s(src|href|srcset|poster|data)\s*=\s*("([^"]*)"|'([^']*)')/gi;
 const CSS_URL = /url\(\s*(["']?)([^"')\s]+)\1\s*\)|@import\s+(["'])([^"']+)\3/gi;
+// Attributes that never load anything. Every OTHER attribute whose value is a remote URL is read as a
+// load: a list of load attributes missed unquoted values, <base>, and every tag nobody thought of
+// (attack 65d01cc B1), so the reader is deny-by-default. <a>/<area> href is navigation and skipped whole.
+const INERT_ATTRS = /^(alt|title|class|id|name|value|placeholder|lang|dir|role|type|rel|target|download|hreflang|for|label|content|property|itemprop|itemtype|itemscope|itemid|xmlns(:.*)?|aria-.*|data-.*|on.*|style|width|height|sizes|media|crossorigin|referrerpolicy|integrity|as|charset|http-equiv|loading|decoding|fetchpriority|tabindex|hidden|translate|spellcheck|autocomplete|async|defer|nomodule|disabled|checked|selected|required|readonly|multiple|viewbox|fill|stroke|d|transform|stroke-width|stroke-linecap|stroke-linejoin)$/;
 
-const decodeAttr = (v) => v.replace(/&amp;/g, "&").replace(/&#38;/g, "&").replace(/&quot;/g, '"');
-const isRemote = (v) => /^(https?:)?\/\//i.test(v.trim());
+// Entities a browser decodes inside an attribute, plus the tab/newline it strips from a URL and the
+// backslash it reads as a slash: `ht&#x74;ps:`, `&sol;&sol;host` and `\\host` are all remote.
+const NAMED = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", colon: ":", sol: "/", bsol: "\\", tab: "\t", newline: "\n", period: "." };
+export const decodeAttr = (v) => v
+  .replace(/&#x([0-9a-f]+);?/gi, (_, h) => String.fromCodePoint(Math.min(parseInt(h, 16), 0x10ffff)))
+  .replace(/&#([0-9]+);?/g, (_, d) => String.fromCodePoint(Math.min(Number(d), 0x10ffff)))
+  .replace(/&([a-z]+);/gi, (m, n) => NAMED[n.toLowerCase()] ?? m);
+const urlish = (v) => decodeAttr(v).replace(/[\t\n\r]/g, "").replace(/\\/g, "/").trim();
+const isRemote = (v) => /^([a-z][a-z0-9+.-]*:)?\/\//i.test(urlish(v));
+const absolute = (v) => urlish(v).replace(/^\/\//, "https://");
 
-// The remote LOADS in one HTML document: [{tag, attr, raw, url, rel}], plus inline-CSS url() refs.
-// An anchor's href is navigation, not a load, so <a> is never listed.
-export function remoteLoads(html) {
-  const out = [];
-  for (const t of html.matchAll(LOAD_TAGS)) {
-    const tag = t[1].toLowerCase();
-    const rel = (/\srel\s*=\s*["']?([^"'\s>]+)/i.exec(t[0])?.[1] ?? "").toLowerCase();
-    for (const a of t[0].matchAll(LOAD_ATTRS)) {
-      const raw = a[3] ?? a[4] ?? "";
-      const attr = a[1].toLowerCase();
-      const parts = attr === "srcset" ? raw.split(",").map((s) => s.trim().split(/\s+/)[0]) : [raw];
-      for (const p of parts) if (p && isRemote(decodeAttr(p))) out.push({ tag, attr, raw: p, url: decodeAttr(p).replace(/^\/\//, "https://"), rel });
+// Every start tag: its name, and each attribute's name, value and the value's offsets in the source.
+// Quoted and unquoted values both. Comments are skipped, and the text of <script>/<style>/<textarea>/
+// <title> is not read as markup (a <style> body is returned as `text` for its url() refs).
+export function tagsOf(html) {
+  const lower = html.toLowerCase();
+  const n = html.length;
+  const tags = [];
+  let i = 0;
+  while (i < n) {
+    const lt = html.indexOf("<", i);
+    if (lt < 0) break;
+    if (html.startsWith("<!--", lt)) { const e = html.indexOf("-->", lt + 4); i = e < 0 ? n : e + 3; continue; }
+    const m = /^<([a-zA-Z][a-zA-Z0-9:-]*)/.exec(html.slice(lt, lt + 80));
+    if (!m) { i = lt + 1; continue; }
+    const name = m[1].toLowerCase();
+    let j = lt + m[0].length;
+    const attrs = [];
+    for (;;) {
+      while (j < n && /[\s/]/.test(html[j])) j++;
+      if (j >= n || html[j] === ">") break;
+      const a0 = j;
+      while (j < n && !/[\s/>=]/.test(html[j])) j++;
+      if (j === a0) { j++; continue; }
+      const aname = html.slice(a0, j).toLowerCase();
+      let k = j;
+      while (k < n && /\s/.test(html[k])) k++;
+      if (html[k] !== "=") { attrs.push({ name: aname, value: "", start: j, end: j }); continue; }
+      k++;
+      while (k < n && /\s/.test(html[k])) k++;
+      let vs, ve;
+      if (html[k] === '"' || html[k] === "'") {
+        vs = k + 1;
+        ve = html.indexOf(html[k], vs);
+        if (ve < 0) ve = n;
+        j = Math.min(n, ve + 1);
+      } else {
+        vs = k;
+        ve = k;
+        while (ve < n && !/[\s>]/.test(html[ve])) ve++;
+        j = ve;
+      }
+      attrs.push({ name: aname, value: html.slice(vs, ve), start: vs, end: ve });
+    }
+    const end = Math.min(n, j + 1);
+    const tag = { name, start: lt, end, attrs };
+    tags.push(tag);
+    i = end;
+    if (/^(script|style|textarea|title)$/.test(name)) {
+      const close = lower.indexOf(`</${name}`, end);
+      tag.text = { start: end, end: close < 0 ? n : close };
+      i = close < 0 ? n : close;
     }
   }
-  for (const m of html.matchAll(CSS_URL)) {
-    const raw = m[2] ?? m[4];
-    if (raw && isRemote(raw)) out.push({ tag: "css", attr: "url", raw, url: raw.replace(/^\/\//, "https://"), rel: "" });
+  return tags;
+}
+
+// The remote LOADS in one HTML document, each with the offsets of the exact text to rewrite:
+// [{tag, attr, raw, url, rel, start, end}]. `refuse` names a construct that cannot be vendored at all
+// (<base>, a meta refresh), which makes the draft unresolved rather than half-online.
+export function remoteLoads(html) {
+  const out = [];
+  const refuse = [];
+  const cssRefs = (text, at) => {
+    for (const m of text.matchAll(CSS_URL)) {
+      const raw = m[2] ?? m[4];
+      if (!raw || !isRemote(raw)) continue;
+      const start = at + m.index + m[0].indexOf(raw);
+      out.push({ tag: "css", attr: "url", raw, url: absolute(raw), rel: "", start, end: start + raw.length });
+    }
+  };
+  for (const t of tagsOf(html)) {
+    if (t.text && t.name === "style") cssRefs(html.slice(t.text.start, t.text.end), t.text.start);
+    if (t.name === "a" || t.name === "area") continue;
+    const rel = (t.attrs.find((a) => a.name === "rel")?.value ?? "").toLowerCase().trim();
+    if (t.name === "base" && t.attrs.some((a) => a.name === "href")) refuse.push("a <base href> re-roots every relative URL on the page");
+    if (t.name === "meta" && /refresh/i.test(t.attrs.find((a) => a.name === "http-equiv")?.value ?? "")) refuse.push("a <meta http-equiv=refresh> navigates the page");
+    for (const a of t.attrs) {
+      if (a.name === "style") { cssRefs(a.value, a.start); continue; }
+      if (INERT_ATTRS.test(a.name)) continue;
+      if (/srcset$/.test(a.name)) {
+        // Each candidate URL, by its own offset inside the value.
+        for (const c of a.value.matchAll(/([^\s,][^\s]*?)(?=\s|,\s|,?$)/g)) {
+          const raw = c[1].replace(/,$/, "");
+          if (raw && isRemote(raw)) out.push({ tag: t.name, attr: a.name, raw, url: absolute(raw), rel, start: a.start + c.index, end: a.start + c.index + raw.length });
+        }
+        continue;
+      }
+      if (a.value && isRemote(a.value)) out.push({ tag: t.name, attr: a.name, raw: a.value, url: absolute(a.value), rel, start: a.start, end: a.end });
+    }
   }
+  out.refuse = refuse;
   return out;
 }
 
+// Edits applied by offset, last first, so only the named spans change -- never a global replace, which
+// rewrote anchors, body text and longer URLs that contained a shorter one (attack 65d01cc B2).
+function applyEdits(text, edits) {
+  const sorted = [...edits].sort((x, y) => y.start - x.start);
+  for (let i = 1; i < sorted.length; i++) if (sorted[i].end > sorted[i - 1].start) throw new Error("two rewrites overlap");
+  let out = text;
+  for (const e of sorted) out = out.slice(0, e.start) + e.text + out.slice(e.end);
+  return out;
+}
+
+// The body of a response, read under a byte cap: the read stops the moment the cap is passed, so a
+// server that omits Content-Length cannot make this hold more than the cap (attack 65d01cc B3).
+async function readCapped(res, cap) {
+  if (Number(res.headers.get("content-length") ?? 0) > cap) throw Object.assign(new Error("larger than the cap"), { code: "TOO_LARGE" });
+  const chunks = [];
+  let got = 0;
+  for await (const c of res.body ?? []) {
+    got += c.length;
+    if (got > cap) {
+      try { await res.body.cancel(); } catch { /* already closed */ }
+      throw Object.assign(new Error("larger than the cap"), { code: "TOO_LARGE" });
+    }
+    chunks.push(Buffer.from(c));
+  }
+  return Buffer.concat(chunks);
+}
+
+// A font's format is read from its first bytes, not from a label a CDN may get wrong; the renderer serves
+// by extension, so a mislabelled woff2 named .bin would reach the page with the wrong type (attack 65d01cc L7).
+const fontMagic = (b) => {
+  const head = b.subarray(0, 4).toString("latin1");
+  return head === "wOF2" ? "woff2" : head === "wOFF" ? "woff" : head === "OTTO" ? "otf" : head === "\x00\x01\x00\x00" || head === "true" ? "ttf" : null;
+};
 const assetName = (url, type, bytes) => {
-  const ext = /css/.test(type) ? "css" : /javascript|ecmascript/.test(type) ? "js" : /woff2/.test(type) || /\.woff2(\?|$)/.test(url) ? "woff2"
-    : /woff/.test(type) ? "woff" : /ttf|truetype/.test(type) ? "ttf" : /otf|opentype/.test(type) ? "otf" : "bin";
+  const ext = fontMagic(bytes) ?? (/css/.test(type) ? "css" : /javascript|ecmascript/.test(type) ? "js" : "bin");
   return `${sha(bytes).slice(0, 16)}.${ext}`;
 };
 
 // A redirect is followed only on the SAME host, over https, at most 3 hops: the Tailwind CDN answers
 // its unversioned URL with a 302 to a pinned version path (observed 2026-10-07, /3.4.17?plugins=...),
 // and the final URL is what the record keeps -- the version that was vendored.
-async function realAsset(url) {
+// Each hop is held to what the first URL was held to: https, same host, the default port.
+async function realAsset(url, cap) {
   let at = new URL(url);
   for (let hop = 0; hop <= 3; hop++) {
+    // The deadline covers the body read too: the signal aborts the stream, not only the headers.
     const res = await fetch(at, { redirect: "manual", headers: { "user-agent": FONT_UA }, signal: AbortSignal.timeout(60000) });
     if (res.status >= 300 && res.status < 400) {
       const next = new URL(res.headers.get("location") ?? "", at);
-      if (next.protocol !== "https:" || next.hostname !== at.hostname) throw new Error(`redirects off host to ${field(next.hostname).slice(0, 80)}`);
+      if (next.protocol !== "https:" || next.hostname !== at.hostname || next.port !== "" || next.username || next.password) throw new Error(`redirects off host to ${field(next.host).slice(0, 80)}`);
       at = next;
       continue;
     }
     if (res.status !== 200) throw new Error(`answered ${res.status}`);
-    if (Number(res.headers.get("content-length") ?? 0) > MAX_ASSET_BYTES) throw new Error("larger than the asset cap");
-    const body = Buffer.from(await res.arrayBuffer());
-    if (body.length > MAX_ASSET_BYTES) throw new Error("larger than the asset cap");
+    const body = await readCapped(res, Math.min(cap, MAX_ASSET_BYTES)).catch((e) => { throw new Error(e.code === "TOO_LARGE" ? "larger than the asset cap" : e.message); });
     return { type: String(res.headers.get("content-type") ?? "").toLowerCase(), body, final: at.href };
   }
   throw new Error("more than 3 redirects");
@@ -290,6 +467,7 @@ export async function vendor(html, assetsDir, getAsset) {
     if (x.protocol !== "https:") return `not https (${field(x.protocol)})`;
     if (x.username || x.password) return "carries credentials";
     if (!ASSET_HOSTS.includes(x.hostname)) return `host ${field(x.hostname).slice(0, 80)} is not an allowed asset host`;
+    if (x.port !== "") return `names port ${field(x.port).slice(0, 8)}`;
     return null;
   };
   const fetchOne = async (url, depth) => {
@@ -298,18 +476,20 @@ export async function vendor(html, assetsDir, getAsset) {
     if (no) { unresolved.push(`${field(url).slice(0, 160)}: ${no}`); cache.set(url, null); return null; }
     if (assets.length >= MAX_ASSETS) { unresolved.push(`more than ${MAX_ASSETS} assets`); cache.set(url, null); return null; }
     let got;
-    try { got = await getAsset(url); } catch (e) { unresolved.push(`${field(url).slice(0, 160)}: ${field(e.message).slice(0, 80)}`); cache.set(url, null); return null; }
+    // The byte budget left is handed to the fetch, so the total cap stops a read, not only a count after it.
+    try { got = await getAsset(url, MAX_TOTAL_ASSET_BYTES - total); } catch (e) { unresolved.push(`${field(url).slice(0, 160)}: ${field(e.message).slice(0, 80)}`); cache.set(url, null); return null; }
     total += got.body.length;
     if (total > MAX_TOTAL_ASSET_BYTES) { unresolved.push(`assets pass ${MAX_TOTAL_ASSET_BYTES} bytes in all`); cache.set(url, null); return null; }
     let body = got.body;
     // A stylesheet names its own fonts: vendored one level down, relative to the stylesheet itself.
     if (/css/.test(got.type) && depth === 0) {
-      let css = body.toString("utf8");
+      const css = body.toString("utf8");
+      const edits = [];
       for (const ref of remoteLoads(css).filter((r) => r.tag === "css")) {
         const name = await fetchOne(ref.url, 1);
-        if (name) { css = css.split(ref.raw).join(name); rewrites.push({ in: "stylesheet", from: field(ref.raw).slice(0, 200), to: name }); }
+        if (name) { edits.push({ start: ref.start, end: ref.end, text: name }); rewrites.push({ in: "stylesheet", from: field(ref.raw).slice(0, 200), to: name }); }
       }
-      body = Buffer.from(css);
+      body = Buffer.from(applyEdits(css, edits));
     } else if (/css/.test(got.type)) {
       unresolved.push(`${field(url).slice(0, 160)}: a stylesheet imported from a stylesheet`);
       cache.set(url, null);
@@ -321,29 +501,60 @@ export async function vendor(html, assetsDir, getAsset) {
     cache.set(url, name);
     return name;
   };
-  let out = html;
-  for (const ref of remoteLoads(html)) {
+  const loads = remoteLoads(html);
+  for (const why of loads.refuse) unresolved.push(why);
+  const edits = [];
+  for (const ref of loads) {
     // A preconnect or dns-prefetch hint loads nothing, but it opens a socket. Pointed at the page's own
     // origin it left an idle connection the loopback server timed out and recorded, refusing the render
     // (observed on the S3 re-render); about:blank opens none and names no host.
     if (ref.tag === "link" && /^(preconnect|dns-prefetch)$/.test(ref.rel)) {
-      out = out.split(`"${ref.raw}"`).join(`"about:blank"`);
+      edits.push({ start: ref.start, end: ref.end, text: "about:blank" });
       rewrites.push({ in: "html", from: field(ref.raw).slice(0, 200), to: "about:blank" });
       continue;
     }
     const name = await fetchOne(ref.url, ref.tag === "css" ? 1 : 0);
     if (!name) continue;
-    out = out.split(ref.raw).join(`assets/${name}`);
+    edits.push({ start: ref.start, end: ref.end, text: `assets/${name}` });
     rewrites.push({ in: "html", from: field(ref.raw).slice(0, 200), to: `assets/${name}` });
   }
-  // Belt and braces: after the rewrite, the page loads nothing remote. A pattern this reader missed
-  // is caught here rather than by a jury rendering a half-online page.
-  const left = remoteLoads(out).map((r) => r.url);
+  if (unresolved.length) return { unresolved: [...new Set(unresolved)] };
+  let out;
+  try { out = applyEdits(html, edits); } catch (e) { return { unresolved: [field(e.message)] }; }
+  // Belt and braces, by a second reader that shares no list with the first: every tag's markup outside
+  // <a>/<area>, and every <style> body, is searched for anything URL-shaped that is still remote. A
+  // construct the load reader missed is caught here rather than by a jury rendering a half-online page.
+  const left = [...remoteLoads(out).map((r) => r.url), ...remoteLoads(out).refuse, ...strayRemote(out)];
   for (const u of left) if (!unresolved.some((x) => x.startsWith(field(u).slice(0, 160)))) unresolved.push(`${field(u).slice(0, 160)}: still remote after vendoring`);
   return unresolved.length ? { unresolved: [...new Set(unresolved)] } : { html: out, assets, rewrites };
 }
 
+// Any `//host` left in tag markup (attribute names and inert values aside) or in a <style> body, after
+// entity decoding. Coarser than remoteLoads on purpose: it knows no attribute names, so it cannot share
+// remoteLoads' blind spots.
+function strayRemote(html) {
+  const found = [];
+  for (const t of tagsOf(html)) {
+    if (t.name !== "a" && t.name !== "area") {
+      for (const a of t.attrs) {
+        if (/^(xmlns(:.*)?|alt|title|aria-.*|data-.*|content|placeholder|value|itemtype|property)$/.test(a.name) && !(t.name === "meta" && a.name === "content" && /refresh/i.test(t.attrs.find((x) => x.name === "http-equiv")?.value ?? ""))) continue;
+        const m = /(?:^|[^a-z0-9])((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[])/i.exec(urlish(a.value));
+        if (m) found.push(`<${t.name} ${a.name}> ${field(urlish(a.value)).slice(0, 120)}`);
+      }
+    }
+    if (t.text && t.name === "style") {
+      const css = decodeAttr(html.slice(t.text.start, t.text.end)).replace(/\/\*[\s\S]*?\*\//g, "");
+      const m = /(?:^|[^a-z0-9])((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[][^\s"')]*)/i.exec(css);
+      if (m) found.push(`<style> ${field(m[1]).slice(0, 120)}`);
+      if (/url\(\s*["']?[^"')]*\\/i.test(css)) found.push("<style> a url() written with a CSS escape");
+    }
+  }
+  return found;
+}
+
 // ---------- the command ----------
+
+let onCrash = null;
 
 async function draft(argv) {
   const o = parseNamed(argv, new Set(["--brief", "--run", "--provider", ...SEAMS]));
@@ -363,6 +574,10 @@ async function draft(argv) {
   const runRoot = join(ROOT, ".claude", "state", "design", "rivals", briefId, runId);
   const out = join(runRoot, pname);
   mkdirSync(out, { recursive: true });
+  // This run's record starts empty: a receipt or vendor record a failed earlier attempt left behind must
+  // never sit beside this run's outcome (attack 65d01cc B6). The vendored page itself is replaced only
+  // on success, and the jury checks it against the receipt's page hash.
+  for (const f of ["receipt.json", "vendor.json"]) rmSync(join(out, f), { force: true });
   const startedAt = new Date().toISOString();
   const req = buildRequest(provider, briefId, briefText);
   const receipt = {
@@ -372,13 +587,23 @@ async function draft(argv) {
   };
 
   let key = null;
+  let settled = false;
   const settle = (status, detail) => {
+    settled = true;
     receipt.finishedAt = new Date().toISOString();
     receipt.status = status;
     const scrub = (t) => (key ? String(t).split(key).join("<key>") : String(t));
-    writeFileSync(join(out, "receipt.json"), scrub(JSON.stringify(receipt, null, 2)) + "\n");
     const line = `rival ${pname}: ${status === "DRAFTED" ? "DRAFTED" : "COULD-NOT-DRAFT"} ${field(scrub(detail))}`;
-    appendFileSync(join(runRoot, "status.log"), `${receipt.finishedAt}\t${pname}\t${status}\t${field(scrub(detail))}\n`);
+    // The status line is printed even when the record cannot be written; a DRAFTED that cannot be
+    // recorded is not a draft, since the jury deals only on the receipt.
+    try {
+      writeFileSync(join(out, "receipt.json"), scrub(JSON.stringify(receipt, null, 2)) + "\n");
+      appendFileSync(join(runRoot, "status.log"), `${receipt.finishedAt}\t${pname}\t${status}\t${field(scrub(detail))}\n`);
+    } catch (e) {
+      console.log(`rival ${pname}: COULD-NOT-DRAFT (the record could not be written: ${field(e.code ?? e.name ?? "error").slice(0, 40)})`);
+      process.exitCode = 3;
+      return;
+    }
     console.log(line);
     // exitCode, not exit(): exiting while fetch's socket is closing trips a libuv assertion on
     // Windows (observed on the S2 contract run, exit 127 after a good draft).
@@ -389,10 +614,19 @@ async function draft(argv) {
     receipt.reason = reason;
     settle("COULD-NOT-DRAFT", `(${reason})`);
   };
+  // Anything thrown from here on is the provider attempt failing, not a usage error: one status line and
+  // exit 3, never a stack trace and the usage code 1 (attack 65d01cc B11).
+  onCrash = (e) => { if (!settled) fail(`internal error ${field(e?.code ?? e?.name ?? "Error").replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 40) || "Error"}`, e); };
 
   // The key first: no key is the provider's outcome, not a usage error, so the jury still degrades on it.
-  const { resolveKey } = await import(pathToFileURL(join(ROOT, ".claude", "scripts", "hq", "lib", "keys.mjs")).href);
-  key = resolveKey(provider.keyName);
+  // A seamed (fake) run never opens the owner's key store: its key, if any, is the one the test put in the
+  // environment, so a fake run can never be exercised with the real key (attack 65d01cc L10).
+  if (seamed.length) {
+    key = process.env[provider.keyName] || null;
+  } else {
+    const { resolveKey } = await import(pathToFileURL(join(ROOT, ".claude", "scripts", "hq", "lib", "keys.mjs")).href);
+    key = resolveKey(provider.keyName);
+  }
   if (!key) return fail("no key");
 
   if (o["--record-request"] != null) {
@@ -406,12 +640,14 @@ async function draft(argv) {
       answer = JSON.parse(readFileSync(o["--fake-answer"], "utf8"));
     } else {
       runDir = mkdtempSync(join(tmpdir(), "arc-rival-"));
-      const entry = sdkEntry(provider, runDir);
-      if (!entry) return fail("install failed");
-      answer = await childTransport(provider, entry, key, req, runDir);
+      const sdk = sdkEntry(provider, runDir);
+      if (!sdk) return fail("install failed");
+      receipt.sdk_tree_sha256 = sdk.tree;
+      answer = await childTransport(provider, sdk.entry, key, req, runDir);
     }
   } finally {
-    if (runDir) rmSync(runDir, { recursive: true, force: true });
+    // A dir a dying child still holds (EBUSY on Windows) is left for the OS temp sweep, not thrown.
+    if (runDir) { try { rmSync(runDir, { recursive: true, force: true, maxRetries: 3 }); } catch { /* temp dir, swept later */ } }
   }
   if (!answer || answer.ok !== true) {
     const err = answer && answer.error ? answer.error : { name: "NoAnswer", code: "NO_ANSWER", message: "no answer" };
@@ -434,23 +670,46 @@ async function draft(argv) {
   writeFileSync(join(out, "draft.raw.html"), body);
   receipt.html = { bytes: body.length, sha256: sha(body) };
   // Vendored into the explore's gitignored rival dir, where the ordinary renderer serves it like a variant.
-  const rivalDir = join(ROOT, "docs", "design", "explore", runId, `rival-${pname}`);
-  rmSync(rivalDir, { recursive: true, force: true });
-  mkdirSync(join(rivalDir, "assets"), { recursive: true });
+  // A symlink or junction anywhere on the way is refused before anything is removed or written: a
+  // recursive remove follows a Windows junction, and a write through one lands outside the explore
+  // (attack 65d01cc B5).
+  const exploreRoot = join(ROOT, "docs", "design", "explore");
+  const exploreDir = join(exploreRoot, runId);
+  const rivalDir = join(exploreDir, `rival-${pname}`);
+  for (const p of [join(ROOT, "docs"), join(ROOT, "docs", "design"), exploreRoot, exploreDir, rivalDir]) {
+    let st = null;
+    try { st = lstatSync(p); } catch { st = null; }
+    if (st && (st.isSymbolicLink() || !st.isDirectory())) return fail(`unusable answer (${p.slice(ROOT.length + 1).split(sep).join("/")} is a link or not a directory)`);
+  }
+  // Vendored into a staging dir under this run's own state, and moved into place only on success: a
+  // failed attempt never removes a page an earlier run made, and never leaves a half-written one.
+  const stage = join(out, "stage");
+  rmSync(stage, { recursive: true, force: true });
+  mkdirSync(join(stage, "assets"), { recursive: true });
   const getAsset = o["--fake-assets"] != null ? fakeAssets(o["--fake-assets"]) : realAsset;
-  const v = await vendor(body.toString("utf8"), join(rivalDir, "assets"), getAsset);
+  const v = await vendor(body.toString("utf8"), join(stage, "assets"), getAsset);
   if (v.unresolved) {
-    rmSync(rivalDir, { recursive: true, force: true });
+    rmSync(stage, { recursive: true, force: true });
     receipt.unresolved = v.unresolved;
     return fail(`not self-contained (${v.unresolved.length} unresolved: ${v.unresolved[0].slice(0, 120)})`);
   }
-  writeFileSync(join(rivalDir, "index.html"), v.html);
-  writeFileSync(join(out, "vendor.json"), JSON.stringify({ hosts: ASSET_HOSTS, assets: v.assets, rewrites: v.rewrites, page: { bytes: Buffer.byteLength(v.html), sha256: sha(v.html) } }, null, 2) + "\n");
-  receipt.vendored = { assets: v.assets.length, bytes: v.assets.reduce((n, a) => n + a.bytes, 0), page: `docs/design/explore/${runId}/rival-${pname}/index.html` };
+  writeFileSync(join(stage, "index.html"), v.html);
+  mkdirSync(exploreDir, { recursive: true });
+  rmSync(rivalDir, { recursive: true, force: true });
+  renameSync(stage, rivalDir);
+  const pageSha = sha(v.html);
+  writeFileSync(join(out, "vendor.json"), JSON.stringify({ hosts: ASSET_HOSTS, assets: v.assets, rewrites: v.rewrites, page: { bytes: Buffer.byteLength(v.html), sha256: pageSha } }, null, 2) + "\n");
+  receipt.vendored = { assets: v.assets.length, bytes: v.assets.reduce((n, a) => n + a.bytes, 0), page: `docs/design/explore/${runId}/rival-${pname}/index.html`, page_sha256: pageSha };
   const shortId = receipt.screen.id ? `, screen ${receipt.screen.id.slice(0, 12)}` : "";
   return settle("DRAFTED", `${body.length} bytes, ${v.assets.length} assets vendored (stitch-sdk ${provider.pkg.slice(provider.pkg.lastIndexOf("@") + 1)}${shortId})`);
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
-if (cmd === "draft") await draft(rest);
-else usage("usage: design-rival.mjs draft --brief <brief-id> --run <run-id> [--provider stitch]");
+// Run as a command only when this file IS the command, both sides realpath'd (a symlinked checkout
+// otherwise compares unequal and the command silently does nothing), so the pure parts can be imported.
+const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.url))) {
+  const [cmd, ...rest] = process.argv.slice(2);
+  if (cmd === "draft") {
+    try { await draft(rest); } catch (e) { if (onCrash) onCrash(e); else throw e; }
+  } else usage("usage: design-rival.mjs draft --brief <brief-id> --run <run-id> [--provider stitch]");
+}

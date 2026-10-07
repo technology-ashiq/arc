@@ -884,20 +884,33 @@ EOF
     [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
     command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the rival adapter needs it" >&2; exit 1; }
     PROVIDER="stitch"
-    RFLAGS=""
+    # An array, expanded quoted, and each value held to its own grammar: a word-split string let a
+    # `--viewport` value smuggle a second `--session` into the renderer (attack 65d01cc B8, L13).
+    RFLAGS=()
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --provider)
           [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
           PROVIDER="$2"; shift 2;;
-        --viewport|--media)
+        --viewport)
           [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
-          RFLAGS="$RFLAGS $1 $2"; shift 2;;
+          case "$2" in
+            ""|*[!0123456789x]*|x*|*x|*x*x*) echo "design-explore: --viewport takes WxH, got '$(printf '%s' "$2" | cut -c1-40)'" >&2; exit 1;;
+            *x*) ;;
+            *) echo "design-explore: --viewport takes WxH, got '$(printf '%s' "$2" | cut -c1-40)'" >&2; exit 1;;
+          esac
+          RFLAGS+=("$1" "$2"); shift 2;;
+        --media)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          case "$2" in
+            ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: --media takes a lowercase keyword" >&2; exit 1;;
+          esac
+          RFLAGS+=("$1" "$2"); shift 2;;
         *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
       esac
     done
     case "$PROVIDER" in
-      ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: --provider must be lowercase kebab" >&2; exit 1;;
+      ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|con|prn|aux|nul|com[0123456789]|lpt[0123456789]) echo "design-explore: --provider must be lowercase kebab, not a device name" >&2; exit 1;;
     esac
     BRIEF_LINE="$(grep '^brief=' "$EX/explore.txt" 2>/dev/null | head -1)"
     BRIEF_ID="${BRIEF_LINE#brief=docs/design/briefs/}"
@@ -906,9 +919,7 @@ EOF
       ""|-*|*/*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: explore.txt names no brief under docs/design/briefs/<id>/brief.md" >&2; exit 1;;
     esac
     node "$DESIGN_DIR/design-rival.mjs" draft --brief "$BRIEF_ID" --run "$ID" --provider "$PROVIDER" || exit $?
-    # RFLAGS is a deliberately word-split flag list, built only from values the loop above validated.
-    # shellcheck disable=SC2086
-    bash "$DESIGN_DIR/design-render.sh" "docs/design/explore/$ID/rival-$PROVIDER/index.html" --mode explore --session "$ID--rival-$PROVIDER" $RFLAGS
+    bash "$DESIGN_DIR/design-render.sh" "docs/design/explore/$ID/rival-$PROVIDER/index.html" --mode explore --session "$ID--rival-$PROVIDER" ${RFLAGS[@]+"${RFLAGS[@]}"}
     exit $?
     ;;
 

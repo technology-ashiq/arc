@@ -360,7 +360,8 @@ _rival_fixture() {
   printf '<main>rival</main>\n' > docs/design/explore/jx/rival-stitch/index.html
   png="$sess/r-1440x900.png"; _png "$png" "rival-stitch"; sha="$(_sha "$png")"
   printf '{\n  "route": "/",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "1440x900@1",\n  "session": "jx--rival-stitch",\n  "iter": 0,\n  "unchanged": false\n}\n' "$png" "$sha" > "$sess/r-1440x900.json"
-  printf '{"provider":"stitch","sdk":"@google/stitch-sdk@0.3.5","status":"%s"}\n' "$status" > .claude/state/design/rivals/bx/jx/stitch/receipt.json
+  printf '{"provider":"stitch","sdk":"@google/stitch-sdk@0.3.5","status":"%s","vendored":{"page_sha256":"%s"}}\n' "$status" "$(_sha docs/design/explore/jx/rival-stitch/index.html)" > .claude/state/design/rivals/bx/jx/stitch/receipt.json
+  grep -qE '"page_sha256":"[0-9a-f]{64}"' .claude/state/design/rivals/bx/jx/stitch/receipt.json || { echo "fixture: no page hash in the receipt"; return 1; }
   printf '2026-10-07T00:00:00.000Z\tstitch\t%s\t(quota)\n' "$status" > .claude/state/design/rivals/bx/jx/status.log
   [ -s "$sess/r-1440x900.json" ] || { echo "fixture: no rival render meta"; return 1; }
 }
@@ -370,7 +371,7 @@ _label_of() { node -e 'const k=require(process.argv[1]);process.stdout.write(k.i
   _fixture 3 1; _rival_fixture DRAFTED
   run --separate-stderr bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
   [ "$status" -eq 0 ] || { echo "the deal failed: $status $output $stderr"; false; }
-  node -e 'const k=require(process.argv[1]);const r=k.items.filter(i=>i.kind==="rival");const v=k.items.filter(i=>i.kind==="variant");if(k.n!==5||r.length!==1||r[0].provenance!=="rival:stitch@@google/stitch-sdk@0.3.5"||!v.every(i=>i.provenance==="arc")||k.items.find(i=>i.kind==="reference").provenance!=="reference")process.exit(1)' "$(_jury_dir)/key.json" \
+  node -e 'const k=require(process.argv[1]);const r=k.items.filter(i=>i.kind==="rival");const v=k.items.filter(i=>i.kind==="variant");if(k.n!==5||r.length!==1||r[0].provenance!=="rival:stitch@0.3.5"||!v.every(i=>i.provenance==="arc")||k.items.find(i=>i.kind==="reference").provenance!=="reference")process.exit(1)' "$(_jury_dir)/key.json" \
     || { echo "the key does not carry one rival with its provenance: $(cat "$(_jury_dir)/key.json")"; false; }
   # The items dir is labels only: five files, every name item-<letter>.png, nothing that says rival.
   [ "$(ls "$(_jury_dir)/items" | wc -l | tr -d ' ')" -eq 5 ] || { echo "not five items"; false; }
@@ -431,9 +432,97 @@ _label_of() { node -e 'const k=require(process.argv[1]);process.stdout.write(k.i
   [[ "$output" == *'"rivalBeatsAllArc":false'* ]] || { echo "the loss was not on the spine: $output"; false; }
 }
 
+# ---------- attack 65d01cc round 1 ----------
+
+@test "jury: a rival name that is a device name or ends in a hyphen is refused, here and in the renderer (B7)" {
+  _fixture 3 1
+  local p
+  for p in con a- nul lpt1; do
+    run bash "$(_explore)" jury jx --n 4 --seed 7 --rival "$p" "${REFS[@]}"
+    [ "$status" -eq 1 ] && [[ "$output" == *"--rival takes a provider name"* ]] || { echo "--rival $p was not refused: $status $output"; false; }
+  done
+  run bash "$SANDBOX/.claude/scripts/design/design-render.sh" docs/design/explore/jx/rival-con/index.html --mode explore --session jx--rival-con
+  [ "$status" -eq 1 ] && [[ "$output" == *"rival-<lowercase kebab provider>"* ]] || { echo "the renderer took rival-con: $status $output"; false; }
+}
+
+@test "jury: a rival page that is not the page its receipt vendored, or a receipt with no pinned version, is refused (B6, L3)" {
+  _fixture 3 1; _rival_fixture DRAFTED
+  printf '<main>changed after drafting</main>\n' > docs/design/explore/jx/rival-stitch/index.html
+  run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"is not the page its receipt vendored"* ]] || { echo "a changed page was dealt: $status $output"; false; }
+  _rival_fixture DRAFTED
+  sed -i 's#"sdk":"@google/stitch-sdk@0.3.5",##' .claude/state/design/rivals/bx/jx/stitch/receipt.json
+  ! grep -q '"sdk"' .claude/state/design/rivals/bx/jx/stitch/receipt.json || { echo "fixture: sdk not removed"; false; }
+  run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"names no pinned package version"* ]] || { echo "a versionless rival was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal left a jury dir"; false; }
+}
+
+@test "jury: two different renders at one iter are refused, never settled by directory order (L2)" {
+  _fixture 3 1
+  local sess=".claude/state/design/renders/jx--variant-a" png sha
+  png="$sess/r-copy-1440x900.png"; _png "$png" "variant-a-other"; sha="$(_sha "$png")"
+  printf '{\n  "route": "/",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "1440x900@1",\n  "session": "jx--variant-a",\n  "iter": 1,\n  "unchanged": false\n}\n' "$png" "$sha" > "$sess/r-copy-1440x900.json"
+  [ "$(ls "$sess" | grep -c '\.json$')" -eq 2 ] || { echo "fixture: second meta not written"; false; }
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"two different renders at iter 1"* ]] || { echo "a tie was dealt: $status $output"; false; }
+}
+
+# Deal with a rival, rank it, check, and score: rival $1, every arc $2, reference 70.
+_rival_scored() {
+  run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "deal: $output"; return 1; }
+  riv="$(_label_of rival)"; arcs="$(_label_of variant)"; ref="$(_label_of reference)"
+  _ranking 1 "$arcs $ref $riv"
+  run bash "$(_explore)" jury-check jx
+  [ "$status" -eq 0 ] || { echo "check: $output"; return 1; }
+  local scores="$riv=$1" l
+  for l in $arcs; do scores="$scores,$l=$2"; done
+  run bash "$(_explore)" score jx --scores "$scores,$ref=70"
+  [ "$status" -eq 0 ] || { echo "score: $output"; return 1; }
+}
+
+@test "unblind: the rival rate is refused on checked rankings from another deal (L5)" {
+  _fixture 3 1; _rival_fixture DRAFTED; _adr1411
+  _rival_scored 50 60
+  node -e 'const f=process.argv[1],r=require(f);r.id="another-explore";require("fs").writeFileSync(f,JSON.stringify(r))' "$(_jury_dir)/result.json"
+  run bash "$(_explore)" unblind jx
+  [ "$status" -eq 1 ] && [[ "$output" == *"this deal's checked rankings"* ]] || { echo "a foreign result.json was counted: $status $output"; false; }
+  [ ! -e "$(_jury_dir)/unblind.json" ] || { echo "the refused unblinding was written"; false; }
+}
+
+@test "unblind: a tie is named as a tie, and is not a rival win (L6)" {
+  _fixture 3 1; _rival_fixture DRAFTED; _adr1411
+  _rival_scored 60 60
+  run bash "$(_explore)" unblind jx
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"rival-beats-all-arc -- owner no (a tie) (rival 60 vs best arc 60)"* ]] || { echo "the tie was not named: $output"; false; }
+  node -e 'const u=require(process.argv[1]).rivalBeatsAllArc;if(u.owner.tie!==true||u.owner.rivalBeatsAllArc!==false)process.exit(1)' "$(_jury_dir)/unblind.json"
+}
+
+@test "unblind: a receipt that cannot be emitted is a non-zero exit, with the payload kept for the main clone (B12)" {
+  _fixture 3 1; _rival_fixture DRAFTED; _adr1411
+  _rival_scored 50 60
+  rm -f "$SANDBOX/.claude/scripts/hq/arc-event.sh"
+  [ ! -e "$SANDBOX/.claude/scripts/hq/arc-event.sh" ] || { echo "fixture: emitter still there"; false; }
+  run bash "$(_explore)" unblind jx
+  [ "$status" -eq 4 ] || { echo "a missing receipt exited $status: $output"; false; }
+  [[ "$output" == *"note.logged receipt NOT emitted"* ]] && [[ "$output" == *"rival-rate.payload.json"* ]] || { echo "$output"; false; }
+  grep -q '"what":"rival-beats-all-arc"' "$(_jury_dir)/rival-rate.payload.json"
+  [ -f "$(_jury_dir)/unblind.json" ] || { echo "the unblinding itself was not written"; false; }
+}
+
+@test "explore rival: a --viewport value cannot smuggle a second flag into the renderer (B8, L13)" {
+  _fixture 3 1
+  run bash "$(_explore)" rival jx --viewport "1440x900 --session x"
+  [ "$status" -eq 1 ] && [[ "$output" == *"--viewport takes WxH"* ]] || { echo "the smuggled flag was not refused: $status $output"; false; }
+  run bash "$(_explore)" rival jx --media "dark --session x"
+  [ "$status" -eq 1 ] && [[ "$output" == *"--media takes a lowercase keyword"* ]] || { echo "$status $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 23 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 23 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 30 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 30 -- a @test was silently dropped"
     false
   }
 }

@@ -136,6 +136,8 @@ function deal(argv) {
       if (!m || m.viewport !== `${viewport}@1` || typeof m.png !== "string" || !/^[0-9a-f]{64}$/.test(m.screenshot_sha256 || "")) continue;
       const iter = Number.isInteger(m.iter) ? m.iter : 0;
       if (best && best.iter === iter && best.m.route !== m.route) fail(`${v} has two routes rendered at ${viewport}; the jury judges one screen per variant`);
+      // Two different renders at one iter: which is dealt would be readdir's order, not the explore's (attack 65d01cc L2).
+      if (best && best.iter === iter && best.m.screenshot_sha256 !== m.screenshot_sha256) fail(`${v} has two different renders at iter ${iter} and ${viewport}; render it again so one is the latest`);
       if (!best || iter > best.iter) best = { m, iter };
     }
     if (!best) fail(`${v} has no render at ${viewport} (render it first)`);
@@ -155,7 +157,8 @@ function deal(argv) {
   const seenRival = new Set();
   let rivalsLeftOut = 0;
   for (const p of rivals) {
-    if (!/^[a-z][a-z0-9-]{0,31}$/.test(p)) fail(`--rival takes a provider name, got '${p}'`);
+    // The name becomes the path rival-<p>, so it carries the reserved-device half of the grammar too (attack 65d01cc B7).
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(p) || p.endsWith("-") || /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/.test(p)) fail(`--rival takes a provider name, got '${p}'`);
     if (seenRival.has(p)) fail(`--rival ${p} given twice`);
     seenRival.add(p);
     const recFile = join(root, ".claude", "state", "design", "rivals", ex.brief, basename(ex.dir), p, "receipt.json");
@@ -171,8 +174,17 @@ function deal(argv) {
       rivalsLeftOut++;
       continue;
     }
+    // The page on disk must be the page this receipt vendored: a failed later attempt leaves an earlier page
+    // in place, and a receipt is only about the bytes it hashed (attack 65d01cc B6).
+    const pageSha = rec.vendored && typeof rec.vendored.page_sha256 === "string" ? rec.vendored.page_sha256 : "";
+    if (!/^[0-9a-f]{64}$/.test(pageSha)) fail(`the ${p} receipt says DRAFTED but records no vendored page hash; draft it again`);
+    if (sha256(readRegular(page, `the ${p} page`)) !== pageSha) fail(`rival-${p}/index.html is not the page its receipt vendored; draft it again`);
+    // The version is the stamp Phase 08's packager refuses on, so a receipt without one is refused here rather
+    // than dealt as `rival:<p>@` (attack 65d01cc L3), and the stamp is rival:<p>@<version>, one `@` (L15).
+    const ver = /^(@?[a-z0-9][a-z0-9._/-]*)@([0-9][0-9A-Za-z.+-]{0,40})$/.exec(String(rec.sdk ?? ""));
+    if (!ver) fail(`the ${p} receipt names no pinned package version (sdk '${clean(String(rec.sdk ?? "")).slice(0, 60)}')`);
     const r = latestRender(`rival-${p}`);
-    items.push({ kind: "rival", source: `rival-${p}`, provenance: `rival:${p}@${String(rec.sdk ?? "").replace(/[^A-Za-z0-9@./_-]/g, "").slice(0, 60)}`, path: r.file, sha256: r.sha, ext: extname(r.file).toLowerCase() });
+    items.push({ kind: "rival", source: `rival-${p}`, provenance: `rival:${p}@${ver[2]}`, path: r.file, sha256: r.sha, ext: extname(r.file).toLowerCase() });
   }
   // References: each --ref is one pack image, bound to a provenance row in the brief's sources.md.
   const packDir = join(root, ".claude", "state", "design", "refpacks", ex.brief);
@@ -350,10 +362,9 @@ function score(argv) {
   writeOnce(join(ex.jury, "score.json"), rec, "the owner's score");
   // The receipt ADR-1411 asks for. The file above is the ordering proof; the spine refuses from a linked worktree
   // by design, so its answer is reported, never assumed.
-  const payload = JSON.stringify({ lens: "design", what: "owner blind score", explore: key.id, scored: rec.scored, scores });
-  const em = spawnSync("bash", [join(root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", "note.logged", "--payload", payload], { encoding: "utf8" });
-  console.log(`design-explore score: note.logged receipt ${em.status === 0 ? "emitted" : `NOT emitted (${clean(String(em.stderr || em.error || "").split("\n").find(Boolean) || `exit ${em.status}`).slice(0, 160)})`}`);
+  const emitted = emitNote(root, join(ex.jury, "score.payload.json"), { lens: "design", what: "owner blind score", explore: key.id, scored: rec.scored, scores }, "score");
   console.log(`design-explore score: ${labels.length} item(s) scored blind at ${rec.scored}; unblind next`);
+  if (!emitted) process.exitCode = 4;
 }
 
 function unblind(argv) {
@@ -377,27 +388,47 @@ function unblind(argv) {
   if (riv) {
     const arcLabels = new Set(key.items.filter((i) => i.kind === "variant").map((i) => i.label));
     const rivLabels = new Set(key.items.filter((i) => i.kind === "rival").map((i) => i.label));
+    const allLabels = new Set(key.items.map((i) => i.label));
+    // The jury half of the rate is read from the CHECKED rankings of THIS deal: a result.json from an earlier
+    // deal, or one checked before this deal was made, is refused rather than counted (attack 65d01cc L5).
     let res = null;
-    try { res = JSON.parse(readFileSync(join(ex.jury, "result.json"), "utf8")); } catch { res = null; }
-    const valid = (res && Array.isArray(res.rankings) ? res.rankings : []).filter((r) => r && r.valid && Array.isArray(r.ranked));
+    try { res = JSON.parse(readRegular(join(ex.jury, "result.json"), "the checked rankings (result.json)").toString("utf8")); } catch { res = null; }
+    if (!res || res.id !== key.id || res.n !== key.n || !(Date.parse(res.checked) >= Date.parse(key.dealt)) || !Array.isArray(res.rankings)) {
+      fail("the rival rate is read from this deal's checked rankings; run jury-check on this deal before unblinding");
+    }
+    const valid = res.rankings.filter((r) => r && r.valid && Array.isArray(r.ranked));
+    for (const r of valid) if (r.ranked.length !== key.n || r.ranked.some((x) => !allLabels.has(x))) fail("a checked ranking names items this deal does not have; run jury-check again");
     const beats = valid.filter((r) => {
       const rp = r.ranked.findIndex((x) => rivLabels.has(x));
       const ap = r.ranked.findIndex((x) => arcLabels.has(x));
       return rp >= 0 && ap >= 0 && rp < ap;
     }).length;
-    rivalRate = { owner: { rival: riv.score, bestArc: arc.score, rivalBeatsAllArc: riv.score > arc.score }, jury: { beats, of: valid.length } };
+    // A tie is not a win (the sealed prediction is "beats"), and it is NAMED, so the record is unambiguous (L6).
+    rivalRate = { owner: { rival: riv.score, bestArc: arc.score, rivalBeatsAllArc: riv.score > arc.score, tie: riv.score === arc.score }, jury: { beats, of: valid.length } };
   }
   writeOnce(join(ex.jury, "unblind.json"), { id: key.id, unblinded: at, scored: sc.scored, rows, bestArc: arc, bestControl: ctl, bestReference: ref, bestRival: riv, bar, rivalBeatsAllArc: rivalRate }, "the unblinding");
   // The key and the score are files on disk; what they carry is printed as text, never as terminal control (S4 attack B3).
   for (const r of rows) console.log(clean(`design-explore unblind: ${r.label} = ${r.kind} ${r.source} -- ${r.score}/100`));
   console.log(clean(`design-explore unblind: best arc ${arc.score}${ctl ? `, plain-prompt control ${ctl.score} (${bar.beats ? "arc beats it" : "arc does NOT beat it"})` : ", no control in this deal"}${ref ? `, reference ${ref.score}` : ""}`));
   if (rivalRate) {
-    console.log(clean(`design-explore unblind: rival-beats-all-arc -- owner ${rivalRate.owner.rivalBeatsAllArc ? "YES" : "no"} (rival ${riv.score} vs best arc ${arc.score}), jury ${rivalRate.jury.beats} of ${rivalRate.jury.of} valid ranking(s)`));
+    console.log(clean(`design-explore unblind: rival-beats-all-arc -- owner ${rivalRate.owner.rivalBeatsAllArc ? "YES" : rivalRate.owner.tie ? "no (a tie)" : "no"} (rival ${riv.score} vs best arc ${arc.score}), jury ${rivalRate.jury.beats} of ${rivalRate.jury.of} valid ranking(s)`));
     if (rivalRate.owner.rivalBeatsAllArc) console.log("design-explore unblind: a rival win routes to design-director for a NEW thesis; its markup is never copied (Phase 07)");
-    const payload = JSON.stringify({ lens: "design", what: "rival-beats-all-arc", explore: key.id, unblinded: at, ...rivalRate });
-    const em = spawnSync("bash", [join(root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", "note.logged", "--payload", payload], { encoding: "utf8" });
-    console.log(`design-explore unblind: note.logged receipt ${em.status === 0 ? "emitted" : `NOT emitted (${clean(String(em.stderr || em.error || "").split("\n").find(Boolean) || `exit ${em.status}`).slice(0, 160)})`}`);
+    // The sealed prediction's receipt is not optional: a failed emit is a non-zero exit, with the payload kept
+    // beside the unblinding so the same receipt can be emitted from the main clone (attack 65d01cc B12).
+    if (!emitNote(root, join(ex.jury, "rival-rate.payload.json"), { lens: "design", what: "rival-beats-all-arc", explore: key.id, unblinded: at, ...rivalRate }, "unblind")) process.exitCode = 4;
   }
+}
+
+// One note.logged receipt: the payload goes through a file (never argv, which MSYS bash rewrites), the emit
+// is bounded in time, and the answer is read. Returns true when emitted.
+function emitNote(root, payloadFile, payload, step) {
+  writeFileSync(payloadFile, `${JSON.stringify(payload)}\n`);
+  const script = join(root, ".claude", "scripts", "hq", "arc-event.sh");
+  const em = spawnSync("bash", [script, "emit", "note.logged", "--payload-file", payloadFile], { encoding: "utf8", timeout: 60000 });
+  if (em.status === 0) { console.log(`design-explore ${step}: note.logged receipt emitted`); return true; }
+  const why = em.error ? (em.error.code === "ETIMEDOUT" ? "timed out" : em.error.code || em.error.message) : String(em.stderr || "").split("\n").find(Boolean) || `exit ${em.status}`;
+  console.log(clean(`design-explore ${step}: note.logged receipt NOT emitted (${clean(String(why)).slice(0, 160)}); the payload is kept at ${relative(root, payloadFile).split(sep).join("/")} -- emit it from the main clone: bash .claude/scripts/hq/arc-event.sh emit note.logged --payload-file <that file>`));
+  return false;
 }
 
 function catchRate(argv) {
