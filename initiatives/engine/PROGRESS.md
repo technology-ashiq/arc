@@ -1,10 +1,10 @@
 # PROGRESS.md — Cycle 8 · arc-engine "Governed Fallback"
 
-status: LIVE
+status: IDLE
 cycle: arc-engine (Cycle 8, opened 2026-10-07)
-phase: 09
+phase: 10 (cycle closed)
 appetite: 3d
-burn: 0.5d
+burn: 1.5d
 blocked-on: —
 depends-on: —
 
@@ -19,14 +19,38 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — **parked, shipped in Cycle 6** | — | ✅ done 2026-08-03 |
-| 09 | Steel thread for ENG-H — classifier, `nextHop`, sidecar class, mock replay, hop record, invariants (a)(b)(d) + mutant | 1.25 days | in progress |
-| 10 | Chain terms at load, refuse-before-spend (invariant c), real-driver declarations, attack, close | 1.25 days | pending |
+| 09 | Steel thread for ENG-H — classifier, `nextHop`, sidecar class, mock replay, hop record, invariants (a)(b)(d) + mutant | 1.25 days | ✅ done 2026-10-07 |
+| 10 | Chain terms at load, refuse-before-spend (invariant c), real-driver declarations, attack, close | 1.25 days | ✅ done 2026-10-07 |
 
-**Appetite burn: 0.5 of 3 days used (17%)** — set 2026-10-07: the `/arc-change` routing, the design-source
+**Appetite burn: 1.5 of 3 days used (50%) — CYCLE CLOSED 2026-10-07, both phases inside the cap.** Was 0.5 of 3 (17%) — set 2026-10-07: the `/arc-change` routing, the design-source
 amendment and this kickoff, one session. Phases allocate 2.5 of 3 (83%). Kill checkpoint at 1.5 days: Phase 09 not
 done → scope cut (REQ-11's claude-code/codex declarations stay `unknown`).
 
 ## Done log
+
+- 2026-10-07 — **PHASES 09 AND 10 CLOSED. CYCLE 8 CLOSED. 2/2 phases, 4/4 REQ validated (REQ-08..11).**
+  `amendments: 1` (ADR-0228 items 6/7 and F3 refined by kickoff evidence and by the attack rounds) · `reopened: n`.
+  **Actual vs appetite: 1.5 of 3 days (50%), one long day including CI waits; the kill checkpoint at 1.5 days found
+  Phase 09 done.**
+  - **CI 19/19, read per job**, run 37609810462 at `f3c00fb0` (= local HEAD). Ubuntu 22 leg: **4320 of 4320 ok**.
+    `tests/engine-failure-class.bats` on every leg: unit 58, invariants 20, mutants 13, drivers 15, exact counts.
+  - **The four invariants hold through the real arc-run**, the second driver counted by its own hits: (a) transport
+    hops, a contract fault hops across families once and stops at 2 attempts; (b) policy-refusal leaves the count at 0;
+    (c) a term breach refuses before spend and `nextHop` replays identically; (d) undeclared is `unknown` and does not
+    hop. **Five mutants of `failure-class.mjs`, each killing a named invariant.**
+  - **Two adversarial rounds, two surfaces: 32 findings, 23 fixed, 9 rejected with one line each, 0 left for the
+    debt ledger.** Plus a self-review that found the m1/m2 mutants would have died for the wrong reason.
+  - **CI's first run found three defects in this cycle's own tests**, none in the product: a check matching a comment,
+    two checks matching round 1's new stop line, and a profile fixture whose undeclared CLI failure the new rule
+    correctly refused to hop on — the old suite had been asserting the behaviour this cycle removes.
+  - **A run never created for a pushed SHA, for three hours**: `docs/wiki/index.md` conflicted with main, and GitHub
+    builds no `refs/pull/N/merge` for a conflicting PR. Resolved by regenerating the wiki on the merged tree.
+  - **What this does NOT claim:** no real provider was called; `max_cost` binds nothing live (every row
+    `unmetered`); `max_wall_ms` is an uncalibrated 1-hour ceiling; claude-code and codex chains do not hop on CLI
+    failures past launch (A-08 FIRED, as pre-decided). Evidence: `evidence/phase-09/`, `evidence/phase-10/`, both
+    bundles VERIFIED.
+  - **Face flake, not engine debt:** `face-browser` front-door `org-who` (light mood) red once on ubuntu 20, green on
+    rerun; a different face check red once on ubuntu 22 the run before. The branch touches no face file.
 
 - 2026-10-07 — `/arc-kickoff --lane engine`, Tier S. Cycle 7 archived; `PLAN.md`, phase specs 09–10 and
   **ADR-0228** written. Design source amended first (§ Amendment 1, commit `0bda9a51`).
@@ -45,9 +69,9 @@ done → scope cut (REQ-11's claude-code/codex declarations stay `unknown`).
 
 ## Now
 
-**Position:** Phases 09 and 10 BUILT on branch `feat/engine-failure-classifier` (worktree `arc-engine-change`, **not
+**Position:** CYCLE 8 CLOSED; phases 09 and 10 ✅. Built on branch `feat/engine-failure-classifier` (worktree `arc-engine-change`, **not
 merged yet** — invisible in the face until merge + pull). Commits `27dcf392` (build) and `a4e3f332` (round-1 fixes).
-**Next:** round 2, push once, CI per job, close both phases.
+**Next:** merge PR #375 on green, then from the MAIN clone: the owed receipts below, and a `workflow_dispatch` on `main`.
 
 **Kickoff attack panel (Tier S, one merged A+C plan-attacker run): 7 findings, 6 applied, 1 rejected.** Applied:
 F1 the schema ladder must not retry after a cross-family hop (2 attempts, never 3); F2 a deadline-edge transport

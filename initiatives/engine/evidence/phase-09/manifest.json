@@ -1,0 +1,32 @@
+{
+  "phase": "09",
+  "commit": "f3c00fb0815aeacefd1542cbe0e07b0e5708e65a",
+  "short": "f3c00fb0",
+  "generated": "2026-10-07T12:54:52Z",
+  "files": [
+    {
+      "name": "attack-27dcf39-r1-boundary.json",
+      "sha256": "02974deb774f164dac98c47a82998b261e30cb57d5e42ac482c36b1f966e3531"
+    },
+    {
+      "name": "attack-27dcf39-r1-logic.json",
+      "sha256": "866565536c1378c9ba4f31d4735dfe720797e874b8e1be69b6161d494daa89b5"
+    },
+    {
+      "name": "attack-a4e3f33-r2-boundary.json",
+      "sha256": "f55f2db570e88623c060897b9d8b40fa0317d9cbcb490ef4d6b082891a4ded0f"
+    },
+    {
+      "name": "attack-a4e3f33-r2-logic.json",
+      "sha256": "61d10e2857f0a19e55483504f906dadc3e0a816864896531c811b57d60ce6fd5"
+    },
+    {
+      "name": "ci-results.md",
+      "sha256": "2c3f5c1510404104f5f045bc4e35bc526be688b244ef58205a50b6fb5b58ee4b"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "4e98e70cdcb826d0a80ec92706f1d456fc08a12ab9c796a60d2966eda6a7fcaa"
+    }
+  ]
+}
