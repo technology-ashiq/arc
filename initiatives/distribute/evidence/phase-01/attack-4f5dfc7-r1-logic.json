@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "gate-parity.mjs:96-118 (batsTestBody)",
+      "breaking_input": "A merge_time test whose @test line is `@test \"name\" {` followed by a nested `}` inside a conditional or a here-doc line `}` at column 0, e.g. a test body containing a line `}` inside a multi-line command substitution. The body scanner stops at the first top-level `}` and may truncate the body, so a `skip` that appears AFTER that early `}` is not seen.",
+      "why": "batsTestBody collects lines until the first line equal to `}`; a bats test may legitimately contain a `}` line inside a here-doc or a command substitution. A mutant that inserts `skip` after such a line escapes the skip check, so the merge-time truth can skip and gate-parity still reports 0 gaps.",
+      "fix": "Parse the test body with a brace-depth counter that ignores `}` inside quotes/here-docs, or run the bats test with a `--filter` and assert it does not skip.",
+      "twin_of": "(j) vacuous pass"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "gate-parity.mjs:82-88 (gateNames)",
+      "breaking_input": "arc.gates.yaml with `gates: [{name: \"scan\"}, {name: \"scan\"}]` plus enforcement.yaml having exactly one row for gate:scan.",
+      "why": "gateNames returns the duplicate name twice; the loop `for (const g of gates)` counts each occurrence, so `coveredGates.get(g)` becomes 2 and the gate is reported as `2 rows name this gate` — a false GAP. Conversely, if the YAML has a gate name with surrounding whitespace, `name` is used as-is and never matches the `gate:NAME` source, producing a spurious gap. The check never normalizes gate names.",
+      "fix": "Deduplicate gate names and trim them when reading from arc.gates.yaml.",
+      "twin_of": "(q) a fixed-name set counted, not named"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "gate-parity.mjs:128-135 (blockingEvents)",
+      "breaking_input": "A hook script `.claude/hooks/PreToolUse.sh` containing `arc_dispatch PreToolUse blocking` but with a leading tab or spaces before `arc_dispatch` — the regex `^\\s*arc_dispatch` handles that. But a hook that calls `arc_dispatch PreToolUse blocking # comment` matches; a hook that calls `arc_dispatch PreToolUse blocking` with a trailing `\r` (CRLF checkout) does NOT match because `\\b` fails after `blocking\\r`.",
+      "why": "The regex requires `blocking` followed by a word boundary; a CRLF file makes `blocking\\r` and the `\\b` between `g` and `\\r` fails, so the event is silently not counted as blocking. The file's CR is not stripped before the regex test (only readFileSync, no `.replace(/\\r/g,\"\")`). A CRLF checkout (which the repo's own debt ledger says is a real Windows risk) makes the event disappear from the derived set, and gate-parity then reports the real blocking event as having no row.",
+      "fix": "Strip `\\r` from the hook text before testing the dispatch regex.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "gate-parity.mjs:158-172 (mutantSelftest)",
+      "breaking_input": "A repo where the first blocking event's `.d/` directory contains a `99-mutant.sh` that already exists (e.g. a real fragment named `99-mutant.sh`). The selftest overwrites it with `exit 2` and then `check(tmp)` reports a gap naming `99-mutant.sh`, so the selftest passes even though the planted fragment was NOT new.",
+      "why": "The selftest writes to a fixed name `99-mutant.sh` without first checking that name is absent; if the real tree already has that fragment, the selftest's positive result is vacuous — it would have passed before planting.",
+      "fix": "Pick a random unused fragment name (e.g. `99-mutant-<pid>.sh`) and assert it did not exist before writing.",
+      "twin_of": "(s) a mutant whose assertion is weaker than its change"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "gate-parity.mjs:96-118 (batsTestBody)",
+      "breaking_input": "A merge_time test named `foo` whose body contains a line `skip` inside a comment or inside a string literal, e.g. `# skip` or `echo \"skip\"`. The check `/^\\s*skip(\\s|$)/` matches only at line start, so a comment `# skip` does not match — good. But a line `  skip # reason` matches and is flagged, even though it is a legitimate skip with a reason; more importantly, a line `skip` inside a here-doc that is part of the test (e.g. `cat <<EOF\\nskip\\nEOF`) is flagged as a skip even though it is not a bats skip statement.",
+      "why": "The body scan is a naive line regex that does not understand bats syntax; a here-doc or a string containing a line that starts with `skip` is misread as a skip, producing a false GAP and blocking legitimate tests.",
+      "fix": "Use bats' own runner to detect skips, or parse the body with awareness of here-docs and strings.",
+      "twin_of": "(j) vacuous pass"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "arc-doctor.mjs:52-60 (readProtection)",
+      "breaking_input": "A `--protection-json` file containing `{\"message\":\"Branch not protected\",\"documentation_url\":\"...\"}` is treated as unprotected (good). But a file containing `{\"url\":\"x\",\"required_status_checks\":null,\"enforce_admins\":null}` — the body has neither `required_status_checks` nor `enforce_admins` as a key (both null keys present) — passes the `in` check and is treated as protected, then settingsOf reports strict-checks MISSING, required-checks MISSING, enforce-admins MISSING, no-force-push MISSING, no-deletion MISSING, and exit 1. That is arguably correct (MISSING not UNKNOWN). But a body with `{\"enforce_admins\":{\"enabled\":false}}` and no `required_status_checks` key is treated as protected and prints four MISSING plus no-force-push MISSING — fine. The real hole: a body that is `[]` (a JSON array) — `typeof body === \"object\"` is true, `\"required_status_checks\" in body` is false, `\"enforce_admins\" in body` is false, so it throws — good. The hole is `null` body: `JSON.parse(\"null\")` gives `null`, `body && body.message` is false, `!body` is true, so it throws — good. So the actual hole is a body with `required_status_checks` set to a non-object (e.g. `true`): `rsc = true`, then `rsc.contexts` throws — but that throw is NOT caught in `settingsOf`; it propagates out of `main`'s try? No — `settingsOf` is called after the protection try/catch, so an exception there crashes the script with a stack trace and no `RAN doctor-repo` line.",
+      "why": "`settingsOf` assumes `required_status_checks` is an object or null; a malformed but parseable protection JSON (e.g. `{\"required_status_checks\": true}`) makes `rsc.contexts` throw, and the throw is outside the try/catch that prints UNKNOWN, so the script exits uncleanly without the RAN marker — a COULD NOT SCAN that is not reported as such.",
+      "fix": "Wrap the `settingsOf` call in the same try/catch that prints UNKNOWN, or validate the shape of `required_status_checks` before dereferencing.",
+      "twin_of": "(e) COULD NOT SCAN"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "arc-doctor.mjs:70-75 (readCheckRuns)",
+      "breaking_input": "A `--checkruns-json` file containing `[\"ci-tier\", null]` — the check `v.some((x) => typeof x !== \"string\")` catches null and throws — good. But a file containing `[\"ci-tier\", \"\"]` (empty string) passes the array check, and `readCheckRuns` returns `[\"ci-tier\", \"\"]`; the empty string is then added to `seen`, and a required context named `\"\"` would be considered seen. More importantly, a file containing a single string `\"ci-tier\"` (not an array) throws — good. The hole: a file containing `[]` (empty array) passes and returns an empty list, so every required context is reported STALE-CONTEXT — that is a false positive but not a security hole.",
+      "why": "The fixture validation only checks element types, not that names are non-empty; an empty-string context in the check-runs list can mask a required context of the same empty name (unlikely) — low impact. The real issue is that the live `gh` path splits on newlines and filters Boolean, so an empty line is dropped, but the fixture path keeps empty strings, creating an inconsistency between fixture and live behavior.",
+      "fix": "Filter out empty strings in the fixture path too.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "arc-doctor.mjs:52-60 (readProtection)",
+      "breaking_input": "A `--protection-json` file containing `{\"message\":\"Branch not protected\",\"documentation_url\":\"...\",\"status\":\"404\"}` is treated as unprotected. But a file containing `{\"message\":\"Branch not protected\",\"documentation_url\":\"...\"}` with an extra key `\"required_status_checks\": null` — the body has both `message` and `required_status_checks`; the code checks `body.message === \"Branch not protected\"` FIRST and returns unprotected, even though the body also carries a `required_status_checks` key that would indicate protection. A malicious or malformed fixture can claim both, and the code trusts the message over the actual structure.",
+      "why": "The order of checks prefers the `message` field; a body that is both a 404-style message and a protection object is misclassified as unprotected, printing five MISSING instead of reading the real settings.",
+      "fix": "Check for the presence of protection keys before trusting the `message` field, or require `status === 404`.",
+      "twin_of": "(r) the machine decides the answer"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "brain-drift.mjs:57-79 (check)",
+      "breaking_input": "A CLAUDE.md line that is exactly `<!-- claude-only -->` with trailing spaces — `l = raw.trim()` so `l === OPEN` matches — good. But a line `<!-- claude-only --> <!-- comment -->` — `l` is not equal to OPEN, and it does not start with `<!--` (it starts with `<!-- claude-only`), so it falls through to the heading check (no match) and then the unmarked-line check, producing a DRIFT even though the line is a comment.",
+      "why": "The comment detection only handles lines that START with `<!--`; a comment that contains the OPEN marker but also other content is treated as an unmarked rule line, producing a false positive drift.",
+      "fix": "Treat any line containing `<!--` ... `-->` as a comment when it is wholly a comment.",
+      "twin_of": "(m) row-shape regex skips silently"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "brain-drift.mjs:57-79 (check)",
+      "breaking_input": "A CLAUDE.md line `<!-- claude-only -->` inside a block comment that spans multiple lines: line 1 `<!-- start`, line 2 `<!-- claude-only -->`, line 3 `-->`. The `inComment` state is set on line 1, but line 2 is checked BEFORE the `if (inComment)` guard? No — the code checks `if (inBlock)` first, then `if (inComment)`. On line 2, `inComment` is true, so it checks `l.includes(\"-->\")` — line 2 has `-->`, so `inComment` is set to false and the line is skipped. But the OPEN marker was never processed, so a real claude-only block inside a comment is missed.",
+      "why": "The comment state machine does not track whether the OPEN marker appears inside a comment; a nested `<!-- claude-only -->` inside a multi-line comment is ignored, and the block it opens is not recognized, so headings inside it are treated as unmarked.",
+      "fix": "Check for comments before processing OPEN/CLOSE markers, or track comment depth.",
+      "twin_of": "(m) row-shape regex skips silently"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "brain-drift.mjs:57-79 (check)",
+      "breaking_input": "A CLAUDE.md heading line `## Heading <!-- comment -->` — the heading regex `^(#{1,6})\\s+(.+?)\\s*$` matches with group 2 `Heading <!-- comment -->`; `norm` strips HTML comments, so it becomes `Heading` — good. But a heading `## Heading <!-- claude-only -->` inside a block: `l` is not equal to OPEN (it has `##`), so it is treated as a heading and checked against agentHeads. If `Heading` exists in AGENTS.md, it is flagged as a repeat — but the line is actually a heading with an inline comment, and the comment is not a block marker.",
+      "why": "The OPEN/CLOSE detection only matches lines that are EXACTLY the marker; an inline `<!-- claude-only -->` in a heading is not treated as a block boundary, so the heading is misclassified.",
+      "fix": "Only treat the marker as a block boundary when it is the entire line; inline occurrences should be stripped as comments.",
+      "twin_of": "(m) row-shape regex skips silently"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "brain-drift.mjs:57-79 (check)",
+      "breaking_input": "A CLAUDE.md file where the `@AGENTS.md` import appears inside a claude-only block. The code sets `imported = true` regardless of block state, so a file with `<!-- claude-only -->\\n@AGENTS.md\\n<!-- /claude-only -->` passes the import check, even though the import is not at the top level and other harnesses would not see it.",
+      "why": "The import check does not verify the import is outside a claude-only block; a malformed file can hide the import inside the block and still pass.",
+      "fix": "Only set `imported` when the import line is outside a claude-only block.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "brain-drift.mjs:57-79 (check)",
+      "breaking_input": "A CLAUDE.md file with a claude-only block that contains a heading also in AGENTS.md, but the heading text has different whitespace, e.g. AGENTS.md has `## Git & deployment` and CLAUDE.md has `## Git  &  deployment` (double spaces). `norm` collapses whitespace to single spaces, so both become `Git & deployment` — good. But a heading with a trailing `#`, e.g. `## Heading #`, is normalized to `Heading #` and would not match `Heading` — a false drift.",
+      "why": "The normalization does not strip trailing `#` characters (setext-style headings are not supported), so a heading with a trailing hash is treated as a different heading.",
+      "fix": "Strip trailing `#` characters from heading text during normalization.",
+      "twin_of": "(m) row-shape regex skips silently"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "rule-propose.mjs:125-131 (checkHome)",
+      "breaking_input": "`--home AGENTS.md` is now accepted, but the branch stem logic at line 156: `args.home === \"CLAUDE.md\" ? \"root-claude\" : args.home === \"AGENTS.md\" ? \"root-agents\" : ...`. A rule proposed to AGENTS.md gets stem `root-agents`, but the rule text is the proposed content of the whole AGENTS.md file (the `proposed` variable). If the rule is a small addition, the proposed file is the full AGENTS.md with the addition, and the branch is named `memory-rule/root-agents-<tag>` — fine. But the approval payload and the files array use `args.home` = `AGENTS.md`, so the PR modifies AGENTS.md directly. The checkHome for `.claude/rules/*.md` verifies the file exists on main, but for AGENTS.md it does NOT verify AGENTS.md exists on main — it returns immediately. A repo without an AGENTS.md (e.g. a fresh checkout before this change) would accept `--home AGENTS.md` and create a PR that adds AGENTS.md, which is fine, but the branch stem `root-agents` could collide with a different rule's branch if the same tag is computed.",
+      "why": "The new AGENTS.md home bypasses the `mainDirNames` existence check that `.claude/rules/*.md` homes get; an attacker can propose a rule to AGENTS.md even when the repo does not track AGENTS.md, and the branch stem is not checked for collisions with other AGENTS.md proposals.",
+      "fix": "Verify AGENTS.md is tracked on main before accepting it as a home, and include a uniqueness check on the branch stem.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "tests/distribute-brain-drift.bats:34-38",
+      "breaking_input": "The test `distribute-brain-drift: the real brain is tracked, imported and drift-free` runs `node brain-drift.mjs --root \"$ARC_ROOT\"` and asserts `status -eq 0`. But the test does not check the `RAN` marker before asserting status — it calls `ran || false` AFTER the status check, so if brain-drift exits 0 without printing RAN (e.g. a mutant that returns early), the test would pass the status check and then `ran` would fail — but only if the output lacks RAN; the order is: `[ \"$status\" -eq 0 ] || { ...; false; }` then `ran || false`. Actually `ran` is called before the status check? Looking at the test: `run --separate-stderr node ...` then `ran || false` then `[ \"$status\" -eq 0 ]`. So RAN is checked first — good. But the test does not assert the exact heading count is non-zero, only `[1-9][0-9]* headings`, so a mutant that reports 0 headings and 0 drift would pass.",
+      "why": "The test allows `0 headings checked, 0 drift` to pass, which is a vacuous pass: a brain-drift that scans nothing and reports clean would be accepted.",
+      "fix": "Assert the heading count is at least the number of headings in the real AGENTS.md (or assert it is > 0 and matches a known count).",
+      "twin_of": "(j) vacuous pass"
+    }
+  ]
+}

@@ -40,3 +40,18 @@ REJECTED: L1 / L14 symlinked ARC_ROOT, POSIX paths — non-actionable
 
 | 5 | attack 5d3f91b r2 logic L8/L13 (medium) | the seed-dir check compares counts (0 = 0) with no named-set equality or planted-seed negative control | deferred: 0 FAITHFUL rows and no `codex-seed/` dir exist, so the check has nothing to compare | any `FAITHFUL` command row or any `codex-seed/` dir appears |
 | 6 | attack 5d3f91b r2 logic L15 (low) | the four probed ignore paths are hard-coded rather than derived from the matrix's rendered directories | deferred to P03, when the adapters declare their rendered directories in `engine/harnesses.yaml` | P03 adds a rendered directory |
+
+Attack 4f5dfc7 round 1 (P01). Fixed: B1, B2, B4 (version check + allow-marker count printed), B5, B6, B7, B8, L1, L2, L4, L6, L7, L8, L9-L12, B10 (slug validated; union of the newest 3 PRs). Rejected:
+
+```
+REJECTED: B3 single-parent HEAD scans only the last commit — already-covered
+REJECTED: B9 a non-.sh file in a blocking dir is enforced — unsupported
+REJECTED: L3 a CRLF event file hides blocking — already-covered
+REJECTED: L5 a skip word inside a string is a false gap — non-actionable
+REJECTED: L13 setext and trailing-hash headings — out-of-appetite
+REJECTED: L15 zero headings checked passes vacuously — already-covered
+```
+(B3: the PR run is a merge ref, and a single-parent HEAD prints that it scanned the last commit only; B9: `_dispatch.sh` runs `[0-9]*.sh` only, and the derivation now uses that exact glob; L3: the event text is CR-stripped before the regex; L5: a false gap is the safe direction for a merge-time truth; L15: the bats asserts `[1-9][0-9]* headings`.)
+
+| 7 | attack 4f5dfc7 r1 boundary B4 (part) | `gitleaks:allow` lets a change's author waive the merge-time secret gate on any line | accepted, made visible: the scan prints how many added lines carry the marker; a PR that edits its own gate is visible in the same diff | a merged PR is found carrying a real credential behind the marker |
+| 8 | attack 4f5dfc7 r1 logic L14 (low) | `rule-propose --home AGENTS.md` skips the existence check `.claude/rules/*.md` homes get | accepted: AGENTS.md is tracked on main from this PR on, the same standing CLAUDE.md has | AGENTS.md is ever removed from main |

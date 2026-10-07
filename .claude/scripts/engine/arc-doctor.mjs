@@ -43,25 +43,39 @@ function readProtection(file, slug) {
     catch (e) { text = String(e.stdout || ""); if (!/Branch not protected/.test(text)) throw new Error(`gh api failed: ${String(e.stderr || e.message).trim().slice(0, 200)}`); }
   }
   const body = JSON.parse(text);
-  if (body && body.message === "Branch not protected") return { state: "unprotected", body };
-  if (!body || typeof body !== "object" || !("required_status_checks" in body || "enforce_admins" in body)) throw new Error("the answer is not a branch-protection object");
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("the answer is not an object");
+  const isProtection = "required_status_checks" in body || "enforce_admins" in body;
+  // Unprotected only on GitHub's exact 404 shape; a body that ALSO carries protection keys is read as
+  // protection, never waved through as "not protected" (attack 4f5dfc7 L8).
+  if (!isProtection && body.message === "Branch not protected" && String(body.status) === "404") return { state: "unprotected", body };
+  if (!isProtection) throw new Error("the answer is not a branch-protection object");
   return { state: "protected", body };
 }
 
 function readCheckRuns(file, slug) {
   if (file) {
     const v = JSON.parse(readFileSync(file, "utf8"));
-    if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) throw new Error("check-runs fixture is not a list of names");
+    if (!Array.isArray(v) || v.some((x) => typeof x !== "string" || x.trim() === "")) throw new Error("check-runs fixture is not a list of non-empty names");
     return v;
   }
-  const head = gh(["pr", "list", "--repo", slug, "--state", "all", "--limit", "1", "--json", "headRefOid", "--jq", ".[0].headRefOid"]).trim();
-  if (!/^[0-9a-f]{40}$/.test(head)) throw new Error("no pull request to read check-runs from");
-  return gh(["api", "--paginate", `repos/${slug}/commits/${head}/check-runs`, "--jq", ".check_runs[].name"]).split("\n").map((s) => s.trim()).filter(Boolean);
+  // The union over the newest three PRs, so one PR whose run was skipped or cancelled cannot report a
+  // live check as stale (attack 4f5dfc7 B10).
+  const heads = gh(["pr", "list", "--repo", slug, "--state", "all", "--limit", "3", "--json", "headRefOid", "--jq", ".[].headRefOid"])
+    .split("\n").map((s) => s.trim()).filter((s) => /^[0-9a-f]{40}$/.test(s));
+  if (heads.length === 0) throw new Error("no pull request to read check-runs from");
+  const names = new Set();
+  for (const h of heads) {
+    for (const n of gh(["api", "--paginate", `repos/${slug}/commits/${h}/check-runs`, "--jq", ".check_runs[].name"]).split("\n")) if (n.trim()) names.add(n.trim());
+  }
+  return [...names];
 }
 
 function settingsOf(body) {
-  const rsc = body.required_status_checks || null;
-  const contexts = rsc ? [...new Set([...(rsc.contexts || []), ...((rsc.checks || []).map((c) => c && c.context))].filter(Boolean))] : [];
+  const rsc = body.required_status_checks && typeof body.required_status_checks === "object" ? body.required_status_checks : null;
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const contexts = rsc
+    ? [...new Set([...list(rsc.contexts), ...list(rsc.checks).map((c) => c && c.context)].filter((c) => typeof c === "string" && c.trim()))]
+    : [];
   return {
     values: {
       "strict-checks": !!(rsc && rsc.strict === true),
@@ -86,7 +100,12 @@ function main(argv) {
     for (let i = 0; i < argv.length; i++) {
       const a = argv[i];
       if (a === "--repo") repo = true;
-      else if (a === "--repo-slug") { slug = flagValue(argv, i, a); i++; }
+      else if (a === "--repo-slug") {
+        slug = flagValue(argv, i, a); i++;
+        // It goes into an API path: owner/name only, never `.`/`..` or a third segment (B10).
+        const ok = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(slug) && !slug.split("/").some((p) => p === "." || p === "..");
+        if (!ok) throw new Error(`--repo-slug must be OWNER/NAME, got ${JSON.stringify(slug).slice(0, 80)}`);
+      }
       else if (a === "--protection-json") { protFile = flagValue(argv, i, a); i++; }
       else if (a === "--checkruns-json") { runsFile = flagValue(argv, i, a); i++; }
       else throw new Error(`unknown argument ${JSON.stringify(a)}`);

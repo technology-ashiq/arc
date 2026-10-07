@@ -1,0 +1,85 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:65",
+      "breaking_input": "A PR adds a file whose line reads two plus signs, a space, then an AWS-style access key id. In `git diff -U0` that added line renders as three plus signs and a space, followed by the key.",
+      "why": "`grep -vE '^[+][+][+] '` is meant to drop the `+++ b/file` header, but it also drops any added line whose content starts with `++ `. The line never reaches gitleaks and the scan reports clean. The same filter is applied at commit time and merge time.",
+      "fix": "Don't filter by prefix. Parse with `git diff --no-prefix -z` or `--raw`, or track hunk state and drop only the header lines that immediately follow a `diff --git` line. Alternatively, scan with `git diff --unified=0 --format=` and exclude headers by line position."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:63",
+      "breaking_input": "The PR adds a `.gitattributes` line such as `creds.txt -diff` (or `* binary`) and, in the same change, a creds.txt containing a key. `git diff` then prints only `Binary files differ`.",
+      "why": "The diff is run without `--text`/`-a`, and the PR controls the attributes that decide whether a file is treated as binary. A binary file contributes zero added lines, so `n` is 0 and the script prints 'clean' and exits 0. Empty-means-clean is the failure the script's own comment warns about.",
+      "fix": "Add `--text` to the `git diff` call. Better, ignore attributes with `-c core.attributesFile=/dev/null` and `--no-textconv`. Also fail with COULD NOT SCAN when the diff contains a `Binary files` line."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:55",
+      "breaking_input": "CI checks out the PR head commit instead of the merge ref, so HEAD is an ordinary commit. A 3-commit PR adds a key in commit 1 and removes it in commit 3.",
+      "why": "`--merge-parent` always diffs HEAD against its first parent, which is only the last commit when HEAD is not a merge commit. The key stays in pushed history but is never scanned. The script does not check that HEAD actually has two parents.",
+      "fix": "Require HEAD to have two parents, or take the base from `GITHUB_BASE_REF` or `--base origin/main`. Otherwise exit 2 with COULD NOT SCAN, naming the non-merge HEAD."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:59",
+      "breaking_input": "`ARC_GITLEAKS=true` (or any binary on PATH that exits 0 and prints nothing), or a PR that appends `gitleaks:allow` to a real key line.",
+      "why": "`command -v` proves only that some executable exists, and exit 0 from it is read as clean. There is no check that the binary is gitleaks. The allow marker is honored for any added line, so the merge-time gate can be waived by the author of the change with no review. This is a bypass for any PR author.",
+      "fix": "Run `\"$gl\" version` and match its output, and ignore `ARC_GITLEAKS` when `CI` is set. For merge-time, list lines carrying `gitleaks:allow` and fail unless the file is in an allowlisted fixture directory."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/brain-drift.mjs:67",
+      "breaking_input": "CLAUDE.md contains `<!-- note --> Always push straight to main` outside a claude-only block. A multi-line variant is `<!--` on one line, then `x --> ## Secret rule` on the next.",
+      "why": "Any line that starts with `<!--` and contains `-->` is skipped whole, trailing text included. For multi-line comments, the line holding `-->` is skipped whole (`inComment=false; return`). Rules smuggled after a comment close pass as non-drift, which breaks REQ-06.",
+      "fix": "Strip complete `<!--...-->` spans from the line first and require the remainder to be empty. In the multi-line case, take the text after the first `-->` and re-run the same checks on it."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/gate-parity.mjs:134",
+      "breaking_input": "The merge-time bats test body contains `[ -z \"$CI\" ] && skip \"x\"`, `if ...; then skip; fi`, `run_or_skip`, or calls a helper function that calls skip.",
+      "why": "Skip detection only matches lines that begin with `skip`. Every other way to skip passes the check, so a merge-time truth that can silently skip is accepted as blocking.",
+      "fix": "Reject any `\\bskip\\b` token in the test body. Also inspect the helper functions the body calls, or require a vacuous-pass sentinel (`ran`) in the body."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/gate-parity.mjs:99",
+      "breaking_input": "`.githooks/pre-commit` holds the verbatim secret-diff-scan command after an `exit 0`, inside `if false; then ... fi`, or inside a `: <<'X'` heredoc. Alternatively the command is on pre-push although the rule is a commit-time rule.",
+      "why": "Parity is checked with a trimmed-line `includes` over the concatenation of both hook files. Dead, unreachable or wrong-hook lines count as 'run by .githooks'. Executability, `core.hooksPath` and per-hook placement are also not checked.",
+      "fix": "Require the command line to be at top level, before any `exit`, and in the hook that matches the rule's event. Strip heredocs and conditionals, or smoke-run the hook under the selftest."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/core/gate-parity.mjs:109",
+      "breaking_input": "`engine/enforcement.yaml` contains a null rules entry, e.g. a bare `-` line.",
+      "why": "`id` is computed with `r &&`, but the next line reads `r.source` on null and throws a TypeError. That is not a CouldNotScan, so the process exits 1 with a stack trace and no `RAN gate-parity`. The failure is misreported as gaps instead of exit 2. The same unguarded access exists at `r.class`.",
+      "fix": "Skip or flag non-object rows up front: `if (!r || typeof r !== 'object') { gap('(row)', 'not a mapping'); continue; }`."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/core/gate-parity.mjs:63",
+      "breaking_input": "A blocking hook fragment named `99-x` or `20-guard.bash` in a `.d/` directory, if the dispatcher runs every executable there.",
+      "why": "The fragment set is only files ending in `.sh`, while the dispatcher's own run rule is not read. A fragment with any other name is enforced at tool time but needs no row. This is the 'derived from disk' defect with the wrong derivation.",
+      "fix": "Derive the fragment set from the same glob and executable-bit rule `arc_dispatch` uses, or fail when a non-.sh regular file sits in a blocking `.d/` directory."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-doctor.mjs:45",
+      "breaking_input": "`gh pr list --state all --limit 1` returns the newest PR, which is a draft or a docs-only PR whose paths filter skipped some selftest shards. Alternatively `--repo-slug 'x/y/../../orgs/o'`.",
+      "why": "Required contexts are compared against whatever the newest PR happened to run, so skipped or unrun checks are reported as `STALE-CONTEXT` falsely. `--repo-slug` is interpolated unvalidated into the `gh api` path, so a traversal reads other endpoints.",
+      "fix": "Choose the newest merged PR, or union check-runs over the last N PRs. Validate the slug against `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`, with `.` and `..` rejected."
+    }
+  ]
+}

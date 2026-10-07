@@ -58,7 +58,9 @@ export function blockingFragments(root, events) {
   for (const ev of events) {
     const d = join(root, ".claude", "hooks", `${ev}.d`);
     if (!existsSync(d)) continue;
-    for (const f of readdirSync(d).sort()) if (f.endsWith(".sh")) out.push(`${ev}/${f}`);
+    // Exactly the dispatcher's own glob (`"$dir"/[0-9]*.sh` in _dispatch.sh): a file it would not run is
+    // not a fragment, and one it would run is never missed.
+    for (const f of readdirSync(d).sort()) if (/^[0-9][^/]*\.sh$/.test(f)) out.push(`${ev}/${f}`);
   }
   return out;
 }
@@ -68,18 +70,22 @@ function gateNames(root) {
   if (!parsed.ok) throw new CouldNotScan(`arc.gates.yaml does not parse at line ${parsed.error.line}: ${parsed.error.what}`);
   const gates = parsed.value && parsed.value.gates;
   if (!Array.isArray(gates) || gates.length === 0) throw new CouldNotScan("arc.gates.yaml has no gates list");
-  return gates.map((g) => (g && typeof g.name === "string" ? g.name : null));
+  return gates.map((g) => (g && typeof g.name === "string" && g.name.trim() ? g.name.trim() : null));
 }
 
-/** A bats test's body: the lines after `@test "<name>" {` up to the next top-level `}`. Null when absent. */
-function batsTestBody(text, name) {
+/**
+ * A bats test's REGION: every line after `@test "<name>" {` up to the next `@test` line or the end of the
+ * file. Deliberately wider than the body, so a `}` line inside a heredoc cannot end it early and hide a
+ * skip after it (attack 4f5dfc7 L1): the check over-approximates rather than misses. Null when absent.
+ */
+function batsTestRegion(text, name) {
   const lines = text.split("\n");
   const head = `@test "${name}" {`;
   const i = lines.findIndex((l) => l === head);
   if (i < 0) return null;
-  const body = [];
-  for (let k = i + 1; k < lines.length && lines[k] !== "}"; k++) body.push(lines[k]);
-  return body;
+  const region = [];
+  for (let k = i + 1; k < lines.length && !lines[k].startsWith("@test "); k++) region.push(lines[k]);
+  return region;
 }
 
 export function check(root) {
@@ -94,9 +100,18 @@ export function check(root) {
   const rows = parsed.value && parsed.value.rules;
   if (!Array.isArray(rows) || rows.length === 0) throw new CouldNotScan("engine/enforcement.yaml has no rules list");
 
-  const hookText = [".githooks/pre-commit", ".githooks/pre-push"]
-    .map((p) => (existsSync(join(root, p)) ? readFileSync(join(root, p), "utf8").replace(/\r/g, "") : ""))
-    .join("\n").split("\n").map((l) => l.trim());
+  // A hook's live lines are those before its first top-level `exit`. A command after an exit, or in the
+  // wrong hook, never runs, so it does not count (attack 4f5dfc7 B7).
+  const liveLines = (p) => {
+    if (!existsSync(join(root, p))) return [];
+    const out = [];
+    for (const l of readFileSync(join(root, p), "utf8").replace(/\r/g, "").split("\n")) {
+      if (/^exit\b/.test(l)) break;
+      out.push(l.trim());
+    }
+    return out;
+  };
+  const hookLines = { "pre-commit": liveLines(".githooks/pre-commit"), "pre-push": liveLines(".githooks/pre-push") };
 
   const gaps = [];
   const gap = (id, why) => gaps.push(`GAP ${id}: ${why}`);
@@ -104,8 +119,14 @@ export function check(root) {
   const coveredHooks = new Map();
   const coveredGates = new Map();
 
+  const seenGates = new Set();
+  for (const g of gates) {
+    if (g !== null && seenGates.has(g)) gap(`gate:${g}`, "arc.gates.yaml defines this gate twice");
+    if (g !== null) seenGates.add(g);
+  }
   for (const r of rows) {
-    const id = r && typeof r.id === "string" && r.id.trim() ? r.id : "(row with no id)";
+    if (!r || typeof r !== "object" || Array.isArray(r)) { gap("(row)", "a rules entry that is not a mapping"); continue; }
+    const id = typeof r.id === "string" && r.id.trim() ? r.id : "(row with no id)";
     if (ids.has(id)) gap(id, "duplicate id");
     ids.add(id);
     const m = typeof r.source === "string" ? SOURCE_RE.exec(r.source) : null;
@@ -136,13 +157,15 @@ export function check(root) {
         if (!/^tests\/[A-Za-z0-9._-]+\.bats$/.test(file) || !name) gap(id, `merge_time must be tests/FILE.bats::TEST or repo:SETTING, got ${JSON.stringify(mt)}`);
         else if (!existsSync(join(root, file))) gap(id, `merge_time test not found: ${file} does not exist`);
         else {
-          const body = batsTestBody(readFileSync(join(root, file), "utf8").replace(/\r/g, ""), name);
-          if (body === null) gap(id, `merge_time test not found: ${file} has no @test "${name}"`);
-          else if (body.some((l) => /^\s*skip(\s|$)/.test(l))) gap(id, `merge_time test can skip: ${file}::${name}`);
+          const region = batsTestRegion(readFileSync(join(root, file), "utf8").replace(/\r/g, ""), name);
+          if (region === null) gap(id, `merge_time test not found: ${file} has no @test "${name}"`);
+          // Any `skip` word outside a comment line: a merge-time truth must never be able to skip (B6).
+          else if (region.some((l) => !/^\s*#/.test(l) && /\bskip\b/.test(l))) gap(id, `merge_time test can skip: ${file}::${name}`);
         }
       }
       const ct = typeof r.commit_time === "string" ? r.commit_time.trim() : "";
-      if (ct !== "" && !ct.startsWith("n/a") && !hookText.includes(ct)) gap(id, `commit_time command not run by .githooks: ${ct}`);
+      const hook = /--pre-push\b/.test(ct) ? "pre-push" : "pre-commit";
+      if (ct !== "" && !ct.startsWith("n/a") && !hookLines[hook].includes(ct)) gap(id, `commit_time command not run by .githooks/${hook}: ${ct}`);
     } else gap(id, `class must be blocking or advisory, got ${JSON.stringify(r.class)}`);
   }
 
@@ -174,10 +197,14 @@ function mutantSelftest(root) {
     const clean = check(tmp);
     if (clean.gaps.length !== 0) return { ok: false, why: `the unplanted copy already has ${clean.gaps.length} gap(s), so the selftest proves nothing` };
     const ev = blockingEvents(tmp)[0];
-    writeFileSync(join(tmp, ".claude", "hooks", `${ev}.d`, "99-mutant.sh"), "#!/usr/bin/env bash\nexit 2\n");
-    const planted = check(tmp);
-    const named = planted.gaps.some((g) => g.includes("99-mutant.sh"));
-    return named ? { ok: true, why: `caught 99-mutant (${ev}.d/99-mutant.sh)` } : { ok: false, why: "the planted fragment was NOT named" };
+    // A name no real fragment can hold, asserted absent first, so a catch is never a coincidence (L4).
+    const name = `99-mutant-${process.pid}.sh`;
+    const planted = join(tmp, ".claude", "hooks", `${ev}.d`, name);
+    if (existsSync(planted)) return { ok: false, why: `${name} already exists, so a catch would prove nothing` };
+    writeFileSync(planted, "#!/usr/bin/env bash\nexit 2\n");
+    const after = check(tmp);
+    const named = after.gaps.some((g) => g.includes(name));
+    return named ? { ok: true, why: `caught 99-mutant (${ev}.d/${name})` } : { ok: false, why: "the planted fragment was NOT named" };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

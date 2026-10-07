@@ -49,9 +49,25 @@ export function check(root) {
 
   let inBlock = false, blockStart = 0, imported = false, inComment = false;
   claude.forEach((raw, i) => {
-    const l = raw.trim();
     const n = i + 1;
     if (PLACEHOLDER.test(raw)) drift.push(`DRIFT CLAUDE.md: placeholder at line ${n}`);
+    // Comments are removed BEFORE any decision, and what is left is judged: text after a closing `-->`
+    // is real content, and a marker inside a comment is not a marker (attack 4f5dfc7 B5, L9-L11).
+    let rest = raw;
+    if (inComment) {
+      const end = rest.indexOf("-->");
+      if (end < 0) return;
+      inComment = false;
+      rest = rest.slice(end + 3);
+    }
+    const whole = rest.trim();
+    if (whole === OPEN || whole === CLOSE) rest = whole;
+    else {
+      rest = rest.replace(/<!--[\s\S]*?-->/g, "");
+      const open = rest.indexOf("<!--");
+      if (open >= 0) { inComment = true; rest = rest.slice(0, open); }
+    }
+    const l = rest.trim();
     if (l === OPEN) {
       if (inBlock) drift.push(`DRIFT CLAUDE.md: nested claude-only block at line ${n}`);
       inBlock = true; blockStart = n; return;
@@ -60,16 +76,15 @@ export function check(root) {
       if (!inBlock) drift.push(`DRIFT CLAUDE.md: a close marker with no open block at line ${n}`);
       inBlock = false; return;
     }
-    const m = HEADING.exec(raw);
+    const m = HEADING.exec(l);
     if (m) headings++;
     if (inBlock) {
       if (m && agentHeads.has(norm(m[2]))) drift.push(`DRIFT CLAUDE.md: "${norm(m[2])}" is in a claude-only block and also in AGENTS.md (line ${n})`);
       return;
     }
-    if (inComment) { if (l.includes("-->")) inComment = false; return; }
-    if (l === "" ) return;
+    if (l === "") return;
+    // Only an import OUTSIDE every block counts: one hidden inside a claude-only block is not the brain (L12).
     if (l === "@AGENTS.md") { imported = true; return; }
-    if (l.startsWith("<!--")) { if (!l.includes("-->")) inComment = true; return; }
     if (n === 1 && m && m[1] === "#") return;
     if (m) {
       if (!agentHeads.has(norm(m[2]))) drift.push(`DRIFT CLAUDE.md: heading "${norm(m[2])}" (line ${n}) is outside a claude-only block and absent from AGENTS.md`);
