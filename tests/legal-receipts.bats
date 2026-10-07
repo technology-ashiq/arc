@@ -654,6 +654,56 @@ LEDGER_REL="products/legal/published/fixture-gateway-gst.json"
   [[ "$output" == *"published "*" page(s)"* ]]
 }
 
+@test "legal receipts: a --venture-dir publish keeps its ledger beside its facts, never in arc" {
+  # ADR-1214. arc is public, and the ledger's per-field prints of a real operator's name and
+  # contact details are an oracle until the pages are live. The re-propose half proves the ledger
+  # written there is also the one read back -- a write nobody reads would pass the first half.
+  _arc_legal_sandbox
+  mkdir -p "$SANDBOX/venture"
+  cp "$SANDBOX/tests/fixtures/legal/ventures/fixture-gateway-gst/facts.yaml" \
+     "$SANDBOX/tests/fixtures/legal/ventures/fixture-gateway-gst/pins.yaml" "$SANDBOX/venture/"
+  _plan="$(node "$ARC_LEGAL_CLI" propose --venture fixture-gateway-gst --venture-dir "$SANDBOX/venture" --out "$SANDBOX/vout" --dry-run)"
+  _digest="$(printf '%s\n' "$_plan" | tail -n 1 | sed -n 's/^{"expect":"\([0-9a-f]\{64\}\)"}$/\1/p')"
+  [ -n "$_digest" ]
+  run node "$ARC_LEGAL_CLI" propose --venture fixture-gateway-gst --venture-dir "$SANDBOX/venture" --out "$SANDBOX/vout" --expect "$_digest"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/vout/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" publish --venture fixture-gateway-gst --venture-dir "$SANDBOX/venture" \
+    --dir "$SANDBOX/vout" --request "$(_decides "$SANDBOX/d.json")"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"published "*" page(s)"* ]]
+  [ -f "$SANDBOX/venture/published.json" ]
+  [ ! -e "$SANDBOX/$LEDGER_REL" ]
+  [ ! -d "$SANDBOX/products/legal/published" ]
+  # Read back: a re-propose against the venture dir sees the publish as previous.
+  sed -i.bak 's/^refund_window_days: 14$/refund_window_days: 7/' "$SANDBOX/venture/facts.yaml"
+  run node "$ARC_LEGAL_CLI" propose --venture fixture-gateway-gst --venture-dir "$SANDBOX/venture" --out "$SANDBOX/vout2" --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"this is a RE-publish"* ]]
+  [[ "$output" == *"facts.refund_window_days: changed"* ]]
+}
+
+@test "legal receipts: a venture-dir ledger naming ANOTHER venture is refused, not read as history" {
+  # A venture-dir ledger is keyed to the directory; the record's own venture field binds the name.
+  _arc_legal_sandbox
+  mkdir -p "$SANDBOX/venture"
+  cp "$SANDBOX/tests/fixtures/legal/ventures/fixture-gateway-gst/facts.yaml" \
+     "$SANDBOX/tests/fixtures/legal/ventures/fixture-gateway-gst/pins.yaml" "$SANDBOX/venture/"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" write "$SANDBOX/venture/published.json" '{"venture":"someone-else","run":{"pages":[]}}'
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" propose --venture fixture-gateway-gst --venture-dir "$SANDBOX/venture" --out "$SANDBOX/vout" --dry-run
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"belongs to \"someone-else\""* ]]
+}
+
+@test "legal receipts: a fixture venture name outside the grammar is refused before the ledger path" {
+  _arc_legal_sandbox
+  run node "$ARC_LEGAL_CLI" propose --venture "CON" --out "$SANDBOX/o" --dry-run
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"not a venture name"* ]]
+}
+
 @test "legal receipts: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"

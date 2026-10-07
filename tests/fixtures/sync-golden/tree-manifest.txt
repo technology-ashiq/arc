@@ -261,7 +261,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	e0dc095db511767641799ef4a4fef0c25ed4de6596ca8bca1e97f0cdc87054f9
+.claude/scripts/hq/face-ops.mjs	5578283386c70171e65f7828e032677ccdf69b3dc986ab9a26c53f0eab8a5ae6
 .claude/scripts/hq/face-sessions.mjs	5255350fc9be8c2f0643e727fbbe028aa5cc4b02c184455ec474af7e5ba1c318
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
@@ -356,7 +356,7 @@
 .claude/scripts/leads/lib/store.mjs	cb5b381ec5b6b261285da3c59876914fff4c2ccfa08cfe1923a58eebdc62aaaf
 .claude/scripts/leads/pii-tripwire.sh	7b61af67a2c17015dea50d156e67d574bc5584f98274c9457e2dd42a5b5d83aa
 .claude/scripts/leads/rehearsal-check.mjs	a99362516bca3b212052f2231d670e960c09613732d5db22a05289227e9c8929
-.claude/scripts/legal/arc-legal.mjs	546377b60a835beec78c9ed43dc9899179f47504e5abcf4172c855ad29a7a93d
+.claude/scripts/legal/arc-legal.mjs	511d09f10229a6ebb1ba3bc741be032c740bc552e54751866d5b5dd790da74ee
 .claude/scripts/legal/lib/canonical.mjs	f2813dd3fa4c71a411eef9f0237008c521e6d10d54517b9e127a069898a6709f
 .claude/scripts/legal/lib/checklist.mjs	c78e12587465499bf5dac6d1e0d11a7caaee0ff449608ce652688367b475fad6
 .claude/scripts/legal/lib/lints.mjs	3ccf0f5c304a4512fa55a2e7e6e7685ed204879bb4ae216e2e6a26272259f2ce
@@ -395,7 +395,7 @@
 .claude/scripts/org/org-coverage.mjs	0463d70b498f8c82ce3fdeaeef1d11c2117100ebeb5cb418b9a97840e1334963
 .claude/scripts/org/org-dispatch.mjs	b9e81ff1cfa7495863545b981dd34125b1d1399478f85a52c7b116fec4922ba8
 .claude/scripts/org/org-judge.mjs	ef3ddafde286e98684d2ba8e2e7080da1d1232823c52d2fabe687a64073ac416
-.claude/scripts/org/org-own.mjs	4fc46764cbcc3324b1d9ebe049d21ded11e289595d697aa11a409ed5bcb869e9
+.claude/scripts/org/org-own.mjs	9f3d596c1b80e84099d200afc1c928651159a9585248a6a8fa3d7a1f21c0c654
 .claude/scripts/org/org-review.mjs	453257708017f189f3add60f348a28115efc69b39047dc69f04124f9ff63850f
 .claude/scripts/org/org-team.mjs	ea780d578ad1f76c4bcc2add5412c8c71a879eb90e05b500978524798f34a3c2
 .claude/scripts/org/skill-import.mjs	d7b98da131267949d3943e165495cbbad6a9b408e4b02694fae12790c09dbab2

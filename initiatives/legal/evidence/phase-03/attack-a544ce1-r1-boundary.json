@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/legal/arc-legal.mjs:ledgerFileFor",
+      "breaking_input": "`propose --venture CON --venture-dir <dir>` or `--venture ../../x --venture-dir <dir>` (or ARC_LEGAL_VENTURE_DIR set). The venture-dir branch returns before the grammar check, so the venture name is never validated. Also, ledgerFileFor is only reached after other work; a venture-dir ledger is keyed to the directory, not the venture.",
+      "why": "Name validation only guards the fixture branch. Two different ventures pointed at the same --venture-dir share one published.json, so venture B's propose reads venture A's ledger as its previous record (and publish overwrites it). The venture name is not bound to the ledger contents, so NON_MONOTONIC/PREVIOUS_MOVED compare the wrong venture's history. This is the guard-keyed-to-a-caller-chosen-location pattern.",
+      "fix": "Validate the venture name against the grammar in both branches, and on read assert the record's venture field equals the requested venture (refuse with PREVIOUS_UNREADABLE otherwise).",
+      "twin_of": "guard-keyed-to-a-caller-chosen-location"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:ledgerFileFor",
+      "breaking_input": "`--venture-dir` passed as a relative path, or ARC_LEGAL_VENTURE_DIR set in the environment while the facts were read from a different directory via `--venture-dir` omitted. `resolve(ventureDir, ...)` resolves against the CWD at call time. Also: `args[\"venture-dir\"]` as `true` (a bare `--venture-dir` flag with no value) makes `resolve(true, ...)` throw a TypeError, not a Fail with a clean exit code.",
+      "why": "The ledger directory is selected by `ventureDirOverride || process.env.ARC_LEGAL_VENTURE_DIR`, which may differ from the directory facts were actually loaded from (a different resolution function, factsPathFor). The ADR claims 'the same directory the facts were just read from', but nothing asserts it. A stale env var silently redirects a fixture run's ledger to an arbitrary directory, dropping the arc ledger and the monotonic check.",
+      "fix": "Use the exact resolved ventureDir that factsPathFor used (pass it in), require a string value, and ignore or reject env/arg disagreement.",
+      "twin_of": "validate-one-read-use-another"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/legal/arc-legal.mjs:publishMain (writeFileSync(ledgerFile...))",
+      "breaking_input": "`published.json` inside the venture-dir is a symlink or directory, or the venture-dir is on a read-only/removed path between the existence check and the write; or two concurrent publishes for the same venture dir.",
+      "why": "The ledger is written with a plain writeFileSync after the earlier read/hash with no lock or temp+rename. Previously the ledger was in a committed repo path where git gave a recovery trail; now a torn or interrupted write in an untracked private dir loses monotonic history and the next run reads it as 'unreadable' or, if truncated to empty... as PREVIOUS_UNREADABLE at best, or a first publish if the file vanishes. A symlink at published.json is followed on write.",
+      "fix": "Write to a temp file in the same dir and rename atomically; refuse if published.json is a symlink (lstat); take an exclusive lock.",
+      "twin_of": "check-vanishes-when-its-input-is-absent"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/legal-receipts.bats (new venture-dir test)",
+      "breaking_input": "The test asserts `[ ! -d \"$SANDBOX/products/legal/published\" ]`, but `_arc_legal_sandbox` may already copy committed fixture ledgers, or a future committed fixture ledger would make the directory exist.",
+      "why": "The negative control can pass or fail for reasons unrelated to the claim: if the sandbox copies the product tree including products/legal/published/, the assertion fails vacuously-wrong; if not, it passes regardless of whether the code wrote there only when the dir absent. It does not distinguish 'not written' from 'never existed'. Also the sed -i.bak mutation leaves facts.yaml.bak in the venture dir, and the read-back asserts only dry-run output, not that a ledger path was read.",
+      "fix": "Assert on a ledger-specific path ($SANDBOX/$LEDGER_REL absent, already present) and snapshot the directory listing before/after the publish; drop the directory-level assertion.",
+      "twin_of": "negative-control-that-cannot-fail"
+    }
+  ]
+}
