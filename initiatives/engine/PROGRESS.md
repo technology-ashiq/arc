@@ -263,6 +263,32 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### NEXT-CYCLE AMENDMENT — ENG-H: fallback governed by a failure classifier and a per-chain budget — 2026-10-07
+
+**Classification: new capability → a design-source amendment, NOT a live phase spec** (`/arc-change --lane engine`,
+owner-raised 2026-10-07). The lane is IDLE and Cycle 7 is closed, so the tracked home is
+`docs/strategy/plans/PLAN-engine-process-layer.md` **§ Amendment 1** (v2.1): decision **ENG-H**, **REQ-08**, one
+assumption row, and a next-cycle phase (numbered at kickoff, next free = 09, ceiling 3d). It is built at the next
+`/arc-kickoff --lane engine`, which receives its own paste-ready prompt in that file.
+
+**What it fixes, verified in the code rather than carried from the report:** arc-run's fallback loop walks the chain on
+`verdict === "driver"`, and `driver` is a catch-all for every exit 1 — a 503, a provider 403, a crashed driver and an
+unparseable answer all hop the same way. Chains carry no `max_attempts`/`max_wall_ms`/`max_cost` of their own.
+
+**Locked by the amendment:** a closed six-value `FailureClass` in one module with one pure `nextHop(chain, hops)`;
+hops only for `transport`/`provider-unavailable`, once cross-family for `model-invalid`, never for
+`policy-refusal`/`budget`/`unknown`; chain terms as router load faults; the class rides the cost sidecar so the driver
+exit map stays 0/1/2 (ADR-0219); the hop record lands on `run.completed` (`failure_class` + `hops[]`, **zero new kinds**,
+`reason` unchanged); a hop never leaves the routed tier. **Left to the kickoff, each with a recommendation:** F1 retry vs
+cross-family hop, F2 generic-api family, F3 `max_cost` against absent spend, F4 explicit-driver runs.
+
+**Assumptions ledger:** nothing FIRED. ADR-0204 and ADR-0225 still hold; ENG-H narrows when they apply. **Appetite:**
+charged to no closed cycle; the next cycle sets its own. **ADR band:** highest on `main` is 0227, so 0228 is the
+candidate — re-swept at kickoff, because band claims cannot see other sessions' unpushed work.
+
+**Owner instruction, recorded (2026-10-07, mid-session):** finish every phase without waiting, push permission given,
+ask only when truly blocked, tests on CI only.
+
 ### OUT-OF-CYCLE BUG — a driver that ignores the run's deadline, a silent retry ladder, and a nullable twin_of — 2026-09-26
 
 **Classification: a bug** (`/arc-change --lane engine`, the owner's OK 2026-09-26; the lane is IDLE and Cycle 7 is
