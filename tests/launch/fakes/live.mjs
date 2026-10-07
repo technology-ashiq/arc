@@ -38,5 +38,5 @@ export function makeLive({ github, full, domain, inner, scores = { performance: 
     }
     return inner(input, init);
   }
-  return { fetch, calls };
+  return { fetch, calls, serving };
 }

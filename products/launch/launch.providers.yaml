@@ -331,11 +331,14 @@ providers:
     payment_model: any
     env_keys:
       - SUPABASE_ACCESS_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - api.supabase.com
+      - supabase.co
       - sandbox.automemory.ai
+      - api.github.com
     credentials:
-      scope: "auth config on one project"
+      scope: "auth config on one project; commits the auth routes; probes with minted probe users (ADR-1734)"
     adapter: providers/auth/supabase-auth.mjs
     digest: null
     approved_by: ashiq
@@ -351,10 +354,16 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - SUPABASE_ACCESS_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.supabase.com
+      - supabase.co
+      - api.github.com
     credentials:
-      scope: "none -- probes the live site"
+      scope: "orgs + memberships migration and routes; probes with minted probe users (ADR-1734)"
     adapter: providers/authz/rls-roles.mjs
     digest: null
     approved_by: ashiq
@@ -370,10 +379,16 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - SUPABASE_ACCESS_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.supabase.com
+      - supabase.co
+      - api.github.com
     credentials:
-      scope: "none -- probes the live site"
+      scope: "invites migration and routes; probes with minted probe users (ADR-1734)"
     adapter: providers/tenancy/org-invite.mjs
     digest: null
     approved_by: ashiq

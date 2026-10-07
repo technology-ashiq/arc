@@ -104,6 +104,15 @@ LexOS facts, a gazette check of the DPDP Rule 3 date, then a read and stamp of t
 pages. **Set LexOS's `effective_date` on or after the day the stamp will land.** The fixture's
 August date was refused as BACKDATED on 2026-10-07, and that cost one stamp.
 
+**Phase 03 so far (2026-10-07):** at the owner's request the five owed facts carry clearly marked
+PLACEHOLDER values in the private facts file, and the real values come later. Seven pages render
+with all four lints run and 0 findings, and the checklist reads 7/7 NOT-APPLICABLE. A DRAFT is
+committed in LexOS on `feat/legal-pages` (`649634a`, worktree `wt-lexos-legal`, not pushed) with
+`legal/HANDOFF.md`. **Not proposed or published:** a stamp on placeholder bytes would be voided by
+the real facts anyway (TOCTOU). **Found on the way, routed via `/arc-change`:** a real venture's
+publish ledger would have landed in arc's PUBLIC tree with per-field prints of the operator's
+contact facts. ADR-1214 moves it beside the venture's facts, and Phase 03 gained that criterion.
+
 _Below: the 2026-10-06 note that led to these closes._
 
 The tracker said `phase: 00 · burn: 0d` for seven weeks while Phases 01 and 02 were built on top

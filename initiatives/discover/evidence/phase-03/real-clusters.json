@@ -1,0 +1,949 @@
+{
+ "version": 1,
+ "niche": "invoice reminders",
+ "threshold": 1000,
+ "records": 45,
+ "skipped": {
+  "duplicate": 1
+ },
+ "untokenized": 0,
+ "clusters": [
+  {
+   "cluster_fp": "0553eb72085478c06aab685ed980c8eff8a42be01d75abbf21a13e8ce98590e1",
+   "top_tokens": [
+    "client",
+    "app",
+    "payment",
+    "web",
+    "billing",
+    "business",
+    "chasing",
+    "couchdb"
+   ],
+   "size": 4,
+   "first_ts": 1320263129,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:3188615",
+     "source_url": "https://news.ycombinator.com/item?id=3188615",
+     "title": "Ask HN: Client hosting billing web app",
+     "engagement": {
+      "points": 1,
+      "comments": 5
+     },
+     "ts": 1320263129
+    },
+    {
+     "source_id": "hn:6353498",
+     "source_url": "https://news.ycombinator.com/item?id=6353498",
+     "title": "Ask HN: How do you handle client that keeps on delaying invoice payment?",
+     "engagement": {
+      "points": 8,
+      "comments": 12
+     },
+     "ts": 1378735584
+    },
+    {
+     "source_id": "hn:14929591",
+     "source_url": "https://news.ycombinator.com/item?id=14929591",
+     "title": "Show HN: CouchDB Web Apps for Business",
+     "engagement": {
+      "points": 2,
+      "comments": 1
+     },
+     "ts": 1501861910
+    },
+    {
+     "source_id": "hn:45537969",
+     "source_url": "https://news.ycombinator.com/item?id=45537969",
+     "title": "Tired of chasing clients for late payments",
+     "engagement": {
+      "points": 1,
+      "comments": 5
+     },
+     "ts": 1760097836
+    }
+   ]
+  },
+  {
+   "cluster_fp": "b7bf86099819f34fa49baecfcf6c3e1998515ce0a1f40defd2e57e8e1368c3ed",
+   "top_tokens": [
+    "email",
+    "attachment",
+    "comercial",
+    "dynamically",
+    "egypt",
+    "generated",
+    "like",
+    "mom"
+   ],
+   "size": 3,
+   "first_ts": 1296660700,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:2170560",
+     "source_url": "https://news.ycombinator.com/item?id=2170560",
+     "title": "What it's like in Egypt: An email from my mom",
+     "engagement": {
+      "points": 238,
+      "comments": 56
+     },
+     "ts": 1296660700
+    },
+    {
+     "source_id": "hn:14280269",
+     "source_url": "https://news.ycombinator.com/item?id=14280269",
+     "title": "Tool to send emails with dynamically generated attachments(responly.com)",
+     "engagement": {
+      "points": 1,
+      "comments": 1
+     },
+     "ts": 1494079539
+    },
+    {
+     "source_id": "hn:20444424",
+     "source_url": "https://news.ycombinator.com/item?id=20444424",
+     "title": "Ask HN: Suggestions for Comercial Email Service",
+     "engagement": {
+      "points": 1,
+      "comments": 4
+     },
+     "ts": 1563219764
+    }
+   ]
+  },
+  {
+   "cluster_fp": "56e7156a651737a4211bddca85280a20356a35d41cd6fcffdb71a0b475e150f4",
+   "top_tokens": [
+    "business",
+    "saas",
+    "1993-era",
+    "accounting",
+    "ai-generated",
+    "anybody",
+    "else",
+    "family"
+   ],
+   "size": 3,
+   "first_ts": 1358453742,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:5074920",
+     "source_url": "https://news.ycombinator.com/item?id=5074920",
+     "title": "Ask HN: Accounting for a SaaS business",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1358453742
+    },
+    {
+     "source_id": "hn:45823234",
+     "source_url": "https://news.ycombinator.com/item?id=45823234",
+     "title": "Ask HN: My family business runs on a 1993-era text-based-UI (TUI). Anybody else?",
+     "engagement": {
+      "points": 320,
+      "comments": 309
+     },
+     "ts": 1762352989
+    },
+    {
+     "source_id": "hn:46943969",
+     "source_url": "https://news.ycombinator.com/item?id=46943969",
+     "title": "Show HN: I built an invoicing SaaS with AI-generated invoice templates",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1770635367
+    }
+   ]
+  },
+  {
+   "cluster_fp": "6e390ca3cf4940c5545f5976093edaed24f08d18999ea5a44c30302d112a6a06",
+   "top_tokens": [
+    "invoice",
+    "tool",
+    "biz",
+    "cli",
+    "freelancer",
+    "generating",
+    "handle",
+    "open-source"
+   ],
+   "size": 3,
+   "first_ts": 1378733239,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:6353270",
+     "source_url": "https://news.ycombinator.com/item?id=6353270",
+     "title": "Ask HN: Which tools do you use for invoice (freelancers and small biz)",
+     "engagement": {
+      "points": 10,
+      "comments": 14
+     },
+     "ts": 1378733239
+    },
+    {
+     "source_id": "hn:19591327",
+     "source_url": "https://news.ycombinator.com/item?id=19591327",
+     "title": "Ask HN: How do you handle invoices and purchase orders?",
+     "engagement": {
+      "points": 11,
+      "comments": 5
+     },
+     "ts": 1554565839
+    },
+    {
+     "source_id": "hn:44970635",
+     "source_url": "https://news.ycombinator.com/item?id=44970635",
+     "title": "Show HN: A simple open-source CLI tool for generating invoices from the terminal",
+     "engagement": {
+      "points": 3,
+      "comments": 1
+     },
+     "ts": 1755767359
+    }
+   ]
+  },
+  {
+   "cluster_fp": "98de3f2086f7ade95de75b59858313859e27a961f7e35b76087f5087db005a8c",
+   "top_tokens": [
+    "pivot",
+    "advice",
+    "career",
+    "comment",
+    "long",
+    "needed",
+    "postalshout.com"
+   ],
+   "size": 2,
+   "first_ts": 1299589564,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:2300711",
+     "source_url": "https://news.ycombinator.com/item?id=2300711",
+     "title": "Ask HN: Comment on my pivot, postalshout.com",
+     "engagement": {
+      "points": 6,
+      "comments": 11
+     },
+     "ts": 1299589564
+    },
+    {
+     "source_id": "hn:3379386",
+     "source_url": "https://news.ycombinator.com/item?id=3379386",
+     "title": "Ask HN: Advice needed: Career Pivot? (Long)",
+     "engagement": {
+      "points": 2,
+      "comments": 2
+     },
+     "ts": 1324505703
+    }
+   ]
+  },
+  {
+   "cluster_fp": "a55176d77a479a9981473e25404a7b068985f00a12acaa8009e1e2b0f2e4b996",
+   "top_tokens": [
+    "company",
+    "contribution",
+    "free",
+    "gain",
+    "hardware",
+    "management",
+    "open-source",
+    "project"
+   ],
+   "size": 2,
+   "first_ts": 1578003545,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:21940568",
+     "source_url": "https://news.ycombinator.com/item?id=21940568",
+     "title": "Ask HN: Project Management for Hardware Companies",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1578003545
+    },
+    {
+     "source_id": "hn:33698819",
+     "source_url": "https://news.ycombinator.com/item?id=33698819",
+     "title": "Ask HN: How to gain support for free/open-source contributions within a company?",
+     "engagement": {
+      "points": 8,
+      "comments": 1
+     },
+     "ts": 1669068839
+    }
+   ]
+  },
+  {
+   "cluster_fp": "95b9a72c76bf97e017dcbf74b934de9f2c33c77ca3b7ec2a5248b0867a121cc3",
+   "top_tokens": [
+    "mailai"
+   ],
+   "size": 2,
+   "first_ts": 1761058751,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:45656655",
+     "source_url": "https://news.ycombinator.com/item?id=45656655",
+     "title": "Show HN: MailAI – Personal AI agents in secure sandboxes for email automation",
+     "engagement": {
+      "points": 3,
+      "comments": 0
+     },
+     "ts": 1761058751
+    },
+    {
+     "source_id": "hn:45704171",
+     "source_url": "https://news.ycombinator.com/item?id=45704171",
+     "title": "Show HN: MailAI – Automate Any Workflow in Plain English with Gmail and Stripe",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1761402424
+    }
+   ]
+  },
+  {
+   "cluster_fp": "12ad1342d30e7e74889958ea90eeba8f434b42c6a11f8c03733e680713c0f8e6",
+   "top_tokens": [
+    "evil",
+    "expansion",
+    "graham",
+    "patent",
+    "paul",
+    "software"
+   ],
+   "size": 1,
+   "first_ts": 1272216631,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:1293078",
+     "source_url": "https://news.ycombinator.com/item?id=1293078",
+     "title": "Expansion on Paul Graham's: Are software patents evil?",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1272216631
+    }
+   ]
+  },
+  {
+   "cluster_fp": "2138766742e81a34b865ac45bbcb1834761c698cf73fa9fc8f4d269fc0392ef5",
+   "top_tokens": [
+    "bad",
+    "contract",
+    "developer",
+    "stubborn"
+   ],
+   "size": 1,
+   "first_ts": 1326305189,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:3452851",
+     "source_url": "https://news.ycombinator.com/item?id=3452851",
+     "title": "Bad contract or stubborn developer",
+     "engagement": {
+      "points": 1,
+      "comments": 1
+     },
+     "ts": 1326305189
+    }
+   ]
+  },
+  {
+   "cluster_fp": "cf9ce375a86b109d0294a01a6c1abcd205ff1af2cd6d24d229b30d684eac27f2",
+   "top_tokens": [
+    "next",
+    "should",
+    "startup.",
+    "struggling"
+   ],
+   "size": 1,
+   "first_ts": 1338153799,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:4031050",
+     "source_url": "https://news.ycombinator.com/item?id=4031050",
+     "title": "Ask HN: Struggling startup. What should I do next?",
+     "engagement": {
+      "points": 7,
+      "comments": 16
+     },
+     "ts": 1338153799
+    }
+   ]
+  },
+  {
+   "cluster_fp": "6774332a303a0b14f50c1a9b44c5940ef1db3a47419d0bf7744b59597c2f0ef4",
+   "top_tokens": [
+    "aren",
+    "http",
+    "invoicing",
+    "standard",
+    "style",
+    "there",
+    "thing"
+   ],
+   "size": 1,
+   "first_ts": 1377453215,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:6272897",
+     "source_url": "https://news.ycombinator.com/item?id=6272897",
+     "title": "Ask HN: Why aren't there HTTP style standards for invoicing things?",
+     "engagement": {
+      "points": 48,
+      "comments": 29
+     },
+     "ts": 1377453215
+    }
+   ]
+  },
+  {
+   "cluster_fp": "7d8e31929e294acd4598af35bb843395acdad8718d476078338dda5ab45349c6",
+   "top_tokens": [
+    "chemistry-as-a-service",
+    "covid",
+    "medicinal",
+    "moonshot",
+    "postera"
+   ],
+   "size": 1,
+   "first_ts": 1593602829,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:23700275",
+     "source_url": "https://news.ycombinator.com/item?id=23700275",
+     "title": "Launch HN: PostEra (YC W20) Medicinal Chemistry-as-a-Service and Covid Moonshot",
+     "engagement": {
+      "points": 114,
+      "comments": 40
+     },
+     "ts": 1593602829
+    }
+   ]
+  },
+  {
+   "cluster_fp": "72448acbd4b69344261111a5f4f2829116a34c01494ed032596a68fb5febc5a9",
+   "top_tokens": [
+    "routable"
+   ],
+   "size": 1,
+   "first_ts": 1612289128,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:26004340",
+     "source_url": "https://news.ycombinator.com/item?id=26004340",
+     "title": "Launch HN: Routable (YC S17) – Scale payouts without building in-house tools",
+     "engagement": {
+      "points": 66,
+      "comments": 14
+     },
+     "ts": 1612289128
+    }
+   ]
+  },
+  {
+   "cluster_fp": "854b8397d0bb06d7f539a233efea7e241ca3a4a0ba763a6d3b03eee54708ab2b",
+   "top_tokens": [
+    "abstraction",
+    "deep",
+    "focused",
+    "keeping",
+    "layer",
+    "learning",
+    "while"
+   ],
+   "size": 1,
+   "first_ts": 1637358577,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:29283013",
+     "source_url": "https://news.ycombinator.com/item?id=29283013",
+     "title": "Ask HN: Keeping focused on learning while several layers of abstraction deep?",
+     "engagement": {
+      "points": 4,
+      "comments": 1
+     },
+     "ts": 1637358577
+    }
+   ]
+  },
+  {
+   "cluster_fp": "430d531a63259291b35fce6d8a86c5e2cdfdc184557e8cbd2f1e334d593102db",
+   "top_tokens": [
+    "slai"
+   ],
+   "size": 1,
+   "first_ts": 1646325543,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:30543228",
+     "source_url": "https://news.ycombinator.com/item?id=30543228",
+     "title": "Launch HN: Slai (YC W22) – Build ML models quickly and deploy them as apps",
+     "engagement": {
+      "points": 130,
+      "comments": 54
+     },
+     "ts": 1646325543
+    }
+   ]
+  },
+  {
+   "cluster_fp": "d2aa57a4bb39d036e5b97cae33b517928bc4b842388ca231065d7c373831ab93",
+   "top_tokens": [
+    "but",
+    "could",
+    "everything",
+    "near",
+    "nowhere",
+    "satisfied",
+    "still",
+    "want"
+   ],
+   "size": 1,
+   "first_ts": 1667150418,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:33396442",
+     "source_url": "https://news.ycombinator.com/item?id=33396442",
+     "title": "Ask HN: Have everything one could want but still nowhere near satisfied",
+     "engagement": {
+      "points": 11,
+      "comments": 11
+     },
+     "ts": 1667150418
+    }
+   ]
+  },
+  {
+   "cluster_fp": "0c7603233a0db3fae77c6c6bdfe8a344b8e93ee4b523e7968464cd5048249da8",
+   "top_tokens": [
+    "axle",
+    "triple"
+   ],
+   "size": 1,
+   "first_ts": 1697126242,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:37858969",
+     "source_url": "https://news.ycombinator.com/item?id=37858969",
+     "title": "Show HN: Triple Axle – Vertical SaaS for Heavy Haul Trucking",
+     "engagement": {
+      "points": 6,
+      "comments": 0
+     },
+     "ts": 1697126242
+    }
+   ]
+  },
+  {
+   "cluster_fp": "4c7a772a2a3083d40daf85f4a7524ebeffe61148b146da42e5ead80452518b75",
+   "top_tokens": [
+    "commodityai"
+   ],
+   "size": 1,
+   "first_ts": 1711462336,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:39828058",
+     "source_url": "https://news.ycombinator.com/item?id=39828058",
+     "title": "Launch HN: CommodityAI (YC W24) – Shipment management for commodity traders",
+     "engagement": {
+      "points": 77,
+      "comments": 46
+     },
+     "ts": 1711462336
+    }
+   ]
+  },
+  {
+   "cluster_fp": "2e8e0ce1eb9a7ecb1b95c717908e00594054cc747da4683be8147d22f1859c8b",
+   "top_tokens": [
+    "aeronautic",
+    "airhart"
+   ],
+   "size": 1,
+   "first_ts": 1722878803,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:41163382",
+     "source_url": "https://news.ycombinator.com/item?id=41163382",
+     "title": "Launch HN: Airhart Aeronautics (YC S22) – A modern personal airplane",
+     "engagement": {
+      "points": 738,
+      "comments": 615
+     },
+     "ts": 1722878803
+    }
+   ]
+  },
+  {
+   "cluster_fp": "85575a7c1c1b3dde6a8fd719169ba4ace8da38124cda061447fe287f784028a8",
+   "top_tokens": [
+    "cron",
+    "postgre",
+    "queue",
+    "service"
+   ],
+   "size": 1,
+   "first_ts": 1723734497,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:41256977",
+     "source_url": "https://news.ycombinator.com/item?id=41256977",
+     "title": "Show HN: Queue/Cron as a service built on Postgres",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1723734497
+    }
+   ]
+  },
+  {
+   "cluster_fp": "68c06737111da4278f290a2f1f249c00505dffb6b62f64758c503d868058f7d1",
+   "top_tokens": [
+    "3d",
+    "ai",
+    "create",
+    "high-quality",
+    "model",
+    "regular",
+    "tool",
+    "video"
+   ],
+   "size": 1,
+   "first_ts": 1743637723,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:43563174",
+     "source_url": "https://news.ycombinator.com/item?id=43563174",
+     "title": "We Built an AI Tool to Create High-Quality 3D Models from Regular Videos",
+     "engagement": {
+      "points": 14,
+      "comments": 2
+     },
+     "ts": 1743637723
+    }
+   ]
+  },
+  {
+   "cluster_fp": "15ee7f633e7de52ea7372798fe6d90c6aef9a9fc1fd65ea3ca6ef43b75bf690f",
+   "top_tokens": [
+    "billdrip"
+   ],
+   "size": 1,
+   "first_ts": 1744046089,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:43613718",
+     "source_url": "https://news.ycombinator.com/item?id=43613718",
+     "title": "Show HN: Billdrip – Invoice scheduling with payment links and reminders",
+     "engagement": {
+      "points": 2,
+      "comments": 3
+     },
+     "ts": 1744046089
+    }
+   ]
+  },
+  {
+   "cluster_fp": "c57e976471c478988e6b0807c7a5b1aa2f00ec91a5e05ff27966540efb70d011",
+   "top_tokens": [
+    "agent",
+    "ai",
+    "businesse",
+    "delfyn",
+    "faster",
+    "get",
+    "help",
+    "paid"
+   ],
+   "size": 1,
+   "first_ts": 1750885599,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:44381839",
+     "source_url": "https://news.ycombinator.com/item?id=44381839",
+     "title": "Show HN: Delfyn, AI Agent to help businesses get paid faster",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1750885599
+    }
+   ]
+  },
+  {
+   "cluster_fp": "1f5e86beeb46a57dea1514d36e01a763f1ec7ab6e8eb0d1ccf4d170ab19a24f9",
+   "top_tokens": [
+    "invoicefast"
+   ],
+   "size": 1,
+   "first_ts": 1751358077,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:44431761",
+     "source_url": "https://news.ycombinator.com/item?id=44431761",
+     "title": "Show HN: InvoiceFast – Generate clean invoices in seconds for freelancers",
+     "engagement": {
+      "points": 1,
+      "comments": 1
+     },
+     "ts": 1751358077
+    }
+   ]
+  },
+  {
+   "cluster_fp": "db17a11821a5e7a251c853128b0aab339b0a1d5aac5cf415f27a1297656af799",
+   "top_tokens": [
+    "fast",
+    "fiscalbud",
+    "invoice",
+    "language",
+    "made",
+    "send",
+    "worldwide"
+   ],
+   "size": 1,
+   "first_ts": 1754688363,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:44841852",
+     "source_url": "https://news.ycombinator.com/item?id=44841852",
+     "title": "Show HN: I made FiscalBud to send invoices fast and worldwide in 77 languages",
+     "engagement": {
+      "points": 3,
+      "comments": 0
+     },
+     "ts": 1754688363
+    }
+   ]
+  },
+  {
+   "cluster_fp": "7208191cb4399ec6ba20edf2addcdff7777f9144bc84012c6d555a066f2eeae7",
+   "top_tokens": [
+    "businesse",
+    "free",
+    "invoice-generating",
+    "modern",
+    "software",
+    "workbass"
+   ],
+   "size": 1,
+   "first_ts": 1763786380,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:46012153",
+     "source_url": "https://news.ycombinator.com/item?id=46012153",
+     "title": "Workbass: Free Invoice-Generating Software for Modern Businesses",
+     "engagement": {
+      "points": 2,
+      "comments": 0
+     },
+     "ts": 1763786380
+    }
+   ]
+  },
+  {
+   "cluster_fp": "5e91b10682dc53c30c3a82f04710722f42eab6b2bb046448a9230aa7da985c4c",
+   "top_tokens": [
+    "bloat",
+    "developer",
+    "fast",
+    "invoicing",
+    "simple",
+    "solo",
+    "tool",
+    "year"
+   ],
+   "size": 1,
+   "first_ts": 1764774005,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:46135247",
+     "source_url": "https://news.ycombinator.com/item?id=46135247",
+     "title": "Show HN: A $20/year invoicing tool for solo developers (simple, fast, no bloat)",
+     "engagement": {
+      "points": 13,
+      "comments": 4
+     },
+     "ts": 1764774005
+    }
+   ]
+  },
+  {
+   "cluster_fp": "59770b59fba8dc0f17c5c2dc630e57d95eed18684c1884c887ab3b082acacfbd",
+   "top_tokens": [
+    "app",
+    "bouquin",
+    "encrypted",
+    "planner",
+    "pyside6",
+    "sqlcipher",
+    "written"
+   ],
+   "size": 1,
+   "first_ts": 1767334798,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:46461974",
+     "source_url": "https://news.ycombinator.com/item?id=46461974",
+     "title": "Show HN: Bouquin, an encrypted planner app written in PySide6 and SQLCipher",
+     "engagement": {
+      "points": 2,
+      "comments": 0
+     },
+     "ts": 1767334798
+    }
+   ]
+  },
+  {
+   "cluster_fp": "63fd8eebe1a79bc20c2a7b9132f208663990d54498d6e11a9c103ed3ffe39941",
+   "top_tokens": [
+    "businesse",
+    "gave",
+    "now",
+    "openclaw",
+    "run",
+    "tools."
+   ],
+   "size": 1,
+   "first_ts": 1771284103,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:47041682",
+     "source_url": "https://news.ycombinator.com/item?id=47041682",
+     "title": "Show HN: I gave OpenClaw 79 tools. It runs businesses now",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1771284103
+    }
+   ]
+  },
+  {
+   "cluster_fp": "e66d03af0bf1a4a7befe0a0024bbd724349e44ac105a2849f64f081523cca615",
+   "top_tokens": [
+    "unpaid"
+   ],
+   "size": 1,
+   "first_ts": 1771553101,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:47082761",
+     "source_url": "https://news.ycombinator.com/item?id=47082761",
+     "title": "Unpaid – AI payment reminders that verify, escalate, and auto-reply",
+     "engagement": {
+      "points": 1,
+      "comments": 0
+     },
+     "ts": 1771553101
+    }
+   ]
+  },
+  {
+   "cluster_fp": "73430ce6987462bdd78e361777240ed539ba98f0eb87ad78b4551e14f2907ce8",
+   "top_tokens": [
+    "uaryn"
+   ],
+   "size": 1,
+   "first_ts": 1771690074,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:47102030",
+     "source_url": "https://news.ycombinator.com/item?id=47102030",
+     "title": "Show HN: Uaryn – Smart invoicing that learns when your clients pay",
+     "engagement": {
+      "points": 2,
+      "comments": 0
+     },
+     "ts": 1771690074
+    }
+   ]
+  },
+  {
+   "cluster_fp": "1cd8d9dfa749cd6d5f8f32df97587e1c2bb6a68abfa22b0df65dbea2efa275b4",
+   "top_tokens": [
+    "hunter",
+    "payment"
+   ],
+   "size": 1,
+   "first_ts": 1773395679,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:47362399",
+     "source_url": "https://news.ycombinator.com/item?id=47362399",
+     "title": "Show HN: Payment Hunter – AI-powered invoice reminders for freelancers",
+     "engagement": {
+      "points": 2,
+      "comments": 0
+     },
+     "ts": 1773395679
+    }
+   ]
+  },
+  {
+   "cluster_fp": "c070645fe2d02002eb34b436c166c17d647122739151d03b89c814e0c641fc37",
+   "top_tokens": [
+    "duely"
+   ],
+   "size": 1,
+   "first_ts": 1784466134,
+   "previously_rejected": null,
+   "members": [
+    {
+     "source_id": "hn:48967864",
+     "source_url": "https://news.ycombinator.com/item?id=48967864",
+     "title": "Duely – Track unpaid invoices and send WhatsApp reminders in one click",
+     "engagement": {
+      "points": 1,
+      "comments": 1
+     },
+     "ts": 1784466134
+    }
+   ]
+  }
+ ]
+}

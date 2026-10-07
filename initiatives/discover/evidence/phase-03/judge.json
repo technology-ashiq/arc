@@ -1,0 +1,68 @@
+{
+ "version": 1,
+ "finalists": [
+  {
+   "cluster_fp": "6e390ca3cf4940c5545f5976093edaed24f08d18999ea5a44c30302d112a6a06",
+   "slug": "invoice-reminders-6e390c",
+   "score": 51,
+   "top_tokens": [
+    "invoice",
+    "tool",
+    "biz",
+    "cli",
+    "freelancer",
+    "generating",
+    "handle",
+    "open-source"
+   ],
+   "question": "Within 90 days of the owner running arc launch new for invoice-reminders-6e390c, will it reach its first paying customer?",
+   "question_hash": "aa31a23e6153f231cb43ec2e7589425b800b2953c5c6e8f0b1056f2b66c7c360",
+   "evidence": [
+    "hn:19591327",
+    "hn:44970635",
+    "hn:6353270"
+   ],
+   "council": {
+    "receipt": "01M49BHH0N45KQSFT1BSB5YVTK"
+   },
+   "verdict": {
+    "receipt": "01M49BHH0N45KQSFT1BSB5YVTK",
+    "session_id": "c-007-invoice-reminders-first-paying-customer-90-days",
+    "call": "hold",
+    "confidence": "Medium"
+   }
+  },
+  {
+   "cluster_fp": "0553eb72085478c06aab685ed980c8eff8a42be01d75abbf21a13e8ce98590e1",
+   "slug": "invoice-reminders-0553eb",
+   "score": 44,
+   "top_tokens": [
+    "client",
+    "app",
+    "payment",
+    "web",
+    "billing",
+    "business",
+    "chasing",
+    "couchdb"
+   ],
+   "question": "Within 90 days of the owner running arc launch new for invoice-reminders-0553eb, will it reach its first paying customer?",
+   "question_hash": "760218b7c59dbe1465dd4d0bb4007b9af7cfb5365213f606885a21f369c7ec8f",
+   "evidence": [
+    "hn:14929591",
+    "hn:3188615",
+    "hn:45537969",
+    "hn:6353498"
+   ],
+   "council": {
+    "receipt": "01M49CA9TAAN0YSC8WXXPFKY80"
+   },
+   "verdict": {
+    "receipt": "01M49CA9TAAN0YSC8WXXPFKY80",
+    "session_id": "c-008-invoice-reminders-first-paying-customer-90-days",
+    "call": "hold",
+    "confidence": "Medium"
+   }
+  }
+ ]
+}

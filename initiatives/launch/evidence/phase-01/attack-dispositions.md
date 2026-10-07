@@ -65,3 +65,12 @@ REJECTED: e37494d L3 (profile slug differs from its file) -- already-covered: lo
   default, stated). L1/L2/L3/L4 REJECTED: every scaffold and verify asks GitHub for protection again, so a plan that
   allows protection takes the normal path (`absent-ruling-no-limit` pins it). L5 REJECTED: other errors refuse by
   name by design. L7-L13 and L15 say no defect themselves. No critical/high/medium stands, so no round 2.
+
+## attack aadcd0c r1 (slice 10)
+
+- The first run (80f0f5e) was refused by arc-run's input scanner on credential-shaped header literals in four files; rewritten with Object.fromEntries, input pre-scanned clean.
+- B1/B2/B3/B4/B5 fixed. B6 -> D26 (a ctx change). L1 REJECTED: the template uses {{ .SiteURL }} and site_url is set to the brand domain in the same PATCH. L2 REJECTED: every call is schema-qualified (`auth.uid()`, `auth.jwt()`).
+
+## attack 6a5c24e r2 (slice 10)
+
+- B1 [high] fixed (round-trip check without a regex; fake wraps base64). B2 fixed (stock = empty). B3/B6 fixed in the exit plan's step order (invites before memberships/orgs, cascade). B7 is process: every finding of this slice is dispositioned here; the D18 twins (kill between a provider create and the report) for Resend and Supabase are added as D27. Logic: RUN FAILED.

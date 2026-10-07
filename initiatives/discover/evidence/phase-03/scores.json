@@ -1,0 +1,1224 @@
+{
+ "version": 1,
+ "niche": "invoice reminders",
+ "weights": {
+  "pain_frequency": 40,
+  "money_signal": 30,
+  "buildability_2w": 20,
+  "moat_hint": 10
+ },
+ "weights_sha256": "5fa2e0e480c3582d3bbf7baa5f68eecd4034988e0f51910f8fabd1ceff26b4ca",
+ "decision": "kickoff-ADR-1903",
+ "scores": [
+  {
+   "cluster_fp": "6e390ca3cf4940c5545f5976093edaed24f08d18999ea5a44c30302d112a6a06",
+   "score": 51,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 32,
+     "evidence": [
+      "hn:6353270",
+      "hn:19591327",
+      "hn:44970635"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 75,
+     "evidence": [
+      "hn:6353270",
+      "hn:19591327",
+      "hn:44970635"
+     ]
+    },
+    "buildability_2w": {
+     "value": 80,
+     "evidence": [
+      "hn:44970635",
+      "hn:6353270"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:19591327",
+    "hn:44970635",
+    "hn:6353270"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "0553eb72085478c06aab685ed980c8eff8a42be01d75abbf21a13e8ce98590e1",
+   "score": 44,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 42,
+     "evidence": [
+      "hn:3188615",
+      "hn:6353498",
+      "hn:14929591",
+      "hn:45537969"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 50,
+     "evidence": [
+      "hn:3188615",
+      "hn:6353498"
+     ]
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:3188615"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:14929591",
+    "hn:3188615",
+    "hn:45537969",
+    "hn:6353498"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "56e7156a651737a4211bddca85280a20356a35d41cd6fcffdb71a0b475e150f4",
+   "score": 41,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 60,
+     "evidence": [
+      "hn:5074920",
+      "hn:45823234",
+      "hn:46943969"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:46943969"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:45823234",
+    "hn:46943969",
+    "hn:5074920"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "2e8e0ce1eb9a7ecb1b95c717908e00594054cc747da4683be8147d22f1859c8b",
+   "score": 38,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 71,
+     "evidence": [
+      "hn:41163382"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:41163382"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "b7bf86099819f34fa49baecfcf6c3e1998515ce0a1f40defd2e57e8e1368c3ed",
+   "score": 27,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 36,
+     "evidence": [
+      "hn:2170560",
+      "hn:14280269",
+      "hn:20444424"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:14280269"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:14280269",
+    "hn:20444424",
+    "hn:2170560"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "95b9a72c76bf97e017dcbf74b934de9f2c33c77ca3b7ec2a5248b0867a121cc3",
+   "score": 26,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 20,
+     "evidence": [
+      "hn:45656655",
+      "hn:45704171"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 80,
+     "evidence": [
+      "hn:45656655",
+      "hn:45704171"
+     ]
+    },
+    "moat_hint": {
+     "value": 20,
+     "evidence": [
+      "hn:45704171"
+     ]
+    }
+   },
+   "evidence": [
+    "hn:45656655",
+    "hn:45704171"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "15ee7f633e7de52ea7372798fe6d90c6aef9a9fc1fd65ea3ca6ef43b75bf690f",
+   "score": 24,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:43613718"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:43613718"
+     ]
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:43613718"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:43613718"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "1cd8d9dfa749cd6d5f8f32df97587e1c2bb6a68abfa22b0df65dbea2efa275b4",
+   "score": 24,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:47362399"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:47362399"
+     ]
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:47362399"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:47362399"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "5e91b10682dc53c30c3a82f04710722f42eab6b2bb046448a9230aa7da985c4c",
+   "score": 24,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:46135247"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:46135247"
+     ]
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:46135247"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:46135247"
+   ],
+   "money_signal": {
+    "estimate_minor": 2000,
+    "currency": "USD",
+    "evidence": [
+     "hn:46135247"
+    ]
+   }
+  },
+  {
+   "cluster_fp": "c070645fe2d02002eb34b436c166c17d647122739151d03b89c814e0c641fc37",
+   "score": 24,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:48967864"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:48967864"
+     ]
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:48967864"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:48967864"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "6774332a303a0b14f50c1a9b44c5940ef1db3a47419d0bf7744b59597c2f0ef4",
+   "score": 22,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 12,
+     "evidence": [
+      "hn:6272897"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:6272897"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:6272897"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "1f5e86beeb46a57dea1514d36e01a763f1ec7ab6e8eb0d1ccf4d170ab19a24f9",
+   "score": 21,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:44431761"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:44431761"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:44431761"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "7208191cb4399ec6ba20edf2addcdff7777f9144bc84012c6d555a066f2eeae7",
+   "score": 21,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:46012153"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:46012153"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:46012153"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "73430ce6987462bdd78e361777240ed539ba98f0eb87ad78b4551e14f2907ce8",
+   "score": 21,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:47102030"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:47102030"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:47102030"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "c57e976471c478988e6b0807c7a5b1aa2f00ec91a5e05ff27966540efb70d011",
+   "score": 21,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:44381839"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:44381839"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:44381839"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "db17a11821a5e7a251c853128b0aab339b0a1d5aac5cf415f27a1297656af799",
+   "score": 21,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:44841852"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 25,
+     "evidence": [
+      "hn:44841852"
+     ]
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:44841852"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "98de3f2086f7ade95de75b59858313859e27a961f7e35b76087f5087db005a8c",
+   "score": 18,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 21,
+     "evidence": [
+      "hn:2300711",
+      "hn:3379386"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:2300711",
+    "hn:3379386"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "59770b59fba8dc0f17c5c2dc630e57d95eed18684c1884c887ab3b082acacfbd",
+   "score": 17,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:46461974"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:46461974"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:46461974"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "63fd8eebe1a79bc20c2a7b9132f208663990d54498d6e11a9c103ed3ffe39941",
+   "score": 17,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:47041682"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:47041682"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:47041682"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "68c06737111da4278f290a2f1f249c00505dffb6b62f64758c503d868058f7d1",
+   "score": 17,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:43563174"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:43563174"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:43563174"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "72448acbd4b69344261111a5f4f2829116a34c01494ed032596a68fb5febc5a9",
+   "score": 17,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 11,
+     "evidence": [
+      "hn:26004340"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:26004340"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:26004340"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "e66d03af0bf1a4a7befe0a0024bbd724349e44ac105a2849f64f081523cca615",
+   "score": 17,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:47082761"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 65,
+     "evidence": [
+      "hn:47082761"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:47082761"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "430d531a63259291b35fce6d8a86c5e2cdfdc184557e8cbd2f1e334d593102db",
+   "score": 16,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 15,
+     "evidence": [
+      "hn:30543228"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:30543228"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "4c7a772a2a3083d40daf85f4a7524ebeffe61148b146da42e5ead80452518b75",
+   "score": 15,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 14,
+     "evidence": [
+      "hn:39828058"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:39828058"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "7d8e31929e294acd4598af35bb843395acdad8718d476078338dda5ab45349c6",
+   "score": 15,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 14,
+     "evidence": [
+      "hn:23700275"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:23700275"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "0c7603233a0db3fae77c6c6bdfe8a344b8e93ee4b523e7968464cd5048249da8",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:37858969"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:37858969"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "12ad1342d30e7e74889958ea90eeba8f434b42c6a11f8c03733e680713c0f8e6",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:1293078"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:1293078"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "2138766742e81a34b865ac45bbcb1834761c698cf73fa9fc8f4d269fc0392ef5",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:3452851"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:3452851"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "854b8397d0bb06d7f539a233efea7e241ca3a4a0ba763a6d3b03eee54708ab2b",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:29283013"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:29283013"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "85575a7c1c1b3dde6a8fd719169ba4ace8da38124cda061447fe287f784028a8",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 10,
+     "evidence": [
+      "hn:41256977"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:41256977"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "cf9ce375a86b109d0294a01a6c1abcd205ff1af2cd6d24d229b30d684eac27f2",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 11,
+     "evidence": [
+      "hn:4031050"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:4031050"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "d2aa57a4bb39d036e5b97cae33b517928bc4b842388ca231065d7c373831ab93",
+   "score": 14,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 11,
+     "evidence": [
+      "hn:33396442"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 50,
+     "evidence": []
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:33396442"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  },
+  {
+   "cluster_fp": "a55176d77a479a9981473e25404a7b068985f00a12acaa8009e1e2b0f2e4b996",
+   "score": 13,
+   "dropped": [],
+   "terms": {
+    "pain_frequency": {
+     "value": 20,
+     "evidence": [
+      "hn:21940568",
+      "hn:33698819"
+     ],
+     "note": "size + comments"
+    },
+    "money_signal": {
+     "value": 0,
+     "evidence": []
+    },
+    "buildability_2w": {
+     "value": 25,
+     "evidence": [
+      "hn:21940568"
+     ]
+    },
+    "moat_hint": {
+     "value": 0,
+     "evidence": []
+    }
+   },
+   "evidence": [
+    "hn:21940568",
+    "hn:33698819"
+   ],
+   "money_signal": {
+    "estimate_minor": "ABSENT",
+    "currency": "USD",
+    "evidence": []
+   }
+  }
+ ],
+ "not_scored": []
+}
