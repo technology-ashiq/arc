@@ -134,7 +134,8 @@ fi
 
 # ---------- full (default): byte-identical to pre-initiative (REQ-02) ----------
 # Excluded from the .claude sync: personal settings + per-project working state +
-# the scheduled-tasks runtime lock (never belongs in a consumer repo -- REQ-04).
+# the scheduled-tasks runtime lock (never belongs in a consumer repo -- REQ-04), and the headroom wrapper's
+# per-machine files (.claude/.headroom_wrap_*), which rode into every consumer repo until 2026-10-08.
 EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock" "worktrees")
 
 mkdir -p "$TARGET/.claude" "$TARGET/docs/templates" "$TARGET/docs/playbooks" "$TARGET/docs"
@@ -145,7 +146,7 @@ _arc_settings_save
 # ARC_SYNC_NO_RSYNC=1 forces the portable cp fallback even where rsync exists --
 # lets CI prove REQ-02 (byte-identical output) holds on BOTH copy paths.
 if command -v rsync >/dev/null 2>&1 && [ -z "${ARC_SYNC_NO_RSYNC:-}" ]; then
-  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' --exclude 'worktrees/' "$SRC/.claude/" "$TARGET/.claude/"
+  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' --exclude 'worktrees/' --exclude '.headroom_wrap_*' "$SRC/.claude/" "$TARGET/.claude/"
   rsync -a "$SRC/docs/templates/" "$TARGET/docs/templates/"
   # docs/playbooks/ is a DIRECTORY sync, not another entry in the flat meta-docs loop below, so a
   # playbook added later ships in FULL mode without editing either twin again. It still needs a
@@ -171,6 +172,8 @@ else
   # Portable cp fallback (Git Bash has no rsync): copy all, then drop excludes.
   cp -r "$SRC/.claude/." "$TARGET/.claude/"
   for x in "${EXCLUDES[@]}"; do rm -rf "$TARGET/.claude/${x:?}" 2>/dev/null || true; done
+  # A pattern, so unquoted on purpose -- EXCLUDES holds exact names and quotes them, which never globs.
+  rm -f "$TARGET"/.claude/.headroom_wrap_* 2>/dev/null || true
   [ -d "$SRC/docs/templates" ] && cp -r "$SRC/docs/templates/." "$TARGET/docs/templates/"
   [ -d "$SRC/docs/playbooks" ] && cp -r "$SRC/docs/playbooks/." "$TARGET/docs/playbooks/"
 fi
