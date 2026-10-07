@@ -927,6 +927,52 @@ EOF
     exit $?
     ;;
 
+  ref)
+    # Phase 07 S4b (REQ-09: every item "rendered by arc's own renderer"). A pack screen dealt as its own
+    # file stayed a JPEG, or a 2x PNG carrying the gallery's iTXt source URL, with the gallery's dates --
+    # the blindness gate told every reference apart from the arc items at the file level (2026-10-07).
+    # So a reference is framed in a one-image page in a gitignored ref-<sha16>/ dir and rendered by the
+    # same renderer into the same session shape as a variant; the deal deals that render.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
+    REF=""
+    RFLAGS=()
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --ref)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          REF="$2"; shift 2;;
+        --viewport)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          case "$2" in
+            ""|*[!0123456789x]*|x*|*x|*x*x*) echo "design-explore: --viewport takes WxH, got '$(printf '%s' "$2" | cut -c1-40)'" >&2; exit 1;;
+            *x*) ;;
+            *) echo "design-explore: --viewport takes WxH, got '$(printf '%s' "$2" | cut -c1-40)'" >&2; exit 1;;
+          esac
+          RFLAGS+=("$1" "$2"); shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    case "$REF" in
+      ????????????????) ;;
+      *) echo "design-explore: --ref takes a 16-hex sha prefix" >&2; exit 1;;
+    esac
+    case "$REF" in
+      *[!0123456789abcdef]*) echo "design-explore: --ref takes a 16-hex sha prefix" >&2; exit 1;;
+    esac
+    BRIEF_LINE="$(grep '^brief=' "$EX/explore.txt" 2>/dev/null | head -1 | tr -d '\r')"
+    BRIEF_ID="${BRIEF_LINE#brief=docs/design/briefs/}"
+    BRIEF_ID="${BRIEF_ID%/brief.md}"
+    case "$BRIEF_ID" in
+      ""|-*|*/*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: explore.txt names no brief under docs/design/briefs/<id>/brief.md" >&2; exit 1;;
+    esac
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the reference frame needs it" >&2; exit 1; }
+    # The copy and the frame are written by a node module (hashing, link refusal, exactly-one match);
+    # its logic belongs in its own file, not in this shell string.
+    node "$DESIGN_DIR/design-jury.mjs" frame --root "$ROOT" --id "$ID" --ref "$REF" || exit $?
+    bash "$DESIGN_DIR/design-render.sh" "docs/design/explore/$ID/ref-$REF/index.html" --mode explore --session "$ID--ref-$REF" ${RFLAGS[@]+"${RFLAGS[@]}"}
+    exit $?
+    ;;
+
   status)
     [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
     echo "explore: $ID"

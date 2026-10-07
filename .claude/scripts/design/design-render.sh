@@ -173,6 +173,7 @@ if [ "$MODE" = "explore" ]; then
     *:*) _explore_route_refuse "A URL or a drive path is never an explore page.";;
     docs/design/explore/*/variant-?/?*) ;;
     docs/design/explore/*/rival-*/?*) ;;
+    docs/design/explore/*/ref-????????????????/?*) ;;
     *) _explore_route_refuse "The route is not a page inside a variant directory.";;
   esac
   # `*` in a case pattern crosses `/`, so each part is taken apart and checked on its own.
@@ -195,7 +196,12 @@ if [ "$MODE" = "explore" ]; then
       case "${_er_variant#rival-}" in
         ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|con|prn|aux|nul|com[0123456789]|lpt[0123456789]) _explore_route_refuse "The rival directory must be rival-<lowercase kebab provider>.";;
       esac;;
-    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter> or rival-<provider>.";;
+    # A pack screen framed for the jury (Phase 07 S4b, REQ-09): every item is rendered by this renderer.
+    ref-????????????????)
+      case "${_er_variant#ref-}" in
+        *[!0123456789abcdef]*) _explore_route_refuse "The reference directory must be ref-<16 lowercase hex>.";;
+      esac;;
+    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter>, rival-<provider> or ref-<16 hex>.";;
   esac
   case "/$EXPLORE_PAGE/" in
     *//*|*/./*|*/../*) _explore_route_refuse "The page is not a plain path inside the variant.";;
@@ -541,7 +547,19 @@ esac
 # `get text` requires a selector -- called without one it errors, which reads as 0 chars and
 # refuses every render. Fail-closed is the right direction but it must fail on a blank PAGE,
 # not on a malformed probe.
-TEXT_LEN="$(_ab get text body 2>/dev/null | wc -c | tr -d ' ')"
+# A framed reference (ref-<sha16>, Phase 07 S4b) is one image and no text by design, so "content" there
+# means its one image decoded with a real size -- the same fail-closed question, asked of what the page is.
+_ER_REF=0
+case "${_er_variant:-}" in ref-*) _ER_REF=1;; esac
+if [ "$_ER_REF" = 1 ]; then
+  IMG_STATE="$(_ab eval "(() => { const i = document.images; return i.length === 1 && i[0].complete && i[0].naturalWidth > 0; })()" 2>/dev/null | tr -d '\r\n ')"
+  case "$IMG_STATE" in
+    true) TEXT_LEN=200;;
+    *) TEXT_LEN=0;;
+  esac
+else
+  TEXT_LEN="$(_ab get text body 2>/dev/null | wc -c | tr -d ' ')"
+fi
 case "$TEXT_LEN" in ''|*[!0-9]*) TEXT_LEN=0;; esac
 if [ "$TEXT_LEN" -lt 200 ]; then
   echo "design-render: REFUSED -- $URL rendered only ${TEXT_LEN} chars of text (blank or half-loaded)." >&2
