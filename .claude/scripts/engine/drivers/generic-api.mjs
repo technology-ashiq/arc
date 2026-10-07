@@ -46,7 +46,25 @@ const DEADLINE_MARGIN_MS = 1500;
 // Words a provider uses when the KEY or the ACCOUNT is out of money, not when the service is busy.
 // A 429 carrying one is a spent quota, and hopping on it spends again (ADR-0228; the capped key's
 // 403 `Key limit exceeded` is the measured case, ADR-0213).
-const MONEY_WORDS = /quota|credit|key limit|billing|insufficient[_ ]funds/i;
+const MONEY_WORDS = /quota|credit|key limit|insufficient[_ ]funds/i;
+
+/**
+ * The provider's own error words, bounded: `error.message` / `error.code` / `error.type` (or a top-level
+ * `message`) of a JSON body, else the first 300 characters. Scanning a whole, unbounded body read a docs link
+ * or a proxy page as a spent quota and suppressed a fallback that would have helped (attack 27dcf39 B9).
+ * @param {string} text
+ */
+function errorWords(text) {
+  const raw = String(text || "");
+  try {
+    const j = JSON.parse(raw);
+    const e = j && typeof j === "object" ? (j.error && typeof j.error === "object" ? j.error : j) : {};
+    const parts = [e.message, e.code, e.type, typeof j.error === "string" ? j.error : undefined].filter((v) => typeof v === "string");
+    return parts.join(" ").slice(0, 500);
+  } catch {
+    return raw.slice(0, 300);
+  }
+}
 
 /**
  * WHY the transport failed, from what the endpoint actually returned (ADR-0228). Only structural
@@ -58,7 +76,7 @@ const MONEY_WORDS = /quota|credit|key limit|billing|insufficient[_ ]funds/i;
 function failureClassOf(last) {
   if (!last) return null;
   const s = last.status;
-  const money = MONEY_WORDS.test(String(last.text || ""));
+  const money = MONEY_WORDS.test(errorWords(last.text));
   if (s === 0) return "transport";                       // connect error, DNS, abort on our own timeout
   if (s === 402) return "budget";
   if (s === 429) return money ? "budget" : "provider-unavailable";
@@ -166,9 +184,14 @@ await runDriver("generic-api", async ({ processName, input }) => {
   // of a 10-minute cap ran 30 minutes under a caller that believed it had set a deadline (engine bug, 2026-09-26).
   const left = () => { const r = msUntilDeadline(); return r === undefined ? undefined : r - DEADLINE_MARGIN_MS; };
   const mmss = (ms) => `${Math.floor(ms / 60_000)}m${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}s`;
+  // Set when the RUN's deadline, not this driver's own attempt cap, is what ended the ladder: that is a budget
+  // outcome and never a transport one, or the fallback would start a hop with the run already out of time
+  // (attack 27dcf39 B1).
+  let outOfTime = false;
   for (let attempt = 0; attempt < tries; attempt++) {
     const rem = left();
     if (rem !== undefined && rem <= 0) {
+      outOfTime = true;
       process.stderr.write(`generic-api: attempt ${attempt + 1}/${tries} not started -- the run's deadline has passed\n`);
       break;
     }
@@ -181,6 +204,7 @@ await runDriver("generic-api", async ({ processName, input }) => {
     } catch (e) {
       // AbortError (timeout) and network errors are transport, same as a 5xx.
       last = { status: 0, text: String(e.message), timedOut: /** @type {any} */ (e).name === "AbortError" };
+      if (last.timedOut && rem !== undefined && rem < TIMEOUT_MS) outOfTime = true;
     }
     // ONE line per failed attempt, as it happens: a retry ladder that said nothing until its last rung failed kept the
     // operator waiting on silence (engine bug, 2026-09-26). The status or "timeout", the time spent, and what is left.
@@ -190,14 +214,14 @@ await runDriver("generic-api", async ({ processName, input }) => {
     if (attempt + 1 < tries) {
       const pause = (attempt + 1) * 1500;
       const r2 = left();
-      if (r2 !== undefined && r2 <= pause) break;
+      if (r2 !== undefined && r2 <= pause) { outOfTime = true; break; }
       await sleep(pause);
     }
   }
 
   if (!last || last.status < 200 || last.status >= 300) {
     const e = new Error(`transport failed after ${MAX_TRANSPORT_RETRIES + 1} attempt(s): status ${last?.status ?? "none"}`);
-    const cls = failureClassOf(last);
+    const cls = outOfTime ? "budget" : failureClassOf(last);
     if (cls === "budget") e.arcExit = 2;
     else if (cls) e.arcFailureClass = cls;
     throw e;

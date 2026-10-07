@@ -1509,7 +1509,11 @@ async function runDriverProcess(file, args, opts) {
 
 async function invoke(name, capMs) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
-  if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null, spawned: false, notInstalled: true };
+  // A FILE, not merely a path: a directory there would pass existsSync and then fail to spawn as an unclassified
+  // exit 1 (attack 27dcf39 B7).
+  let shIsFile = false;
+  try { shIsFile = statSync(sh).isFile(); } catch { shIsFile = false; }
+  if (!shIsFile) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null, spawned: false, notInstalled: true };
 
   const blocked = policyGate(name);
   if (blocked) {
@@ -1650,6 +1654,9 @@ async function invoke(name, capMs) {
   let declared;
   if (existsSync(costFile)) {
     try { cost = JSON.parse(readFileSync(costFile, "utf8")); } catch { cost = null; }
+    // A sidecar that is not a plain object (an array, a string, a number) carries neither a cost nor a class
+    // (attack 27dcf39 B2).
+    if (!cost || typeof cost !== "object" || Array.isArray(cost)) cost = null;
     // WHY the driver says it failed rides the same sidecar (ADR-0228), and it is not a cost: lifted
     // out here so no cost reader ever sees it, and judged by failure-class.mjs, never trusted raw.
     if (cost && typeof cost === "object" && Object.prototype.hasOwnProperty.call(cost, "failure_class")) {
@@ -1685,6 +1692,8 @@ async function invoke(name, capMs) {
     // than arc-run would hold. The property is "did a process exist", not "did spawnSync return an
     // error", and the two named codes are the ones that mean it did.
     spawned: !(res.error && res.status === null && !timedOut && !overflowed),
+    // The same fact, read as a class: no process ever existed, so nothing answered (attack 27dcf39 B7).
+    notInstalled: Boolean(res.error && res.status === null && !timedOut && !overflowed),
   };
 }
 
@@ -1854,10 +1863,17 @@ async function attempt(name, capMs) {
   // THE CLASS COMES FROM failure-class.mjs AND NOWHERE ELSE (ADR-0228). The verdict above keeps the
   // receipt's `reason` exactly as it was; the class is what decides a hop.
   const c = classifyAttempt({ timedOut: r.timedOut, overflowed: r.overflowed, policyDenied: r.policyDenied, notInstalled: r.notInstalled,
-    code: r.code, declared: r.declared, contractFault: v.verdict === "schema" });
+    code: r.code, declared: r.declared, contractFault: v.verdict === "schema", driver: name });
   if (c.warn) console.error(`arc-run: WARN ${c.warn}`);
+  // Spend is kept only as a non-negative integer of paise; a figure that is PRESENT but unreadable is marked, so
+  // the money term reads it as unproven rather than as nothing (attack 27dcf39 B5, L14 -- blank read as zero).
+  const okInr = (v) => Number.isInteger(v) && v >= 0 && v <= 1e12;
   const hopCost = r.cost && typeof r.cost === "object"
-    ? Object.fromEntries(["inr", "tokens_in", "tokens_out"].filter((k) => Number.isFinite(r.cost[k])).map((k) => [k, r.cost[k]]))
+    ? {
+      ...(okInr(r.cost.inr) ? { inr: r.cost.inr } : {}),
+      ...(r.cost.inr !== undefined && r.cost.inr !== null && !okInr(r.cost.inr) ? { inr_invalid: true } : {}),
+      ...Object.fromEntries(["tokens_in", "tokens_out"].filter((k) => Number.isInteger(r.cost[k]) && r.cost[k] >= 0).map((k) => [k, r.cost[k]])),
+    }
     : null;
   // `class: null` is an attempt that succeeded. It is not a seventh class.
   HOPS.push({ driver: name, tier: tier ?? null, class: c.cls, ms: Math.max(0, Date.now() - t0), ...(hopCost && Object.keys(hopCost).length ? { cost: hopCost } : {}) });
@@ -2084,19 +2100,29 @@ let contractHopped = false;
 // was every exit 1 -- a 503, a provider refusal, a crash and an unparseable answer all walked the chain.
 while (a.verdict !== "ok" && !overBudget()) {
   const d = nextHop({ remaining: fallbacks, terms: chainTerms }, HOPS, hopCtx());
-  if (!d.hop) { chainStop = d; break; }
+  if (!d.hop) {
+    chainStop = d;
+    if (!d.byTerms && fallbacks.length) console.error(`arc-run: not falling back -- ${d.why}`);
+    break;
+  }
   const next = d.to;
-  fallbacks.splice(d.index, 1);
-  console.error(`arc-run: ${driver} failed as ${a.failureClass} (${a.why}); falling back to ${next}`);
+  // Checked BEFORE the chain is changed or the hop announced (attack 27dcf39 B6, B10): a refused target exits here,
+  // and an owner-model run stops without a "falling back" line for a hop that never happens.
   // THE HOP IS VALIDATED LIKE ANY OTHER SELECTION. Without this the closed driver set and the
   // ADR-0225 grant were both bypassed by a fallback entry -- proved, with an arbitrary script
   // outside the drivers directory executed from a router row.
-  validateDriverSelection(next, " on a fallback hop");
   // An owner model was checked against ONE driver (ADR-1350). A hop to a driver that cannot apply a model would record
   // the owner's choice for a run that never used it (attack c50172d B7): stop instead of carrying it across.
   // The owner chose a model at ONE endpoint (generic-api, the owner's base URL); another driver, capable or not, would send that
   // id somewhere it was never chosen for (attack b8271c1 B4). An owner-model run does not fall back.
-  if (ownerModel) { console.error(`arc-run: no fallback to \`${next}\` -- an owner-model run stays on the driver it was chosen for`); break; }
+  validateDriverSelection(next, " on a fallback hop");
+  if (ownerModel) {
+    console.error(`arc-run: no fallback to \`${next}\` -- an owner-model run stays on the driver it was chosen for`);
+    chainStop = { hop: false, why: "an owner-model run does not fall back", byTerms: false };
+    break;
+  }
+  fallbacks.splice(d.index, 1);
+  console.error(`arc-run: ${driver} failed as ${a.failureClass} (${a.why}); falling back to ${next}`);
   if (a.failureClass === "model-invalid") contractHopped = true;
   driver = next;
   // THE PIN IS PER-DRIVER, SO IT IS RECOMPUTED PER HOP. It was resolved once from the ORIGINAL

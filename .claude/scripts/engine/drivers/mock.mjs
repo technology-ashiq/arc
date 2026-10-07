@@ -134,6 +134,10 @@ await runDriver("mock", async ({ processName }) => {
   if (unknownKey) throw new Error(`recording ${processName}/${id} carries ${JSON.stringify(unknownKey)}, which this driver does not know (only __cost and __failure)`);
 
   const { __cost, __failure, ...output } = doc;
+  // The cost's source is checked before EITHER path, because a replayed failure may carry a measured spend too.
+  if (__cost && !["measured", "estimated", "manual"].includes(__cost.source)) {
+    throw new Error(`recording ${processName}/${id} declares __cost.source ${JSON.stringify(__cost.source)}, outside measured|estimated|manual -- the spine would quarantine this receipt and the run would still exit 0`);
+  }
   // A REPLAYED FAILURE (ADR-0228), so every FailureClass can be fixtured offline (ENG-F). `class` is
   // what the driver declares (null declares nothing); `exit` 2 asks for BUDGET_DECLINED; `exit` 0
   // returns the output AND writes the declaration, which fixtures the rule that exit 0 decides the
@@ -149,6 +153,8 @@ await runDriver("mock", async ({ processName }) => {
     const e = new Error(String(__failure.message || `replayed failure (${__failure.class ?? "undeclared"})`));
     if (__failure.class !== null && __failure.class !== undefined) e.arcFailureClass = __failure.class;
     if (exit === 2) e.arcExit = 2;
+    // A failure that spent money says so: a chain's max_cost must be able to see it (ADR-0228 F3).
+    if (__cost) e.arcCost = __cost;
     throw e;
   }
   if (__cost) {

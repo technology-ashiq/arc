@@ -85,9 +85,9 @@ if (want("unit")) {
     && nh(["generic-api"], [hop("transport")], ctx({ runRemainingMs: FC.MIN_HOP_MS })).hop === true);
   check("U: max_attempts refuses the attempt past it",
     nh(["generic-api"], [hop("transport")], ctx(), { max_attempts: 1 }).byTerms === true && nh(["generic-api"], [hop("transport")], ctx(), { max_attempts: 2 }).hop === true);
-  check("U: max_wall_ms refuses at the term and caps the hop's timeout below it",
-    nh(["generic-api"], [hop("transport")], ctx({ elapsedMs: 1000 }), { max_wall_ms: 1000 }).byTerms === true
-    && nh(["generic-api"], [hop("transport")], ctx({ elapsedMs: 400, runRemainingMs: 9000 }), { max_wall_ms: 1000 }).timeoutMs === 600);
+  check("U: max_wall_ms needs MIN_HOP_MS of the term left, and caps the hop's timeout at what is left",
+    nh(["generic-api"], [hop("transport")], ctx({ elapsedMs: 6000 }), { max_wall_ms: 10000 }).byTerms === true
+    && nh(["generic-api"], [hop("transport")], ctx({ elapsedMs: 4000, runRemainingMs: 9000 }), { max_wall_ms: 10000 }).timeoutMs === 6000);
   check("U: max_cost -- an answering attempt with no spend is unproven (F3)", /unproven/.test(String(nh(["generic-api"], [hop("model-invalid")], ctx(), { max_cost: 100 }).why)));
   check("U: max_cost -- an answer-less attempt's absent spend counts as 0 (F3)", nh(["generic-api"], [hop("transport")], ctx(), { max_cost: 100 }).hop === true);
   check("U: max_cost -- measured spend at the cap refuses, under it hops",
@@ -95,6 +95,29 @@ if (want("unit")) {
     && nh(["generic-api"], [hop("model-invalid", { cost: { inr: 50 } })], ctx(), { max_cost: 100 }).hop === true);
   check("U: max_cost unmetered skips the money check", nh(["generic-api"], [hop("model-invalid")], ctx(), { max_cost: "unmetered" }).hop === true);
   check("U: termsCheck binds a same-tier retry the same way", FC.termsCheck({ max_attempts: 1 }, [hop("model-invalid")], ctx()).ok === false);
+  check("U: (B2) a declaration from a driver that does not declare is ignored and read as unknown",
+    FC.classifyAttempt({ code: 1, declared: "transport", driver: "hermes" }).cls === "unknown" && FC.classifyAttempt({ code: 1, declared: "transport", driver: "generic-api" }).cls === "transport");
+  check("U: (B5) a present but unreadable spend is unproven even on an answer-less attempt",
+    nh(["generic-api"], [hop("transport", { cost: { inr_invalid: true } })], ctx(), { max_cost: 100 }).byTerms === true);
+  {
+    // (B3) the driver side writes only a class-shaped name; anything else leaves no declaration at all.
+    const { writeFailureClass } = await import(pathToFileURL(join(REPO, ".claude/scripts/engine/drivers/common.mjs")).href);
+    const side = join(mkdtempSync(join(tmpdir(), "fc-sidecar-")), "cost.json");
+    const held = process.env.ARC_DRIVER_COST_FILE;
+    process.env.ARC_DRIVER_COST_FILE = side;
+    const errW = process.stderr.write.bind(process.stderr);
+    process.stderr.write = () => true;
+    try {
+      writeFailureClass("x".repeat(100000));
+      const wroteHuge = existsSync(side);
+      writeFailureClass("transport");
+      const good = JSON.parse(readFileSync(side, "utf8")).failure_class === "transport";
+      check("U: (B3) writeFailureClass refuses a value that is not a short lowercase name, and writes a real one", !wroteHuge && good);
+    } finally {
+      process.stderr.write = errW;
+      if (held === undefined) delete process.env.ARC_DRIVER_COST_FILE; else process.env.ARC_DRIVER_COST_FILE = held;
+    }
+  }
 
   // Replay determinism (invariant c): the same recorded hops give the same decision, and the input is not mutated.
   const rec = [hop("transport"), { driver: "generic-api", class: "provider-unavailable", ms: 5 }];
@@ -159,14 +182,14 @@ if (needTree) {
   const put = (id, doc) => writeFileSync(join(rec, "commit-msg-draft", `${id}.json`), JSON.stringify(doc));
   put("valid", VALID);
   put("transport", { __failure: { class: "transport", message: "connect ECONNREFUSED (replayed)" } });
-  put("policy", { __failure: { class: "policy-refusal", message: "the provider refused (replayed)" } });
+  put("policy", { __failure: { class: "policy-refusal", message: "the provider refused (replayed)" }, __cost: { inr: 1, source: "measured" } });
   put("undeclared", { __failure: { class: null, message: "it broke (replayed)" } });
   put("teleport", { __failure: { class: "teleport", message: "a typo (replayed)" } });
   put("bad-cost1", { ...BAD, __cost: { inr: 1, source: "measured" } });
   put("bad-cost500", { ...BAD, __cost: { inr: 500, source: "measured" } });
   put("bad-nocost", BAD);
   put("ok-declares", { ...VALID, __failure: { class: "transport", exit: 0 } });
-  put("exit2-declares", { __failure: { class: "transport", exit: 2, message: "declined (replayed)" } });
+  put("exit2-declares", { __failure: { class: "transport", exit: 2, message: "declined (replayed)" }, __cost: { inr: 1, source: "measured" } });
   check("fixture: the copied tree carries arc-run, the emitter, both drivers and the process (vacuous-pass guard)",
     ["engine/arc-run.mjs", "hq/arc-event.sh", "engine/drivers/mock.sh", "engine/drivers/generic-api.sh", "engine/failure-class.mjs"].every((p) => existsSync(join(root, ".claude/scripts", p)))
     && existsSync(join(root, "processes/commit-msg-draft.process.yaml")) && readdirSync(join(rec, "commit-msg-draft")).length === 10);
@@ -396,6 +419,7 @@ try {
       [402, JSON.stringify({ error: "payment required" }), "budget", false],
       [403, JSON.stringify({ error: { message: "Key limit exceeded (total limit)" } }), "budget", false],
       [500, "{}", "transport", true],
+      [429, JSON.stringify({ error: { message: "rate limited -- see https://example.com/docs/billing-and-limits" } }), "provider-unavailable", true],
       [401, JSON.stringify({ error: "bad key" }), "unknown", false],
     ];
     for (const [status, body, cls, hops] of cases) {
@@ -408,6 +432,13 @@ try {
     server.mode = "notjson";
     const nj = await arcRun({ port, fixture: "valid" });
     check("D: generic-api with a 200 whose answer is not JSON declares model-invalid", hopsOf(nj)[0]?.class === "model-invalid", JSON.stringify(hopsOf(nj)));
+    // (B1) The RUN's deadline, not the per-attempt cap, ends the ladder: a hanging endpoint, a 60 s attempt cap and a
+    // ~9 s run budget. The driver aborts on the run's clock and must declare budget, never transport.
+    writeRouter({ driver: "generic-api", chain: ["mock"] });
+    server.mode = "hang";
+    const dlg = await arcRun({ port, fixture: "valid", timeoutMs: "60000", budget: "min=0.15" });
+    check("D: generic-api ended by the run's deadline declares budget and does not hop", hopsOf(dlg)[0]?.class === "budget" && !hopped(dlg) && dlg.receipt?.reason === "budget", `${JSON.stringify(hopsOf(dlg))} ${dlg.err.slice(-200)}`);
+    srv.closeAllConnections?.();
     // A closed port: connect refused is transport.
     const dead = createServer();
     const deadPort = await new Promise((ok) => dead.listen(0, "127.0.0.1", () => ok(dead.address().port)));

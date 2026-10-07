@@ -16,7 +16,7 @@ section_green() {
 }
 
 @test "failure-class unit: the six classes, the classifier, families, nextHop, terms and the real router" {
-  section_green unit 54
+  section_green unit 57
   [[ "$output" == *"ok U: arc-run's loop asks nextHop exactly once and keeps no hop rule of its own"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok U: (c) nextHop over the same recorded hops is identical twice and mutates nothing"* ]] || { echo "$output"; false; }
 }
@@ -37,7 +37,7 @@ section_green() {
 }
 
 @test "failure-class drivers: generic-api per HTTP status, and the CLI drivers with no CLI installed" {
-  section_green drv 13
+  section_green drv 15
   [[ "$output" == *"ok D: generic-api HTTP 429 (money) declares budget and does not hop"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok D: claude-code with no CLI installed declares provider-unavailable"* ]] || { echo "$output"; false; }
 }

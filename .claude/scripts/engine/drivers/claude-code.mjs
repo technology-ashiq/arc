@@ -26,6 +26,11 @@ import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
  * returns, so everything after it is unchanged. What a line may say is the adapter's `progressLine`, pure and tested.
  */
 
+// The CLI could not be STARTED at all: not there (ENOENT), not runnable (EACCES, EPERM), or a Windows shim the
+// spawn cannot launch (EINVAL). That is the driver being unavailable -- the one failure it can name structurally
+// (ADR-0228; attack 27dcf39 B8). Anything after the CLI started stays undeclared.
+const cliMissing = (e) => Boolean(e) && (["ENOENT", "EACCES", "EPERM"].includes(e.code) || (e.code === "EINVAL" && String(e.syscall || "").startsWith("spawn")));
+
 /** Run the CLI in stream-json mode, writing a progress line per tool step; resolve with the final result event. */
 /**
  * The command that runs the CLI. A fixture CLI is a .mjs run under this node: Windows cannot spawn a script file
@@ -107,7 +112,7 @@ function runStreaming(args, prompt) {
     child.stderr.on("data", (c) => { errTail = (errTail + c).slice(-2000); });
     // A CLI that is not there is the one failure this driver can name structurally (ADR-0228); every other
     // CLI failure reaches it as free text, and guessing a class from words is not a classification.
-    child.on("error", (e) => fail(e.message, e && e.code === "ENOENT" ? "provider-unavailable" : undefined));
+    child.on("error", (e) => fail(e.message, cliMissing(e) ? "provider-unavailable" : undefined));
     child.on("exit", (code, signal) => {
       exited = { code, signal };
       drain = setTimeout(finish, STREAM_DRAIN_MS);
@@ -173,7 +178,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
     } catch (e) {
       const err = new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
       // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
-      if (e && e.code === "ENOENT") err.arcFailureClass = "provider-unavailable";
+      if (cliMissing(e)) err.arcFailureClass = "provider-unavailable";
       throw err;
     }
     envelope = parseModelJson(raw, "the claude CLI envelope");

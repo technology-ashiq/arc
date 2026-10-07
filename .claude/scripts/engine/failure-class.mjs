@@ -25,6 +25,11 @@ const KNOWN = new Set(FAILURE_CLASSES);
 // across families; everything else surfaces.
 const HOPPABLE = new Set(["transport", "provider-unavailable"]);
 
+// Drivers whose OWN code declares a class (ADR-0228). A declaration from any other driver is ignored:
+// `hermes` runs a model-driven agent, and a class that could reach its sidecar from anything the runtime
+// controls must not become permission to hop (attack 27dcf39 B2). A driver joins in the diff that makes it declare.
+export const DECLARING_DRIVERS = Object.freeze(new Set(["generic-api", "claude-code", "codex", "mock"]));
+
 /**
  * A driver-declared class, read from the cost sidecar. Anything outside the closed set is `unknown`
  * and says so: a typo must never be read as permission to hop.
@@ -34,7 +39,9 @@ const HOPPABLE = new Set(["transport", "provider-unavailable"]);
 export function readDeclared(v) {
   if (v === undefined || v === null) return { cls: "unknown", warn: null };
   if (typeof v === "string" && KNOWN.has(v)) return { cls: v, warn: null };
-  return { cls: "unknown", warn: `a driver declared failure_class ${JSON.stringify(v)}, outside ${FAILURE_CLASSES.join("|")} -- read as unknown, which never falls back` };
+  // Bounded: the value came from a file a driver wrote, and the warning reaches the transcript (B3).
+  const shown = String(JSON.stringify(v) ?? typeof v).slice(0, 80);
+  return { cls: "unknown", warn: `a driver declared failure_class ${shown}, outside ${FAILURE_CLASSES.join("|")} -- read as unknown, which never falls back` };
 }
 
 /**
@@ -47,7 +54,7 @@ export function readDeclared(v) {
  * claiming otherwise is ignored.
  *
  * @param {{ timedOut?: boolean, overflowed?: boolean, policyDenied?: boolean, notInstalled?: boolean,
- *           code: number, declared?: unknown, contractFault?: boolean }} o
+ *           code: number, declared?: unknown, contractFault?: boolean, driver?: string }} o
  * @returns {{ cls: string | null, warn: string | null }}
  */
 export function classifyAttempt(o) {
@@ -56,7 +63,12 @@ export function classifyAttempt(o) {
   if (o.policyDenied) return { cls: "policy-refusal", warn: null };
   if (o.notInstalled) return { cls: "provider-unavailable", warn: null };
   if (o.code === 2) return { cls: "budget", warn: null };
-  if (o.code !== 0) return readDeclared(o.declared);
+  if (o.code !== 0) {
+    if (o.declared !== undefined && o.declared !== null && o.driver !== undefined && !DECLARING_DRIVERS.has(o.driver)) {
+      return { cls: "unknown", warn: `driver ${String(o.driver).slice(0, 40)} is not one that declares a failure class -- its declaration is ignored and read as unknown` };
+    }
+    return readDeclared(o.declared);
+  }
   if (o.contractFault) return { cls: "model-invalid", warn: null };
   return { cls: null, warn: null };
 }
@@ -205,15 +217,19 @@ export function termsCheck(terms, hops, ctx) {
   if (isTerm(t.max_attempts) && hops.length + 1 > t.max_attempts) {
     return { ok: false, why: `the chain allows ${t.max_attempts} attempt(s) and ${hops.length} have run` };
   }
-  if (isTerm(t.max_wall_ms) && ctx.elapsedMs >= t.max_wall_ms) {
-    return { ok: false, why: `the chain allows ${t.max_wall_ms} ms and ${ctx.elapsedMs} have passed` };
+  // The wall term follows the run clock's rule: a hop needs MIN_HOP_MS of the term left, or it would start with a
+  // timeout of a few milliseconds and be killed at once (attack 27dcf39 L1-L3: at the term was both a stop and a start).
+  if (isTerm(t.max_wall_ms) && t.max_wall_ms - ctx.elapsedMs < MIN_HOP_MS) {
+    return { ok: false, why: `the chain allows ${t.max_wall_ms} ms and ${ctx.elapsedMs} have passed, leaving under the ${MIN_HOP_MS} ms a hop needs` };
   }
   if (isTerm(t.max_cost)) {
     // F3. An attempt that served an answer and reported no spend leaves the total UNPROVEN, and an
     // unproven total is never assumed to be under the cap (ADR-0069 b5: absent is never estimated).
     // An answer-less attempt's absent figure is 0: the class says no model produced anything.
-    const measured = (h) => h.cost && Number.isInteger(h.cost.inr);
-    const unmeasured = hops.find((h) => !measured(h) && !ANSWERLESS.has(h.class));
+    // A figure that was PRESENT but not a non-negative integer is unproven even on an answer-less attempt:
+    // it is a report of spend nobody can read, never a 0 (attack 27dcf39 B5).
+    const measured = (h) => h.cost && Number.isInteger(h.cost.inr) && h.cost.inr >= 0;
+    const unmeasured = hops.find((h) => !measured(h) && (!ANSWERLESS.has(h.class) || (h.cost && h.cost.inr_invalid)));
     if (unmeasured) return { ok: false, why: `the spend so far is unproven (${unmeasured.driver} answered and reported no spend) against max_cost ${t.max_cost}` };
     const spent = hops.reduce((s, h) => s + (measured(h) ? h.cost.inr : 0), 0);
     if (spent >= t.max_cost) return { ok: false, why: `${spent} paise spent against max_cost ${t.max_cost}` };

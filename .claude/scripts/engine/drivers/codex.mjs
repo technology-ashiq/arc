@@ -21,6 +21,11 @@ const CLI = process.env.ARC_CODEX_CLI || "codex";
 // file at $ARC_ROOT is validating one read and using another.
 const WORK_ROOT = process.env.ARC_ROOT || process.cwd();
 
+// The CLI could not be STARTED at all: not there (ENOENT), not runnable (EACCES, EPERM), or a Windows shim the
+// spawn cannot launch (EINVAL). That is the driver being unavailable -- the one failure it can name structurally
+// (ADR-0228; attack 27dcf39 B8). Anything after the CLI started stays undeclared.
+const cliMissing = (e) => Boolean(e) && (["ENOENT", "EACCES", "EPERM"].includes(e.code) || (e.code === "EINVAL" && String(e.syscall || "").startsWith("spawn")));
+
 await runDriver("codex", async ({ processName, input }) => {
   // ONE READER for the canonical document (canonicalDoc). This body used to open the file itself,
   // so the gate validated one read while the prompt and the tool grant came from a second, later
@@ -49,7 +54,7 @@ await runDriver("codex", async ({ processName, input }) => {
   } catch (e) {
     const err = new Error(`codex CLI failed: ${String(e.message).split("\n")[0]}`);
     // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
-    if (e && e.code === "ENOENT") err.arcFailureClass = "provider-unavailable";
+    if (cliMissing(e)) err.arcFailureClass = "provider-unavailable";
     throw err;
   }
 

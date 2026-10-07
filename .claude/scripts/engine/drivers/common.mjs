@@ -106,6 +106,12 @@ export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) 
 export function writeFailureClass(cls) {
   const path = process.env.ARC_DRIVER_COST_FILE;
   if (!path || cls === undefined || cls === null) return;
+  // BOUNDED TO A CLASS-SHAPED NAME (attack 27dcf39 B3): anything else is written as nothing at all, which arc-run
+  // reads as `unknown`. A ten-megabyte or object-valued "class" must not ride the sidecar into a warning.
+  if (typeof cls !== "string" || !/^[a-z][a-z-]{0,63}$/.test(cls)) {
+    process.stderr.write("arc-driver: WARN a failure class that is not a short lowercase name was not written -- arc-run reads unknown\n");
+    return;
+  }
   let cost = {};
   if (existsSync(path)) {
     try { cost = JSON.parse(readFileSync(path, "utf8")) || {}; } catch { cost = {}; }
@@ -396,7 +402,15 @@ export async function runDriver(name, produce, opts = {}) {
     const asked = e && e.arcExit;
     // WHY it failed, when the driver knows (ADR-0228). Written before the exit code is set, so a driver
     // that dies right after still left its declaration; arc-run reads `unknown` if it never arrives.
-    if (e && e.arcFailureClass !== undefined) writeFailureClass(e.arcFailureClass);
+    // A failed attempt can still have spent money, and only a measured figure may say so (ADR-0069 b5).
+    // GUARDED: a sidecar write that throws (EBUSY, a read-only dir) must never skip die() below, or an exit-2
+    // budget decline would leave as a crash code and be read as a different failure (attack 27dcf39 B4).
+    try {
+      if (e && e.arcCost && typeof e.arcCost === "object") writeCost(e.arcCost);
+      if (e && e.arcFailureClass !== undefined) writeFailureClass(e.arcFailureClass);
+    } catch (w) {
+      process.stderr.write(`arc-driver: WARN could not write the failure sidecar (${w && w.code ? w.code : "error"}) -- arc-run reads unknown\n`);
+    }
     die(asked === EXIT.BUDGET_DECLINED ? EXIT.BUDGET_DECLINED : EXIT.DRIVER_FAIL, e.message);
   }
 }
