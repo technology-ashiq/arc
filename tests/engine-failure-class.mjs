@@ -153,7 +153,8 @@ if (want("unit")) {
     rows.every(([, r]) => Number.isInteger(r.max_attempts) && r.max_attempts >= 2 + (r.fallback || []).length));
 
   // ONE OWNER (PLAN pre-mortem 1): arc-run asks nextHop and keeps no hop rule of its own.
-  const src = readFileSync(join(REPO, ".claude/scripts/engine/arc-run.mjs"), "utf8");
+  const src = readFileSync(join(REPO, ".claude/scripts/engine/arc-run.mjs"), "utf8")
+    .split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
   check("U: arc-run's loop asks nextHop exactly once and keeps no hop rule of its own",
     (src.match(/nextHop\(/g) || []).length === 1 && !/fallbacks\.shift\(/.test(src) && !/while \(a\.verdict === "driver"/.test(src));
 }
@@ -328,7 +329,7 @@ try {
 
     const sf = await runScen(port, SCEN.sameFamily);
     check("(F1) with no other family in the chain, ADR-0204's retry stays: two attempts, no hop",
-      sf.code === 1 && sf.hits === 0 && sf.receipt?.attempts === 2 && !/falling back/.test(sf.err) && /retried once on the same tier/.test(String(sf.proposal?.why)), `${sf.err.slice(-300)} ${JSON.stringify(sf.proposal)}`);
+      sf.code === 1 && sf.hits === 0 && sf.receipt?.attempts === 2 && !/falling back to /.test(sf.err) && /not falling back -- no chain entry of a different model family/.test(sf.err) && /retried once on the same tier/.test(String(sf.proposal?.why)), `${sf.err.slice(-300)} ${JSON.stringify(sf.proposal)}`);
 
     const x2 = await runScen(port, SCEN.exit2);
     check("(ADR-0228 item 4) exit 2 is budget whatever the sidecar declares: no hop", x2.code === 1 && x2.hits === 0 && x2.receipt?.reason === "budget" && x2.receipt?.failure_class === "budget", JSON.stringify(x2.receipt));
@@ -377,7 +378,7 @@ try {
       { name: "m3 transport stops", from: `const HOPPABLE = new Set(["transport", "provider-unavailable"]);`, to: `const HOPPABLE = new Set(["provider-unavailable"]);`,
         scen: "transport", red: (r) => r.hits === 0, says: "a transport failure never reached the second driver" },
       { name: "m4 model-invalid hops within one family", from: `return f !== "unknown" && from !== "unknown" && f !== from;`, to: `return f !== "unknown";`,
-        scen: "sameFamily", red: (r) => /falling back/.test(r.err), says: "a contract fault hopped to the same family" },
+        scen: "sameFamily", red: (r) => /falling back to /.test(r.err), says: "a contract fault hopped to the same family" },
       { name: "m5 a declaration overrides the observed class", from: "export function classifyAttempt(o) {\n", to: "export function classifyAttempt(o) {\n  if (o.declared !== undefined && o.declared !== null) return readDeclared(o.declared);\n",
         scen: "exit2", red: (r) => r.hits !== 0, says: "exit 2 with a transport declaration hopped" },
     ];

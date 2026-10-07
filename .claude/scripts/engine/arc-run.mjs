@@ -1879,7 +1879,7 @@ async function attempt(name, capMs) {
     }
     : null;
   // `class: null` is an attempt that succeeded. It is not a seventh class.
-  HOPS.push({ driver: name, tier: tier ?? null, class: c.cls, ms: Math.max(0, Date.now() - t0), ...(hopCost && Object.keys(hopCost).length ? { cost: hopCost } : {}) });
+  HOPS.push({ driver: name, tier: tier ?? null, model: effectiveModel ?? null, class: c.cls, ms: Math.max(0, Date.now() - t0), ...(hopCost && Object.keys(hopCost).length ? { cost: hopCost } : {}) });
   return { ...v, failureClass: c.cls };
 }
 
