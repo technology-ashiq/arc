@@ -149,7 +149,7 @@ lifted off the live spine: real → folded, fake → not. Demotions are delibera
 engine-raised on an incident and only ever *lower* a cap, so gating them would fail open.
 
 Four findings are recorded as **owed rather than closed**, all in
-[`initiatives/policy/evidence/phase-04/handoff.md`](../initiatives/policy/evidence/phase-04/handoff.md):
+[`initiatives/policy/archive/evidence-cycle9-2026-08-10/phase-04/handoff.md`](../initiatives/policy/archive/evidence-cycle9-2026-08-10/phase-04/handoff.md):
 `encode` coercing `Map`/`Set`/`Date` to `{}`, `reserveAndSpend` reaching a provider at L1, the
 `"."` stem, and `/arc-develop next` pinned to a closed phase's ledger. None is an escalation and
 none needs you.

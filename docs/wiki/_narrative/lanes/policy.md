@@ -26,7 +26,7 @@ Silence means no. A kind of work the rulebook never mentions can read, and nothi
 
 ### Why this needs to be a lane at all
 
-The plan (`initiatives/policy/PLAN.md`) starts from one fact: before this lane, arc's headless runner
+The Cycle 9 plan (`initiatives/policy/archive/PLAN-cycle9-2026-08-10.md`) starts from one fact: before this lane, arc's headless runner
 called its driver with no check of any kind. The lane's aim is that the first run nobody is watching
 is already policed by code, and that every change of authority leaves a receipt in arc's logbook.
 
