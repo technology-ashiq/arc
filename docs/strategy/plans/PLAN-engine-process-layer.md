@@ -266,8 +266,8 @@ IDLE and Cycle 7 closed at Phase 08, so this is a design-source amendment for th
    | `transport` | connect / DNS / TLS / 5xx / a **per-attempt** timeout before the first token — the request never reached a model that answered | yes |
    | `provider-unavailable` | 429 / 503 / overloaded **after** the driver's own transport retries (ADR-0203) are spent; or the driver is not installed / did not launch | yes |
    | `model-invalid` | a model answered and the answer failed the contract (not JSON, or `validateData` faults) | **at most once, and only to a different model family** |
-   | `policy-refusal` | arc's policy gate denied, or the provider refused (403 on a capped key, a content refusal) | **never** — no other driver is more permitted |
-   | `budget` | the RUN's deadline, `inr` spent, the driver declined for budget (exit 2), arc-run's output ceiling, or a chain term would be breached | **never** — the next hop spends again |
+   | `policy-refusal` | arc's policy gate denied, or the provider refused the request on policy/content grounds | **never** — no other driver is more permitted |
+   | `budget` | the RUN's deadline, `inr` spent, the driver declined for budget (exit 2 — this includes the capped key's HTTP 403 `Key limit exceeded`, which `drivers/hermes` already maps to BUDGET_DECLINED per ADR-0213 / fixture 10), arc-run's output ceiling, or a chain term would be breached | **never** — the next hop spends again |
    | `unknown` | anything not positively classified, including a driver exit 1 that declared no class | **never** |
 
 2. **`unknown` does not hop, and that is a behaviour change on purpose.** Today an undeclared
