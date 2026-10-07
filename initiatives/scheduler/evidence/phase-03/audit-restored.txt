@@ -1,0 +1,18 @@
+jobs audit 2026-09-29..2026-10-06  (8 days, spine observed from 2026-07-23)
+
+  brief-materialize      weekdays@06:00
+    expected 6  completed 6  failed 0  drift p50 16326000ms
+    gaps: 0 unexplained, 0 explained, 0 failed
+  day-close-roll         daily@00:15
+    expected 8  completed 8  failed 0  drift p50 3000ms
+    gaps: 0 unexplained, 0 explained, 0 failed
+
+metric pack
+  attempted 14  completed 14  failed 0  missed 0
+  drift p50                 3000ms
+  manual starts (target 0)  0
+  incidents                 policy-declined=0 overlap=0 receipt-write-failure=0 timeout=0 crash=0
+  spend (expected 0)        INR 0
+  needs-you days            0
+
+CLEAN against the pre-declared pack
