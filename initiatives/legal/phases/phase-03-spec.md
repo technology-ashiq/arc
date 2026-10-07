@@ -28,6 +28,7 @@ Read from `E:/Work_Hub/01_Automemory/Lexos` on 2026-08-12, so Phase 3 does not s
 - [ ] Seven pages rendered; all three lints green; all ≥ 8 scenarios answered.
 - [ ] `approval.requested` raised with the full page set; the owner reads the actual rendered pages — an agent's summary of a page is not the page — and decides via `arc-inbox` with a reason.
 - [ ] Pages, `pins.yaml` and receipts committed into the LexOS working tree on a branch, never to its `main`, and never pushed or deployed by this cycle.
+- [ ] **The publish ledger for a `--venture-dir` venture is written beside its facts, never into arc's public `products/legal/published/` (ADR-1214, added 2026-10-07 via `/arc-change`)** — proven by a fixture that publishes from a venture dir and asserts the arc ledger path stays absent.
 - [ ] **LexOS-side integration handoff checklist** produced and committed: route wiring for the seven paths · creating the footer that does not exist · signup consent capture · cancel-path UI parity · grievance mailbox provisioning · provider dashboard fields for whenever LexOS's own subscription billing lands.
 - [ ] Live-deploy and production-probe rows recorded `OPEN-at-venture-resume` with the reason (LexOS is PAUSED under the same mandate) — never a fake green.
 - [ ] **The production publish count is read from the spine and reported** at close, alongside the fixture count. An engine proven only by fixtures is the `arc-policy` 2026-08-10 failure shape, and only the ledger can say which this was.

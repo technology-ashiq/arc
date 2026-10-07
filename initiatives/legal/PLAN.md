@@ -149,6 +149,7 @@ flowchart TB
 | 1009 | LEG-I — text quality is judged by ANSWERABILITY; the scenario set is a fixture | accepted |
 | 1010 | LEG-J — the seven kickoff-day decisions | accepted |
 | 1011 | LEG-K — `payment_model` gains a third value, because LexOS is not a merchant | accepted |
+| 1214 | LEG-N — a real venture's publish ledger lives with its facts, not in arc's public tree | accepted |
 
 ## Non-negotiables
 

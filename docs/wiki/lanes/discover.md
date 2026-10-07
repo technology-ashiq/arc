@@ -11,8 +11,8 @@
 
 | | |
 |---|---|
-| Status | LIVE |
-| Cycle | arc-discover (Cycle 1, opened 2026-10-06) |
+| Status | IDLE |
+| Cycle | arc-discover (Cycle 1, sealed 2026-10-07) |
 | Product | [discover](../products/discover.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
