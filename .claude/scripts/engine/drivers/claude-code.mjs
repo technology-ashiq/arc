@@ -14,6 +14,7 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
+import { statSync } from "node:fs";
 
 import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
@@ -25,6 +26,16 @@ import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
  * the door shows a council's phases while they happen. The final `result` event is the same envelope `json` mode
  * returns, so everything after it is unchanged. What a line may say is the adapter's `progressLine`, pure and tested.
  */
+
+// The CLI could not be STARTED at all: not there (ENOENT), not runnable (EACCES, EPERM), or a Windows shim the
+// spawn cannot launch (EINVAL). That is the driver being unavailable -- the one failure it can name structurally
+// (ADR-0228; attack 27dcf39 B8). Anything after the CLI started stays undeclared.
+// ONLY when the work root is a usable directory: a deleted or unreadable cwd fails the spawn with the same codes, and
+// that is a fault on this machine -- declaring it unavailable would hop to a gateway and send the work elsewhere
+// (attack a4e3f33 B2).
+const workRootUsable = () => { try { return statSync(WORK_ROOT).isDirectory(); } catch { return false; } };
+const cliMissing = (e) => Boolean(e) && workRootUsable()
+  && (["ENOENT", "EACCES", "EPERM"].includes(e.code) || (e.code === "EINVAL" && String(e.syscall || "").startsWith("spawn")));
 
 /** Run the CLI in stream-json mode, writing a progress line per tool step; resolve with the final result event. */
 /**
@@ -59,12 +70,14 @@ function runStreaming(args, prompt) {
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     let buf = "", total = 0, result = null, errTail = "", settled = false, exited = null, drain = null, overflow = "";
-    const fail = (msg) => {
+    const fail = (msg, cls) => {
       if (settled) return;
       settled = true;
       if (drain) clearTimeout(drain);
       try { child.kill("SIGKILL"); } catch { /* already gone */ }
-      rejectP(new Error(`claude CLI failed: ${msg}`));
+      const err = new Error(`claude CLI failed: ${msg}`);
+      if (cls) err.arcFailureClass = cls;
+      rejectP(err);
     };
     const finish = () => {
       if (settled) return;
@@ -103,7 +116,9 @@ function runStreaming(args, prompt) {
       if (buf.length > STREAM_LINE_CAP) { overflow = `one stream line passed ${STREAM_LINE_CAP} bytes`; finish(); }
     });
     child.stderr.on("data", (c) => { errTail = (errTail + c).slice(-2000); });
-    child.on("error", (e) => fail(e.message));
+    // A CLI that is not there is the one failure this driver can name structurally (ADR-0228); every other
+    // CLI failure reaches it as free text, and guessing a class from words is not a classification.
+    child.on("error", (e) => fail(e.message, cliMissing(e) ? "provider-unavailable" : undefined));
     child.on("exit", (code, signal) => {
       exited = { code, signal };
       drain = setTimeout(finish, STREAM_DRAIN_MS);
@@ -167,7 +182,10 @@ await runDriver("claude-code", async ({ processName, input }) => {
       const [bin, argv] = cliCommand(args);
       raw = execFileSync(bin, argv, { input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
     } catch (e) {
-      throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
+      const err = new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
+      // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
+      if (cliMissing(e)) err.arcFailureClass = "provider-unavailable";
+      throw err;
     }
     envelope = parseModelJson(raw, "the claude CLI envelope");
   }
@@ -190,7 +208,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.2.0",
+  version: () => "claude-code@1.3.0",
 });
 
 settle();

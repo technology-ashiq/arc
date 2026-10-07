@@ -19,6 +19,10 @@ const GOOD = {
   hosted: "local",
   judge: "ashiq",
   review_by: "2026-11-13",
+  // ADR-0228: every row declares its chain terms, or the load faults on them before anything here is measured.
+  max_attempts: 2,
+  max_wall_ms: 3600000,
+  max_cost: "unmetered",
 };
 
 const FIELDS = ["cap", "hosted", "judge", "review_by"];
@@ -58,7 +62,7 @@ const cases = {
 
   /** An ordinary row carrying NONE of the four is untouched — this lands as one diff, not a rewrite. */
   untouched() {
-    const ordinary = { driver: "claude-code", tier: "balanced-workhorse", fallback: ["codex"] };
+    const ordinary = { driver: "claude-code", tier: "balanced-workhorse", fallback: ["codex"], max_attempts: 3, max_wall_ms: 3600000, max_cost: "unmetered" };
     const faults = rowFaults("commit-msg-draft", ordinary);
     console.log(`ordinary_faults=${faults.length}`);
     // ...but a PARTIAL row must not sneak through by not being a runtime row.

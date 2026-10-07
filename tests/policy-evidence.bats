@@ -178,8 +178,8 @@ _emit() { # $1 payload json; emits note.logged into the per-test spine, strict
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"fixture"}'
   [ "$status" -eq 0 ] || { echo "valid refusal refused: $output"; false; }
-  grep -rq '"policy.refusal"' "$ARC_SPINE_ROOT/events/"*.jsonl || { echo "not in events/"; false; }
-  ! grep -rqs '"policy.refusal"' "$ARC_SPINE_ROOT/events/_quarantine/" || { echo "landed in quarantine"; false; }
+  grep -rqF '"subject":"policy.refusal"' "$ARC_SPINE_ROOT/events/"*.jsonl || { echo "not in events/"; false; }
+  ! grep -rqsF '"subject":"policy.refusal"' "$ARC_SPINE_ROOT/events/_quarantine/" || { echo "landed in quarantine"; false; }
 }
 
 @test "profile: an unknown key is refused by name" {
@@ -340,7 +340,7 @@ EOF
   run node "$FX/spine-probe.mjs" refusals "$d/.claude/state/hq/events"
   [[ "$output" =~ ^REFUSALS\ 1\ ([0-9A-Z]{26})\ INCIDENTS-WITH-DENIALS\ 1$ ]] || { echo "expected 1 refusal and 1 typed incident: $output"; false; }
   local rid="${BASH_REMATCH[1]}"
-  ! grep -rqs '"policy.refusal"' "$d/.claude/state/hq/events/_quarantine/" || { echo "the refusal was quarantined"; false; }
+  ! grep -rqsF '"subject":"policy.refusal"' "$d/.claude/state/hq/events/_quarantine/" || { echo "the refusal was quarantined"; false; }
 
   # A SECOND denied run the same IST day: its incident is written, its refusal is not (ADR-0509, attack r1 B3).
   run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
@@ -372,7 +372,7 @@ EOF
   run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
   [[ "$output" == *"policy denied"* ]] || { echo "no denial: $output"; false; }
   [[ "$output" == *"policy.refusal NOT written"* ]] || { echo "the skipped refusal was silent: $output"; false; }
-  ! grep -rqs '"policy.refusal"' "$BATS_TEST_TMPDIR/foreign-spine/events/" || { echo "a refusal landed on the foreign spine"; false; }
+  ! grep -rqsF '"subject":"policy.refusal"' "$BATS_TEST_TMPDIR/foreign-spine/events/" || { echo "a refusal landed on the foreign spine"; false; }
 }
 
 @test "check: the real policy today is 17 in scope and all BELOW-BAR on an empty spine" {

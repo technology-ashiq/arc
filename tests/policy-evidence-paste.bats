@@ -142,7 +142,7 @@ _verify_root() { # $1 dir: the six LIVE files, the manifest and the verifier, at
   [ "$status" -eq 2 ] || { echo "$status $output"; false; }
   run node "$FX/spine-probe.mjs" refusals "$d/.claude/state/hq/events"
   [[ "$output" =~ ^REFUSALS\ 1\  ]] || { echo "the refusal did not land in the checked spine: $output"; false; }
-  ! grep -rqs '"policy.refusal"' "$BATS_TEST_TMPDIR/decoy/.claude/state/hq/events/" || { echo "the refusal went to the decoy"; false; }
+  ! grep -rqsF '"subject":"policy.refusal"' "$BATS_TEST_TMPDIR/decoy/.claude/state/hq/events/" || { echo "the refusal went to the decoy"; false; }
 }
 
 _hook_no_stderr() { _hook "$1" 2>&-; }

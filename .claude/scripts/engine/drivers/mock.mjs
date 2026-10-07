@@ -127,7 +127,36 @@ await runDriver("mock", async ({ processName }) => {
   //
   // Stripped, not passed through: the process output schemas are `additionalProperties: false`,
   // so leaving the key in would make every costed recording fail its own contract.
-  const { __cost, ...output } = doc;
+  // ONE SPELLING PER CONTROL KEY. A recording key this driver does not know is a load error, never a
+  // silent no-op: a misspelled `__failure_class` would replay as a SUCCESS, and every fixture asserting
+  // a stop would pass for the wrong reason (ADR-0228; the twin-key spelling is this lane's recorded shape).
+  const unknownKey = Object.keys(doc && typeof doc === "object" ? doc : {}).find((k) => k.startsWith("__") && k !== "__cost" && k !== "__failure");
+  if (unknownKey) throw new Error(`recording ${processName}/${id} carries ${JSON.stringify(unknownKey)}, which this driver does not know (only __cost and __failure)`);
+
+  const { __cost, __failure, ...output } = doc;
+  // The cost's source is checked before EITHER path, because a replayed failure may carry a measured spend too.
+  if (__cost && !["measured", "estimated", "manual"].includes(__cost.source)) {
+    throw new Error(`recording ${processName}/${id} declares __cost.source ${JSON.stringify(__cost.source)}, outside measured|estimated|manual -- the spine would quarantine this receipt and the run would still exit 0`);
+  }
+  // A REPLAYED FAILURE (ADR-0228), so every FailureClass can be fixtured offline (ENG-F). `class` is
+  // what the driver declares (null declares nothing); `exit` 2 asks for BUDGET_DECLINED; `exit` 0
+  // returns the output AND writes the declaration, which fixtures the rule that exit 0 decides the
+  // class whatever the sidecar says. The class is passed through unvalidated on purpose: arc-run is
+  // the one judge of the closed set.
+  if (__failure !== undefined) {
+    if (!__failure || typeof __failure !== "object" || Array.isArray(__failure)) {
+      throw new Error(`recording ${processName}/${id} has a __failure that is not a mapping`);
+    }
+    const exit = __failure.exit ?? 1;
+    if (![0, 1, 2].includes(exit)) throw new Error(`recording ${processName}/${id} has __failure.exit ${JSON.stringify(exit)}, outside 0|1|2`);
+    if (exit === 0) return { output, failureClass: __failure.class ?? undefined };
+    const e = new Error(String(__failure.message || `replayed failure (${__failure.class ?? "undeclared"})`));
+    if (__failure.class !== null && __failure.class !== undefined) e.arcFailureClass = __failure.class;
+    if (exit === 2) e.arcExit = 2;
+    // A failure that spent money says so: a chain's max_cost must be able to see it (ADR-0228 F3).
+    if (__cost) e.arcCost = __cost;
+    throw e;
+  }
   if (__cost) {
     // REFUSE HERE, LOUDLY, rather than let the spine refuse it silently later. `writeCost` makes
     // `source` mandatory but never checks it against the spine's closed set, and `arc-run` emits

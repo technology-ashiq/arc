@@ -101,6 +101,9 @@ classes:
     tier: balanced-workhorse
     driver: hermes
     cap: L1-drafts
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
 YAML
   run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
   [ "$status" -ne 0 ] || { echo "a faulty router loaded: $output"; false; }
@@ -140,6 +143,9 @@ classes:
     judge: ashiq
     review_by: $by
     fallback: []
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: 100000
 YAML
 }
 
@@ -260,6 +266,9 @@ classes:
     driver: claude-code
     fallback:
       - hermes
+    max_attempts: 3
+    max_wall_ms: 3600000
+    max_cost: unmetered
 YAML
   run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
   [ "$status" -ne 0 ] || { echo "a row that can reach the runtime loaded unbounded: $output"; false; }
@@ -285,6 +294,9 @@ default:
   tier: balanced-workhorse
   driver: claude-code
   fallback: []
+  max_attempts: 2
+  max_wall_ms: 3600000
+  max_cost: unmetered
 YAML
 }
 
@@ -334,6 +346,9 @@ classes:
     driver: claude-code
     fallback:
       - codex
+    max_attempts: 3
+    max_wall_ms: 3600000
+    max_cost: unmetered
 YAML
   run node "$(RUN)" --root "$root" --process commit-msg-draft --driver hermes --dry-run
   [ "$status" -eq 2 ] || { echo "an ungranted class dispatched the runtime, got $status: $output"; false; }
@@ -396,6 +411,9 @@ classes:
     driver: claude-code
     fallback:
       - hermes-lookalike
+    max_attempts: 3
+    max_wall_ms: 3600000
+    max_cost: unmetered
 YAML
   run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes --dry-run \
     --input '{"classification":"external-ok","pack_ref":"p","pack":"x"}'
@@ -428,6 +446,9 @@ classes:
     driver: claude-code
     fallback:
       - ./hermes
+    max_attempts: 3
+    max_wall_ms: 3600000
+    max_cost: unmetered
 YAML
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/hopspine"
   mkdir -p "$ARC_SPINE_ROOT"
@@ -472,6 +493,9 @@ classes:
     hosted: local
     judge: ashiq
     review_by: 2099-12-31
+    max_attempts: 3
+    max_wall_ms: 3600000
+    max_cost: unmetered
 YAML
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/grantspine"
   mkdir -p "$ARC_SPINE_ROOT" "$BATS_TEST_TMPDIR/hdata"
