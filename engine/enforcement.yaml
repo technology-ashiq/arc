@@ -1,0 +1,173 @@
+# engine/enforcement.yaml -- the three-level enforcement contract (distribute DST-B, ADR-2002).
+#
+# One row per blocking hook fragment, per arc.gates.yaml rule, and per repository action. Columns are
+# the three levels: tool_time (a harness hook), commit_time (.githooks/, ADR-2013) and merge_time (a
+# required check or a repository setting, ADR-2015). Merge-time is the only level that cannot be
+# bypassed from a workstation, so:
+#   - a `blocking` row names a merge_time that exists: `tests/<file>.bats::<test name>` (a bats test
+#     that runs inside the required `selftest` checks, ADR-2016) or `repo:<setting>`;
+#   - an `advisory` row is a rule with no merge-time truth, and says why in advisory_reason. It is
+#     DECLARED, never silently absent (A-02 of the design source).
+# A commit_time command that is not `n/a: ...` must appear verbatim in .githooks/pre-commit or
+# pre-push. `.claude/scripts/core/gate-parity.mjs` checks all of this against the fragments and rules
+# it derives from disk, never against this file's own list.
+#
+# Read 2026-10-07 from evidence/phase-01/fragment-census.md, which falsified three guesses in the
+# design source's table: no hook fragment refuses a generated-file edit, none scans for secrets, and
+# none checks the branch.
+
+version: 1
+rules:
+  # ---- repository actions ---------------------------------------------------------------------
+  - id: action-commit-secret
+    source: "action:commit-secret"
+    class: blocking
+    tool_time: "none in any harness (fragment census 2026-10-07)"
+    commit_time: "bash .claude/scripts/core/secret-diff-scan.sh --staged"
+    merge_time: "tests/distribute-merge-gates.bats::distribute-merge-gates: the PR diff adds no secret"
+  - id: action-commit-to-main
+    source: "action:commit-to-main"
+    class: blocking
+    tool_time: "none (CLAUDE rule prose only)"
+    commit_time: "bash .claude/scripts/core/branch-guard.sh"
+    merge_time: "repo:protected-main"
+  - id: action-push-to-main
+    source: "action:push-to-main"
+    class: blocking
+    tool_time: "none"
+    commit_time: "bash .claude/scripts/core/branch-guard.sh --pre-push"
+    merge_time: "repo:protected-main"
+  - id: action-edit-generated
+    source: "action:edit-generated"
+    class: blocking
+    tool_time: "none (fragment census 2026-10-07)"
+    commit_time: "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code"
+    merge_time: "tests/engine-compile.bats::the post-flip gate is a DIFFERENT comparison, and it is the hand-edit detector"
+  - id: action-failing-tests
+    source: "action:failing-tests"
+    class: blocking
+    tool_time: "none"
+    commit_time: "n/a: tests never run on a workstation (.claude/rules/testing.md)"
+    merge_time: "repo:required-checks"
+  - id: action-merge-pr
+    source: "action:merge-pr"
+    class: blocking
+    tool_time: "none"
+    commit_time: "n/a: a merge is a server event"
+    merge_time: "repo:required-checks"
+
+  # ---- blocking hook fragments (tool-time, Claude Code) -----------------------------------------
+  - id: hook-pretooluse-destructive
+    source: "hook:PreToolUse/00-destructive.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse BLOCK on destructive shell lines; other harnesses: none"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: local damage class"
+    advisory_reason: "a destructive command damages the workstation, not main; nothing on the merge path can see it (design-source A-02)"
+  - id: hook-pretooluse-design-composer
+    source: "hook:PreToolUse/10-design-composer.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse BLOCK on a ui-composer subagent's Bash"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: agent fence inside one session"
+    advisory_reason: "fences one subagent inside a Claude Code design run; a harness without subagents has nothing to fence (ADR-2009)"
+  - id: hook-pretooluse-policy
+    source: "hook:PreToolUse/40-policy.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse BLOCK on policy-engine L-level denials for Bash"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: an agent capability grant, decided per call"
+    advisory_reason: "policy levels govern what an agent may do in a session; what it changes still reaches main only through a PR under the required checks"
+  - id: hook-pretooluse-deploy
+    source: "hook:PreToolUse/50-deploy.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse BLOCK on a deploy verb unless tests + arc-gates.sh pass"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: arc's own repo has no deploy job"
+    advisory_reason: "arc deploys nothing from its CI; deploys happen in venture repos behind launch's gate 2, which is that repo's merge-time truth"
+  - id: hook-edit-freeze
+    source: "hook:PreToolUse-edit/00-freeze.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse-edit BLOCK outside an /arc-freeze boundary"
+    commit_time: "n/a: a debugging aid, opt-in per session"
+    merge_time: "n/a: local"
+    advisory_reason: "an edit boundary the owner sets for one debugging session; it protects focus, not main"
+  - id: hook-edit-design-critic
+    source: "hook:PreToolUse-edit/10-design-critic.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse-edit BLOCK on a critic write outside docs/design/critique/"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: agent fence inside one session"
+    advisory_reason: "fences one subagent inside a Claude Code critique run (ADR-2009)"
+  - id: hook-edit-design-composer
+    source: "hook:PreToolUse-edit/11-design-composer.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse-edit BLOCK on a composer write outside its variant dir"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: agent fence inside one session"
+    advisory_reason: "fences one subagent inside a Claude Code explore run (ADR-2009)"
+  - id: hook-edit-policy
+    source: "hook:PreToolUse-edit/40-policy.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse-edit BLOCK on policy denials, incl. the ADR-0502 un-grantable files"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: an agent capability grant, decided per call"
+    advisory_reason: "stops an agent rewriting its own grants mid-session; a changed policy file still reaches main only as a reviewed PR under the required checks"
+  - id: hook-read-design-composer
+    source: "hook:PreToolUse-read/10-design-composer.sh"
+    class: advisory
+    tool_time: "claude-code: PreToolUse-read BLOCK on a composer read outside its allowlist"
+    commit_time: "n/a: not a git event"
+    merge_time: "n/a: agent fence inside one session"
+    advisory_reason: "keeps one subagent blind to its rivals inside a Claude Code explore run (ADR-2009)"
+
+  # ---- arc.gates.yaml rules (run by arc-gates.sh before a deploy) ------------------------------
+  - id: gate-scan
+    source: "gate:scan"
+    class: blocking
+    tool_time: "claude-code: via 50-deploy.sh at deploy time"
+    commit_time: "bash .claude/scripts/core/secret-diff-scan.sh --staged"
+    merge_time: "tests/distribute-merge-gates.bats::distribute-merge-gates: the PR diff adds no secret"
+    note: "the merge-time twin covers the secret half of arc-scan; its SAST and dependency halves remain deploy-time only"
+  - id: gate-coverage
+    source: "gate:coverage"
+    class: advisory
+    tool_time: "claude-code: via 50-deploy.sh"
+    commit_time: "n/a: tests never run on a workstation"
+    merge_time: "n/a: arc has no application coverage report"
+    advisory_reason: "a consumer-repo deploy gate; arc's own tree produces no coverage-summary.json to read"
+  - id: gate-reviews
+    source: "gate:reviews"
+    class: advisory
+    tool_time: "claude-code: via 50-deploy.sh"
+    commit_time: "n/a: review stamps are local state"
+    merge_time: "n/a: .claude/state/reviews is gitignored, so CI cannot read it"
+    advisory_reason: "a deploy-time check of local review stamps; the merge-time review of arc's own PRs is /arc-attack plus the required checks"
+  - id: gate-docs
+    source: "gate:docs"
+    class: advisory
+    tool_time: "claude-code: via 50-deploy.sh"
+    commit_time: "n/a"
+    merge_time: "n/a: arc's own doc drift is gated by wiki-build --check and wiki-coverage in CI"
+    advisory_reason: "the consumer-repo doc-drift gate; arc's own docs are held by the generated-wiki checks, a different rule"
+  - id: gate-rls
+    source: "gate:rls"
+    class: advisory
+    tool_time: "claude-code: via 50-deploy.sh"
+    commit_time: "n/a"
+    merge_time: "n/a: arc has no database migrations"
+    advisory_reason: "a consumer-repo Supabase gate; arc's tree holds no migrations for it to read"
+  - id: gate-spine-api
+    source: "gate:spine-api"
+    class: advisory
+    tool_time: "claude-code: via 50-deploy.sh (mode warn)"
+    commit_time: "n/a"
+    merge_time: "n/a: warn-mode gate"
+    advisory_reason: "declared warn in arc.gates.yaml, so it never blocked at any level"
+  - id: gate-design
+    source: "gate:design"
+    class: advisory
+    tool_time: "claude-code: via 50-deploy.sh (mode warn)"
+    commit_time: "n/a"
+    merge_time: "n/a: warn-mode gate"
+    advisory_reason: "declared warn in arc.gates.yaml, so it never blocked at any level"
