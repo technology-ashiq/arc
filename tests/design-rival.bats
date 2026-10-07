@@ -167,7 +167,8 @@ teardown() { rm -rf "$SANDBOX"; }
   # The stylesheet's font URL was rewritten to the vendored file beside it.
   css="$(grep -oE 'assets/[0-9a-f]{16}.css' "$(_page)" | head -1)"
   [ -n "$css" ]
-  grep -qE 'url([0-9a-f]{16}.woff2)' "$SANDBOX/docs/design/explore/r1/rival-stitch/$css"
+  # ERE: the parens are literal, escaped -- unescaped they were a group, and the line could never match.
+  grep -qE 'url\([0-9a-f]{16}\.woff2\)' "$SANDBOX/docs/design/explore/r1/rival-stitch/$css"
   [ "$(ls "$SANDBOX/docs/design/explore/r1/rival-stitch/assets" | wc -l | tr -d ' ')" -eq 3 ]
   node -e 'const v=JSON.parse(require("fs").readFileSync(process.argv[1]));if(v.assets.length!==3||v.rewrites.length<4||!v.assets.every(a=>a.sha256.length===64))process.exit(1)' "$(_out)/stitch/vendor.json"
 }

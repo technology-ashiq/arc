@@ -98,7 +98,7 @@ export function classifyFailure(err) {
   if (/quota|RESOURCE_EXHAUSTED/i.test(text)) return "quota";
   if (/\b429\b|rate.?limit|too many requests/i.test(text)) return "rate-limit";
   if (/timed? ?out|timeout|AbortError|ETIMEDOUT/i.test(text)) return "timeout";
-  const code = field(err?.code ?? err?.name ?? "unknown").replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 40) || "unknown";
+  const code = field(err?.code ?? err?.name ?? "unknown").replace(/[^\w.-]/g, "").slice(0, 40) || "unknown";
   return `provider error ${code}`;
 }
 
@@ -378,7 +378,7 @@ export function cssLoads(text, at = 0) {
 // comments are dropped, and any url() written with a CSS escape, which no reader here decodes.
 function strayCss(text) {
   const css = decodeAttr(text).replace(/\/\*[\s\S]*?\*\//g, "");
-  const m = /(?:^|[^a-z0-9])((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[][^\s"')]*)/i.exec(css);
+  const m = /(?:^|\W|_)((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[][^\s"')]*)/i.exec(css);
   if (m) return `still remote after vendoring: ${field(m[1]).slice(0, 120)}`;
   if (/url\(\s*["']?[^"')]*\\/i.test(css) || /@import\s+[^;]*\\/i.test(css)) return "a url() or @import written with a CSS escape";
   return null;
@@ -575,7 +575,7 @@ function strayRemote(html) {
     if (t.name !== "a" && t.name !== "area") {
       for (const a of t.attrs) {
         if (/^(xmlns(:.*)?|alt|title|aria-.*|data-.*|content|placeholder|value|itemtype|property)$/.test(a.name) && !(t.name === "meta" && a.name === "content" && /refresh/i.test(t.attrs.find((x) => x.name === "http-equiv")?.value ?? ""))) continue;
-        const m = /(?:^|[^a-z0-9])((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[])/i.exec(urlish(a.value));
+        const m = /(?:^|\W|_)((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[])/i.exec(urlish(a.value));
         if (m) found.push(`<${t.name} ${a.name}> ${field(urlish(a.value)).slice(0, 120)}`);
       }
     }
@@ -679,7 +679,7 @@ async function draft(argv) {
   };
   // Anything thrown from here on is the provider attempt failing, not a usage error: one status line and
   // exit 3, never a stack trace and the usage code 1 (attack 65d01cc B11).
-  onCrash = (e) => { if (!settled) fail(`internal error ${field(e?.code ?? e?.name ?? "Error").replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 40) || "Error"}`, e); };
+  onCrash = (e) => { if (!settled) fail(`internal error ${field(e?.code ?? e?.name ?? "Error").replace(/[^\w.-]/g, "").slice(0, 40) || "Error"}`, e); };
 
   // The key first: no key is the provider's outcome, not a usage error, so the jury still degrades on it.
   // A seamed (fake) run never opens the owner's key store: its key, if any, is the one the test put in the
