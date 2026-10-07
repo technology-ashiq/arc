@@ -87,7 +87,7 @@ const browser = async (who) => {
   const p = supabase.store[0];
   const key = `service-key-${p.id}`;
   const email = `launch-probe-${who}@${DOMAIN}`;
-  const adm = (path, body) => fetch(`https://${p.id}.supabase.co/auth/v1/admin${path}`, { method: "POST", headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body) });
+  const adm = (path, body) => fetch(`https://${p.id}.supabase.co/auth/v1/admin${path}`, { method: "POST", headers: Object.fromEntries([["apikey", key], ["authorization", `Bearer ${key}`], ["content-type", "application/json"]]), body: JSON.stringify(body) });
   await adm("/users", { email, email_confirm: true });
   const hash = (await (await adm("/generate_link", { type: "magiclink", email })).json()).properties.hashed_token;
   const r = await fetch(`https://${DOMAIN}/auth/confirm?token_hash=${encodeURIComponent(hash)}&type=magiclink`, { redirect: "manual" });
