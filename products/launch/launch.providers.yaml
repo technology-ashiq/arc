@@ -511,14 +511,15 @@ providers:
     region: in
     payment_model: gateway
     env_keys:
-      - RAZORPAY_KEY_ID
-      - RAZORPAY_KEY_SECRET
       - RAZORPAY_WEBHOOK_SECRET
+      - SUPABASE_ACCESS_TOKEN
+      - GITHUB_TOKEN
     hosts:
-      - api.razorpay.com
       - sandbox.automemory.ai
+      - api.supabase.com
+      - api.github.com
     credentials:
-      scope: "test-mode keys; webhook secret"
+      scope: "webhook secret to sign the probe event; webhook table migration and the route commit; no Razorpay API call (ADR-1739)"
     adapter: providers/webhooks-ledger/razorpay-webhook.mjs
     digest: null
     approved_by: ashiq

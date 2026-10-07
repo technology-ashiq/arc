@@ -18,6 +18,7 @@
     ".claude/scripts/launch/lib/dag.mjs",
     ".claude/scripts/launch/lib/runner.mjs",
     ".claude/scripts/launch/lib/scan.mjs",
+    ".claude/scripts/launch/lib/simulated.mjs",
     ".claude/scripts/launch/lib/state.mjs",
     ".claude/scripts/launch/lib/worker.mjs"
   ],
