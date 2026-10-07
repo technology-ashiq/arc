@@ -42,7 +42,8 @@ planted_line() {
   run --separate-stderr bash "$(SDS)" --merge-parent
   ran secret-diff-scan || { echo "stderr: $stderr"; false; }
   [ "$status" -eq 0 ] || { echo "status $status -- a secret in the lines this change adds, or the scan could not run. Mark a deliberate test fixture with gitleaks:allow. $output $stderr"; false; }
-  printf '%s\n' "$output" | grep -qE '^secret-diff-scan: [0-9]+ added line\(s\) scanned, clean$' || { echo "$output"; false; }
+  # `clean` may be followed by notes such as the gitleaks:allow count; the verdict word is what is pinned.
+  printf '%s\n' "$output" | grep -qE '^secret-diff-scan: [0-9]+ added line\(s\) scanned, clean( \(.*\))?$' || { echo "$output"; false; }
 }
 
 @test "distribute-merge-gates: a staged planted key is refused" {

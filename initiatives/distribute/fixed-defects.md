@@ -41,3 +41,4 @@ and lane finds are appended under their PR.
 - **(ac) an unterminated comment swallows the file.** A scanner whose comment state is still open at EOF names it as a finding. Fixed in `brain-drift.mjs`, attack 7c55982 L2.
 - **(ad) a range where a ref belongs.** A `--base` value containing `..`, `:` or a leading `-` is refused before git sees it. Fixed in `secret-diff-scan.sh`, attack 7c55982 B2.
 - **(ae) a malformed field read as absent.** A protection object whose fields are not objects is UNKNOWN, never MISSING. Fixed in `arc-doctor.mjs`, attack 7c55982 L6.
+- **(af) a fix changes output a sibling test pins.** The round-1 fix appended a note after `clean`, and the merge-time test anchored `clean$`; CI (macOS shard 2) was the only thing that noticed. After changing any script's output, grep every `tests/distribute-*.bats` for its printed lines before pushing. Fixed in `tests/distribute-merge-gates.bats`.
