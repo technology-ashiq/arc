@@ -1,0 +1,87 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:failureClassOf / .claude/scripts/engine/arc-run.mjs:invoke",
+      "breaking_input": "A generic-api attempt whose per-attempt abort fires (status 0 from our own ARC_LLM_TIMEOUT_MS or the deadline margin) while the RUN deadline is the binding limit. Driver exits 1 declaring transport; arc-run's timedOut is only true if arc-run itself SIGKILLs. The driver self-aborts at deadline-1.5s, so r.timedOut=false and class=transport.",
+      "why": "The run's own deadline expiry is classified transport, which hops. nextHop's MIN_HOP_MS check usually stops it, but with a budget of ~6.5s the hop starts with 5s and is killed. The distinction between per-attempt timeout and run deadline (ADR item 5) rests on the driver self-reporting status 0 for both.",
+      "fix": "In arc-run, after a declared transport, if msRemaining() is at or below the driver margin treat as budget, or have the driver declare budget when its abort was caused by the run deadline.",
+      "twin_of": "A driver's clock per attempt, not per run"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:invoke cost sidecar lift",
+      "breaking_input": "A driver writes the cost sidecar as the JSON array [] or a string, or writes {\"failure_class\":\"transport\"} on an exit-0 path. For an array, typeof is object, hasOwnProperty works, destructure of an array into {failure_class, ...cost} yields cost={} -> null; fine. But a sidecar of the single literal null makes cost null and skips lift. The real hole: JSON.parse of a sidecar with __proto__ key: {\"__proto__\":{\"failure_class\":\"transport\"}} then spread/destructure.",
+      "why": "The sidecar is attacker-influenced (model-driven drivers such as hermes copy runtime-written files). hasOwnProperty guards own keys, but a sidecar written by a runtime inside the workspace can declare transport on exit 1 and force every failure to hop and spend again at will.",
+      "fix": "Treat declarations from drivers that execute model-controlled code (hermes) as untrusted: ignore declared unless exit 1 and the driver is in an allowlist of declaring drivers; validate sidecar is a plain object."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/common.mjs:writeFailureClass",
+      "breaking_input": "ARC_DRIVER_COST_FILE points to a file where an earlier writeCost already wrote; a driver throws with e.arcFailureClass = {toString(){...}} or a 10 MB string.",
+      "why": "cls is written unvalidated by JSON.stringify; arc-run echoes it in a WARN via JSON.stringify(v) to stderr, which reaches the transcript. A multi-megabyte declared value is written to the sidecar and the warning, bypassing size ceilings applied to stdout/stderr.",
+      "fix": "Bound the declared value: only write strings of length <= 64 matching a class-name pattern; otherwise write nothing."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/common.mjs:writeFailureClass + runDriver catch",
+      "breaking_input": "writeFileSync throws (read-only sidecar dir, EBUSY on Windows from a scanner) inside the catch block of runDriver before die() runs.",
+      "why": "A throw in the catch handler skips die(), so the driver exits via an unhandled rejection with a different exit code (Node default 1 or a crash code), losing the original message and possibly mapping an exit-2 budget decline (arcExit 2) to exit 1, which then hops and spends again. The call is placed before die() without a try.",
+      "fix": "Wrap writeFailureClass in try/catch inside the handler so die() always runs with the intended exit code."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:attempt (hopCost) and HOPS",
+      "breaking_input": "A driver writes cost {\"inr\": 1e308} or a fractional inr like 0.5; hopCost filters Number.isFinite but termsCheck's measured() requires Number.isInteger.",
+      "why": "A fractional inr is kept in hops yet counted unmeasured by termsCheck, so for an answering attempt the total reads unproven and for an answer-less attempt (transport) the real spend is silently counted as 0. Conversely inr: -5 passes isFinite and reduces spend, defeating max_cost (the negative-inr defect already fixed for inrSpent elsewhere).",
+      "fix": "Filter hopCost with Number.isInteger and >= 0, and treat a present-but-invalid inr as unproven, not 0.",
+      "twin_of": "Blank read as zero, NaN read as a cap"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs fallback loop, ownerModel break",
+      "breaking_input": "Owner-model run where nextHop returns hop for transport; code has already done fallbacks.splice(d.index,1) and printed 'falling back to X' before the ownerModel check breaks.",
+      "why": "After the break, a.verdict!=='ok' and chainStop is null, so the run proceeds to downstream arms with a misleading 'falling back' line; and for model-invalid, contractHopped is not set (set after the break) but the loop mutated fallbacks. Also the validateDriverSelection refusal path (after splice) leaves the removed entry gone from the chain on a retried loop.",
+      "fix": "Run the ownerModel and selection checks before splicing and logging, or restore the entry."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:invoke notInstalled / policyDenied",
+      "breaking_input": "Chain [claude-code, codex] where claude-code driver .sh exists but its bash wrapper exits 127 for a missing interpreter (not ENOENT on the CLI); or the driver .sh path is a directory.",
+      "why": "existsSync(sh) true for a directory, then spawn fails with res.error EISDIR; r.code becomes 1 with no declaration -> unknown, no hop, whereas the failure is exactly provider-unavailable. Conversely a missing .sh is classified provider-unavailable, which hops past an unreviewed-driver mistake in the router.",
+      "fix": "Use statSync().isFile(); and distinguish spawn-never-launched (res.error) as provider-unavailable consistently."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:runStreaming child.on('error')",
+      "breaking_input": "claude CLI path resolves but spawn fails with EACCES or EPERM (Windows, not ENOENT).",
+      "why": "Only ENOENT declares provider-unavailable; EACCES/EPERM remain unknown and stop the chain, though the CLI is equally unavailable. Also execFileSync path on Windows for a .cmd shim throws EINVAL, never ENOENT.",
+      "fix": "Include EACCES, EPERM and EINVAL spawn errors where e.syscall starts with spawn."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:MONEY_WORDS",
+      "breaking_input": "A 503 or 500 body containing the word 'credit' (e.g. 'Service credit unavailable'), or a 429 'rate limit, see billing docs link'.",
+      "why": "429 with 'billing' anywhere in a docs link is read as budget and never hops; the regexp scans the full unbounded body text from a provider, and a hostile or generic proxy page containing 'quota' on a plain rate limit suppresses the fallback.",
+      "fix": "Scan only the parsed error.message/code field, bounded in length, not the whole body."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:emitRun hops payload",
+      "breaking_input": "Chain with many attempts; each hop record carries driver names read from the router (fallback entries trimmed strings) with no length cap; HOPS array embedded in receipt and in the escalation proposal payload.",
+      "why": "A router fallback entry of a huge or newline-containing string (rejected by validateDriverSelection only after nextHop and after HOPS may record it? driver name is pushed in attempt only after validation, but the 'hop' log line prints it before) lands in the receipt unscrubbed; the spine validator rejecting the oversized payload quarantines the whole receipt.",
+      "fix": "Cap and charset-check driver names in hops, and print only validated names."
+    }
+  ]
+}

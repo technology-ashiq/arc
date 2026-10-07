@@ -1,0 +1,7 @@
+jobs 2026-08-26
+  brief-materialize      OVERDUE (3 missed)     last 2026-08-21T14:56:25+05:30  next 2026-08-27T06:00:00+05:30
+  day-close-roll         enabled                last 2026-08-26T00:15:03+05:30  next 2026-08-27T00:15:00+05:30
+  logon model Interactive -- scheduled jobs fire ONLY while you are logged on; a slot falling while you are signed out is caught up late by StartWhenAvailable, not run on time
+
+needs-you (1)
+  job brief-materialize silent since 2026-08-21T14:56:25+05:30 -- 3 scheduled slots missed (weekdays@06:00)

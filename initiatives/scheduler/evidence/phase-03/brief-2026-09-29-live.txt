@@ -1,0 +1,7 @@
+brief 2026-09-29
+
+needs-you (1)
+  job brief-materialize silent since 2026-08-21T14:56:25+05:30 -- 27 scheduled slots missed (weekdays@06:00)
+
+progress (1)
+  run.completed

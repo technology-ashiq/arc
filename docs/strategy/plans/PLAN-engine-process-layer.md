@@ -8,6 +8,11 @@
 > handshake added (task-class-tagged fixtures, eval revisions, driver `--version`);
 > kickoff prompt rewritten to lane grammar (ADR-0054); appetite made honest at 2.5w.
 > Decisions ENG-A..G locked; real ADR numbers assigned at kickoff from the next free slot.
+> → **v2.1 2026-10-07, Amendment 1 (`/arc-change --lane engine`, owner-raised):** ENG-H —
+> fallback is governed by a failure classifier and a per-chain budget, not merely configured
+> as a list. Adds REQ-08, one assumption row and one next-cycle phase; ENG-A..G untouched.
+> The lane is IDLE (Cycle 7 closed at Phase 08), so this is NOT a live phase spec — it is
+> built at the next `/arc-kickoff --lane engine`. Full text: § Amendment 1 below.
 >
 > **Trigger (pull, any one — the first two are ADR-0069 block (d), checked where it says):**
 > **public-release prep begins** (any lane's PLAN.md names public release or external
@@ -105,6 +110,7 @@ not a migration.
 | REQ-05 | Budgets are hard, and every run is a policy-grade receipt | `--budget inr=N,min=M` enforced: a fixture process that would exceed budget stops with `outcome: fail/budget` — never silently continues. Every run emits `run.completed` whose payload carries: process@semver · task-class · driver + driver `--version` · **MP-F fingerprint** (provider · exact model id · prompt/canonical sha · input sha · timestamp · wall-clock duration · effort + cost **if visible**) · retries · escalation `none|proposed` · optional work-item ref (`--ref`). Cost fields follow the eligibility rule: provider-reported usage × pinned pricing snapshot = derived; neither available → **absent, never estimated** (0069 b(5)). This makes policy metrics 1–3 computable by a reader script with **zero new event kinds** | 2 |
 | REQ-06 | Routing is explicit, policy-derived, not magic | `engine/router.yaml` (hand-edited): header cites ADR-0069; rows = task-class → **tier by its policy name** → driver + implementation model + fallback chain. Includes the **independent-family-verifier** row even while unoccupied (routing to it → loud "tier defined, unoccupied" error — the slot the policy told the engine to inherit). Every row carries `data: internal-only|external-ok`. `arc-run --driver auto` resolves through it; unknown class → loud error naming the file to edit. Any edit is a reviewed diff citing the policy (MP-A) | 2 |
 | REQ-07 | No secrets or bounded data leak through drivers | Driver logs/transcripts scrubbed by the same deny-pattern scanner as the spine (SPINE-E); fixture: a fake key in process input never appears in any driver artifact. **Data boundary:** a process whose input is marked `internal-only` routed toward an `external` driver → refused loud (exit 5), fixture-proven — the first convenience routing must not silently ship repo context to a third party | 2 |
+| REQ-08 *(Amendment 1, next cycle)* | A fallback never re-sends a prompt for a failure no other model would fix, and never spends past its chain's terms | Every failed attempt carries one `FailureClass` from a closed set of six; a hop is taken ONLY for `transport`/`provider-unavailable`, at most once (cross-family) for `model-invalid`, never for `policy-refusal`/`budget`/`unknown`. Every routed chain declares `max_attempts`, `max_wall_ms`, `max_cost`; a missing term is a router LOAD fault, and a hop that would breach any term is refused before it spends. Every hop's class is on the `run.completed` payload (zero new kinds). Proven by the four invariants in § Amendment 1, including a mutant that drops the classifier and must turn the suite red | next (09) |
 
 ## Appetite
 
@@ -127,6 +133,7 @@ drivers (claude-code + codex), bank, note the third as demand-triggered.
 | ENG-E | **(v2 — reconciled with 0069 b(1)):** escalation = retry-once-same-tier → fail loud + escalation-proposal receipt (`approval.requested`) naming the suggested tier; every standing tier change is a reviewed `router.yaml` diff citing ADR-0069 (MP-A). No component changes a tier at runtime; no auto-learning in v1 (bench owns evidence later) |
 | ENG-F | `drivers/mock` ships in Phase 2 as the deterministic test-harness driver (replays pinned outputs): keyless CI for budget/escalation/scrub/boundary fixtures. Excluded from router.yaml and from the ≤3 production-driver cap — it is a harness, not a route |
 | ENG-G | `run.completed`'s payload is the cost-attribution surface (policy metric 1); `cost.incurred` stays emitter-less this cycle — one receipt per run, no double-counting. Revisit only via `/arc-change` carrying a concrete metric-1 gap |
+| ENG-H *(Amendment 1, 2026-10-07)* | **Fallback is governed, not listed.** One module owns a closed `FailureClass` enum (`transport` · `model-invalid` · `provider-unavailable` · `policy-refusal` · `budget` · `unknown`) and the one pure decision `nextHop(chain, hops)`; arc-run's fallback loop consults nothing else. Hop rules: `transport`/`provider-unavailable` may hop; `model-invalid` hops at most once and only to a different model family; `policy-refusal`, `budget` and `unknown` never hop — they surface. Every chain declares `max_attempts`/`max_wall_ms`/`max_cost`. A hop keeps the ROUTED tier and never lands in a tier it was not routed to. Driver exit map stays 0/1/2 (ADR-0219); the class travels in the cost sidecar (the ENG-D channel). Detail and kickoff forks: § Amendment 1 |
 
 ## Non-negotiables
 
@@ -181,6 +188,7 @@ drivers (claude-code + codex), bank, note the third as demand-triggered.
 | The 6-tool abstract taxonomy covers the 3 pilots | A pilot step needs a 7th tool → extend by ADR, never inline | 0 |
 | Sidecar cost files behave identically on all 3 CI OSes | A CI leg diverges → fall back to a stdout-frame protocol by ADR | 2 |
 | One real dogfood week fits inside Phase 3's 2d | <3 real non-Claude runs by seal → Phase 3 closes with the receipt count it truly has; north-star marked unmet, retro decides next | 3 |
+| *(Amendment 1)* Each driver can tell transport from model failure from what it observes | A driver's transport failures and bad answers reach it as the same signal (e.g. a CLI that exits 1 with indistinguishable stderr for overload and for a refusal) → that driver declares `unknown`, so every chain through it stops hopping; recorded per driver, never papered over with a stderr regex guess | next (09) |
 
 ## Pre-mortem (top 5 — seeded from history first)
 
@@ -208,12 +216,150 @@ drivers (claude-code + codex), bank, note the third as demand-triggered.
 | 1 | `arc-compile`: pilot bytes re-pinned at a named commit → claude-code target → **3/3 byte-identical proof** → flip source of truth; codex target + goldens | 3d |
 | 2 | Engine: 3 drivers + `drivers/mock` + `arc-run` (hard budgets, fail-loud + proposal receipts, full `run.completed` payload, secret scrub + data-boundary refusal) + `router.yaml` (policy-derived, verifier row, data classes) + `--driver auto` | 4d |
 | 3 | Dogfood + seal: one real week where commit-msg drafting runs via `arc-run` on a non-Claude driver ≥3× · fourth-driver stub receipt (<1h, ENG-F pattern) · absent-field payload count · retro + lint promotions review | 2d |
+| next (09) *(Amendment 1)* | Governed fallback (ENG-H / REQ-08): `FailureClass` module + `nextHop` · driver-declared class in the sidecar · chain terms in `router.yaml` enforced at load and before every hop · per-hop record on `run.completed` · the four invariants + the classifier-drop mutant · two-surface adversarial pass. Numbered at kickoff (lane's next free phase is 09); the kickoff may split it by risk | 3d (ceiling) |
 
 **North-star:** the 3 pilot processes run on 2+ drivers with identical contract
 compliance; a NEW driver is one shim file, proven by the <1h stub receipt; and when
 bench's trigger later fires, its kickoff inherits task-class fixtures, eval revisions,
 driver versions and eligible cost evidence that **already exist** — zero
 re-instrumentation, exactly as this cycle inherited its policy from ADR-0069.
+
+---
+
+## Amendment 1 (2026-10-07) — ENG-H: fallback is governed by a failure classifier and a per-chain budget
+
+**Routed by** `/arc-change --lane engine`, raised by the owner on 2026-10-07. The engine lane is
+IDLE and Cycle 7 closed at Phase 08, so this is a design-source amendment for the **next**
+`/arc-kickoff --lane engine` and not a live phase spec. It decides no tier and adds no provider.
+
+### The problem, verified against the code (main @ `9864ee29`)
+
+- `engine/router.yaml` carries a `fallback:` list per class, and ADR-0225 validates every hop
+  for driver-set membership and the runtime grant. What a hop is FOR is decided by nothing more
+  than `a.verdict === "driver"` (`arc-run.mjs`, the `while` at ~L2025). `attempt()` (~L1823)
+  sorts a result into `budget | harness | policy | driver | schema | ok`, and **`driver` is a
+  catch-all**: any non-zero exit that is not 2 and not a policy denial lands there, so a
+  connect error, a 503, a provider refusal (fixture 10's 403) and a driver that crashed on its
+  own bug all walk the chain the same way.
+- The only classification that exists was added as bug fixes, one arm at a time — the budget
+  arm (a timeout spent the budget again per driver), the overflow arm (arc-run's own ceiling
+  blamed on the driver), the policy arm (one denial became three incidents). The comment near
+  ~L617 records a dispatch shape that "went straight past the boundary with no classification
+  at all". Each fix closed one shape; none made classification first-class.
+- `generic-api` already knows the difference internally (it retries 429/5xx, then throws
+  `transport failed after N attempt(s)`) and then reports it upward as a bare exit 1, which
+  arc-run cannot tell apart from a model answer it could not parse.
+- Chains carry no terms of their own. The run's `--budget inr=,min=` bounds the RUN, but a chain
+  has no `max_attempts`, no wall cap and no money cap, so how much a fallback may spend is a
+  property of whoever called arc-run, not of the route.
+
+### The decision (ENG-H) — what the kickoff inherits as locked
+
+1. **One module, one enum, one decision.** `FailureClass` is a closed set of six, owned by ONE
+   module (next to `router-row.mjs`), together with the pure function `nextHop(chain, hops)`.
+   arc-run's fallback loop asks `nextHop` and nothing else; there is no second copy of the rule
+   in arc-run, bench or a driver (the "validate one read, compare another" twin this lane has
+   closed three times).
+
+   | class | meaning | hops? |
+   |---|---|---|
+   | `transport` | connect / DNS / TLS / 5xx / a **per-attempt** timeout before the first token — the request never reached a model that answered | yes |
+   | `provider-unavailable` | 429 / 503 / overloaded **after** the driver's own transport retries (ADR-0203) are spent; or the driver is not installed / did not launch | yes |
+   | `model-invalid` | a model answered and the answer failed the contract (not JSON, or `validateData` faults) | **at most once, and only to a different model family** |
+   | `policy-refusal` | arc's policy gate denied, or the provider refused the request on policy/content grounds | **never** — no other driver is more permitted |
+   | `budget` | the RUN's deadline, `inr` spent, the driver declined for budget (exit 2 — this includes the capped key's HTTP 403 `Key limit exceeded`, which `drivers/hermes` already maps to BUDGET_DECLINED per ADR-0213 / fixture 10), arc-run's output ceiling, or a chain term would be breached | **never** — the next hop spends again |
+   | `unknown` | anything not positively classified, including a driver exit 1 that declared no class | **never** |
+
+2. **`unknown` does not hop, and that is a behaviour change on purpose.** Today an undeclared
+   driver failure falls back. After ENG-H it surfaces. A chain through a driver that declares
+   nothing therefore stops hopping until that driver classifies its failures — named, not
+   hidden, and counted at kickoff (assumption row above).
+
+3. **Where the class comes from.** arc-run classifies what it observes itself (timeout against
+   the run deadline → `budget`, policy denial → `policy-refusal`, exit 2 → `budget`, overflow →
+   `budget`, not-launched → `provider-unavailable`, exit 0 with a contract fault →
+   `model-invalid`). For a driver exit 1, the driver DECLARES its class in the cost sidecar
+   (`failure_class`, the ENG-D channel; `writeCost` already carries non-cost facts — `model`,
+   `runtime` — for exactly this reason). The **exit map stays 0/1/2** (ADR-0219): no new exit
+   code. A declared value outside the closed set is `unknown`, loudly; a declaration on exit 0
+   or exit 2 is ignored, because those codes already decide the class.
+
+4. **A per-attempt timeout is not the run's deadline.** Invariant (a) depends on keeping the two
+   apart: generic-api's own attempt cap expiring with run time left is `transport` (hops); the
+   run's `ARC_DRIVER_DEADLINE_EPOCH_MS` passing is `budget` (never hops). Conflating them is the
+   exact defect the timeout arm was written to remove.
+
+5. **Chain terms.** Every class row AND `default:` in `router.yaml` declares
+   `max_attempts` (integer ≥1, counting every attempt including ADR-0204's same-tier retry),
+   `max_wall_ms` (integer ms) and `max_cost` (integer **paise**, the unit `writeCost` already
+   uses). A row missing any of the three is a **load fault** reported by `router-row.mjs`, like
+   the four hire terms — a term that only fails when used sits wrong for as long as nobody uses
+   it. The effective bound is the tighter of the chain term and the caller's `--budget`.
+
+6. **Refuse before spend, deterministically.** `nextHop` is pure over `(chain terms, hops so far)`
+   where each hop records `{driver, class, ms, cost?}` as MEASURED. It refuses the next hop when
+   `attempts + 1 > max_attempts`, when elapsed `≥ max_wall_ms`, or when spend so far `≥ max_cost`;
+   a started hop gets `min(run remaining, max_wall_ms − elapsed)` as its timeout, so it cannot run
+   past the term. Replaying the same recorded hops yields the same decision — that is invariant
+   (c)'s "replay-deterministic", and it is why the clock is an input, never read inside.
+
+7. **The hop record — zero new kinds.** The receipt kind stays `run.completed`, and its existing
+   `reason` field keeps its current values (`budget | policy | schema | driver | …`) so no reader
+   breaks. Two fields are added to that payload: `failure_class` (the final attempt's class) and
+   `hops: [{driver, tier, class, ms, cost?}]`, one entry per attempt. The ledger prices fallbacks
+   from `hops`; the escalation proposal stays `approval.requested` exactly as ADR-0204 has it.
+
+8. **No promotion.** Every hop keeps the routed `tier` (each hop's `tier` is recorded so this is
+   checkable); the pin is recomputed per driver UNDER THAT TIER, as arc-run already does. A hop
+   never lands in a tier it was not routed to, and `independent-family-verifier` stays empty by
+   default (ADR-0069's unoccupied slot; ADR-0225's reach rule) — a fallback is never how it gets
+   filled.
+
+### Invariants the kickoff must pin (owner-written, verbatim intent)
+
+- **(a)** A wall-time timeout classified `transport` falls back; the same prompt classified
+  `model-invalid` falls back once and stops.
+- **(b)** `policy-refusal` never reaches a second driver — pinned with a fake driver that
+  refuses, and the second driver's invocation count read as ZERO (it ran = it was counted).
+- **(c)** A chain budget breach refuses the hop **before** spend, and the decision is
+  replay-deterministic.
+- **(d)** An unclassified failure is `unknown` and does NOT fall back — **the mutant that drops
+  the classifier must fail the suite** (the mutant IS the negative control, per this lane's
+  non-negotiable).
+
+### Forks left to the kickoff — each with a recommendation, none decided here
+
+- **F1. ADR-0204's same-tier retry vs ENG-H's cross-family hop for `model-invalid`.**
+  *Recommendation:* when the chain holds a different-family entry, the cross-family hop REPLACES
+  rung 1; when it does not, rung 1 stays. Either way at most ONE extra attempt for a contract
+  fault, then the proposal receipt. Two extra attempts (retry + hop) is the "fail three times
+  instead of once, slower" shape router.yaml already warns about.
+- **F2. Model family for `generic-api`.** It reaches a gateway, so its family is the profile's
+  model, not the driver. *Recommendation:* family is read from the resolved pin/profile; an
+  unknown family is treated as SAME family (fail closed: no cross-family hop).
+- **F3. `max_cost` when a prior hop reported no spend.** ADR-0069 b5 forbids estimating.
+  *Recommendation:* fail closed — an absent figure means the spend is unproven, so no further
+  hop under a finite `max_cost`; the kickoff measures which drivers actually report `inr` and
+  says what that does to each live chain before any row is written.
+- **F4. Explicit `--driver` runs** (bench, arc-attack's trial) consult no row and therefore
+  have no chain. *Recommendation:* they keep no chain and gain only the `failure_class`/`hops`
+  record; ENG-H governs the routed path.
+
+### Blast radius the kickoff must count before writing specs
+
+- Every fixture `router.yaml` under `tests/` gains three required terms (a missing term faults
+  the load) — count them; `engine-router-row.bats` is the known heavy one.
+- Drivers: `generic-api` declares `transport`/`provider-unavailable` from what it already knows;
+  `claude-code`, `codex`, `hermes` and `mock` each need a declared class or they read `unknown`.
+  `mock` must be able to replay any class (a `__failure_class` recording key, stripped like
+  `__cost`), or the invariants cannot be proven offline (ENG-F).
+- Readers of `run.completed` (`hq/lib/face/reads.mjs`, `jobs/audit.mjs`, the ledger lane, bench)
+  must tolerate the two new payload fields; none may start depending on `reason` changing.
+
+### Out of scope / no-gos
+
+Adding providers · auto-switching (ADR-0069 b1 forbids it) · changing any tier · a new spine
+kind · a new driver exit code (ADR-0219) · filling `independent-family-verifier`.
 
 ---
 
@@ -232,4 +378,18 @@ since this plan is flagged, never silently absorbed. No runtime auto-escalation 
 (0069 b(1)) — escalation ends in a proposal receipt, and tier changes are reviewed
 router diffs. STOP after PLAN.md + phase specs + kickoff-lint pass — I approve before
 Phase 0 code.
+```
+
+**Amendment 1 kickoff (the next engine cycle).** Paste instead:
+
+```
+/arc-kickoff --lane engine Governed fallback -- a failure classifier and a per-chain budget (ENG-H)
+
+Design source: docs/strategy/plans/PLAN-engine-process-layer.md § Amendment 1 (v2.1). ENG-H
+is locked; assign it the next free engine ADR number (0228 was free on main at 2026-10-07 --
+re-sweep origin/* and sibling worktrees first). REQ-08 is the cycle's REQ; its four
+invariants (a)-(d) are acceptance, and (d)'s classifier-drop mutant is the negative control.
+Resolve forks F1-F4 with the recommendations unless evidence says otherwise, and count the
+blast radius (fixture routers, driver declarations, run.completed readers) before writing
+specs. No tier changes, no providers, no new spine kind, no new exit code.
 ```

@@ -192,7 +192,7 @@ hook: a small guard that blocks an action, such as a write outside an agent's ow
 - [design-jury](../agents/design-jury.md) — Explore-mode blind juror. Ranks N unlabelled items — the explore's variants plus at least one world-class reference screen it is not told about — against the brief, and returns ONE comparative ranking with reasons. No absolute scores, no cross-talk with other jurors, no knowledge of theses or authorship. Writes exactly one ranking artifact.
 - [ui-composer](../agents/ui-composer.md) — Explore-mode composer. Builds exactly ONE variant from the brief and its assigned thesis — its own directory, its own invented visual system, realistic content. Blind to the other variants and never edits the brief, the matrix, or anything outside its own variant dir.
 
-## Scripts (17)
+## Scripts (20)
 
 - [`.claude/scripts/design/composer-bash-check.sh`](../../../.claude/scripts/design/composer-bash-check.sh)
 - [`.claude/scripts/design/composer-scope-check.sh`](../../../.claude/scripts/design/composer-scope-check.sh)
@@ -204,9 +204,12 @@ hook: a small guard that blocks an action, such as a write outside an agent's ow
 - [`.claude/scripts/design/design-gate.sh`](../../../.claude/scripts/design/design-gate.sh)
 - [`.claude/scripts/design/design-jury.mjs`](../../../.claude/scripts/design/design-jury.mjs)
 - [`.claude/scripts/design/design-lint.mjs`](../../../.claude/scripts/design/design-lint.mjs)
+- [`.claude/scripts/design/design-package.mjs`](../../../.claude/scripts/design/design-package.mjs)
 - [`.claude/scripts/design/design-refpack.mjs`](../../../.claude/scripts/design/design-refpack.mjs)
 - [`.claude/scripts/design/design-render-serve.mjs`](../../../.claude/scripts/design/design-render-serve.mjs)
 - [`.claude/scripts/design/design-render.sh`](../../../.claude/scripts/design/design-render.sh)
+- [`.claude/scripts/design/design-rival-stitch.mjs`](../../../.claude/scripts/design/design-rival-stitch.mjs)
+- [`.claude/scripts/design/design-rival.mjs`](../../../.claude/scripts/design/design-rival.mjs)
 - [`.claude/scripts/design/design-robots.mjs`](../../../.claude/scripts/design/design-robots.mjs)
 - [`.claude/scripts/design/design-sources-lint.mjs`](../../../.claude/scripts/design/design-sources-lint.mjs)
 - [`.claude/scripts/design/open-brief.mjs`](../../../.claude/scripts/design/open-brief.mjs)

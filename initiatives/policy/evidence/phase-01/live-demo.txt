@@ -1,0 +1,13 @@
+$ guard (one in-scope cell, no refusal ever)
+no-writer  session:interactive/shell unknown refusal=-
+policy-evidence guard: NOT CLEAN as-of 2026-10-07 -- 1 BELOW-BAR (1 no-writer, 0 clearable); approval <ULID>; run <ULID>
+exit=3
+$ guard again (same BELOW-BAR set)
+no-writer  session:interactive/shell unknown refusal=-
+policy-evidence guard: NOT CLEAN as-of 2026-10-07 -- 1 BELOW-BAR (1 no-writer, 0 clearable); same set as the last guard run, no new approval; run <ULID>
+exit=3
+RUNS 2 APPROVALS 1 LAST partial 01M4B9JNR96RGFS9TVWPHY94G3
+$ guard (nothing in scope)
+policy-evidence guard: CLEAN as-of 2026-10-07 -- no in-scope cell (nothing above L0 to evidence); run <ULID>
+exit=0
+RUNS 1 APPROVALS 0 LAST ok 01M4B9JR1JZKTTD7YSDDBZZT7N

@@ -86,6 +86,7 @@ export function flowInputs(ctx) {
     "legal.full-read": { venture: "fixture-gateway-gst" },
     // The company ring (ADR-1343): both write a proposal branch, so a sim door refuses them at apply.
     "org.lane-status": { lane: "face", status: "QUEUED" },
+    "org.seat-assign": { role: "coo-dispatcher", seat: "agent", agents: "researcher" },
     "concepts.define-term": { term: "browser flow probe", room: "today", station: "needs-you cards" },
   };
 }
@@ -135,6 +136,7 @@ export const REFUSALS = Object.freeze({
   // Or, on a checkout WITH a main, the fixture spine's deliberate torn line: an unknown read is never "nothing
   // requested" (the register's twin -- main CI after PR 5a).
   "org.lane-status": "SIM_EFFECT|NO_BASE|torn line",
+  "org.seat-assign": "SIM_EFFECT|NO_BASE|torn line",
   "concepts.define-term": "SIM_EFFECT|NO_BASE|torn line",
 });
 

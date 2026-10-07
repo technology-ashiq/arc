@@ -59,6 +59,9 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-13 | value (legal-lints) | registered at birth, legal Phase 00 | **YES** — twice on the lane's own authored pages | **YES, twice — both real false positives, both fixed.** See below |
 | 2026-08-13 | trace (legal-lints) | registered at birth, legal Phase 00 | **YES** — once on a correct page | **YES — one real false positive, fixed.** See below |
 | 2026-08-13 | completeness (legal-lints) | registered at birth, legal Phase 00 | **YES** — on 3 of 6 fixtures, unplanted | **no** — see below; this is the only true positive of the three |
+| 2026-10-07 | value (legal-lints) | legal Phase 03, LexOS real render (`01M4AHJZPVC46NN5PDYRAZK2WW`) | no | no — clean run 1 of 3 |
+| 2026-10-07 | trace (legal-lints) | legal Phase 03, LexOS real render | no | no — clean run 1 of 3 |
+| 2026-10-07 | completeness (legal-lints) | legal Phase 03, LexOS real render | no | no — clean run 2 of 3 |
 
 ### the three `legal` lints — registered at birth, and two of them are already at zero
 
@@ -603,3 +606,5 @@ two fresh attackers. **P2 NOT APPROVED:** a built-but-unclosed WARN. The 2026-09
 row stays the only record of that pattern.
 | 2026-10-07 | `adr-wired` | arc-discover Cycle 1, kickoff-lint every run from build to close | **yes** (ADR-1916 written at build, cited by PLAN and code but by no phase spec) | **no**: the ADR really was unwired from the specs; fixed by citing it in phase-03-spec, then clean |
 | 2026-10-07 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-discover Cycle 1, every run cycle-long | **no** | n/a: silent runs, no promotion |
+| 2026-10-07 | `pre-mortem-cite` · `adr-wired` · `adr-confidence` · `architecture` · `current-state-structure` · `nonneg-drift` · `verify-red` · `birth-rule(kickoff-lint)` | arc-scheduler Cycle 12 Phase 03 close, kickoff-lint every run | **no** | n/a: silent runs on a close that changed no plan structure, so the silence proves nothing about these gates; no promotion |
+| 2026-10-07 | `pre-mortem-cite` · `adr-wired` · `adr-confidence` · `architecture` · `current-state-structure` · `nonneg-drift` · `verify-red` · `birth-rule(kickoff-lint)` | arc-design v2 Cycle 16, Phases 07-08 open and close, kickoff-lint every run | **no** | n/a: silent runs on closes and a spec refinement that changed no plan structure, so the silence proves nothing about these gates; no promotion |

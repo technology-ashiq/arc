@@ -1,0 +1,63 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:verdictOf (first line, `if (r.cost && Number.isFinite(r.cost.inr)) inrSpent += r.cost.inr`)",
+      "breaking_input": "A driver's cost sidecar reads {\"inr\":-1000000,\"source\":\"measured\"}, or {\"inr\":0.5}, on any attempt in a run that has a `--budget inr=N`.",
+      "why": "This round validated spend in `hopCost` with `okInr` (non-negative integer, bounded) and in `termsCheck`. The run-level accumulator `inrSpent` still uses a bare `Number.isFinite`. A negative figure drives `inrSpent` down so `overBudget()` can never fire. This is the same fix applied in one reader and not in the twin that reads the same sidecar field.",
+      "fix": "Route verdictOf through the same `okInr` predicate. Ignore a present-but-invalid figure for the sum and treat it as unproven for the budget.",
+      "twin_of": "A present-but-unreadable spend counted as zero"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:cliMissing and codex.mjs:cliMissing",
+      "breaking_input": "ARC_ROOT, or the `--work-root` it is derived from, names a directory that has been deleted or is unreadable. `spawn`/`execFileSync` is called with `cwd: WORK_ROOT` and fails with ENOENT or EACCES (syscall `spawn claude`), although the CLI is installed.",
+      "why": "`cliMissing` keys on the error code alone (ENOENT, EACCES, EPERM, EINVAL+spawn). It cannot tell a missing binary from an unusable cwd. A local configuration fault is declared `provider-unavailable`, which hops. The chain then walks to `generic-api`, which has no cwd, and the prompt and repo context go to a third party because of a fault on this machine.",
+      "fix": "Stat the CLI path, or check that `WORK_ROOT` is an accessible directory, before the spawn. Declare `provider-unavailable` only when the CLI lookup itself failed. Otherwise leave the failure undeclared.",
+      "twin_of": "A guard that runs on only one of N entry points"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:invoke (`notInstalled: Boolean(res.error && res.status === null && ...)`)",
+      "breaking_input": "The driver spawn fails with E2BIG, EMFILE, ENOMEM or EAGAIN. Any `res.error` with `status === null` that is neither a timeout nor ENOBUFS has the same effect.",
+      "why": "Every spawn error other than the two excluded ones is classed as 'no process existed', then `classifyAttempt` maps `notInstalled` to `provider-unavailable`. Local resource exhaustion and oversized-argv faults are therefore treated as an unavailable provider and trigger a hop, which will hit the same local fault. The same line is also reused as `spawned`.",
+      "fix": "Restrict `notInstalled` to ENOENT, EACCES and EPERM on the driver path. Leave other spawn errors undeclared, so the class is `unknown` and nothing hops."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:attempt (`classifyAttempt({... contractFault: v.verdict === \"schema\" ...})`) and failure-class.mjs:classifyAttempt",
+      "breaking_input": "A driver exits 0 with empty or non-JSON stdout, or any exit-0 result whose verdict is neither `schema` nor `ok`.",
+      "why": "ADR-0228 item 4 says exit 0 with unparseable stdout is `model-invalid`, but only `verdict === \"schema\"` sets `contractFault`. For any other failing verdict at exit 0, `classifyAttempt` returns `{cls:null}`. `HOPS` then records `class:null`, which the code comments define as 'an attempt that succeeded', on a failed attempt. `nextHop` fails safe to unknown, but the receipt's `hops[]` misreports the attempt and the ledger will price it as a success.",
+      "fix": "For exit 0 with a non-ok verdict, return a non-null class (`model-invalid` for unparseable stdout, otherwise `unknown`). Assert in a fixture that `hops[].class` is null only when the verdict is ok."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:hopCtx / modelFor, called from failure-class.mjs:nextHop",
+      "breaking_input": "A router fallback entry that is not in the closed driver set (for example `../x`, a name with a newline, or a lookalike), reached after a `model-invalid` failure.",
+      "why": "For `model-invalid`, `nextHop` calls `ctx.familyOf(entry)` on every remaining raw router string. That runs `routeFor(entry).pin` before `validateDriverSelection` has run. The comment says to validate, then mutate, then announce, but the router is consulted for unvalidated names first. If `routeFor` throws or mis-resolves on such a name, the run dies or decides on an unvalidated target without a receipt.",
+      "fix": "Filter or validate fallback entries against the closed driver set before building `familyOf`. Have `familyOf` return `unknown` for any name outside that set without consulting the router."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/common.mjs: runDriver catch (`writeCost(e.arcCost); writeFailureClass(e.arcFailureClass)` in one try)",
+      "breaking_input": "A thrown error carries `arcCost` with a missing or invalid `source`, or the cost write fails with EBUSY, together with `arcFailureClass:\"transport\"`.",
+      "why": "Both writes share one try block. If `writeCost` throws, `writeFailureClass` never runs. The declaration is lost, the class reads `unknown`, and a failure the driver could classify never hops. The warning says only 'could not write the failure sidecar'. The spend was also not recorded.",
+      "fix": "Use separate try blocks. Write the class first, since it is the cheaper and more important fact, then the cost."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs: the first `attempt(driver)` call (only hops and the retry pass `capMs`)",
+      "breaking_input": "A row with `max_wall_ms: 60000` and a primary driver that hangs for 55 minutes on a run with no `--budget`.",
+      "why": "`max_wall_ms` is enforced only by `termsCheck` before a hop or retry, and as `capMs` on those attempts. The first attempt is spawned with no term cap, so the chain's wall term does not bound it. The router comment claims 'no hop or retry starts at or past it', which hides this, but nothing documents that the first attempt is exempt.",
+      "fix": "Pass `max_wall_ms` as `capMs` to the first attempt on the auto path, or document in ADR-0228 and the router header that the term binds only later attempts."
+    }
+  ]
+}

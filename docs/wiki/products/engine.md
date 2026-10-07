@@ -189,7 +189,7 @@ diff: the list of exactly what changed between two versions of the files.
 
 None declared.
 
-## Scripts (33)
+## Scripts (35)
 
 - [`.claude/scripts/engine/adapters/claude-code.mjs`](../../../.claude/scripts/engine/adapters/claude-code.mjs)
 - [`.claude/scripts/engine/adapters/codex.mjs`](../../../.claude/scripts/engine/adapters/codex.mjs)
@@ -197,6 +197,7 @@ None declared.
 - [`.claude/scripts/engine/arc-attack.mjs`](../../../.claude/scripts/engine/arc-attack.mjs)
 - [`.claude/scripts/engine/arc-bench.mjs`](../../../.claude/scripts/engine/arc-bench.mjs)
 - [`.claude/scripts/engine/arc-compile.mjs`](../../../.claude/scripts/engine/arc-compile.mjs)
+- [`.claude/scripts/engine/arc-doctor.mjs`](../../../.claude/scripts/engine/arc-doctor.mjs)
 - [`.claude/scripts/engine/arc-run.mjs`](../../../.claude/scripts/engine/arc-run.mjs)
 - [`.claude/scripts/engine/build-attack-input.mjs`](../../../.claude/scripts/engine/build-attack-input.mjs)
 - [`.claude/scripts/engine/build-pack-input.mjs`](../../../.claude/scripts/engine/build-pack-input.mjs)
@@ -216,6 +217,7 @@ None declared.
 - [`.claude/scripts/engine/drivers/mock.sh`](../../../.claude/scripts/engine/drivers/mock.sh)
 - [`.claude/scripts/engine/egress-proxy.py`](../../../.claude/scripts/engine/egress-proxy.py)
 - [`.claude/scripts/engine/egress-session.sh`](../../../.claude/scripts/engine/egress-session.sh)
+- [`.claude/scripts/engine/failure-class.mjs`](../../../.claude/scripts/engine/failure-class.mjs)
 - [`.claude/scripts/engine/narrative-verify.mjs`](../../../.claude/scripts/engine/narrative-verify.mjs)
 - [`.claude/scripts/engine/process-lint.mjs`](../../../.claude/scripts/engine/process-lint.mjs)
 - [`.claude/scripts/engine/propose.mjs`](../../../.claude/scripts/engine/propose.mjs)

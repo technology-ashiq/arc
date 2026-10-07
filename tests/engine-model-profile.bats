@@ -89,7 +89,11 @@ VAL()   { printf '%s\n' "$output" | grep -m1 "^$1=" | cut -d= -f2-; }
 @test "profile: claude-code runs the tier pin first, and the generic-api hop runs the class profile" {
   run PROBE hop
   [[ "$output" == *"RAN"* ]] || { echo "$output"; false; }
-  [[ "$(VAL CLI_RAN)" == *"sonnet"* ]] || { echo "attempt 1 did not run claude-code on the tier pin: $output"; false; }
+  # Attempt 1 ran claude-code on the TIER pin, read from the receipt's hop record (ADR-0228): its CLI is absent on
+  # purpose, the one claude-code failure that may hop.
+  [ "$(VAL HOP0_DRIVER)" = "claude-code" ] || { echo "attempt 1 was not claude-code: $output"; false; }
+  [ "$(VAL HOP0_MODEL)" = "sonnet" ] || { echo "attempt 1 did not run on the tier pin: $output"; false; }
+  [ "$(VAL HOP0_CLASS)" = "provider-unavailable" ] || { echo "attempt 1 did not fail as a missing CLI: $output"; false; }
   [ "$(VAL REQUESTS)" = "1" ] || { echo "the hop never reached the gateway: $output"; false; }
   [ "$(VAL REQ0_BEARER)" = "KEY_FY" ] || { echo "$output"; false; }
   [ "$(VAL REQ0_MODEL)" = "vendor/model-fy" ] || { echo "$output"; false; }

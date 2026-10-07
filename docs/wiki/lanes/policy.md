@@ -32,7 +32,7 @@ Silence means no. A kind of work the rulebook never mentions can read, and nothi
 
 ### Why this needs to be a lane at all
 
-The plan (`initiatives/policy/PLAN.md`) starts from one fact: before this lane, arc's headless runner
+The Cycle 9 plan (`initiatives/policy/archive/PLAN-cycle9-2026-08-10.md`) starts from one fact: before this lane, arc's headless runner
 called its driver with no check of any kind. The lane's aim is that the first run nobody is watching
 is already policed by code, and that every change of authority leaves a receipt in arc's logbook.
 
@@ -193,14 +193,14 @@ Constitution: the short list of things arc has agreed nobody automates. It lives
 ADR: a short written record of one decision and why it was taken.
 ```
 
-*arc-policy "Enforced capability vectors"*
+*policy cycle 2 "Evidenced levels"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-policy (Cycle 9, closed 2026-08-10) |
+| Status | BLOCKED |
+| Cycle | arc-policy cycle 2 (opened 2026-10-07) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -210,7 +210,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/policy/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/policy/PROGRESS.md)
 
-## Decisions (9)
+## Decisions (12)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -225,6 +225,9 @@ ADRs whose `Product:` line names this lane first.
 | [`0506`](../../../docs/adr/0506-e2-binds-by-declaration-and-drift-is-caught-by-a-pinned-parse.md) | E2 binds to grants through a mandatory declaration, and quote drift is caught by parsing the hash-pinned Constitution | accepted | 2026-08-06 |
 | [`0507`](../../../docs/adr/0507-no-capability-may-exceed-another-capabilitys-grant.md) | No capability may be used to exceed another capability's grant | accepted | 2026-08-06 |
 | [`0508`](../../../docs/adr/0508-four-authority-receipts-extend-the-closed-vocabulary.md) | Four authority receipts extend the closed vocabulary, 40 to 44 | accepted | 2026-08-06 |
+| [`0509`](../../../docs/adr/0509-evidence-is-a-fold-and-refusals-ride-a-note-logged-profile.md) | Evidence is a fold over existing kinds, and a refusal rides a `note.logged` profile | accepted | 2026-10-07 |
+| [`0510`](../../../docs/adr/0510-below-bar-is-an-unproven-refusal-path-on-the-ist-day-boundary.md) | BELOW-BAR is an unproven refusal path, judged on the IST day boundary | accepted | 2026-10-07 |
+| [`0511`](../../../docs/adr/0511-the-policy-evidence-guard-adopts-adr-0910-and-cannot-be-clean-below-bar.md) | The policy evidence guard adopts ADR-0910's rule and cannot be clean with a BELOW-BAR cell | accepted | 2026-10-07 |
 
 ## Source
 

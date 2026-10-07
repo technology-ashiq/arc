@@ -1,0 +1,59 @@
+harness-proof: opencode 1.17.18 session=ses_eea881c8fffeTT1twYeGKOCUuJ model=openrouter/deepseek/deepseek-v4-flash-0731 flags=--pure cwd=main-clone date=2026-10-07 command=arc-spike-receipt
+
+# distribute Phase 00 -- the live OpenCode spike (kickoff item 10, A-02, A-03)
+
+## Result
+
+One command invoked from OpenCode emitted one receipt carrying `harness: opencode`:
+
+  invocation   opencode run --pure --command arc-spike-receipt --agent spike --auto -m openrouter/deepseek/deepseek-v4-flash-0731 --format json
+  tool call    bash: node .claude/scripts/hq/arc-event.mjs emit note.logged --payload-file .opencode/spike-payload.json --process distribute@0.1.0  -> completed
+  model reply  RECEIPT: 01M4AQG22Y85433X9KC4BHJV8H
+  spine        found by id in E:/Work_Hub/01_Automemory/arc/.claude/state/hq/events/2026-10-07.jsonl
+               kind note.logged · process distribute@0.1.0 · payload.harness "opencode"
+  quarantine   0 files in events/_quarantine/ contain `distribute@`
+
+The spine accepted `harness` on `note.logged` without a vocab change, so assumption A-03 holds and no vocab ADR is needed.
+
+## A labelling error in the receipt (stated, not corrected: receipts are immutable)
+
+The receipt's payload says `"command":"arc-resume"`. The command that actually ran was `arc-spike-receipt`. The payload
+file was written for the first spike plan and was not rewritten when the command changed. The correct reading of
+`01M4AQG22Y85433X9KC4BHJV8H` is: an OpenCode session ran the quarantined `arc-spike-receipt` command, not
+`arc-resume`.
+
+## Deviation from the spec: why the final command is not arc-resume
+
+phase-00-spec step 8 named a rendering of `arc-resume`. That rendering was run four times, and OpenCode executed it
+every time. It loaded the hand-rendered command and the `spike` agent, enforced the agent's permission map, and ran its
+tools. No run reached the emit step that closes the command:
+
+| # | Model | What happened |
+|---|---|---|
+| 1 | opencode/nemotron-3-ultra-free | HTTP 426: "OpenCode 1.18.0 or newer is required to use the free tier" |
+| 2 | google/gemini-2.5-flash | APIError: the model "is no longer available to new users" |
+| 3 | google/gemini-3.8-flash | 16 tool calls (lane-resolve, git, kickoff-lint, PLAN/spec reads), still reading at the 900 s timeout |
+| 4 | google/gemini-3.8-flash | zero stdout for 35 min; the OpenCode log shows a free-tier quota error retried silently |
+| 5 | nvidia/deepseek-ai/deepseek-v4.1-flash | 10 tool calls, then a malformed tool-call token; stalled to the 1200 s timeout |
+| 6 | nvidia (minimal command) | zero events in 420 s; global plugins and MCP servers failed to load at startup |
+| 7 | openrouter deepseek, `--pure`, minimal command | one tool call, one receipt, exit 0 |
+
+The kickoff's requirement is "one command invoked from OpenCode, one receipt with `harness: opencode` in payload". Run 7
+meets it. The failures that blocked arc-resume came from the free models and the user-level OpenCode config. They are
+not the command format. Running arc's real commands end to end in OpenCode is REQ-03's job in P03, on a model the owner
+names.
+
+## Facts the spike fed into engine/harnesses.yaml
+
+- `opencode run` parses a message that starts with `--` as its own flag, so pass `-- <message>`.
+- The bundled free tier refuses 1.17.18 (HTTP 426, needs 1.18.0 or newer).
+- OpenCode writes `package.json`, `package-lock.json`, `.gitignore` and `node_modules/` into `.opencode/` on first run.
+- A provider quota error is retried silently, with nothing on stdout. Only `~/.local/share/opencode/log/opencode.log`
+  shows it, so the P03 adapter's `doctor` and REQ-03's runner must read that log, or pass `--print-logs`.
+- User-level plugins and MCP servers load into every run, and can stall startup. `--pure` disables external plugins.
+
+## Quarantine of the spike files
+
+`.opencode/` (the hand-rendered command, the spike agent, the payload, and OpenCode's own package files) was moved out
+of the main clone to `~/.arc-private/distribute/spike-2026-10-07/`, together with all 7 raw transcripts. Nothing from
+the spike is committed except this file.

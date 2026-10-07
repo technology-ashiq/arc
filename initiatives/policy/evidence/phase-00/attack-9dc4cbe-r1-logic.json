@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:62",
+      "breaking_input": "Run `policy-evidence.mjs check --as-of 2026-10-07` from a git worktree (not the main clone). The fold reads the worktree's own empty spine via `loadEvidenceInputs()` which derives root from module location — the guard requirement pinned to the main clone is not enforced in the CLI's check path.",
+      "why": "The plan and ADR-0511 require the guard to refuse a non-canonical spine; check/report accept any root, so a worktree reading reports 17 BELOW-BAR cells — the canonical-spine requirement is silently bypassed.",
+      "fix": "Enforce that the resolved policyRoot is the main clone before folding, in both guard and check paths.",
+      "twin_of": "A receipt emitted from a worktree landed in that worktree's spine, invisible to the canonical one"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence/fold.mjs:157-160",
+      "breaking_input": "A `policy.refusal` event whose `ts` is e.g. `2026-10-07T11:59:59+05:30` but whose incident_ref points to an `incident.raised` with `ts` `2026-10-07T12:00:01+05:30` — same IST day, same process. The fold checks `istDay(inc.ts) === istDay(e.ts)` (same day) but not that the incident precedes the refusal.",
+      "why": "A headless refusal can cite an incident written seconds LATER on the same day and still be accepted as corroborating — the temporal ordering is never verified, so a forged receipt can be paired with a later legitimate incident.",
+      "fix": "Require the incident's ULID (time order) to precede the refusal's id, or check `inc.id < e.id`.",
+      "twin_of": "`decision_ref` was written, shape-checked and hashed into the idem, and never dereferenced"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence/fold.mjs:118-124",
+      "breaking_input": "Place a `policy.refusal` with `level: \"L0\"`, `decision: \"deny\"`, `surface: \"headless\"`, and an `incident_ref` whose incident has `source: \"arc-run policy gate\"` but whose `payload` lacks a `denials` array, on the spine. The fold's `gateIncidents` map accepts any incident with the right source string, and `consistent()` passes because L0 deny is always 'not propose'. The receipt is attributed.",
+      "why": "ADR-0509 says a headless refusal must be corroborated by the incident it cites, but the incident's own shape (whether it actually carries denials) is never validated — only its source string and process/day. An attacker who can write a note.logged can forge a refusal citing any gate-sourced incident.",
+      "fix": "Validate that the incident's payload carries a matching denials block naming the same capability, or require the incident's own sha-corrobation.",
+      "twin_of": "Policy receipts could not be emitted at all... read back the spine directory"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/validate-policy-refusal.mjs:63-76",
+      "breaking_input": "A `policy.refusal` with `reason` containing a newline character (U+000A) but no other control char. The regex `[\\u0000-\\u001f\\u007f]` (also used in arc-run's sanitizer) does not match U+000A? It does match. Instead use a reason containing U+2028 (line separator) or U+0085 (next line), which are not in the class — the reason is 'single-line text' per spec but these are accepted.",
+      "why": "The validator claims single-line text but only excludes the C0 control range; U+2028/U+0085 and other Unicode line separators pass, creating a multi-line payload that fold/brief consumers may misparse.",
+      "fix": "Also reject U+2028, U+2029, U+0085.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence/fold.mjs:130-134",
+      "breaking_input": "A refusal event with `ts` on day D and an `incident_ref` whose incident has `ts` on the SAME day D, but the incident's `process` is `other@1.0.0` while the refusal's `process` is `policy-hook@1.0.0` — `envelopeName` compares only the path before '@', so `policy-hook@1.0.0` vs `policy-hook@2.0.0` passes. Use a refusal process `demo@9.9.9` with incident process `demo@1.0.0`; both envelopeName to `demo`, so it's accepted though the version differs.",
+      "why": "`envelopeName` strips the version, so a refusal citing an incident from a different version of the same process is considered corroborated — a false attribution.",
+      "fix": "Compare full process strings, not just the stem.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence/fold.mjs:169-185",
+      "breaking_input": "A `policy.refusal` at `level: \"L0\"` for capability `write` (out of IN_SCOPE) on a subject `process:demo` with no `evidence_days`. The cell is computed `inScope = false` → state `n/a`, but the fold still sets `last_refusal` to the L0 receipt. The guard's 'n/a' cells are not listed as BELOW-BAR, so a forged L0 receipt on an out-of-scope capability is silently accepted into the report as a refusal though it can never refresh — misleading the reader about actual refusal history.",
+      "why": "Out-of-scope cells are still attributed refusals, so the report shows false 'last_refusal' ULIDs for capabilities the fold never checks — a confusion vector.",
+      "fix": "For out-of-scope cells, do not set last_refusal/last_refusal_level from any receipt; leave them null.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence/fold.mjs:66-69",
+      "breaking_input": "Pass `asOf: \"2026-02-29\"` (not a real date). `dayDiff` uses `Date.UTC(+b[2]-1, ...)` which silently rolls over to 2026-03-01, so a refusal on 2026-02-28 gets age 3 instead of throwing. The CLI's DAY_RE only checks the regex shape, not a real calendar date.",
+      "why": "An invalid as-of is accepted and produces a wrong age bucket, violating deterministic replay for a malformed input rather than refusing it.",
+      "fix": "Validate asOf is a real calendar date before folding.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:37-40",
+      "breaking_input": "A day file that starts with a BOM (EF BB BF) — a byte sequence `\\uFEFF` before `{`. `JSON.parse` of a line beginning with a BOM throws, so the line is counted as `rejected`. An attacker who can append to the spine can cause every line in a day file to be rejected, silently dropping legitimate events from the fold — those cells fall to `absent`, triggering false BELOW-BAR.",
+      "why": "Rejected lines are counted but still silently dropped; there's no fail-closed handling that a rejected event means 'unknown/spine suspect' rather than 'no evidence'.",
+      "fix": "Strip a leading BOM per line before JSON.parse, or fail closed when any line is rejected.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:57-58",
+      "breaking_input": "Run `policy-evidence.mjs check --as-of 2026-10-07` with `hq.policy.yaml` present but with a `kinds` section that has no entry for `session:interactive` and no `process:*` entries (empty kinds). The fold's `resolveEffectivePolicy` and `grantFor` look up each kind; a missing subject yields no grants, so every cell reads `absent`/`unknown` and all 8 capabilities are BELOW-BAR — but the summary line prints `0 subjects, 0 cells` because `subjects = Object.keys(policy.kinds).length`. The CLI still prints the summary and exits 3, but a reader may mistake '0 cells' for 'no evidence needed' rather than 'no kinds configured'.",
+      "why": "The positive marker does not assert that the fold saw a meaningful policy; a broken/empty policy yields a vacuous zero-cell pass.",
+      "fix": "Require subjects > 0 to consider a check run real, or treat missing kinds as an error.",
+      "twin_of": "7 of 18 tests stayed green with the whole check deleted, because each asserted only that a string was ABSENT"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence/fold.mjs:104-107",
+      "breaking_input": "A `policy.refusal` for `process:demo` capability `shell` with `level: \"L1\"` and `decision: \"deny\"`, on a subject `process:demo` which currently holds effective L1. The `consistent()` check returns true for deny at any level; the receipt is accepted as `qualifying` because `effective !== \"L0\"` and `p.level === effective`. But according to the level table, L1 is PROPOSE-only — a deny at L1 that the authorizer cannot have decided is accepted as a fresh refusal.",
+      "why": "POL-A says L1 means propose; a deny at L1 is impossible for a correctly-wired authorizer, yet the fold accepts it as proof the L1 refusal path worked — so a hand-written L1 deny receipt can clear the bar.",
+      "fix": "Require decision === 'propose' when effective === 'L1' (and level === 'L1'), or reject L1 deny as inconsistent.",
+      "twin_of": null
+    }
+  ]
+}

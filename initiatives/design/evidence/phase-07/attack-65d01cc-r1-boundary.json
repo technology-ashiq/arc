@@ -1,0 +1,122 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-rival.mjs:vendor (remoteLoads/LOAD_TAGS)",
+      "breaking_input": "A draft whose remote load hides from the regexes: an unquoted attribute (`<script src=https://evil.example/x.js>`), a `<style>@import url(https://evil.example/a.css)</style>` is caught only by CSS_URL, but `<meta http-equiv=refresh>`, `<base href=\"https://evil.example/\">` (base is not in LOAD_TAGS), `<form action=...>`, or an inline `style=\"background:url(https://evil.example/p.png)\"` on a tag not in the list. LOAD_ATTRS requires quoted values, so unquoted src is missed by both the rewrite and the belt-and-braces check.",
+      "why": "Self-containment is declared proven by the same reader that missed the load. A page with a remaining remote load is vendored as DRAFTED and the jury renders a half-online page; the final check reuses the blind reader, so it cannot catch what it cannot see.",
+      "fix": "Parse with a real HTML tokenizer, accept unquoted attributes, and add base/form/meta/object. Backstop with a scan of the final HTML for any `//host` or `https?:` substring outside allowed anchors.",
+      "twin_of": "A pin applied to one tool and not its twin -> a check added for one tool is added to every tool that resolves the same relative path."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-rival.mjs:vendor (out.split(ref.raw).join)",
+      "breaking_input": "Draft contains `<a href=\"https://fonts.googleapis.com/css2?family=Inter\">x</a>` or text/code mentioning the same URL string, alongside a real `<link href=\"https://fonts.googleapis.com/css2?family=Inter\">`. Also a raw of `//cdn.tailwindcss.com` is a substring of other URLs.",
+      "why": "Global string replace of ref.raw rewrites every occurrence, including anchors and body text, not only the load attribute. Contradicts the claim that only src/href targets change, and substring raws (e.g. a short raw contained inside a longer URL) corrupt other URLs so a different host's URL is mangled into an assets/ path; the recorded rewrites are then inaccurate.",
+      "fix": "Rewrite by match offset inside the specific tag, with the attribute boundaries, not a global split/join.",
+      "twin_of": "A check on the first URL that no redirect hop repeats -> every hop passes every check the first URL passed."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:realAsset",
+      "breaking_input": "An asset whose server omits Content-Length and streams a huge body, or a 200 with chunked 2 GB. `res.arrayBuffer()` is fully buffered before the length check.",
+      "why": "The cap is enforced after the whole body is in memory, so a hostile or broken response exhausts memory. The same applies to `download()` for the HTML (arrayBuffer then check). MAX_TOTAL_ASSET_BYTES is also checked only after the fetch completes.",
+      "fix": "Stream the body with a reader, abort when the running total passes the cap, and make each fetch's deadline cover the body read.",
+      "twin_of": "A keyed request whose deadline, size and reply count were the server's to choose -> a deadline and a byte cap on every remote body"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:download",
+      "breaking_input": "The HTML URL on contribution.usercontent.google.com answers 302 to another host. `redirect:\"error\"` throws, but the fetch also resolves the hostname by normal DNS, with no IP check, so a host resolving to a private address is fetched.",
+      "why": "Host allowlist is by name only. realAsset likewise connects to allow-listed hostnames without validating the resolved address, and the htmlUrl's port is not checked (`https://contribution.usercontent.google.com:8443/`), because only hostname is compared.",
+      "fix": "Require u.port === \"\" or 443 in readAnswer and the asset allowed(); pin the resolution if DNS poisoning is in scope.",
+      "twin_of": "A permission check resolved the host once and the connection resolved it again"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:draft (rivalDir) vs design-explore.sh rival",
+      "breaking_input": "`--run` validated as ID, but the explore dir docs/design/explore/<runId> is never checked to be the explore's real dir. design-explore.sh passes $ID while the jury reads `basename(ex.dir)`. A run like `con` is refused by RESERVED, but the explore passes through `rmSync(rivalDir,{recursive,force})` with no check that rivalDir is not a symlink or junction.",
+      "why": "If rival-stitch is a pre-planted symlink/junction into another directory, rmSync recursive follows or deletes through it on Windows junctions, then mkdir/write land elsewhere. Cleanup also deletes a rival dir from an earlier run of the same id even when this run never created it, e.g. a prior DRAFTED page is destroyed by a later failed attempt that reaches the vendor step.",
+      "fix": "lstat the dir and refuse a symlink; stage into a temp dir and rename only on success; clean up only what this run created.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:draft (stale rival state on failure)",
+      "breaking_input": "Run 1 DRAFTED, then run 2 with the same --run fails early (no key, bad key, quota). Receipt.json is overwritten with COULD-NOT-DRAFT, but the earlier rival-stitch/index.html remains. The jury treats the receipt as the gate, so it is left out; conversely a failed draft after a vendoring step crash leaves the receipt of the previous DRAFTED.",
+      "why": "The receipt and the page can disagree. A crash (exception in vendor/writeFileSync, not caught) between writing the page and settle() leaves a stale DRAFTED receipt from a prior run beside a different page, so the jury deals a page that does not match the receipt's html sha. The jury never re-hashes the page against the receipt or vendor.json.",
+      "fix": "Clear receipt.json and the rival dir at the start of a run; have the jury verify the page sha256 against vendor.json.",
+      "twin_of": "A run record that a failed begin leaves behind -> clear the record at the start of the run that will write it"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:deal (rival block)",
+      "breaking_input": "`--rival stitch` where the status.log last line for p has been forged by a tab in a provider message, or rival provider matches `.+`; plus the `rivals` path uses ex.brief and basename(ex.dir) from explore.txt, not validated. A rival name such as `a-` or one that collides with the Windows-reserved list (`con`, `nul`) passes `^[a-z][a-z0-9-]{0,31}$` and becomes a directory name.",
+      "why": "The jury grammar for --rival omits the reserved-device-name half, though it becomes the path `rival-<p>`. design-render.sh also accepts `rival-con`/`rival-nul`.",
+      "fix": "Apply the RESERVED check in jury and design-render.sh, and refuse trailing `-`.",
+      "twin_of": "A name grammar copied without its reserved-word half -> a name that becomes a path carries both halves of the grammar, everywhere it is accepted."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:rival",
+      "breaking_input": "`design-explore.sh rival <id> --viewport \"1440x900 --session x\"`: the value is concatenated into RFLAGS and word-split unquoted into design-render.sh, so a value with spaces injects extra flags, including a second `--session`. The loop validates only that the value exists, not its shape.",
+      "why": "The comment claims RFLAGS is built only from validated values, but --viewport/--media values are never validated, so the unquoted $RFLAGS expansion is an argument injection (also glob expansion of `*`).",
+      "fix": "Validate each value against a strict grammar (`^[0-9]+x[0-9]+$`) or build a bash array and expand it quoted.",
+      "twin_of": "Unquoted multi-word flag value smuggles extra flags into the resolver"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:privateEnv / sdkEntry",
+      "breaking_input": "The npm cache and SDK install dir are shared and persistent: a package already present at `rival-sdk/<pkg>/node_modules/@google/stitch-sdk` with a matching package.json version is trusted, though its files were never integrity-checked. Only the version string is compared. Another local process, or a poisoned previous install, replaces the entry JS.",
+      "why": "The child that receives STITCH_API_KEY imports whatever entry file is there. The version check is the only pin; no lockfile or hash, and `npm install --no-save` runs with transitive deps unpinned, so transitive dependencies are resolved fresh at install time.",
+      "fix": "Record the entry sha256 at install and verify before every run; install with a lockfile or shrinkwrap pinning transitive deps.",
+      "twin_of": "Test seam shipped ungated / pin applied to one tool and not its twin"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-rival.mjs:childTransport",
+      "breaking_input": "The child ignores stdin close and spawns grandchildren; `child.kill()` kills only the direct process. On the timeout the SDK may hold a socket and the parent finishes while the key-bearing child lives on, and the run dir (HOME) is rmSync'd while it is still alive.",
+      "why": "On Windows, killing the parent does not kill the tree, and the finally-block rmSync can fail with EBUSY while the child holds the dir, throwing out of draft with a stack trace instead of a named COULD-NOT-DRAFT line (exit 1 or crash code, not 3). The `close` event is also not awaited after kill.",
+      "fix": "Kill the tree (taskkill /T), wait for close, and wrap rmSync in try/catch.",
+      "twin_of": "A tree kill that only works while the parent lives"
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:draft (uncaught throws)",
+      "breaking_input": "Disk full or a read-only path on writeFileSync(draft.raw.html), a vendor() exception from a malformed fake-assets index, or mkdirSync(rivalDir) failing: none are inside try/catch. In a --fake-answer run, `JSON.parse` failure of the answer file is inside try, but is then rethrown by finally with no catch.",
+      "why": "The contract says exactly one status line and exit 3 on provider failure. An unhandled rejection from top-level await exits with code 1 and a stack trace and no status line, and exit 1 collides with the usage-error code, so the jury and the caller read a crash as a usage error.",
+      "fix": "Wrap the whole draft body in try/catch routed to fail(); use a verdict code the runtime never produces.",
+      "twin_of": "A caller read the parser's \"someone else\" code, 1, which is also bash's crash code"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:unblind (spawnSync arc-event.sh)",
+      "breaking_input": "The payload JSON is passed as argv to `bash arc-event.sh emit --payload <json>`, with `join(root,...)` as a Windows path. A root containing spaces is fine as an arg, but the MSYS bash expands `@file`-style args and the JSON begins with `{`, and on Windows `bash` may resolve to WSL (per HQ memory), where the path is not valid. The failure is only printed, and the unblind.json was already written once.",
+      "why": "A missing receipt is non-fatal, so the rival-beats-all-arc record can be silently absent from the spine while exit is 0; there is no timeout on the spawnSync, so a hung emit hangs unblind after the write-once file is already committed.",
+      "fix": "Set a timeout, treat a failed emit as a nonzero exit after writing, and pass the payload by env or a file.",
+      "twin_of": "A subprocess result was ignored -> read status and error of every spawn whose failure matters"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:171-190",
+      "breaking_input": "Route `docs/design/explore/x/rival-stitch/assets/../index.html`, or the case `docs/design/explore/*/rival-*/?*` where `*` crosses `/`: `docs/design/explore/a/b/rival-x/index.html` matches the first pattern with `*`=`a/b`.",
+      "why": "The glob lets the explore segment span slashes; the later per-part check is relied on to take it apart, but the rival branch only validates `_er_variant`, so a rival path with extra depth before it depends entirely on that later parse being right.",
+      "fix": "Test the segment count explicitly before the case, as the variant path has to.",
+      "twin_of": "A textual `..` check on a pattern language that can expand"
+    }
+  ]
+}

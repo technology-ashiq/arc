@@ -45,7 +45,11 @@
     ".claude/scripts/core/statusline.sh",
     ".claude/scripts/core/toolchain-health.sh",
     ".claude/scripts/core/variant-grammar.mjs",
-    ".claude/scripts/core/wip-line.sh"
+    ".claude/scripts/core/wip-line.sh",
+    ".claude/scripts/core/brain-drift.mjs",
+    ".claude/scripts/core/branch-guard.sh",
+    ".claude/scripts/core/gate-parity.mjs",
+    ".claude/scripts/core/secret-diff-scan.sh"
   ],
   "files": [
     ".claude/hooks/PostToolUse.d/00-format.sh",
