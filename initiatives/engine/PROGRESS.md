@@ -73,9 +73,9 @@ done → scope cut (REQ-11's claude-code/codex declarations stay `unknown`).
 
 ## Now
 
-**Position:** CYCLE 8 CLOSED; phases 09 and 10 ✅. Built on branch `feat/engine-failure-classifier` (worktree `arc-engine-change`, **not
-merged yet** — invisible in the face until merge + pull). Commits `27dcf392` (build) and `a4e3f332` (round-1 fixes).
-**Next:** merge PR #375 on green, then from the MAIN clone: the owed receipts below, and a `workflow_dispatch` on `main`.
+**Position:** CYCLE 8 CLOSED and **MERGED** as PR #375, squash `3ffc2220` (2026-10-07), CI 19/19 at the PR head `8c73e0c4`.
+`git diff origin/main 8c73e0c4` is empty, so the squash carried the whole branch. **Next: the owner's three stamps below;
+a Cycle 8 retro (`/arc-retro --lane engine`) is optional and not started.**
 
 **Kickoff attack panel (Tier S, one merged A+C plan-attacker run): 7 findings, 6 applied, 1 rejected.** Applied:
 F1 the schema ladder must not retry after a cross-family hop (2 attempts, never 3); F2 a deadline-edge transport
@@ -120,5 +120,16 @@ first attempt on the routed path too (ADR-0228 item 7 and the router header now 
 (Round 1's L5 again; its own fix text describes the existing behaviour: `max_attempts: 1` allows the first attempt and
 no hop.) Two rounds is the cap; push next.
 
-**Owed to the main clone after merge:** `kickoff.done`, the plan `approval.requested` and its `decision.recorded`,
-and each phase's `phase.closed`.
+**Receipts, emitted from the MAIN clone after the merge (2026-10-07), each verified in `events/2026-10-07.jsonl` and
+absent from `_quarantine/`:** `kickoff.done` `01M4BJT821YEE8E3F28X69BMBV` · `phase.closed` 09 `01M4BJT9WJC9Z6G54C9N3VHZ23` ·
+`phase.closed` 10 `01M4BJTAJH5194GGF0BM5NR9WD`.
+**The owner's three stamps (approval.requested, decided only by him -- approving my own plan is the self-authorising act
+POL-I exists to prevent):** plan `01M4BJT9GZRA9SD9D8WZVYJ3A1` · past phase 09 `01M4BJTA7RR6JJFMV3N64V314K` · past phase 10
+`01M4BJTAXKG0H54443VZAWWZ3Y`. Stamp with `node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason ...` from the main clone.
+
+**The merged tree, by dispatch:** run 37651480130 at `3ffc2220` -- **18/19, and the one red is not engine's**, recorded
+rather than smoothed: `face-browser`'s `bench.run-model` flow timed out at its fixed 30 s CDP limit on Windows shard 1, on
+the run and again on a rerun. The same flow measured **25.6 s on main BEFORE this merge** (dispatch 37629185502) and
+**16.0 s on this PR's own head** (run 37643247522) -- it was already within a few seconds of its ceiling, and runner
+variance crossed it. The flow is the face lane's harness and its limit is a gate; raising it is a gate change that needs
+`/arc-change` in the face lane and the owner's OK, so it is handed over, not touched here.
