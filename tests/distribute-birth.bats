@@ -25,17 +25,32 @@ field() { printf '%s\n' "$output" | tr -d '\r' | sed -n "s/^$1 //p"; }
 
 has_problem() { printf '%s\n' "$output" | tr -d '\r' | grep -E "^PROBLEM $1"; }
 
-# Asks git, not a grep, whether a rendered path is ignored, so `.codex/*`, `**/AGENTS.md` and every
-# other spelling of the same rule are caught. Prints each path git would ignore, then the RAN marker.
-ignored_paths() {
-  local repo="$BATS_TEST_TMPDIR/ign-$2"
-  mkdir -p "$repo" && git -C "$repo" init -q && cp "$1" "$repo/.gitignore" || return 2
-  [ -s "$repo/.gitignore" ] || { echo "COULD NOT SCAN: copied .gitignore is empty"; return 2; }
-  local p
+# Asks git, not a grep, whether a rendered path is ignored, so `.codex/*`, `**/AGENTS.md`, a nested
+# .gitignore and every other spelling of the same rule are caught. The user's global and system git
+# config are neutralised, so a machine's own excludesFile or init.templateDir cannot decide the
+# answer. Exit 0 = ignored, 1 = not ignored, anything else is COULD NOT SCAN, never "not ignored".
+# Prints each path git would ignore, then the RAN marker.
+check_paths() {
+  local repo="$1" p rc
   for p in .codex/hooks.json .agents/skills/x/SKILL.md AGENTS.md .opencode/commands/x.md; do
-    if git -C "$repo" check-ignore -q --no-index "$p"; then echo "$p"; fi
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$repo" check-ignore -q --no-index "$p"
+    rc=$?
+    case "$rc" in
+      0) echo "$p" ;;
+      1) ;;
+      *) echo "COULD NOT SCAN: check-ignore exit $rc on $p"; return 2 ;;
+    esac
   done
   echo "RAN ignored"
+}
+
+# The mutant arm: a fresh temp repo carrying a CR-stripped copy of the given .gitignore.
+ignored_in_copy() {
+  local repo="$BATS_TEST_TMPDIR/ign-$2"
+  mkdir -p "$repo" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$repo" init -q || return 2
+  tr -d '\r' < "$1" > "$repo/.gitignore"
+  [ -s "$repo/.gitignore" ] || { echo "COULD NOT SCAN: copied .gitignore is empty"; return 2; }
+  check_paths "$repo"
 }
 
 @test "distribute-birth: every test in the file is registered" {
@@ -52,11 +67,11 @@ ignored_paths() {
 
 @test "distribute-birth: git ignores no rendered surface, and the check sees a planted rule" {
   [ -s "$ARC_ROOT/.gitignore" ] || { echo ".gitignore missing or empty -- could not scan"; false; }
-  run ignored_paths "$ARC_ROOT/.gitignore" real
+  run check_paths "$ARC_ROOT"
   [ "$status" -eq 0 ] && [ "${lines[${#lines[@]}-1]}" = "RAN ignored" ] || { echo "check did not run: $output"; false; }
   [ "${#lines[@]}" -eq 1 ] || { echo "git still ignores: $output"; false; }
   { cat "$ARC_ROOT/.gitignore"; printf '.codex/*\n'; } > "$BATS_TEST_TMPDIR/gitignore"
-  run ignored_paths "$BATS_TEST_TMPDIR/gitignore" mutant
+  run ignored_in_copy "$BATS_TEST_TMPDIR/gitignore" mutant
   [ "$status" -eq 0 ] && [ "${lines[${#lines[@]}-1]}" = "RAN ignored" ] || { echo "mutant check did not run: $output"; false; }
   [ "${lines[0]}" = ".codex/hooks.json" ] || { echo "the check did not see a planted .codex/* rule: $output"; false; }
 }
@@ -78,7 +93,9 @@ ignored_paths() {
   if cmp -s "$ARC_ROOT/engine/harnesses.yaml" "$BATS_TEST_TMPDIR/undated.yaml"; then echo "the mutant removed nothing"; false; fi
   run --separate-stderr probe matrix "$(native "$BATS_TEST_TMPDIR/undated.yaml")"
   ran_ok matrix
-  has_problem '.*: undated$' >/dev/null || { echo "the check did not see a row with its date removed: $output"; false; }
+  local undated
+  undated=$(has_problem '.*: undated$' | wc -l)
+  [ "$undated" -eq "$(field rows)" ] || { echo "every row lost its date, but only $undated of $(field rows) were reported undated: $output"; false; }
 }
 
 @test "distribute-birth: every cell is legal and every row carries all 9 cells" {
