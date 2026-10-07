@@ -99,6 +99,11 @@ function main(argv) {
     process.stdout.write(`policy-lint: ${path} is law -- 0 violations\n`);
     printDerivedTable(text);
     if (!evidence) return 0;
+    // --evidence judges the GOVERNING policy and spine; a verdict about another file would be confident and wrong.
+    if (path !== resolve(ROOT, "hq.policy.yaml")) {
+      process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\n`);
+      return 1;
+    }
     const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit" });
     return r.status === null ? 1 : r.status;
   }

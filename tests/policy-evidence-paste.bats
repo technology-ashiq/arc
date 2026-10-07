@@ -92,6 +92,44 @@ _hook() { # run the sandbox hook on a Bash tool call; stdin is the PreToolUse pa
   done
 }
 
+_verify_root() { # $1 dir: the six LIVE files, the manifest and the verifier, at their repo-relative paths
+  local d="$1" rel
+  mkdir -p "$d/initiatives/policy/evidence/phase-02"
+  cp "$ARC_ROOT/initiatives/policy/evidence/phase-02/paste-manifest.json" "$ARC_ROOT/initiatives/policy/evidence/phase-02/verify-paste.mjs" "$d/initiatives/policy/evidence/phase-02/"
+  for rel in hq.policy.yaml .claude/scripts/hq/lib/policy/lint.mjs .claude/scripts/hq/policy-lint.mjs .claude/scripts/hq/policy-hook.mjs \
+             .claude/scripts/hq/lib/policy-evidence/fold.mjs .claude/settings.json; do
+    mkdir -p "$d/$(dirname "$rel")"; cp "$ARC_ROOT/$rel" "$d/$rel"
+  done
+}
+
+@test "verify --pre: a live file that drifted since generation refuses the copy, by name" {
+  local d="$BATS_TEST_TMPDIR/v-pre"; _verify_root "$d"
+  cd "$d"
+  run node initiatives/policy/evidence/phase-02/verify-paste.mjs --pre
+  [ "$status" -eq 0 ] && [[ "$output" != *"DIFFERS"* ]] || { echo "the untouched tree was refused: $output"; false; }
+  printf "# drift\n" >> "$d/.claude/scripts/hq/policy-hook.mjs"
+  run node initiatives/policy/evidence/phase-02/verify-paste.mjs --pre
+  [ "$status" -eq 1 ] && [[ "$output" == *"DIFFERS  .claude/scripts/hq/policy-hook.mjs"* && "$output" == *"DO NOT copy"* ]] || { echo "drift not refused: $status $output"; false; }
+}
+
+@test "verify: a CRLF checkout of the same text reads the same, never DIFFERS" {
+  local d="$BATS_TEST_TMPDIR/v-crlf"; _verify_root "$d"
+  cd "$d"
+  local f; f="$d/hq.policy.yaml"
+  awk '{ printf "%s\r\n", $0 }' "$f" > "$f.crlf" && mv "$f.crlf" "$f"
+  grep -q $'\r' "$f" || { echo "fixture is not CRLF"; false; }
+  run node initiatives/policy/evidence/phase-02/verify-paste.mjs --pre
+  [ "$status" -eq 0 ] && [[ "$output" != *"DIFFERS  hq.policy.yaml"* ]] || { echo "CRLF read as drift: $output"; false; }
+}
+
+@test "paste: policy-lint --evidence refuses a policy that is not the governing one" {
+  local d="$BATS_TEST_TMPDIR/p-foreign"; _paste_root "$d" || return 1
+  cp "$d/hq.policy.yaml" "$d/candidate.yaml"
+  cd "$d"
+  run node "$d/.claude/scripts/hq/policy-lint.mjs" candidate.yaml --evidence
+  [ "$status" -eq 1 ] && [[ "$output" == *"judges the governing"* ]] || { echo "$status $output"; false; }
+}
+
 @test "suite count: every paste test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 7 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 7"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 10"; false; }
 }

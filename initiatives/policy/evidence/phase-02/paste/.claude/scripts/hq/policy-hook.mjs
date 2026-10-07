@@ -97,9 +97,12 @@ function recordRefusal({ root, capability, level, decision, reason }) {
       JSON.stringify({ subject: "policy.refusal", action_kind: SESSION_KIND, capability, level, decision,
         surface: "interactive", reason: capReason(reason) }),
       "--strict", "--process", REFUSAL_PROCESS, "--outcome", "fail"],
-    { encoding: "utf8", cwd: root, timeout: REFUSAL_EMIT_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "pipe"] });
+    { encoding: "utf8", cwd: root, timeout: REFUSAL_EMIT_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "pipe"],
+      // The spine that was checked is the spine that is written: both selectors pinned (attack p02 B3).
+      env: { ...process.env, ARC_SPINE_ROOT: writerSpine, ARC_ROOT: root } });
   } catch (e) {
-    process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\n")[0]}) -- the block stands\n`);
+    // Even the report cannot throw: a closed stderr must not turn the block into exit 1 (attack p02 B5).
+    try { process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\n")[0]}) -- the block stands\n`); } catch { /* the block stands either way */ }
   }
 }
 

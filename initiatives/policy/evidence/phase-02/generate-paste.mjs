@@ -13,7 +13,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const OUT = "initiatives/policy/evidence/phase-02/paste";
-const sha = (s) => createHash("sha256").update(s).digest("hex");
+// Hashed with CRLF folded to LF: a Windows checkout with autocrlf holds the same text in other bytes (attack p02 B6).
+const sha = (s) => createHash("sha256").update(s.replace(/\r\n/g, "\n")).digest("hex");
 const files = {};
 
 function edit(rel, steps) {
@@ -72,6 +73,10 @@ edit(".claude/scripts/hq/policy-lint.mjs", [
   ["delegate after law",
     "    printDerivedTable(text);\n    return 0;\n",
     "    printDerivedTable(text);\n    if (!evidence) return 0;\n" +
+    "    // --evidence judges the GOVERNING policy and spine; a verdict about another file would be confident and wrong.\n" +
+    '    if (path !== resolve(ROOT, "hq.policy.yaml")) {\n' +
+    '      process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\\n`);\n' +
+    '      return 1;\n    }\n' +
     '    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit" });\n' +
     "    return r.status === null ? 1 : r.status;\n"],
 ]);
@@ -104,9 +109,12 @@ edit(".claude/scripts/hq/policy-hook.mjs", [
     '      JSON.stringify({ subject: "policy.refusal", action_kind: SESSION_KIND, capability, level, decision,\n' +
     '        surface: "interactive", reason: capReason(reason) }),\n' +
     '      "--strict", "--process", REFUSAL_PROCESS, "--outcome", "fail"],\n' +
-    '    { encoding: "utf8", cwd: root, timeout: REFUSAL_EMIT_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "pipe"] });\n' +
+    '    { encoding: "utf8", cwd: root, timeout: REFUSAL_EMIT_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "pipe"],\n' +
+    '      // The spine that was checked is the spine that is written: both selectors pinned (attack p02 B3).\n' +
+    '      env: { ...process.env, ARC_SPINE_ROOT: writerSpine, ARC_ROOT: root } });\n' +
     "  } catch (e) {\n" +
-    '    process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\\n")[0]}) -- the block stands\\n`);\n' +
+    '    // Even the report cannot throw: a closed stderr must not turn the block into exit 1 (attack p02 B5).\n' +
+    '    try { process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\\n")[0]}) -- the block stands\\n`); } catch { /* the block stands either way */ }\n' +
     "  }\n}\n\nfunction main() {\n"],
   ["deny records", "        process.stdout.write(`policy: WARN the overreach was NOT recorded -- ${bite.reason}\\n`);\n      return 2;\n",
     "        process.stdout.write(`policy: WARN the overreach was NOT recorded -- ${bite.reason}\\n`);\n" +

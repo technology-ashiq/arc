@@ -67,3 +67,13 @@ Cycle 2, Phase 01, attack round 2 (`f03f3fe`; 17 findings: 6 fixed, 4 rejected, 
 - **CLEAN said "all fresh" with nothing in scope** — says "no in-scope cell (nothing above L0 to evidence)" (L5) — *a clean message must not claim what it never measured*
 
 Rejected in Phase 01 round 2: L1 (the previous-digest loop reads unvalidated lines) — `already-covered`: every event in `inputs.events` passed `validateEvent` + `eventSha`, and the process id and outcome are matched exactly; L2/L8 (the digest omits the no-writer/clearable split) — `already-covered`: `state` encodes the split (unknown = no-writer); L4 (duplicate cell keys in the door map) — `unsupported`: the fold builds one cell per subject x capability by construction.
+
+Cycle 2, Phase 02, attack round 1 (`9b82c06`; boundary 7 findings: 5 fixed, 1 rejected, 1 to the debt ledger; the logic surface returned an empty list in 11 s, recorded as UNVERIFIED rather than as "no findings"):
+
+- **The drift check ran only AFTER the copy, so a paste generated from a stale file silently reverted another change** — `verify-paste.mjs --pre` gates the copy (B1) — *any check meant to catch drift must run before the overwrite*
+- **Hashes were of raw bytes, so an autocrlf checkout read every file as DIFFERS** — CRLF folded to LF in generator and verifier (B6) — *every byte-compare a Windows owner will run*
+- **The hook checked one spine and spawned the emitter with the whole environment** — `ARC_SPINE_ROOT`/`ARC_ROOT` pinned in the child env (B3) — *the writer/reader twin, fourth time: pin every selector at every spawn*
+- **The failure report inside the catch could itself throw, turning the block into exit 1** — guarded (B5) — *a best-effort path's own logging must be best-effort*
+- **`policy-lint other.yaml --evidence` linted one file and judged the evidence of another** — `--evidence` refuses a non-governing path (B7) — *a delegated verdict must be about the same subject as the caller's*
+
+Rejected in Phase 02 round 1: B4 (a WSL `bash` makes every hook receipt fail silently) — `unsupported`: the hook is spawned by the PreToolUse dispatcher, which is itself bash, so `bash` on its PATH is that same bash.

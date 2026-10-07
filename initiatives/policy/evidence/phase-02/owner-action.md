@@ -12,10 +12,10 @@ the paste is proven on CI by `tests/policy-evidence-paste.bats` before you apply
 From **Git Bash** (PowerShell sends `bash` to WSL), in the checkout that holds this branch, at the repo root:
 
 ```bash
-cp -r initiatives/policy/evidence/phase-02/paste/. . && node initiatives/policy/evidence/phase-02/verify-paste.mjs
+node initiatives/policy/evidence/phase-02/verify-paste.mjs --pre && cp -r initiatives/policy/evidence/phase-02/paste/. . && node initiatives/policy/evidence/phase-02/verify-paste.mjs
 ```
 
-The second half prints six `APPLIED` lines and `every file is byte-identical to the paste`. Anything else: stop,
+The first check refuses to copy if any live file changed after the paste was generated (copying would revert that change). The last check prints six `APPLIED` lines and `every file is byte-identical to the paste`. Anything else: stop,
 and the agent reads what `verify-paste` printed.
 
 ## What the six files change
