@@ -24,6 +24,21 @@ import { asArray, asObject, cell, field, servedRead, servedTable } from "../../.
  */
 
 /**
+ * POL-L (ADR-0510): a configured level is not an evidenced one. The door serves each cell's evidence state; this draws
+ * it after the level and decides nothing. `n/a` and an absent evidence object draw nothing, so a cell outside the bar
+ * reads exactly as it did before.
+ * @param {Record<string, unknown>} ev
+ */
+function evidenceText(ev) {
+  const state = field(ev, "state");
+  const age = typeof ev["evidence_age_days"] === "number" ? `${ev["evidence_age_days"]}d` : "";
+  if (state === "fresh") return ` · ${age}`;
+  if (state === "stale") return field(ev, "reason") === "no-bar-declared" ? ` · ${age}, no bar` : ` · stale ${age}`;
+  if (state === "absent" || state === "unknown") return ` · ${state}`;
+  return "";
+}
+
+/**
  * @param {Record<string, Payload>} payloads
  * @param {import("../../../lib/registry.mjs").FoldContext} ctx
  * @returns {Folded}
@@ -64,7 +79,8 @@ export function fold(payloads, ctx) {
             if (c === undefined) return "—";
             const eff = field(c, "effective");
             const ceil = field(c, "ceiling");
-            return eff !== ceil && ceil !== "" ? `${eff} (ceiling ${ceil})` : eff;
+            const level = eff !== ceil && ceil !== "" ? `${eff} (ceiling ${ceil})` : eff;
+            return `${level}${evidenceText(asObject(c["evidence"]))}`;
           })],
         };
       },

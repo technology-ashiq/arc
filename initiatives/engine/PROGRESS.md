@@ -49,6 +49,10 @@ done → scope cut (REQ-11's claude-code/codex declarations stay `unknown`).
     `unmetered`); `max_wall_ms` is an uncalibrated 1-hour ceiling; claude-code and codex chains do not hop on CLI
     failures past launch (A-08 FIRED, as pre-decided). Evidence: `evidence/phase-09/`, `evidence/phase-10/`, both
     bundles VERIFIED.
+  - **A cross-lane test fixed, stronger not weaker:** `tests/policy-evidence.bats` (policy cycle 2, merged mid-PR) asserted
+    no refusal with `grep '"policy.refusal"'`, an unescaped regex dot -- and this cycle's receipts now carry
+    `"failure_class":"policy-refusal"`, which it matched. The refusal had not landed (arc-run said "NOT written"). All
+    four greps now match `"subject":"policy.refusal"` as a fixed string. The policy lane's assertions are unchanged.
   - **Face flake, not engine debt:** `face-browser` front-door `org-who` (light mood) red once on ubuntu 20, green on
     rerun; a different face check red once on ubuntu 22 the run before. The branch touches no face file.
 

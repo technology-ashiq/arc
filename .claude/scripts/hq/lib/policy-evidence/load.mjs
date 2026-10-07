@@ -93,13 +93,24 @@ function sealedEvent(line) {
   return typeof e.sha === "string" && e.sha === sealed ? e : null;
 }
 
+/** Did THIS receipt -- this id, kind and process -- land in that day's file? Parsed, never a substring match. */
+export function receiptLanded({ eventsDir, day, id, kind, process: proc }) {
+  if (!id) return false;
+  const text = readDayFile(join(eventsDir, `${day}.jsonl`));
+  if (text === null) return false;
+  return text.split("\n").some((l) => {
+    if (!l.includes(id)) return false;
+    try { const e = JSON.parse(l); return e.id === id && e.kind === kind && e.process === proc; } catch { return false; }
+  });
+}
+
 /**
  * arc-run's day bound (ADR-0509): is a CORROBORATED deny refusal for this pair already sealed in today's file? Only a
  * sealed, valid refusal whose cited gate incident precedes it, comes from the same process@version and names this
  * capability in its typed denials counts -- the fold's own rule. A forged or junk line matching three fields must not
  * suppress the genuine receipt for the rest of the day (attack r2 B3). Any read failure answers "not sealed".
  */
-export function sealedRefusalToday({ eventsDir, day, actionKind, capability, process: proc }) {
+export function sealedRefusalToday({ eventsDir, day, actionKind, capability, process: proc, decision = "deny", surface = "headless", level = null }) {
   const text = readDayFile(join(eventsDir, `${day}.jsonl`));
   if (text === null) return null;
   const incidents = new Map();
@@ -109,8 +120,13 @@ export function sealedRefusalToday({ eventsDir, day, actionKind, capability, pro
     if (!e) continue;
     if (e.kind === "incident.raised" && e.payload && e.payload.source === "arc-run policy gate") { incidents.set(e.id, e); continue; }
     const p = e.payload;
-    if (e.kind !== "note.logged" || !p || p.subject !== "policy.refusal" || p.decision !== "deny") continue;
+    if (e.kind !== "note.logged" || !p || p.subject !== "policy.refusal" || p.decision !== decision || p.surface !== surface) continue;
     if (p.action_kind !== actionKind || p.capability !== capability || e.process !== proc) continue;
+    // An interactive refusal has no incident behind it to corroborate (ADR-0509 states that residual); it counts
+    // once sealed, valid and matching. A headless one must still name its preceding gate incident.
+    // It must still be the refusal THIS writer would write now: same level as the decision being recorded (attack p01
+    // r2 L6/B3), so a receipt from another level -- or a forged one at the wrong level -- cannot suppress today's.
+    if (surface === "interactive") { if (level === null || p.level === level) return e.id; continue; }
     const inc = incidents.get(p.incident_ref);
     if (inc && inc.id < e.id && inc.process === e.process && Array.isArray(inc.payload.denials) &&
         inc.payload.denials.some((d) => d && d.capability === p.capability && d.level === p.level)) return e.id;

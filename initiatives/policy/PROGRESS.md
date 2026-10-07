@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-policy cycle 2 (opened 2026-10-07)
 phase: 00
 appetite: 3d
-burn: 0.1d
+burn: 1.0d
 blocked-on: —
 depends-on: —
 
@@ -20,11 +20,11 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Steel thread: refusal profile + `arc-run`'s typed L0 refusal receipt → pure fold → `check` with BELOW-BAR, invariants (a)(b) + mutants | 1.25 days | ⏳ next |
-| 01 | Guard (invariant (c)) + `/api/policy` evidence + the room's per-cell age | 0.75 days | ⏳ |
+| 00 | Steel thread: refusal profile + `arc-run`'s typed L0 refusal receipt → pure fold → `check` with BELOW-BAR, invariants (a)(b) + mutants | 1.25 days | 🔨 built, 2 attack rounds, PR #368 on CI |
+| 01 | Guard (invariant (c)) + `/api/policy` evidence + the room's per-cell age | 0.75 days | 🔨 built, 2 attack rounds, stacked PR from `feat/policy-c2-p01` |
 | 02 | Owner paste: `evidence_days`, lint key, hook's interactive receipt, `policy-lint --evidence`, deny floor | 0.5 days | ⏳ |
 
-**Appetite burn: 0.1 of 3 days used (3%).** Phases allocate 2.5 of 3 days; 0.5 days of slack.
+**Appetite burn: 1.0 of 3 days used (33%).** Under the 50% tripwire, Phase 00 built and on CI. Phases allocate 2.5 of 3 days; 0.5 days of slack.
 
 **Tripwires:** at 1.5 days, Phase 00 not closed → face cell cut to the API field only. Phase 02
 waits on the owner's paste, never on effort.
@@ -57,4 +57,4 @@ decision that Cycle 9's assumption row 1 forced when it fired (archived PLAN, ro
 the lane that owns "Gap B's Availability enum" · stamping the kickoff approval · the Phase 02
 paste when it is generated.
 
-**Next:** Phase 00, red first: `tests/policy-evidence.bats` with the module absent.
+**Next:** Phase 01 attack (round 1) on `feat/policy-c2-p01`, base `origin/feat/policy-c2-evidence`; then #368 CI per job (main was red on `PLAN-distribute` until #364), close Phase 00, then Phase 02 (the owner paste).

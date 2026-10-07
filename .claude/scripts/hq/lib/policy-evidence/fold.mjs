@@ -129,8 +129,9 @@ export function foldEvidence({ policy, transitions, events, asOf, writers = REFU
 
   // The latest guard run is every cell's last audit.
   let lastAudit = null;
+  // A guard run judged against a back-dated or future --as-of is not an audit of the spine as it stands (attack p01 B5).
   for (const e of evs)
-    if (e.kind === "run.completed" && envelopeName(e) === GUARD_PROCESS) lastAudit = e;
+    if (e.kind === "run.completed" && envelopeName(e) === GUARD_PROCESS && !(e.payload && e.payload.as_of_overridden === true)) lastAudit = e;
 
   const subjects = Object.keys(policy.kinds).sort();
   const cells = [];

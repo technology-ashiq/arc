@@ -31,7 +31,8 @@ if (cmd === "refusals") {
   console.log(`RUNS ${runs.length} APPROVALS ${approvals.length} LAST ${last ? last.outcome : "-"} ${last ? last.id : "-"}`);
 } else if (cmd === "audits") {
   const r = JSON.parse(readFileSync(a, "utf8"));
-  console.log(`AUDITS ${[...new Set(r.cells.map((x) => x.last_audit))].join(",")}`);
+  // String(): Array#join renders null as "", which would make "no audit" print as nothing at all.
+  console.log(`AUDITS ${[...new Set(r.cells.map((x) => String(x.last_audit)))].join(",")}`);
 } else if (cmd === "kinds") {
   const { KINDS } = await import(pathToFileURL(resolve(a)).href);
   console.log(`KINDS ${KINDS.length} ${KINDS.filter((k) => /refus/.test(k)).length} ${KINDS.includes("note.logged")}`);

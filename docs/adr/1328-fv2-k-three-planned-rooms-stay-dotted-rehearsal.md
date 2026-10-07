@@ -25,3 +25,5 @@ Option 1.
 
 - Their v0.7 flows run as REHEARSAL assertions only and never touch the work door.
 - The carried `trader wears LIVE` defect is closed by this batch, not re-carried.
+
+**Amended 2026-10-07 (ADR-1356):** the revisit trigger fired for `discover` (the lane was born 2026-10-06, ADR-1900). Phase 17 makes it a live room on discover's own receipts. This ADR still holds for `ops` and `trader`.
