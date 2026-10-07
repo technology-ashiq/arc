@@ -25,21 +25,21 @@ const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 const FULL = "technology-ashiq/arc-sandbox";
 const DOMAIN = "sandbox.automemory.ai";
 const REF = "fixtureref0000000001";
-const SECRET = "fixture_webhook_secret_not_real";
+const HOOK_KEY = "fixture_webhook_secret_not_real";
 const TAG = "arc-sandbox@webhooks-ledger@razorpay-webhook";
-const ENV = { RAZORPAY_WEBHOOK_SECRET: SECRET, SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", GITHUB_TOKEN: "gho_fixtureToken0123456789" };
+const ENV = { RAZORPAY_WEBHOOK_SECRET: HOOK_KEY, SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", GITHUB_TOKEN: "gho_fixtureToken0123456789" };
 
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const supabase = makeSupabase({ projects: [{ id: REF, name: "arc-sandbox" }] });
 const opts = {
-  "wrong-secret": { secret: "whsec_someone_else_9876543210" },
+  "wrong-secret": { hookKey: "whsec_someone_else_9876543210" },
   "served-accepts-any": { serve: (src) => src.replace("if (given.length !== want.length || !timingSafeEqual(given, want)) return answer(401, { error: \"bad signature\" });", "") },
   "served-reserialises": { serve: (src) => src.replace("update(raw, \"utf8\")", "update(JSON.stringify(JSON.parse(raw)), \"utf8\")") },
   "policy": { policies: 1 },
   "foreign-table": { foreign: true },
-  "secret-unset": { secret: null },
+  "secret-unset": { hookKey: null },
 }[scenario] || {};
-const webhook = makeWebhook({ github, supabase, full: FULL, domain: DOMAIN, secret: SECRET, inner: (i, o) => (new URL(String(i)).hostname === "api.github.com" ? github.fetch(i, o) : supabase.fetch(i, o)), ...opts });
+const webhook = makeWebhook({ github, supabase, full: FULL, domain: DOMAIN, hookKey: HOOK_KEY, inner: (i, o) => (new URL(String(i)).hostname === "api.github.com" ? github.fetch(i, o) : supabase.fetch(i, o)), ...opts });
 globalThis.fetch = webhook.fetch;
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-webhooks-"));
@@ -110,12 +110,12 @@ switch (scenario) {
     await adapter.scaffold(ctxNow());
     const ev = { entity: "event", event: "payment.captured", payload: { payment: { entity: { id: "pay_RouteFixture01", amount: 100, fee: 2, currency: "INR", created_at: 1791000000 } } } };
     const raw = JSON.stringify(ev, null, 2);
-    out.valid = await post(raw, hmac(SECRET, raw), "evtRoute000001");
-    out.replay = await post(raw, hmac(SECRET, raw), "evtRoute000001");
+    out.valid = await post(raw, hmac(HOOK_KEY, raw), "evtRoute000001");
+    out.replay = await post(raw, hmac(HOOK_KEY, raw), "evtRoute000001");
     out.rowsAfterReplay = rows();
     out.badSig = await post(raw, hmac("whsec_not_the_secret_000000", raw), "evtRoute000002");
-    out.reserialised = await post(raw, hmac(SECRET, JSON.stringify(JSON.parse(raw))), "evtRoute000003");
-    out.noId = await post(raw, hmac(SECRET, raw), "");
+    out.reserialised = await post(raw, hmac(HOOK_KEY, JSON.stringify(JSON.parse(raw))), "evtRoute000003");
+    out.noId = await post(raw, hmac(HOOK_KEY, raw), "");
     out.rowsAtEnd = rows();
     out.stored = webhook.table().rows.map((r) => ({ event_id: r.event_id, payment_id: r.payment_id, amount: r.amount, fee: r.fee, raw: r.body === raw }));
     break;
@@ -123,7 +123,7 @@ switch (scenario) {
   case "secret-unset": {
     await adapter.scaffold(ctxNow());
     const raw = JSON.stringify({ event: "payment.captured" });
-    out.post = await post(raw, hmac(SECRET, raw), "evtRoute000009");
+    out.post = await post(raw, hmac(HOOK_KEY, raw), "evtRoute000009");
     out.rows = rows();
     break;
   }

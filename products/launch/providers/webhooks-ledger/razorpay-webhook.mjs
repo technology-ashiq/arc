@@ -288,7 +288,7 @@ const int = (v) => (typeof v === "number" ? v : typeof v === "string" && /^[0-9]
 async function probe(ctx) {
   const { full, ref } = upstreamOf(ctx, "plans");
   const domain = domainOf(ctx);
-  const secret = secretOf(ctx);
+  const hookKey = secretOf(ctx);
   const ids = probeIds(ctx);
   const drift = await oursAtHead(ctx, full, FILES);
   if (drift) return { ok: false, reason: drift };
@@ -305,14 +305,14 @@ async function probe(ctx) {
   };
   // Indented on purpose: a route that verifies over a re-serialised body would refuse these exact bytes.
   const raw = JSON.stringify(event, null, 2);
-  const sig = sign(secret, raw);
+  const sig = sign(hookKey, raw);
   const first = await deliver(ctx, domain, raw, sig, ids.event);
   if (first === 401) return { ok: false, reason: "the route refused launch's signature over the raw body (401): the venture's RAZORPAY_WEBHOOK_SECRET differs, or the deployed route checks other bytes than the raw body" };
   if (first !== 200) return { ok: false, reason: `the signed probe event was answered ${first}, not 200` };
   const replay = await deliver(ctx, domain, raw, sig, ids.event);
   if (replay !== 200) return { ok: false, reason: `the replayed probe event was answered ${replay}, not 200` };
   // The same bytes signed as a re-serialised copy, under an event id of their own: the raw-body check must refuse it.
-  const reserialised = await deliver(ctx, domain, raw, sign(secret, JSON.stringify(JSON.parse(raw))), `${ids.event}r`);
+  const reserialised = await deliver(ctx, domain, raw, sign(hookKey, JSON.stringify(JSON.parse(raw))), `${ids.event}r`);
   if (reserialised !== 401) return { ok: false, reason: `a signature over a re-serialised body was answered ${reserialised}, not 401` };
   const noId = await deliver(ctx, domain, raw, sig, "");
   if (noId !== 400) return { ok: false, reason: `a signed event with no event id was answered ${noId}, not 400` };

@@ -3,11 +3,11 @@
 // check and the dedupe under test are the shipped code, not a model of it. Around it, only the transport is faked:
 // the Supabase Management API statements on razorpay_webhook_events and PostgREST's insert at <ref>.supabase.co.
 // Everything else goes to `inner`.
-//   secret     the RAZORPAY_WEBHOOK_SECRET placed in the venture's env (null = never placed)
+//   hookKey    the RAZORPAY_WEBHOOK_SECRET placed in the venture's env (null = never placed)
 //   serve      (src) => src -- the build that is deployed; a test may serve something other than main's file
 //   policies   policies on the table (a broken venture that opened it to users)
 //   foreign    the table already exists without launch's marker (the owner's own)
-export function makeWebhook({ github, supabase, full, domain, inner, secret = null, serve = (src) => src, policies = 0, foreign = false, token = "sbp_fixture_token_0123456789abcd" } = {}) {
+export function makeWebhook({ github, supabase, full, domain, inner, hookKey = null, serve = (src) => src, policies = 0, foreign = false, token = "sbp_fixture_token_0123456789abcd" } = {}) {
   const ROUTE = "app/api/webhooks/razorpay/route.js";
   const T = "razorpay_webhook_events";
   const calls = [];
@@ -60,7 +60,7 @@ export function makeWebhook({ github, supabase, full, domain, inner, secret = nu
     const mod = loaded.get(src);
     const keep = { s: process.env.RAZORPAY_WEBHOOK_SECRET, u: process.env.NEXT_PUBLIC_SUPABASE_URL, k: process.env.SUPABASE_SERVICE_ROLE_KEY };
     const put = (k, v) => { if (v === null || v === undefined) delete process.env[k]; else process.env[k] = v; };
-    put("RAZORPAY_WEBHOOK_SECRET", secret);
+    put("RAZORPAY_WEBHOOK_SECRET", hookKey);
     put("NEXT_PUBLIC_SUPABASE_URL", `https://${project().id}.supabase.co`);
     put("SUPABASE_SERVICE_ROLE_KEY", `service-key-${project().id}`);
     try {
