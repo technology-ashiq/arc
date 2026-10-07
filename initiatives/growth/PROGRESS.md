@@ -6,7 +6,7 @@ cycle: arc-growth (Cycle 14, opened 2026-08-12)
 phase: 06
 appetite: 10d
 burn: 8.0d
-blocked-on: Ashiq — merge arc-site #7-#10 (E2) and export one Search Console Pages CSV for the ingest
+blocked-on: Ashiq — export one Search Console Pages CSV for the ingest
 depends-on: —
 
 ## Phase table
@@ -196,8 +196,19 @@ was looking. Facts read today, not inferred:
   Every fact cites a file in the public arc repo. The first attempt to open the arc-site PRs was
   refused by the session's permission layer as a publication the owner had not approved; the owner
   then said "publish pannu", and **arc-site #7–#10 are open with green Vercel previews**, review pack
-  in each body. **Not merged: E2, the owner merges.** Merged, they make `c-001`
-  pillar + 5 spokes — **cluster-complete** under criterion 5. `ai voice` and `yc s23` are not
+  in each body. **The owner merged all four on 2026-10-08** (E2 held: no machine merge). Live at
+  200 and in `sitemap-0.xml`; sealed from the main clone, each **present in `events/`, absent from
+  `_quarantine/`** — spine total now **8** `content.published`:
+
+  | Slug | Receipt | arm | `pr_ref` |
+  |---|---|---|---|
+  | `ai-agents` (pillar) | `01M4C1RDMS78Z9FRT58Z3Y30SE` | title-a | #7 |
+  | `agents-build` | `01M4C1RE6WPZ8QBKVCPS30GWMV` | title-b | #8 |
+  | `coding-workflows` | `01M4C1REQWWKVX08Q0T30FK8VZ` | title-b | #9 |
+  | `driven-development` | `01M4C1RF7TJ09YN38MEGWSG16J` | title-a | #10 |
+
+  With them `c-001` is
+  pillar + 5 spokes (`multi-agent-ai-coding-workflows`, `ai-coding` and the three above) — **cluster-complete** under criterion 5. `ai voice` and `yc s23` are not
   drafted: neither has anything arc learned by doing behind it.
 - **A link-check defect surfaced on the first non-empty citation list.** `BARE_URL_RE` in
   `text.mjs` kept the closing quote of every quoted frontmatter `citations:` entry, so all five real
