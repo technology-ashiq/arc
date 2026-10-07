@@ -298,7 +298,7 @@
 .claude/scripts/hq/lib/owner-key.mjs	363a037ce80983aef12294b0d08f2a47c3bb3fac5c1627d909503b77dea66586
 .claude/scripts/hq/lib/owner-sig.mjs	33828b142f9f4a5b651026dbf711ce91db1572e3af164d11ce7d20ac296c62d0
 .claude/scripts/hq/lib/policy-evidence/fold.mjs	06019d4a600ce4bf33bf01f0d75db9966d86b1edec21867996417de510e34508
-.claude/scripts/hq/lib/policy-evidence/load.mjs	aff19b2adb66e8de6d5e18fd423d4ca3d8d0516b70591bfc7512748473ce10de
+.claude/scripts/hq/lib/policy-evidence/load.mjs	f04d0a7d11f4e0347256aaba52e99dacb2c1e66a71ab3869a6f998488e03070c
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
 .claude/scripts/hq/lib/policy/encode.mjs	436c17ed6bd3269e8ce39383803706da27064531b112f2f43feb10bf5487bcb1
@@ -324,7 +324,7 @@
 .claude/scripts/hq/lib/validate-policy-refusal.mjs	dbef2199e8331275ef94133590a913f9c08f1e55629cbebe51e09ee708d6288c
 .claude/scripts/hq/lib/validate-policy.mjs	6b5bd88f51b75956bbf1b3bc755360002e27db431d7488695c96c8c2456be657
 .claude/scripts/hq/lib/validate.mjs	d271e43f05c6b40b7b427962ec74366aeb7e3a43bddb09fb53eb841e7654e8a4
-.claude/scripts/hq/policy-evidence.mjs	053a4cd7bf8084c0d7d5b937a4e7c9f91f8b825fe99fab2572a6b7ca8f9a181e
+.claude/scripts/hq/policy-evidence.mjs	788d43d81a4d5891ed83fcb45342c364fedef4c17e28f8c2f4e4af76939e8cc5
 .claude/scripts/hq/policy-hook.mjs	d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76
 .claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
