@@ -292,7 +292,11 @@ export async function scaffold(ctx) {
   domainOf(ctx);
   // Tables of these names launch did not create are the venture's own: never altered (the probe-table rule, ADR-1731).
   const tid = `${ref}:public.orgs+public.memberships`;
-  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid) && count(await query(ctx, ref, OURS)) !== 2)
+  // Every table of these names that exists must carry launch's marker, recorded or not: a recorded id is not an
+  // ownership check, since the owner may have replaced the table since (attack d1dc8eb B3). A half-made run of
+  // launch's own migration still resumes, because each table it made carries the marker.
+  const have = count(await query(ctx, ref, TABLES));
+  if (have > 0 && count(await query(ctx, ref, OURS)) !== have)
     throw refuse("TABLES_FOREIGN", "public.orgs or public.memberships already exists and launch did not create it");
   await query(ctx, ref, MIGRATION);
   ctx.report({ kind: "db-tables", id: tid });

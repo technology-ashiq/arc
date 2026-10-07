@@ -6,16 +6,16 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | Part | Count | With narrative |
 |---|---|---|
 | [Products](#products) | 20 | 17 |
-| [Lanes](#lanes) | 20 | 17 |
+| [Lanes](#lanes) | 21 | 17 |
 | [Processes](#processes) | 14 | 0 |
-| [Decisions (ADR bands)](#decisions-adr-bands) | 20 | 0 |
+| [Decisions (ADR bands)](#decisions-adr-bands) | 21 | 0 |
 | [Commands](#commands) | 29 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **149** | **34** |
+| **Total** | **151** | **34** |
 
-Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 432 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 387 of 456 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -32,7 +32,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 80 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 84 |
 | [launch](products/launch.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 11 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
@@ -51,6 +51,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 
 | [design](lanes/design.md) | LIVE | arc-design v2 (Cycle 16, opened 2026-08-23) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
 | [discover](lanes/discover.md) | IDLE | arc-discover (Cycle 1, sealed 2026-10-07) |
+| [distribute](lanes/distribute.md) | LIVE | arc-distribute (Cycle 1, opened 2026-10-07) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 7, opened 2026-08-12) |
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
@@ -59,11 +60,11 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 
 | [launch](lanes/launch.md) | LIVE | arc-launch (Cycle 1, opened 2026-10-03) |
 | [leads](lanes/leads.md) | LIVE | arc-leads (Cycle 8, opened 2026-08-04) |
 | [ledger](lanes/ledger.md) | IDLE | arc-ledger (opened 2026-08-12, closed 2026-08-13) |
-| [legal](lanes/legal.md) | LIVE | arc-legal (Cycle 14, opened 2026-08-12) |
+| [legal](lanes/legal.md) | IDLE | arc-legal (Cycle 14, sealed 2026-10-07) |
 | [memory](lanes/memory.md) | IDLE | arc-memory (Cycle 11, closed 2026-08-12) |
 | [model-policy](lanes/model-policy.md) | IDLE | model-policy v2 (opened 2026-10-05, closed 2026-10-06) |
 | [org](lanes/org.md) | IDLE | arc-org (Cycle 20, opened 2026-10-05) |
-| [policy](lanes/policy.md) | IDLE | arc-policy (Cycle 9, closed 2026-08-10) |
+| [policy](lanes/policy.md) | LIVE | arc-policy cycle 2 (opened 2026-10-07) |
 | [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
 | [scheduler](lanes/scheduler.md) | IDLE | arc-scheduler (Cycle 12, sealed 2026-10-07) |
 
@@ -95,7 +96,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 
 | [0200–0299](adr/0200.md) | 28 | 2 |
 | [0300–0399](adr/0300.md) | 12 | 0 |
 | [0400–0499](adr/0400.md) | 19 | 0 |
-| [0500–0599](adr/0500.md) | 9 | 0 |
+| [0500–0599](adr/0500.md) | 12 | 0 |
 | [0600–0699](adr/0600.md) | 7 | 0 |
 | [0700–0799](adr/0700.md) | 10 | 0 |
 | [0800–0899](adr/0800.md) | 9 | 0 |
@@ -103,13 +104,14 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 
 | [1000–1099](adr/1000.md) | 19 | 0 |
 | [1100–1199](adr/1100.md) | 21 | 0 |
 | [1200–1299](adr/1200.md) | 16 | 0 |
-| [1300–1399](adr/1300.md) | 53 | 2 |
+| [1300–1399](adr/1300.md) | 56 | 5 |
 | [1400–1499](adr/1400.md) | 23 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
 | [1600–1699](adr/1600.md) | 31 | 0 |
-| [1700–1799](adr/1700.md) | 37 | 0 |
+| [1700–1799](adr/1700.md) | 38 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
 | [1900–1999](adr/1900.md) | 17 | 0 |
+| [2000–2099](adr/2000.md) | 17 | 0 |
 
 ## Commands
 

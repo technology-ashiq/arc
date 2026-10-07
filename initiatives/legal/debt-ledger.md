@@ -40,3 +40,10 @@ one line each, with where they came from. Each is paid in a later slice or close
 - **B4 (low)** — the venture-dir test's negative control (`products/legal/published` absent) holds
   only because the sandbox copies a product tree with no `published/` in it. Pay: assert the
   directory is absent BEFORE the publish too, so the control cannot pass on a stale copy.
+
+## Retro 2026-10-07 (Cycle 14) — routed to `/arc-change`, not built
+
+- **value-lint gap (low)** — LexOS's facts carried `operator.type: individual` with `legal_name`
+  equal to `trade_name`. For an individual that is almost never the name on the PAN, and no lint
+  said so; it was caught by hand before propose. Pay: a value-lint WARN for exactly that pair,
+  entering in TRIAL like every legal lint, via `/arc-change` in the next legal cycle.

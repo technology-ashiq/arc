@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:probe (finally { await setPlan(... \"free\") })",
+      "breaking_input": "The slot timeout fires while the pro read is in flight. verify's ctx.fetch carries the slot's abort signal, so the finally block's setPlan -> query -> ctx.fetch call is rejected immediately. A related case: the pro upsert itself fails (5xx), then the free upsert in finally also throws an uncoded error.",
+      "why": "The B2 fix only restores free when ctx.fetch still works. On the timeout path the signal has already fired, so the restore never reaches Supabase and the probe org stays on pro. A throw from finally also replaces the original ABORTED error, so verify's `e.code === \"ABORTED\"` rethrow no longer sees it. The claim that the org ends on free on every exit is false for the timeout exit. The new bats test only covers a 500 answer.",
+      "fix": "Run the restore on a signal that is not aborted, with a short own timeout, or record an in-flight pro marker so the next verify starts by setting free. Wrap the finally restore in try/catch so it cannot replace the original error. Add a test where the signal is aborted mid-read.",
+      "twin_of": "A killed verify left the previous run's `last_verify`, which the log then printed as this run's reason -> every \"read the result after the child\" that can read a result the child never wrote"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:ownOrg / probe",
+      "breaking_input": "The live app's GET /api/orgs, as probe user A, returns an org with name \"launch-probe-a\" whose id is not launch's. Examples: a customer renamed their org that, or the user was invited to one. ownOrg returns that id and setPlan upserts pro and then free on it with the service role.",
+      "why": "The org id comes from the live app and is trusted by name alone. The ADR says only the probe org is touched, but nothing ties the id to an org launch created. Every verify then overwrites a real customer's paid plan with free, outside RLS. A recorded creation or an owner-membership check is missing.",
+      "fix": "Record the org id launch created as a resource, or accept a found org only if it was reported by launch. Refuse when more than one org carries the name. Check that the org's only member is probe-a before any write.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:teardown",
+      "breaking_input": "Between scaffold and teardown the owner replaces public.org_plans with their own unmarked table. Teardown still emits a step for the recorded db-tables id, with no marker check and no run-time query.",
+      "why": "The B4 fix changed only the text of `action`. No marker is queried and nothing is conditional on it. The step is a label that depends on whoever or whatever executes it to honour the wording. The test asserts only that the string equals itself. The drop-by-recorded-id defect is still there.",
+      "fix": "Have teardown query `obj_description` for the table and emit the step only when the marker is present, otherwise a `skipped: foreign` step. Or emit the SQL with a guard (`do $$ ... if obj_description(...) = 'arc-launch plans' then drop table ... end if $$`).",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:oursAtHead",
+      "breaking_input": "Contents answer with type file, a string content and encoding \"none\" (a file over 1 MB), or a content value that is not valid base64.",
+      "why": "B6 from round 1 is neither fixed nor in the dispositions. oursAtHead has no `encoding === \"base64\"` guard, which commitFiles has. utf8() throws an uncoded InvalidCharacterError. verify turns it into `error: ...` instead of the drift reason \"is not launch's file\".",
+      "fix": "Add `b.encoding !== \"base64\"` to the not-launch's-file condition in oursAtHead.",
+      "twin_of": "The shared-file path dropped the encoding guard the owned-file path had -> every second code path through the same file"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:FILES[app/api/reports/route.js] regex",
+      "breaking_input": "GET /api/reports?org=------------------------------------ (36 hyphens), or any 36-character string of [0-9a-f-] that is not a uuid.",
+      "why": "B7 from round 1 is also left out of the dispositions and unchanged. The route's check admits non-uuids, Postgres rejects the id as an invalid uuid, and the route answers 500 `read failed` instead of 400. A client can trigger 500s at will. Uppercase uuids are refused as 400.",
+      "fix": "Use the full uuid regex, case-insensitive, in the route, and lowercase before the query.",
+      "twin_of": "Upstream entries were coerced with `String()`, so a `null` id became the hostname \"null\" -> every value one adapter hands another through state"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/authz/rls-roles.mjs:scaffold, tenancy/org-invite.mjs:scaffold, plans-yaml.mjs:scaffold (have vs OURS)",
+      "breaking_input": "The owner holds their own public.memberships and launch's public.orgs exists with the marker. TABLES counts 2, OURS counts 1, and scaffold refuses. Conversely, the owner copies the marker comment text 'arc-launch plans' onto their own table.",
+      "why": "Ownership is a free-text comment anyone can write, and this is now the only ownership check, with the recorded-resource short-circuit removed. A copied comment passes it, and migration then alters the owner's table. The marker itself is the same defect as the 'ownership was a marker found anywhere in a user-editable description' twin.",
+      "fix": "Add an ownership signal the owner would not copy by accident, such as a launch-owned secret in the comment or a structural fingerprint of the columns. At minimum compare the table's columns to launch's before altering it.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description -> every ownership test on free text"
+    }
+  ]
+}
