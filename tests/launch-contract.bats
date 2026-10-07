@@ -941,7 +941,7 @@ arm() {
   arm login checkout-refusals
   [ "$(j 'o.orgs + " " + o.cookie')" = "2 true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.signedOut + " " + o.notUuid + " " + o.notMember + " " + o.refusedCreates')" = "401 400 403 0" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.member.status + " " + o.member.test + " " + o.member.slotKey + " " + o.member.amount + " " + o.member.currency + " " + o.member.secret + " " + o.creates')" = "201 true true 49900 INR false 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.member.status + " " + o.member.test + " " + o.member.slotKey + " " + o.member.amount + " " + o.member.currency + " " + o.member.leaksSecret + " " + o.creates')" = "201 true true 49900 INR false 1" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a live key refuses in checkout-portal before any call, and in the venture's server env the route answers 503 with no order (gate 3 never crossed)" {

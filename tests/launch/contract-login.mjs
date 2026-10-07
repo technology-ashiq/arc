@@ -305,7 +305,7 @@ switch (scenario) {
     out.notMember = (await checkout(a, theirs)).status;
     out.refusedCreates = creates() - n0;
     const ok = await checkout(a, mine);
-    out.member = { status: ok.status, test: String(ok.body && ok.body.key_id).startsWith("rzp_test_"), slotKey: !!ok.body && ok.body.key_id === ENV.RAZORPAY_KEY_ID, amount: ok.body && ok.body.amount, currency: ok.body && ok.body.currency, secret: JSON.stringify(ok.body).includes(RZ_SECRET) };
+    out.member = { status: ok.status, test: String(ok.body && ok.body.key_id).startsWith("rzp_test_"), slotKey: !!ok.body && ok.body.key_id === ENV.RAZORPAY_KEY_ID, amount: ok.body && ok.body.amount, currency: ok.body && ok.body.currency, leaksSecret: JSON.stringify(ok.body).includes(RZ_SECRET) };
     out.creates = creates() - n0;
     break;
   }
