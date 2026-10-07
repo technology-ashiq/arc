@@ -96,13 +96,15 @@ switch (scenario) {
     await release.mod.scaffold(R(["deploy-prod-first"]));
     const first = await attempt(() => frontend.mod.scaffold(F()));
     out.firstId = first.ok ? first.value.resources[0].id : first.code;
-    repo().files["README.md"] = { sha: "a".repeat(40), content: Buffer.from("owner notes\n").toString("base64") };
-    repo().commits.push({ sha: "a".repeat(40), message: "owner readme", files: { "README.md": "a".repeat(40) } });
+    // Fixed shas no other commit in this file uses: "a" is the initial commit, so reusing it made the fake resolve the
+    // owner's head to that commit and see no shell at all.
+    repo().files["README.md"] = { sha: "7".repeat(40), content: Buffer.from("owner notes\n").toString("base64") };
+    repo().commits.push({ sha: "7".repeat(40), message: "owner readme", files: { "README.md": "7".repeat(40) } });
     const again = await attempt(() => frontend.mod.scaffold(F()));
     out.againId = again.ok ? again.value.resources[0].id : again.code;
-    out.headIsOwner = out.againId === `${FULL}:${"a".repeat(40)}`;
+    out.headIsOwner = out.againId === `${FULL}:${"7".repeat(40)}`;
     const blob = repo().files["app/page.js"].sha;
-    repo().commits.push({ sha: "b".repeat(40), message: "owner touches the page", files: { "app/page.js": blob } });
+    repo().commits.push({ sha: "8".repeat(40), message: "owner touches the page", files: { "app/page.js": blob } });
     out.adopted = await attempt(() => frontend.mod.scaffold(F()));
     break;
   }
