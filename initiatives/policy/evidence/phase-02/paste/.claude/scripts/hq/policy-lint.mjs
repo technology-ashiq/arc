@@ -104,8 +104,14 @@ function main(argv) {
       process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\n`);
       return 1;
     }
-    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit" });
-    return r.status === null ? 1 : r.status;
+    // The delegate judges THIS root: cwd and both selectors pinned, never inherited (attack p02 r2 B1).
+    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit", cwd: ROOT,
+      env: { ...process.env, ARC_ROOT: ROOT, ARC_SPINE_ROOT: join(ROOT, ".claude", "state", "hq") } });
+    if (r.status === null) {
+      process.stderr.write(`policy-lint: policy-evidence check did not run (${r.error ? r.error.message : r.signal})\n`);
+      return 1;
+    }
+    return r.status;
   }
   process.stderr.write(`policy-lint: ${target} is NOT law -- ${violations.length} violation(s)\n`);
   for (const v of violations) process.stderr.write(`  - ${v}\n`);

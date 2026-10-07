@@ -60,6 +60,7 @@ _hook() { # run the sandbox hook on a Bash tool call; stdin is the PreToolUse pa
 
 @test "paste: the armed hook's propose is one refusal a day, and it turns the cell fresh" {
   local d="$BATS_TEST_TMPDIR/p-hook"; _paste_root "$d" || return 1
+  export ARC_POLICY_REFUSAL_TIMEOUT_MS=30000
   run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
   printf '%s' "$output" > "$BATS_TEST_TMPDIR/before.json"
   run node "$FX/spine-probe.mjs" cell "$BATS_TEST_TMPDIR/before.json" session:interactive shell
@@ -130,6 +131,27 @@ _verify_root() { # $1 dir: the six LIVE files, the manifest and the verifier, at
   [ "$status" -eq 1 ] && [[ "$output" == *"judges the governing"* ]] || { echo "$status $output"; false; }
 }
 
+@test "paste: a decoy ARC_ROOT cannot redirect the refusal; it lands in the spine that was checked" {
+  local d="$BATS_TEST_TMPDIR/p-decoy"; _paste_root "$d" || return 1
+  mkdir -p "$BATS_TEST_TMPDIR/decoy/.claude/state/hq/events"
+  export ARC_ROOT="$BATS_TEST_TMPDIR/decoy" CLAUDE_PROJECT_DIR="$BATS_TEST_TMPDIR/decoy"
+  export ARC_POLICY_REFUSAL_TIMEOUT_MS=30000
+  run _hook "$d"
+  [ "$status" -eq 2 ] || { echo "$status $output"; false; }
+  run node "$FX/spine-probe.mjs" refusals "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^REFUSALS\ 1\  ]] || { echo "the refusal did not land in the checked spine: $output"; false; }
+  ! grep -rqs '"policy.refusal"' "$BATS_TEST_TMPDIR/decoy/.claude/state/hq/events/" || { echo "the refusal went to the decoy"; false; }
+}
+
+_hook_no_stderr() { _hook "$1" 2>&-; }
+
+@test "paste: with stderr closed and the emitter gone, the block is unchanged (exit 2, same words)" {
+  local d="$BATS_TEST_TMPDIR/p-closed"; _paste_root "$d" || return 1
+  mv "$d/.claude/scripts/hq/arc-event.sh" "$d/arc-event.parked"
+  run _hook_no_stderr "$d"
+  [ "$status" -eq 2 ] && [[ "$output" == *"BLOCKED by policy"* && "$output" != *"policy-hook threw"* ]] || { echo "$status $output"; false; }
+}
+
 @test "suite count: every paste test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 10"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 12"; false; }
 }

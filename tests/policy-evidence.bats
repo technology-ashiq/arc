@@ -442,7 +442,7 @@ _guard_root() { # $1 dir, $2 clean|one
 @test "guard: one BELOW-BAR cell is NOT clean, one approval, run.completed partial" {
   local d="$BATS_TEST_TMPDIR/g-one"; _guard_root "$d" one || return 1
   run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
-  [ "$status" -eq 3 ] && [[ "$output" == *"NOT CLEAN"* && "$output" == *"  session:interactive/shell"* ]] || { echo "$status $output"; false; }
+  [ "$status" -eq 3 ] && [[ "$output" == *"NOT CLEAN"* && "$output" =~ (no-writer|clearable)\ \ session:interactive/shell ]] || { echo "$status $output"; false; }
   run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
   [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 1\ LAST\ partial\  ]] || { echo "receipts: $output"; false; }
 }

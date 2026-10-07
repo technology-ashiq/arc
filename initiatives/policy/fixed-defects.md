@@ -77,3 +77,13 @@ Cycle 2, Phase 02, attack round 1 (`9b82c06`; boundary 7 findings: 5 fixed, 1 re
 - **`policy-lint other.yaml --evidence` linted one file and judged the evidence of another** — `--evidence` refuses a non-governing path (B7) — *a delegated verdict must be about the same subject as the caller's*
 
 Rejected in Phase 02 round 1: B4 (a WSL `bash` makes every hook receipt fail silently) — `unsupported`: the hook is spawned by the PreToolUse dispatcher, which is itself bash, so `bash` on its PATH is that same bash.
+
+Cycle 2, Phase 02, attack round 2 (`0da9701`; boundary 8 + logic 15 -- the first logic run failed its output contract and was re-run on the same SHA before any fix): 7 fixed, 9 rejected as written against older code or already covered, the rest LOW to the debt ledger.
+
+- **Parallel tool calls ran parallel hooks, and the check-then-emit sealed two receipts** — an O_EXCL lock around the day check and the emit, taken over after 60 s if stale (r2 L1, closing debt row 10) — *any check-then-write across processes needs the lock, not a comment*
+- **`policy-lint --evidence` spawned the delegate with an inherited root and spine** — `cwd` and both selectors pinned; a spawn failure is named (r2 B1/B7) — *the writer/reader twin, fifth time: every spawn of a judge*
+- **The env-pin and non-throwing-report fixes had no fixture** — a decoy `ARC_ROOT`/`CLAUDE_PROJECT_DIR` test and a closed-stderr test (r2 B3) — *a fix with no test that fails without it is not applied*
+- **A 3000 ms bound measured once on one box makes the first-receipt test flaky on a slow runner** — `ARC_POLICY_REFUSAL_TIMEOUT_MS` (a wait, never a selector) raised in the tests (r2 B5) — *every timing bound inside a test*
+- **A loosened assertion stopped proving the cell was classified** — now `no-writer|clearable`, both states named (r2 B6) — *a test made to pass in two worlds must still assert something in each*
+
+Rejected in Phase 02 round 2: B2 (CRLF bytes hide behaviour) — `already-covered`: `.gitattributes` sets `* text=auto eol=lf`, so no working copy here is CRLF; L2, L4, L7, L9 — `already-covered`: written against the round-1 paste (env pinned, catch guarded, the full field set matched, realpath compare); L5 (the N edit counts matches, not which) — `unsupported`: the design is N on EVERY in-scope L1 grant, and a count change refuses to generate; L11 (hook and emitter clocks differ) — `unsupported`: one host clock, the day computed once per call.

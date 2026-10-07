@@ -77,8 +77,13 @@ edit(".claude/scripts/hq/policy-lint.mjs", [
     '    if (path !== resolve(ROOT, "hq.policy.yaml")) {\n' +
     '      process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\\n`);\n' +
     '      return 1;\n    }\n' +
-    '    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit" });\n' +
-    "    return r.status === null ? 1 : r.status;\n"],
+    "    // The delegate judges THIS root: cwd and both selectors pinned, never inherited (attack p02 r2 B1).\n" +
+    '    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit", cwd: ROOT,\n' +
+    '      env: { ...process.env, ARC_ROOT: ROOT, ARC_SPINE_ROOT: join(ROOT, ".claude", "state", "hq") } });\n' +
+    "    if (r.status === null) {\n" +
+    '      process.stderr.write(`policy-lint: policy-evidence check did not run (${r.error ? r.error.message : r.signal})\\n`);\n' +
+    "      return 1;\n    }\n" +
+    "    return r.status;\n"],
 ]);
 
 // 4. policy-hook.mjs -- an interactive refusal becomes evidence (REQ-05). Best effort, bounded, never changes the block.
@@ -86,6 +91,7 @@ edit(".claude/scripts/hq/policy-hook.mjs", [
   ["imports", 'import { SESSION_KIND } from "./lib/policy/model.mjs";\n',
     'import { SESSION_KIND } from "./lib/policy/model.mjs";\n' +
     'import { execFileSync } from "node:child_process";\n' +
+    'import { closeSync, openSync, statSync, unlinkSync } from "node:fs";\n' +
     'import { canonicalSpine, sameSpine, sealedRefusalToday } from "./lib/policy-evidence/load.mjs";\n' +
     'import { capReason } from "./lib/validate-policy-refusal.mjs";\n' +
     'import { formatIst, nowMs } from "./lib/canonical.mjs";\n'],
@@ -95,13 +101,23 @@ edit(".claude/scripts/hq/policy-hook.mjs", [
     "// and never able to change the block: a lost receipt goes to stderr and the exit code is decided before this runs.\n" +
     "// 3000 ms, not 500: measured 2026-10-07, a warm emit is ~300 ms and the first of a session 2077 ms, so a 500 ms\n" +
     "// bound would drop the first receipt of every session -- the very evidence this exists to record.\n" +
-    "const REFUSAL_EMIT_TIMEOUT_MS = 3000;\n" +
+    "// A slow runner may raise the bound through ARC_POLICY_REFUSAL_TIMEOUT_MS; it is a wait, never a selector (p02 r2 B5).\n" +
+    "const REFUSAL_EMIT_TIMEOUT_MS = Number(process.env.ARC_POLICY_REFUSAL_TIMEOUT_MS) > 0 ? Number(process.env.ARC_POLICY_REFUSAL_TIMEOUT_MS) : 3000;\n" +
     'const REFUSAL_PROCESS = "policy-hook@1.0.0";\n' +
     "function recordRefusal({ root, capability, level, decision, reason }) {\n" +
     '  if (level === "L0") return; // the deny IS the level: nothing to evidence (ADR-0510, n/a)\n' +
+    "  let lockFd = null, lock = null;\n" +
     "  try {\n" +
     '    const writerSpine = process.env.ARC_SPINE_ROOT || join(root, ".claude", "state", "hq");\n' +
     "    if (!sameSpine(writerSpine, canonicalSpine(root))) return;\n" +
+    "    // ONE writer at a time across the check and the emit (attack p02 r2 L1): parallel tool calls run parallel hooks,\n" +
+    "    // and a check-then-emit with no lock seals two. A fresh lock is another hook mid-write -- its receipt is today's,\n" +
+    "    // so this one has nothing to add. A lock older than a minute is a crashed writer's, taken over once.\n" +
+    '    lock = join(writerSpine, ".policy-refusal.lock");\n' +
+    '    try { lockFd = openSync(lock, "wx"); } catch {\n' +
+    "      if (Date.now() - statSync(lock).mtimeMs < 60000) { lock = null; return; }\n" +
+    '      unlinkSync(lock); lockFd = openSync(lock, "wx");\n' +
+    "    }\n" +
     "    const day = formatIst(nowMs()).slice(0, 10);\n" +
     '    if (sealedRefusalToday({ eventsDir: join(writerSpine, "events"), day, actionKind: SESSION_KIND, capability,\n' +
     '      process: REFUSAL_PROCESS, decision, surface: "interactive", level })) return;\n' +
@@ -115,6 +131,9 @@ edit(".claude/scripts/hq/policy-hook.mjs", [
     "  } catch (e) {\n" +
     '    // Even the report cannot throw: a closed stderr must not turn the block into exit 1 (attack p02 B5).\n' +
     '    try { process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\\n")[0]}) -- the block stands\\n`); } catch { /* the block stands either way */ }\n' +
+    "  } finally {\n" +
+    "    if (lockFd !== null) try { closeSync(lockFd); } catch { /* released below */ }\n" +
+    "    if (lockFd !== null && lock) try { unlinkSync(lock); } catch { /* a stale lock is taken over after a minute */ }\n" +
     "  }\n}\n\nfunction main() {\n"],
   ["deny records", "        process.stdout.write(`policy: WARN the overreach was NOT recorded -- ${bite.reason}\\n`);\n      return 2;\n",
     "        process.stdout.write(`policy: WARN the overreach was NOT recorded -- ${bite.reason}\\n`);\n" +

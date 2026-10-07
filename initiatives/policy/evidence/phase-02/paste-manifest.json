@@ -9,11 +9,11 @@
   },
   ".claude/scripts/hq/policy-lint.mjs": {
     "live_before": "2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a",
-    "paste": "c64eba0e646c110d3f70bf4185bccbb160207e558816716f5f112505d6404eda"
+    "paste": "599faa30014a089d40c7870fe40ff6967e4d24dd6b9d4370cd9446a01c2f0f4d"
   },
   ".claude/scripts/hq/policy-hook.mjs": {
     "live_before": "d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76",
-    "paste": "6edc78ad58674233ce994c8e3400fd20296cdcca3a96e805cb7fbce4a8cc7f56"
+    "paste": "f0d811e5243e820a82a953eef887fcf55afff8135e14d19cc6f10612c009c6ea"
   },
   ".claude/scripts/hq/lib/policy-evidence/fold.mjs": {
     "live_before": "06019d4a600ce4bf33bf01f0d75db9966d86b1edec21867996417de510e34508",

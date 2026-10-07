@@ -26,6 +26,7 @@ import { loadPolicyFromDisk, loadPolicyEvents, policyRoot } from "./lib/policy/r
 import { recordOverreach } from "./lib/policy/incident.mjs";
 import { SESSION_KIND } from "./lib/policy/model.mjs";
 import { execFileSync } from "node:child_process";
+import { closeSync, openSync, statSync, unlinkSync } from "node:fs";
 import { canonicalSpine, sameSpine, sealedRefusalToday } from "./lib/policy-evidence/load.mjs";
 import { capReason } from "./lib/validate-policy-refusal.mjs";
 import { formatIst, nowMs } from "./lib/canonical.mjs";
@@ -83,13 +84,23 @@ function capabilitiesFor(toolName, matrix) {
 // and never able to change the block: a lost receipt goes to stderr and the exit code is decided before this runs.
 // 3000 ms, not 500: measured 2026-10-07, a warm emit is ~300 ms and the first of a session 2077 ms, so a 500 ms
 // bound would drop the first receipt of every session -- the very evidence this exists to record.
-const REFUSAL_EMIT_TIMEOUT_MS = 3000;
+// A slow runner may raise the bound through ARC_POLICY_REFUSAL_TIMEOUT_MS; it is a wait, never a selector (p02 r2 B5).
+const REFUSAL_EMIT_TIMEOUT_MS = Number(process.env.ARC_POLICY_REFUSAL_TIMEOUT_MS) > 0 ? Number(process.env.ARC_POLICY_REFUSAL_TIMEOUT_MS) : 3000;
 const REFUSAL_PROCESS = "policy-hook@1.0.0";
 function recordRefusal({ root, capability, level, decision, reason }) {
   if (level === "L0") return; // the deny IS the level: nothing to evidence (ADR-0510, n/a)
+  let lockFd = null, lock = null;
   try {
     const writerSpine = process.env.ARC_SPINE_ROOT || join(root, ".claude", "state", "hq");
     if (!sameSpine(writerSpine, canonicalSpine(root))) return;
+    // ONE writer at a time across the check and the emit (attack p02 r2 L1): parallel tool calls run parallel hooks,
+    // and a check-then-emit with no lock seals two. A fresh lock is another hook mid-write -- its receipt is today's,
+    // so this one has nothing to add. A lock older than a minute is a crashed writer's, taken over once.
+    lock = join(writerSpine, ".policy-refusal.lock");
+    try { lockFd = openSync(lock, "wx"); } catch {
+      if (Date.now() - statSync(lock).mtimeMs < 60000) { lock = null; return; }
+      unlinkSync(lock); lockFd = openSync(lock, "wx");
+    }
     const day = formatIst(nowMs()).slice(0, 10);
     if (sealedRefusalToday({ eventsDir: join(writerSpine, "events"), day, actionKind: SESSION_KIND, capability,
       process: REFUSAL_PROCESS, decision, surface: "interactive", level })) return;
@@ -103,6 +114,9 @@ function recordRefusal({ root, capability, level, decision, reason }) {
   } catch (e) {
     // Even the report cannot throw: a closed stderr must not turn the block into exit 1 (attack p02 B5).
     try { process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\n")[0]}) -- the block stands\n`); } catch { /* the block stands either way */ }
+  } finally {
+    if (lockFd !== null) try { closeSync(lockFd); } catch { /* released below */ }
+    if (lockFd !== null && lock) try { unlinkSync(lock); } catch { /* a stale lock is taken over after a minute */ }
   }
 }
 

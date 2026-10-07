@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "Two concurrent hook invocations (parallel tool calls) both call sealedRefusalToday on a day with no receipt, both see none, and both execFileSync the emitter. Each writes a policy.refusal, so two receipts for one (capability, decision, IST day).",
+      "why": "The day bound is check-then-emit with no lock and no idem enforced by the spine (the caller-supplied idem was removed by the amendment). The debt ledger row 10 admits this race. The shared safe reader does not serialize writes.",
+      "fix": "Take an exclusive lock (O_EXCL) around the sealedRefusalToday check and the emit, or have the emitter enforce the day bound atomically inside its own append lock.",
+      "twin_of": "every check-then-use on a path"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:93-96 (execFileSync env)",
+      "breaking_input": "The session environment contains ARC_ROOT, CLAUDE_PROJECT_DIR, an events-dir override, or another root-selector variable pointing at a different tree. The hook's pre-check compares only ARC_SPINE_ROOT to canonicalSpine(root) and passes. The child emitter inherits the full process.env and resolves its spine from the other selector, so the receipt is sealed somewhere the reader never looks.",
+      "why": "This is the writer/reader spine twin. The hook validates one selector but spawns the emitter with the entire environment, so the sealed location can differ from the checked one. The pattern list says to close the whole family of selector variables, not just the one named.",
+      "fix": "Pass an explicit env to the child: strip every root and spine selector variable and set ARC_SPINE_ROOT to the verified writerSpine. Alternatively, pass the spine via the emitter's explicit flag and assert it.",
+      "twin_of": "The emitter's root selector was still inherited -> close the whole family of selector variables"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:93 (execFileSync(\"bash\", ...))",
+      "breaking_input": "The hook is launched from a PowerShell-origin PATH, where `bash` resolves to WSL's bash.exe. It is given the Windows path C:\\Users\\...\\arc-event.sh as argv.",
+      "why": "The repo's own memory records that WSL bash makes every emit fail. Here the catch swallows the failure with 'refusal evidence not recorded', so on that PATH no interactive receipt is ever written. The cells stay absent forever with only a one-line stderr message, and the CI test cannot see it because CI uses Git Bash.",
+      "fix": "Resolve the bash binary explicitly (the Git for Windows path, or the dispatcher's own bash via process.env.BASH or the hook's inherited shell), and record the failure as a spine-visible counter or a loud WARN. Add a fixture with a fake bash on PATH that fails.",
+      "twin_of": "The emit failure said only 'Command failed: bash'"
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:97-99 (catch block)",
+      "breaking_input": "The hook's stderr is a closed pipe (EPIPE), or the stderr write otherwise throws, while the emitter fails or times out.",
+      "why": "The stderr write sits inside the catch block, so a throw there escapes recordRefusal. main's caller catches it, prints 'policy-hook threw: ...' to stdout, and sets exit code 1 instead of 2. That changes both stdout and the exit code, which REQ-05 says must stay unchanged. The fragment still denies, but the words and code differ. The EPIPE handler only covers some paths.",
+      "fix": "Wrap the stderr write in its own try/catch, or make recordRefusal's catch body non-throwing. Add a hostile fixture that closes stderr.",
+      "twin_of": "The EPIPE handler covered the text path only -> every early-return branch that writes"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/generate-paste.mjs:44-47 (edit function)",
+      "breaking_input": "The live hq.policy.yaml has a shell grant line that matches the regex but is NOT one of the 11 intended in-scope L1 grants (for example, a future process row added by another lane that also has `shell: { level: L1 }`). The edit applies once, but it silently adds evidence_days to that grant too, and the paste then carries an N the owner never approved.",
+      "why": "The edit asserts the count of matches (11) but not WHICH lines matched. A drifted file with an extra matching line fails the count check, but a file where one intended grant was changed to L0 and another unrelated grant was added at L1 still passes (11 matches), and the wrong grant gets N.",
+      "fix": "Match the exact grant context (the kind block) or verify the resulting file's full set of evidence_days grants against the intended list, not just the count.",
+      "twin_of": "any check that runs on one level or branch and is assumed to run on the others"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "A SIGKILLed emitter whose orphaned child finishes later (Windows does not kill the child tree) writes a second receipt after a retry, or a timeout leaves the emitter running in the background and it eventually writes.",
+      "why": "The killSignal SIGKILL on the execFileSync only kills the direct child; on Windows the tree is not killed. A retry after a timeout can then race the orphaned child and both write, breaking the day bound.",
+      "fix": "Use a unique per-run marker (a temp file or a lock) that the emitter checks, or kill the process tree, or have the emitter itself enforce the day bound atomically.",
+      "twin_of": "every check-then-use on a path"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal) with lib/policy-evidence/load.mjs sealedRefusalToday",
+      "breaking_input": "A forged line in the day file that matches the three fields (action_kind, capability, decision) but with a different process name or surface suppresses the genuine receipt all day. The hook reads the day file through the shared safe reader, but the dedupe check counts any matching line, not only lines the reader would attribute.",
+      "why": "The pattern list says: 'The day bound counted any line matching three fields, so one forged line suppressed the genuine receipt all day -> any dedupe check: count only what the reader would count'. The hook's sealedRefusalToday likely matches on the same three fields without verifying process, surface, or level.",
+      "fix": "Make sealedRefusalToday match on the full set of fields the fold attributes (process, surface, level, decision, capability, action_kind, day), and verify the line is a valid typed refusal.",
+      "twin_of": "The day bound counted any line matching three fields, so one forged line suppressed the genuine receipt all day"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `level` argument is `verdict.effective`, which is the effective level after the policy chain. If the effective level is L1 but the grant's ceiling is L2 (a promotion happened), the receipt says level L1, which is correct. But if the hook is called with a level that is not the current effective level (e.g., a race where the policy changed between the verdict and the record), the receipt's level may not match the current effective level, so the fold marks it inconsistent and the cell stays absent.",
+      "why": "The hook records the level it was given, but the fold only counts a refusal as qualifying if its level equals the pair's CURRENT effective level. A policy change between the verdict and the record (or a stale verdict) makes the receipt non-qualifying, silently dropping the evidence.",
+      "fix": "Re-read the effective level at record time, or have the fold accept a refusal at the level the pair held when the decision was made (it already does via `then`), but ensure the hook passes the level that was actually used for the decision.",
+      "twin_of": "validate one read, compare another"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook runs with ARC_SPINE_ROOT set to a path that is a symlink to the canonical spine, or the canonicalSpine(root) resolves differently than the writerSpine after symlink resolution. sameSpine compares strings, not filesystem identity, so a symlinked spine passes the check but the emitter writes through the symlink to a different real location.",
+      "why": "The pattern list says: 'A trailing dot or space is a second name for the same file on Windows; the guard reported the target clear while the file went 3219 → 14 bytes -> every path compared by string rather than by filesystem identity'. sameSpine likely compares strings, not realpaths.",
+      "fix": "Compare realpaths (fs.realpathSync) of both spines, not strings.",
+      "twin_of": "A trailing dot or space is a second name for the same file on Windows; the guard reported the target clear while the file went 3219 → 14 bytes"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `reason` is passed through capReason(reason), which may truncate or transform the reason. The fold's `consistent` check does not validate the reason content, but the receipt's reason could be empty or misleading, and the room renders it. A hostile emitter could set a reason that breaks the room's renderer.",
+      "why": "The pattern list says: 'A new optional field must not be able to take down the old required ones'. The reason is a free-text field that is rendered; if it contains markup or control characters, the room could break.",
+      "fix": "Sanitize the reason before writing (strip control characters, bound length), and have the room render it as plain text.",
+      "twin_of": "One fold refusal blanked the whole Policy room -> a new optional field must not be able to take down the old required ones"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `day` is computed from `formatIst(nowMs()).slice(0, 10)`. If the system clock is skewed (e.g., the hook runs at 23:59:59Z but the spine timestamps use a different clock), the day may differ from the spine's day, so the receipt is written for a different day than the spine records, and the fold's istDay(ts) may not match the day the hook intended.",
+      "why": "The hook computes the day from its own clock, but the spine writes ts from the emitter's clock. If the two clocks disagree (even by a few minutes across the IST boundary), the receipt's day (from the hook) and the spine's day (from the emitter) can differ, breaking the day bound and the fold's attribution.",
+      "fix": "Have the emitter stamp the day, or read the day from the spine's clock after emit, or verify the receipt's day matches the hook's day.",
+      "twin_of": "any check that runs on one level or branch and is assumed to run on the others"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `sealedRefusalToday` reads the day file through the shared safe reader, but the reader may not dedupe on idem. If the emitter writes the same receipt twice (e.g., a retry after a timeout), the day file has two identical lines, and the fold counts them as two refusals, breaking the 'at most one per day' guarantee.",
+      "why": "The pattern list says: 'The dedupe Set was marked before the emit outcome -> any \"done\" flag set before the work succeeds'. The spine's DUP_IDEM may not be enforced for this kind, or the reader may not dedupe.",
+      "fix": "Ensure the spine enforces DUP_IDEM for policy.refusal receipts, and have the reader dedupe on idem before counting.",
+      "twin_of": "The dedupe Set was marked before the emit outcome -> any \"done\" flag set before the work succeeds"
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `execFileSync` uses `timeout: 3000` and `killSignal: SIGKILL`. If the emitter hangs (e.g., a FIFO open blocks), the timeout kills it, but the hook's catch swallows the error and the block stands. However, the emitter may have already written the receipt before the kill, so the receipt exists but the hook reports 'not recorded'. The fold sees it, but the hook's stdout/stderr say otherwise.",
+      "why": "The pattern list says: 'A blocking `open` on a FIFO still hung the reader; a symlinked day file was followed; arc-run re-added a by-path read -> fix the pattern in every copy, not the file the attacker named'. The timeout does not prevent the receipt from being written; it only stops the hook from waiting.",
+      "fix": "After a timeout, check whether the receipt was actually written (read back the day file) before reporting 'not recorded'.",
+      "twin_of": "A blocking `open` on a FIFO still hung the reader; a symlinked day file was followed; arc-run re-added a by-path read"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `recordRefusal` is called for both deny and propose decisions. For a deny at L1, the fold's `consistent` check accepts any decision at L1, but the qualifying check requires `propose` at L1. So a deny at L1 writes a receipt that is attributed (last_refusal) but does not clear the cell (qualifying is null). The cell stays BELOW-BAR even though a refusal happened, which may be intended but could surprise the owner.",
+      "why": "The pattern list says: 'A deny at L1 counted as proof of L1's propose path -> any \"proof a level works\" that accepts a different decision than the level's own'. The hook records the deny, but the fold correctly does not count it as proof. However, the hook's comment says 'an L1+ propose or deny writes ≤ 1', implying both are evidence, but only propose clears.",
+      "fix": "Clarify the hook's comment and ensure the owner understands that a deny at L1 does not clear the cell. Or, if a deny should clear, change the fold's qualifying logic.",
+      "twin_of": "A deny at L1 counted as proof of L1's propose path"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs:86-97 (recordRefusal)",
+      "breaking_input": "The hook's `recordRefusal` is called with `level: verdict.effective`. If the verdict is a deny at L0 (the deny IS the level), the hook returns early. But if the verdict is a deny at L1+ and the hook's `sameSpine` check passes, it writes. However, if the hook is called from a context where `root` is not the canonical root (e.g., a worktree), the `canonicalSpine(root)` may resolve to the worktree's spine, not the main clone's, so the receipt lands in the wrong spine.",
+      "why": "The pattern list says: 'A receipt emitted from a worktree landed in that worktree's spine, invisible to the canonical one'. The hook's `canonicalSpine(root)` may not pin to the main clone.",
+      "fix": "Pin the canonical spine to the main clone explicitly, not via root-relative resolution.",
+      "twin_of": "A receipt emitted from a worktree landed in that worktree's spine, invisible to the canonical one"
+    }
+  ]
+}
