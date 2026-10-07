@@ -32,7 +32,7 @@
 // Exit: 0 ok | 1 refused, or deviations found.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROVIDERS } from "./design-rival.mjs";
@@ -269,12 +269,16 @@ function deal(argv) {
   // Every item leaves the deal looking the same at the file level: one format, no ancillary metadata, one
   // timestamp. Checked on the bytes, not assumed from the pipeline (Phase 07 blindness gate, 2026-10-07).
   const at = new Date(key.dealt);
+  // A failure after the claim -- a copy, a re-hash, a timestamp -- releases the claim before it fails, so no
+  // half-dealt jury blocks the write-once deal that follows (attack bb0c9a7 L3 L12 B2). Only this run's own
+  // fresh dir is removed: the claim above is a non-recursive mkdir that this run won.
+  const release = (msg) => { try { rmSync(ex.jury, { recursive: true, force: true }); } catch { /* left for the operator */ } fail(msg); };
   items.forEach((it, i) => {
     const label = `item-${LABELS[i]}`;
     const file = `${label}${it.ext}`;
-    copyFileSync(it.path, join(itemsDir, file));
-    if (sha256(readFileSync(join(itemsDir, file))) !== it.sha256) fail(`${label} did not copy byte for byte`);
-    utimesSync(join(itemsDir, file), at, at);
+    try { copyFileSync(it.path, join(itemsDir, file)); } catch (e) { release(`${label} could not be copied (${e.code || e.message})`); }
+    if (sha256(readFileSync(join(itemsDir, file))) !== it.sha256) release(`${label} did not copy byte for byte`);
+    try { utimesSync(join(itemsDir, file), at, at); } catch (e) { release(`${label}'s timestamp could not be set (${e.code || e.message})`); }
     key.items.push({ label, file, kind: it.kind, source: it.source, provenance: it.provenance, ...(it.package ? { package: it.package } : {}), ...(it.pack_sha256 ? { pack_sha256: it.pack_sha256 } : {}), sha256: it.sha256 });
   });
   const body = `${JSON.stringify(key, null, 2)}\n`;
