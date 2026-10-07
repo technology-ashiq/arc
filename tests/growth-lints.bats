@@ -227,6 +227,18 @@ const exemplars = () => G.loadExemplars("initiatives/growth/exemplars");'
   [[ "$output" == "3 0 UNCHECKED_LINK,UNCHECKED_LINK,UNCHECKED_LINK" ]]
 }
 
+@test "lints: pinned -- a quoted frontmatter citation is checked without its quote" {
+  # renderMdx quotes every citations entry; the bare-URL scan took the closing quote as part of
+  # the URL, so all five real links in the 2026-10-07 drafts reported DEAD_LINK 404 while live.
+  run _node "$PRE
+    const seen = [];
+    const doc = ['---', 'citations:', '  - ' + JSON.stringify('https://a.test/x.md'), '---', '', 'Body.'].join(String.fromCharCode(10));
+    const l = await C.checkLinks(doc, async (u) => { seen.push(u); return { state: u === 'https://a.test/x.md' ? 'live' : 'dead', status: 200 }; });
+    console.log(l.linksChecked + ' ' + l.findings.length + ' ' + seen.join(','));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "1 0 https://a.test/x.md" ]
+}
+
 @test "lints: pinned -- only an absolute http source counts as a citation" {
   # An image, an anchor, a relative internal link and a mailto all satisfied "carries a source
   # link" -- and since the prompt INSTRUCTS the writer to add internal cluster links, a fabricated

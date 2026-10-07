@@ -6,7 +6,7 @@ cycle: arc-growth (Cycle 14, opened 2026-08-12)
 phase: 06
 appetite: 10d
 burn: 8.0d
-blocked-on: Ashiq — OK publishing the four c-001 drafts to arc-site (E2) and export one Search Console Pages CSV for the ingest
+blocked-on: Ashiq — merge arc-site #7-#10 (E2) and export one Search Console Pages CSV for the ingest
 depends-on: —
 
 ## Phase table
@@ -193,11 +193,17 @@ was looking. Facts read today, not inferred:
 - **Four more `c-001` drafts exist and are lint-clean** — pillar `ai agents` (title-a) and spokes
   `agents build` (title-b), `coding workflows` (title-b), `driven development` (title-a). Generated
   past the gate, rendered by `arc-growth render`, slop-lint no marker, citation-lint 0 uncited.
-  Every fact cites a file in the public arc repo. **Not published**: opening the arc-site PRs was
-  refused by the session's permission layer as a publication the owner had not approved in this
-  session, which is E2 working as written. They wait on the owner. Published, they make `c-001`
+  Every fact cites a file in the public arc repo. The first attempt to open the arc-site PRs was
+  refused by the session's permission layer as a publication the owner had not approved; the owner
+  then said "publish pannu", and **arc-site #7–#10 are open with green Vercel previews**, review pack
+  in each body. **Not merged: E2, the owner merges.** Merged, they make `c-001`
   pillar + 5 spokes — **cluster-complete** under criterion 5. `ai voice` and `yc s23` are not
   drafted: neither has anything arc learned by doing behind it.
+- **A link-check defect surfaced on the first non-empty citation list.** `BARE_URL_RE` in
+  `text.mjs` kept the closing quote of every quoted frontmatter `citations:` entry, so all five real
+  links reported `DEAD_LINK 404` while serving 200. Every earlier article had `citations: []`, so the
+  path had never run on real input. Fixed (a raw `"` is never part of a URL) and pinned in
+  `growth-lints.bats`. WARN-level only, so no review pack was ever blocked by it.
 - **The real-week ingest needs one Search Console CSV export**, which only the owner's Google
   login can produce. No API credential exists for it.
 
