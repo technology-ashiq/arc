@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "tests/launch/fakes/supabase.mjs:+31 (the `up` regex)",
+      "breaking_input": "The adapter sends `insert into public.org_plans (org_id, plan) values ('<uuid>', 'pro') on conflict (org_id) do update set plan = excluded.plan, updated_at = now();`. The fake's regex leaves its parentheses and `.` unescaped: `org_plans (org_id, plan) values ('([0-9a-f-]{36})', '(free|pro)') ... on conflict (org_id) ... now();`. Unescaped parens are capture groups, so the pattern expects `org_plans org_id, plan values 'uuid', 'pro' ...` with no literal parens and `now` followed by `;` instead of `now()`. The real statement therefore never matches.",
+      "why": "The fake never models the upsert it exists to model. The statement falls through to whatever the fake does for unknown SQL, so the plan rows stay empty or the call errors. The `plans` contract test (`finalPlans == free`, `pro 200`) then fails, or passes only if the fall-through is lenient. This is the lost-backslash defect again, in a regex that has no backslashes at all. The sibling regex in the same function is correctly escaped, which suggests this one was written through a different path.",
+      "fix": "Escape every literal paren and `.`: `/^insert into public\\.org_plans \\(org_id, plan\\) values \\('([0-9a-f-]{36})', '(free|pro)'\\) on conflict \\(org_id\\) do update set plan = excluded\\.plan, updated_at = now\\(\\);$/`. Make unknown SQL return an error instead of empty rows, and add a test that the pro upsert actually changed a row.",
+      "twin_of": "A whitespace regex lost its backslash on the way into the file (`/s/g`), deleting every `s` from base64 and refusing every real file -> every escape written through a shell heredoc or a JS string: read the file back, and make the fake answer in the provider's real shape"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:probe (setPlan pro, then early return)",
+      "breaking_input": "The probe org is set to pro. The `/api/reports` call then returns 500, a transport error (status 0), or the slot timeout aborts (ABORTED is rethrown). The function returns or throws before `setPlan(..., \"free\")`.",
+      "why": "The ADR says the org ends on free. On any failure after the first upsert the probe org is left on pro, and the next verify starts from that state. Only the happy path restores free.",
+      "fix": "Wrap the pro..down section in try/finally that sets free, best-effort, without masking the original result. Do not let ABORTED skip it.",
+      "twin_of": "A killed verify left the previous run's `last_verify`, which the log then printed as this run's reason -> every \"read the result after the child\" that can read a result the child never wrote"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:scaffold (TABLES_FOREIGN guard)",
+      "breaking_input": "launch recorded `db-tables` `<ref>:public.org_plans`. The owner then drops the table and creates their own `public.org_plans` with no marker. They re-run scaffold. `ctx.resources.some(...)` is true, so the whole guard short-circuits and the OURS marker check never runs.",
+      "why": "A recorded resource id substitutes for a run-time ownership check. The migration then runs `drop policy if exists`, enables RLS, and stamps `comment on table ... 'arc-launch plans'` on the owner's table. That claims it as launch's, and teardown will drop it.",
+      "fix": "When the table exists, always require `count(OURS) === 1`. Use the recorded resource only to explain a half-made state, never to skip the marker check.",
+      "twin_of": "A probe table of the same name as the owner's was altered and written to -> every create-if-not-exists on a name the owner can also use"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:teardown",
+      "breaking_input": "Between scaffold and teardown the owner replaces `public.org_plans` with their own table. Teardown still emits the step `drop org_plans` for every recorded `db-tables` resource, with no check that the table still carries the `arc-launch plans` marker.",
+      "why": "The exit plan trusts the recorded id and drops by name. Nothing re-checks ownership at run time, so the owner's data can be destroyed.",
+      "fix": "Make the step conditional on `obj_description = 'arc-launch plans'` (drop-if-marker). Have teardown query the marker and omit or flag the step when it is absent.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:probe (oursAtHead then live fetch)",
+      "breaking_input": "launch's commit is on main's head, but the live deployment still runs an older build, or a different commit the owner deployed. That build's `/api/reports` returns 200 on pro and 403 on free. verify reports ok even though the deployed code is not the committed route.",
+      "why": "The drift check reads main's head. The behaviour proof comes from whatever the live domain serves. Nothing ties the two together, so a file that is launch's is paired with an answer that may come from different code.",
+      "fix": "Require a READY production deployment for main's head sha (the same proof the release/frontend slots use) before probing. Otherwise report the deployment as stale.",
+      "twin_of": "A verify proved \"some file at that path\" and \"some green run\", not launch's file under that run -> every verify that pairs a file with an outside answer: is the file still launch's?"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:oursAtHead",
+      "breaking_input": "The contents answer for a path has `type: file` and a string `content` but `encoding: \"none\"` (a file over 1 MB, or an unusual encoding). `oursAtHead` skips the `encoding === \"base64\"` check that `commitFiles` has. `utf8()` then runs `atob` on non-base64 content and throws an uncoded InvalidCharacterError.",
+      "why": "The second code path over the same file dropped the encoding guard. The result is a vague `error: ...` reason instead of the drift reason.",
+      "fix": "Add the `b.encoding === \"base64\"` check to `oursAtHead` and return a not-launch's-file reason.",
+      "twin_of": "The shared-file path dropped the encoding guard the owned-file path had -> every second code path through the same file"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:FILES[app/api/reports/route.js]",
+      "breaking_input": "`GET /api/reports?org=------------------------------------` (36 chars of `-`, which passes `/^[0-9a-f-]{36}$/`). The value reaches `.eq(\"id\", org)` and Postgres rejects it as an invalid uuid. The route answers 500 `read failed`, not 400.",
+      "why": "The route's validation is weaker than the verifier's UUID regex. A malformed id from a client is reported as a server fault and trips error alerts. Uppercase uuids are also rejected as 400.",
+      "fix": "Use the full uuid regex, case-insensitive, in the route.",
+      "twin_of": "Upstream entries were coerced with `String()`, so a `null` id became the hostname \"null\" -> every value one adapter hands another through state"
+    }
+  ]
+}
