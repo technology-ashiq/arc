@@ -1,0 +1,71 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:20",
+      "breaking_input": "Run `node .claude/scripts/hq/policy-evidence.mjs check` from a linked git worktree such as arc-policy-change. policyRoot() resolves to that worktree, whose gitignored .claude/state/hq/events is empty or missing. loadSpineEvents hits `if (!existsSync(dir)) return { events: [], rejected: 0 }` and the CLI prints a normal-looking summary: 17 in scope, 17 BELOW-BAR, 0 rejected.",
+      "why": "The reader's spine root is not pinned to the main clone, and a missing events dir is treated the same as an empty spine. Real refusals on the canonical spine are invisible, and the output is indistinguishable from a true all-absent reading. Phase 01 adds the main-clone refusal only to `guard`, not to `report` or `check`. ADR-0511 states the worktree-spine finding of 2026-08-10, so this is a known failure.",
+      "fix": "Have report and check print the resolved root and the day-file and event counts. Refuse, or print a loud WARN with a distinct exit code, when the events dir is missing or the root is a linked worktree (git-common-dir differs from .git). Put the same check in load.mjs so every consumer gets it.",
+      "twin_of": "A receipt emitted from a worktree landed in that worktree's spine, invisible to the canonical one -> any emit or read whose spine root is not pinned to the main clone"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1428 (receiptRefusals via emitEvent) vs load.mjs policyRoot()",
+      "breaking_input": "Run `ARC_SPINE_ROOT=/elsewhere arc-run --process denied` in the main clone. The incident and the policy.refusal are written under /elsewhere/events, while policy-evidence reads <policyRoot>/.claude/state/hq/events and never sees them. The run reports a refusal receipt that landed (verifyLanded reads the same env root) and the deny stands. The canonical evidence never exists.",
+      "why": "The writer selects its spine by environment variable and the reader selects by module location. The two can disagree silently, so evidence is lost without any signal. This is the same env-selects-the-spine shape as ARC_ROOT disarming the gate.",
+      "fix": "Have receiptRefusals and verifyLanded use the same pinned root as the fold, and ignore ARC_SPINE_ROOT outside the test-only door. At minimum, warn when the effective spine root differs from policyRoot().",
+      "twin_of": "`ARC_ROOT=/tmp/x` disarmed the whole headless gate in one variable -> any env var that selects the root, the policy file or the spine a decision reads"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1422-1436",
+      "breaking_input": "A scheduled job (the scheduler fires every 15 minutes) whose process is held at L0 for shell. Every run that is denied writes a new policy.refusal and an incident, because refusalsReceipted is a module-level Set that lives for one process run. After a month that is thousands of near-identical receipts.",
+      "why": "ADR-0509 says volume is bounded at the writer, with at most one receipt per (action_kind, capability, decision, IST day). The arc-run writer implements no day-level bound. The spine and the fold's whole-spine read grow without limit, and every spine append takes the spine lock.",
+      "fix": "Derive the idem from (action_kind, capability, decision, IST day) so DUP_IDEM enforces the bound, as Phase 02 does for the hook. Otherwise check the day file before emitting."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:19 and fold.mjs DAY_RE/dayDiff",
+      "breaking_input": "`policy-evidence.mjs check --as-of 2026-02-30` or `--as-of 2026-13-45`. DAY_RE accepts both, and Date.UTC silently rolls them to 2026-03-02 and 2027-02-14.",
+      "why": "Parsing validates shape, not calendar validity, so an impossible day yields a plausible reading. A typo shifts every age and can flip fresh to stale, or the reverse, with exit 0 or 3 and no error.",
+      "fix": "After matching, round-trip the date (new Date(Date.UTC(y,m-1,d)).toISOString().slice(0,10) === input) and refuse with exit 2 on a mismatch. Do it in both the CLI and foldEvidence."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:70-72",
+      "breaking_input": "`node policy-evidence.mjs check | head -1` on a spine with many BELOW-BAR cells. head closes the pipe, node's stdout emits EPIPE as an uncaught error, and the process exits 1 instead of 3. Exit 1 carries no BELOW-BAR meaning to a caller.",
+      "why": "BELOW-BAR is signalled only by exit 3 (set late, after the output loop). A pipe closed early means the exit code the policy-lint --evidence delegation depends on is lost.",
+      "fix": "Set process.exitCode = 3 before writing output. Attach a no-op handler for stdout 'error' EPIPE, or build the output and write it once."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/policy-evidence.bats (zero-new-kinds test, E2E rid= line and node -e attribution lines)",
+      "breaking_input": "`node --input-type=module -e \"... import('./.claude/scripts/hq/lib/validate.mjs') ...\"` and `node -e \"let s='';process.stdin.on(...)\"` embed single quotes inside a program carried in a shell string. Editing either program to contain an apostrophe, a backtick or a $ in code or in a comment breaks the shell quoting.",
+      "why": "The repo rule forbids single quotes and apostrophes in a program embedded in a shell string. This has recurred four times, the last on 2026-08-12. These programs sit one edit away from the same failure.",
+      "fix": "Move each embedded program into its own .mjs file under tests/fixtures/policy-evidence/ and pass inputs as argv."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:29-32",
+      "breaking_input": "Between the lstatSync(path).isFile() check and readFileSync(path), replace the day file with a FIFO (rm, then mkfifo/mknod of the same name). readFileSync blocks forever, so report, check and the face API hang.",
+      "why": "The comment says a FIFO is skipped, but the check and the read are two separate path lookups (check-then-use), so the guard can be defeated.",
+      "fix": "Open the file once with openSync and fstatSync the descriptor (isFile), then read from that descriptor. Use O_NONBLOCK where available."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:1424",
+      "breaking_input": "A denial reason of 299 ASCII characters followed by an emoji. slice(0,300) cuts the surrogate pair in half, leaving a lone surrogate in the payload that is then passed as a process argument.",
+      "why": "On Windows a lone surrogate in argv becomes U+FFFD or is mangled by the child's argument decoding, so the stored reason differs from the sealed intent. The lossy replacement can also throw inside the emitter path rather than landing the receipt.",
+      "fix": "Truncate by code points (Array.from(reason).slice(0,300).join('')) or strip lone surrogates before building the payload."
+    }
+  ]
+}

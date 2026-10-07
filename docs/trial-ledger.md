@@ -59,6 +59,9 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-13 | value (legal-lints) | registered at birth, legal Phase 00 | **YES** — twice on the lane's own authored pages | **YES, twice — both real false positives, both fixed.** See below |
 | 2026-08-13 | trace (legal-lints) | registered at birth, legal Phase 00 | **YES** — once on a correct page | **YES — one real false positive, fixed.** See below |
 | 2026-08-13 | completeness (legal-lints) | registered at birth, legal Phase 00 | **YES** — on 3 of 6 fixtures, unplanted | **no** — see below; this is the only true positive of the three |
+| 2026-10-07 | value (legal-lints) | legal Phase 03, LexOS real render (`01M4AHJZPVC46NN5PDYRAZK2WW`) | no | no — clean run 1 of 3 |
+| 2026-10-07 | trace (legal-lints) | legal Phase 03, LexOS real render | no | no — clean run 1 of 3 |
+| 2026-10-07 | completeness (legal-lints) | legal Phase 03, LexOS real render | no | no — clean run 2 of 3 |
 
 ### the three `legal` lints — registered at birth, and two of them are already at zero
 

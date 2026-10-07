@@ -1,0 +1,20 @@
+{
+  "phase": "03",
+  "commit": "74aae21a04affb55799ecb4f9aecd6f0d4548bac",
+  "short": "74aae21a",
+  "generated": "2026-10-07T07:45:01Z",
+  "files": [
+    {
+      "name": "attack-a544ce1-r1-boundary.json",
+      "sha256": "591f398395e5fc09b42dd613e4cd5ab7f5a9c84b408594601115c89c608d86ff"
+    },
+    {
+      "name": "attack-a544ce1-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "bundle.md",
+      "sha256": "2fd2edadfcc95965bc81f817a506348db7ccc735d1ee2c8f6f5b9ef9aed77b3b"
+    }
+  ]
+}

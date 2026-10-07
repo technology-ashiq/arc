@@ -52,6 +52,12 @@ _exempt() {
     # lane's call to make with its own tests in front of it. Recorded here so the next policy-lane
     # reader sees it, instead of being hidden by a `lib/*` glob that never scanned the file at all.
     .claude/scripts/hq/lib/policy/run-gate.mjs) return 0 ;;
+    # POL-L (ADR-0509/0510), the same argument from the same lane: the policy EVIDENCE reader is implementation-layer.
+    # It re-validates and sha-checks every line it accepts, dedupes on idem, refuses a non-canonical spine (a linked
+    # worktree, a missing spine, a foreign ARC_SPINE_ROOT), and opens each day file through one non-blocking,
+    # no-follow descriptor -- three properties spine.mjs's scanAll does not have yet. Routing it through the reader is
+    # the right end state once the reader carries them; until then, exempt by name rather than weakened.
+    .claude/scripts/hq/lib/policy-evidence/load.mjs) return 0 ;;
     .claude/scripts/hq/lib/*/*)        return 1 ;;
     .claude/scripts/hq/lib/*)          return 0 ;;
     *)                                 return 1 ;;
