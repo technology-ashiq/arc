@@ -3,7 +3,8 @@
 # (ADR-2000, ADR-2003, ADR-2004, ADR-2005, ADR-2014).
 #
 # Red-first is commit order (this file lands in its own commit ahead of the rows) plus mutant arms:
-# tests 2, 4 and 7 re-run their assertion on a temp copy with the change undone and must see it.
+# tests 2, 4 and 7 re-run their assertion on a temp copy with the change undone and must see it,
+# and each mutant first proves it changed something (cmp), so a formatting drift cannot make it a no-op.
 # Every probe asserts it RAN (exit 0, empty stderr, the RAN marker) before its output is believed.
 # Probes live in tests/distribute/birth-probe.mjs, never in a shell string.
 
@@ -12,12 +13,30 @@ load 'test_helper'
 
 probe() { ( cd "$ARC_ROOT" && node tests/distribute/birth-probe.mjs "$@" ); }
 
+# A temp path handed to native node goes through cygpath on Windows (fixed-defects class g).
+native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+
 ran_ok() {
   [ "$status" -eq 0 ] && [ -z "$stderr" ] || { echo "probe did not run: status $status, stderr: $stderr"; return 1; }
-  printf '%s\n' "$output" | grep -qx "RAN $1" || { echo "probe never reached its end: $output"; return 1; }
+  printf '%s\n' "$output" | tr -d '\r' | grep -qx "RAN $1" || { echo "probe never reached its end: $output"; return 1; }
 }
 
-field() { printf '%s\n' "$output" | sed -n "s/^$1 //p"; }
+field() { printf '%s\n' "$output" | tr -d '\r' | sed -n "s/^$1 //p"; }
+
+has_problem() { printf '%s\n' "$output" | tr -d '\r' | grep -E "^PROBLEM $1"; }
+
+# Asks git, not a grep, whether a rendered path is ignored, so `.codex/*`, `**/AGENTS.md` and every
+# other spelling of the same rule are caught. Prints each path git would ignore, then the RAN marker.
+ignored_paths() {
+  local repo="$BATS_TEST_TMPDIR/ign-$2"
+  mkdir -p "$repo" && git -C "$repo" init -q && cp "$1" "$repo/.gitignore" || return 2
+  [ -s "$repo/.gitignore" ] || { echo "COULD NOT SCAN: copied .gitignore is empty"; return 2; }
+  local p
+  for p in .codex/hooks.json .agents/skills/x/SKILL.md AGENTS.md .opencode/commands/x.md; do
+    if git -C "$repo" check-ignore -q --no-index "$p"; then echo "$p"; fi
+  done
+  echo "RAN ignored"
+}
 
 @test "distribute-birth: every test in the file is registered" {
   local declared
@@ -31,14 +50,15 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1 //p"; }
   [ "$output" = "1" ] || { echo "band 2000 row does not name distribute"; false; }
 }
 
-@test "distribute-birth: no rendered surface is gitignored, and the check sees a planted line" {
+@test "distribute-birth: git ignores no rendered surface, and the check sees a planted rule" {
   [ -s "$ARC_ROOT/.gitignore" ] || { echo ".gitignore missing or empty -- could not scan"; false; }
-  run grep -cxE '/?(\.codex|\.agents|AGENTS\.md)/?' "$ARC_ROOT/.gitignore"
-  [ "$status" -le 1 ] || { echo "grep could not read .gitignore"; false; }
-  [ "$output" = "0" ] || { echo ".gitignore still ignores .codex, .agents or AGENTS.md ($output lines)"; false; }
-  { cat "$ARC_ROOT/.gitignore"; printf '.codex\n'; } > "$BATS_TEST_TMPDIR/gitignore"
-  run grep -cxE '/?(\.codex|\.agents|AGENTS\.md)/?' "$BATS_TEST_TMPDIR/gitignore"
-  [ "$output" = "1" ] || { echo "the check did not see a planted .codex line: $output"; false; }
+  run ignored_paths "$ARC_ROOT/.gitignore" real
+  [ "$status" -eq 0 ] && [ "${lines[${#lines[@]}-1]}" = "RAN ignored" ] || { echo "check did not run: $output"; false; }
+  [ "${#lines[@]}" -eq 1 ] || { echo "git still ignores: $output"; false; }
+  { cat "$ARC_ROOT/.gitignore"; printf '.codex/*\n'; } > "$BATS_TEST_TMPDIR/gitignore"
+  run ignored_paths "$BATS_TEST_TMPDIR/gitignore" mutant
+  [ "$status" -eq 0 ] && [ "${lines[${#lines[@]}-1]}" = "RAN ignored" ] || { echo "mutant check did not run: $output"; false; }
+  [ "${lines[0]}" = ".codex/hooks.json" ] || { echo "the check did not see a planted .codex/* rule: $output"; false; }
 }
 
 @test "distribute-birth: the matrix parses with at least 8 rows" {
@@ -52,12 +72,13 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1 //p"; }
   run --separate-stderr probe matrix engine/harnesses.yaml
   ran_ok matrix
   [ "$(field verified)" -eq 4 ] || { echo "verified rows: $(field verified)"; false; }
-  if printf '%s\n' "$output" | grep -E '^PROBLEM .*: (undated|no version|no source)$'; then echo "a row is undated or unsourced"; false; fi
-  grep -v '^    verified: ' "$ARC_ROOT/engine/harnesses.yaml" > "$BATS_TEST_TMPDIR/undated.yaml"
+  if has_problem '.*: (undated|no version|no source)$'; then echo "a row is undated or unsourced"; false; fi
+  grep -vE '^[[:space:]]+verified: ' "$ARC_ROOT/engine/harnesses.yaml" > "$BATS_TEST_TMPDIR/undated.yaml"
   [ -s "$BATS_TEST_TMPDIR/undated.yaml" ] || { echo "mutant copy is empty"; false; }
-  run --separate-stderr probe matrix "$BATS_TEST_TMPDIR/undated.yaml"
+  if cmp -s "$ARC_ROOT/engine/harnesses.yaml" "$BATS_TEST_TMPDIR/undated.yaml"; then echo "the mutant removed nothing"; false; fi
+  run --separate-stderr probe matrix "$(native "$BATS_TEST_TMPDIR/undated.yaml")"
   ran_ok matrix
-  printf '%s\n' "$output" | grep -qE '^PROBLEM .*: undated$' || { echo "the check did not see a row with its date removed: $output"; false; }
+  has_problem '.*: undated$' >/dev/null || { echo "the check did not see a row with its date removed: $output"; false; }
 }
 
 @test "distribute-birth: every cell is legal and every row carries all 9 cells" {
@@ -66,7 +87,7 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1 //p"; }
   local rows cells
   rows=$(field rows); cells=$(field cells)
   [ "$cells" -eq $((rows * 9)) ] || { echo "cells $cells for $rows rows"; false; }
-  if printf '%s\n' "$output" | grep -E '^PROBLEM '; then echo "the matrix has problems"; false; fi
+  if has_problem ''; then echo "the matrix has problems"; false; fi
 }
 
 @test "distribute-birth: the claude-code golden is the sync golden, and its transform is declared" {
@@ -76,7 +97,7 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1 //p"; }
   local n
   n=$(wc -l < "$ARC_ROOT/tests/fixtures/sync-golden/tree-manifest.txt")
   [ "$n" -ge 400 ] || { echo "sync golden has only $n lines"; false; }
-  field claude-transform | grep -qF '\r' || { echo "golden_transform does not name the CR strip"; false; }
+  field claude-transform | grep -qF 'carriage-return' || { echo "golden_transform does not name the CR strip"; false; }
   field claude-transform | grep -qF 'arc-registry.json' || { echo "golden_transform does not name the registry exclusion"; false; }
 }
 
@@ -84,15 +105,16 @@ field() { printf '%s\n' "$output" | sed -n "s/^$1 //p"; }
   local v=initiatives/distribute/evidence/phase-00/agents-skills-verdict.md
   run --separate-stderr probe verdict "$v"
   ran_ok verdict
-  printf '%s\n' "$output" | grep -qx 'verdict complete' || { echo "$output"; false; }
+  printf '%s\n' "$output" | tr -d '\r' | grep -qx 'verdict complete' || { echo "$output"; false; }
   local seeds=0
   if [ -d "$ARC_ROOT/tests/fixtures/distribute/goldens/codex-seed" ]; then
     seeds=$(find "$ARC_ROOT/tests/fixtures/distribute/goldens/codex-seed" -mindepth 1 -maxdepth 1 -type d | wc -l)
   fi
   [ "$seeds" -eq "$(field faithful)" ] || { echo "seed dirs $seeds, FAITHFUL rows $(field faithful)"; false; }
-  grep -v 'source-command-arc-pr ' "$ARC_ROOT/$v" > "$BATS_TEST_TMPDIR/short.md"
+  grep -vE '^[|][[:space:]]*source-command-arc-pr[[:space:]]*[|]' "$ARC_ROOT/$v" > "$BATS_TEST_TMPDIR/short.md"
   [ -s "$BATS_TEST_TMPDIR/short.md" ] || { echo "mutant copy is empty"; false; }
-  run --separate-stderr probe verdict "$BATS_TEST_TMPDIR/short.md"
+  if cmp -s "$ARC_ROOT/$v" "$BATS_TEST_TMPDIR/short.md"; then echo "the mutant removed nothing"; false; fi
+  run --separate-stderr probe verdict "$(native "$BATS_TEST_TMPDIR/short.md")"
   ran_ok verdict
-  printf '%s\n' "$output" | grep -qx 'verdict incomplete' || { echo "the check did not see a deleted row: $output"; false; }
+  printf '%s\n' "$output" | tr -d '\r' | grep -qx 'verdict incomplete' || { echo "the check did not see a deleted row: $output"; false; }
 }

@@ -21,4 +21,8 @@ and lane finds are appended under their PR.
 
 ## Lane finds
 
-(none yet)
+- **(l) ignore-check by grep.** Whether a path is ignored is asked of git (`git check-ignore --no-index` in a temp repo), never grepped from `.gitignore`: `.codex/*` and `**/AGENTS.md` walk past an exact-line grep. Fixed in `tests/distribute-birth.bats`, attack c4e1d7d B1.
+- **(m) row-shape regex skips silently.** A table/row reader splits every row into cells and counts a row it cannot classify as illegal; a row the regex did not match must never vanish. Fixed in `tests/distribute/birth-probe.mjs` (verdict), attack c4e1d7d B4.
+- **(n) mutant that may delete nothing.** Every mutant arm proves it changed the file (`cmp -s` original vs mutant) before running the check on it, and matches on structure (`[[:space:]]+`, cell delimiters), never on column padding. Fixed in `tests/distribute-birth.bats`, attack c4e1d7d B5/B7.
+- **(o) dispatch on inherited keys.** A case table is looked up with `Object.hasOwn`, and the call is wrapped in `Promise.resolve().then(...)` so a synchronous throw reaches the catch. Fixed in `tests/distribute/birth-probe.mjs`, attack c4e1d7d B6.
+- **(p) escapes in data.** A data value a test greps for carries no backslash escape; words instead (`carriage-return`). Fixed in `engine/harnesses.yaml`, attack c4e1d7d B8.

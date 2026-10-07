@@ -1,0 +1,93 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:36",
+      "breaking_input": "A .gitignore line `.codex/*`, `**/.codex`, `.agents/*`, `/AGENTS.md ` (trailing space), `.Codex` or `AGENTS.md*` re-ignores a rendered surface. The check `grep -cxE '/?(\\.codex|\\.agents|AGENTS\\.md)/?'` matches only the exact forms, so it still reports 0 lines.",
+      "why": "The anchored regex accepts only 6 exact spellings. Common git-ignore variants of the same rule pass, so REQ-05's claim that no rendered directory is ignored is not actually checked. The mutant arm plants only the one literal `.codex` line, so it cannot show the gap. This is (f) validating one form and using another, and (k), a hand-kept pattern list.",
+      "fix": "Ask git instead of grepping. In a temp repo, run `git check-ignore -q .codex/x .agents/skills/x/SKILL.md AGENTS.md` against the real .gitignore, and require exit 1 for each path. Also plant `.codex/*` in the mutant arm."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:44-52",
+      "breaking_input": "The matrix row for `codex` has `golden_pending: P03`, but the test on harnesses.yaml checks only the shape of the cells. A row such as `golden: ../../etc/x` or an absolute path `C:\\x` also passes. The probe never validates the `golden:` value except for claude-code.",
+      "why": "The paths in `golden:` will later be consumed by the installer and compiler. No path-confinement check (d) exists at birth, so the data file will accept `..` and drive-letter values that the Phase 03 consumer must then trust.",
+      "fix": "In the probe, reject any `golden` that is absolute, contains a `..` segment, contains a backslash or a `:`, or does not start with `tests/fixtures/`. Add a mutant arm for each."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/distribute/birth-probe.mjs:84-88",
+      "breaking_input": "`node birth-probe.mjs matrix` run with no file argument, or with a file that is a directory. When `read()` throws synchronously inside the async `cases.matrix`, the rejection is caught and prints an error. But `cases[which]()` for `which = \"__proto__\"` or `\"constructor\"`/`\"toString\"` passes the `!cases[which]` guard because those are inherited properties, and then `cases[which]()` throws a synchronous TypeError or runs `Object.prototype` functions.",
+      "why": "The lookup of `which` on a plain object accepts inherited names. A synchronous throw escapes the `.catch` chain and dies as an uncaught exception, which gives a different exit code and message than the documented 1 and 2 paths. This is a missing-vs-present confusion, class (i).",
+      "fix": "Use `Object.hasOwn(cases, which)`, or build `cases` from `Object.create(null)`. Wrap the call in `Promise.resolve().then(() => cases[which]())`."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:15",
+      "breaking_input": "`probe() { ( cd \"$ARC_ROOT\" && node tests/distribute/birth-probe.mjs \"$@\" ); }` is called as `probe verdict \"$BATS_TEST_TMPDIR/short.md\"`. On the Windows CI leg, `$BATS_TEST_TMPDIR` is a POSIX MSYS path such as `/tmp/bats-run-X/...`, and native node cannot resolve that path.",
+      "why": "A POSIX path is passed into native node as a plain argument. This is class (g), in which MSYS paths reach native node. Argv conversion is not guaranteed for it, and none of the arms here uses the realpath guard. The mutant arms (tests 5 and 8) can then fail with ENOENT on the windows leg only, or the probe may read a different file than the one that was validated, and they may still pass vacuously if ENOENT lands in `$stderr` and `ran_ok` is skipped.",
+      "fix": "Convert with `cygpath -m` when available, or write the mutant file under a repo-relative scratch directory. Also have the probe print the resolved path it read so the test can assert it."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:35",
+      "breaking_input": "A CRLF checkout (core.autocrlf=true) turns every line of .gitignore into `.codex\\r`. The regex with `-x` matches only `.codex`, so the check reports 0 lines and the test passes.",
+      "why": "The CR bytes are not stripped before the match, so the rule that is ignored on Windows goes unseen. This is the same destroyed-signal pattern that the golden_transform declares for the sync golden, but here it fails open. The checkout of a CRLF file on the Windows leg can hide the ignore line.",
+      "fix": "Strip `\\r` first with `tr -d '\\r' < .gitignore | grep -cxE ...` in the real arm and in the mutant arm."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:50",
+      "breaking_input": "`if printf '%s\\n' \"$output\" | grep -E '^PROBLEM .*: (undated|no version|no source)$'` runs against the probe output, but bats `run --separate-stderr` leaves the lines in `$output` with `\\r` on the Windows leg if node writes CRLF through a pipe. A line `PROBLEM x: undated\\r` does not match `$` and the problem goes undetected.",
+      "why": "This anchored grep sits on the output of a native Windows process, and the CR is not stripped. The `ran_ok` line check `grep -qx \"RAN matrix\"` shares the exposure. This makes the check pass without detecting the fault. It is class (j) in its vacuous-pass form.",
+      "fix": "Pipe `$output` through `tr -d '\\r'` in `ran_ok`, `field` and every PROBLEM grep, or have the probe write LF-only through `process.stdout.write` on a binary stream."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:92",
+      "breaking_input": "`grep -v 'source-command-arc-pr ' \"$ARC_ROOT/$v\"` is intended to delete the single `source-command-arc-pr` row. If a row's name is changed or padding is altered, the pattern (with a trailing space) matches nothing, the copy is identical to the original, and the check expects `verdict incomplete` but gets `verdict complete`.",
+      "why": "The mutation is a text pattern that depends on column padding. When the deletion does not occur, the failure is reported as the test failing, but it is not asserted that the mutant differs from the original. A harmless reflow of the table would turn the mutant arm into a false alarm, or, if the row is renamed, the mutation would silently be a no-op.",
+      "fix": "Assert `! cmp -s` between the original and the mutant, or count the rows removed, before the probe is run on the mutant."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "engine/harnesses.yaml:35",
+      "breaking_input": "`golden_transform: \"\\\\r stripped ...\"` inside a double-quoted string. A YAML reader with escape handling yields `\\r` (backslash r), but `parseYamlSubset` may decode `\\\\` differently from a full YAML parser, or treat `\\r` as a carriage-return escape if the author writes it with a single backslash.",
+      "why": "Test 7 greps the output for the two literal characters backslash-r. Whether the value contains a backslash plus `r` or an actual CR depends on how the subset parser handles escapes, and nothing verifies that. If the parser keeps `\\\\` as two characters, the string has the wrong content. The same bytes are validated by one reader and used by another (f).",
+      "fix": "Make the probe assert `charCodeAt` of the characters and reject a real CR. Or avoid backslashes by writing the transform as the words `carriage-return stripped`."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "initiatives/distribute/evidence/phase-00/agents-skills-verdict.md:33",
+      "breaking_input": "The evidence file quotes single-quoted absolute Windows paths of the form 'E:\\\\Work_Hub\\\\...' inside a fenced block. Any later tool that embeds this file into a shell string, or scans it for secrets, will see apostrophes and drive-letter paths.",
+      "why": "The fixed-defects rule (h) forbids apostrophes in shell-embedded programs, and this file is data that the Phase 01 spec says is quoted as the boundary exhibit. The evidence also commits a local user path with the machine name `E:\\Work_Hub\\01_Automemory`. The repo is public, and arc-repo-is-public-owner-pii-stays-off-git applies to local filesystem layout.",
+      "fix": "Keep the exhibit but replace the machine-specific directory with a placeholder such as `<MAIN_CLONE>`. It still shows the absolute-path defect."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "initiatives/distribute/phases/phase-00-spec.md:57",
+      "breaking_input": "Step 1 runs `mv .codex .agents AGENTS.md ~/.arc-private/distribute/local-2026-07-11/` as one command. If the target directory already holds a `.codex` from an earlier partial run, mv into an existing non-empty directory of the same name fails or, on some shells, merges. If it fails halfway, `.gitignore` lines are removed in the same PR while some local files remain in the main clone.",
+      "why": "ADR-2014 states the order is load-bearing, because one `git add -A` can commit a machine-path hooks.json to a public repo once the ignore lines are gone. The move has no check that it fully completed, and the PR proceeds regardless. The verification, `status --porcelain --ignored`, was run only once, before the ignore lines were removed, and it is not repeated after the merge removes them.",
+      "fix": "Repeat the `git status --porcelain -- .codex .agents AGENTS.md` check after merging the .gitignore change, and have the bats test fail if a tracked path matches `hooks.json` containing a drive letter, for example by grepping the tree for `[A-Z]:\\\\\\\\` in `.codex/`."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".gitignore:72-75",
+      "breaking_input": "The removal of `.codex`, `.agents` and `AGENTS.md` from .gitignore takes effect in the main clone as soon as the PR merges and is pulled. A second session or a worktree that still holds a local `.codex/hooks.json` with absolute paths then sees untracked files, and `git add -A` or `git add .` commits them.",
+      "why": "The ordering protection in ADR-2014 covers only the main clone. The 17 sibling worktrees, and any other clone of the repository, may hold the same untracked files, and removing the ignore lines exposes those files in all of them. Only the main clone is checked.",
+      "fix": "Keep a narrow ignore for the machine-specific file, for instance `.codex/hooks.json`, until the Phase 03 renderer writes its own portable version. Or ask each worktree to run the `status --porcelain` check."
+    }
+  ]
+}

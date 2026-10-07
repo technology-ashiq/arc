@@ -79,8 +79,8 @@ OpenCode, leaves a receipt carrying `harness: opencode` on the canonical spine.
      what that golden destroys: `\r` stripped (so `core.autocrlf` checkouts hash alike), and `.claude/arc-registry.json`
      excluded; it also states that no compile-side claude-code golden exists until P02. Every other verified row's
      golden is `tests/fixtures/distribute/goldens/<id>/` with `golden_pending: P03`. `golden_transform:` is a plain string
-     containing the two literal characters backslash-r (`\r stripped; .claude/arc-registry.json excluded; ...`), and test 6
-     greps for those two characters.
+     containing the words `carriage-return` and `arc-registry.json` (no backslash escape, so no parser escape question:
+     attack c4e1d7d B8), and test 6 greps for both.
    - **Corrections:** where the live docs contradict PLAN's paths (`.opencode/command/`, `.opencode/agent/`,
      `.agents/skills/`), the row wins, and the correction is written into the PLAN Current state in the same commit.
 5. **Board rows + lane birth.** Run `git log origin/main --oneline -5 -- PORTFOLIO.md` first.
@@ -156,7 +156,7 @@ OpenCode, leaves a receipt carrying `harness: opencode` on the canonical spine.
   3. "the matrix parses": `parseYamlSubset` on `engine/harnesses.yaml` returns `ok: true` and ≥ 8 rows. It first asserts the file exists and is non-empty (RAN).
   4. "every verified row is dated and sourced": each `status: verified` row has a `verified:` that matches `^\d{4}-\d{2}-\d{2}$`, plus a non-empty `version:` and `source:`. There are exactly 4 such rows.
   5. "every cell is legal": each cell value is `true`, `false` or starts with `partial:`. The count of cells checked equals rows × 9.
-  6. "the claude-code golden is today's sync golden": the `claude-code` row's `golden:` equals `tests/fixtures/sync-golden/tree-manifest.txt`, that file has ≥ 400 lines, and `golden_transform:` names both `\r` and `arc-registry.json`.
+  6. "the claude-code golden is today's sync golden": the `claude-code` row's `golden:` equals `tests/fixtures/sync-golden/tree-manifest.txt`, that file has ≥ 400 lines, and `golden_transform:` names both `carriage-return` and `arc-registry.json`.
   7. "the verdict file is complete": `initiatives/distribute/evidence/phase-00/agents-skills-verdict.md` exists (RAN) and its table has exactly 8 `source-command-arc-*` rows plus 1 `seo-article-writer` row, each verdict `FAITHFUL` or `DIVERGED`; the count of `tests/fixtures/distribute/goldens/codex-seed/*/` dirs equals the count of FAITHFUL command rows (0 on 2026-10-07); a mutant arm with one row deleted fails with `verdict incomplete`.
 - **Expected failure first:** red-first is evidenced by **commit order plus mutant arms, not by a throwaway push** (push-once rule). The test file is its own commit, ahead of the rows: `git log --format=%h\ %s -- tests/distribute-birth.bats engine/harnesses.yaml` on PR A shows the test commit first, recorded in the evidence. Test 1 fails with
   `band 2000 row does not name distribute`, test 2 with `.gitignore still ignores .codex`, and tests 3–6 with

@@ -25,7 +25,7 @@ harnesses:
     version: "2.1.292"
     source: "identity target: the .claude/ source itself (ADR-2001) + claude --version"
     golden: tests/fixtures/sync-golden/tree-manifest.txt
-    golden_transform: "\\r stripped before hashing (core.autocrlf checkouts hash alike); .claude/arc-registry.json excluded; path-to-sha256 manifest of the synced tree, no compile-side claude-code golden until P02"
+    golden_transform: "carriage-return (CR) bytes stripped before hashing (core.autocrlf checkouts hash alike); .claude/arc-registry.json excluded; path-to-sha256 manifest of the synced tree, no compile-side claude-code golden until P02"
     cells:
       commands: "true"
       agents: "true"

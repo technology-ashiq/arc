@@ -61,15 +61,18 @@ const cases = {
     out("RAN matrix");
   },
   async verdict() {
+    // Every table row is split into cells rather than matched by a row-shape regex: a row the
+    // regex missed used to be skipped silently, so a mangled verdict counted as nothing at all.
     const lines = read(file).replace(/\r/g, "").split("\n");
     let commandRows = 0, seoRows = 0, faithful = 0, illegal = 0;
     for (const l of lines) {
-      const m = l.match(/^\|\s*([a-z0-9-]+)\s*\|\s*([A-Z]+)\s*\|/);
-      if (!m) continue;
-      const [, name, verdict] = m;
+      if (!l.startsWith("|")) continue;
+      const cells = l.split("|").slice(1, -1).map((c) => c.trim());
+      if (cells.length < 2 || /^-+$/.test(cells[0]) || cells[0] === "Local skill") continue;
+      const [name, verdict] = cells;
       if (name.startsWith("source-command-arc-")) commandRows += 1;
       else if (name === "seo-article-writer") seoRows += 1;
-      else continue;
+      else { illegal += 1; continue; }
       if (verdict === "FAITHFUL") { if (name !== "seo-article-writer") faithful += 1; }
       else if (verdict !== "DIVERGED") illegal += 1;
     }
@@ -82,9 +85,12 @@ const cases = {
   },
 };
 
-if (!cases[which]) {
+// Own keys only: `constructor` or `toString` must be an unknown case, not an inherited function.
+if (typeof which !== "string" || !Object.hasOwn(cases, which)) {
   process.stderr.write(`birth-probe: unknown case ${JSON.stringify(which)}\n`);
   process.exitCode = 2;
 } else {
-  cases[which]().catch((e) => { process.stderr.write(`birth-probe: ${e.message}\n`); process.exitCode = 1; });
+  Promise.resolve()
+    .then(() => cases[which]())
+    .catch((e) => { process.stderr.write(`birth-probe: ${e.message}\n`); process.exitCode = 1; });
 }
