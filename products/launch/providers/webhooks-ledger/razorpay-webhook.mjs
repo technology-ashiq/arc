@@ -196,7 +196,7 @@ const FILES = {
     '  const url = (base.endsWith("/") ? base.slice(0, -1) : base) + "/rest/v1/razorpay_webhook_events?on_conflict=event_id";',
     '  const res = await fetch(url, {',
     '    method: "POST",',
-    '    headers: { apikey: key, authorization: "Bearer " + key, "content-type": "application/json", prefer: "resolution=ignore-duplicates,return=representation" },',
+    '    headers: Object.fromEntries([["apikey", key], ["authorization", "Bearer " + key], ["content-type", "application/json"], ["prefer", "resolution=ignore-duplicates,return=representation"]]),',
     '    body: JSON.stringify(row),',
     '  });',
     '  if (!res.ok) return answer(500, { error: "store failed" });',
