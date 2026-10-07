@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:34",
+      "breaking_input": "A .gitignore whose last line is `.codex` with no trailing newline, or a .gitignore that is a symlink or has CRLF endings (autocrlf checkout on the Windows leg): `.codex\\r` is read by git as the pattern `.codex\\r`, so git does not ignore `.codex/hooks.json`.",
+      "why": "The check copies .gitignore into a temp repo and asks git. On a CRLF checkout git treats the CR as part of the pattern, so the real rule that would ignore the directory is not seen as ignoring it and the test passes, while a LF-clean clone (CI Linux leg) ignores it. The result differs by checkout settings, so the check reads a different file than the one every other clone uses. The debt ledger claims .gitattributes eol=lf covers it, but the test never asserts this, so a missing attribute makes the check pass or fail by leg.",
+      "fix": "Assert `git check-attr eol .gitignore` is lf in the test, or strip CR from the copy and fail if the original contained any.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:25",
+      "breaking_input": "A .gitignore containing a negation pair such as `.codex/` then `!.codex/hooks.json`, or a rule scoped by a nested .gitignore (`.codex/.gitignore` with `*`) that exists only once the renderer writes it.",
+      "why": "The probe set is four fixed paths in a temp repo with only the root .gitignore copied. A nested `.gitignore` inside a rendered directory, or `.git/info/exclude` and `core.excludesFile`, are not modelled. The temp repo's `git init` also inherits the user's global `core.excludesFile` (a host `.codex` line in the global ignore), so the real arm can fail or pass depending on the machine, not the repo.",
+      "fix": "Run the temp git with `-c core.excludesFile=` and `GIT_CONFIG_GLOBAL=/dev/null` (NUL on Windows), and probe a nested .gitignore case in the renderer's own tests when it exists.",
+      "twin_of": "(l) ignore-check by grep"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:24",
+      "breaking_input": "`git -C \"$repo\" init -q` run where `$BATS_TEST_TMPDIR` is a POSIX MSYS path and git is Windows git, or where the machine has `init.templateDir` set with a pre-filled `info/exclude` containing `AGENTS.md`.",
+      "why": "A user-level init.templateDir or global excludesFile is copied or read into the temp repo, so `check-ignore` reports AGENTS.md as ignored on the owner's machine and the real arm fails with a false red, or a template excluding nothing hides a planted rule. The ambient git state decides the verdict, the same shard-order ambient class the lane already recorded.",
+      "fix": "Use `git init --template=` and set `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` to an empty file for the helper.",
+      "twin_of": "(k) derived, not hand-kept"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:27",
+      "breaking_input": "`ignored_paths` is run through bats `run`, and a failure inside the `for` loop's `git check-ignore` returns 128 (not a repository, or a corrupt temp repo): the `if` treats any non-zero as `not ignored`.",
+      "why": "`git check-ignore -q` exits 1 for not-ignored but 128 for a fatal error. The `if` collapses both, so a broken temp repo reports every path as not ignored and the real arm passes vacuously as long as the RAN marker prints. The mutant arm would catch this only for the planted rule, but the real arm has no such control when git itself errors.",
+      "fix": "Capture the exit code and treat anything other than 0 or 1 as COULD NOT SCAN with return 2.",
+      "twin_of": "(e) COULD NOT SCAN"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:60",
+      "breaking_input": "engine/harnesses.yaml with `verified:` keys quoted differently, e.g. a `verified:` line inside the `golden_transform` multi-line text, or a row indented with tabs; the mutant `grep -vE '^[[:space:]]+verified: '` also deletes any `    verified: ` line inside a nested value.",
+      "why": "The mutant removes every line matching, not one row's date, and the assertion only requires that SOME row reports undated. It never checks that all 8 rows reported it or that exactly the verified-line count was removed, so a regex that deletes only 1 of 8 lines passes. The mutant therefore does not prove the date check sees each row, which is the point of a mutant control.",
+      "fix": "Count removed lines (diff line count equals 8) and assert the probe prints exactly 8 `undated` PROBLEM lines.",
+      "twin_of": "(n) mutant that may delete nothing"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/distribute/birth-probe.mjs:84",
+      "breaking_input": "`node birth-probe.mjs matrix` where stdout is a closed pipe (the consumer `grep -qx` exits at first match in `ran_ok` while the probe still writes), or a very large verdict file.",
+      "why": "`process.stdout.write` on a pipe closed early raises EPIPE asynchronously; the probe sets exitCode only in the catch of the case promise, so an EPIPE after the case resolved is an unhandled error event. On Windows the child can also be killed mid-write, giving a truncated output with no RAN marker but status 0.",
+      "fix": "Add `process.stdout.on('error', ...)` that sets a non-zero exitCode, and rely on the missing RAN marker as the failure signal.",
+      "twin_of": "(b) exit after async I/O"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/distribute/birth-probe.mjs:40",
+      "breaking_input": "A matrix row whose `golden` is `../../etc/x`, an absolute `C:\\\\x` path, or contains a backslash, in engine/harnesses.yaml.",
+      "why": "The probe validates id, status, dates and cells, but prints `golden` without any confinement check. The phase 03 installer and compiler will read this field from data, so the birth gate lets a traversal or drive-letter path in, which is exactly what fixed-defects class (d) says one function must refuse. Only the claude-code row's value is compared, and by exact string.",
+      "fix": "Reject any golden that is absolute, has a `..` segment, a backslash or a colon, or does not start with `tests/fixtures/`; add a mutant arm.",
+      "twin_of": "(d) path confinement"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:92",
+      "breaking_input": "`grep -vE '^[|][[:space:]]*source-command-arc-pr[[:space:]]*[|]'` against a verdict file with CRLF endings: the row ends `|\\r`, and the leading anchor still matches, but the table uses `| source-command-arc-pr-x |` rows too.",
+      "why": "The pattern's `[[:space:]]*[|]` after `pr` requires only whitespace before the next pipe, so a sibling row named `source-command-arc-pr` plus a suffix does not match and is safe, but a row where the name cell is backticked (`` `source-command-arc-pr` ``) is not deleted. The cmp -s guard then fails the test as no-op, so a harmless reformat of the evidence table breaks the suite with a misleading message.",
+      "fix": "Parse the name via the probe and delete by cell value, or accept an optional backtick in the pattern.",
+      "twin_of": "(n) mutant that may delete nothing"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "initiatives/distribute/evidence/phase-00/agents-skills-verdict.md:36",
+      "breaking_input": "The committed evidence quotes the owner's absolute path `E:\\\\Work_Hub\\\\01_Automemory\\\\arc\\\\.codex\\\\hooks\\\\...` on a public repository.",
+      "why": "The memory rule says owner PII and local layout stay off git for this public repo. The drive and directory names reveal the machine layout and a user's work folder. A scanner or tool that later reads this file into a shell string also meets single quotes and backslashes (class h).",
+      "fix": "Replace the machine directory with a `<MAIN_CLONE>` placeholder; keep the shape of the defect.",
+      "twin_of": "(h) shell-string programs"
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:42",
+      "breaking_input": "Windows leg where `cd \"$ARC_ROOT\"` receives a path with a space and node is native: `probe matrix engine/harnesses.yaml` is relative, but `probe verdict \"$v\"` and the mutant paths mix a relative path and `native()` temp paths in the same helper.",
+      "why": "The helper does `cd \"$ARC_ROOT\"` in a subshell, so relative arguments resolve against the repo root while the native() temp arguments are absolute. The verdict real arm reads `$v` relative but the mutant arm reads `$ARC_ROOT/$v` via grep, so the file the probe validated (relative) and the file the mutant derives from (absolute) are resolved separately. If ARC_ROOT is a symlinked or junctioned path the two can differ, and the mutant arm compares against a different copy than the real arm checked.",
+      "fix": "Resolve one canonical path to the verdict file once and pass that to both the real and mutant arms.",
+      "twin_of": "(f) validate one read, compare another"
+    }
+  ]
+}
