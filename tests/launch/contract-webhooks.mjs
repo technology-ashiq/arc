@@ -32,7 +32,7 @@ const ENV = { RAZORPAY_WEBHOOK_SECRET: HOOK_KEY, SUPABASE_ACCESS_TOKEN: "sbp_fix
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const supabase = makeSupabase({ projects: [{ id: REF, name: "arc-sandbox" }] });
 const opts = {
-  "wrong-secret": { hookKey: "whsec_someone_else_9876543210" },
+  "other-hook-key": { hookKey: "whsec_someone_else_9876543210" },
   "served-accepts-any": { serve: (src) => src.replace("if (given.length !== want.length || !timingSafeEqual(given, want)) return answer(401, { error: \"bad signature\" });", "") },
   "served-reserialises": { serve: (src) => src.replace("update(raw, \"utf8\")", "update(JSON.stringify(JSON.parse(raw)), \"utf8\")") },
   "policy": { policies: 1 },
@@ -127,7 +127,7 @@ switch (scenario) {
     out.rows = rows();
     break;
   }
-  case "wrong-secret":
+  case "other-hook-key":
   case "served-accepts-any":
   case "served-reserialises":
   case "policy": {

@@ -871,7 +871,7 @@ arm() {
   arm webhooks served-reserialises
   [ "$(j 'o.mutated + " " + o.verify.ok + " " + o.queued + " " + o.rows')" = "true false 0 0" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.reason')" == "the route refused launch"*"signature over the raw body (401)"* ]] || { echo "$DONE"; false; }
-  arm webhooks wrong-secret
+  arm webhooks other-hook-key
   [ "$(j 'o.verify.ok + " " + o.queued + " " + o.rows')" = "false 0 0" ] || { echo "$DONE"; false; }
   arm webhooks policy
   [ "$(j 'o.verify.ok + " " + o.queued')" = "false 0" ] || { echo "$DONE"; false; }
