@@ -1,7 +1,7 @@
 # PROGRESS.md — arc-legal "the policy pack"
 
-status: LIVE
-cycle: arc-legal (Cycle 14, opened 2026-08-12)
+status: IDLE
+cycle: arc-legal (Cycle 14, sealed 2026-10-07)
 phase: 03
 appetite: 5d
 burn: 5d
@@ -123,10 +123,10 @@ recomputed.
 
 ## Now
 
-**Position (2026-10-07):** **all four phases closed.** Phase 03 published LexOS's seven pages on
+**Position (2026-10-07):** **Cycle 14 SEALED — all four phases closed, retro done, lane IDLE.** Phase 03 published LexOS's seven pages on
 real facts and template set v3 (`01M4AHJZPVC46NN5PDYRAZK2WW` → `01M4AKZ32VHVY264SBKMHWZZYA`).
-They are committed to LexOS `feat/legal-pages` `645efcf`. **Next: `/arc-retro`** for Cycle 14,
-which asks the scope-creep question explicitly. Then the reseal sets the lane IDLE. The owner
+They are committed to LexOS `feat/legal-pages` `645efcf`. Retro: `docs/retro-log.md` (two rows),
+HISTORY C14, trial-ledger (three clean runs), one debt row routed to `/arc-change`. The owner
 still has to sign off on moving past Phase 03 (`phase-done` approval on the spine).
 
 _Below: the Phase 03 build notes, kept for the retro._

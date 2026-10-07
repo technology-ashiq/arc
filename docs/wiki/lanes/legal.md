@@ -165,8 +165,8 @@ path, needs one answer. Is the operator registered for GST? Both answers are alr
 
 | | |
 |---|---|
-| Status | LIVE |
-| Cycle | arc-legal (Cycle 14, opened 2026-08-12) |
+| Status | IDLE |
+| Cycle | arc-legal (Cycle 14, sealed 2026-10-07) |
 | Product | [legal](../products/legal.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
