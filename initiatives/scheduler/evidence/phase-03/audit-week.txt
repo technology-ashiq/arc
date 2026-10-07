@@ -1,0 +1,20 @@
+jobs audit 2026-08-17..2026-08-23  (7 days, spine observed from 2026-07-23)
+
+  brief-materialize      weekdays@06:00
+    expected 5  completed 4  failed 0  drift p50 19392000ms
+    gaps: 1 unexplained, 0 explained, 0 failed
+      MISSED 2026-08-20T06:00:00+05:30
+  day-close-roll         daily@00:15
+    expected 7  completed 6  failed 0  drift p50 3000ms
+    gaps: 1 unexplained, 0 explained, 0 failed
+      MISSED 2026-08-20T00:15:00+05:30
+
+metric pack
+  attempted 10  completed 10  failed 0  missed 2
+  drift p50                 17482000ms
+  manual starts (target 0)  0
+  incidents                 policy-declined=0 overlap=0 receipt-write-failure=0 timeout=0 crash=0
+  spend (expected 0)        INR 0
+  needs-you days            0
+
+NOT CLEAN: 2 unexplained gap(s)

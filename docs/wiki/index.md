@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **149** | **34** |
 
-Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 363 of 428 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 364 of 429 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -65,7 +65,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 363 of 
 | [org](lanes/org.md) | IDLE | arc-org (Cycle 20, opened 2026-10-05) |
 | [policy](lanes/policy.md) | IDLE | arc-policy (Cycle 9, closed 2026-08-10) |
 | [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
-| [scheduler](lanes/scheduler.md) | LIVE | arc-scheduler (Cycle 12, opened 2026-08-12) |
+| [scheduler](lanes/scheduler.md) | IDLE | arc-scheduler (Cycle 12, sealed 2026-10-07) |
 
 ## Processes
 
