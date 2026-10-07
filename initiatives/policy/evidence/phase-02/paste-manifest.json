@@ -1,0 +1,26 @@
+{
+  "hq.policy.yaml": {
+    "live_before": "3fa8e5c3e0985985c30b178c2c021c1f03b0a5478cf1ba13b2858a4503c5a13b",
+    "paste": "7692257bc3659ada69dc0d1c3e45f83eb033a8154f561d022adfa12a0ea1b48f"
+  },
+  ".claude/scripts/hq/lib/policy/lint.mjs": {
+    "live_before": "97931f85a729100ba26ba18dba2fe443ca03be1bc99fb3b64949abda3d9e24db",
+    "paste": "8617d3d18aca54a92d057261048c99ccef10325a4880f43d0302b42658ef1982"
+  },
+  ".claude/scripts/hq/policy-lint.mjs": {
+    "live_before": "2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a",
+    "paste": "78b2aa4c14ba6e10b9ef64d27fefa06c70ad31ef639de0a39de17fc3862d8dfd"
+  },
+  ".claude/scripts/hq/policy-hook.mjs": {
+    "live_before": "d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76",
+    "paste": "85895406e4706c820c8c9f0f7fa8125e3a23673f9de890441cf89ef7dad75e63"
+  },
+  ".claude/scripts/hq/lib/policy-evidence/fold.mjs": {
+    "live_before": "06019d4a600ce4bf33bf01f0d75db9966d86b1edec21867996417de510e34508",
+    "paste": "18f2b72674df82d7866275563484ddf3a0b38caed1df747c096abd959770bd79"
+  },
+  ".claude/settings.json": {
+    "live_before": "37bf4e66bbf9726958dc7caf2a59807fa825aae6352fbec62bbef3dfa2ef5a80",
+    "paste": "31cbd7b15f945634eb6fc032cbdf517fc74ec6aa79b31904a85c671727801785"
+  }
+}

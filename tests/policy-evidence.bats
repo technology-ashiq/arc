@@ -416,8 +416,9 @@ _root() { # $1 dir: a minimal governing root -- scripts, the real policy, an eve
 # (session:interactive shell put back to L1). Two plain -e expressions: BSD sed has no alternation.
 _guard_root() { # $1 dir, $2 clean|one
   local d="$1"; _root "$d"
-  sed -e "s/^    shell: { level: L1 }$/    shell: { level: L0 }/" -e "s/^    network: { level: L1 }$/    network: { level: L0 }/" "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
-  ! grep -qE "^    (shell|network): \{ level: L1 \}$" "$d/hq.policy.yaml" || { echo "fixture still holds an L1 shell/network grant"; return 1; }
+  # -E is portable across BSD and GNU sed; the optional N matches the policy before AND after the Phase 02 paste.
+  sed -E -e "s/^    shell: \{ level: L1(, evidence_days: [0-9]+)? \}$/    shell: { level: L0 }/" -e "s/^    network: \{ level: L1(, evidence_days: [0-9]+)? \}$/    network: { level: L0 }/" "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
+  ! grep -qE "^    (shell|network): \{ level: L1[,} ]" "$d/hq.policy.yaml" || { echo "fixture still holds an L1 shell/network grant"; return 1; }
   if [ "$2" = "one" ]; then
     awk '
       /^  "session:interactive":/ { inblock = 1 }
@@ -441,7 +442,7 @@ _guard_root() { # $1 dir, $2 clean|one
 @test "guard: one BELOW-BAR cell is NOT clean, one approval, run.completed partial" {
   local d="$BATS_TEST_TMPDIR/g-one"; _guard_root "$d" one || return 1
   run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
-  [ "$status" -eq 3 ] && [[ "$output" == *"NOT CLEAN"* && "$output" == *"no-writer  session:interactive/shell"* ]] || { echo "$status $output"; false; }
+  [ "$status" -eq 3 ] && [[ "$output" == *"NOT CLEAN"* && "$output" == *"  session:interactive/shell"* ]] || { echo "$status $output"; false; }
   run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
   [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 1\ LAST\ partial\  ]] || { echo "receipts: $output"; false; }
 }

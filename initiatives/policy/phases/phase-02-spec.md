@@ -13,7 +13,13 @@
 - [ ] Attackers on the paste's code paths; CI green per job; tracker updated
 
 ## Verification plan
-- Coarse, refined when the phase starts (via `/arc-change`): CI `tests/policy-lint.bats` + `policy-hook.bats` + `policy-evidence.bats`; red first = `evidence_days` rejected as an unknown key today.
+*Refined 2026-10-07 at phase start (the paste is proven BEFORE it lands, so CI is the gate for both halves):*
+- **Test command:** CI `tests/policy-evidence-paste.bats` (7 tests: each overlays `evidence/phase-02/paste/` on a sandbox copy of the tree), plus the untouched `tests/policy-lint.bats` and `tests/policy-hook.bats` on the live files.
+- **Expected failure first:** on the live tree today, the hook's propose leaves `session:interactive/shell` at `unknown` with no receipt, and `policy-lint --evidence` is an unknown path (the flag does not exist); the paste suite proves both flip.
+- **Live demo scenario:** after the owner applies the paste, from Git Bash in the main clone: `node initiatives/policy/evidence/phase-02/verify-paste.mjs` prints six `APPLIED`; with `ARC_POLICY_HOOK=1`, one Bash call in a session is blocked as before and `policy-evidence.mjs report` shows `session:interactive/shell` turn from `unknown` to `fresh`.
+- **Real-system check:** that same `report` on the canonical spine, before and after: the refusal ULID is on the spine and the cell is fresh.
+- **Expected evidence:** CI run id per job; `evidence/phase-02/live-demo.md` (verify-paste output, the before/after report lines); `evidence/phase-02/paste-manifest.json`.
+- **Note on red-first:** the earlier coarse line said "`evidence_days` rejected as an unknown key today". Measured at phase start, it is NOT rejected: `lintPolicy` never closes the keys inside a grant. So the lint change adds a value check (1..3650), not a key.
 
 ## Rabbit holes in this phase
 - Editing any deny-listed file from the session: never. If the paste is not applied, the phase is BLOCKED, not worked around.
