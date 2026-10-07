@@ -60,7 +60,32 @@ an unclosable bypass class → STOP.
 
 ## Now
 
-**Current position: all five phases (00–04) are CLOSED. The cycle's build is done. The owner
+### 2026-10-07 — `/arc-change`: POL-L, evidenced levels, filed for cycle 2 (lane stays IDLE)
+
+**Classified as new capability/scope, routed to the design source and not to a live phase.**
+The cycle is closed and its 7-day appetite is spent (7.0 of 7, 100%), so nothing is added to
+this tracker's phase table. `docs/strategy/plans/PLAN-policy.md` gains v1.1: REQ-09,
+decision POL-L, Phase 5, the per-capability refusal-exercise table, the BELOW-BAR class,
+invariants (a)(b)(c) and a cycle-2 kickoff prompt. **It builds only at
+`/arc-kickoff --lane policy`.** Cycle 2 gets its own appetite there (proposal ~3d).
+
+**Step 0 found a fired assumption.** Row 1 of `PLAN.md`'s ledger, *"starting before the
+pull-trigger fired was right"*, had its full condition met: Phase 4 closed 2026-08-10, the
+7 dogfood days passed long ago, and the canonical spine (1,695 events) still holds **0**
+policy-promotion requests, **0** `incident.raised` and **0** of the four policy kinds. Marked
+`FIRED 2026-10-07`. What it was load-bearing for: the decision to build before the trigger,
+the dogfood window as the engine's validation, and the done-log's "live end-to-end" wording
+for Phase 02 (true through fixtures only, as the 2026-08-10 retro below already says). POL-L
+is the **instrument** that makes exercise measurable. It is not the STOP-or-fund decision,
+which stays with the owner.
+
+**The amendment's headline finding:** all 17 in-scope cells (shell × 11, network × 6, every
+one at its L1 birth cap) are BELOW-BAR today, and 5 of the 5 capabilities have no
+attributable refusal receipt at L1. A propose is *prepared and not recorded*, which
+contradicts POL-A's own L1 text. Adapter owners named: policy (hook, `arc-run` gate, spend),
+growth (publish), launch (deploy).
+
+**Current position (Cycle 9): all five phases (00–04) are CLOSED. The cycle's build is done. The owner
 applied the three `.claude/settings.json` edits on 2026-08-09; Phase 04 closed 2026-08-10.**
 
 **Why 04 merged before it closed, which reversed the plan written on 2026-08-07.** The plan said
