@@ -15,7 +15,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { foldEvidence, istDay, isCalendarDay, GUARD_PROCESS } from "./lib/policy-evidence/fold.mjs";
-import { loadEvidenceInputs, readDayFile } from "./lib/policy-evidence/load.mjs";
+import { loadEvidenceInputs, receiptLanded } from "./lib/policy-evidence/load.mjs";
 import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 
 const USAGE = "usage: policy-evidence.mjs report [--as-of YYYY-MM-DD] [--json] | check [--as-of YYYY-MM-DD] | guard [--as-of YYYY-MM-DD]";
@@ -165,13 +165,9 @@ function emit(inputs, kind, payload, outcome) {
       // Both selectors pinned to the tree that was read (attack p01 r2 L9/B1): a receipt sealed under another root's
       // rules or into another spine is the writer/reader twin this lane keeps closing.
       env: { ...process.env, ARC_MODEL: "", ARC_ROOT: inputs.root, ARC_SPINE_ROOT: dirname(inputs.eventsDir) } }).trim().split("\n").pop().trim();
-    const day = istDay(formatIst(nowMs()));
-    const text = readDayFile(join(inputs.eventsDir, `${day}.jsonl`)) || "";
-    // The read-back finds THE event -- this id, this kind, this guard -- not a string that happens to contain the id.
-    const landed = text.split("\n").some((l) => {
-      if (!l.includes(id)) return false;
-      try { const e = JSON.parse(l); return e.id === id && e.kind === kind && e.process === GUARD_PROCESS_ID; } catch { return false; }
-    });
+    // The read-back finds THE event -- this id, this kind, this guard -- through the evidence reader, which is the one
+    // module here allowed to open a day file (spine-reader-lint, ADR-0030).
+    const landed = receiptLanded({ eventsDir: inputs.eventsDir, day: istDay(formatIst(nowMs())), id, kind, process: GUARD_PROCESS_ID });
     if (!id || !landed) { fail(1, `${kind} ${id || "(no id)"} is not in ${inputs.eventsDir} -- the receipt did not land where it was read from`); return null; }
     return id;
   } catch (e) {

@@ -93,6 +93,17 @@ function sealedEvent(line) {
   return typeof e.sha === "string" && e.sha === sealed ? e : null;
 }
 
+/** Did THIS receipt -- this id, kind and process -- land in that day's file? Parsed, never a substring match. */
+export function receiptLanded({ eventsDir, day, id, kind, process: proc }) {
+  if (!id) return false;
+  const text = readDayFile(join(eventsDir, `${day}.jsonl`));
+  if (text === null) return false;
+  return text.split("\n").some((l) => {
+    if (!l.includes(id)) return false;
+    try { const e = JSON.parse(l); return e.id === id && e.kind === kind && e.process === proc; } catch { return false; }
+  });
+}
+
 /**
  * arc-run's day bound (ADR-0509): is a CORROBORATED deny refusal for this pair already sealed in today's file? Only a
  * sealed, valid refusal whose cited gate incident precedes it, comes from the same process@version and names this
