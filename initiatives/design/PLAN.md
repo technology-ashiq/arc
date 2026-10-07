@@ -75,8 +75,8 @@ and the **composer's iron law 1 forbids reading the pack and its own render**
 | REQ-06 | The composer-tier question is settled by evidence, not argument | Paired same-commit run receipts + a formula decision ADR; the sealed prediction of [ADR-1416](../../docs/adr/1416-the-exp-a1-prediction-is-session-authored-on-the-owners-delegation.md) settled hit or miss, in writing | 04 | validated |
 | REQ-07 | Reference packs come from live sources, and the run says which ones answered | A pack built from ≥2 live sources, each with a per-run `availability` line; a source whose `status` is `off` produces no fetch; a robots.txt `Disallow` produces a recorded refusal, never a silent skip | 05 | validated |
 | REQ-08 | A rival's contract is known before any code depends on it | A spike receipt carrying provider version + request + output schema exists **before** any adapter file is committed; terms clearance for that provider recorded as `decision.recorded` | 06 | validated |
-| REQ-09 | Rival drafts compete on equal terms in one blind jury | One blind jury over arc×3 + ≥1 rival + 1 reference item, all rendered by arc's own renderer; rival-beats-all-arc rate recorded on the spine whichever way it lands | 07 | active |
-| REQ-10 | Nothing leaves the repo carrying someone else's authorship | The packager refuses a planted rival render and a planted gallery image; a render with absent provenance fails closed; a manually dropped file appears attributed in the next pack | 08 | active |
+| REQ-09 | Rival drafts compete on equal terms in one blind jury | One blind jury over arc×3 + ≥1 rival + 1 reference item, all rendered by arc's own renderer; rival-beats-all-arc rate recorded on the spine whichever way it lands | 07 | validated |
+| REQ-10 | Nothing leaves the repo carrying someone else's authorship | The packager refuses a planted rival render and a planted gallery image; a render with absent provenance fails closed; a manually dropped file appears attributed in the next pack | 08 | validated |
 
 ## Appetite
 

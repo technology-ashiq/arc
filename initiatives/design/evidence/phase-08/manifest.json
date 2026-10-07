@@ -1,0 +1,20 @@
+{
+  "phase": "08",
+  "commit": "3ace479c7c660d7351f07335e931b5356d8ecfa5",
+  "short": "3ace479c",
+  "generated": "2026-10-07T14:43:32Z",
+  "files": [
+    {
+      "name": "s1-s3-live-packager.md",
+      "sha256": "2ca8f116fd713dde8b45d564878724fb7e9a3b3d89d3ac1987c0b7a3dff83922"
+    },
+    {
+      "name": "s4-retro-and-triggers.md",
+      "sha256": "a3eadbe9dec0644628f160d9a13105fedad3f71035119e33c286a29d36bf12cc"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "575f6fee2e93d88dc59863346db49cbba3499723b39167f14869a1a49736e143"
+    }
+  ]
+}
