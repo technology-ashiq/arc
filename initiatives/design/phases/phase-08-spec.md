@@ -8,33 +8,33 @@ capped, the manual-drop door works — and all three sealed predictions are sett
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Packager lint **refuses a planted rival render** and **refuses a planted gallery image** in
+- [x] Packager lint **refuses a planted rival render** and **refuses a planted gallery image** in
       any package leaving the repo ([ADR-1410](../../../docs/adr/1410-dsv-k-outbound-blind-packages-carry-arc-authored-renders-only.md))
-- [ ] A render whose provenance is **absent fails closed** — it is never defaulted to
+- [x] A render whose provenance is **absent fails closed** — it is never defaulted to
       arc-authored
-- [ ] Adaptable-principle discipline **verified across the cycle's packs by reading them** — a
+- [x] Adaptable-principle discipline **verified across the cycle's packs by reading them** — a
       `sources.md` row whose principle describes appearance rather than a transferable idea
       fails. No second automated lint is built: Phase 02's human read already gates this, and a
       duplicate checker maps to no REQ-10 acceptance line
-- [ ] Per-source spend caps ride `hq.policy.yaml`, ₹0 default — edited under the shared-file
+- [x] Per-source spend caps ride `hq.policy.yaml`, ₹0 default — edited under the shared-file
       protocol: `git log origin/main -5 -- hq.policy.yaml` run **before** the edit, stronger
       version taken at merge
-- [ ] Manual-drop door proved end to end: a file dropped by the owner appears **attributed** in
+- [x] Manual-drop door proved end to end: a file dropped by the owner appears **attributed** in
       the next pack
-- [ ] Two-surface adversarial pass by fresh agents on the packager lint — this is the gate whose
+- [x] Two-surface adversarial pass by fresh agents on the packager lint — this is the gate whose
       failure is irreversible, so it gets the strongest attack of the cycle
-- [ ] **Retro settles all three sealed predictions** of
+- [x] **Retro settles all three sealed predictions** of
       [ADR-1411](../../../docs/adr/1411-dsv-l-calibration-is-controlled-or-it-is-theatre.md),
       hit or miss, in plain words: the ≥60/100 post-Phase-03 score, the ≤50% rival-beats-all-arc
       rate, and [ADR-1416](../../../docs/adr/1416-the-exp-a1-prediction-is-session-authored-on-the-owners-delegation.md)'s
       EXP-A1 call — the last of which calibrates the session, not the owner, and is scored as such
-- [ ] Retro metric pack computed from spine receipts only: owner blind score trend ·
+- [x] Retro metric pack computed from spine receipts only: owner blind score trend ·
       rival-beats-all-arc rate · self-review catch rate · per-source availability lines ·
       captures and wall-clock per explore · EXP-A1 prediction vs outcome
-- [ ] Every assumption-ledger trigger is **run**, not eyeballed; a dogfood-gated row is recorded
+- [x] Every assumption-ledger trigger is **run**, not eyeballed; a dogfood-gated row is recorded
       NOT EVALUABLE rather than VALIDATED
-- [ ] tests added & green **on CI, read per JOB at the branch head SHA**
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log) and `docs/HISTORY.md` updated as part of
+- [x] tests added & green **on CI, read per JOB at the branch head SHA**
+- [x] tracker updated (PROGRESS.md row ✅ + done-log) and `docs/HISTORY.md` updated as part of
       the close, not as a follow-up
 
 ## Verification plan
