@@ -55,3 +55,23 @@ REJECTED: L15 zero headings checked passes vacuously — already-covered
 
 | 7 | attack 4f5dfc7 r1 boundary B4 (part) | `gitleaks:allow` lets a change's author waive the merge-time secret gate on any line | accepted, made visible: the scan prints how many added lines carry the marker; a PR that edits its own gate is visible in the same diff | a merged PR is found carrying a real credential behind the marker |
 | 8 | attack 4f5dfc7 r1 logic L14 (low) | `rule-propose --home AGENTS.md` skips the existence check `.claude/rules/*.md` homes get | accepted: AGENTS.md is tracked on main from this PR on, the same standing CLAUDE.md has | AGENTS.md is ever removed from main |
+
+Attack 7c55982 round 2 (P01; the cap). Fixed: L2, L6, B2, B11 (selftest copies dereference symlinks). Rejected:
+
+```
+REJECTED: L1 a marker sharing a line with a comment is consumed — non-actionable
+REJECTED: L3 / B12 a conditional or heredoc exit in a hook — non-actionable
+REJECTED: L4 a non-executable fragment is a false gap — unsupported
+REJECTED: B3 in-tree .gitattributes still alters the diff — already-covered
+REJECTED: B4 gitleaks:allow waives the gate — duplicate
+REJECTED: B5 a final line with no newline is uncounted — unsupported
+REJECTED: B6 a depth-1 fetched parent lacks its tree — unsupported
+REJECTED: branch-guard detached HEAD and short ref forms — unsupported
+REJECTED: L13 a stand-in binary can print v8 — non-actionable
+REJECTED: L14 / L15 heading and fragment counts not exact — already-covered
+```
+(L1/L3/B12: each errs toward a false finding, the safe direction for a gate; L4: `_dispatch.sh` runs `bash "$f"`, so the exec bit is irrelevant; B3: `--text --no-textconv` was tested against a committed `*.dat binary` attribute and the key was caught; B4: debt row 7; B5: awk emits a newline per added line; B6: a depth-1 fetch of a commit brings its tree, and a failed fetch exits 2; branch-guard: pre-push always receives the full remote ref, and the server is the truth; L13: a runner that controls PATH controls CI anyway; L14/L15: counts are asserted against an independent derivation.)
+
+| 9 | attack 7c55982 r2 L5 | a `skip` reached through a loaded helper escapes the lexical skip check | accepted: catching it needs executing the test; the merge-time test body itself is checked | a merge-time row's test is found skipping on a CI log |
+| 10 | attack 7c55982 r2 B7 | `.githooks/*` call bare `bash`; a PowerShell-launched git could resolve WSL bash | watch (A-04): git for Windows runs hooks inside its own MSYS environment; the owner's main clone is checked when `core.hooksPath` is set | a commit from PowerShell shows the hook running under WSL or silent |
+| 11 | attack 7c55982 r2 B10 | `arc-doctor` trusts gh stdout on a non-zero exit when it contains "Branch not protected" | accepted: the text must still parse as GitHub's exact 404 object | a gh wrapper is found printing that body on another failure |

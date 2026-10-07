@@ -1,0 +1,101 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:73",
+      "breaking_input": "A PR adds a file whose path contains a newline-free but diff-looking name, or an added line inside a hunk whose content begins with `diff --git ` (a pure addition `+diff --git a b` is fine, but a context-free hunk line is `+`-prefixed so it is safe). The real break: a file renamed or added whose hunk header `@@` is missing because `--diff-filter=ACMR` includes mode-only changes; instead use a file with a path containing `\\n@@ ` is impossible. The workable input: an added line in a hunk body that itself starts with `@@` is printed as `+@@...`, safe; but a removed line `-...` followed by added `+` is safe. Net: awk sets h=1 on `diff --git` and clears only on `@@`, so a copy/rename with 100% similarity (no hunks) followed by the next file's header works, but a NEW EMPTY-hunk-less file with only `new file mode` and `Binary` is handled. The concrete hole is a file whose first hunk is absent because `-U0` on a pure mode change emits no `@@`, leaving h=1 so the NEXT diff's `+++` header is dropped correctly, no leak.",
+      "why": "Low confidence the awk state machine leaks; header-state awk is position based and looks correct. Listed only because h stays 1 across hunk-less entries.",
+      "fix": "Add a bats mutant with a mode-only change followed by an added key line to prove no line is swallowed."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:22-27",
+      "breaking_input": "`secret-diff-scan.sh --base --staged` or `--base -x`: the --base value check rejects a leading dash, but `--base HEAD~1 --staged` is rejected as two modes; however `--base origin/main..HEAD` is accepted and passed into `git rev-parse --verify \"$base^{commit}\"`, then `range=(\"$base\" HEAD)` becomes `git diff origin/main..HEAD HEAD`, which git treats as a different, wrong comparison.",
+      "why": "A ref containing `..` or `...` passes the unknown-ref check in some forms (`A..B^{commit}` fails, but `A...B` plus peel suffix tricks vary) and a range string handed to `git diff` with a second revision changes meaning, scanning the wrong lines and reporting clean.",
+      "fix": "Reject any base containing `..`, whitespace or starting with `-`, resolve it to a full SHA with `git rev-parse --verify` and use the SHA in the range."
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:70",
+      "breaking_input": "Run the script on Windows Git Bash with `-c core.attributesFile=/dev/null`: `/dev/null` is an MSYS path that native git for Windows may not resolve, and the repo-level `.gitattributes` inside the worktree is still honoured because only the global attributes file is overridden.",
+      "why": "The B2 fix (PR declares its own file `-diff` or `binary` via a committed `.gitattributes`) is only partly closed: `--text` handles it for diff output, but `core.attributesFile` does not disable in-tree `.gitattributes` or `.git/info/attributes`; a `diff=somedriver` plus `--no-textconv --no-ext-diff` is covered, yet the claim that attributes are neutralised is false. If `--text` is ever dropped the hole reopens, and the `/dev/null` form is a POSIX path into a native binary (twin of g).",
+      "fix": "Rely on `--text --no-textconv --no-ext-diff` only and delete the misleading attributesFile override, or point it at an empty temp file via a native path; add a bats test with a committed `* -diff` .gitattributes and a planted key."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:80-82",
+      "breaking_input": "Added line `password = 'x' # gitleaks:allow` appears in a file that also contains a real key on a different line; or a PR adds one line that contains the text gitleaks:allow inside a longer string spanning the key's own line.",
+      "why": "gitleaks stdin mode honours the allow marker per line, and the script only counts markers, never fails. Any PR author can waive the merge-time gate and the result is still exit 0 with a note nobody reads in CI. The ledger accepts this, but the note is appended to the clean line only; on a clean pass the marker count is visible but non-blocking, so the required check goes green.",
+      "fix": "At merge-time (`--merge-parent`) fail on any added `gitleaks:allow` line outside an allowlisted fixtures path, or require the marker only in files under tests/."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:76",
+      "breaking_input": "An added file whose content has a NUL byte or invalid UTF-8, with `--text` forced; the extracted `added` file is passed to `gitleaks stdin`. A line longer than gitleaks' internal buffer, or a file of 200 MB, makes gitleaks exit with a code other than 0 or 1.",
+      "why": "That path is correctly mapped to COULD NOT SCAN, but `wc -l` counts newline characters: an added file with a single huge line without a trailing newline and `n` = 0 gives `n=0` and prints `0 added line(s) scanned, clean` while a real secret sits on the unterminated line.",
+      "fix": "Count with `grep -c ''` or test `[ -s \"$added\" ]` instead of `wc -l`, so a final line with no newline is still scanned."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/secret-diff-scan.sh:51-55",
+      "breaking_input": "CI checkout where `origin` is not the repository remote (a fork PR workflow, or a remote named differently) and HEAD is a merge ref whose first parent is not in the shallow clone.",
+      "why": "`git fetch --depth=1 origin \"$parent\"` fetches by SHA from a remote that may refuse unadvertised SHAs; on failure it exits 2, which is safe, but on success with depth=1 the parent's tree can still be missing blobs (partial clone), making `git diff` fail late. More importantly, `git cat-file -e \"$parent^{commit}\"` succeeds for a commit object whose TREE is absent, so the fetch is skipped and the diff then fails or, with a promisor remote, silently lazy-fetches.",
+      "fix": "Verify the tree exists with `git cat-file -e \"$parent^{tree}\"` and check the diff exit status, which the script already does; also pass `--no-lazy-fetch` equivalents."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".githooks/pre-commit:5-9",
+      "breaking_input": "`git commit` from a subdirectory or a linked worktree on Windows where `sh` resolves to a different shell, or where `bash` on PATH is WSL's bash.exe (a known arc failure: PowerShell PATH sends bash to WSL).",
+      "why": "The hook calls bare `bash`, which on a PowerShell-launched git is C:\\Windows\\System32\\bash.exe (WSL). The script then runs in a Linux distro with a different filesystem view, so `git rev-parse` or `gitleaks` is missing and the hook fails closed or, worse, WSL lacks the repo and the `cd` fails. No `RAN` marker is checked by the hook, and `set -e` is the only guard.",
+      "fix": "Invoke through `sh` with `exec` of an absolute Git-for-Windows bash discovered via `git --exec-path`, or make the scripts POSIX sh and run them directly."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/branch-guard.sh:13",
+      "breaking_input": "Commit on a detached HEAD or during a rebase of main (`git rebase` on a branch named main), or `git symbolic-ref` run when HEAD points to `refs/heads/main` via a worktree whose branch was just renamed.",
+      "why": "`git symbolic-ref --short -q HEAD` returns nothing when detached, so the guard prints 'branch detached ok' and exits 0; a commit made on a detached HEAD at main's tip is then pushed with `git push origin HEAD:main`, and the pre-push guard only sees `refs/heads/main` as rref. A push with `HEAD:refs/heads/main` is caught, but `HEAD:main` is rewritten by git to `refs/heads/main` in the hook input, so that case is fine; the detached commit itself is the allowed hole.",
+      "fix": "Refuse a detached HEAD whose commit equals main's tip, or refuse detached commits outright with a message."
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/branch-guard.sh:25-31",
+      "breaking_input": "A push of a tag or a delete to main: `git push origin :refs/heads/main` yields a pre-push line with lref `(delete)` and rref `refs/heads/main`, which is refused (fine); but `git push origin feat/x:refs/heads/Main` or a case-insensitive remote resolves to main on a case-insensitive filesystem remote.",
+      "why": "The comparison is an exact string against `refs/heads/main`, so aliases (`refs/heads/main` reached by a symbolic ref on the server, or a refspec pushing to a branch the server aliases to main) pass. Also `while read -r lref lsha rref rsha` strips leading whitespace and a ref name with a backslash is mangled, though -r handles that.",
+      "fix": "Treat the guard as advisory (already declared) and rely on the server; additionally compare the lowercased rref."
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-doctor.mjs:24-29",
+      "breaking_input": "`gh api` fails with a 404 whose stdout is the message but the repo slug is wrong or the token lacks access: GitHub also returns 404 `Not Found` for a private repo the token cannot see, and the doctor reads `Branch not protected` only; but an attacker-controlled or proxied response `Branch not protected` on stdout with a non-JSON stderr passes as unprotected.",
+      "why": "`String(e.stdout)` is trusted when the exit code is non-zero; a failing `gh` that prints that text for any other reason (a wrapper script, a mocked `gh` earlier on PATH in a repo-local `node_modules/.bin` or a Windows `gh.cmd` in the working directory) produces five MISSING and exit 1 instead of UNKNOWN. Because `execFileSync(\"gh\")` on Windows resolves `gh.exe` or `gh.cmd` from the current directory first, a planted file in the checkout shadows the real CLI.",
+      "fix": "Resolve gh to an absolute path outside the repo, run it with `cwd` set to an empty temp dir, and require the HTTP status line, not just the message text."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/core/gate-parity.mjs:162-175",
+      "breaking_input": "Run `--mutant-selftest` with `TMPDIR` pointing under the repo or with the tree holding a symlink in `.claude/hooks`; `cpSync(..., {recursive:true})` dereferences nothing by default and copies the link as-is, which may point back into the real tree.",
+      "why": "The planted `99-mutant-<pid>.sh` is written via a path that can resolve through a copied symlink into the REAL `.claude/hooks/<Event>.d/`, leaving a blocking mutant fragment in the working tree when the temp dir is deleted (rmSync removes the link, not its target). The real tree then fails gate-parity until cleaned.",
+      "fix": "Pass `dereference: true` to cpSync, or assert after the plant that the file's realpath is inside the temp directory."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/core/gate-parity.mjs:96-103",
+      "breaking_input": "`.githooks/pre-commit` containing `exit` inside a heredoc or a function body at column 0, e.g. a line `exit 0` in a here-document, or a line `exit` that is the start of `exit_code=$?`.",
+      "why": "`liveLines` cuts at the first line matching `^exit\\b`, so a column-0 `exit` inside a heredoc or an `exit` word prefix truncates the live set early and hides real commands (false gap, safe direction) while an `exit` indented inside a nested block is not cut and a dead command after `if false; then ... exit; fi` still counts as live (false pass).",
+      "fix": "Treat only an unconditional top-level `exit` as terminal, and reject hooks containing conditionals or heredocs around parity lines."
+    }
+  ]
+}

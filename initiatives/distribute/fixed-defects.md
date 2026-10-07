@@ -38,3 +38,6 @@ and lane finds are appended under their PR.
 - **(z) a body bounded by the first `}`.** A bats test region runs to the next `@test`, and any `skip` word outside a comment is a gap, so a heredoc `}` cannot hide a skip. Fixed in `gate-parity.mjs`, attack 4f5dfc7 B6, L1.
 - **(aa) "the line is somewhere in the hooks".** A commit-time command counts only in its own hook (pre-push vs pre-commit) and before the first `exit`. Fixed in `gate-parity.mjs`, attack 4f5dfc7 B7.
 - **(ab) a fixed mutant name.** The selftest plants a pid-suffixed name and asserts it was absent first. Fixed in `gate-parity.mjs`, attack 4f5dfc7 L4.
+- **(ac) an unterminated comment swallows the file.** A scanner whose comment state is still open at EOF names it as a finding. Fixed in `brain-drift.mjs`, attack 7c55982 L2.
+- **(ad) a range where a ref belongs.** A `--base` value containing `..`, `:` or a leading `-` is refused before git sees it. Fixed in `secret-diff-scan.sh`, attack 7c55982 B2.
+- **(ae) a malformed field read as absent.** A protection object whose fields are not objects is UNKNOWN, never MISSING. Fixed in `arc-doctor.mjs`, attack 7c55982 L6.

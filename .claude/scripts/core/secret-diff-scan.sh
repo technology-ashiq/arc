@@ -50,7 +50,9 @@ note=""
 
 case "$mode" in
   --staged) range=(--cached) ;;
-  --base)   git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "secret-diff-scan: COULD NOT SCAN -- unknown ref $base"; exit 2; }
+  --base)   # One plain ref, never a range: `A...B` would change what the second revision means (7c55982 B2).
+            case "$base" in *..*|*:*|-*) echo "secret-diff-scan: COULD NOT SCAN -- --base must be a single ref, got $base"; exit 2 ;; esac
+            git rev-parse --verify -q "$base^{commit}" >/dev/null || { echo "secret-diff-scan: COULD NOT SCAN -- unknown ref $base"; exit 2; }
             range=("$base" HEAD) ;;
   --merge-parent)
     parent=$(git cat-file -p HEAD 2>/dev/null | sed -n 's/^parent //p' | head -1)

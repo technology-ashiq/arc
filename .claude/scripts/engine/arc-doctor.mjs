@@ -49,6 +49,11 @@ function readProtection(file, slug) {
   // protection, never waved through as "not protected" (attack 4f5dfc7 L8).
   if (!isProtection && body.message === "Branch not protected" && String(body.status) === "404") return { state: "unprotected", body };
   if (!isProtection) throw new Error("the answer is not a branch-protection object");
+  // A protection object with a malformed field is unreadable, not "missing" (attack 7c55982 L6).
+  const objOrNull = (v) => v === undefined || v === null || (typeof v === "object" && !Array.isArray(v));
+  for (const k of ["required_status_checks", "enforce_admins", "allow_force_pushes", "allow_deletions"]) {
+    if (!objOrNull(body[k])) throw new Error(`${k} is not an object`);
+  }
   return { state: "protected", body };
 }
 

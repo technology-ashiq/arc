@@ -94,6 +94,8 @@ export function check(root) {
     drift.push(`DRIFT CLAUDE.md: unmarked line ${n} outside a claude-only block: ${l.slice(0, 60)}`);
   });
   if (inBlock) drift.push(`DRIFT CLAUDE.md: unclosed claude-only block opened at line ${blockStart}`);
+  // An unterminated `<!--` would hide every line after it from this check (attack 7c55982 L2).
+  if (inComment) drift.push("DRIFT CLAUDE.md: unclosed HTML comment hides the rest of the file");
   if (!imported) drift.push("DRIFT CLAUDE.md: no @AGENTS.md import line");
   return { headings, drift };
 }

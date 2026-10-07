@@ -191,8 +191,8 @@ function mutantSelftest(root) {
       if (!existsSync(from)) throw new CouldNotScan(`mutant-selftest: ${p} missing in ${root}`);
       if (p === "tests") {
         mkdirSync(join(tmp, "tests"), { recursive: true });
-        for (const f of readdirSync(from)) if (f.endsWith(".bats")) cpSync(join(from, f), join(tmp, "tests", f));
-      } else cpSync(from, join(tmp, p), { recursive: true });
+        for (const f of readdirSync(from)) if (f.endsWith(".bats")) cpSync(join(from, f), join(tmp, "tests", f), { dereference: true });
+      } else cpSync(from, join(tmp, p), { recursive: true, dereference: true });
     }
     const clean = check(tmp);
     if (clean.gaps.length !== 0) return { ok: false, why: `the unplanted copy already has ${clean.gaps.length} gap(s), so the selftest proves nothing` };
