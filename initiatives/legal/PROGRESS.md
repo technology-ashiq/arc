@@ -113,6 +113,17 @@ the real facts anyway (TOCTOU). **Found on the way, routed via `/arc-change`:** 
 publish ledger would have landed in arc's PUBLIC tree with per-field prints of the operator's
 contact facts. ADR-1214 moves it beside the venture's facts, and Phase 03 gained that criterion.
 
+**The gazette check ran (2026-10-07) and found a gap.** The MeitY-hosted G.S.R. 846(E) PDF answered
+HTTP 200. Commencement is 13-May-2027, as ADR-1206 recorded, so its revisit trigger did not fire.
+But Rule 3(c) wants the privacy notice to give the site's communication link, and the rendered
+notice printed only mailboxes. Assumptions row 2 is marked FIRED. Template set v3 adds one
+sentence (ADR-1215), LexOS's private pin moves to v3, and v3's render shows the link with
+0 findings. v3's prose approval is on the spine as `01M49QMR8BJCXNBQN40BR9MGC6`, awaiting the
+owner. **Order from here:** owner stamps v3 → `approved-sets.json` records it with that decision
+id → merge → from the main clone, propose LexOS on v3 → owner reads and stamps → publish into the
+venture dir → commit pages + `published.json` to LexOS `feat/legal-pages` → `/arc-phase-done 03`
+→ `/arc-retro`.
+
 _Below: the 2026-10-06 note that led to these closes._
 
 The tracker said `phase: 00 · burn: 0d` for seven weeks while Phases 01 and 02 were built on top

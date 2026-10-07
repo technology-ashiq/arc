@@ -206,7 +206,7 @@ None declared.
 - [`.claude/scripts/legal/lib/yaml.mjs`](../../../.claude/scripts/legal/lib/yaml.mjs)
 - [`.claude/scripts/legal/publish-gate.mjs`](../../../.claude/scripts/legal/publish-gate.mjs)
 
-## Files (24)
+## Files (31)
 
 - [`products/legal/approved-sets.json`](../../../products/legal/approved-sets.json)
 - [`products/legal/data/claim-denylist.json`](../../../products/legal/data/claim-denylist.json)
@@ -232,6 +232,13 @@ None declared.
 - [`products/legal/templates/v2/refund-cancellation.tmpl.md`](../../../products/legal/templates/v2/refund-cancellation.tmpl.md)
 - [`products/legal/templates/v2/shipping-delivery.tmpl.md`](../../../products/legal/templates/v2/shipping-delivery.tmpl.md)
 - [`products/legal/templates/v2/terms.tmpl.md`](../../../products/legal/templates/v2/terms.tmpl.md)
+- [`products/legal/templates/v3/about.tmpl.md`](../../../products/legal/templates/v3/about.tmpl.md)
+- [`products/legal/templates/v3/contact.tmpl.md`](../../../products/legal/templates/v3/contact.tmpl.md)
+- [`products/legal/templates/v3/pricing.tmpl.md`](../../../products/legal/templates/v3/pricing.tmpl.md)
+- [`products/legal/templates/v3/privacy.tmpl.md`](../../../products/legal/templates/v3/privacy.tmpl.md)
+- [`products/legal/templates/v3/refund-cancellation.tmpl.md`](../../../products/legal/templates/v3/refund-cancellation.tmpl.md)
+- [`products/legal/templates/v3/shipping-delivery.tmpl.md`](../../../products/legal/templates/v3/shipping-delivery.tmpl.md)
+- [`products/legal/templates/v3/terms.tmpl.md`](../../../products/legal/templates/v3/terms.tmpl.md)
 
 ## Source
 
