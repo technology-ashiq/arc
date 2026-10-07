@@ -19,7 +19,7 @@ const scenario = process.argv[2];
 console.log(`RAN ${scenario}`);
 const rows = loadRegistry();
 const load = async (id) => { const row = rows.find((r) => r.id === id); if (!row) { console.error(`no ${id} row`); process.exit(1); } return { row, mod: await import(pathToFileURL(join(PRODUCT, row.adapter)).href) }; };
-const A = { hosting: await load("vercel"), release: await load("arc-ship-release"), frontend: await load("nextjs-shell"), database: await load("supabase"), auth: await load("supabase-auth"), authz: await load("rls-roles"), tenancy: await load("org-invite") };
+const A = { hosting: await load("vercel"), release: await load("arc-ship-release"), frontend: await load("nextjs-shell"), database: await load("supabase"), auth: await load("supabase-auth"), authz: await load("rls-roles"), tenancy: await load("org-invite"), plans: await load("plans-yaml") };
 const realTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn) => realTimeout(fn, 0);
 
@@ -29,7 +29,7 @@ const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", com
 const vercel = makeVercel({ github });
 const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz" });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: (i, o) => supabase.fetch(i, o).catch(() => vercel.fetch(i, o)) });
-const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak" });
+const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail" });
 // Route by host: Supabase hosts to its fake (through the venture fake for auth admin), the rest down the chain.
 globalThis.fetch = async (input, init) => {
   const h = new URL(String(input)).hostname;
@@ -39,9 +39,9 @@ globalThis.fetch = async (input, init) => {
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-login-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
-const state = { hosting: [], release: [], frontend: [], database: [], auth: [], authz: [], tenancy: [], repo: [{ kind: "github-repo", id: FULL }], "email-transactional": [] };
+const state = { hosting: [], release: [], frontend: [], database: [], auth: [], authz: [], tenancy: [], plans: [], repo: [{ kind: "github-repo", id: FULL }], "email-transactional": [] };
 const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd" };
-const UP = { hosting: ["repo"], release: ["hosting"], frontend: ["repo", "release"], database: [], auth: ["database", "email-transactional", "frontend"], authz: ["auth"], tenancy: ["authz"] };
+const UP = { hosting: ["repo"], release: ["hosting"], frontend: ["repo", "release"], database: [], auth: ["database", "email-transactional", "frontend"], authz: ["auth"], tenancy: ["authz"], plans: ["authz"] };
 const ctxFor = (slot, approvals = []) => makeCtx({
   profile: { slug: "arc-sandbox", region: "in", brand: { name: "arc sandbox", domain: DOMAIN } }, board: {}, slot: { id: slot }, row: A[slot].row,
   root: ROOT, resources: state[slot], upstream: Object.fromEntries(UP[slot].map((d) => [d, state[d]])), tag: `arc-sandbox@${slot}@${A[slot].row.id}`,
@@ -145,6 +145,80 @@ switch (scenario) {
     await A.authz.mod.scaffold(ctxFor("authz"));
     await A.tenancy.mod.scaffold(ctxFor("tenancy"));
     out.tenancyVerify = await A.tenancy.mod.verify(ctxFor("tenancy"));
+    break;
+  case "plans": {
+    // The whole login half, then plans: scaffold twice, verify pro -> 200 and downgraded -> 403, twice.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    out.before = await A.plans.mod.verify(ctxFor("plans"));
+    out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
+    out.plansAgain = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
+    out.commits = repo().commits.filter((c) => (c.message || "").startsWith("plans:")).length;
+    out.files = ["plans.yaml", "lib/plans.js", "app/api/reports/route.js"].map((p) => !!text(p));
+    out.rls = supabase.store[0].tables.org_plans.rls;
+    out.verify = await A.plans.mod.verify(ctxFor("plans"));
+    out.verifyAgain = await A.plans.mod.verify(ctxFor("plans"));
+    out.finalPlans = supabase.store[0].tables.org_plans.rows.map((r) => r.plan);
+    out.kinds = state.plans.map((r) => r.kind);
+    out.teardown = (await A.plans.mod.teardown(ctxFor("plans"))).steps.map((x) => x.action);
+    break;
+  }
+  case "plans-ignored":
+    // A route that ignores the plan: the downgrade does not close it, so verify is not ok.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    out.verify = await A.plans.mod.verify(ctxFor("plans"));
+    break;
+  case "plans-foreign-table":
+    // The owner's org_plans, without launch's marker: never altered.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    supabase.store[0].tables.org_plans = { rls: false, rows: [{ org: "x", plan: "enterprise" }] };
+    out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
+    out.rows = supabase.store[0].tables.org_plans.rows.map((r) => r.plan);
+    break;
+  case "plans-killed-after-migration":
+    // The migration ran and the worker died before reporting the table: the re-run recognises its marker.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    state.plans.splice(state.plans.findIndex((r) => r.kind === "db-tables"), 1);
+    out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
+    break;
+  case "plans-owner-edited":
+    // The owner rewrote the gated route after launch: verify names the drift and changes no plan.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    repo().files["app/api/reports/route.js"] = { sha: "f".repeat(40), content: Buffer.from("export async function GET() { return Response.json({}); }" + String.fromCharCode(10)).toString("base64") };
+    repo().commits.push({ sha: "f".repeat(40), message: "owner rewrote reports", files: { "app/api/reports/route.js": "f".repeat(40) } });
+    out.verify = await A.plans.mod.verify(ctxFor("plans"));
+    out.planRows = supabase.store[0].tables.org_plans.rows.length;
+    break;
+  case "plans-reports-fail":
+    // The pro read answers 500: verify is not ok, and the probe org is back on free.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    out.verify = await A.plans.mod.verify(ctxFor("plans"));
+    out.finalPlans = supabase.store[0].tables.org_plans.rows.map((r) => r.plan);
+    break;
+  case "replaced-tables": {
+    // launch recorded its tables; the owner then replaced them with their own, unmarked. A re-run never adopts them.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    await A.authz.mod.scaffold(ctxFor("authz"));
+    await A.plans.mod.scaffold(ctxFor("plans"));
+    supabase.store[0].tables.org_plans = { rls: false, rows: [{ org: "x", plan: "enterprise" }] };
+    out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
+    out.planRls = supabase.store[0].tables.org_plans.rls;
+    supabase.store[0].tables.orgs = { rls: false, rows: [{ id: "y", name: "real customer" }] };
+    out.authz = await attempt(() => A.authz.mod.scaffold(ctxFor("authz")));
+    out.orgRls = supabase.store[0].tables.orgs.rls;
+    break;
+  }
+  case "plans-no-upstream":
+    out.plans = await attempt(() => A.plans.mod.scaffold(ctxFor("plans")));
     break;
   default:
     console.error(`unknown scenario ${scenario}`);
