@@ -25,7 +25,7 @@ const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 const FULL = "technology-ashiq/arc-sandbox";
 const DOMAIN = "sandbox.automemory.ai";
 const REF = "fixtureref0000000001";
-const SECRET = "whsec_fixture_0123456789abcdef";
+const SECRET = "fixture_webhook_secret_not_real";
 const TAG = "arc-sandbox@webhooks-ledger@razorpay-webhook";
 const ENV = { RAZORPAY_WEBHOOK_SECRET: SECRET, SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", GITHUB_TOKEN: "gho_fixtureToken0123456789" };
 
