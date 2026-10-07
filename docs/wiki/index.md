@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **149** | **34** |
 
-Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 363 of 428 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 366 of 431 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -63,7 +63,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 363 of 
 | [memory](lanes/memory.md) | IDLE | arc-memory (Cycle 11, closed 2026-08-12) |
 | [model-policy](lanes/model-policy.md) | IDLE | model-policy v2 (opened 2026-10-05, closed 2026-10-06) |
 | [org](lanes/org.md) | IDLE | arc-org (Cycle 20, opened 2026-10-05) |
-| [policy](lanes/policy.md) | IDLE | arc-policy (Cycle 9, closed 2026-08-10) |
+| [policy](lanes/policy.md) | LIVE | arc-policy cycle 2 (opened 2026-10-07) |
 | [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
 | [scheduler](lanes/scheduler.md) | LIVE | arc-scheduler (Cycle 12, opened 2026-08-12) |
 
@@ -95,7 +95,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 363 of 
 | [0200–0299](adr/0200.md) | 28 | 2 |
 | [0300–0399](adr/0300.md) | 12 | 0 |
 | [0400–0499](adr/0400.md) | 19 | 0 |
-| [0500–0599](adr/0500.md) | 9 | 0 |
+| [0500–0599](adr/0500.md) | 12 | 0 |
 | [0600–0699](adr/0600.md) | 7 | 0 |
 | [0700–0799](adr/0700.md) | 10 | 0 |
 | [0800–0899](adr/0800.md) | 9 | 0 |

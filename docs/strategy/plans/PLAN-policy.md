@@ -239,8 +239,8 @@ Measured on the canonical spine (main clone, 2026-10-07, 1,695 events, 61 day-fi
 **zero** `policy.level.changed`, `policy.demoted`, `spend.reserved`, `spend.released` and
 `incident.raised` have ever been emitted, and no `approval.requested` has carried the
 `policy.promotion` profile. Every level the engine enforces today is fixture-proven and
-production-unexercised. Lane assumption row 1 (`initiatives/policy/PLAN.md`) fired on that
-count. See `initiatives/policy/PROGRESS.md` `## Now`.
+production-unexercised. Lane assumption row 1 (`initiatives/policy/archive/PLAN-cycle9-2026-08-10.md` since the cycle-2 kickoff) fired on that
+count. See that cycle's archived `PROGRESS` `## Now`.
 
 ### Which cells the bar applies to today
 
