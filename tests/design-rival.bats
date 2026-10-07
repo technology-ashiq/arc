@@ -310,7 +310,7 @@ _html_answer() {
   export STITCH_API_KEY="test-key-0123456789"
   _ok_answer
   _assets
-  sed -i 's#"type":"font/woff2"#"type":"application/octet-stream"#' "$BATS_TEST_TMPDIR/assets/index.json"
+  sed -i.bak 's#"type":"font/woff2"#"type":"application/octet-stream"#' "$BATS_TEST_TMPDIR/assets/index.json"
   grep -q 'application/octet-stream' "$BATS_TEST_TMPDIR/assets/index.json" || { echo "fixture: the type was not changed"; false; }
   run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

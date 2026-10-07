@@ -451,7 +451,7 @@ _label_of() { node -e 'const k=require(process.argv[1]);process.stdout.write(k.i
   run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
   [ "$status" -eq 1 ] && [[ "$output" == *"is not the page its receipt vendored"* ]] || { echo "a changed page was dealt: $status $output"; false; }
   _rival_fixture DRAFTED
-  sed -i 's#"sdk":"@google/stitch-sdk@0.3.5",##' .claude/state/design/rivals/bx/jx/stitch/receipt.json
+  sed -i.bak 's#"sdk":"@google/stitch-sdk@0.3.5",##' .claude/state/design/rivals/bx/jx/stitch/receipt.json
   ! grep -q '"sdk"' .claude/state/design/rivals/bx/jx/stitch/receipt.json || { echo "fixture: sdk not removed"; false; }
   run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
   [ "$status" -eq 1 ] && [[ "$output" == *"not stitch on the pinned @google/stitch-sdk@0.3.5"* ]] || { echo "a versionless rival was dealt: $status $output"; false; }
@@ -524,12 +524,12 @@ _rival_scored() {
 
 @test "jury: a receipt naming another package, or a render older than its draft, is refused (L5 L10 L14, B5)" {
   _fixture 3 1; _rival_fixture DRAFTED
-  sed -i 's#"sdk":"@google/stitch-sdk@0.3.5"#"sdk":"@evil/sdk@9.9.9"#' .claude/state/design/rivals/bx/jx/stitch/receipt.json
+  sed -i.bak 's#"sdk":"@google/stitch-sdk@0.3.5"#"sdk":"@evil/sdk@9.9.9"#' .claude/state/design/rivals/bx/jx/stitch/receipt.json
   grep -q '@evil/sdk@9.9.9' .claude/state/design/rivals/bx/jx/stitch/receipt.json || { echo "fixture: package not swapped"; false; }
   run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
   [ "$status" -eq 1 ] && [[ "$output" == *"not stitch on the pinned @google/stitch-sdk@0.3.5"* ]] || { echo "another package was stamped as Stitch: $status $output"; false; }
   _rival_fixture DRAFTED
-  sed -i 's#"finishedAt":"2000-01-01T00:00:00.000Z"#"finishedAt":"2999-01-01T00:00:00.000Z"#' .claude/state/design/rivals/bx/jx/stitch/receipt.json
+  sed -i.bak 's#"finishedAt":"2000-01-01T00:00:00.000Z"#"finishedAt":"2999-01-01T00:00:00.000Z"#' .claude/state/design/rivals/bx/jx/stitch/receipt.json
   grep -q '2999-01-01' .claude/state/design/rivals/bx/jx/stitch/receipt.json || { echo "fixture: time not moved"; false; }
   run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
   [ "$status" -eq 1 ] && [[ "$output" == *"render is older than its draft"* ]] || { echo "a stale render was dealt: $status $output"; false; }
