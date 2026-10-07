@@ -912,7 +912,11 @@ EOF
     case "$PROVIDER" in
       ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|con|prn|aux|nul|com[0123456789]|lpt[0123456789]) echo "design-explore: --provider must be lowercase kebab, not a device name" >&2; exit 1;;
     esac
-    BRIEF_LINE="$(grep '^brief=' "$EX/explore.txt" 2>/dev/null | head -1)"
+    # The jury's grammar caps a provider at 32 characters; the same cap here (attack ae0aeb8 B7).
+    [ "${#PROVIDER}" -le 32 ] || { echo "design-explore: --provider is at most 32 characters" >&2; exit 1; }
+    # A CRLF checkout leaves a CR on the line; it is dropped before the strips, as every record reader
+    # here does, so the refusal below names a real problem and not a line ending (attack ae0aeb8 L11).
+    BRIEF_LINE="$(grep '^brief=' "$EX/explore.txt" 2>/dev/null | head -1 | tr -d '\r')"
     BRIEF_ID="${BRIEF_LINE#brief=docs/design/briefs/}"
     BRIEF_ID="${BRIEF_ID%/brief.md}"
     case "$BRIEF_ID" in

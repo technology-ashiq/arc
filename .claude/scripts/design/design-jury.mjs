@@ -32,8 +32,9 @@
 // Exit: 0 ok | 1 refused, or deviations found.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
+import { PROVIDERS } from "./design-rival.mjs";
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
@@ -138,14 +139,14 @@ function deal(argv) {
       if (best && best.iter === iter && best.m.route !== m.route) fail(`${v} has two routes rendered at ${viewport}; the jury judges one screen per variant`);
       // Two different renders at one iter: which is dealt would be readdir's order, not the explore's (attack 65d01cc L2).
       if (best && best.iter === iter && best.m.screenshot_sha256 !== m.screenshot_sha256) fail(`${v} has two different renders at iter ${iter} and ${viewport}; render it again so one is the latest`);
-      if (!best || iter > best.iter) best = { m, iter };
+      if (!best || iter > best.iter) best = { m, iter, meta: join(sess, f) };
     }
     if (!best) fail(`${v} has no render at ${viewport} (render it first)`);
     const file = join(root, best.m.png);
     inside(file, sess, `${v}'s render ${best.m.png}`);
     const bytes = readFileSync(file);
     if (sha256(bytes) !== best.m.screenshot_sha256) fail(`${v}'s render bytes no longer match its meta; render again`);
-    return { file, sha: best.m.screenshot_sha256 };
+    return { file, sha: best.m.screenshot_sha256, meta: best.meta };
   };
   for (const v of variants) {
     const r = latestRender(v);
@@ -181,10 +182,20 @@ function deal(argv) {
     if (sha256(readRegular(page, `the ${p} page`)) !== pageSha) fail(`rival-${p}/index.html is not the page its receipt vendored; draft it again`);
     // The version is the stamp Phase 08's packager refuses on, so a receipt without one is refused here rather
     // than dealt as `rival:<p>@` (attack 65d01cc L3), and the stamp is rival:<p>@<version>, one `@` (L15).
-    const ver = /^(@?[a-z0-9][a-z0-9._/-]*)@([0-9][0-9A-Za-z.+-]{0,40})$/.exec(String(rec.sdk ?? ""));
+    // The receipt must name THIS provider and ITS pinned package: a copied or hand-written receipt naming any
+    // package at any version would otherwise stamp a draft Stitch never made (attack ae0aeb8 L5, L10, L14).
+    const pinned = Object.hasOwn(PROVIDERS, p) ? PROVIDERS[p].pkg : null;
+    if (!pinned) fail(`--rival ${p} is not a rival arc knows (${Object.keys(PROVIDERS).join(", ")})`);
+    if (rec.provider !== p || rec.sdk !== pinned) fail(`the ${p} receipt names provider '${clean(String(rec.provider ?? "")).slice(0, 32)}' and package '${clean(String(rec.sdk ?? "")).slice(0, 60)}', not ${p} on the pinned ${pinned}`);
+    const ver = /^(@?[a-z0-9][a-z0-9._/-]*)@([0-9][0-9A-Za-z.+-]{0,40})$/.exec(pinned);
     if (!ver) fail(`the ${p} receipt names no pinned package version (sdk '${clean(String(rec.sdk ?? "")).slice(0, 60)}')`);
     const r = latestRender(`rival-${p}`);
-    items.push({ kind: "rival", source: `rival-${p}`, provenance: `rival:${p}@${ver[2]}`, path: r.file, sha256: r.sha, ext: extname(r.file).toLowerCase() });
+    // The render must be newer than the draft it shows: the meta carries no page hash, and a re-draft after a
+    // render left the older picture of an older page in the session (attack ae0aeb8 B5).
+    const drafted = Date.parse(String(rec.finishedAt ?? ""));
+    if (!Number.isFinite(drafted)) fail(`the ${p} receipt records no finish time; draft it again`);
+    if (statSync(r.meta).mtimeMs < drafted) fail(`rival-${p}'s render is older than its draft; render it again`);
+    items.push({ kind: "rival", source: `rival-${p}`, provenance: `rival:${p}@${ver[2]}`, package: pinned, path: r.file, sha256: r.sha, ext: extname(r.file).toLowerCase() });
   }
   // References: each --ref is one pack image, bound to a provenance row in the brief's sources.md.
   const packDir = join(root, ".claude", "state", "design", "refpacks", ex.brief);
@@ -202,9 +213,11 @@ function deal(argv) {
     inside(file, packDir, `--ref ${r}`);
     const full = sha256(readFileSync(file));
     if (!full.startsWith(r)) fail(`--ref ${r}: the file's bytes hash to ${full.slice(0, 16)}; the pack was changed`);
-    if (!rows.split(/\r?\n/).some((l) => l.startsWith("|") && l.split("|").map((c) => c.trim()).includes(full))) {
-      fail(`--ref ${r} has no provenance row in ${sourcesMd}; an unattributed screen never enters a jury`);
-    }
+    // The hash must sit in the sha256 COLUMN of exactly one row: any cell of any row admitted a screen a
+    // licensing table or a note merely mentioned (attack ae0aeb8 L6).
+    const owning = rows.split(/\r?\n/).filter((l) => l.startsWith("|") && (l.split("|")[3] ?? "").trim() === full);
+    if (owning.length === 0) fail(`--ref ${r} has no provenance row in ${sourcesMd}; an unattributed screen never enters a jury`);
+    if (owning.length > 1) fail(`--ref ${r} has ${owning.length} provenance rows in ${sourcesMd}; exactly one row attributes a screen`);
     items.push({ kind: "reference", source: basename(file, ext), provenance: "reference", path: file, sha256: full, ext });
   }
   if (control !== null && !items.some((i) => i.kind === "control")) fail(`--control ${control}: there is no variant-${control} to mark`);
@@ -233,7 +246,7 @@ function deal(argv) {
     const file = `${label}${it.ext}`;
     copyFileSync(it.path, join(itemsDir, file));
     if (sha256(readFileSync(join(itemsDir, file))) !== it.sha256) fail(`${label} did not copy byte for byte`);
-    key.items.push({ label, file, kind: it.kind, source: it.source, provenance: it.provenance, sha256: it.sha256 });
+    key.items.push({ label, file, kind: it.kind, source: it.source, provenance: it.provenance, ...(it.package ? { package: it.package } : {}), sha256: it.sha256 });
   });
   const body = `${JSON.stringify(key, null, 2)}\n`;
   // Written once: `wx` refuses if another deal got there first.
@@ -294,7 +307,9 @@ function check(argv) {
     const ts = new Date().toISOString();
     appendFileSync(join(ex.jury, "deviations.log"), devs.map((d) => `${ts}\t${d.file}\t${d.cls}\t${clean(d.detail)}\n`).join(""));
   }
-  const result = { id: key.id, n: key.n, checked: new Date().toISOString(), deviations: devs.length, rankings };
+  // Bound to the exact sealed key it was checked against: id, n and a time all survive a re-deal of the same
+  // explore with the same N, and the labels then name other items (attack ae0aeb8 L3).
+  const result = { id: key.id, n: key.n, key_sha256: sha256(readFileSync(keyPath)), checked: new Date().toISOString(), deviations: devs.length, rankings };
   const tmp = join(ex.jury, `result.json.${process.pid}.tmp`);
   writeFileSync(tmp, `${JSON.stringify(result, null, 2)}\n`);
   renameSync(tmp, join(ex.jury, "result.json"));
@@ -393,7 +408,8 @@ function unblind(argv) {
     // deal, or one checked before this deal was made, is refused rather than counted (attack 65d01cc L5).
     let res = null;
     try { res = JSON.parse(readRegular(join(ex.jury, "result.json"), "the checked rankings (result.json)").toString("utf8")); } catch { res = null; }
-    if (!res || res.id !== key.id || res.n !== key.n || !(Date.parse(res.checked) >= Date.parse(key.dealt)) || !Array.isArray(res.rankings)) {
+    const keySha = sha256(readRegular(join(ex.jury, "key.json"), "the sealed key"));
+    if (!res || res.id !== key.id || res.n !== key.n || res.key_sha256 !== keySha || !(Date.parse(res.checked) >= Date.parse(key.dealt)) || !Array.isArray(res.rankings)) {
       fail("the rival rate is read from this deal's checked rankings; run jury-check on this deal before unblinding");
     }
     const valid = res.rankings.filter((r) => r && r.valid && Array.isArray(r.ranked));
@@ -421,8 +437,11 @@ function unblind(argv) {
 
 // One note.logged receipt: the payload goes through a file (never argv, which MSYS bash rewrites), the emit
 // is bounded in time, and the answer is read. Returns true when emitted.
-function emitNote(root, payloadFile, payload, step) {
-  writeFileSync(payloadFile, `${JSON.stringify(payload)}\n`);
+function emitNote(root, payloadBase, payload, step) {
+  // A name only this call uses, written exclusively: a fixed name could already be a link planted in the
+  // jury dir, and a truncating write follows it (attack ae0aeb8 B6).
+  const payloadFile = payloadBase.replace(/\.json$/, `.${Date.now()}-${process.pid}.json`);
+  try { writeFileSync(payloadFile, `${JSON.stringify(payload)}\n`, { flag: "wx" }); } catch (e) { fail(`the ${step} payload could not be written (${e.code || e.message})`); }
   const script = join(root, ".claude", "scripts", "hq", "arc-event.sh");
   const em = spawnSync("bash", [script, "emit", "note.logged", "--payload-file", payloadFile], { encoding: "utf8", timeout: 60000 });
   if (em.status === 0) { console.log(`design-explore ${step}: note.logged receipt emitted`); return true; }

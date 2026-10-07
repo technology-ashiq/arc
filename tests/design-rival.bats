@@ -316,7 +316,50 @@ _html_answer() {
   ls "$SANDBOX/docs/design/explore/r1/rival-stitch/assets" | grep -qE '^[0-9a-f]{16}\.woff2$' || { echo "the font was not named .woff2: $(ls "$SANDBOX/docs/design/explore/r1/rival-stitch/assets")"; false; }
 }
 
+# ---------- attack ae0aeb8 round 2 ----------
+
+@test "rival: an HTML URL path with a dot segment, raw or percent-encoded, is an unusable answer (L7)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  local u
+  for u in 'https://contribution.usercontent.google.com/a/../d' 'https://contribution.usercontent.google.com/a/%2e%2e/d' 'https://contribution.usercontent.google.com/a%2fb'; do
+    _answer "{\"ok\":true,\"screen\":{\"id\":\"s1\",\"htmlCode\":{\"downloadUrl\":\"$u\"}},\"htmlUrl\":\"$u\",\"html\":\"<html></html>\"}"
+    run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json"
+    [ "$status" -eq 3 ] && [ "${lines[0]}" = "rival stitch: COULD-NOT-DRAFT (unusable answer (the HTML URL path carries a dot segment or an encoded slash))" ] || { echo "took $u: $output"; false; }
+  done
+}
+
+@test "rival: a key holding a quote is scrubbed in its JSON-escaped spelling too (L12)" {
+  export STITCH_API_KEY='test-key-"quoted"-0123456789'
+  _answer '{"ok":false,"error":{"name":"StitchError","code":"UNKNOWN_ERROR","message":"backend said no to test-key-\"quoted\"-0123456789"}}'
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json"
+  [ "$status" -eq 3 ] || { echo "$output"; false; }
+  grep -q '<key>' "$(_out)/stitch/receipt.json" || { echo "nothing was scrubbed: $(cat "$(_out)/stitch/receipt.json")"; false; }
+  ! grep -q 'quoted' "$(_out)/stitch/receipt.json" || { echo "the key survived in its escaped spelling"; false; }
+}
+
+@test "rival: a vendored stylesheet with a url() the reader cannot decode is refused, not left online (B2)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _ok_answer
+  _assets
+  printf '@font-face{font-family:Inter;src:url(\\68ttps://fonts.gstatic.com/s/inter/v1/a.woff2)}\n' > "$BATS_TEST_TMPDIR/assets/inter.css"
+  grep -q '68ttps' "$BATS_TEST_TMPDIR/assets/inter.css" || { echo "fixture: escape not written"; false; }
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json" --fake-assets "$BATS_TEST_TMPDIR/assets"
+  [ "$status" -eq 3 ] && [[ "${lines[0]}" == "rival stitch: COULD-NOT-DRAFT (not self-contained ("* ]] || { echo "an escaped stylesheet load was drafted: $output"; false; }
+  [ ! -e "$(_page)" ]
+}
+
+@test "rival: a state dir that is a symlink is refused before the record is written through it (B9)" {
+  export STITCH_API_KEY="test-key-0123456789"
+  _ok_answer
+  mkdir -p "$SANDBOX/.claude/state/design/rivals/demo" "$BATS_TEST_TMPDIR/elsewhere"
+  ln -s "$BATS_TEST_TMPDIR/elsewhere" "$SANDBOX/.claude/state/design/rivals/demo/r1" 2>/dev/null || true
+  [ -L "$SANDBOX/.claude/state/design/rivals/demo/r1" ] || skip "this filesystem made a copy, not a symlink"
+  run node "$(_rival)" draft --brief demo --run r1 --fake-answer "$BATS_TEST_TMPDIR/answer.json"
+  [ "$status" -eq 1 ] && [[ "$output" == *"is a link or not a directory"* ]] || { echo "$status $output"; false; }
+  [ -z "$(ls -A "$BATS_TEST_TMPDIR/elsewhere")" ] || { echo "the record was written through the link"; false; }
+}
+
 @test "rival: the suite registered all of its tests" {
   run grep -c '^@test ' "$BATS_TEST_FILENAME"
-  [ "$output" -eq 22 ]
+  [ "$output" -eq 26 ]
 }

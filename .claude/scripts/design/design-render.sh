@@ -164,6 +164,11 @@ if [ "$MODE" = "explore" ]; then
     echo "  $1" >&2
     exit 1
   }
+  # Every segment is a plain name -- no empty, `.` or `..` segment anywhere in the route -- checked before
+  # any pattern can let `*` cross a `/` (attack ae0aeb8 L9, B10).
+  case "/$ROUTE/" in
+    *//*|*/./*|*/../*) _explore_route_refuse "The route carries an empty, '.' or '..' segment.";;
+  esac
   case "$ROUTE" in
     *:*) _explore_route_refuse "A URL or a drive path is never an explore page.";;
     docs/design/explore/*/variant-?/?*) ;;

@@ -23,7 +23,7 @@
 // answer, --record-request <file> writes the request the transport would have sent (the key as a sha256
 // prefix, so a test can prove where it went without the key being written down).
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -36,7 +36,7 @@ const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const SEAMS = ["--fake-answer", "--record-request", "--fake-assets"];
 
 // One provider today. A second is a new row here plus its own child file, never a branch in the caller.
-const PROVIDERS = {
+export const PROVIDERS = {
   stitch: {
     pkg: "@google/stitch-sdk@0.3.5",
     name: "@google/stitch-sdk",
@@ -119,6 +119,9 @@ export function readAnswer(provider, answer) {
   // screen's HTML (attack 65d01cc L9).
   const own = answer.screen && typeof answer.screen === "object" && answer.screen.htmlCode && typeof answer.screen.htmlCode === "object" ? answer.screen.htmlCode.downloadUrl : undefined;
   if (typeof own !== "string" || own !== String(answer.htmlUrl)) return { why: "the HTML URL is not the screen's own htmlCode download" };
+  // A dot segment, raw or percent-encoded, names a resource other than the one written (attack ae0aeb8 L7).
+  // The path itself is recorded in the receipt; its prefix is not pinned until a live draft has shown it.
+  if (/(^|\/)(\.|%2e){1,2}(\/|$)/i.test(String(answer.htmlUrl).replace(/^[a-z]+:\/\/[^/]*/i, "").split(/[?#]/)[0]) || /%2f|%5c/i.test(u.pathname)) return { why: "the HTML URL path carries a dot segment or an encoded slash" };
   return { url: u };
 }
 
@@ -188,6 +191,12 @@ function sdkEntry(provider, runDir) {
     writeFileSync(pin, JSON.stringify({ pkg: provider.pkg, installedAt: new Date().toISOString(), tree_sha256: recorded }, null, 2) + "\n");
   }
   if (treeHash(nm) !== recorded) return null;
+  // The child imports a COPY in this run's private dir, hashed after the copy: hashing the shared install
+  // and importing it later left a window to swap the entry in between (attack ae0aeb8 B4).
+  const copyNm = join(runDir, "sdk", "node_modules");
+  try { cpSync(nm, copyNm, { recursive: true, verbatimSymlinks: true }); } catch { return null; }
+  if (treeHash(copyNm) !== recorded) return null;
+  const pkgCopy = join(copyNm, ...provider.name.split("/"));
   let rel;
   try {
     const p = JSON.parse(readFileSync(pj, "utf8"));
@@ -195,18 +204,21 @@ function sdkEntry(provider, runDir) {
     const dot = p.exports && p.exports["."];
     rel = (dot && typeof dot === "object" ? dot.import : dot) ?? p.main;
   } catch { return null; }
-  const entry = resolve(pkgDir, String(rel ?? ""));
-  return rel && entry.startsWith(resolve(pkgDir) + sep) && existsSync(entry) ? { entry, tree: recorded } : null;
+  const entry = resolve(pkgCopy, String(rel ?? ""));
+  return rel && entry.startsWith(resolve(pkgCopy) + sep) && existsSync(entry) ? { entry, tree: recorded } : null;
 }
 
 // The child and everything it started: on Windows a plain kill reaches only the direct process, and a
-// grandchild holding the key and a socket outlived the run (attack 65d01cc B10).
+// grandchild holding the key and a socket outlived the run (attack 65d01cc B10). Unconditional: a leader
+// that already exited can leave its group alive, and an early return on its exit skipped the group
+// (attack ae0aeb8 B8). ESRCH -- nothing left -- is the success case.
 function killTree(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
   if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true, timeout: 10000 });
+    // Windows has no process group to reach once the leader is gone, and a freed pid can be reused by an
+    // unrelated process, so the tree kill runs only while the leader lives.
+    if (child.exitCode === null && child.signalCode === null) spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true, timeout: 10000 });
   } else {
-    try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { /* gone */ } }
+    try { process.kill(-child.pid, "SIGKILL"); } catch { /* ESRCH: the group is gone */ }
   }
 }
 
@@ -349,17 +361,33 @@ export function tagsOf(html) {
 // The remote LOADS in one HTML document, each with the offsets of the exact text to rewrite:
 // [{tag, attr, raw, url, rel, start, end}]. `refuse` names a construct that cannot be vendored at all
 // (<base>, a meta refresh), which makes the draft unresolved rather than half-online.
+// The remote url()/@import refs in one CSS text, offsets relative to `at`. A stylesheet is CSS, not
+// HTML: reading it through the HTML tag reader finds nothing, and its fonts would stay remote.
+export function cssLoads(text, at = 0) {
+  const out = [];
+  for (const m of text.matchAll(CSS_URL)) {
+    const raw = m[2] ?? m[4];
+    if (!raw || !isRemote(raw)) continue;
+    const start = at + m.index + m[0].indexOf(raw);
+    out.push({ tag: "css", attr: "url", raw, url: absolute(raw), rel: "", start, end: start + raw.length });
+  }
+  return out;
+}
+
+// What the second reader finds still remote in a CSS text, or null: anything `//host`-shaped after
+// comments are dropped, and any url() written with a CSS escape, which no reader here decodes.
+function strayCss(text) {
+  const css = decodeAttr(text).replace(/\/\*[\s\S]*?\*\//g, "");
+  const m = /(?:^|[^a-z0-9])((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[][^\s"')]*)/i.exec(css);
+  if (m) return `still remote after vendoring: ${field(m[1]).slice(0, 120)}`;
+  if (/url\(\s*["']?[^"')]*\\/i.test(css) || /@import\s+[^;]*\\/i.test(css)) return "a url() or @import written with a CSS escape";
+  return null;
+}
+
 export function remoteLoads(html) {
   const out = [];
   const refuse = [];
-  const cssRefs = (text, at) => {
-    for (const m of text.matchAll(CSS_URL)) {
-      const raw = m[2] ?? m[4];
-      if (!raw || !isRemote(raw)) continue;
-      const start = at + m.index + m[0].indexOf(raw);
-      out.push({ tag: "css", attr: "url", raw, url: absolute(raw), rel: "", start, end: start + raw.length });
-    }
-  };
+  const cssRefs = (text, at) => { out.push(...cssLoads(text, at)); };
   for (const t of tagsOf(html)) {
     if (t.text && t.name === "style") cssRefs(html.slice(t.text.start, t.text.end), t.text.start);
     if (t.name === "a" || t.name === "area") continue;
@@ -485,11 +513,17 @@ export async function vendor(html, assetsDir, getAsset) {
     if (/css/.test(got.type) && depth === 0) {
       const css = body.toString("utf8");
       const edits = [];
-      for (const ref of remoteLoads(css).filter((r) => r.tag === "css")) {
+      for (const ref of cssLoads(css)) {
         const name = await fetchOne(ref.url, 1);
         if (name) { edits.push({ start: ref.start, end: ref.end, text: name }); rewrites.push({ in: "stylesheet", from: field(ref.raw).slice(0, 200), to: name }); }
       }
-      body = Buffer.from(applyEdits(css, edits));
+      // An overlap is a named refusal here exactly as in the page, never an internal error (attack ae0aeb8 L8).
+      let rewritten;
+      try { rewritten = applyEdits(css, edits); } catch (e) { unresolved.push(`${field(url).slice(0, 160)}: ${field(e.message)}`); cache.set(url, null); return null; }
+      // The second reader runs over every vendored stylesheet too, not only the page (attack ae0aeb8 B2).
+      const stray = strayCss(rewritten);
+      if (stray) { unresolved.push(`${field(url).slice(0, 160)}: ${stray}`); cache.set(url, null); return null; }
+      body = Buffer.from(rewritten);
     } else if (/css/.test(got.type)) {
       unresolved.push(`${field(url).slice(0, 160)}: a stylesheet imported from a stylesheet`);
       cache.set(url, null);
@@ -499,6 +533,9 @@ export async function vendor(html, assetsDir, getAsset) {
     writeFileSync(join(assetsDir, name), body);
     assets.push({ url: field(url).slice(0, 300), ...(got.final && got.final !== url ? { final: field(got.final).slice(0, 300) } : {}), type: field(got.type).slice(0, 80), bytes: body.length, sha256: sha(body), local: `assets/${name}` });
     cache.set(url, name);
+    // The final URL after a same-host redirect names the same bytes: a second reference to it reuses this
+    // file rather than fetching it again under another name (attack ae0aeb8 B3).
+    if (got.final && got.final !== url && !cache.has(got.final)) cache.set(got.final, name);
     return name;
   };
   const loads = remoteLoads(html);
@@ -543,10 +580,8 @@ function strayRemote(html) {
       }
     }
     if (t.text && t.name === "style") {
-      const css = decodeAttr(html.slice(t.text.start, t.text.end)).replace(/\/\*[\s\S]*?\*\//g, "");
-      const m = /(?:^|[^a-z0-9])((?:[a-z][a-z0-9+.-]*:)?\/\/[a-z0-9[][^\s"')]*)/i.exec(css);
-      if (m) found.push(`<style> ${field(m[1]).slice(0, 120)}`);
-      if (/url\(\s*["']?[^"')]*\\/i.test(css)) found.push("<style> a url() written with a CSS escape");
+      const why = strayCss(html.slice(t.text.start, t.text.end));
+      if (why) found.push(`<style> ${why}`);
     }
   }
   return found;
@@ -555,6 +590,25 @@ function strayRemote(html) {
 // ---------- the command ----------
 
 let onCrash = null;
+
+// The first path in `chain` that exists and is a link or not a real directory, or whose resolved path
+// leaves the repo, as a repo-relative name; null when every one is safe. lstat alone is not enough on
+// Windows, where some Node versions report a junction as a directory, so the realpath is compared too.
+function unsafeDirs(chain) {
+  const rootReal = realpathSync(ROOT);
+  for (const p of chain) {
+    let st = null;
+    try { st = lstatSync(p); } catch { st = null; }
+    if (!st) continue;
+    const name = p.slice(ROOT.length + 1).split(sep).join("/");
+    if (st.isSymbolicLink() || !st.isDirectory()) return name;
+    let real;
+    try { real = realpathSync(p); } catch { return name; }
+    const want = resolve(rootReal, p.slice(ROOT.length + 1));
+    if (real.toLowerCase() !== want.toLowerCase()) return name;
+  }
+  return null;
+}
 
 async function draft(argv) {
   const o = parseNamed(argv, new Set(["--brief", "--run", "--provider", ...SEAMS]));
@@ -573,6 +627,12 @@ async function draft(argv) {
 
   const runRoot = join(ROOT, ".claude", "state", "design", "rivals", briefId, runId);
   const out = join(runRoot, pname);
+  // The state tree takes draft.raw.html, the receipt, the stage dir and its recursive removes, so it gets
+  // the same link refusal as the explore tree (attack ae0aeb8 B9). Nothing is attempted yet: a usage error.
+  const stateChain = [".claude", join(".claude", "state"), join(".claude", "state", "design"), join(".claude", "state", "design", "rivals"),
+    join(".claude", "state", "design", "rivals", briefId), join(".claude", "state", "design", "rivals", briefId, runId), join(".claude", "state", "design", "rivals", briefId, runId, pname)].map((p) => join(ROOT, p));
+  const badState = unsafeDirs(stateChain);
+  if (badState) usage(`${badState} is a link or not a directory; the rival record is written only inside the repo`);
   mkdirSync(out, { recursive: true });
   // This run's record starts empty: a receipt or vendor record a failed earlier attempt left behind must
   // never sit beside this run's outcome (attack 65d01cc B6). The vendored page itself is replaced only
@@ -592,7 +652,10 @@ async function draft(argv) {
     settled = true;
     receipt.finishedAt = new Date().toISOString();
     receipt.status = status;
-    const scrub = (t) => (key ? String(t).split(key).join("<key>") : String(t));
+    // The key in its raw AND its JSON-escaped spelling: the receipt is scrubbed after serialising, and a key
+    // holding a quote or backslash is written escaped, which a raw-only split would miss (attack ae0aeb8 L12).
+    const spellings = key ? [...new Set([key, JSON.stringify(key).slice(1, -1)])] : [];
+    const scrub = (t) => spellings.reduce((s, k) => s.split(k).join("<key>"), String(t));
     const line = `rival ${pname}: ${status === "DRAFTED" ? "DRAFTED" : "COULD-NOT-DRAFT"} ${field(scrub(detail))}`;
     // The status line is printed even when the record cannot be written; a DRAFTED that cannot be
     // recorded is not a draft, since the jury deals only on the receipt.
@@ -658,6 +721,7 @@ async function draft(argv) {
   const s = answer.screen && typeof answer.screen === "object" ? answer.screen : {};
   receipt.screen = { id: field(s.id ?? "").slice(0, 80) || null, projectId: field(s.projectId ?? "").slice(0, 80) || null, deviceType: field(s.deviceType ?? "").slice(0, 20) || null };
   receipt.html_host = read.url.hostname;
+  receipt.html_path = field(read.url.pathname).slice(0, 200);
 
   let body;
   try {
@@ -676,11 +740,9 @@ async function draft(argv) {
   const exploreRoot = join(ROOT, "docs", "design", "explore");
   const exploreDir = join(exploreRoot, runId);
   const rivalDir = join(exploreDir, `rival-${pname}`);
-  for (const p of [join(ROOT, "docs"), join(ROOT, "docs", "design"), exploreRoot, exploreDir, rivalDir]) {
-    let st = null;
-    try { st = lstatSync(p); } catch { st = null; }
-    if (st && (st.isSymbolicLink() || !st.isDirectory())) return fail(`unusable answer (${p.slice(ROOT.length + 1).split(sep).join("/")} is a link or not a directory)`);
-  }
+  const chain = [join(ROOT, "docs"), join(ROOT, "docs", "design"), exploreRoot, exploreDir, rivalDir];
+  const bad = unsafeDirs(chain);
+  if (bad) return fail(`unusable answer (${bad} is a link or not a directory)`);
   // Vendored into a staging dir under this run's own state, and moved into place only on success: a
   // failed attempt never removes a page an earlier run made, and never leaves a half-written one.
   const stage = join(out, "stage");
@@ -695,7 +757,16 @@ async function draft(argv) {
   }
   writeFileSync(join(stage, "index.html"), v.html);
   mkdirSync(exploreDir, { recursive: true });
-  rmSync(rivalDir, { recursive: true, force: true });
+  // Checked AGAIN right before the remove and the rename, since the vendoring fetch above can take
+  // minutes; the old dir is first renamed to a name only this run uses, then that name is removed, so the
+  // recursive remove never runs on a path something else could have swapped in (attack ae0aeb8 B1, L4).
+  const late = unsafeDirs(chain);
+  if (late) return fail(`unusable answer (${late} is a link or not a directory)`);
+  if (existsSync(rivalDir)) {
+    const old = join(exploreDir, `.rival-${pname}.old-${process.pid}-${Date.now()}`);
+    renameSync(rivalDir, old);
+    rmSync(old, { recursive: true, force: true });
+  }
   renameSync(stage, rivalDir);
   const pageSha = sha(v.html);
   writeFileSync(join(out, "vendor.json"), JSON.stringify({ hosts: ASSET_HOSTS, assets: v.assets, rewrites: v.rewrites, page: { bytes: Buffer.byteLength(v.html), sha256: pageSha } }, null, 2) + "\n");
