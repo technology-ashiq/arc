@@ -250,11 +250,16 @@ _emit() { # $1 payload json; emits note.logged into the per-test spine, strict
 }
 
 @test "loader: a FIFO day file is skipped, never blocks the reader" {
+  # Windows: Git Bash's mkfifo makes an MSYS-emulated FIFO that native node never sees, so the test would measure
+  # nothing there (CI showed REJECTED 0). A real FIFO cannot sit in a Windows directory, which is the platform's answer.
+  case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) skip "no native FIFO on Windows";; esac
   command -v mkfifo >/dev/null 2>&1 || skip "no mkfifo on this platform"
+  command -v perl >/dev/null 2>&1 || skip "no perl to bound the read"
   local root="$BATS_TEST_TMPDIR/froot"; mkdir -p "$root/.claude/state/hq/events"
   mkfifo "$root/.claude/state/hq/events/2026-10-07.jsonl" 2>/dev/null || skip "mkfifo cannot make a FIFO here"
   [ -p "$root/.claude/state/hq/events/2026-10-07.jsonl" ] || skip "not a FIFO on this filesystem"
-  run timeout 30 node "$FX/loader-probe.mjs" "$SB/$LOAD_REL" "$root"
+  # Bounded with perl's alarm, not timeout(1): macOS runners have no `timeout` (CI: status 127).
+  run perl -e 'alarm shift; exec @ARGV' 30 node "$FX/loader-probe.mjs" "$SB/$LOAD_REL" "$root"
   [ "$output" = "LOADED 0 REJECTED 1" ] || { echo "FIFO: status $status, output $output"; false; }
 }
 
