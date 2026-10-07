@@ -47,50 +47,126 @@ _killed() {
 
 # ---------------------------------------------------------------- REQ-01: the fold ran, over every pair
 
-@test "fold RAN: one cell per subject x capability" { _pass ran; }
-@test "carriers: guard run is every cell last_audit, process run is its shell success" { _pass carriers; }
-@test "no clock: Date.now and an argument-less Date throw and the fold still answers" { _pass noClock; }
+@test "fold RAN: one cell per subject x capability" {
+  _pass ran
+}
+@test "carriers: guard run is every cell last_audit, process run is its shell success" {
+  _pass carriers
+}
+@test "no clock: Date.now and an argument-less Date throw and the fold still answers" {
+  _pass noClock
+}
 
 # ---------------------------------------------------------------- REQ-02: BELOW-BAR and invariants (a)(b)
 
-@test "invariant a: zero receipts is BELOW-BAR, never PASS" { _pass zeroReceipts; }
-@test "invariant a: mutant M-a (absent stops counting) is killed" { _killed "$FOLD_REL" M-a zeroReceipts; }
-@test "positive control: a fresh refusal clears the bar" { _pass freshControl; }
-@test "invariant b: fresh at N, BELOW-BAR at N+1, byte-identical replays" { _pass dayBoundary; }
-@test "invariant b: mutant M-b (age from the clock) is killed" { _killed "$FOLD_REL" M-b dayBoundary; }
-@test "invariant b: mutant M-b2 (boundary one day early) is killed" { _killed "$FOLD_REL" M-b2 dayBoundary; }
-@test "IST bucketing: 23:59:59 and 00:00:00 IST are different days" { _pass istBucketing; }
-@test "IST bucketing: mutant M-utc is killed" { _killed "$FOLD_REL" M-utc istBucketing; }
-@test "future events after as-of are ignored, never a negative age" { _pass future; }
-@test "future events: mutant M-future is killed" { _killed "$FOLD_REL" M-future future; }
-@test "a missing N is BELOW-BAR with reason no-bar-declared" { _pass noBarDeclared; }
+@test "invariant a: zero receipts is BELOW-BAR, never PASS" {
+  _pass zeroReceipts
+}
+@test "invariant a: mutant M-a (absent stops counting) is killed" {
+  _killed "$FOLD_REL" M-a zeroReceipts
+}
+@test "positive control: a fresh refusal clears the bar" {
+  _pass freshControl
+}
+@test "invariant b: fresh at N, BELOW-BAR at N+1, byte-identical replays" {
+  _pass dayBoundary
+}
+@test "invariant b: mutant M-b (age from the clock) is killed" {
+  _killed "$FOLD_REL" M-b dayBoundary
+}
+@test "invariant b: mutant M-b2 (boundary one day early) is killed" {
+  _killed "$FOLD_REL" M-b2 dayBoundary
+}
+@test "IST bucketing: 23:59:59 and 00:00:00 IST are different days" {
+  _pass istBucketing
+}
+@test "IST bucketing: mutant M-utc is killed" {
+  _killed "$FOLD_REL" M-utc istBucketing
+}
+@test "future events after as-of are ignored, never a negative age" {
+  _pass future
+}
+@test "future events: mutant M-future is killed" {
+  _killed "$FOLD_REL" M-future future
+}
+@test "a missing N is BELOW-BAR with reason no-bar-declared" {
+  _pass noBarDeclared
+}
 
 # ---------------------------------------------------------------- REQ-03: attribution, and what does not count
 
-@test "an inconsistent level is discarded" { _pass inconsistent; }
-@test "inconsistent: mutant M-noforge is killed" { _killed "$FOLD_REL" M-noforge inconsistent; }
-@test "an L0 refusal from before a promotion does not refresh the L1 pair" { _pass l0BeforePromotion; }
-@test "L0 before promotion: mutant M-l0 is killed" { _killed "$FOLD_REL" M-l0 l0BeforePromotion; }
-@test "a headless refusal with no gate incident behind it is unverified" { _pass unverifiedHeadless; }
-@test "unverified headless: mutant M-ref is killed" { _killed "$FOLD_REL" M-ref unverifiedHeadless; }
-@test "an interactive refusal before any interactive writer exists is forged" { _pass forgedBeforeWriter; }
-@test "forged before writer: mutant M-writer is killed" { _killed "$FOLD_REL" M-writer forgedBeforeWriter; }
-@test "prose is never parsed: an incident naming shell is not a refusal" { _pass proseIgnored; }
-@test "corroboration positive control: incident first, same process, typed denial" { _pass corroborated; }
-@test "an incident written after the refusal cannot vouch for it" { _pass incidentAfterRefusal; }
-@test "incident order: mutant M-order is killed" { _killed "$FOLD_REL" M-order incidentAfterRefusal; }
-@test "an incident whose typed denials miss the capability vouches for nothing" { _pass incidentWithoutDenial; }
-@test "typed denials: mutant M-denials is killed" { _killed "$FOLD_REL" M-denials incidentWithoutDenial; }
-@test "another version of the process is another process" { _pass versionMismatch; }
-@test "process version: mutant M-version is killed" { _killed "$FOLD_REL" M-version versionMismatch; }
-@test "an impossible as-of day is refused, never rolled over" { _pass invalidAsOf; }
-@test "calendar days: mutant M-calendar is killed" { _killed "$FOLD_REL" M-calendar invalidAsOf; }
-@test "a policy with no subject is refused, never a clean zero-cell reading" { _pass emptyPolicy; }
-@test "at L1 a deny is attributed but never proves the propose path" { _pass l1DenyDoesNotQualify; }
-@test "L1 deny: mutant M-l1deny is killed" { _killed "$FOLD_REL" M-l1deny l1DenyDoesNotQualify; }
-@test "a receipt declaring the other surface cannot borrow its writer" { _pass surfaceMismatch; }
-@test "surface: mutant M-surface is killed" { _killed "$FOLD_REL" M-surface surfaceMismatch; }
-@test "a declared but unusable N reads invalid-bar, apart from no N" { _pass invalidBar; }
+@test "an inconsistent level is discarded" {
+  _pass inconsistent
+}
+@test "inconsistent: mutant M-noforge is killed" {
+  _killed "$FOLD_REL" M-noforge inconsistent
+}
+@test "an L0 refusal from before a promotion does not refresh the L1 pair" {
+  _pass l0BeforePromotion
+}
+@test "L0 before promotion: mutant M-l0 is killed" {
+  _killed "$FOLD_REL" M-l0 l0BeforePromotion
+}
+@test "a headless refusal with no gate incident behind it is unverified" {
+  _pass unverifiedHeadless
+}
+@test "unverified headless: mutant M-ref is killed" {
+  _killed "$FOLD_REL" M-ref unverifiedHeadless
+}
+@test "an interactive refusal before any interactive writer exists is forged" {
+  _pass forgedBeforeWriter
+}
+@test "forged before writer: mutant M-writer is killed" {
+  _killed "$FOLD_REL" M-writer forgedBeforeWriter
+}
+@test "prose is never parsed: an incident naming shell is not a refusal" {
+  _pass proseIgnored
+}
+@test "corroboration positive control: incident first, same process, typed denial" {
+  _pass corroborated
+}
+@test "an incident written after the refusal cannot vouch for it" {
+  _pass incidentAfterRefusal
+}
+@test "incident order: mutant M-order is killed" {
+  _killed "$FOLD_REL" M-order incidentAfterRefusal
+}
+@test "an incident whose typed denials miss the capability vouches for nothing" {
+  _pass incidentWithoutDenial
+}
+@test "typed denials: mutant M-denials is killed" {
+  _killed "$FOLD_REL" M-denials incidentWithoutDenial
+}
+@test "another version of the process is another process" {
+  _pass versionMismatch
+}
+@test "process version: mutant M-version is killed" {
+  _killed "$FOLD_REL" M-version versionMismatch
+}
+@test "an impossible as-of day is refused, never rolled over" {
+  _pass invalidAsOf
+}
+@test "calendar days: mutant M-calendar is killed" {
+  _killed "$FOLD_REL" M-calendar invalidAsOf
+}
+@test "a policy with no subject is refused, never a clean zero-cell reading" {
+  _pass emptyPolicy
+}
+@test "at L1 a deny is attributed but never proves the propose path" {
+  _pass l1DenyDoesNotQualify
+}
+@test "L1 deny: mutant M-l1deny is killed" {
+  _killed "$FOLD_REL" M-l1deny l1DenyDoesNotQualify
+}
+@test "a receipt declaring the other surface cannot borrow its writer" {
+  _pass surfaceMismatch
+}
+@test "surface: mutant M-surface is killed" {
+  _killed "$FOLD_REL" M-surface surfaceMismatch
+}
+@test "a declared but unusable N reads invalid-bar, apart from no N" {
+  _pass invalidBar
+}
 
 # ---------------------------------------------------------------- the profile on the spine (ADR-0509)
 
