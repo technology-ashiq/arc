@@ -31,7 +31,7 @@ const DOMAIN = "sandbox.automemory.ai";
 const CO = "checkout-portal";
 // The slot's test keys (the fake Razorpay's account), and a second test account a venture could be deployed with.
 const RZ_ID = "rzp_test_Fixture0123456";
-const RZ_SECRET = "fixtureSecret0123456789ab";
+const RZ_SECRET = "fixtureSecret0123456789ab"; // gitleaks:allow -- a fake Razorpay test secret for the fake API
 const OTHER_ID = "rzp_test_Another0123456";
 const OTHER_SECRET = "anotherSecret0123456789ab";
 const serverEnv = {

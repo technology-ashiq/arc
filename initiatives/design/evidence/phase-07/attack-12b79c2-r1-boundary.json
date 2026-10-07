@@ -1,0 +1,121 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-render.sh:820-830",
+      "breaking_input": "design-render.sh docs/design/explore/t/rival-stitch/index.html --mode critique --session ex--variant-a. The same applies to a critique render of an HTML page that frames a reference-pack screen.",
+      "why": "Provenance is derived only when MODE is explore. Every other mode is stamped `arc` without looking at the route's directory. The packager trusts that stamp, and a framed pack screen has different bytes from the pack image, so the GALLERY hash check cannot catch it either. A rival or reference page can therefore be stamped `arc`, pass lint, and leave the repo.",
+      "fix": "Derive provenance from the route path in every mode. Refuse any route under a rival-* or ref-* directory unless MODE is explore and the stamp matches the directory. Treat a non-explore render of an explore path as a refusal, not as arc.",
+      "twin_of": "The hook validating one input field while the tool used another -> pick the field by the tool, and refuse the other key."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:859-861",
+      "breaking_input": "No node on PATH, and a rival directory named `rival-x\",\"provenance\":\"arc`, which is legal on POSIX. The printf fallback writes `\"provenance\": \"rival:x\",\"provenance\":\"arc\"`.",
+      "why": "The fallback writer interpolates $PROVENANCE with %s and no escaping. The quote/backslash guard covers only ROUTE. The field is last in the object, so JSON.parse takes the injected duplicate and a rival render reads as arc. The node writer escapes it correctly, so the two writers disagree.",
+      "fix": "Refuse a provenance containing a quote, backslash, or control character before either writer runs. Also restrict the suffix after `rival:` to the id grammar.",
+      "twin_of": "A fixed scrub with an unfixed twin in the next file -> every writer of remote or registry text into a line scrubs it; grep the pattern, not the file."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "design-package.mjs:166-172",
+      "breaking_input": "Build where the post-copy lint finds a refusal. One cause: an older receipt for the same bytes has no provenance, which gives PROVENANCE-ABSENT.",
+      "why": "package-manifest.json is written before the lint and with a truncating writeFileSync. When lint fails, rmSync removes the package but the manifest stays, still claiming `provenance: arc` for files that no longer exist. The same manifest path is shared by every out dir directly under blind-test, so a later build silently overwrites an earlier one. With `--out docs/design/blind-test` itself, the manifest lands in docs/design, outside the blind-test tree.",
+      "fix": "Write the manifest only after the lint passes, using a temp file and rename. Create it exclusively, or refuse if it already exists. Require `out` to be strictly below blindRoot.",
+      "twin_of": "An exclusive write at the end of a job whose middle already wrote shared state -> claim first (an atomic mkdir after every check), then write."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "design-package.mjs:163-175",
+      "breaking_input": "A copyFileSync that fails on the second of three files (AV lock or full disk). Alternatively, a file in the new package that is unreadable at lint time, so readFileSync inside lintPackage throws.",
+      "why": "mkdirSync, the copies, and lintPackage are unguarded. A throw gives a stack trace and no `design-package:` line. The partial or unlinted package directory is never removed, because the rmSync only runs on a clean findings list. The next build then fails with 'already exists'. An unlinted package sits where the gate says only linted packages live.",
+      "fix": "Wrap claim, copy, and lint in try/catch. On any error, remove the directory this run created and print a named ERR line with a distinct exit code.",
+      "twin_of": "A throw that escapes the one-status-line contract -> every throw after argument parsing becomes a named error and a fixed exit."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "design-package.mjs:135-141,164-175",
+      "breaking_input": "docs/design/blind-test/ex is a symlink or junction to a directory outside the repo. Run build --out docs/design/blind-test/ex/package.",
+      "why": "The containment check is purely lexical, via resolve and startsWith, with no lstat or realpath of any component. The copies and the later recursive rmSync both go through the link, so files are written to and deleted from the real target outside the tree. A dangling link at `out` makes existsSync false and mkdirSync then throws.",
+      "fix": "lstat every component from root down to `out` and refuse a link. Realpath-contain the parent to blindRoot before mkdir, and delete only what this run created.",
+      "twin_of": "A cleanup that removed what an earlier run made, through whatever was at the path -> lstat every component and refuse a link; stage under the run own state and rename only on success"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "design-package.mjs:153-157",
+      "breaking_input": "A `renders/ex--variant-a/sub` directory that is a junction, with a receipt whose png is `.../ex--variant-a/sub/x.png`.",
+      "why": "The path-leaves-session check is lexical and lstat covers only the final component, which resolves through the parent link. The file is read from outside the session directory. The sha match against the receipt is the only remaining guard.",
+      "fix": "Take realpathSync of the file and of the session directory, require containment, and lstat each component.",
+      "twin_of": "A path from a metadata file trusted because it had no `..` -> a file read on a record's word is realpath-contained to the directory it was found through, a regular file, and the type it claims."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:206",
+      "breaking_input": "An hq.policy.yaml with tens of thousands of blank or whitespace-only lines before the spend lines, scanned with /^\\s+spend:.../gm.",
+      "why": "With the m flag, `^\\s+` starts at every line start and `\\s+` consumes all following blank lines before failing, so the scan is quadratic. The same regex also accepts a `spend:` line at any nesting, not only under a kind.",
+      "fix": "Split on /\\r?\\n/ and match each line with `^[ \\t]+spend:...`. Require the line to sit under a kinds entry.",
+      "twin_of": "A multiline regex anchored with `^\\s*`, so `\\s` crossed lines and rescanned every blank line -> scan lines one at a time; never let a whitespace class cross a line anchor."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/design-package.bats (link cases in the third package test and the second drop test)",
+      "breaking_input": "The Windows CI leg under MSYS, where `ln -s` copies the file by default. `|| true` plus `if [ -L ... ]` then skips the link assertion.",
+      "why": "The refusal of linked package files and linked drop files is never executed on the Windows leg. The test still reports green, so it proves nothing there.",
+      "fix": "Create the link with node fs.symlinkSync, or fail the test when a link cannot be created. Assert that the link branch ran."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "design-package.mjs:30-33,181-188",
+      "breaking_input": "An uncaught throw in lint, such as EACCES on readFileSync of a package file or an EISDIR on the --dir target.",
+      "why": "Node's crash exit code is 1, the same code as REFUSED and usage errors. A caller cannot tell a verdict from a crash. It fails closed here but the codes are ambiguous.",
+      "fix": "Give a refusal its own code that the runtime never produces. Catch every other throw as a named ERR line with a distinct code.",
+      "twin_of": "A caller read the parser's \"someone else\" code, 1, which is also bash's crash code -> a verdict gets a code the runtime never produces by accident; every unknown code is judged."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:823-831",
+      "breaking_input": "An explore render whose _er_variant is `foo`, so it hits `*)` and exits 1.",
+      "why": "By then the PNG is already written. The other failure paths run `rm -f \"$PNG\" \"$META\"` but this refusal leaves an orphan PNG with no receipt in the renders dir.",
+      "fix": "Compute provenance before the screenshot is taken, or rm the PNG on this branch.",
+      "twin_of": "A refusal raised after the output dir was claimed -> judge every input before claiming the output"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "design-refpack.mjs drop():~677-684",
+      "breaking_input": "The --drop file is swapped between lstatSync and readFileSync, either for a link or for a file larger than 16 MiB.",
+      "why": "The size cap and link check run on the lstat snapshot, but readFileSync reads whatever is there afterwards. body.length is never rechecked, so an oversized or linked file is read after the guards passed.",
+      "fix": "Open once with openSync and fstat the descriptor. Read at most the cap plus one byte, and refuse if body.length is 0 or over the cap.",
+      "twin_of": "A byte cap checked after the whole body is in memory -> stream the body and stop the read at the cap"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "design-refpack.mjs drop():~694 (the row written with shown(url))",
+      "breaking_input": "--url set to an http(s) URL carrying userinfo, a user name and a password, with the host after the @.",
+      "why": "The new test pins only query-string stripping. If shown() keeps userinfo, the credential is written into the committed sources.md of a public repo.",
+      "fix": "Refuse a URL with userinfo in parseHttpUrl, or drop it in shown(), and add a fixture for it.",
+      "twin_of": "A full URL with its query string went into a committed file -> drop query and fragment before anything is committed."
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "design-package.mjs:186-192",
+      "breaking_input": "Another script or a sandbox copy whose own file name is design-package.mjs imports this module.",
+      "why": "The basename fallback treats it as the command and runs build, lint, or the usage `fail`. The usage branch calls process.exit(1) at import time and kills the importing process.",
+      "fix": "Fall back only to an exact realpath match, or compare the full lowercased path. Do not match on file name alone.",
+      "twin_of": "A main guard whose miss is a silent exit 0 -> fall back to the file name, never to doing nothing"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "phase": "03",
+  "commit": "d6df3cc976434e01a5f50ed4b88be9a359f91d6e",
+  "short": "d6df3cc9",
+  "generated": "2026-10-07T01:01:49Z",
+  "files": [
+    {
+      "name": "audit-full.txt",
+      "sha256": "c7aceb3734d68b34b460e5081160a062be524e37f624cdaa7a0cc86a94359d95"
+    },
+    {
+      "name": "audit-restored.txt",
+      "sha256": "4ec6afa648d437c2fdacb30b2b218000f2ebfec0af79ae93a3f5317a974ca103"
+    },
+    {
+      "name": "audit-week.txt",
+      "sha256": "7fa00bcd43c877b8726c7210e9b674418fd0454ce570c08c65eb4adcbcfaf8eb"
+    },
+    {
+      "name": "brief-2026-09-29-live.txt",
+      "sha256": "85d54d80dd8e0a046d239fca71d1b71b872836786fb49bb0830b31d41b9be1a5"
+    },
+    {
+      "name": "close.md",
+      "sha256": "b498f0795f4872cd69520605f78ada2068170070e505b0bb00fa6dab4e94cc0b"
+    },
+    {
+      "name": "drill-panel-replay-2026-08-26.txt",
+      "sha256": "62e4c8989dd8ffbc551ed625134f2467b3c60c3812040c6c122f0586f3a6a427"
+    },
+    {
+      "name": "gap-classes.txt",
+      "sha256": "51ff33945cbefdb9c8280c023c9ace408c066eee96e94eb536814f6dc12093d8"
+    },
+    {
+      "name": "week-log.md",
+      "sha256": "ec03423eee0acebb3db3a339cb14e2324d4c040bbd564422c1f30a24bf2546fe"
+    }
+  ]
+}

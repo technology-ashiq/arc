@@ -40,8 +40,10 @@
     ".claude/scripts/engine/cert-label.mjs",
     ".claude/scripts/engine/data-boundary.mjs",
     ".claude/scripts/engine/router-row.mjs",
+    ".claude/scripts/engine/failure-class.mjs",
     ".claude/scripts/engine/narrative-verify.mjs",
-    ".claude/scripts/engine/role-seat.mjs"
+    ".claude/scripts/engine/role-seat.mjs",
+    ".claude/scripts/engine/arc-doctor.mjs"
   ],
   "files": [],
   "docs": [],

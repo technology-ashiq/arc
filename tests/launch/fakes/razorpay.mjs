@@ -5,7 +5,7 @@
 //   fetchError    { status, description } answers every single-order GET with it
 //   ignoreReceipt the list ignores the receipt filter and pages every order (count + skip), newest first
 //   alsoAccept    more [keyId, keySecret] pairs Basic auth accepts (a venture deployed with another test account's keys)
-export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null, ignoreReceipt = false, alsoAccept = [] } = {}) {
+export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null, ignoreReceipt = false, alsoAccept = [] } = {}) { // gitleaks:allow -- fake Razorpay test keys the fake API accepts
   const store = orders.map((o) => ({ entity: "order", amount: 100, currency: "INR", status: "created", notes: {}, ...o }));
   const calls = [];
   let n = 0;

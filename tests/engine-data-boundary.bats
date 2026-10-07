@@ -197,10 +197,16 @@ classes:
     judge: fixture
     review_by: 2999-12-31
     fallback: []
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
 default:
   tier: balanced-workhorse
   driver: claude-code
   fallback: []
+  max_attempts: 2
+  max_wall_ms: 3600000
+  max_cost: unmetered
 YAML
 }
 

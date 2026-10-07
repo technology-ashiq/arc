@@ -744,7 +744,8 @@
       "docs": "lane",
       "org": "lane",
       "launch": "lane",
-      "discover": "lane"
+      "discover": "lane",
+      "distribute": "lane"
     }
   },
   "commands": {
@@ -1386,6 +1387,7 @@
       "1700": "lane",
       "1800": "model-policy",
       "1900": "lane",
+      "2000": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1420,6 +1422,7 @@
       "PLAN-design": "strategy",
       "PLAN-develop": "strategy",
       "PLAN-discover": "strategy",
+      "PLAN-distribute": "strategy",
       "PLAN-docs": "strategy",
       "PLAN-engine-process-layer": "strategy",
       "PLAN-evolve": "strategy",

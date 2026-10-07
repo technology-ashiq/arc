@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+/**
+ * policy-lint -- the validator for hq.policy.yaml.
+ *
+ * EXIT 2 ON ANY VIOLATION, FROM BIRTH. This is not an advisory lint and it has no WARN-first
+ * period: the spine strict-mode precedent applies, because a policy file that parses when it
+ * should not is a grant nobody authorised. Every other new lint this cycle starts WARN-first in
+ * TRIAL; this one never does.
+ *
+ *   node .claude/scripts/hq/policy-lint.mjs [path] [--evidence]     default: hq.policy.yaml
+ *
+ * Exit codes: 0 clean · 1 usage/IO · 2 the file is not law · 3 (--evidence only) law, but a level is BELOW-BAR.
+ * `--evidence` runs `policy-evidence.mjs check` after the file is law -- BELOW-BAR lives there once (POL-L, ADR-0511).
+ */
+
+import { spawnSync } from "node:child_process";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { lintPolicy } from "./lib/policy/lint.mjs";
+import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
+import { CAPABILITIES, minLevel } from "./lib/policy/model.mjs";
+import { resolveEffectivePolicy } from "./lib/policy/reduce.mjs";
+import { reproducedBy } from "./lib/policy/authorize.mjs";
+// The subject-set resolution moved to lib/policy/subjects.mjs in Phase 03: kickoff-lint's
+// birth rule consumes the SAME relation from the other direction, and a relation computed in
+// two files is a relation that drifts (POL-D). This file's behaviour is unchanged.
+import { processNames } from "./lib/policy/subjects.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "..", "..", "..");
+
+/**
+ * Print the DERIVED kind x capability x level table -- what the file actually means once
+ * ADR-0507's shell derivation and the birth cap are applied, not what it appears to say.
+ * A reviewer reading only the YAML cannot see either, and an adversarial pass showed a
+ * one-line file mutation that changed every grant while the lint printed a bare count.
+ */
+function printDerivedTable(text) {
+  let doc;
+  try {
+    doc = parsePolicyYaml(text);
+  } catch {
+    return;
+  }
+  const kinds = Object.keys(doc.kinds || {});
+  if (kinds.length === 0) {
+    process.stdout.write("  (no kinds declared -- every action kind is read-only at L1)\n");
+    return;
+  }
+  const pad = (s, n) => String(s).padEnd(n);
+  process.stdout.write(`  ${pad("action kind", 28)}${CAPABILITIES.map((c) => pad(c, 9)).join("")}\n`);
+  for (const kind of kinds) {
+    const cells = CAPABILITIES.map((capability) => {
+      const declared = resolveEffectivePolicy(kind, capability, { policy: doc, events: [] });
+      let level = declared.effective;
+      if (capability === "shell") {
+        const grant = doc.kinds[kind].shell || {};
+        for (const c of reproducedBy(grant.argv0_allow, doc.argv0_classes))
+          level = minLevel(level, resolveEffectivePolicy(kind, c, { policy: doc, events: [] }).effective);
+      }
+      return pad(level, 9);
+    });
+    process.stdout.write(`  ${pad(kind, 28)}${cells.join("")}\n`);
+  }
+  process.stdout.write("  (effective at birth: every cap starts at L1, so nothing above L1 executes yet)\n");
+}
+
+function main(argv) {
+  const evidence = argv.includes("--evidence");
+  const args = argv.filter((a) => a !== "--" && a !== "--evidence");
+  const target = args[0] || "hq.policy.yaml";
+  const path = resolve(process.cwd(), target);
+
+  if (!existsSync(path)) {
+    process.stderr.write(`policy-lint: no such file: ${target}\n`);
+    return 1;
+  }
+
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    process.stderr.write(`policy-lint: cannot read ${target}: ${e.message}\n`);
+    return 1;
+  }
+
+  const constitutionPath = join(ROOT, "CONSTITUTION.md");
+  // ONE buffer for both the hash check and the parse -- no TOCTOU gap between them (ADR-0506).
+  // A missing file is a VIOLATION raised by lintPolicy, never a warning printed here: both E2
+  // checks are on the never-cut list, so "is law" with them skipped is the poster document.
+  const constitutionBuffer = existsSync(constitutionPath) ? readFileSync(constitutionPath) : null;
+
+  const violations = lintPolicy(text, { constitutionBuffer, processNames: processNames(ROOT) });
+
+  if (violations.length === 0) {
+    // The path is printed RESOLVED. A CI step run from the wrong cwd once reported
+    // "hq.policy.yaml is law" about an entirely different file.
+    process.stdout.write(`policy-lint: ${path} is law -- 0 violations\n`);
+    printDerivedTable(text);
+    if (!evidence) return 0;
+    // --evidence judges the GOVERNING policy and spine; a verdict about another file would be confident and wrong.
+    // By filesystem identity, not string: Windows names one temp dir two ways (RUNNER~1 vs runneradmin), and a
+    // string compare refused the governing file itself on CI (attack p02 r2 B8, closed).
+    const real = (p) => { try { const r = realpathSync.native(p); return process.platform === "win32" ? r.toLowerCase() : r; } catch { return null; } };
+    if (real(path) === null || real(path) !== real(resolve(ROOT, "hq.policy.yaml"))) {
+      process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\n`);
+      return 1;
+    }
+    // The delegate judges THIS root: cwd and both selectors pinned, never inherited (attack p02 r2 B1).
+    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit", cwd: ROOT,
+      env: { ...process.env, ARC_ROOT: ROOT, ARC_SPINE_ROOT: join(ROOT, ".claude", "state", "hq") } });
+    if (r.status === null) {
+      process.stderr.write(`policy-lint: policy-evidence check did not run (${r.error ? r.error.message : r.signal})\n`);
+      return 1;
+    }
+    return r.status;
+  }
+  process.stderr.write(`policy-lint: ${target} is NOT law -- ${violations.length} violation(s)\n`);
+  for (const v of violations) process.stderr.write(`  - ${v}\n`);
+  return 2;
+}
+
+process.exit(main(process.argv.slice(2)));

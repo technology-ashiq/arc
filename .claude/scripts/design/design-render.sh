@@ -164,9 +164,16 @@ if [ "$MODE" = "explore" ]; then
     echo "  $1" >&2
     exit 1
   }
+  # Every segment is a plain name -- no empty, `.` or `..` segment anywhere in the route -- checked before
+  # any pattern can let `*` cross a `/` (attack ae0aeb8 L9, B10).
+  case "/$ROUTE/" in
+    *//*|*/./*|*/../*) _explore_route_refuse "The route carries an empty, '.' or '..' segment.";;
+  esac
   case "$ROUTE" in
     *:*) _explore_route_refuse "A URL or a drive path is never an explore page.";;
     docs/design/explore/*/variant-?/?*) ;;
+    docs/design/explore/*/rival-*/?*) ;;
+    docs/design/explore/*/ref-????????????????/?*) ;;
     *) _explore_route_refuse "The route is not a page inside a variant directory.";;
   esac
   # `*` in a case pattern crosses `/`, so each part is taken apart and checked on its own.
@@ -180,7 +187,21 @@ if [ "$MODE" = "explore" ]; then
   esac
   case "$_er_variant" in
     variant-[abcdefghijklmnopqrstuvwxyz]) ;;
-    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter>.";;
+    # A rival draft (Phase 07, ADR-1422): its vendored copy, in a gitignored rival-<provider>/ dir,
+    # is served and recorded exactly like a variant -- one render path, the renderer never learns more.
+    # The provider half carries the whole name grammar, reserved device names included (attack 65d01cc B7).
+    # The variant part is the SECOND path segment by construction above, so `*` crossing `/` in the route
+    # pattern never makes a deeper directory the rival dir (B13, L14).
+    rival-*)
+      case "${_er_variant#rival-}" in
+        ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|con|prn|aux|nul|com[0123456789]|lpt[0123456789]) _explore_route_refuse "The rival directory must be rival-<lowercase kebab provider>.";;
+      esac;;
+    # A pack screen framed for the jury (Phase 07 S4b, REQ-09): every item is rendered by this renderer.
+    ref-????????????????)
+      case "${_er_variant#ref-}" in
+        *[!0123456789abcdef]*) _explore_route_refuse "The reference directory must be ref-<16 lowercase hex>.";;
+      esac;;
+    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter>, rival-<provider> or ref-<16 hex>.";;
   esac
   case "/$EXPLORE_PAGE/" in
     *//*|*/./*|*/../*) _explore_route_refuse "The page is not a plain path inside the variant.";;
@@ -526,7 +547,19 @@ esac
 # `get text` requires a selector -- called without one it errors, which reads as 0 chars and
 # refuses every render. Fail-closed is the right direction but it must fail on a blank PAGE,
 # not on a malformed probe.
-TEXT_LEN="$(_ab get text body 2>/dev/null | wc -c | tr -d ' ')"
+# A framed reference (ref-<sha16>, Phase 07 S4b) is one image and no text by design, so "content" there
+# means its one image decoded with a real size -- the same fail-closed question, asked of what the page is.
+_ER_REF=0
+case "${_er_variant:-}" in ref-*) _ER_REF=1;; esac
+if [ "$_ER_REF" = 1 ]; then
+  IMG_STATE="$(_ab eval "(() => { const i = document.images; return i.length === 1 && i[0].complete && i[0].naturalWidth > 0; })()" 2>/dev/null | tr -d '\r\n ')"
+  case "$IMG_STATE" in
+    true) TEXT_LEN=200;;
+    *) TEXT_LEN=0;;
+  esac
+else
+  TEXT_LEN="$(_ab get text body 2>/dev/null | wc -c | tr -d ' ')"
+fi
 case "$TEXT_LEN" in ''|*[!0-9]*) TEXT_LEN=0;; esac
 if [ "$TEXT_LEN" -lt 200 ]; then
   echo "design-render: REFUSED -- $URL rendered only ${TEXT_LEN} chars of text (blank or half-loaded)." >&2
@@ -784,17 +817,49 @@ for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
   [ "$ITER_GIVEN" -eq 1 ] || UNCHANGED="true"
 done
 
+# Provenance (Phase 08 S1, ADR-1410): who authored the pixels, read from the route's own path and nothing else,
+# so the packager has a record to refuse on. It is read in EVERY mode, not only explore: a rival draft or a pack
+# screen rendered as a plain route was stamped arc by mode alone (attack 12b79c2 L12 B1). A route through a
+# rival-<p>/ dir is the rival's, through ref-<sha16>/ or a pack/rival state dir a third party's; anything else
+# is arc's. The value is held to a closed grammar before either writer sees it (B2), and a refusal removes the
+# PNG already captured, so no picture is left without a receipt (B10).
+PROVENANCE="arc"
+_prov_refuse() { echo "design-render: REFUSED -- $1; a render without a provenance is never written." >&2; rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
+case "/$ROUTE/" in
+  */.claude/state/design/refpacks/*|*/.claude/state/design/rivals/*) PROVENANCE="reference";;
+  */ref-????????????????/*) PROVENANCE="reference";;
+  */rival-*/*)
+    _prov_rival="${ROUTE#*rival-}"; _prov_rival="${_prov_rival%%/*}"
+    PROVENANCE="rival:$_prov_rival";;
+esac
+if [ "$MODE" = "explore" ]; then
+  case "${_er_variant:-}" in
+    variant-?) [ "$PROVENANCE" = "arc" ] || _prov_refuse "an explore variant route also names $PROVENANCE";;
+    rival-*) PROVENANCE="rival:${_er_variant#rival-}";;
+    ref-*) PROVENANCE="reference";;
+    *) _prov_refuse "no provenance for '${_er_variant:-}'";;
+  esac
+fi
+case "$PROVENANCE" in
+  arc|reference) ;;
+  rival:*)
+    case "${PROVENANCE#rival:}" in
+      ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _prov_refuse "the rival name in '$(printf '%s' "$PROVENANCE" | cut -c1-60)' is not lowercase kebab";;
+    esac;;
+  *) _prov_refuse "provenance '$(printf '%s' "$PROVENANCE" | cut -c1-60)' is outside arc / reference / rival:<p>";;
+esac
+
 # node writes the JSON so the route/url strings are escaped by a real serialiser rather than
 # by printf, which is how a path containing a quote becomes an unparseable meta file.
 if command -v node >/dev/null 2>&1; then
   node -e '
-    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out] = process.argv.slice(1);
+    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out,provenance] = process.argv.slice(1);
     require("fs").writeFileSync(out, JSON.stringify({
       route, url, png: png.replace(/\\/g,"/"),
       screenshot_sha256: sha, viewport: `${vw}x${vh}@1`, recipe,
-      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true",
+      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true", provenance,
     }, null, 2) + "\n");
-  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" \
+  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" "$PROVENANCE" \
     || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 else
   # This branch already emitted a DIFFERENT, smaller object than the node one above -- no url,
@@ -810,8 +875,8 @@ else
     *\"*|*\\*) echo "design-render: REFUSED -- no node on this box, and the route contains a quote or backslash this fallback writer cannot escape safely." >&2
        rm -f "$PNG" "$META" 2>/dev/null; exit 1;;
   esac
-  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s\n}\n' \
-    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" > "$META" \
+  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s,\n  "provenance": "%s"\n}\n' \
+    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" "$PROVENANCE" > "$META" \
     || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 fi
 

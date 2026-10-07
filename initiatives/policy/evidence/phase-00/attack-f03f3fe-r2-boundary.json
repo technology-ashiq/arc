@@ -1,0 +1,67 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (env: { ...process.env, ARC_SPINE_ROOT })",
+      "breaking_input": "ARC_ROOT=/tmp/other-tree (or any other root or policy selector the emitter reads) set in the owner's shell, then `policy-evidence.mjs guard`. The fix pins only ARC_SPINE_ROOT. The child `arc-event.sh emit --strict` still inherits ARC_ROOT, so it resolves its validators, idem logic or policy from a tree the guard did not read.",
+      "why": "The round-1 fix for B2 closed one selector variable out of the family. The defect pattern says `ARC_ROOT=/tmp/x` disarmed the whole gate, and that every env var that selects the root, the policy file or the spine is in scope. The pinned spine and an unpinned root can disagree. The receipt is then sealed or rejected under another tree's rules while the read-back looks at the pinned spine.",
+      "fix": "Build the child env explicitly. Set ARC_ROOT to inputs.root and ARC_SPINE_ROOT to dirname(inputs.eventsDir). Delete every other root, spine and policy selector the emitter reads. Do not spread process.env wholesale.",
+      "twin_of": "any env var that selects the root, the policy file or the spine a decision reads"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (approval emit when overridden === true)",
+      "breaking_input": "`policy-evidence.mjs guard --as-of 2030-01-01`. A future as-of makes every in-scope cell stale, so the set is not clean. `digest !== previousDigest` holds because overridden runs dedupe only against overridden runs. A real approval.requested listing every cell as BELOW-BAR is sealed into the owner's inbox.",
+      "why": "B5's fix marks the run with `as_of_overridden` and stops it posing as an audit. It still performs the one durable, outward-facing write: an approval for the owner. The flag lives only in the payload. Nothing in the approval path or the inbox consumer filters on it. A typo or a test run therefore raises a real, unanswerable approval.",
+      "fix": "When overridden, never emit approval.requested. Report to stdout only, or refuse `guard` with --as-of unless an explicit test env flag is set.",
+      "twin_of": "every clock override that reaches a durable write"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:sealedRefusalToday (surface === \"interactive\" early return)",
+      "breaking_input": "One sealed note.logged with subject policy.refusal, decision deny, surface \"interactive\", the target action_kind and capability, and --process equal to the hook's process name. It names no incident_ref and no level. The function returns its id, so the writer's once-per-day bound treats that pair as already sealed for the rest of the day, and the genuine hook receipt is never written.",
+      "why": "`surface` is a self-declared field that selects the trust path. The headless path demands a preceding incident of the same process that names the capability and level. The interactive path demands none of that. It also never checks `p.level` against anything. This is both the day-bound-counts-any-matching-line pattern and the self-declared-surface pattern.",
+      "fix": "For the interactive path, corroborate what can be corroborated (level, and an actor or process allowlist for the hook). Or return the receipt for the fold's own matching rule, not a bare three-field match. At minimum, have the fold and the day bound share one predicate.",
+      "twin_of": "A receipt could declare the other surface and borrow its writer"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (read-back day and id parse)",
+      "breaking_input": "The guard seals at 23:59:58 IST. Time passes midnight before `nowMs()` is read, so the read-back opens the next day's file. It does not find the id and calls fail(1, \"receipt did not land\"). The receipt is in fact sealed. The same false failure occurs if arc-event.sh prints any line after the id, because `.split(\"\\n\").pop()` then returns the wrong token.",
+      "why": "The read-back takes a fresh clock instead of the day the emitter stamped, so it can look in the wrong file. A false \"could not seal\" makes the owner rerun. Whenever the failure came after the approval, the rerun can stack a duplicate. The fix for B2 turned a silent miss into a false negative at the day boundary. The `includes('\"id\":\"…\"')` substring also assumes compact key order.",
+      "fix": "Derive the day from the ULID timestamp, or check both today's and yesterday's day file. Parse the id by ULID shape (a 26-character Crockford match) rather than by last line.",
+      "twin_of": "every early-return branch that writes"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:apiPolicy (events from spineRead fed to foldEvidence)",
+      "breaking_input": "A malformed or forged note.logged policy.refusal line (for example a nested payload) in the day file. The CLI path runs loadEvidenceInputs, which per the lane's own debt notes runs the closed-shape validator on every event and refuses a linked worktree's private spine. The door passes the raw events from spineRead straight to the fold. The room can show `fresh` for a cell the CLI reports BELOW-BAR. The diff shows no worktree or canonical-spine refusal on the door side.",
+      "why": "There are two readers of one spine with different admission rules. The room is the owner's trust surface, so a confident, wrong reading there is worse than one in the CLI. The B7 fix also catches fold throws, so a malformed line can no longer surface as an error. It is simply folded.",
+      "fix": "Have the door call the same loader or validator as the CLI. Or assert in the door test that a planted malformed or forged refusal changes neither the state nor the age.",
+      "twin_of": "every reader of the spine: a reading of the wrong spine is confident and wrong"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (read previous digest, then emit approval, then emit run)",
+      "breaking_input": "Two `guard` runs started together (the owner plus a scheduled job, or a double start). Both read the same previousDigest, both pass `digest !== previousDigest`, and both seal an approval.requested for the same set.",
+      "why": "B4's suggested lock was dropped. The fix covers only the sequential half-failure. The race is not in the debt ledger (row 2 covers arc-run only; row 5 covers only the timeout). The code comment says a duplicate approval teaches the owner to ignore the inbox.",
+      "fix": "Take an O_EXCL lock file next to the spine around read, emit and emit. Or re-read the spine immediately before the approval emit and skip if the digest has appeared. Or record the race in the debt ledger.",
+      "twin_of": "any dedupe check: count only what the reader would count"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (bare execFileSync(\"bash\") plus the win32 hint)",
+      "breaking_input": "The owner runs the guard from PowerShell. `bash` resolves to System32's WSL launcher. WSL writes its error to stderr as UTF-16LE with NUL bytes. `String(e.stderr).trim().split(\"\\n\").pop()` then prints NUL-interleaved text before the hint, or an empty tail line that falls through to the generic message.",
+      "why": "B1's fix names the fault but still spawns whatever `bash` the PATH finds. It does not refuse the WSL launcher up front. It also does not handle the encoding of the launcher's error text. The message can be unreadable on exactly the platform the hint targets.",
+      "fix": "Resolve bash once. Prefer Git Bash's `usr/bin/bash.exe`, or honour an ARC_BASH override. Refuse when the resolved path is under System32. Strip NULs from stderr before taking its last line."
+    }
+  ]
+}

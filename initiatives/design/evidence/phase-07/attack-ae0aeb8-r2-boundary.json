@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-rival.mjs:draft (stage/rename section)",
+      "breaking_input": "rivalDir is lstat-checked, then rmSync(rivalDir) and renameSync(stage, rivalDir) run later. Between the check and the rename, another process replaces rival-stitch (or the explore dir) with a Windows junction pointing outside the explore. Also: `exploreDir` is created by mkdirSync after the lstat loop, and `exploreDir` itself is never re-checked after creation.",
+      "why": "A check-then-act gap: the link refusal and the remove/rename are separate steps, with an awaited vendor() fetch (up to minutes) in between. A junction planted in that window makes rmSync recursive delete through it, or the rename land outside the explore. Same class as the 'bound to the bytes looked at' pattern.",
+      "fix": "Re-lstat rivalDir and exploreDir immediately before rmSync/renameSync, rename to a unique name first and then remove only that, and refuse if the parent is not a real directory.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-rival.mjs:vendor (CSS pass, depth===0) and assetName",
+      "breaking_input": "A vendored stylesheet at depth 0 whose body is valid UTF-8 but contains url() written with a CSS escape or inside an @import of another stylesheet; remoteLoads(css) is used on the stylesheet and strayRemote is never run over vendored CSS bodies. Example: `@font-face{src:url(\\68ttps://fonts.gstatic.com/x.woff2)}` or `background:url(//evil.example/p.png)` in a stylesheet served from fonts.googleapis.com.",
+      "why": "The 'second reader' (strayRemote) runs only on the final HTML, not on the fetched stylesheet bodies, which are written to disk verbatim after edits. A remote URL in a vendored CSS that the CSS_URL regex does not match (escaped, or inside image-set()/src() or a bare @import with no url()) stays online in the page the jury renders, which the CSP refusal then makes inconsistent, or loads a third host.",
+      "fix": "Run the same strayRemote/escape check over every vendored stylesheet body after rewriting and make any remaining remote reference unresolved.",
+      "twin_of": "A load reader built from a list of load tags and attributes -> deny by default"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:realAsset",
+      "breaking_input": "An allow-listed host answers 200 with a body longer than the remaining total budget but under MAX_ASSET_BYTES, and the content-type is text/css with a 3xx hop to the same host and a different path that resolves to a non-allowlisted path-level resource. Also, the redirect check compares hostname only against the current hop, and the first hop is never re-run through allowed() for port/credentials on the original URL's equivalent.",
+      "why": "Each redirect hop is checked for https/host/port, but fetchOne records the asset under the ORIGINAL url key while the content comes from the final URL; the cache then maps a different resource to the first URL, and a second reference to the final URL is fetched again and written as a separate file. The recorded `final` is informational only, so two names for one resource can diverge in content between fetches.",
+      "fix": "Key the cache and the record on the final URL, and verify a re-fetched resource has the same hash before reusing the name.",
+      "twin_of": "A check on the first URL that no redirect hop repeats -> every hop passes every check the first URL passed."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:sdkEntry",
+      "breaking_input": "treeHash(nm) is computed before the child imports the entry; the install tree stays writable by any same-user process. Between treeHash and the child's `import(entry)` (run seconds later, after mkdtemp and env setup), a process replaces the entry JS. Also, `.package-lock.json` is excluded from the hash and `node_modules/.bin` and dotfiles are included only if regular files.",
+      "why": "The hash is verified once, then the key-bearing child imports the files later: validate one read, use another. The window covers the whole run setup, and the child is never given the hash to re-verify on import.",
+      "fix": "Copy the verified tree into the private run dir (or hash it from the run dir copy) and import from that copy, or have the child re-hash the entry file before importing it.",
+      "twin_of": "\"Look before you write\" not bound to the bytes looked at -> bind a judgement to the content hash it was made on."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:deal (rival block)",
+      "breaking_input": "rival receipt.json is read via readRegular, and page via readRegular, but `recFile` path components ex.brief and basename(ex.dir) come from explore.txt. latestRender(`rival-${p}`) reads the render session `${basename(ex.dir)}--rival-${p}`. A render session for rival-stitch created from a DIFFERENT page (the render step re-run after the page was re-drafted with the same bytes length) still carries the older screenshot hash.",
+      "why": "The jury binds the page hash to the receipt, but the render PNG is bound only to its own meta, not to the page hash it was rendered from. A re-draft after a render leaves the old PNG of an older page in the session; the deal passes the page check and deals the stale picture.",
+      "fix": "Have the renderer record the page sha256 in the meta, and have latestRender compare it to the receipt's page_sha256.",
+      "twin_of": "A receipt and a page that can disagree -> the receipt carries the page hash and the deal re-hashes the page against it"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:emitNote",
+      "breaking_input": "payloadFile in ex.jury is written with writeFileSync (truncating) and the same name is reused: score.payload.json and rival-rate.payload.json. A second `unblind` or `score` attempt (write-once main files refuse, but the payload write happens first in score: emitNote is called after writeOnce, in unblind it is called after writeOnce too) -- and a payload file pre-created as a symlink inside the jury dir.",
+      "why": "The payload file is written with a truncating write to a fixed name, not exclusively; a symlink or junction planted at that name makes the write land elsewhere. The spawn is bounded, but bash on Windows may also resolve to WSL, where a Windows path to --payload-file is not valid, so every emit fails and exit 4 hides the real cause behind 'exit N'.",
+      "fix": "Write with flag wx (unlink first only if this run made it), lstat for a link, and pass the path in a form valid for the resolved bash.",
+      "twin_of": "Check-then-create with a truncating write -> create exclusively (`wx`) and append; never exists()-then-write."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:rival (provider case) vs design-rival.mjs PROVIDERS",
+      "breaking_input": "`design-explore.sh rival jx --provider __proto__` is blocked by the grammar, but `--provider constructor` passes the bash lowercase-kebab check, then reaches design-rival.mjs where Object.hasOwn guards it; however the bash side accepts any grammar-valid name (e.g. `x`) and the jury accepts `--rival x`, so a name the adapter would refuse still becomes a jury path.",
+      "why": "The two entry points validate different grammars (bash: no length cap; jury: 32 chars; adapter: PROVIDERS table). A 200-character provider name passes bash, reaches the adapter and is refused there only after the explore dir is touched by earlier steps; the failure is exit 1 (usage), which the render step after `|| exit $?` correctly stops on, but the status is the usage code rather than a verdict.",
+      "fix": "Share one grammar with a length cap in every entry point, and check the provider against the known set in bash before spawning node.",
+      "twin_of": "A registry lint accepted an id its consumer refuses -> the lint enforces the consumer's own grammar."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:childTransport (resolveWhenClosed backstop)",
+      "breaking_input": "The child exits normally but its grandchild keeps the stdout pipe open, so 'close' never fires. finish() sets a 10 s backstop that forces closed=true and resolves, while on POSIX the killTree uses process.kill(-child.pid) only when detached; after a `finish` triggered by 'close' the child is already exited, so killTree returns early (exitCode !== null) and the surviving grandchild is never killed.",
+      "why": "killTree is skipped once the direct child has exited, so a grandchild that holds the key in its environment and a socket outlives the run. The same early return makes the Windows taskkill /T path unreachable for a child that already exited but left descendants.",
+      "fix": "Kill the process group/tree unconditionally on finish (POSIX: kill(-pid) even when the leader is gone; Windows: taskkill /T on the recorded pid), and treat ESRCH as success.",
+      "twin_of": "A tree kill that only works while the parent lives -> remove the middle process"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-rival.mjs:draft (out dir and status.log)",
+      "breaking_input": "`.claude/state/design/rivals/<brief>/<run>/stitch` or `status.log` is pre-created as a symlink/junction to another directory, then `mkdirSync(out,{recursive:true})` succeeds and writeFileSync(receipt.json)/appendFileSync(status.log)/rmSync(f) write and remove through it. Only docs/design/explore components are lstat-checked.",
+      "why": "The link refusal covers the vendored output tree but not the state tree that receives draft.raw.html, receipt.json, vendor.json, stage/ (rmSync recursive) and status.log. rmSync(stage, recursive) follows a Windows junction.",
+      "fix": "lstat every component of runRoot and out before the first write or remove, as is done for the explore tree.",
+      "twin_of": "A cleanup that removed what an earlier run made, through whatever was at the path -> lstat every component and refuse a link"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:171-190",
+      "breaking_input": "Route `docs/design/explore/a/b/rival-x/index.html` with the explore segment spanning a slash: the glob `docs/design/explore/*/rival-*/?*` lets `*` match `a/b`. The comment asserts the variant is the second segment 'by construction', but that depends on the per-part split code outside this diff, which this change did not re-test for the rival branch (only rival-con is tested).",
+      "why": "The fix for B13 is a comment, not a check or a test: no assertion proves a deeper path is refused for a rival route, so the claim is unverified and a regression in the split would admit a nested rival dir.",
+      "fix": "Add an explicit segment-count check for the rival branch and a bats case with a route that has an extra directory before rival-.",
+      "twin_of": "A textual `..` check on a pattern language that can expand -> hold an expanding pattern to a plain alphabet"
+    }
+  ]
+}

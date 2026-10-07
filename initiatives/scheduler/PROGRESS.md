@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-scheduler "the heartbeat"
 
-status: LIVE
-cycle: arc-scheduler (Cycle 12, opened 2026-08-12)
+status: IDLE
+cycle: arc-scheduler (Cycle 12, sealed 2026-10-07)
 phase: 03
 appetite: 3d
-burn: 2.5d
-blocked-on: elapsed time — the proving week RESTARTED 2026-08-17 (a defect made every run after the first a no-op), and the fire-drill armed 2026-08-23 needs its THIRD missed slot before the detector fires; earliest close 2026-08-26
+burn: 3d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -28,9 +28,9 @@ depends-on: —
 | 00 | Steel thread — `hq.jobs.yaml` + `jobs-lint` (hostile corpus + adversarial pass) + wrapper core (per-job lock, slot computation, receipts + idem@slot, git-state guard, POL-D authorization, script timeout, mock-driver delegation) + the two job scripts + `processes/` stubs + the `arc-run` refusal guard | 1.0d | ✅ done 2026-08-12 |
 | 01 | The attended heartbeat — `run` / `catchup` / `list --next 7`, read-only SessionStart nudge, deterministic brief jobs panel with overdue needs-you | 0.5d | ✅ done 2026-08-12 |
 | 02 | The cron flip — `register`/`unregister` with ADR-0803's five explicit settings, next-minute smoke, fail-closed policy gate, rehearsed off-switch | 0.75d | ✅ done 2026-08-13 |
-| 03 | Proving week + retro — ≥2 jobs unattended ≥7d, zero manual starts by actor query, fire-drill, gap audit, metric pack, `/arc-retro` | 0.5d | ⏳ running — clock RESTARTED 2026-08-17, fire-drill armed 2026-08-23, earliest close **2026-08-26** |
+| 03 | Proving week + retro — ≥2 jobs unattended ≥7d, zero manual starts by actor query, fire-drill, gap audit, metric pack, `/arc-retro` | 0.5d | ✅ done 2026-10-07 |
 
-**Appetite burn: 2.5 of 3 days used (83%).** Phases allocate **2.75 of 3 days; 0.25 days reserved
+**Appetite burn: 3 of 3 days used (100%) — cycle sealed 2026-10-07.** Phases allocate **2.75 of 3 days; 0.25 days reserved
 for Phase 0 adversarial rework** — named, not spare. The reserve exists because this repo's own
 equivalent passes returned 43 and 77 real holes against gates that passed their own tests, and
 budgeting the pass without budgeting the fixing of what it finds budgets a ceremony. Phase 2 went
@@ -45,7 +45,7 @@ week is 0.5d of effort against ≥7d elapsed — elapsed is not burn.
 | REQ-02 | 00 | validated |
 | REQ-03 | 01 | validated |
 | REQ-04 | 02 | validated |
-| REQ-05 | 03 | active |
+| REQ-05 | 03 | validated |
 
 ## Done-log
 
@@ -53,10 +53,30 @@ week is 0.5d of effort against ≥7d elapsed — elapsed is not burn.
 |---|---|---|
 | 2026-08-12 | **Phase 00 CLOSED — the law, the wrapper, and 24 adversarial findings.** `hq.jobs.yaml` with a closed v1 schema parsed by the engine's own frozen subset · `jobs-lint` as a validator (exit 2 from birth, exit 1 when it cannot run at all) · `arc-jobs` wrapper walking one path, lock→guards→execute→receipt · both script-jobs · `processes/` stubs + the `arc-run` job-stub guard · the OS-scheduler fake behind a contract · REQ-01 and REQ-02 validated. **The two-surface adversarial pass returned 24 findings overlapping on ONE**, and four would have shipped: every close-day failure counted as a *sealed* day (`arc-event` exits 0 without `--strict`), `roots: ["**"]` passing the self-modification ban, a directory accepted as a script entry, and the branch already CI-red on all three legs before anyone looked. The live demo then found two more the unit tests could not: every receipt was being rejected `BAD_IDEM` while the wrapper reported `ok`, and a benign double fire was being called a lost receipt. Double fires are now *prevented*, not merely noticed | CI **31602308397, 19/19 green** at `d29fce9`, read per-JOB and head SHA confirmed equal to local HEAD · `evidence/phase-00/adversarial.md` · `evidence/phase-00/live-demo.md` · tests 0 → 66 across `jobs-lint.bats` (44), `jobs-run.bats` (14) and `jobs-contract.bats` (8) · `phase.closed` **`01KZV8SSEZX599DBG6S5H971K1`** on the canonical spine in the main clone, read back out of `events/2026-08-12.jsonl`, 0 quarantined — emitted from the main clone because `spineRoot()` refuses inside a linked worktree, and a receipt written to a worktree spine is real, valid and invisible to every reader |
 | 2026-08-12 | **Phase 01 CLOSED — silence became visible.** The jobs panel, `catchup`, `list --next 7`, and the SessionStart nudge. REQ-03 validated. The panel is a DERIVATION, not a query: a job that dies emits nothing, so there is no receipt to read and no kind to subscribe to. `derivePanel` is pure — `Date.now()` is absent rather than discouraged, because `--date D` is a replay that must stay byte-identical forever. **The hard case was the job that has NEVER run, and the first version got it wrong in the worst direction:** anchoring the count at the last slot reported exactly one missed slot forever, so a job that had never fired in a month read identically to one registered an hour ago — the detector reporting health for the loudest failure it exists to catch. It now measures over the window the SPINE CAN WITNESS, which is also what keeps a healthy schedule from writing anything into the brief and disturbing another lane's pinned golden | CI **31622464864** at `81e2392` — every scheduler test green, verified by name in the run log (panel replay, disabled-never-overdue, double-fire prevention, catchup idempotence, delegate argv, brief integration). **The run is RED on one arc-scan test that is not this lane's**, and that was proven rather than assumed: a `workflow_dispatch` control run on unchanged `main` (**31622490938**) fails the SAME arc-scan tests, three of them, where this branch fails one. `evidence/phase-01/` · tests 66 → 79 |
-
 | 2026-08-13 | **Phase 02 CLOSED — the heartbeat is installed, and the adversarial pass found that until today it could not have been.** `register`/`unregister` against the real Windows Task Scheduler, the six pinned settings written explicitly and read back off the OS, the fail-closed policy interlock, the rehearsed off-switch, and both v1 jobs live on the canonical clone. REQ-04 validated. **The headline is the finding, not the feature: `registrationFor` emitted `weekly:MON,TUE,WED,THU,FRI@06:00`, which `scheduler-task.ps1` refuses — so no weekdays job could be registered, and since `register` walks enabled jobs in file order with `brief-materialize` first, the entire unattended surface was unregisterable.** Three green checks looked straight at it: the real-OS smoke hand-typed its trigger and never went through `registrationFor`; the contract test *pinned the bug* by asserting the wrong string back; every other test used the daily job. Twenty-four findings from two fresh agents overlapping on three — including a log directory created at register time only (delete it and cmd fails opening the redirect *before* the job starts, so the job never runs and the mechanism added to make failures visible is the one hiding it), an argv joined with spaces, a readback that checked settings while ignoring command/arguments/cwd, `unregister` going through the legality gate so a broken policy file left tasks firing with no way to remove them, and a policy gate whose only control was blind to `BIRTH_CAP` being raised | CI **31674397504, 19/19 green** at `103f1a7`, read per-JOB, head SHA equal to local HEAD · merged as **`4b7410b`** (PR #163) · tests 79 → **106** across `jobs-contract` (19), `jobs-register` (15, new), `jobs-panel` (14), `jobs-lint` (44), `jobs-run` (14) · `evidence/phase-02/adversarial.md` + `smoke-and-offswitch.md` with the live readback transcript · `phase.closed` **`01KZX2FTDB324TSBCN83W02NSG`** read back out of `events/2026-08-13.jsonl`, 0 quarantined |
+| 2026-10-07 | **Phase 03 CLOSED — the heartbeat ran unattended, the detector caught its own outage, and the record found one real miss.** REQ-05 validated. The pre-declared week 2026-08-17..23: 10/10 completed, 0 manual starts, ₹0, and both missed slots (2026-08-20) graded DOWNTIME. They are graded against the **Windows System power log** this time, a witness and not an inference from spine silence, so ADR-0808's one written inference is now backed. **Fire-drill PASSED and was captured live:** the first brief after the drilled job came back (`briefs/2026-09-29.txt`, written by `scheduler:brief-materialize` itself) reads `silent since 2026-08-21T14:56 -- 27 scheduled slots missed`. **Two things went wrong and both are in the record.** (1) The drill was armed and never disarmed: the job stayed unregistered for 35 days and 22 extra slots, raised by needs-you every day, until another session re-registered it on 2026-09-27. (2) Over the full 51 days, **one gap is ARC-SIDE**: `day-close-roll` at 2026-09-28T00:15, with the machine on, awake and logged on, and no launch in its job log. The cause is undetermined (the Task Scheduler log has rolled past September), and no work was lost, because the 09-29 run sealed both days. It is routed to the next cycle with ADR-0807/0808's deferred mechanisms. The 8 days after the restore grade CLEAN outright, 14/14. ADR-0806's limit stands: in 51 days the lock and incident classes were never exercised in the real. **Metrics:** amendments 2 (ADR-0807, ADR-0808 — the DoD rewrites of 2026-08-23) · reopened n · actual 0.5d effort against 0.5d appetite, 44 days elapsed past the computed close because the lane was not resumed | `evidence/phase-03/close.md` + `audit-week.txt` / `audit-full.txt` / `audit-restored.txt` / `gap-classes.txt` / `drill-panel-replay-2026-08-26.txt` / `brief-2026-09-29-live.txt` · `week-log.md` · audits run in the canonical clone at main `290b2d09` · no code changed this phase, so the PR's CI is the test evidence (tests stay at 106) · `phase.closed` emitted from the main clone after the merge |
 
 ## Now
+
+**Current position, 2026-10-07: Cycle 12 SEALED — all 4 phases closed, 5/5 REQ validated, lane IDLE.**
+Phase 03 closed on the pre-declared week plus a live-captured fire-drill; the close evidence is
+`evidence/phase-03/close.md`. The heartbeat keeps running: both jobs are registered on the real
+Windows Task Scheduler and fired on schedule through 2026-10-07.
+
+**What the next scheduler cycle starts with — three carried items, none of them a defect in what shipped:**
+
+| Item | Source | Why it is next |
+|---|---|---|
+| A logon trigger that repays every owed slot, not only the newest one | ADR-0807 (deferred) | Windows queues one missed instance; downtime silently drops the older slots |
+| Witnessed downtime: a job emits one incident per slot it owed and could not serve, so the audit grades gaps by class itself | ADR-0808 (deferred) | this close graded 39 gaps by hand against the OS power log; that should be a mechanism |
+| The 2026-09-28T00:15 `day-close-roll` miss — machine on, logged on, no launch | `close.md` §3 | the first ARC-SIDE gap on record; cause undetermined, so the next one must be caught while the Task Scheduler log still holds it |
+
+The next cycle starts with `/arc-kickoff --lane scheduler`.
+
+**The owner's sign-off for moving past Phase 03 is still open** (`approval.requested`, emitted from
+the main clone after the close PR merges).
+
+### Position as of 2026-08-23 (superseded, kept as the record of the week)
 
 **Current position, 2026-08-23: Phases 00, 01 and 02 CLOSED. Phase 03 is RUNNING, the week has been
 audited once, and it has already produced its finding.** Burn 2.5 of 3 days of *effort*; the

@@ -24,10 +24,12 @@ mkdirSync(scratch, { recursive: true });
 if (kase === "faults") {
   const { routerFaults } = await import("../.claude/scripts/engine/router-row.mjs");
   const { parseYamlSubset } = await import("../.claude/scripts/engine/yaml-subset.mjs");
-  const row = (extra) => ({ classes: { c: { tier: "t", driver: "generic-api", fallback: [], ...extra } } });
+  // ADR-0228: every row carries its chain terms, so the counts below measure the profile rule and nothing else.
+  const TERMS = { max_attempts: 3, max_wall_ms: 3600000, max_cost: "unmetered" };
+  const row = (extra) => ({ classes: { c: { tier: "t", driver: "generic-api", fallback: [], ...TERMS, ...extra } } });
   const cases = {
     BAD_GRAMMAR: row({ profile: "has space" }),
-    UNREACHABLE: { classes: { c: { tier: "t", driver: "claude-code", fallback: ["codex"], profile: "fx" } } },
+    UNREACHABLE: { classes: { c: { tier: "t", driver: "claude-code", fallback: ["codex"], profile: "fx", ...TERMS } } },
     WRONG_DRIVER: { models: { t: { "claude-code": "profile:fx" } }, classes: {} },
     BARE: { models: { t: { "generic-api": "profile:" } }, classes: {} },
     NOT_STRING: row({ profile: 7 }),
@@ -38,7 +40,7 @@ if (kase === "faults") {
     if (f.length) console.log(`${k}_MSG=${f[0]}`);
   }
   // The controls: a reachable class profile through a FALLBACK loads, and so does the real router file.
-  console.log(`FALLBACK_OK=${routerFaults({ classes: { c: { tier: "t", driver: "claude-code", fallback: ["generic-api"], profile: "fx" } } }).length}`);
+  console.log(`FALLBACK_OK=${routerFaults({ classes: { c: { tier: "t", driver: "claude-code", fallback: ["generic-api"], profile: "fx", ...TERMS } } }).length}`);
   console.log(`PIN_OK=${routerFaults({ models: { t: { "generic-api": "profile:omni-ds", "claude-code": "opus" } }, classes: {} }).length}`);
   const real = parseYamlSubset(readFileSync(join(ARC_ROOT, "engine", "router.yaml"), "utf8"));
   console.log(`REAL_PARSED=${real.ok ? 1 : 0}`);
@@ -86,6 +88,10 @@ function writeRouter({ pin, driver = "generic-api", fallback = [], profile }) {
     `    driver: ${driver}`,
     ...(fallback.length ? ["    fallback:", ...fallback.map((f) => `      - ${f}`)] : ["    fallback: []"]),
     ...(profile !== undefined ? [`    profile: ${profile}`] : []),
+    // ADR-0228 chain terms; mock is the one metering driver, so a chain holding it carries paise.
+    `    max_attempts: ${fallback.length + 2}`,
+    "    max_wall_ms: 3600000",
+    `    max_cost: ${[driver, ...fallback].includes("mock") ? 100000 : "unmetered"}`,
     "",
   ];
   writeFileSync(join(fixtureRoot, "engine", "router.yaml"), lines.join("\n"));
@@ -150,6 +156,10 @@ switch (kase) {
   case "class-override":
     writeStore(storePath, [FX, FY]); writeRouter({ pin: "profile:fx", profile: "fy" }); break;
   case "hop":
+    // ADR-0228: a fallback is taken only for a failure another driver could fix. claude-code declares exactly one,
+    // a CLI that cannot start, so attempt 1 points at a CLI that is not there; the fake CLI's undeclared exit 1 is
+    // `unknown` and never hops (asserted by tests/engine-failure-class.mjs).
+    env.ARC_CLAUDE_CLI = join(scratch, "no-such-claude-cli");
     writeStore(storePath, [FY]); writeRouter({ driver: "claude-code", fallback: ["generic-api"], profile: "fy" }); break;
   case "gone":
     writeStore(storePath, [FX]); writeRouter({ driver: "claude-code", fallback: ["generic-api"], profile: "gone" }); break;
@@ -201,6 +211,18 @@ for (const [i, q] of requests.entries()) {
 out("KEY_IN_OUTPUT", all ? 1 : 0);
 out("KEY_IN_SPINE", spineHolds(KEY_FX) || spineHolds(KEY_FY) ? 1 : 0);
 out("CLI_RAN", existsSync(cliMark) ? readFileSync(cliMark, "utf8").trim().replace(/\n/g, " | ") : "no");
+// The first attempt as the receipt records it (ADR-0228 hops[]): driver, the model it was handed, and its class.
+{
+  let hop0 = null;
+  const root = process.env.ARC_SPINE_ROOT;
+  const ev = root && existsSync(join(root, "events")) ? readdirSync(join(root, "events")) : [];
+  for (const f of ev) for (const l of readFileSync(join(root, "events", f), "utf8").split("\n")) {
+    try { const e = JSON.parse(l); if (e.kind === "run.completed" && Array.isArray(e.payload?.hops) && e.payload.hops.length) hop0 = e.payload.hops[0]; } catch { /* not a record */ }
+  }
+  out("HOP0_DRIVER", hop0 ? hop0.driver : "none");
+  out("HOP0_MODEL", hop0 ? String(hop0.model) : "none");
+  out("HOP0_CLASS", hop0 ? String(hop0.class) : "none");
+}
 // The run's own words, last-but-one, so a failing assertion shows them.
 console.log("---- arc-run output ----");
 console.log(res.text.trim());

@@ -258,8 +258,9 @@ try {
   check("face-coverage's commands inventory homes /arc-face-module in a real room", typeof home === "string" && contract.rooms.list.some((r) => r.id === home), String(home));
   const files = readdirSync(join(REPO, ".claude", "commands")).filter((n) => n.endsWith(".md"));
   const generated = keys.filter((k) => /\(G\)$/.test(k)).length;
-  const claude = readFileSync(join(REPO, "CLAUDE.md"), "utf8");
-  const m = /The other (\d+)\s+commands/.exec(claude);
+  // The brain is AGENTS.md plus CLAUDE.md, which imports it (distribute ADR-2007); the count lives in AGENTS.md.
+  const brain = ["AGENTS.md", "CLAUDE.md"].filter((f) => existsSync(join(REPO, f))).map((f) => readFileSync(join(REPO, f), "utf8")).join("\n");
+  const m = /The other (\d+)\s+commands/.exec(brain);
   check("root CLAUDE.md states how many commands are hand-written", m !== null);
   check("and the number is the command files minus the generated ones", m !== null && Number(m[1]) === files.length - generated, `CLAUDE.md=${m ? m[1] : "?"} derived=${files.length}-${generated}`);
   check("the derivation read real counts (vacuous-pass guard)", files.length >= 27 && generated >= 3, `files=${files.length} generated=${generated}`);

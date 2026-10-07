@@ -1,0 +1,6 @@
+#!/bin/sh
+# arc commit-time line (distribute ADR-2013): refuse a push bound for main. The server refuses it
+# too once main is protected (ADR-2015); this only says so sooner.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+bash .claude/scripts/core/branch-guard.sh --pre-push

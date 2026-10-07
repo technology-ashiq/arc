@@ -134,6 +134,16 @@ const only = (route, data, query = null) => (r) => (r.route === route && (query 
     JSON.stringify(pol.subjects.rows[0].cells) === JSON.stringify(["process:x", "L1 (ceiling L3)", "L1"]), JSON.stringify(pol.subjects.rows[0].cells));
   check("POLICY: the ladder counts the pairs on each rung by their effective level", pol.ladder.rows.find((r) => r.key === "L1").cells[2] === "2" && pol.ladder.rows.find((r) => r.key === "L3").cells[2] === "0");
 
+  // policy (POL-L, ADR-0510): a served evidence state is drawn after the level; n/a draws nothing at all.
+  const polEv = await foldWith("kernel", "policy", only("/api/policy", { route: "/api/policy", capabilities: ["shell", "network", "deploy"], transitions: 0,
+    levels: [{ level: "L0", meaning: "denied" }, { level: "L1", meaning: "propose" }],
+    subjects: [{ subject: "session:interactive", e2: [], cells: [
+      { capability: "shell", ceiling: "L1", cap: "L1", effective: "L1", evidence: { state: "fresh", below_bar: false, evidence_age_days: 12 } },
+      { capability: "network", ceiling: "L1", cap: "L1", effective: "L1", evidence: { state: "unknown", below_bar: true, evidence_age_days: null } },
+      { capability: "deploy", ceiling: "L0", cap: "L1", effective: "L0", evidence: { state: "n/a", below_bar: false, evidence_age_days: null } }] }] }));
+  check("POLICY: a cell draws its evidence age or state after the level, and n/a draws nothing",
+    JSON.stringify(polEv.subjects.rows[0].cells) === JSON.stringify(["session:interactive", "L1 · 12d", "L1 · unknown", "L0"]), JSON.stringify(polEv.subjects.rows[0].cells));
+
   // legal: one seal the policy does not quote is drawn as drifted, and the check says it fails.
   const leg = await foldWith("money", "legal", only("/api/legal", { route: "/api/legal", quoteHolds: false, quoteProblem: "ungrantable_actions[1] drifted", publishGate: [],
     seals: [{ seal: "moving money", quoted: true }, { seal: "killing a venture", quoted: false }] }));

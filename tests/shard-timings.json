@@ -35,6 +35,7 @@
     "warn-shape.bats": 74,
     "growth-lints.bats": 74,
     "engine-driver-contract.bats": 72,
+    "engine-failure-class.bats": 240,
     "design-explore.bats": 71,
     "engine-process-lint.bats": 65,
     "bench-seal.bats": 65,

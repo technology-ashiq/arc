@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-run.mjs:1419-1434",
+      "breaking_input": "Set ARC_SPINE_ROOT to any writable directory, then run a denied arc-run whose process is at L0. The incidental receipt and the policy.refusal land under that directory, while policy-evidence reads the module-derived root and never sees them; the refusal is reported as landed but the canonical evidence never exists.",
+      "why": "The writer selects its spine by environment variable and the reader selects by module location, so the two can silently disagree. The fix for B2 is claimed but the same env-selected root remains authoritative for the writer, while the reader refuses an ARC_SPINE_ROOT naming another spine only when it is set at read time.",
+      "fix": "Ignore ARC_SPINE_ROOT for arc-run writes except under the test-only door; or have receiptRefusals verify the root it writes to is the canonical one and refuse otherwise.",
+      "twin_of": "`ARC_ROOT=/tmp/x` disarmed the whole headless gate in one variable"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/policy-evidence/fold.mjs:153-163",
+      "breaking_input": "Place a headless policy.refusal on the spine whose incident_ref points to a genuine incident.raised from the gate that names this capability at this level but whose level is the pair's current effective level and whose decision is deny at L1. The fold attributes it as qualifying and clears the cell for a deny at L1.",
+      "why": "consistent() allows any deny at any level, and the qualifying check only requires p.level === effective and effective !== L0. POL-A says L1 is propose-only; a deny at L1 cannot be a decision the authorizer made, yet it refreshes the cell as evidence the refusal path works.",
+      "fix": "Reject a decision deny when the effective level at the receipt's spine position is L1; only a propose counts as a refusal exercise at L1.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/fold.mjs:144-150",
+      "breaking_input": "A policy.refusal for subject session:interactive is valid and attributed, but the fold determines surface from subject, so an interactive refusal whose payload declares surface 'headless' is still treated as interactive; likewise a headless refusal carrying surface 'interactive' is corroborated as if headless.",
+      "why": "The writers table is keyed on surface, and the fold checks writers[p.surface], but the refusal's own surface field is not cross-checked against the subject-derived surface. A malicious or buggy emitter can declare a surface that grants a writer that would not otherwise exist for that subject.",
+      "fix": "After computing surfaceOf(subject), verify it equals refusal.payload.surface and discard otherwise.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/fold.mjs:116-126",
+      "breaking_input": "Place a note.logged whose payload is itself note.logged (nested) and subject 'policy.refusal' on the spine. isRefusal returns true, and payload fields are read from the inner object; an attacker who crafts a nested payload can pass the reshaped validator.",
+      "why": "The fold trusts the event object as produced by the loader, which validated the event, but the refusal fields are read from payload without re-validating that they were typed at top level.",
+      "fix": "Have the loader reject events whose payload is not a plain object (validateEvent already does), and document that refusal attribution requires a plain payload.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:75-91",
+      "breaking_input": "A day file containing a line that is a valid event but whose sha is missing or mismatched is counted as rejected; an attacker who appends a malformed line after a real event causes the loader to reject and drop the whole file's events, making cells fall to absent and the report look BELOW-BAR with no indication that the spine is suspect.",
+      "why": "Rejected lines are counted but never surfaced as a reason to distrust the fold; a single corrupt line silently eliminates evidence, and the report continues as if the absence were real.",
+      "fix": "Fail closed (exit non-zero, refuse to report) when any line in a day file is rejected, or quarantine the file and state so.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:36-56",
+      "breaking_input": "Run `policy-evidence.mjs report --json` against a root whose events dir contains a day file with a leading BOM. The loader rejects every line as malformed, the fold sees zero events, and the report prints 17 BELOW-BAR cells with no warning, which reads as a true all-absent state.",
+      "why": "The BOM is stripped once at file start, not per line; a BOM inserted at the start of any line after the first breaks every later line, and the report carries no marker that the spine was partially unreadable.",
+      "fix": "Strip BOM per line before JSON.parse, or fail closed on any rejected line.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/fold.mjs:198-198",
+      "breaking_input": "A policy whose grant for a capability carries evidence_days: 0. nFor returns null, the cell is BELOW-BAR with reason no-bar-declared; but the CLI's check still exits 3, and the report shows N=none, indistinguishable from a grant that legitimately has no N.",
+      "why": "The spec says a missing N is BELOW-BAR, but a declared N of 0 is also treated as missing, so a mis-configuration reads the same as an honest unset and the owner cannot tell the two apart.",
+      "fix": "Fail lint on evidence_days <= 0 instead of folding it to null, or distinguish reason 'invalid-n' from 'no-bar-declared'.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1425-1430",
+      "breaking_input": "A capability denial at L0 whose reason contains a lone surrogate (e.g. a reason cut with slice) is passed to emitEvent; the validator rejects the receipt, receiptRefusals prints a WARN, and the cell never records the refusal. On Windows argv mangling can also occur.",
+      "why": "The sanitizer truncates by code points, so this was fixed, but the pre-check in refusalSealedToday scans the day file for the (capability, deny) pair and finds no refusal, so a later denial re-emits, violating once-per-day.",
+      "fix": "have refusalSealedToday recognize that a failed receipt still counts as the day's attempt, or bound before sanitizing.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/policy-evidence/fold.mjs:118-124",
+      "breaking_input": "A headless refusal whose incident_ref is the ULID of an incident.raised from an older day but whose ts is on the current day passes the istDay equality check only if the incident's ts is also the same day; if the incident's ts is on the old day, it fails, so a refusal that cites an incident on a different day is unverified.",
+      "why": "The check requires same IST day, which is stricter than ULID order; a legitimate refusal emitted after midnight IST for an incident shortly before midnight becomes unverified even though it is genuinely connected.",
+      "fix": "Allow the incident to be in the prior IST day as long as ULID order holds, or document the day-boundary exception.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:58-65",
+      "breaking_input": "A day file that is swapped between the openSync check and the read (the check-then-use) is caught by design, but a day file that is a symlink to a FIFO passes fstatSync isFile? No, a symlink target FIFO isFile is false, so this is covered. Instead, a day file that is a symlink to a real file is read through the symlink, bypassing any path-based quarantine expectations.",
+      "why": "readDayFile uses openSync and fstatSync, which follows symlinks; a quarantined day file could be symlinked into events and read as legitimate.",
+      "fix": "use lstatSync on the open descriptor or realpath the day file directory and refuse symlink day files.",
+      "twin_of": null
+    }
+  ]
+}

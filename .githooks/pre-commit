@@ -1,0 +1,9 @@
+#!/bin/sh
+# arc commit-time line (distribute ADR-2013). Each line below calls the SAME script a merge-time
+# gate calls, and engine/enforcement.yaml names each one; gate-parity checks they match verbatim.
+# This is the second line, never the gate: --no-verify skips it, and merge-time is the truth (ADR-2002).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+bash .claude/scripts/core/branch-guard.sh
+bash .claude/scripts/core/secret-diff-scan.sh --staged
+node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code

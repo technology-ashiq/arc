@@ -35,6 +35,8 @@
  */
 
 /** Drivers that are agent runtimes rather than model APIs. A runtime is hired; an API is called. */
+import { chainTermFaults } from "./failure-class.mjs";
+
 export const RUNTIME_DRIVERS = new Set(["hermes"]);
 
 /** The ceiling is absolute this cycle (the PLAN non-negotiable), so the set has one member. */
@@ -160,6 +162,10 @@ export function rowFaults(className, row, where) {
   }
   // Before the early return below: an ordinary row is exactly where a profile goes.
   faults.push(...profileRowFaults(at, row));
+  // THE CHAIN'S TERMS, on every row and before the early return below (ADR-0228 item 6). Their meaning
+  // lives in failure-class.mjs beside the one function that enforces them; this loader only refuses a
+  // router whose rows do not declare them, so a missing term fails at load rather than when a hop needs it.
+  faults.push(...chainTermFaults(at, row));
 
   // THE FALLBACK CHAIN IS PART OF "DOES THIS ROW REACH THE RUNTIME", and it was not.
   //
