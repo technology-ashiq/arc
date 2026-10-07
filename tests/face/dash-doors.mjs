@@ -433,6 +433,14 @@ try {
       const readCell = rd && rd.cells.find((c) => c.capability === "read");
       check("P04 policy: the fixture's level change is FOLDED -- read on review-diff is L2 under an L3 ceiling, from exactly 1 transition",
         p.body.transitions === 1 && readCell && readCell.ceiling === "L3" && readCell.cap === "L2" && readCell.effective === "L2", JSON.stringify(readCell));
+      // POL-L (ADR-0510): every cell carries its evidence from the policy lane's own fold, judged against the door's clock.
+      const STATES = ["fresh", "stale", "absent", "unknown", "n/a"];
+      const allCells = (p.body.subjects || []).flatMap((s) => s.cells || []);
+      check("P04 policy: every cell carries an evidence state from the closed enum, and the body says the as-of day",
+        allCells.length > 0 && allCells.every((c) => c.evidence && STATES.includes(c.evidence.state)) && p.body.evidence && p.body.evidence.as_of === today,
+        JSON.stringify({ n: allCells.length, ev: p.body.evidence, bad: allCells.filter((c) => !c.evidence || !STATES.includes(c.evidence.state)).slice(0, 2) }));
+      check("P04 policy: an L0 cell is n/a and never BELOW-BAR",
+        allCells.filter((c) => c.effective === "L0").every((c) => c.evidence.state === "n/a" && c.evidence.below_bar === false));
     }
     // /api/jobs -- the schedule file, judged against the fixture's one fire.
     {

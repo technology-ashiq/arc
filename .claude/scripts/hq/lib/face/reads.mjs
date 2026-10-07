@@ -560,6 +560,14 @@ export async function apiPolicy(ctx, url) {
   // The cap is folded from the transitions in SPINE APPEND ORDER (reduce.mjs's own rule), read through the reader.
   const { events, counts } = await spineRead(ctx);
   const transitions = events.filter((e) => e.kind === LEVEL_CHANGED || e.kind === DEMOTED);
+  // POL-L (ADR-0510): each cell also carries its EVIDENCE, folded by the policy lane's own fold over the same
+  // events and judged against the door's one clock. The door re-derives nothing; the room draws what is served.
+  const { foldEvidence } = await lib("../policy-evidence/fold.mjs");
+  const asOf = todayIst();
+  let evidence;
+  try { evidence = foldEvidence({ policy, transitions, events, asOf }); }
+  catch (e) { throw refusal(ctx, "SOURCE_INVALID", `the evidence fold refused: ${String(/** @type {Error} */ (e).message).split("\n")[0]}`); }
+  const evidenceOf = new Map(evidence.cells.map((c) => [`${c.subject}|${c.capability}`, c]));
   let subjects;
   try {
     subjects = Object.keys(kinds).map((subject) => {
@@ -569,7 +577,10 @@ export async function apiPolicy(ctx, url) {
         e2: Array.isArray(obj(kinds[subject]).e2) ? obj(kinds[subject]).e2.map(String) : [],
         cells: CAPABILITIES.map((capability) => {
           const c = obj(v[capability]);
-          return { capability, ceiling: str(c.ceiling), cap: str(c.cap), effective: str(c.effective) };
+          const ev = evidenceOf.get(`${subject}|${capability}`);
+          return { capability, ceiling: str(c.ceiling), cap: str(c.cap), effective: str(c.effective),
+            evidence: ev ? { state: ev.state, below_bar: ev.below_bar, reason: ev.reason, evidence_age_days: ev.evidence_age_days,
+              n: ev.n, last_refusal: ev.last_refusal, last_success: ev.last_success, last_audit: ev.last_audit } : null };
         }),
       };
     });
@@ -582,6 +593,7 @@ export async function apiPolicy(ctx, url) {
     levels,
     subjects,
     transitions: transitions.length,
+    evidence: { as_of: asOf, in_scope: evidence.in_scope, below_bar: evidence.below_bar },
     ungrantable: Array.isArray(obj(policy).ungrantable_actions) ? obj(policy).ungrantable_actions.map(String) : [],
   }, counts);
 }

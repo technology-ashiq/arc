@@ -271,7 +271,7 @@
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/models.mjs	dee2063e634ff21cbe6c4c30b5060d0c5269c89a7a866b383a662ed50b96b684
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
-.claude/scripts/hq/lib/face/reads.mjs	6068b346d929322fbe7c74b84409a02c66b1a9910bfd8ecdc3ae449e8d734850
+.claude/scripts/hq/lib/face/reads.mjs	789fcb01440831dd52ee36970db0efdc2441f5fa095490c3d70a219c3cbf1b7d
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
 .claude/scripts/hq/lib/face/work-door.mjs	c3168466d25da0a130233840d5dda13d6e54f9739d1af94554997a0d6f0efbbb
@@ -324,7 +324,7 @@
 .claude/scripts/hq/lib/validate-policy-refusal.mjs	dbef2199e8331275ef94133590a913f9c08f1e55629cbebe51e09ee708d6288c
 .claude/scripts/hq/lib/validate-policy.mjs	6b5bd88f51b75956bbf1b3bc755360002e27db431d7488695c96c8c2456be657
 .claude/scripts/hq/lib/validate.mjs	d271e43f05c6b40b7b427962ec74366aeb7e3a43bddb09fb53eb841e7654e8a4
-.claude/scripts/hq/policy-evidence.mjs	532b1ddb1689763edcf7825f8d36fb441f115cc36f86986a04b521479a2b36e4
+.claude/scripts/hq/policy-evidence.mjs	85593291599c9e5ee99f06fd73bdb00bc8379ced1c24a4c693714eee28b0b6f3
 .claude/scripts/hq/policy-hook.mjs	d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76
 .claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
