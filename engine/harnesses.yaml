@@ -1,0 +1,149 @@
+# engine/harnesses.yaml -- the declared harness capability matrix (DST-C, ADR-2003).
+#
+# One row per harness, one cell per feature. A cell is "true", "false" or "partial:<note>", always
+# double-quoted so the colon inside partial never parses as a mapping. A row installs only when it is
+# status: verified AND dated; an unverified row is a declaration that arc has NOT checked that
+# harness, never a promise. `arc init` places only "true" cells and prints every "false" by name;
+# a "partial" cell installs with its note printed.
+#
+# Verified 2026-10-07 against the live docs (opencode.ai/docs, learn.chatgpt.com/docs -- the old
+# developers.openai.com/codex paths 308-redirect there -- and agentskills.io/specification) plus the
+# installed binaries: opencode 1.17.18, codex-cli 0.147.0, claude 2.1.292. The docs carry no version
+# stamp, so a row can drift with a harness release; the pinned version is what `doctor` compares
+# (assumption A-02). Where the docs contradicted the design source, the row won:
+#   - OpenCode dirs are PLURAL (.opencode/commands/, .opencode/agents/, .opencode/skills/).
+#   - Codex has NO project-level slash command (custom prompts are user-level and deprecated), so a
+#     command renders as a skill at .agents/skills/arc-NAME/SKILL.md, invoked as $arc-NAME.
+#
+# Edited by hand, reviewed as a diff. Nothing writes this file at run time.
+
+version: 1
+harnesses:
+  - id: claude-code
+    status: verified
+    verified: "2026-10-07"
+    version: "2.1.292"
+    source: "identity target: the .claude/ source itself (ADR-2001) + claude --version"
+    golden: tests/fixtures/sync-golden/tree-manifest.txt
+    golden_transform: "\\r stripped before hashing (core.autocrlf checkouts hash alike); .claude/arc-registry.json excluded; path-to-sha256 manifest of the synced tree, no compile-side claude-code golden until P02"
+    cells:
+      commands: "true"
+      agents: "true"
+      hooks: "true"
+      skills: "true"
+      mcp: "true"
+      brain_file: "true"
+      subagents: "true"
+      user_only_invocation: "true"
+      argument_substitution: "true"
+  - id: codex
+    status: verified
+    verified: "2026-10-07"
+    version: "0.147.0"
+    source: "https://learn.chatgpt.com/docs/build-skills + /custom-prompts + /hooks + /agent-configuration/subagents + /agent-configuration/agents-md + /extend/mcp + codex --help"
+    golden: tests/fixtures/distribute/goldens/codex/
+    golden_pending: P03
+    cells:
+      commands: "partial:rendered as skills at .agents/skills/arc-NAME/SKILL.md, invoked $arc-NAME; no project slash commands"
+      agents: "partial:.codex/agents/NAME.toml with developer_instructions; no per-agent tool allowlist field"
+      hooks: "partial:.codex/hooks.json PreToolUse can deny; the repo layer runs only after the user trusts it via /hooks"
+      skills: "true"
+      mcp: "partial:.codex/config.toml mcp_servers, read for trusted projects only"
+      brain_file: "true"
+      subagents: "true"
+      user_only_invocation: "true"
+      argument_substitution: "false"
+  - id: opencode
+    status: verified
+    verified: "2026-10-07"
+    version: "1.17.18"
+    source: "https://opencode.ai/docs/commands/ + /agents/ + /rules/ + /skills/ + /mcp-servers/ + /plugins/ + /permissions/ + opencode run --help"
+    golden: tests/fixtures/distribute/goldens/opencode/
+    golden_pending: P03
+    cells:
+      commands: "true"
+      agents: "true"
+      hooks: "partial:plugin tool.execute.before can throw to block; arc fragments are not loaded as plugins"
+      skills: "true"
+      mcp: "true"
+      brain_file: "true"
+      subagents: "true"
+      user_only_invocation: "partial:slash commands are user-typed; no documented key forbids model invocation"
+      argument_substitution: "true"
+  - id: skills-only
+    status: verified
+    verified: "2026-10-07"
+    version: "agentskills.io spec 2026-10-07"
+    source: "https://agentskills.io/specification"
+    golden: tests/fixtures/distribute/goldens/skills-only/
+    golden_pending: P03
+    cells:
+      commands: "partial:rendered as skills only; invocation depends on the reading harness"
+      agents: "partial:role skills, single-session (ADR-2009)"
+      hooks: "false"
+      skills: "true"
+      mcp: "partial:.mcp.json shipped as-is; the reading harness must understand that format"
+      brain_file: "true"
+      subagents: "partial:single-session role skills, never a nested harness call (ADR-2009)"
+      user_only_invocation: "false"
+      argument_substitution: "false"
+  - id: hermes
+    status: unverified
+    verified: "2026-10-07"
+    version: "unverified"
+    source: "not read; v1 gets skills-only (ADR-2010)"
+    cells:
+      commands: "false"
+      agents: "false"
+      hooks: "false"
+      skills: "false"
+      mcp: "false"
+      brain_file: "false"
+      subagents: "false"
+      user_only_invocation: "false"
+      argument_substitution: "false"
+  - id: kimi-cli
+    status: unverified
+    verified: "2026-10-07"
+    version: "unverified"
+    source: "not read; v1 gets skills-only (ADR-2010)"
+    cells:
+      commands: "false"
+      agents: "false"
+      hooks: "false"
+      skills: "false"
+      mcp: "false"
+      brain_file: "false"
+      subagents: "false"
+      user_only_invocation: "false"
+      argument_substitution: "false"
+  - id: gemini-cli
+    status: unverified
+    verified: "2026-10-07"
+    version: "unverified"
+    source: "not read; v1 gets skills-only (ADR-2010)"
+    cells:
+      commands: "false"
+      agents: "false"
+      hooks: "false"
+      skills: "false"
+      mcp: "false"
+      brain_file: "false"
+      subagents: "false"
+      user_only_invocation: "false"
+      argument_substitution: "false"
+  - id: cursor
+    status: unverified
+    verified: "2026-10-07"
+    version: "unverified"
+    source: "not read; v1 gets skills-only (ADR-2010)"
+    cells:
+      commands: "false"
+      agents: "false"
+      hooks: "false"
+      skills: "false"
+      mcp: "false"
+      brain_file: "false"
+      subagents: "false"
+      user_only_invocation: "false"
+      argument_substitution: "false"
