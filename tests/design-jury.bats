@@ -11,7 +11,21 @@ _explore() { echo "$SANDBOX/.claude/scripts/design/design-explore.sh"; }
 _jury_dir() { echo "$SANDBOX/.claude/state/design/explore/jx/jury"; }
 
 # One png-shaped file per call, distinct bytes per name.
-_png() { printf '\211PNG\r\n\032\n%s' "$2" > "$1"; }
+# A real one-pixel PNG whose colour derives from $2, so distinct names give distinct bytes. The deal
+# now parses every item as a PNG (Phase 07 S4b), so a signature with junk after it no longer passes.
+_png() {
+  node -e 'const z=require("zlib"),c=require("crypto"),fs=require("fs");const crc=(b)=>{let x=~0;for(const v of b){x^=v;for(let k=0;k<8;k++)x=(x>>>1)^(0xedb88320&-(x&1))}return (~x)>>>0};const ch=(t,d)=>{const l=Buffer.alloc(4);l.writeUInt32BE(d.length);const td=Buffer.concat([Buffer.from(t),d]);const r=Buffer.alloc(4);r.writeUInt32BE(crc(td));return Buffer.concat([l,td,r])};const h=c.createHash("sha256").update(process.argv[2]).digest();const ih=Buffer.alloc(13);ih.writeUInt32BE(1,0);ih.writeUInt32BE(1,4);ih[8]=8;ih[9]=2;fs.writeFileSync(process.argv[1],Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),ch("IHDR",ih),ch("IDAT",z.deflateSync(Buffer.from([0,h[0],h[1],h[2]]))),ch("IEND",Buffer.alloc(0))]))' "$1" "$2"
+  [ -s "$1" ] || { echo "fixture: _png wrote nothing"; return 1; }
+}
+# A pack screen framed into ref-<sha16>/ and rendered into its session, as design-explore.sh ref does.
+_frame_ref() {
+  local s="$1" src="$2" d="docs/design/explore/jx/ref-$1" sess=".claude/state/design/renders/jx--ref-$1" png sha
+  mkdir -p "$d" "$sess"
+  cp "$src" "$d/image.png"
+  png="$sess/r-1440x900.png"; _png "$png" "ref-render-$s"; sha="$(_sha "$png")"
+  printf '{\n  "route": "/",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "1440x900@1",\n  "session": "jx--ref-%s",\n  "iter": 0,\n  "unchanged": false\n}\n' "$png" "$sha" "$s" > "$sess/r-1440x900.json"
+  [ -s "$sess/r-1440x900.json" ] || { echo "fixture: ref render not built"; return 1; }
+}
 _sha() { node -e 'const c=require("crypto"),f=require("fs");process.stdout.write(c.createHash("sha256").update(f.readFileSync(process.argv[1])).digest("hex"))' "$1"; }
 
 # An explore `jx` on brief `bx` with $1 variants rendered at 1440x900, and $2 pack screens with
@@ -41,6 +55,7 @@ _fixture() {
     png=".claude/state/design/refpacks/bx/probe.png"; _png "$png" "reference-$i"; sha="$(_sha "$png")"
     mv "$png" ".claude/state/design/refpacks/bx/nicelydone-${sha:0:16}.png"
     printf '| https://assets.nicelydone.club/x%s.png | 2026-09-27T00:00:00Z | %s | nicelydone | p | a |\n' "$i" "$sha" >> docs/design/refpacks/bx/sources.md
+    _frame_ref "${sha:0:16}" ".claude/state/design/refpacks/bx/nicelydone-${sha:0:16}.png" || return 1
     REFS+=(--ref "${sha:0:16}")
   done
   [ "$(ls docs/design/explore/jx | grep -c '^variant-')" -eq "$nv" ] || { echo "fixture: variants not built"; return 1; }
@@ -569,9 +584,96 @@ _rival_scored() {
   done
 }
 
+# ---------- Phase 07 S4b: every item through the renderer, nothing file-level left to tell them apart ----------
+
+@test "jury: every dealt item is a PNG with no metadata and one timestamp, and a reference carries its pack hash (S4b)" {
+  _fixture 3 1; _rival_fixture DRAFTED
+  run bash "$(_explore)" jury jx --n 5 --seed 7 --rival stitch "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "the deal failed: $output"; false; }
+  [ "$(ls "$(_jury_dir)/items" | grep -c '\.png$')" -eq 5 ] || { echo "not five PNGs: $(ls "$(_jury_dir)/items")"; false; }
+  node -e 'const fs=require("fs"),p=require("path"),d=process.argv[1];const t=new Set(fs.readdirSync(d).map(f=>fs.statSync(p.join(d,f)).mtimeMs));if(t.size!==1)process.exit(1)' "$(_jury_dir)/items" \
+    || { echo "the items carry different timestamps"; false; }
+  node -e 'const k=require(process.argv[1]);const r=k.items.find(i=>i.kind==="reference");if(!/^[0-9a-f]{64}$/.test(r.pack_sha256||"")||r.pack_sha256===r.sha256)process.exit(1)' "$(_jury_dir)/key.json" \
+    || { echo "the reference item is not the render of a framed pack screen"; false; }
+}
+
+@test "jury: a reference that was never framed, or whose frame is not the pack screen, is refused (S4b)" {
+  _fixture 3 1
+  local r="${REFS[3]}"
+  [ "${#r}" -eq 16 ] || { echo "fixture: no ref prefix"; false; }
+  printf 'not the pack screen' > "docs/design/explore/jx/ref-$r/image.png"
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"is not the pack screen it names"* ]] || { echo "a swapped frame was dealt: $status $output"; false; }
+  rm -rf "docs/design/explore/jx/ref-$r"
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"is not framed for this explore"* ]] && [[ "$output" == *"design-explore.sh ref jx --ref $r"* ]] || { echo "an unframed reference was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal left a jury dir"; false; }
+}
+
+@test "jury: a render carrying a PNG text chunk is refused before it is dealt (S4b, the gallery iTXt source URL)" {
+  _fixture 3 1
+  local sess=".claude/state/design/renders/jx--variant-a" png meta
+  png="$sess/r-1440x900.png"; meta="$sess/r-1440x900.json"
+  node -e 'const fs=require("fs"),z=require("zlib");const f=process.argv[1];const b=fs.readFileSync(f);const crc=(x)=>{let c=~0;for(const v of x){c^=v;for(let k=0;k<8;k++)c=(c>>>1)^(0xedb88320&-(c&1))}return (~c)>>>0};const td=Buffer.concat([Buffer.from("iTXt"),Buffer.from("Source\0\0\0\0\0https://example.org/x")]);const l=Buffer.alloc(4);l.writeUInt32BE(td.length-4);const r=Buffer.alloc(4);r.writeUInt32BE(crc(td));const iend=b.length-12;fs.writeFileSync(f,Buffer.concat([b.subarray(0,iend),l,td,r,b.subarray(iend)]))' "$png"
+  sha="$(_sha "$png")"
+  node -e 'const fs=require("fs"),f=process.argv[1];const m=JSON.parse(fs.readFileSync(f));m.screenshot_sha256=process.argv[2];fs.writeFileSync(f,JSON.stringify(m))' "$meta" "$sha"
+  grep -q 'iTXt' "$png" || { echo "fixture: chunk not planted"; false; }
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"carries PNG metadata (iTXt)"* ]] || { echo "a render with metadata was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal left a half-dealt jury dir (attack 1773af3 B1)"; false; }
+}
+
+# Plant one ancillary chunk of type $3 before IEND in render $1 and re-bind its meta $2 to the new bytes.
+_plant_chunk() {
+  node -e 'const fs=require("fs");const f=process.argv[1],t=process.argv[2];const b=fs.readFileSync(f);const crc=(x)=>{let c=~0;for(const v of x){c^=v;for(let k=0;k<8;k++)c=(c>>>1)^(0xedb88320&-(c&1))}return (~c)>>>0};const td=Buffer.concat([Buffer.from(t),Buffer.from([0])]);const l=Buffer.alloc(4);l.writeUInt32BE(1);const r=Buffer.alloc(4);r.writeUInt32BE(crc(td));const iend=b.length-12;fs.writeFileSync(f,Buffer.concat([b.subarray(0,iend),l,td,r,b.subarray(iend)]))' "$1" "$3"
+  node -e 'const fs=require("fs"),c=require("crypto");const m=JSON.parse(fs.readFileSync(process.argv[1]));m.screenshot_sha256=c.createHash("sha256").update(fs.readFileSync(process.argv[2])).digest("hex");fs.writeFileSync(process.argv[1],JSON.stringify(m))' "$2" "$1"
+  grep -q "$3" "$1" || { echo "fixture: $3 not planted"; return 1; }
+}
+
+@test "jury: a chunk one item carries and the others do not is refused; a chunk all items share is dealt (attack 1773af3 L8)" {
+  _fixture 3 1
+  _plant_chunk .claude/state/design/renders/jx--variant-a/r-1440x900.png .claude/state/design/renders/jx--variant-a/r-1440x900.json sRGB
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"do not share one PNG chunk set"* ]] || { echo "one encoder told apart was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal left a jury dir"; false; }
+  local s
+  for s in .claude/state/design/renders/jx--variant-b .claude/state/design/renders/jx--variant-c .claude/state/design/renders/jx--ref-"${REFS[3]}"; do
+    _plant_chunk "$s/r-1440x900.png" "$s/r-1440x900.json" sRGB
+  done
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "a chunk every item shares was refused: $output"; false; }
+}
+
+@test "frame: copies the pack screen into a gitignored ref dir under a text-free page, and refuses a linked dir (S4b)" {
+  _fixture 3 1
+  local r="${REFS[3]}"
+  rm -rf "docs/design/explore/jx/ref-$r"
+  run node "$SANDBOX/.claude/scripts/design/design-jury.mjs" frame --root "$SANDBOX" --id jx --ref "$r"
+  [ "$status" -eq 0 ] && [[ "$output" == *"framed $r"* ]] || { echo "$status $output"; false; }
+  [ "$(_sha "docs/design/explore/jx/ref-$r/image.png")" = "$(_sha .claude/state/design/refpacks/bx/nicelydone-$r.png)" ] || { echo "the frame is not the pack bytes"; false; }
+  grep -q '<img src="image.png" alt="">' "docs/design/explore/jx/ref-$r/index.html"
+  run git -C "$ARC_ROOT" check-ignore -q "docs/design/explore/any-explore/ref-$r/image.png"
+  [ "$status" -eq 0 ] || { echo "a framed pack screen would be tracked by git"; false; }
+  rm -rf "docs/design/explore/jx/ref-$r"; mkdir -p "$BATS_TEST_TMPDIR/elsewhere"
+  ln -s "$BATS_TEST_TMPDIR/elsewhere" "docs/design/explore/jx/ref-$r" 2>/dev/null || true
+  [ -L "docs/design/explore/jx/ref-$r" ] || skip "this filesystem made a copy, not a symlink"
+  run node "$SANDBOX/.claude/scripts/design/design-jury.mjs" frame --root "$SANDBOX" --id jx --ref "$r"
+  [ "$status" -eq 1 ] && [[ "$output" == *"is a link or not a directory"* ]] || { echo "$status $output"; false; }
+  [ -z "$(ls -A "$BATS_TEST_TMPDIR/elsewhere")" ] || { echo "the frame was written through the link"; false; }
+}
+
+@test "render: a ref dir that is not ref-<16 lowercase hex> is refused (S4b)" {
+  _fixture 3 1
+  local r
+  for r in docs/design/explore/jx/ref-0123/index.html docs/design/explore/jx/ref-0123456789ABCDEF/index.html docs/design/explore/jx/ref-0123456789abcdeg/index.html; do
+    run bash "$SANDBOX/.claude/scripts/design/design-render.sh" "$r" --mode explore --session jx--ref-x
+    [ "$status" -eq 1 ] && [[ "$output" == *"REFUSED"* ]] || { echo "the renderer took $r: $status $output"; false; }
+  done
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 34 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 34 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 40 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 40 -- a @test was silently dropped"
     false
   }
 }

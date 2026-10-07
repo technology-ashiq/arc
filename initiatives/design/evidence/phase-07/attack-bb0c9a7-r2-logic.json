@@ -1,0 +1,122 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:236-250 (pngChunks loop)",
+      "breaking_input": "The per-item format/metadata check runs over `items`, but `items` is populated in the loop *above* which for references already called `latestRender(ref-<r>)` and pushed `path: rr.file`. The check `if (it.ext !== \".png\")` therefore inspects the *render's* bytes, never the frame/pack bytes — `pngChunks(readFileSync(it.path))` reads the render, not the frame copy. So the deal's 'a dealt item carries no metadata' gate is applied to the render, while `pack_sha256` (the value that travels into key.json as the provenance) is the hash of the untested framed image. A crafted `image.png` with a domain-carrying iTXt chunk can be placed at `ref-<r>/image.png` at frame time; its hash is recorded and shipped, and the file-level blindness check (the whole point of S4b) is never run on it.",
+      "why": "The gate was written against `items[].path`, but for references that path is `rr.file` (the render). The bytes that carry the pack provenance are hashed at deal time from `framed` only to compare against the re-read `framed` — they are never passed through the PNG/length/mtime gates. The very file the change is meant to clean ('stayed a JPEG... carrying the gallery iTXt source URL') is exactly the file not checked.",
+      "fix": "Run the ext + pngChunks/TELLING_CHUNKS check over the framed file (`sha256(readRegular(framed))` path) as well, or push both paths and check both; never assert provenance on bytes that skip the gate.",
+      "twin_of": "A size guard written for one tool reached another through a new entry point -> a guard reused by a new caller is re-checked against that caller's real inputs."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:230-235 (deal, reference branch)",
+      "breaking_input": "Set `r` to the 16-hex prefix of ref A, but populate `ref-<r>/image.png` with ref B's real pack bytes (whose sha256 also has a row in sources.md). `frame` never ran against this directory with A's prefix. In `deal`, `framed = join(ex.dir, 'ref-'+r, 'image'+ext)`; `sha256(readRegular(framed))` returns B's full hash `fullB`; the owning-row lookup matches `fullB` in sources.md; the deal accepts. The prior finding L5's requested `full.startsWith(r)` was NOT added — `frame` still binds prefix→bytes, `deal` re-reads and never re-binds. The shipped fix for the prior provenance finding was applied only to the row-column, not to the prefix binding.",
+      "why": "The claimed fix ('the sha256 column of exactly one row') is present, but the pre-existing hole it was supposed to close — the prefix named in `--ref r` not composing the bytes under `ref-<r>/` — is still open in `deal`. A validation made in one read (frame) and re-read without it (deal).",
+      "fix": "In `deal`, after recomputing `full`, assert `full.startsWith(r)`; refuse otherwise.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:280-320 (deal copy loop)",
+      "breaking_input": "The new bats test asserts `[ ! -e \"$(_jury_dir)\" ]` after a refused deal. But `mkdirSync(itemsDir)` (and thus the parent jury dir) runs before the per-item format/chunk loop only in the *old* order — in the new order the loop at lines 236-250 runs before `mkdirSync(itemsDir)`, so B1's fix is real. The remaining hole: the loop at 236-250 reads PNGs but `mkdirSync(itemsDir)` and the copy loop still write items one at a time. If `sha256(readFileSync(join(itemsDir,file))) !== it.sha256` fails on item 3 of 5 (e.g. an EIO mid-copy on a network FS), the first two items are already on disk and `key.writeFileSync(..., {flag:'wx'})` never runs. The test only exercises refusals that *precede* the copy loop, never a refusal inside it. The 'judge every input before claiming the output' fix moved the input checks earlier, but the copy writes are still shared state written in a middle that can then fail.",
+      "why": "The B1 fix is real for the checks that were moved (they now run before `mkdirSync`), and the test runs those paths. But the claim `wx` on key.json is at the end while the copy loop already wrote itemsDir; any fail after `mkdirSync(itemsDir)` still leaves a half-dealt jury. The test that asserts `! -e \"$(_jury_dir)\"` does not cover a failure between `mkdirSync` and the key write.",
+      "fix": "Stage the whole deal in a private temp dir and `renameSync` into place, or wrap the copy loop and unlink the jury dir on any failure after the claim.",
+      "twin_of": "An exclusive write at the end of a job whose middle already wrote shared state -> claim first (an atomic mkdir after every check), then write."
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:503-518 (invoked guard)",
+      "breaking_input": "Run `node .claude/scripts/design/design-jury.mjs deal --root R --id X ...` where `.claude` is a symlink to a real directory, or on Windows where the drive letter is lower-case in argv[1] and upper-case after realpath (or vice-versa). `realOf(process.argv[1])` resolves via `realpathSync`, but on Windows the drive letter case in the realpath form may differ from argv's form; the strict `===` comparison is false, the CLI block never runs, and the process exits 0 with no output. The shell caller `bash design-explore.sh ref ... || exit $?` reads exit 0 as success and proceeds to render a page that was never written.",
+      "why": "The B2/L13 fix was not applied — the guard still silently no-ops on a realpath mismatch. The 'basename fallback' mentioned in fixed-defects was only added as `basename(invoked) === basename(self)`, which itself is a coincidence shape: two different files named design-jury.mjs in the same invocation would both match, and a symlink alias that realpath-resolves differently from argv still falls to the basename branch, which would *run* the CLI — the opposite failure. Either way the guard is a file-name coincidence, not a proof the file is the entry point.",
+      "fix": "Dispatch on `import.meta.url` vs argv only for exact match, but ALWAYS fail if argv[2] is a known verb and the guard is false; or move pngAncillary/pngChunks into their own module and keep the CLI unconditional.",
+      "twin_of": "A main guard whose miss is a silent exit 0 -> fall back to the file name, never to doing nothing."
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-render.sh:553-560 (IMG_STATE check)",
+      "breaking_input": "A framed ref page that loads, but whose `document.images[0]` has `complete === true` and `naturalWidth === 0` because the image is a 1x1 transparent PNG with no intrinsic size on a buggy decoder, or — more directly — `_ab eval` prints its result with surrounding quotes or a leading space on some agent-browser versions. The code strips `\\r\\n ` but not `\"`; `IMG_STATE='\"true\"'` falls to `*) TEXT_LEN=0` and every ref render is refused as blank. All S4b bats fixtures fabricate the render (`_frame_ref` writes the session JSON and PNG directly), so no test drives `_ab eval` through the real renderer on a ref page. The claimed fix for B3 (real renderer test) is not in the diff.",
+      "why": "The ref-content probe switched from `get text body` (a probe whose output shape was known) to a raw JS eval whose output shape is assumed to be exactly `true`. The prior B3 finding (no CI test drives a real renderer) remains unaddressed; the elif branch that falls back to `get text` on a malformed probe output was removed for refs.",
+      "fix": "Normalise the eval output (`case \"$IMG_STATE\" in true|\"true\"|*[!\\\"t\\\"''])` or strip quotes before matching; keep the fail-closed fallback to `get text` when eval errors.",
+      "twin_of": "A failing probe command read as \"not applicable\" -> only a positive \"absent\" skips; an error is a failure."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:940-947 (--viewport grammar)",
+      "breaking_input": "`ref jx --ref <sha16> --viewport 0x0`, `--viewport 0001440x00900`, or two `--viewport` flags with different values. The grammar is `\"\"|*[!0123456789x]*|x*|*x|*x*x*` → refuse; else `*x*)` accept. `0x0` passes (no non-digit-or-x), `0001440x00900` passes. A zero-padded viewport yields session `r-0001440x00900.png`; if the deal compares the key's viewport to the render meta's, this disagrees. A repeated flag appends twice into `RFLAGS` and is handed to the renderer; whichever wins is undefined. The prior B7 finding stands unresolved — no cap, no `[1-9]` requirement, no second-flag refusal.",
+      "why": "A name grammar that admits leading zeros and no upper bound, reused unvalidated into a session-file name. The same `[1-9][0-9]*` rule used elsewhere for anything naming or counting is not applied here.",
+      "fix": "Use `[1-9][0-9]*x[1-9][0-9]*` with a length cap; refuse a second `--viewport`.",
+      "twin_of": "A number grammar that admits leading zeros -> `[1-9][0-9]*`, never `[0-9]+`, for anything that names or counts."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:951-972 (BRIEF_ID parse then discarded)",
+      "breaking_input": "Author `explore.txt` with `brief=docs/design/briefs/foo/brief.md ` (trailing space). The grep|head|tr -d '\\r' yields `foo/brief.md `; the `%/brief.md` strip does not match; the case `*[!a-z0-9-]*` refuses a valid explore. Symmetrically, an explore.txt with no `brief=` line makes grep exit 1; under `set -o pipefail` the assignment aborts the script with no message. And BRIEF_ID, once validated, is thrown away — `frame` re-reads `ex.brief` through its own `exploreOf` parser, so the validated value is never the value used.",
+      "why": "The id validated on one read is not the id used by the writer; and the trailing-whitespace case is a DoS on valid input. The prior L11 and B9 findings stand.",
+      "fix": "Drop the shell parse and use `ex.brief` from `exploreOf`, or pass BRIEF_ID to node and assert it equals `ex.brief`; trim spaces and tabs (`tr -d ' \\r'`) and guard the pipeline with `|| true` plus a named error.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "tests/design-jury.bats (render: a ref dir that is not ref-<16 lowercase hex> is refused)",
+      "breaking_input": "The three test paths `ref-0123`, `ref-0123456789ABCDEF`, `ref-0123456789abcdeg` are created as `index.html` paths by the test, and the test asserts only `status -eq 1` and the word `REFUSED`. The route case pattern `docs/design/explore/*/ref-????????????????/?*` matches none of `ref-0123` (too short), so the early route refusal fires there. For `ref-0123456789ABCDEF` and `ref-0123456789abcdeg`, the new inner case `*[!0123456789abcdef]*` is what refuses — but the route pattern only reaches it after the `?`-glob matches. Delete the new `ref-????????????????)` case in design-render.sh and the fallback `*)` case still returns REFUSED, so the test passes even with the new hex check removed.",
+      "why": "The test is aimed at a path where more than one rule refuses; it does not assert the specific reason ('must be ref-<16 lowercase hex>'), so it does not prove the new branch exists. The prior B8 finding stands.",
+      "fix": "Assert the reason text for the uppercase and non-hex cases.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:236-250 (chunkSet equality)",
+      "breaking_input": "The chunk-set gate uses `types.join(\",\")` over de-duplicated order-of-first-appearance (from `pngChunks`). Two items encoded by the same encoder but with a different *chunk order* (e.g. one has `PLTE` before `IDAT`, another after a `tRNS`, both stripped) produce different signatures and are refused — a legitimate pipeline can be blocked. More importantly, the gate refuses only if the *whole set string* differs; an item with extra chunks that happen to make the same joined set as another item (e.g. both end up `IHDR,IDAT,IEND` after the duplicates collapse) pass even when one carries an ancillary chunk the other doesn't, because `TELLING_CHUNKS` catches only a named list. A novel ancillary chunk type not in TELLING_CHUNKS (e.g. `sPLT`, `hIST`, `bKGD`, `pHYs`) survives both gates and reaches the jury.",
+      "why": "The gate is an allow-list of 'telling' types plus an exact-string equality. Anything outside the list on all items, or a differing-but-not-listed type, is invisible. The S4b claim ('no chunk that can carry where an image came from') is broader than the implementation: the only chunks that can carry text are covered, but a `pHYs`/`bKGD`/`sPLT` difference between a reference render and a variant render still tells them apart.",
+      "fix": "Refuse any ancillary chunk at all for dealt items (allow only IHDR/PLTE/IDAT/IEND), or normalise every item through the same encoder before dealing.",
+      "twin_of": "A jury item dealt as the file it arrived as -> every item is rendered by the one renderer; the deal refuses a non-PNG or any ancillary chunk and stamps one mtime on all."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:262-275 (mtime bind)",
+      "breaking_input": "Frame ref R, render it, then `git checkout` the explore tree (mtime of `ref-<R>/image.png` is set to checkout time, newer than the render). Deal refuses with `ref-<R>'s render is older than its frame; render it again` — a correct pipeline is blocked by any touch. Symmetrically, `touch -d '2000-01-01' ref-<R>/image.png` after a stale render makes the stale render acceptable. The prior L1/B5 finding stands: the freshness link is an mtime comparison, not a content hash.",
+      "why": "The render is not bound to the page it shows; the binding is a filesystem timestamp that any checkout, restore or touch rewrites. The fix requested (compare the session record's page sha256, or regenerate the expected index.html and compare) was not applied.",
+      "fix": "Put the frame's sha256 into the render session record at render time and compare that in the deal; never use mtime as the binding.",
+      "twin_of": "A render not bound to the page it shows -> a rival render older than its draft is refused"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:236 (per-item check comments vs. code)",
+      "breaking_input": "The comment claims 'Every item is judged on its bytes BEFORE the jury dir is claimed', but the loop reads `readFileSync(it.path)` where `it.path` for a reference is `rr.file` (the render). The reference's *pack* bytes at `ref-<r>/image.png` — the file the deal is supposed to certify as 'these exact pack bytes' — are never passed to `pngChunks`. So a reference frame carrying an iTXt chunk in `ref-<r>/image.png` is certified (its sha256 is recorded as `pack_sha256`) and dealt as a render whose own bytes happen to be clean. The test `a render carrying a PNG text chunk is refused` plants the chunk in the *variant* render, never in `ref-<r>/image.png`, so the hole is untested.",
+      "why": "The S4b fix ('a dealt item carries no ancillary chunk') checks the render items only; the reference's preserved pack bytes — the one file whose provenance the whole change is about — bypass the gate. This is the L1 twin at the test level: the fixture drives the gate only on the path it already covered.",
+      "fix": "Run the pngChunks/TELLING_CHUNKS check on `ref-<r>/image${ext}` (the framed file) at deal time, before `latestRender`; add a bats case that plants a tEXt chunk in the framed pack image and asserts the refusal.",
+      "twin_of": "A test seam that drove only the fixture path -> a fake stdio server driven through the real spawn, one mode per failure"
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:240-243 (utimesSync loop)",
+      "breaking_input": "The stamp `at = new Date(key.dealt)` and `utimesSync(join(itemsDir, file), at, at)` runs inside the copy loop. On a filesystem that rejects setting mtime (e.g. some read-only or overlay mounts, or when running as an unprivileged user against a sticky-bit dir), `utimesSync` throws an uncaught exception — the deal exits with a stack trace, not a named refusal. The `|| exit $?` in the shell cannot distinguish this from a deliberate fail() (exit 1).",
+      "why": "The mtime-stamping was added to make all items indistinguishable at the file level, but its failure path is a throw outside the one-status-line contract. The prior B4 finding (uncaught throw through `|| exit $?`) is unaddressed for the new utimesSync call.",
+      "fix": "Wrap the utimesSync in try/catch and fail() with a named message; or compare mtimes after stamping and refuse if they differ.",
+      "twin_of": "A throw that escapes the one-status-line contract -> every throw after argument parsing becomes COULD-NOT-DRAFT (internal error) and exit 3"
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:214-217 (deal reference branch)",
+      "breaking_input": "After `frame` succeeds and the render is produced, `latestRender(\"ref-${r}\")` is called and its result used for `rr.file`. `latestRender` picks the highest-iteration session. If the session dir `.claude/state/design/renders/<id>--ref-<r>` carries a stale iteration from a previous explore (`<id>` differs? — the session name is `<id>--ref-<r>`, so explore id is in the name), the stale render is picked. But within a single explore, `frame` does not clear the session; a re-frame after an operator changes the pack (and sources.md) leaves the old iteration at a higher number than the new render if the renderer names iterations descending — or simply leaves an older render whose mtime is now older than the new frame file, so the deal refuses a correct re-frame. The prior L6 finding stands.",
+      "why": "frame does not own the render session; the deal's `latestRender` selection is by iteration number, not by tie to the current frame. A legitimate re-frame is blocked.",
+      "fix": "frame should clear or bump the `<id>--ref-<r>` session (recording the frame sha in the session record); deal should select the render whose record carries the current frame sha.",
+      "twin_of": "A run record that a failed begin leaves behind -> clear the record at the start of the run that will write it, not only at the end of the one that consumes it."
+    }
+  ]
+}
