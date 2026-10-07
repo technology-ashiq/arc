@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:157",
+      "breaking_input": "--rival stitch where `.claude/state/design/rivals/<brief>/<id>/stitch/receipt.json` exists with status DRAFTED, and the vendored page `docs/design/explore/<id>/rival-stitch/index.html` exists, but no render session `.claude/state/design/renders/<id>--rival-stitch/` exists (draft succeeded, render step was killed / rc != 0 so it never started).",
+      "why": "`latestRender('rival-stitch')` returns null when it fails, but the code does `const r = latestRender(...); items.push({path: r.file, sha256: r.sha, ...})` — that throws TypeError. The whole deal crashes with an unhandled stack trace instead of failing closed with a contract message. For variants the same shape also throws (though `for (const v of variants)` is reached only after a render, so variants cannot easily be missing) — but for rivals DRAFTED and rendered are decoupled by `design-explore.sh rival`, which runs the renderer after the adapter and exits with the renderer's status; a rival can easily be DRAFTED-but-unrendered (render refused as duplicate pixels, renderer's stricter route check, render budget) while its receipt says DRAFTED.",
+      "fix": "Have `latestRender` throw a named `fail(...)` on a missing session/meta rather than returning null; or check the return and call `fail(`rival-stitch has no render for this viewport; render it again`)` before touching `.file`.",
+      "twin_of": "A caller read the parser's \"someone else\" code, 1, which is also bash's crash code -> a verdict gets a code the runtime never produces by accident; every unknown code is judged."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:143",
+      "breaking_input": "Two renders in `.claude/state/design/renders/<id>--variant-a/` whose metas both have the same `iter` value — e.g. `<route>.json` deleted by hand then re-rendered, or a session copied into the state dir by an earlier explore — with different `screenshot_sha256` values, at the same viewport. Or simply: first `--rival` deal is fine, a rival dir is `rm -rf`'d and re-drafted, yielding a new meta whose iter equals the old one's.",
+      "why": "The loop compares `m.iter > best.m.iter` with a strict `>`, so on a tie it keeps whichever file `readdirSync` returned first — an unspecified order. It does not count. Two latest metas at the same iter are two different renders, and one is silently ignored. Every subsequent check (`sha256(bytes) !== best.m.screenshot_sha256`) binds to only one of them, so the item is one of two possible pages and the deal's `sha256` is not a function of the explore.",
+      "fix": "Group by iter, require exactly one meta at the maximum iter, and refuse (`fail`) on a tie — count matches rather than taking `find`/first. Alternatively compare `(best, m) => m.m.iter > best.m.iter ? m : (m.m.iter < best.m.iter ? best : (fail(...), best))`.",
+      "twin_of": "`find()` took the first of duplicate rows -> count matches; exactly one or refuse."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:373",
+      "breaking_input": "A rival deal where the rival dir was deleted between the deal and the unblind: `rm -rf docs/design/explore/<id>/rival-stitch`. Or a hand-edited key.json whose `--rival` provider placeholder for the unblind stage does not match a receipt.",
+      "why": "At unblind, `riv = best(\"rival\")` — `riv` is `null` if no item has kind `rival`. The block reads `if (riv) { ... }` around the whole thing, but then `console.log(...rivalRate...)` and the whole rival-beats-all-arc computation reference `riv.score` inside the guarded body; on the guarded path a rival exists. The real hole: on a deal with no rival at all, `rivalBeatsAllArc: rivalRate` is `null`, `riv` is `null`, and the summary line is not printed — fine. But on a deal WITH a rival where `rec.sdk` is `null`, `String(rec.sdk ?? \"\")` produces `rival:stitch@` — a provenance stamp with no version, so the Phase 08 packager has a receipt that names a provider with an empty version; the `provenance` field is a stamp the packager refuses on, and an empty-version stamp is exactly the \"record for Phase 08 to refuse on\" that was promised, not the one written.",
+      "fix": "Require `rec.sdk` to be a non-empty string at deal time; `fail` on a DRAFTED receipt whose sdk is missing, so no key ever carries `rival:stitch@`.",
+      "twin_of": "\"Look before you write\" not bound to the bytes looked at -> bind a judgement to the content hash it was made on."
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:196",
+      "breaking_input": "A brief whose `sources.md` has a provenance row like `| ref-pack/img-01.png |` — with the filename in a non-first column, and an unrelated cell `img-01.png` that also happens to equal `full`. Or `sources.md` that contains any line starting `|` that names the ref anywhere.",
+      "why": "The provenance check splits a markdown row on `|`, trims each cell, and asks `.includes(full)`. `includes` finds the filename anywhere in the row, in any column; the reference binding therefore accepts any row that mentions the file, not the row that attributes it. Worse, the check is made against a `rows` string built from the whole file, so a row in a different table that happens to mention the basename admits the image. The `full` value is derived from the deal's `--ref` argument, not from the pack, so a ref file placed in `refpacks/` by another mechanism is admitted by an unrelated line.",
+      "fix": "Bind the row to the exact value: split each row into cells, require `cells[0].trim() === full` (or whatever fixed column sources.md uses) and require exactly one such row; refuse on zero or more than one.",
+      "twin_of": "An allow-branch names the exact pair it admits."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:363",
+      "breaking_input": "A `result.json` from a previous `jury-check` run (same explore, same jury dir), left on disk. `unblind` reads it and computes the rival rate. Between the `jury` deal and the `unblind`, a juror's ranking file was rewritten (or a second `jury-check` run was executed against a modified ranking).",
+      "why": "The rate is computed from `join(ex.jury, \"result.json\")`, which is a file on disk that is not vetted against the sealed key or against the ranking set the score in `score.json` claims. `unblind` reads `result.json` for `valid` rankings but never verifies that the `result.json` it read corresponds to the key it is unblinding (item count, labels, or the deal's `sha256`). A stale `result.json` from an earlier deal with different labels produces a `valid` array whose labels miss `rivLabels` and `arcLabels`; the filter `rp >= 0 && ap >= 0` then returns 0 beats, and the rate is written as `jury 0 of N` even though the jury never saw those labels — the sealed prediction is computed on the wrong rankings and receipted as if it were right.",
+      "fix": "Cross-check `result.json` against `key.json`: the item labels in the key must equal the label set the ranking was scored on, and the count of valid rankings must equal `key.n`; refuse otherwise.",
+      "twin_of": "A threshold read back from the record it judges -> the bar lives in code; a record carrying any other bar is refused."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:379",
+      "breaking_input": "A rival whose page renders to exactly the sha of an arc variant (identical bytes possible when vendoring rewrites to the same final asset set, or when both are hand-edited), or a `--rival` whose provider string equals a variant's directory suffix. More simply: `--rival stitch` while a variant dir literally named `variant-s` exists and the control is `s`.",
+      "why": "`riv.source` is `rival-stitch`, `v.source` is `variant-s`. The `best(kind)` reduction filters rows by row.kind, so the labels are disjoint — but `rivalRate.owner.rivalBeatsAllArc = riv.score > arc.score` compares scores, not items; a score tie passes as a loss, and a `riv.score` on a score list that includes the same label twice (because `_label_of` in the tests uses the kind filter, but a hand-written key can list a label under two kinds) yields `arc.score === riv.score` scrolls through as no-win. The sealed prediction is `>`; a tie is a loss by the code and by ADR-1411's stated rule, but the printed line says only `owner no` — no tie is named.",
+      "fix": "Name the tie explicitly (`owner tie — rival 60 vs best arc 60`) rather than folding it into `no`, so the sealed prediction's outcome is unambiguous on the spine payload.",
+      "twin_of": "A source of truth moved from one deletable thing to another -> cross-check the two records."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:200",
+      "breaking_input": "An asset whose final URL after redirect has a *different* extension than the body's content-type, e.g. a Tailwind script served from a `.js` path with `content-type: text/javascript; charset=utf-8`. The `assetName` regex tests `type` first, so `js` wins — good. But a woff2 served with `content-type: text/plain` (some CDNs mislabel) hits the `or /\\.woff2(\\?|$)/.test(url)` fallback; that fallback tests the *url* not the *final* URL, so a `?` in the original query before a redirect that appends `.woff2` yields `bin`. Minor.",
+      "why": "The extension is chosen from the response's content-type, or from the original request URL's spelling — never from the bytes. A `content-type` of `application/octet-stream` on a font file, which Google Fonts does emit for tarballs and some bins, produces `bin` even for a woff2, and a woff2's magic bytes are checked nowhere. The extension is a label the renderer later trusts (MIME by extension), so a mislabelled asset is served with the wrong Content-Type.",
+      "fix": "Let the magic bytes decide when the bytes start with `wOF2`/`wOFF`/`\\x00\\x01\\x00\\x00`/`OTTO`; use the content-type only as a hint, and drop the url-spelling fallback for a bin.",
+      "twin_of": "A non-standard but real content-type refused a real image -> accept the aliases real servers send, and let the magic bytes decide."
+    },
+    {
+      "id": "L8",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-rival.mjs:279",
+      "breaking_input": "A real draft whose HTML contains an inline style block with an `@import url(https://fonts.googleapis.com/css2?family=Inter)` inside a `<style>` tag, or whose `<link>` is inside a `<noscript>` block — the `LOAD_TAGS` regex is case-insensitive and the CSS pass runs over the whole document, so `@import` inside a comment or inside a `<template>` block is fetched. More sharply: a draft with an inline `<style>p{background:url(https://assets.example/x.png)}</style>`.",
+      "why": "The CSS url() scan runs over the *entire* document, not just stylesheet bodies, and records every remote url it finds in `out` with `tag: \"css\"`. The vendoring loop then rewrites `out = out.split(ref.raw).join(...)`. If the same `raw` string appears elsewhere in the document as plain text (a code sample, a comment, an attribute in a `<pre>`), *all* occurrences are rewritten — including the ones the user can see. Worse: the CSS pass runs before `remoteLoads` on the HTML, so a `url(https://...)` inside a `<script>` string is rewritten too, changing program behaviour.",
+      "fix": "Do the CSS url() pass only inside `<style>` bodies, not over the whole document; or, at minimum, keep the same ref as a token and bound the split/join to the CSS context.",
+      "twin_of": "Remote text compiled into a regex -> never build a RegExp from untrusted text; use a linear matcher."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival-stitch.mjs:28",
+      "breaking_input": "A provider answer whose `htmlUrl` is `https://contribution.usercontent.google.com/./x.html` or a URL with `%2e%2e/` in the path — the check is `httpHosts.includes(u.hostname)` only.",
+      "why": "`readAnswer` checks protocol, userinfo, and hostname, but never the path. A URL that returns a `3xx` to a different path on the same host passes the host check; `download()` uses `redirect: \"error\"` so it refuses the redirect — good — but the *first* URL is not validated beyond the host. A URL like `https://contribution.usercontent.google.com/<very long path>` is fetched; the body is then served from `draft.raw.html` and vendored. The check binds the permission to the host but not to the path the fetch actually uses — the very host is correct but the resource is not the screen's HTML download.",
+      "fix": "Require the path to start with the download prefix observed in Phase 06, or bind the URL to the screen id returned in the same answer (`screen.id` in the path), so the permission is bound to the exact value that is then used.",
+      "twin_of": "The licence was checked on one input and the fetch made on another -> every permission check binds to the exact value that is then used."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:186",
+      "breaking_input": "A `--fake-answer` file whose JSON is `{\"ok\":true,\"screen\":{\"id\":\"s1\"},\"htmlUrl\":\"https://contribution.usercontent.google.com/d\",\"html\":\"\"}` — an empty string. The code path: `body = typeof answer.html === \"string\" && o[\"--fake-answer\"] != null ? Buffer.from(answer.html) : await download(read.url)`; the empty string is falsy for the length check `body.length === 0`, so it falls into `fail(\"unusable answer (the HTML is empty)\")` — good. But the fake path bypasses `readAnswer`? No: `readAnswer` runs before. The subtlety: the fake can supply *both* `htmlUrl` and `html`. The real path uses the URL; the fake uses `html`. A fake that names a good host but supplies HTML that is a base64 blob, or one that is the *provider's* HTML not the screen's, cannot be told apart from the real path. The `--record-request` writes the key's sha16 into a file the run created — but the fake run does not write `draft.raw.html` from the network, only from the answer; the receipt still says `mode: \"fake\"`, so downstream can tell.",
+      "why": "The seam gate is on `ARC_DESIGN_OFFLINE === \"1\"` only. The test `setup()` does not export `ARC_DESIGN_OFFLINE=1` — it relies on `_arc_design_sandbox` to export it. If a developer runs `node design-rival.mjs draft --brief demo --run r1 --fake-answer ...` outside the sandbox without that env, the seam is refused — good. But the reverse: an offline run with `ARC_DESIGN_OFFLINE=1` set globally in the developer's shell (a real possibility, since `ARC_DESIGN_OFFLINE` is a shared env in the harness) will let `--fake-answer` drive a process whose `key` was already resolved from `keys.mjs`. The seam bypasses the transport but not the key lookup; a key must exist for a fake run to reach `settle`. Not a leak, but a seam that requires a real key to exercise is a seam that will be run with a real key.",
+      "fix": "When any seam is set, skip the key lookup entirely (`key = null; if (seamed.length === 0) { key = resolveKey(...) }`), so the fake path never touches the key store; and refuse `--record-request` outside `ARC_DESIGN_OFFLINE=1`.",
+      "twin_of": "A test seam forwarded from the hook's inherited environment -> a seam in a production path needs a second, path-specific switch, and its answers are stamped as fixture."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-rival.mjs:229",
+      "breaking_input": "A vendored stylesheet whose body contains the literal string of a different remote URL that is also a remote load — e.g. `@import url(https://fonts.googleapis.com/a)` and later `@import url(https://fonts.googleapis.com/a?x=1)` where the first fetch returns a body whose bytes contain the string `https://fonts.googleapis.com/a` (as a comment).",
+      "why": "The stylesheet pass does `css.split(ref.raw).join(name)` for each ref, where `ref.raw` is the exact string in the CSS. If two different refs have a prefix relation (the second contains the first as a substring, or the same URL appears twice with different quoting), the second `split/join` operates on *already-rewritten* text; the resulting page can name a name that includes `assets/` inside the name, or the second rewrite matches the first rewrite's output and corrupts it. The same split/join is used on the HTML — a `<link href=\"https://a\">` and `<link href=\"https://a/\">` both present, first rewrite yields `assets/x.css`, the second sees `assets/x.css/` and mangles it.",
+      "fix": "Do one pass over the collected loads, computing all replacements first, then applying them by position (offsets) rather than repeated split/join on the same body; or match on quoted boundaries.",
+      "twin_of": "A remote line echoed into a refusal an agent reads -> refusal reasons are fixed text; remote text is data and is never quoted into an agent's context."
+    },
+    {
+      "id": "L12",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-rival.mjs:405",
+      "breaking_input": "A run where `vendor` returns `{unresolved: [...]}` and the draft is refused. The code does `rmSync(rivalDir, { recursive: true, force: true })` — removing `docs/design/explore/<runId>/rival-<pname>/` — then `fail(...)`. But `rivalDir` may already have existed before this run started (a prior successful run wrote it), and this run's `rmSync` removes the earlier run's page.",
+      "why": "The `rmSync` is unconditional and runs before `mkdirSync` of the new assets dir — so a failed re-draft wipes a previously-good vendored page that a jury might still be using (a jury deal already refused it for lack of receipt, but the render session may already be there). More importantly, the `draft.raw.html` under `.claude/state` is written before this, but the *page* the previous run produced is now gone and the `receipt.json` for the previous run still says DRAFTED. The next `design-jury` deal for the same explore will look for the page, find it gone, and produce an item for a receipt that claims DRAFTED — the code above (L1) crashes on the missing render, but the *state on disk* is now inconsistent in a way the receipt does not record.",
+      "fix": "Only remove `rivalDir` after a successful vendor, or remove it at the end of a successful run; write the new page to a temp dir and rename into place. A failed run leaves the previous page intact and its receipt records the failure.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created."
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:891",
+      "breaking_input": "`design-explore.sh rival my-explore --provider stitch --viewport 1440x900` — the top-level parsing uses `shift 2` twice, so `$@` after is the subcommand's args. Inside `rival)`, the loop over `$@` consumes `--provider` and `--viewport`. Good. But the shell passes `$RFLAGS` (word-split) to `design-render.sh` — and the renderer's own arg parser is the trust boundary. If the renderer accepts `--mode` or `--session` from the same `$RFLAGS` region as `--viewport` values, an attacker who can set `--viewport` to `--session X` can override the session name. The loop only checks `[ \"$#\" -ge 2 ]`, not that `$2` looks like `WxH`.",
+      "why": "`--viewport` is validated by nothing: `RFLAGS=\"$RFLAGS $1 $2\"` copies the *value* verbatim, and the renderer is invoked with `--mode explore --session \"$ID--rival-$PROVIDER\" $RFLAGS`. If `--viewport`'s value starts with `--`, then `$RFLAGS` contains `--viewport --mode real` or `--viewport --session other`, and the renderer's own parser (same CLI, `getopt`-style) may take the later `--session` over the earlier. The `--media` alias is the same.",
+      "fix": "Validate the viewport value against `^[0-9]+x[0-9]+$` in the `rival` case; or pass `--viewport` to the renderer as `--viewport \"$VALUE\"` with the value quoted, not word-split.",
+      "twin_of": "The hook validating one input field while the tool used another -> pick the field by the tool, and refuse the other key."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:184",
+      "breaking_input": "`design-render.sh docs/design/explore/jx/rival-stitch/index.html --mode explore --session jx--rival-stitch` where the explored `_er_variant` is `rival-stitch` — good. But `rival-` prefix is checked case by case: `rival-*` then a nested case on `${_er_variant#rival-}`. For `rival-` (empty suffix), the outer case matches `rival-*`? In POSIX shell `rival-*` does match `rival-` (the `*` matches empty), so the nested case sees `\"\"` and refuses. Good. But `rival-STITCH` — the outer `rival-*` matches, the nested case tests `*[!a-z0-9-]*` and `STITCH` contains uppercase, so it refuses. Good. But the second `case` in the diff guards `variant-[a-z]` and `rival-*` — and the third check `case \"/$EXPLORE_PAGE/\"` for `//`, `/./`, `/../`. The route check accepts `docs/design/explore/*/rival-*/?*` — the `*` after `rival-` crosses `/`. So `rival-stitch/a/../../variant-a` matches the *outer* pattern (because `*` crosses `/`), then `_er_variant` is taken apart below. If the code below takes `${ROUTE#docs/design/explore/}` and splits on `/` at the *first* slash, the explore segment is `rival-stitch/a/..` and the variant is `../variant-a` — the nested refusal fails because `_er_variant` is now `rival-stitch/a/..` under the outer case and does not match `rival-*`... The safest reading is that the split is fragile.",
+      "why": "The comment in the original says \"`*` in a case pattern crosses `/`, so each part is taken apart and checked on its own\" — and the rival case is added *before* that split, so a rival dir with a `..` segment inside its path is accepted by the outer pattern and the split is what saves it. But the route pattern for rivals is `docs/design/explore/*/rival-*/?*`, which accepts `rival-stitch/../variant-a/index.html` — the `*` after `rival-` matches `stitch/../variant-a/`, and `?*` matches `index.html`. The subsequent per-part check is the only barrier; if any part check is weakened by the new case, this admits a page outside the rival dir.",
+      "fix": "Tighten the route to `docs/design/explore/*/rival-[a-z0-9-]*/?*` and reject any `/..` segment in the per-part split before the variant check.",
+      "twin_of": "A textual `..` check on a pattern language that can expand -> hold an expanding pattern to a plain alphabet instead of searching it for bad substrings."
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": "tests/design-jury.bats:392",
+      "breaking_input": "A future refactor of the deal path that drops `provenance` from a variant item — the asserted `r[0].provenance === \"rival:stitch@@google/stitch-sdk@0.3.5\"` string is itself a twin of the `@`-collapse: the code is `rival:${p}@${rec.sdk}` where `rec.sdk` is `@google/stitch-sdk@0.3.5`, so the concatenation yields `rival:stitch@@google/stitch-sdk@0.3.5` — a double `@`. The test asserts this exact string, so it does not detect the double `@` as a bug; it enshrines it.",
+      "why": "The provenance shape was intended as `rival:<provider>@<version>`; the code produces `rival:<provider>@@<scope>/<name>@<version>` because `provider.pkg` includes a leading `@` from the npm scope. A Phase 08 packager parsing `provenance` at the first `@` reads `rival:stitch` and `@google/stitch-sdk@0.3.5` — the version is the right one but the separator is a lie. The test's assertion `\"rival:stitch@@google/stitch-sdk@0.3.5\"` makes the double `@` the contract, so a later fix that produces the intended single-`@` shape will break the test and be reverted.",
+      "fix": "Normalise the stamp: `rival:${p}@${rec.sdk.replace(/^@/, \"\")}`, or use `pkg@version` as the whole version token without adding another `@`. Rename the test's expected string accordingly.",
+      "twin_of": "An exception keyed on \"differs\" instead of on the one difference it means."
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:62",
+      "breaking_input": "GET /v1/orders?receipt=... answers 200 with a non-JSON body (a proxy HTML page) or JSON with no `items` field. `rz` turns the parse failure into `body: null`, `list(undefined)` returns [], and `found` is empty.",
+      "why": "A check-then-create keyed on an unreadable answer reads as 'absent, create it'. Scaffold POSTs a second order even though launch's own order may already exist. The 'found before created' guarantee holds only when the list is well-formed.",
+      "fix": "Require `Array.isArray(body.items)` and `body.entity === 'collection'`. Otherwise throw an uncoded error before any POST.",
+      "twin_of": "A 404 from a token without access read as \"absent, create it\" -> every check-then-create keyed on a 404"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:41",
+      "breaking_input": "Two ventures with slugs sharing the first 29 characters (for example a 35-character slug and a 41-character slug with the same prefix). `receiptOf` cuts `arc-launch-<slug>` to 40 characters, so both get the same receipt.",
+      "why": "The receipt is cut but the slug regex still allows 41 characters. Venture B finds venture A's order, whose tag differs because the tag includes the slug. That reads as a foreign order and wedges venture B with FOREIGN_ORDER permanently. Distinct names are mapped onto one external name.",
+      "fix": "Cap the slug so `arc-launch-` plus the slug is at most 40 characters (slug at most 29), or refuse BAD_SLUG over the limit. Alternatively, put a short hash of the slug in the receipt.",
+      "twin_of": "Provider record names were guessed absolute-or-relative against the brand domain -> every name a provider returns: relative to WHAT?"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:46",
+      "breaking_input": "ctx.tag is undefined or an empty string, and the owner's order for launch's receipt has `notes: {}` or no `arc_launch_tag`. Then `o.notes.arc_launch_tag === ctx.tag` can be true.",
+      "why": "`ours()` compares against ctx.tag without asserting it is a non-empty string. With a missing tag, a foreign order is adopted as launch's, and verify passes on it. The ownership test also rests on a free-text notes field the owner can edit, with a guessable deterministic value.",
+      "fix": "Require `typeof ctx.tag === 'string' && ctx.tag.length > 0` inside `ours`. Refuse if the tag is unusable.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description -> every ownership test on free text"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:28",
+      "breaking_input": "fetch aborted by the slot timeout throws a DOMException AbortError (name AbortError, numeric code 20). If ctx.fetch does not remap it to the string code ABORTED, `rz` rethrows it because `e.code` is truthy.",
+      "why": "`verify` rethrows only `e.code === 'ABORTED'`. A numeric-coded abort therefore becomes `{ok:false, reason:'20: ...'}`, so the slot timeout is swallowed as a verify failure. In scaffold it surfaces as a raw uncoded error. `if (e && e.code)` conflates coded refusals with any error carrying a code.",
+      "fix": "Test `e.name === 'AbortError' || e.code === 'ABORTED'` explicitly. Rethrow only string-coded launch refusals out of `rz`.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:101",
+      "breaking_input": "State holds a razorpay-test-order resource whose id contains a newline or an ESC sequence (a hand-edited or corrupted state file). `teardown` prints `resource: r.id` verbatim.",
+      "why": "`probe` validates the id against the order_ regex and `say()`s adapter text, but teardown interpolates the state id raw. A terminal line can be forged.",
+      "fix": "Wrap `r.id` in `say()`, or filter to ids matching the order regex as `probe` does.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:75",
+      "breaking_input": "Razorpay returns 400 for reasons other than a missing id (malformed request, or a transient BAD_REQUEST_ERROR). `verify` passes `allow:[400,404]` and treats any such status as 'razorpay has no order'.",
+      "why": "The reason text claims the order is absent, but a 400 does not prove that. Flipping a verified slot to not-ok with a wrong cause is the 'infer a cause from status' pattern.",
+      "fix": "Allow 404 only. For a 400, check that `error.description` names a missing id, or report 'razorpay refused the lookup (400)'.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause -> any code that infers a cause from `status` or `signal`"
+    }
+  ]
+}

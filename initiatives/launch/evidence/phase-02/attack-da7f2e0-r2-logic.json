@@ -1,0 +1,131 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:52-53",
+      "breaking_input": "The list endpoint returns a response with `body.items` as a non-array (e.g., `null`, `undefined`, `string`). `list()` treats non-array as empty, so `found` is empty. Scaffold then proceeds to create an order even though an order with that receipt may exist.",
+      "why": "The code checks `Array.isArray(listed.items)` only at the top level; the `list()` helper itself does not guard against non-array items, so a response with `items: null` is treated as empty. This is the same pattern as the defect \"A contents answer with no content (directory, submodule, >1 MB) was read as an empty contract\".",
+      "fix": "In `list()`, always return an empty array for non-array input, or check in `list()` that `v` is an array before filtering.",
+      "twin_of": "A contents answer with no content (directory, submodule, >1 MB) was read as an empty contract"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:77-79",
+      "breaking_input": "An order has `notes` as an array (e.g., `notes: [\"a\"]`). `ours()` checks `typeof o.notes === 'object' && !Array.isArray(o.notes)`, which would return `false` for an array. But the foreign order check at line 77 only checks `found.length > 0`, so an adversarial order with array `notes` and the right receipt would be considered foreign and block the slot.",
+      "why": "The `ours()` function correctly guards against arrays, but the foreign-order path does not call `ours()` and relies solely on `found.length`. This means an order with `notes` as array (which is not a legitimate order) is treated as a foreign order, blocking creation.",
+      "fix": "In the foreign-order check, after filtering `found` by receipt, also check that the notes field (if present) is an object that could potentially contain the tag, otherwise skip it.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:24-26",
+      "breaking_input": "Set `RAZORPAY_KEY_ID` to a value like `\"  rzp_test_ABC1234DEF5678\"` (leading spaces) or `\"rzp_test_ABC1234DEF5678  \"` (trailing spaces). After `.trim()`, the key passes the regex, but the raw environment variable might be used elsewhere in the code (e.g., in a different context that does not trim). The header is built from the trimmed value, but the regex validation is on the trimmed value too, so the enforcement is correct in this function. However, if any other function reads the raw env var, a mismatch in trimming would break auth.",
+      "why": "The code trims before regex validation, meaning whitespace in the env var is silently accepted. If the same env var is read elsewhere without trimming, the key shape will differ. The fix noted in the attack disposition (check keys after trimming) is implemented correctly in the code; this finding is about consistency across the codebase.",
+      "fix": "Consider validating that the env var does not contain leading/trailing whitespace before trimming, to enforce clean inputs.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:31",
+      "breaking_input": "A key id that is exactly `rzp_test_` followed by 14 characters but contains uppercase letters (allowed by regex) might be valid for Razorpay but the regex only allows `[A-Za-z0-9]`, which is fine. No real attack.",
+      "why": "No issue; the regex is correctly permissive.",
+      "fix": "No change."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:28-32",
+      "breaking_input": "The `keySecret` regex `/^[A-Za-z0-9]{16,64}$/` requires at least 16 characters, but Razorpay secrets can be shorter in test mode. Some test secrets may be 14 characters. Although the ADR says 16-64, the actual provider may accept shorter secrets, causing a false refusal.",
+      "why": "The regex enforces a length range that may not match real test secrets. If a legitimate 14-character secret is supplied, the code throws BAD_TOKEN even though the secret is valid.",
+      "fix": "Either relax the regex to match Razorpay's actual minimum length (which varies), or document that the lane requires a 16–64 character secret in test mode.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:52",
+      "breaking_input": "The list endpoint returns `200` with `body` being a non-object (e.g., a string). Then `if (!listed || !Array.isArray(listed.items))` will throw, which is correct. No additional vulnerability.",
+      "why": "The guard is properly placed.",
+      "fix": "None."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:67-69",
+      "breaking_input": "If the GET to list orders returns a non-200 status (e.g., 500), `rz()` will throw an error because `allow` is empty. This is correct; no unfiltered error.",
+      "why": "No bug; the default `allow` is empty, which is safe.",
+      "fix": "None."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:88-89",
+      "breaking_input": "`probe()` checks `rec.length !== 1` but `rec` is filtered by `r.kind === \"razorpay-test-order\"`. If two resources of the same kind exist but with different ids, it returns not-ok. This is the correct behavior; the prior finding L1 is already rejected in the attack disposition.",
+      "why": "The code correctly rejects multiple resources, which is the desired behavior.",
+      "fix": "None."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:93-94",
+      "breaking_input": "In `probe()`, the GET for a single order allows `[400, 404]`. The code then checks if the status is 404 or a 400 with description containing \"does not exist\". This is correct. However, a 400 that does NOT contain that description (e.g., a 400 with a generic error) is returned as `ok: false` with reason mentioning the status. This is the fix for B6. Good.",
+      "why": "No issue; the fix is properly implemented.",
+      "fix": "None."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:105-107",
+      "breaking_input": "`teardown()` filters `ctx.resources` for `razorpay-test-order`. If the resources array has entries of that kind but with non-string `id` values, `say(r.id, 60)` will convert it to a string, which may produce unexpected output but is safe.",
+      "why": "The `say()` function handles non-strings, so this is fine.",
+      "fix": "None."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:80-82",
+      "breaking_input": "An order returned by Razorpay has an `id` that is a string but does not match the pattern `/^order_[A-Za-z0-9]{6,40}$/` (e.g., a shorter id like `order_1`). The code at line 82 throws an error. This is correct; no issue.",
+      "why": "The validation is properly strict.",
+      "fix": "None."
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:42-46",
+      "breaking_input": "The `receiptOf()` function uses `createHash` to truncate long slugs. The hash is computed from the slug only; if two different long slugs produce the same hash (collision), they would get the same receipt. Although SHA-256 has negligible collision probability, the truncation to 12 hex chars (48 bits) gives a 2^24 collision chance for millions of slugs. This is low probability but possible.",
+      "why": "The hash is only 12 hex characters (48 bits), which is safe for 2^16 ventures (practical limit). However, if the number of ventures exceeds ~10^6, collisions become plausible.",
+      "fix": "Consider increasing the hash truncation to 16 hex chars (64 bits) for stronger assurance.",
+      "twin_of": "A 40-character cut gave two long slugs the same Razorpay receipt"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:108-109",
+      "breaking_input": "`teardown()` returns steps for each matching resource. If the resources list is empty (e.g., if scaffold never ran), it returns an empty array. The contract test at line 108 of contract-payment.mjs expects a specific string. This is a test issue, not a code issue.",
+      "why": "The code handles empty resources correctly by returning an empty steps array; the test should accept that.",
+      "fix": "Update test to handle empty teardown steps gracefully.",
+      "twin_of": "A completed run with a job still pending was read as red"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:37-38",
+      "breaking_input": "The `SKIP` function skips characters with `n >= 0x7f && n < 0xa0`. This range includes many control characters (DEL and C1 controls). However, U+061C (ARABIC LETTER MARK) is explicitly added. The range `0x7f` to `0x9f` might miss U+00A0 (non-breaking space), but that is not a control character. The comment in the attack disposition says SKIP covers U+202A-U+202E, which it does. No omission.",
+      "why": "The SKIP range is correct; this finding is not valid.",
+      "fix": "None."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:38-39",
+      "breaking_input": "The `say()` function caps output at `cap = 120` characters. If a long error message is truncated after filtering, it may hide important parts of the error. This is a display-only issue.",
+      "why": "Truncation is intentional to avoid overwhelming the terminal; no exploitation possible.",
+      "fix": "None."
+    }
+  ]
+}

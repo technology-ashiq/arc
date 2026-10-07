@@ -99,3 +99,6 @@ docs/design/reference/face-hq/assets/arcface/.shots/
 # lexos-case-workspace-* dirs committed before that ruling stay tracked; a rule never untracks.
 # Pinned by tests/design-explore.bats section 5, with two negative controls.
 docs/design/explore/lexos-*/
+# A rival's vendored draft is local evidence for one jury, never committed, whatever the brief
+# (design v2 Phase 07, ADR-1422 -- no rival draft in git).
+docs/design/explore/*/rival-*/

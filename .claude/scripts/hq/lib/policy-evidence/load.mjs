@@ -21,13 +21,13 @@ export class EvidenceRootError extends Error {}
 
 const BOM = String.fromCharCode(0xfeff);
 const sameDir = (a, b) => {
-  const ra = realpathSync(a), rb = realpathSync(b);
+  const ra = realpathSync.native(a), rb = realpathSync.native(b); // native: expands Windows 8.3 short names (RUNNER~1)
   return process.platform === "win32" ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
 };
 
 /** Do two paths name the same spine directory? Realpath when it exists (both sides), else the resolved path. */
 export function sameSpine(a, b) {
-  const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+  const real = (p) => { try { return realpathSync.native(p); } catch { return resolve(p); } };
   const ra = real(a), rb = real(b);
   return process.platform === "win32" ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
 }

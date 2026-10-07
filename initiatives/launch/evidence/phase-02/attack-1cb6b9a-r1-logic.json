@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:88",
+      "breaking_input": "Call verify with a resources list that has two entries with kind 'razorpay-test-order' and different ids.",
+      "why": "probe() checks only rec.length !== 1, does not check that the one recorded order is the one launch actually created. If state records two, the test returns not-ok, but if an attacker injects a foreign order into the context's resources, verify will probe a wrong order without detecting the injection.",
+      "fix": "Also verify that the recorded order's id matches the order that scaffold actually created and reported.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:71",
+      "breaking_input": "A GET /v1/orders?receipt=<receipt> response that includes an order with the correct receipt but missing 'notes' field entirely (so notes is undefined). Then verify will not find the tag and return false, but the foreign order check at L76 sees found.length>0 and throws FOREIGN_ORDER, so an owner's order without notes permanently blocks the slot.",
+      "why": "ours(ctx,o) uses o.notes.arc_launch_tag without a guard for undefined notes, but the foreign-order rejection path never calls ours(); it only checks found.length. An owner's order that happens to have no notes field at all will be treated as foreign and block the slot even though the slot could have created its own.",
+      "fix": "In the foreign-order check, also verify that the order's notes object exists and does not contain launch's tag. If the owner's order has no notes, treat it as not-foreign and allow creating a new one.",
+      "twin_of": "Ownership was a marker found anywhere in a user-editable description"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:28",
+      "breaking_input": "Set RAZORPAY_KEY_SECRET to a value that passes the shape regex but contains trailing whitespace, e.g. 'validKey0123456789ab    '. The .trim() at line 29 removes it inside the function, but the regex test at line 31 sees the trimmed version. Meanwhile, fetch() will use the raw (untrimmed) environment variable in the Authorization header because the caller may not call keys() through the same path. For example, if env is passed directly to rz(), the trimmed value is used; if some other code reads env.RAZORPAY_KEY_SECRET directly, the untrimmed one is used.",
+      "why": "keys() uses .trim() on the stored id and secret, but the regex validation runs after the trim, so a trailing space passes validation. However, the actual Basic auth header is built from the trimmed value; if the environment variable is untrimmed anywhere else, the auth will mismatch. Also, the regex validation on the trimmed value masks the real shape that the provider will see.",
+      "fix": "Validate the key before trimming, or trim before storing but also reject keys that require trimming (i.e., keys with leading/trailing whitespace are malformed).",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:50",
+      "breaking_input": "A Razorpay GET /v1/orders response that returns 200 with body having no 'items' field (e.g., body may be null or {}). Then the list() call returns [] because body?.items is null/undefined, and found is empty, so the slot tries to create an order that already exists (but was not returned due to API pagination or filtering). The check for foreign order is skipped because found.length is 0.",
+      "why": "list() filters out null/undefined items, but does not handle the case where body itself is non-null but 'items' is absent. This can happen if Razorpay returns a response with a different shape (e.g., during rate limiting or maintenance).",
+      "fix": "Check that body and body.items exist before calling list().",
+      "twin_of": "A contents answer with no content (directory, submodule, >1 MB) was read as an empty contract"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:93",
+      "breaking_input": "During verify, the probe() function calls keys(ctx) which re-fetches and re-validates the environment variables. If the environment changes between scaffold and verify (e.g., an admin rotates the secret), verify will use the new secret but the recorded order was created with the old secret. This will cause a 401 error that is caught and returned as not-ok, but the real issue is a secret rotation, not a payment-test failure.",
+      "why": "keys() is called fresh on every verify, meaning verify depends on the current environment being the same as during scaffold. This is correct for the test, but the error message will say \"razorpay GET /v1/orders/<id> -> 401: The api key provided is invalid\" which may confuse operators. More importantly, a secret rotation during the slot's lifetime will make verify fail permanently until the keys are updated.",
+      "fix": "Consider recording a hash of the key id or the key itself during scaffold, and verifying that it matches during probe. However, this might be acceptable for the test slot; consider documenting it as a limitation.",
+      "twin_of": "Any 403 with the right words became PLAN_LIMIT"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:56",
+      "breaking_input": "A venture slug that is exactly 40 characters long and ends with a letter that when combined with 'arc-launch-' exceeds 40 characters, so the slice(0,40) cuts off the last character. This could accidentally match a different venture's receipt if that venture has the same first 40 characters of the slug after prefix.",
+      "why": "According to the ADR, the receipt is capped at 40 characters for Razorpay. The code does `return 'arc-launch-${slug}'.slice(0, 40)`. If slug is such that the full prefix+slug exceeds 40, the receipt becomes ambiguous. For example, two slugs 'abcdefghij0123456789' and 'abcdefghij0123456789X' would produce the same receipt.",
+      "fix": "Check that the slug length plus prefix length fits in 40 characters, or truncate the slug before concatenating, and ensure uniqueness.",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes"
+    },
+    {
+      "id": "L7",
+      "severity": "critical",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:76",
+      "breaking_input": "An order with launch's receipt but a notes field that is an array (not an object). Then ours(ctx, o) checks `typeof o.notes === 'object'` which is true for arrays, then tries to access `o.notes.arc_launch_tag` which will be undefined, so ours() returns false. But the foreign-order check at L76 only checks found.length > 0, and found will include that order. The slot throws FOREIGN_ORDER even though an array-notes order is arguably not the owner's legitimate order.",
+      "why": "typeof null === 'object' is checked (L56) but arrays also pass the typeof object test. An adversary could create an order with receipt matching launch's and notes as an array to block the slot without having launch's tag.",
+      "fix": "Also check that o.notes is not an Array.",
+      "twin_of": "typeof null === 'object' let \"slots\": null past the state shape guard into a TypeError"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:30",
+      "breaking_input": "An attacker sets RAZORPAY_KEY_ID to a value that passes the test key regex but contains whitespace: 'rzp_test_  ABC1234DEF5678'. The regex /^rzp_test_[A-Za-z0-9]{14}$/ does not account for whitespace because the space is inside the prefix; the pattern expects exactly 14 alphanumeric characters after the underscore, but a space is not alphanumeric, so the regex fails. However, if the whitespace is inserted elsewhere, e.g., 'rzp_test_ABC1234DEF5678 ' (trailing space), the .trim() at line 29 removes it but the regex sees the trimmed version. This is fine, but if the env var has leading whitespace, e.g., ' rzp_test_...', .trim() removes it.",
+      "why": "The regex validation uses the trimmed value, so leading/trailing whitespace in the env var is silently accepted. Although .trim() is used for the auth header, if any other code reads the env var directly without trimming, the key shape will mismatch. Also, the test at line 31 uses the trimmed value for regex, but line 28 trims id; the regex test uses id (trimmed), but the problem is minimal.",
+      "fix": "Document that keys are trimmed before validation; accept no leading/trailing whitespace in env vars.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L9",
+      "severity": "high",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:82",
+      "breaking_input": "After scaffold() creates or finds an order, it reports the order's id. If the order's id is not a valid order id (e.g., if Razorpay returns something unexpected), the code throws an error. But an adversary could craft a scenario where scaffold returns a pseudo-order id that matches the regex but is not actually a Razorpay order, and verify would try to GET that id and get a 400/404, resulting in a not-ok verify. This is not a security issue per se, but the check at line 82 (/^order_[A-Za-z0-9]{6,40}$/) is too broad: it will match any string of that pattern, even if it is not a Razorpay order. However, the real verification against Razorpay later will catch it.",
+      "why": "The regex for order id is lenient; Razorpay's actual ids are longer and fixed format, but the code does not enforce that. No real attack here, but could mask bugs.",
+      "fix": "Strengthen the regex to match actual Razorpay order id format (e.g., order_ followed by 10-20 alphanumeric chars).",
+      "twin_of": "Import regexes assumed whitespace, so `import{x}from\"pkg\"` matched nothing"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:84",
+      "breaking_input": "The report call at line 84 pushes a resource into ctx.report. If scaffold is called twice without an intervening verify (e.g., if the slot's apply is interrupted after scaffold but before verify, and then re-run), the second scaffold call will push a second resource with the same kind and different id, but the probe() at verify will then have more than one resource and return not-ok with reason 'state records 2 usable razorpay-test-order resources; verify needs exactly one'.",
+      "why": "The code does not prevent duplicate scaffold calls from recording multiple resources. If the slot is re-run, it will fail on verify.",
+      "fix": "In scaffold, check if a resource with kind 'razorpay-test-order' already exists in ctx.resources and refuse to create a second one, or update the existing one.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:108",
+      "breaking_input": "The teardown() function returns a list of steps with action 'none (test-mode order, Razorpay keeps it)'. If the slot's resources list is empty (e.g., if scaffold never ran), the steps array is empty, and the test at line 87 of contract-payment.mjs expects the teardown output to be exactly that string, which would fail with empty.",
+      "why": "teardown() does not handle the case where no resources exist. Although the test currently only runs teardown after scaffold, if called independently it would return an empty steps array.",
+      "fix": "In teardown, if no resources are found, return a step indicating that there are no resources to teardown.",
+      "twin_of": "A completed run with a job still pending was read as red"
+    },
+    {
+      "id": "L12",
+      "severity": "high",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:67",
+      "breaking_input": "The scaffold() function calls rz() twice: first GET /v1/orders?receipt=..., then possibly POST /v1/orders. If the GET response status is not 200 but also not in allow (the default allow is empty), rz() throws an error. This is correct. However, if the GET response returns a 200 with an empty items array, and then the POST succeeds, the order is created. But if the POST returns a non-2xx, scaffold throws an error and the order is not recorded. The GET check is not idempotent with regard to the creation: if the POST fails, the next scaffold call will try to GET again, find no order, and try to POST again, potentially creating a duplicate order if the first POST actually succeeded but the response was lost.",
+      "why": "This is a classic create-if-not-exists race condition when the provider's API is not idempotent. Razorpay's order creation is not idempotent (each POST creates a new order with a new id). A network error after the POST request is sent but before the response is received could cause a duplicate order.",
+      "fix": "Include an idempotency key in the POST header (Razorpay supports Idempotency-Key header) to prevent duplicate orders on retry.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit"
+    },
+    {
+      "id": "L13",
+      "severity": "critical",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:86",
+      "breaking_input": "The verify() function at line 86 calls probe() with a ctx that has fetch replaced with a fresh bind to ctx.fetch. But if ctx has a malicious fetch that returns fake data, the verify will pass incorrectly. This is a deliberate design, but if ctx.fetch is overridden by an attacker during the slot's execution, verify will not detect it.",
+      "why": "The code rebinds ctx.fetch to bypass any potential local override, but the binding happens at verify time, not at the point of call. If an attacker has already replaced ctx.fetch with a fake, the bind will capture that fake. However, the comment says 'the probe is Razorpay, never state', meaning it trusts the fetch.",
+      "fix": "Not a vulnerability in the normal flow; documented as intentional.",
+      "twin_of": "ctx.fetch checked only the first URL and let fetch follow redirects to a host nobody checked"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:63",
+      "breaking_input": "The receiptOf() function builds receipt as 'arc-launch-${slug}'. If the slug contains a newline or other special characters (but the regex only allows [a-z0-9-], so it should not), but if the slug is empty or invalid, the regex at line 57 throws BAD_SLUG. However, the slug is validated only against the pattern; if the slug is 'a' (valid), the receipt is 'arc-launch-a', which is within 40 characters. No issue here.",
+      "why": "No actual vulnerability here; just a comment.",
+      "fix": "N/A",
+      "twin_of": ""
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:16",
+      "breaking_input": "The SKIP function used in say() filters out certain Unicode control characters and bidi markers, but it does not filter U+202D (LEFT-TO-RIGHT OVERRIDE) and U+202E (RIGHT-TO-LEFT OVERRIDE), which can cause visual reordering of lines in a terminal. Although the say() function is used to build error messages and evidence strings, if an adversary can inject these characters into, say, the order's receipt or notes, the terminal output could be misleading.",
+      "why": "The SKIP function misses U+202D and U+202E. The comment in the code mentions that the sanitiser missed these marks. This is a known pattern from the defect list.",
+      "fix": "Add U+202D and U+202E to the SKIP range.",
+      "twin_of": "The sanitiser missed U+061C and the zero-width marks, and capped by UTF-16 units"
+    }
+  ]
+}
