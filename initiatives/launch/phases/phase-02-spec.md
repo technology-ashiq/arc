@@ -35,6 +35,10 @@
 ## Your-setup / pending
 
 - Owner places Razorpay test keys `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`.
+- `RAZORPAY_WEBHOOK_SECRET` is a value the owner generates, not one Razorpay issues. The dashboard webhook can only be
+  added once `sandbox.automemory.ai` resolves: Razorpay's form refuses `no such host` before the `dns` slot has run
+  (2026-10-07). Order: keys and secret now; the webhook (same secret, events `payment.captured`, `payment.failed`,
+  `refund.processed`, `order.paid`) after `dns` + `release`, before `webhooks-ledger`.
 
 ## Non-negotiables (verbatim from PLAN)
 

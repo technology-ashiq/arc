@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:62",
+      "breaking_input": "The Razorpay account holds more than 100 orders, or Razorpay ignores the `receipt` query parameter on the list call. `GET /orders?receipt=...&count=100` returns one full page of 100 items, and launch's older order is not on it. `found` is empty, so scaffold POSTs a second INR 1 order.",
+      "why": "The page is fixed at 100 and there is no `skip`, so a full page is read as the whole answer. The fake filters by receipt exactly as the real API is assumed to, so no test covers this. An answer that may be incomplete is read as absence, which is the same check-then-create pattern as the fixed B1.",
+      "fix": "When `listed.items.length >= 100`, either paginate with `skip` until a short page, or refuse with an uncoded error before any POST. Add a fake scenario that returns 100 unrelated items.",
+      "twin_of": "The sha-matched proof was searched in a fixed page of recent deployments -> every \"find the one we made\" inside a paged list"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": "products/launch/providers/payment-test/razorpay.mjs:99",
+      "breaking_input": "`ctx.fetch` rejects with an error whose `code` is non-string or contains control or bidi characters, for example an error object from a wrapped transport carrying `code: \"x\\n[OK] verified\"`. `verify` builds the reason as `${(e && e.code) || \"error\"}: ...`, so the code goes into the reason raw.",
+      "why": "Only `e.message` is passed through `say()`. `e.code` is printed raw in the not-ok reason, which lets a newline or an escape sequence forge a line in the status output.",
+      "fix": "Use `say(e && e.code, 40) || \"error\"` in the reason, and print the code only when `typeof e.code === \"string\"`.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line -> every terminal line that interpolates provider or adapter data"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "docs/adr/1736-payment-test-proves-test-mode-keys-with-one-tagged-order.md:33",
+      "breaking_input": "The ADR says the receipt is `arc-launch-` plus the slug \"cut to 40 characters\". The code now keeps a 16-character slug prefix plus 12 hex of the slug's sha256 whenever the whole receipt would exceed 40.",
+      "why": "The ADR documents the exact truncation that attack B2 showed produces colliding receipts. A later reader will rebuild the receipt from the ADR and fail to find existing orders. Anything that predicts the receipt from the ADR text, such as dashboards or reconciliation, will never match long slugs.",
+      "fix": "Amend the ADR's scaffold bullet to describe the hash form, and state that a slug of 29 characters or fewer is used whole.",
+      "twin_of": "Provider record names were guessed absolute-or-relative against the brand domain -> every name a provider returns: relative to WHAT?"
+    }
+  ]
+}
