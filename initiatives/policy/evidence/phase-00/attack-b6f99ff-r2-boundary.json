@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:46-52",
+      "breaking_input": "On POSIX, replace events/2026-10-07.jsonl with a FIFO (mkfifo) and leave no writer attached. Then run `policy-evidence.mjs check`. readDayFile calls openSync(path, \"r\") first, and a blocking open of a FIFO with no writer never returns.",
+      "why": "The round-1 B7 fix moved the type check onto a descriptor, but the fstat only runs after the open. The open itself is where a FIFO blocks, so report, check and the face API still hang. The fix only closed the narrow race and left the hang in place. The same defect is in the other direction too: a day-file symlink pointing outside the spine is followed.",
+      "fix": "lstatSync the path first and skip anything that is not a regular file. Open with fs.constants.O_RDONLY | O_NONBLOCK, plus O_NOFOLLOW where it exists. Then fstatSync the descriptor and read from it.",
+      "twin_of": "A type check then a read by path could be split by a swap (FIFO TOCTOU) -> every check-then-use on a path"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1459-1464 (receiptRefusals) and validate-policy-refusal.mjs:67",
+      "breaking_input": "A denial reason of 300 emoji (astral characters). arc-run cuts by code point and keeps 300 code points, which is 600 UTF-16 units. The validator checks `p.reason.length > 300` in UTF-16 units and rejects it with BAD_POLICY_REFUSAL. The emit fails, so only the WARN line is printed and the refusal receipt is never written. A reason made only of control characters becomes whitespace and fails the `trim() === \"\"` check the same way.",
+      "why": "The B8 fix cut the string by code point, but the validator still measures it by .length. The writer's bound and the validator's bound disagree, so valid denials silently lose their evidence receipt. The cell stays absent or unknown with no signal beyond one stderr line.",
+      "fix": "Use one shared function for the reason cap, in code points or in UTF-16 units, called by both the writer and the validator. After sanitizing, fall back to a fixed reason such as \"denied by policy\" when the result trims to empty.",
+      "twin_of": "Single-line text excluded only C0, so U+2028/2029/NEL and lone surrogates passed; a UTF-16 cut split surrogate pairs -> every free-text field bounded by `.length` or a C0-only class"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1423-1435 (refusalSealedToday)",
+      "breaking_input": "Someone who can emit writes a schema-valid `policy.refusal` for the same (action_kind, capability, deny) today, with a bogus incident_ref. The fold discards it as unverified. The real arc-run denial then finds it in today's file, prints \"already sealed today\", and skips its own genuine, corroborated receipt.",
+      "why": "The writer's day bound counts any line that merely matches three fields. It checks no seal, no sha and no incident corroboration, and it does not look at quarantine. A single junk or forged receipt suppresses the real evidence for the whole IST day, and the fold then reads the cell as absent.",
+      "fix": "Count a line as sealed only if its incident_ref resolves to a gate incident for the same process@version with typed denials naming this capability, using the same corroboration the fold uses. Better still, derive the idem from (action_kind, capability, decision, IST day) so DUP_IDEM enforces the bound atomically.",
+      "twin_of": "A headless refusal could cite an incident written AFTER it, of another version of the process, that never named the capability -> any cross-reference check: verify order, identity and content, not just that the id resolves"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:1423-1425 vs load.mjs assertCanonicalSpine",
+      "breaking_input": "Run `ARC_SPINE_ROOT=/elsewhere arc-run --process denied` or pass `--root /tmp/x`. Both the incident and the refusal go to the selected spine, and refusalSealedToday and verifyLanded read the same selected path, so everything looks consistent. The reader later runs without that variable and pins the canonical spine, so it never sees the receipts.",
+      "why": "The B2 fix only made the reader refuse a mismatched ARC_SPINE_ROOT in the reader's own environment. The writer still picks its spine from an env var or `root` instead of the pinned governing root. So evidence still goes to the wrong spine silently. The writer's day-bound check also reads a root-derived path that may not be the one the emitter actually writes to.",
+      "fix": "Have receiptRefusals, verifyLanded and refusalSealedToday resolve the spine through the same pinned helper the reader uses. Ignore ARC_SPINE_ROOT outside a single test-only door. At minimum, warn loudly when the effective spine differs from policyRoot()'s spine.",
+      "twin_of": "`ARC_ROOT=/tmp/x` disarmed the whole headless gate in one variable -> any env var that selects the root, the policy file or the spine a decision reads"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:1425-1427",
+      "breaking_input": "Make the day file a FIFO or a directory, or a very large file, during a denial. refusalSealedToday calls readFileSync(file) directly with no fstat, no non-blocking open and no size cap. On a FIFO, the policy denial path hangs and the deny never returns its exit 77.",
+      "why": "The B7 hardening was applied only in load.mjs. The same check-then-read-by-path pattern was added again in the arc-run writer, which sits on the enforcement path. A hang there stalls denial handling itself.",
+      "fix": "Share one safe day-file reader, with the O_NONBLOCK and fstat fix from B1, between arc-run and load.mjs. Treat any read failure as \"not sealed\" and carry on.",
+      "twin_of": "A type check then a read by path could be split by a swap (FIFO TOCTOU) -> every check-then-use on a path"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:1437-1450",
+      "breaking_input": "Two denied jobs for the same pair fire at once. The scheduler does this, and ADR-0056 says concurrent emitters are uncertified. Both call refusalSealedToday before either emit lands, both see null, and both write a refusal. Separately, refusalsReceipted.add(d.capability) runs before the emit, so a transient emit failure under lock contention is never retried in that run.",
+      "why": "The day bound is a read-then-write across processes with no lock. The in-process Set is marked before the outcome is known. The ADR claims at most one receipt per day, but duplicates are possible and a lost receipt is permanent for the run.",
+      "fix": "Derive the idem from the bound key so the spine rejects the duplicate atomically. Add to the Set only after r.ok, or remove the entry on failure.",
+      "twin_of": "The arc-run writer had no day bound, so a job denied every 15 minutes wrote thousands of receipts -> any receipt emitted on a recurring path"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:63-66",
+      "breaking_input": "`node policy-evidence.mjs report --json | head -c 10`. The --json branch returns before `process.stdout.on(\"error\", ...)` is attached, so EPIPE is uncaught and the process exits 1 instead of 0.",
+      "why": "The B5 fix attached the EPIPE handler only on the text path. The JSON path writes a large document with no handler, so a closed pipe becomes an unhandled error. A later guard or face consumer would read exit 1 as a failure.",
+      "fix": "Attach the stdout error handler once at the top of main, before any branch writes.",
+      "twin_of": "BELOW-BAR exit 3 was set after the output loop, so a closed pipe turned it into exit 1 -> every CLI whose exit code is its verdict"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:34-45",
+      "breaking_input": "Run the evidence CLI from a plain second clone of the repo, or a copy of the tree. `.git` is a directory, so the linked-worktree check passes, and the clone's own gitignored spine is read as canonical. A git submodule, whose `.git` is a file, is refused wrongly.",
+      "why": "Canonical is inferred only from `.git` being a file. That is a heuristic. It does not prove the root is the main clone, so a confident reading of the wrong spine remains possible.",
+      "fix": "Compare `git rev-parse --git-common-dir` with `--git-dir` to identify the main worktree. Alternatively, pin the canonical root explicitly and refuse when the resolved root differs.",
+      "twin_of": "A receipt emitted from a worktree landed in that worktree's spine, invisible to the canonical one -> any emit or read whose spine root is not pinned to the main clone"
+    }
+  ]
+}

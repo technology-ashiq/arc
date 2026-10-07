@@ -15,6 +15,14 @@
 #   - Codex has NO project-level slash command (custom prompts are user-level and deprecated), so a
 #     command renders as a skill at .agents/skills/arc-NAME/SKILL.md, invoked as $arc-NAME.
 #
+# Found by the P00 OpenCode spike (2026-10-07, evidence initiatives/distribute/evidence/phase-00/):
+#   - `opencode run` parses a message that starts with `--` as its own flag: pass `-- <message>`.
+#   - OpenCode's bundled free models refuse clients older than 1.18.0 (HTTP 426); 1.17.18 runs
+#     only on a configured provider. The opencode row stays pinned at the version actually run.
+#   - OpenCode writes its own `package.json`, `package-lock.json`, `.gitignore` and `node_modules/`
+#     into `.opencode/` on first run, so a rendered `.opencode/` holds files arc did not write; the
+#     P02 dirty check must exclude OpenCode's own files by name rather than call them hand edits.
+#
 # Edited by hand, reviewed as a diff. Nothing writes this file at run time.
 
 version: 1

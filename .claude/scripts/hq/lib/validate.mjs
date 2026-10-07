@@ -11,6 +11,7 @@ import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 import { CONTENT_KINDS, assertContent, isContentKind } from "./validate-content.mjs";
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearMiss, isAdoptionProposal, assertAdoptionProposal } from "./validate-absorb.mjs";
+import { isPolicyRefusal, assertPolicyRefusal, isNearMissPolicyRefusal, assertNotNearMissPolicyRefusal } from "./validate-policy-refusal.mjs";
 import {
   isLedgerRevenueKind, assertLedgerRevenue,
   isCriteriaChange, assertCriteriaChange, isNearMissCriteriaChange, assertNotNearMissCriteria,
@@ -423,6 +424,9 @@ export function validateEvent(event) {
   if (isAdoptionProposal(event)) assertAdoptionProposal(event);
   // A subject differing only by case or whitespace is REFUSED, never normalized and never exempt.
   if (isNearMissAbJudgement(event)) assertNotNearMiss(event);
+  // ADR-0509 (POL-L): a policy refusal rides note.logged as a profile, so the closed vocabulary gains ZERO kinds.
+  if (isPolicyRefusal(event)) assertPolicyRefusal(event);
+  if (isNearMissPolicyRefusal(event)) assertNotNearMissPolicyRefusal(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

@@ -9,6 +9,12 @@
 > moved `BRIEF-policy.md` to `docs/archive/` (evolve/leads precedent) and updated both
 > READMEs (plans ordering row + strategy file map/corrections).
 >
+> **v1.1 amendment 2026-10-07 — POL-L (evidenced levels), routed through `/arc-change
+> --lane policy`.** Adds REQ-09, decision POL-L, Phase 5 and the cycle-2 kickoff prompt.
+> v1.0's text is unchanged; everything POL-L adds is marked **v1.1**. Not a live phase spec:
+> it builds only at `/arc-kickoff --lane policy` (cycle 2 of this lane — Cycle 9, phases
+> 00–04, closed 2026-08-10).
+>
 > **Scope honesty:** this cycle delivers **runtime authority enforcement** — what an
 > action may DO. It is NOT the scheduler (`BRIEF-scheduler.md` sleeps behind this as a
 > hard dependent), NOT tool supply-chain vetting (`/arc-capability`, ADR-0110), and NOT
@@ -97,6 +103,7 @@ incident — so the first unattended run is policed by code before that run exis
 | REQ-06 | A second run cannot double-spend the day's cap | Money flow proven: read settled + active reservations from spine → atomic `spend.reserved` under spine `withLock` → provider call with idempotency key → `cost.incurred` (settlement profile: reservation_ref, integer minor-unit amount, ISO-4217 currency, provider idempotency ref — strict when reservation_ref present, legacy shape untouched, forward-only) or `spend.released`; **reservation state derived from the event chain, never stored**; fixtures: under-cap allowed, exact-boundary behaviour pinned, over-cap blocked, sequential second run blocked, lock-level concurrent attempt blocked, restart/replay identical; **no provider call before reservation success** — fixture; v1 autonomous spend valid in Mode A only | 1 | active |
 | REQ-07 | One source of cap truth, honestly | Cap inventory recorded (engine budgets, router, process permissions, council envelopes — whatever exists at kickoff); **birth-rule wired**: a module born after policy lands with its policy row in the same change (kickoff-lint check, WARN-first as advisory lint); migration executed **only against a real cap-bearing module** — parity claimed only from that module's own fixtures; if no such module exists, REQ-07 closes as inventory + birth-rule with migration explicitly deferred, never faked (E3) | 3 | active |
 | REQ-08 | The engine survives a real attack, with receipts | Two full days of fresh-agent adversarial passes over: wrapper bypass via direct driver, denied command embedded in allowed shell, symlink/path escape from write roots, domain allowlist bypass (redirect, DNS-rebind, IP-encode, subdomain, proxy), concurrent double-spend race, demotion-fails-open, cap-above-ceiling no-op attempt, fake/missing trial-ledger evidence, forged promotion payload, stale cached policy vs file, hook fail-open, quarantined-event-reported-as-success; **every discovered hole lands as a permanent regression fixture**; "no findings" without demonstrated attack paths does not pass | 4 | active |
+| REQ-09 (v1.1) | A configured level is never mistaken for an evidenced one | **Evidence fold** over the canonical spine yields, per (action kind × capability) pair at its effective level, `last_success` · `last_refusal` · `last_audit` (each a receipt ULID or absent) and `evidence_age_days`, from **existing kinds only** (zero new spine kinds), with the as-of day injected and never read from the clock. A **BELOW-BAR** class (ADR-0049 pattern: it fails for insufficiency, not for a violation) flags every pair at effective ≥ L1 on spend/publish/deploy/network/shell whose `last_refusal` is absent, `unknown` or older than that pair's N. N is declared in `hq.policy.yaml` next to the level. A policy evidence guard (ADR-0910's cadence and clean-run rule) reports clean **only** with zero BELOW-BAR cells, and otherwise raises one `approval.requested`. The face Policy room renders evidence age per cell, and `unknown` where no kind can carry the evidence. POL-L invariants (a)(b)(c) are each fixture-pinned and each goes red against a mutant | 5 | proposed — cycle 2 |
 
 ## Appetite
 
@@ -125,6 +132,7 @@ politely. A blown cap is cut or killed, never extended (A9).
 | POL-I | **Birth-rule over migration.** New modules are born WITH their policy row (same change, advisory lint). Migration of existing caps executes only against a REAL cap-bearing module; "zero behavior change" is claimed only from that module's own fixtures — a parity proof against a mockup is an E3 violation. Retired cap paths are **attic'd, never deleted** (A10, ADR-0023). |
 | POL-J | **Scope boundary**: `/arc-capability` (ADR-0110) vets what may ENTER the toolchain (supply-chain provenance); the policy engine governs what a RUN may DO (runtime authority). Neither absorbs the other; the words "capability vetting" and "capability vector" are kept distinct in every doc this cycle touches. |
 | POL-K | **OPEN — decided at kickoff, recorded in the kickoff ADR set:** lane name · ADR century (next free at birth) · code home (`products/policy` vs inside `hq` — the architecture doc places the policy engine in hq; the separate-product lean is on record as opinion only, for dependency cleanliness: engine consumes the policy library). |
+| POL-L (v1.1) | **A configured level is not an evidenced level.** Per pair, a deterministic fold over existing spine kinds derives when its capability last succeeded, was last refused correctly, and was last audited. An effective ≥ L1 pair on spend/publish/deploy/network/shell with no fresh refusal is **BELOW-BAR**, because an unexercised refusal path is unproven. Zero new spine kinds. Levels are never changed by evidence in either direction: promotion stays a human `policy.level.changed` citing evidence (ADR-0508), and nothing auto-demotes on stale evidence. Full text: § v1.1 below. |
 
 ## Non-negotiables
 
@@ -204,6 +212,7 @@ fakes (ADR-0104 pattern) — v1 needs no real external spend to prove enforcemen
 | 2 | Receipts + interactive: vocab ADR (+4), promotion chain end-to-end via inbox, automatic demotion, hook fragments per feasibility matrix, brief/inbox rendering (REQ-04, REQ-05) | 1.25d |
 | 3 | Birth-rule wiring + cap inventory + conditional migration, honestly scoped (REQ-07) | 0.5d |
 | 4 | **Adversarial security pass — two full days, untouchable.** Fresh agents, the red-team list, every hole a permanent regression fixture (REQ-08) | 2d |
+| 5 (v1.1, cycle 2) | **Evidenced levels (POL-L).** Evidence fold + BELOW-BAR class + per-pair N + the policy evidence guard + face per-cell evidence age, plus the receipts the fold needs where the policy lane owns the adapter. A two-agent adversarial pass (logic + boundary) attacks the fold, the gate and the tests that protect invariants (a)(b)(c) (REQ-09) | ~3d, set at kickoff |
 
 **North-star:** when the scheduler kickoff eventually fires, its plan checks "policy
 engine live" as a verified prerequisite and adds **zero** new permission machinery — the
@@ -211,6 +220,181 @@ first unattended run in arc's history is block-capable on its first day, and eve
 authority change before and after it is a receipt on the spine.
 
 ---
+
+## v1.1 — POL-L: evidenced levels (amendment 2026-10-07, builds at cycle 2)
+
+**Status:** design source only. Nothing here is a live phase spec. It is built when
+`/arc-kickoff --lane policy` opens cycle 2, and that kickoff writes the phase spec, the
+ADRs (band 0500–0599) and re-verifies every count below.
+
+### The problem, measured
+
+`hq.policy.yaml` shows effective levels, and ADR-0910 gives a monthly guard that the owner
+starts. Nothing records, per capability, when it last succeeded, when it was last refused
+correctly, or when it was last audited. **An L1 that has never been exercised looks
+identical to an L1 that works.** For spend, publish, deploy, network and shell, that is the
+difference between a policy and a poster: pre-mortem row 3 of this plan, in its exact words.
+
+Measured on the canonical spine (main clone, 2026-10-07, 1,695 events, 61 day-files):
+**zero** `policy.level.changed`, `policy.demoted`, `spend.reserved`, `spend.released` and
+`incident.raised` have ever been emitted, and no `approval.requested` has carried the
+`policy.promotion` profile. Every level the engine enforces today is fixture-proven and
+production-unexercised. Lane assumption row 1 (`initiatives/policy/archive/PLAN-cycle9-2026-08-10.md` since the cycle-2 kickoff) fired on that
+count. See that cycle's archived `PROGRESS` `## Now`.
+
+### Which cells the bar applies to today
+
+The effective level is `min(ceiling, cap)`. No `policy.level.changed` exists, so every cap
+is still the L1 birth cap. On `hq.policy.yaml` at `9864ee29` (15 subjects):
+
+| Capability | Pairs at effective L1 | Pairs at L0 | Under the BELOW-BAR rule? |
+|---|---|---|---|
+| shell | 11 | 4 | yes, all 11 |
+| network | 6 | 9 | yes, all 6 |
+| spend | 0 | 15 | no: L0 is the deny, so there is nothing to evidence |
+| publish | 0 | 15 | no |
+| deploy | 0 | 15 | no |
+
+**17 cells are in scope today, and every one of them is BELOW-BAR**: none has a refusal
+receipt the fold can read (next table). That is the expected first reading, not a defect of
+the rule. L0 cells are still rendered, with `n/a` in place of an age.
+
+### What counts as a refusal exercise, per capability
+
+A refusal exercise is **a real attempted action that the policy refused, recorded on the
+spine**. It is never a unit test, a fixture or a bats run: tests prove the code, and this
+measures the running system. "Recorded" means a receipt the fold can attribute to one
+(kind, capability) pair **from typed payload fields**. The fold never parses free text, so a
+receipt whose capability lives only inside a prose `what` string does not count.
+
+| Capability | Counts as a refusal exercise | Existing kind that carries it today | Instrumented? | Who owns the adapter |
+|---|---|---|---|---|
+| **shell** | A Bash call (interactive) or a driver spawn (headless) that the policy turned into `deny` or `propose` instead of executing | L2+ overreach: `incident.raised` with `source: "policy <kind>/shell"` (`recordOverreach`). Headless L0: `incident.raised` `source: "arc-run policy gate"` + `run.completed reason=policy`, with the capability only in prose. Scheduler: `incident.raised class=policy-declined` with `denials` | **No at L1**: the hook prints `BLOCKED … at L1 (propose)` and writes nothing. Headless L0: process-attributable only | **policy** (`policy-hook.mjs`, the `arc-run` gate) |
+| **network** | A WebFetch/WebSearch/MCP call or a headless egress attempt to a destination the grant does not allow, refused | Same carriers as shell (`source: "policy <kind>/network"` at L2+) | **No at L1**, same gap | **policy** (hook + `authorizeAction` domain decision). A headless egress adapter does not exist yet; **engine** owns the driver side |
+| **spend** | A `reserveAndSpend` that `checkReservation` refused (over cap, outside the window, L0) against a real provider budget | None. The refusal returns `{ ok: false }` and emits nothing. `spend.released` records a release *after* a reservation (race, provider failure), which is not a policy refusal | **No** | **policy** (`lib/policy/spend.mjs`). Out of the bar until a spend pair reaches L1 |
+| **publish** | An attempted publish (growth's sender, a publish-class MCP tool) refused by `authorizeAction` | None. growth's publish path emits `content.published` on success and **does not import the policy library** (grep, 2026-10-07: no growth script calls it). `targets.publish` is empty | **No** on either side | **growth** routes its sender through `authorizeAction` (its band, ADR-1101); policy owns the receipt shape |
+| **deploy** | An attempted deploy (launch's git-triggered prod deploy, a deploy-class MCP tool) refused | None. No deploy path calls the policy library | **No** | **launch** (its deploy gate, PLAN-launch REQ-03); policy owns the receipt shape |
+
+Success and audit carriers, also existing kinds only:
+
+| Field | Read from |
+|---|---|
+| `last_success` | shell/network: `run.completed outcome=ok` of a process holding the pair (process-level, honest about it). spend: `cost.incurred` with `reservation_ref` (settlement profile). publish: `content.published`. deploy: `ship.done`. At L1 a "success" is a *recorded propose*, which has no carrier today (the L1 gap above) |
+| `last_refusal` | The table above. `policy.demoted` also counts, since it cites an `incident.raised` |
+| `last_audit` | The policy evidence guard's own `run.completed` (its process name is fixed at kickoff). One audit covers every cell it read |
+
+**The L1 gap is the centre of this amendment.** POL-A defines L1 as *"propose — prepared and
+recorded, never executed"*, and today a propose is prepared and **not recorded**. Choosing
+the existing kind that records it is fork POL-L1 below, and it is the kickoff's to decide.
+
+### The fold
+
+`evidence(spine, policy, asOf) → cells[]`. One cell per (subject × capability):
+`{ subject, capability, effective, last_success, last_refusal, last_audit,
+evidence_age_days, n, state }`.
+
+- **Pure.** Spine events, the parsed policy and an `asOf` IST day go in; nothing is read
+  from the clock or the filesystem inside it. The same three inputs give byte-identical
+  output, always.
+- `evidence_age_days` = the `asOf` IST calendar day minus the IST calendar day of
+  `last_refusal`'s `ts`. Spine `ts` is already IST (`IST_TS_RE`), so no timezone is guessed.
+- `state` is a closed enum: `fresh` · `stale` · `absent` · `unknown` · `n/a`. `unknown`
+  means no existing kind can carry this cell's refusal (the not-instrumented rows above), and
+  it is distinct from `absent`, which means the kind exists and has never fired.
+- **Dependency, named: "Gap B's Availability enum".** It does not exist on `origin/main`
+  `9864ee29` (grep: no `Gap B` and no Availability enum outside unrelated design/council
+  docs). Until it lands, the fold ships the local enum above with a one-to-one mapping table.
+  When it lands, the fold adopts it in the same change and the mapping is deleted. The lane
+  that owns Gap B is **unnamed in the tree**, so the owner names it at kickoff.
+
+### BELOW-BAR, the class that is not an absence check
+
+`PASS = zero violations` cannot see a policy nobody uses (the CLAUDE.md lesson behind
+ADR-0049). The evidence check reports **BELOW-BAR** for a cell where:
+
+> effective ≥ L1 **and** capability ∈ {spend, publish, deploy, network, shell} **and**
+> state ∈ {absent, unknown, stale} (stale = `evidence_age_days > n`)
+
+- **N lives in `hq.policy.yaml`, next to the level:** `shell: { level: L1, evidence_days: 35 }`.
+  The proposed starting value is 35 for every pair (the monthly guard cadence plus 4 days
+  of grace). The owner sets the real numbers in the reviewed diff.
+- **A missing N is BELOW-BAR (`reason: no-bar-declared`), never a lint FAIL.** A new
+  required field would turn every lane's CI red over a file only the owner can edit. The
+  insufficiency class carries it until the owner declares one.
+- BELOW-BAR never changes a level and never denies an action. It is a reported state, read
+  by the guard and the face.
+
+### The guard
+
+ADR-0910 belongs to **bench** (BEN-F) and is not edited. POL-L **adopts its rule** for its
+own policy evidence guard: monthly, first working day, started by the owner. A clean run
+emits **only** `run.completed`, and the inbox never carries no-op approvals.
+
+- **Clean** ⇔ zero BELOW-BAR cells. A run with any BELOW-BAR cell raises **one**
+  `approval.requested` (gate `policy-evidence`) listing every such cell, never one per cell.
+- With the L1 gap open, the guard **cannot be clean**. That is intended: the guard says
+  out loud what the configured levels hide.
+- A missed month is visible from the spine without any new instrument: no guard
+  `run.completed` in that month's slice (ADR-0910's own detection, reused).
+
+### The face
+
+The Policy room's subject table (`face/src/modules/kernel/policy/`) shows, in each cell, the
+effective level and the evidence age (`12d`, `stale 41d`, `absent`, `unknown`, `n/a`).
+It reads the same fold through `/api/policy` and does not re-derive anything (POL-D: one
+interpretation). The face lane builds the cell from a fold field the policy lane serves.
+
+### Invariants (carried verbatim into the cycle-2 kickoff plan)
+
+- **(a)** A capability with **zero receipts** is BELOW-BAR, never PASS.
+- **(b)** A refusal receipt older than N flips to BELOW-BAR **on the IST day boundary**,
+  deterministically under replay: the same spine at `asOf = d + N` is fresh and at
+  `asOf = d + N + 1` is stale, and both outputs are byte-identical across two replays.
+- **(c)** The guard **cannot report clean** with any BELOW-BAR cell. The mutant that drops
+  one BELOW-BAR cell from the guard's input goes red.
+
+Each invariant is a fixture **and** a mutant (the CLAUDE.md "attack the test" rule): the
+fold with `absent` mapped to PASS, the age computed from `Date.now()`, and the guard with
+the BELOW-BAR filter deleted, each one killed by its fixture.
+
+### A constraint the kickoff must plan around: the guard files are deny-listed
+
+Phase 04 put `hq.policy.yaml`, `.claude/scripts/hq/lib/policy/**`, `policy-lint.mjs` and
+`policy-hook.mjs` on the static deny floor (ADR-0502). An agent cannot edit them, which is
+the rule working. So POL-L splits like this:
+
+- **Agent-built, outside the guarded set:** the fold, the evidence check and the guard, as
+  new files (e.g. `.claude/scripts/hq/policy-evidence.mjs` and a sibling lib), plus their
+  bats suite, the face cell and the `/api/policy` field.
+- **Owner paste, generated as whole files (the Phase 04 STEP1/STEP2 pattern, never a
+  diff):** the `evidence_days` fields in `hq.policy.yaml`, the L1-propose receipt in
+  `policy-hook.mjs`, and, once the fold is green, **adding the new evidence files to
+  `ungrantable_resources` and the deny floor**. A guard an agent can edit to report clean is
+  not a guard (ADR-0502's own sentence).
+
+### Forks for the kickoff (recommendation given, not decided here)
+
+| ID | Fork | Recommendation |
+|---|---|---|
+| POL-L1 | Which **existing** kind records an L1 propose? `note.logged` with a closed `policy.proposed` payload profile · `approval.requested` (floods the inbox: every propose would need a human) · `incident.raised` (wrong: `incident.mjs` rules a propose out on purpose) | `note.logged` + a closed profile validated first-party (`assertDecision` style). If no existing kind can carry it honestly, STOP and route a vocabulary ADR rather than shoehorn it. "Zero new kinds" is this amendment's constraint, and it is the assumption most likely to break |
+| POL-L2 | Are interactive and headless refusals one cell or two? | One cell per (subject × capability). `session:interactive` is already its own subject, so the surfaces are separated by subject, not by a new axis |
+| POL-L3 | Does a scheduler `policy-declined` incident count? | Yes, if its `denials` carry the capability as a typed field (verify the shape at kickoff); otherwise it counts as `unknown`, and the scheduler lane is asked for the field |
+
+### Out of scope (v1.1)
+
+Changing any level; auto-promotion or auto-demotion on evidence, in either direction
+(promotion stays a human `policy.level.changed` citing evidence, ADR-0508); new spine kinds;
+backfilling receipts onto historic events; synthetic "exercise" runs whose only purpose is
+to refresh a cell (that is a unit test wearing a receipt); building growth's or launch's
+adapters (theirs. This plan names the receipt shape they must emit).
+
+### Assumptions (v1.1)
+
+| Assumption | Trigger | Tests it |
+|---|---|---|
+| An existing kind can record an L1 propose honestly | POL-L1 finds no kind without inbox flood or a prose-only payload → STOP, vocabulary ADR | kickoff |
+| N = 35 days is long enough that organic refusals keep cells fresh | After 2 guard runs, > half of in-scope cells are `stale` while the processes ran at all → N is wrong, or the work does not exercise its refusals; the owner reads which one | dogfood |
+| Process-level `run.completed` is honest enough for shell/network `last_success` | A process holds a pair it never uses, and its runs read as that pair's success → narrow `last_success` to `unknown` for that capability | 5 |
 
 ## KICKOFF PROMPT — paste into Claude Code in the arc repo (only after the trigger fires)
 
@@ -229,4 +413,21 @@ Phase 4's two adversarial days are untouchable — do not compress them for any 
 No scheduler code of any kind; anything scheduler-shaped becomes a note in
 BRIEF-scheduler.md. This is security-class work: policy-lint FAILs from birth.
 STOP after PLAN.md + phase specs + kickoff-lint pass — I approve before Phase 0 work.
+```
+
+## KICKOFF PROMPT — cycle 2 (v1.1, POL-L)
+
+```
+/arc-kickoff --lane policy Evidenced levels — a configured level is not an evidenced level
+
+Design source: docs/strategy/plans/PLAN-policy.md § v1.1 (POL-L, REQ-09). Read it fully.
+This is cycle 2 of an existing lane (Cycle 9 closed 2026-08-10); ADRs from band 0500–0599.
+Re-verify every count in § v1.1 on the canonical spine (main clone) before writing a REQ.
+Decide forks POL-L1..L3 and record them as ADRs; if POL-L1 finds no existing kind that can
+honestly record an L1 propose, STOP and route a vocabulary ADR — never shoehorn.
+Name the lane that owns "Gap B's Availability enum" or ship the local enum + mapping.
+Carry invariants (a)(b)(c) verbatim into PLAN.md Non-negotiables, each with a mutant.
+Plan the deny-listed files as whole-file owner pastes (Phase 04 pattern), never diffs.
+Out of scope: changing any level; auto-promotion/demotion on evidence (ADR-0508).
+The fold + BELOW-BAR class is a gate: two fresh attackers (logic + boundary), /arc-attack.
 ```
