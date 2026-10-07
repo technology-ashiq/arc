@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:34",
+      "breaking_input": "A .gitignore containing the rule '.codex/*', '**/.codex', '.agents/**' or 'AGENTS.md ' (trailing space is ignored by git) or '/AGENTS.md'.",
+      "why": "The grep -cxE pattern only matches whole lines exactly equal to .codex, .agents or AGENTS.md with an optional leading and trailing slash. Equivalent git ignore rules pass the test, so rendered outputs stay untrackable and REQ-05's dirty-diff cannot see them. CRLF .gitignore lines also defeat -x on Windows autocrlf checkouts, so a planted '.codex\\r' line is missed.",
+      "fix": "Use `git check-ignore -q` on probe paths (.codex/x, .agents/skills/x, AGENTS.md) in a temp repo, or strip CR and normalize before matching, and match globs too.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/distribute/birth-probe.mjs:20",
+      "breaking_input": "engine/harnesses.yaml checked out with CRLF line endings (core.autocrlf=true on the Windows CI leg).",
+      "why": "The probe passes raw file text to parseYamlSubset, which per the phase spec rejects CR bytes. The matrix test fails on the Windows leg only, whereas the verdict case strips \\r. The inconsistent handling means the matrix check is green or red depending on checkout settings.",
+      "fix": "Strip \\r before parsing, and record in golden_transform that the matrix is hashed or read CR-normalized, or add .gitattributes eol=lf for engine/*.yaml.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:14",
+      "breaking_input": "ARC_ROOT is a path containing spaces or an MSYS /c/... path while node is native Windows: probe runs `cd \"$ARC_ROOT\" && node tests/distribute/birth-probe.mjs`, and the bats tests also pass \"$BATS_TEST_TMPDIR/undated.yaml\" (a POSIX path) as an argv to node.",
+      "why": "A POSIX/MSYS temp path passed to a native node can resolve differently. The probe's relative path engine/harnesses.yaml is safe, but the absolute mutant-copy paths depend on MSYS-to-Windows argument conversion. If conversion is skipped (MSYS2_ARG_CONV_EXCL or a WSL bash), readFileSync throws ENOENT. The mutant arm then fails with a probe error rather than the expected named PROBLEM, and ran_ok would flag it as a hard failure instead of testing the mutant.",
+      "fix": "Copy mutant files into the repo-relative scratch dir, or convert with cygpath -m before passing to node.",
+      "twin_of": "(g) POSIX path into node"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/distribute/birth-probe.mjs:75",
+      "breaking_input": "verdict file where a row uses a non-[a-z0-9-] character in the name, e.g. 'source-command-arc-Pr' or 'source-command-arc-pr_x', or the verdict is lowercase 'faithful'/'Diverged'.",
+      "why": "The row regex requires a lowercase-hyphen name and ([A-Z]+) verdict. A non-matching row is silently skipped (no count, no illegal), so a mangled row is indistinguishable from a deleted one only through the count==8 check. A lowercase verdict like 'diverged' is skipped rather than counted illegal. Combined with deleting that row and adding a malformed twin, the count falls short and is reported 'incomplete', but a duplicated row counts twice: 9 rows with one skill duplicated and one deleted gives 8 and 'complete' with a missing skill.",
+      "fix": "Collect the set of names, require exactly the 8 expected command names plus seo-article-writer, reject duplicates, and flag unparsed table rows as illegal.",
+      "twin_of": "(k) derived, not hand-kept"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:76",
+      "breaking_input": "Mutant arm `grep -v 'source-command-arc-pr ' ...` on a verdict file where the pr row is written 'source-command-arc-pr|' or is the only text on a line with different spacing.",
+      "why": "The mutant deletion depends on a literal trailing space after 'pr', so it is coupled to table formatting. If the formatting changes, the grep deletes nothing, the copy is complete, and the assertion 'verdict incomplete' fails. The inverse is a vacuous risk: 'source-command-arc-pr ' also matches any row whose name begins 'source-command-arc-pr ', which can delete more than one row. The mutant does not prove a single-row deletion is detected.",
+      "fix": "Delete by exact anchored match (grep -v '^| source-command-arc-pr |') and assert the deleted line count is exactly 1 before running the probe.",
+      "twin_of": "(j) vacuous pass"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/distribute/birth-probe.mjs:86",
+      "breaking_input": "An unexpected throw synchronous in a case, or `which` such as '__proto__' or 'constructor' or 'toString'.",
+      "why": "`cases[which]` is a plain object, so `cases['constructor']` is truthy (Object) and `cases[which]()` is called, which returns a non-promise and throws TypeError at .catch. The probe then dies on an uncaught exception rather than the unknown-case path. Low impact since the callers are fixed, but it breaks the named-refusal contract.",
+      "fix": "Use Object.hasOwn(cases, which) or a Map.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/distribute-birth.bats:62",
+      "breaking_input": "engine/harnesses.yaml whose duplicate key `verified:` is removed with the mutant `grep -v '^    verified: '`, applied to rows indented differently or where the claude-code row's golden_transform line contains the text.",
+      "why": "The mutant pattern assumes exactly 4-space indentation. If indentation differs, the mutant removes nothing, the undated check is not exercised, and the test fails for the wrong reason. Nor does the test assert that lines were actually removed (before/after count), so a no-op mutant is not distinguished from a real one.",
+      "fix": "Assert the mutant copy's line count is smaller by exactly the verified-row count (8) before probing.",
+      "twin_of": "(j) vacuous pass"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "engine/harnesses.yaml:18",
+      "breaking_input": "golden_transform value `\"\\\\r stripped ...\"` in a double-quoted YAML scalar.",
+      "why": "In the double-quoted scalar, `\\\\r` is an escaped backslash followed by r, so the parsed value is the two characters backslash-r. But parseYamlSubset's escape handling is unverified: if it does not process escapes, the value holds 3 characters `\\\\r`. grep -F '\\r' still matches either way, so the test cannot distinguish a correct from a mangled declaration. A spec requirement, 'plain string containing the two literal characters', is therefore unpinned.",
+      "fix": "Have the probe assert the parsed string's first two characters char-by-char equal backslash and r, and not three.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".gitignore:72",
+      "breaking_input": "A consumer checkout or the main clone still holding the local .codex/hooks.json after the lines are removed, if the owner restores the archive per A-06.",
+      "why": "Removing the ignore lines while the order-dependent move is only an instruction means any clone that has not performed step 1 (the owner's other worktrees, a second machine) shows .codex/, .agents/ and AGENTS.md untracked with a machine-path hooks.json. One `git add -A` commits it to a public repo. ADR-2014 names this risk, but no gate or hook guards it, and the birth test checks only the ignore lines.",
+      "fix": "Add a tracked-file lint (or pre-commit fragment) refusing a staged .codex/hooks.json containing a drive-letter path, or keep a narrow ignore for .codex/hooks.json until P03 renders it.",
+      "twin_of": "(h) shell-string programs"
+    }
+  ]
+}

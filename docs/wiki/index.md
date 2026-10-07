@@ -6,16 +6,16 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | Part | Count | With narrative |
 |---|---|---|
 | [Products](#products) | 20 | 17 |
-| [Lanes](#lanes) | 20 | 17 |
+| [Lanes](#lanes) | 21 | 17 |
 | [Processes](#processes) | 14 | 0 |
-| [Decisions (ADR bands)](#decisions-adr-bands) | 20 | 0 |
+| [Decisions (ADR bands)](#decisions-adr-bands) | 21 | 0 |
 | [Commands](#commands) | 29 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **149** | **34** |
+| **Total** | **151** | **34** |
 
-Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 369 of 435 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 386 of 452 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -51,6 +51,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 369 of 
 | [design](lanes/design.md) | LIVE | arc-design v2 (Cycle 16, opened 2026-08-23) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
 | [discover](lanes/discover.md) | IDLE | arc-discover (Cycle 1, sealed 2026-10-07) |
+| [distribute](lanes/distribute.md) | LIVE | arc-distribute (Cycle 1, opened 2026-10-07) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 7, opened 2026-08-12) |
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
@@ -110,6 +111,7 @@ Narrative debt: **115 of 149** pages have no narrative yet. ADR headers: 369 of 
 | [1700–1799](adr/1700.md) | 37 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
 | [1900–1999](adr/1900.md) | 17 | 0 |
+| [2000–2099](adr/2000.md) | 17 | 0 |
 
 ## Commands
 
