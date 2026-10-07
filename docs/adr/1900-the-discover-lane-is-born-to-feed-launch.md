@@ -23,4 +23,4 @@ Option 2. Phase 00 records the ruling on the spine as `decision.recorded`, emitt
 
 ADR century 1900–1999 is claimed. On 2026-10-06 the sweep checked 17 worktrees and every `origin/*` branch, and none held an ADR numbered 19xx. Every `venture.yaml` discover writes before launch P02 closes is `honesty_class: rehearsal`.
 
-Receipts (main clone, 2026-10-06): `kickoff.done` `01M47ZCQMHWB54E808DEZXGJH6`; the ruling `approval.requested` `01M47ZCQW6XF5ZEWF4QGS1XFRH` (gate `lane-birth`), which the owner decides with `arc-inbox`. Every 19xx ADR cites this request id.
+Receipts (main clone, 2026-10-06): `kickoff.done` `01M47ZCQMHWB54E808DEZXGJH6`; the ruling `approval.requested` `01M47ZCQW6XF5ZEWF4QGS1XFRH` (gate `lane-birth`), decided by the owner's `decision.recorded` `01M4982PTC62ZM2WF6YWN8KRZR` (verdict `approve`, 2026-10-07). Every 19xx ADR cites this request id.

@@ -1,0 +1,28 @@
+{
+  "phase": "03",
+  "commit": "465c32684f3f0ce1dc5c029145ac57694e2b8612",
+  "short": "465c3268",
+  "generated": "2026-10-06T19:58:12Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "99a98ac0423a746a80cce997717192e358c32d04d558c89de6b8afd5234d6978"
+    },
+    {
+      "name": "judge.json",
+      "sha256": "b82d7e2315d43f2621ed4975cb73af78eacac84cafa0e263c7f60e57ab830bf9"
+    },
+    {
+      "name": "proposal.json",
+      "sha256": "b21a82424b9529210a87f07989bc2b01d1d354cd3a0b287abb65ef4c502ad567"
+    },
+    {
+      "name": "real-clusters.json",
+      "sha256": "6d40daaa2deaaf20d9fdb7c021c8d041d04257df19f20273021cafc1d2bd63e2"
+    },
+    {
+      "name": "scores.json",
+      "sha256": "a706d952e81315706668eb9faa573c055fb7e34725ce4b5c3c3bb40f1755a9fa"
+    }
+  ]
+}

@@ -16,6 +16,27 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
 
   // Answers with the LAST statement's rows only, as the real endpoint does: a trailing `commit` answers [].
   function run(p, sql) {
+    // A launch migration runs whole (its function bodies hold semicolons); the marker line says which one.
+    const mig = String(sql).match(/^-- arc-launch migration: (authz|tenancy)/);
+    if (mig) {
+      if (mig[1] === "tenancy" && !p.tables.orgs) return { error: "relation \"public.orgs\" does not exist" };
+      for (const t of mig[1] === "authz" ? ["orgs", "memberships"] : ["invites"]) {
+        p.tables[t] = p.tables[t] || { rls: !rlsOff, rows: [] };
+        // `comment on table` in the migration: launch's ownership marker on each table it made.
+        if (String(sql).includes(`comment on table public.${t} is 'arc-launch ${mig[1]}'`)) p.tables[t].comment = `arc-launch ${mig[1]}`;
+      }
+      return { rows: [] };
+    }
+    const ours = String(sql).match(/tablename in \(([^)]*)\) and obj_description\(\('public\.' \|\| t\.tablename\)::regclass\) = '([^']+)';/);
+    if (ours) {
+      const names = ours[1].split(",").map((x) => x.trim().replace(/^'|'$/g, ""));
+      return { rows: [{ n: names.filter((t) => p.tables[t] && p.tables[t].comment === ours[2]).length }] };
+    }
+    const inList = String(sql).match(/from pg_tables where schemaname = 'public' and tablename in \(([^)]*)\)( and rowsecurity)?;/);
+    if (inList) {
+      const names = inList[1].split(",").map((x) => x.trim().replace(/^'|'$/g, ""));
+      return { rows: [{ n: names.filter((t) => p.tables[t] && (!inList[2] || p.tables[t].rls)).length }] };
+    }
     let out = [];
     const anon = /set local role anon/i.test(sql);
     for (const stmt of sql.split(";").map((s) => s.trim()).filter(Boolean)) {
@@ -76,8 +97,16 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
       if (proj.status === "COMING_UP" && ++proj.polls >= becomeHealthy) proj.status = "ACTIVE_HEALTHY";
       return json(200, { id: proj.id, name: proj.name, status: proj.status });
     }
+    m = p.match(/^\/projects\/([a-z0-9]{20})\/config\/auth$/);
+    if (m) {
+      const proj = store.find((x) => x.id === m[1]);
+      if (!proj) return err(404, "project not found");
+      proj.auth = proj.auth || { site_url: "http://localhost:3000" };
+      if (method === "GET") return json(200, proj.auth);
+      if (method === "PATCH") { Object.assign(proj.auth, body); return json(200, proj.auth); }
+    }
     m = p.match(/^\/projects\/([a-z0-9]{20})\/api-keys$/);
-    if (m && method === "GET") return store.some((x) => x.id === m[1]) ? json(200, [{ name: "anon", api_key: `anon-key-${m[1]}` }, { name: "service_role", api_key: `service-key-${m[1]}` }]) : err(404, "project not found");
+    if (m && method === "GET") return store.some((x) => x.id === m[1]) ? json(200, ["anon", "service_role"].map((name) => Object.fromEntries([["name", name], ["api_key", `${name === "anon" ? "anon" : "service"}-key-${m[1]}`]]))) : err(404, "project not found");
     m = p.match(/^\/projects\/([a-z0-9]{20})\/database\/query$/);
     if (m && method === "POST") {
       const proj = store.find((x) => x.id === m[1]);
