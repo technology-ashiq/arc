@@ -130,3 +130,4 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A provenance match on any cell of any row** (attack ae0aeb8 L6) -- `design-jury.mjs` deal -- *the sha256 column of exactly one row*
 - **A scrub that knows only the raw spelling of the key** (attack ae0aeb8 L12) -- `design-rival.mjs` settle -- *scrub the raw and the JSON-escaped spelling*
 - **A route pattern where `*` crosses `/`** (attack ae0aeb8 L9, B10) -- `design-render.sh` -- *refuse empty, . and .. segments before any pattern*
+- **A jury item dealt as the file it arrived as** -- references stayed a JPEG, or a 2x RGBA PNG with the gallery iTXt source URL, with the gallery mtime, so a file-level look told every reference from every render (Phase 07 blindness gate, 2026-10-07) -- `design-jury.mjs` deal, `design-explore.sh ref`, `design-render.sh` -- *every item is rendered by the one renderer; the deal refuses a non-PNG or any ancillary chunk and stamps one mtime on all*

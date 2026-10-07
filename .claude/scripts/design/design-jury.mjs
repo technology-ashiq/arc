@@ -32,8 +32,9 @@
 // Exit: 0 ok | 1 refused, or deviations found.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PROVIDERS } from "./design-rival.mjs";
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -218,7 +219,16 @@ function deal(argv) {
     const owning = rows.split(/\r?\n/).filter((l) => l.startsWith("|") && (l.split("|")[3] ?? "").trim() === full);
     if (owning.length === 0) fail(`--ref ${r} has no provenance row in ${sourcesMd}; an unattributed screen never enters a jury`);
     if (owning.length > 1) fail(`--ref ${r} has ${owning.length} provenance rows in ${sourcesMd}; exactly one row attributes a screen`);
-    items.push({ kind: "reference", source: basename(file, ext), provenance: "reference", path: file, sha256: full, ext });
+    // REQ-09: every item is rendered by arc's own renderer. A pack file dealt as itself stayed a JPEG, or a 2x
+    // PNG carrying the gallery's iTXt source URL, and the blindness gate told every reference apart at the file
+    // level (2026-10-07). So the deal takes the render of the ref-<sha16>/ frame, whose image must still be
+    // these exact pack bytes; the pack hash is kept in the key as the provenance.
+    const framed = join(ex.dir, `ref-${r}`, `image${ext}`);
+    if (!existsSync(framed)) fail(`--ref ${r} is not framed for this explore; run: design-explore.sh ref ${basename(ex.dir)} --ref ${r}`);
+    if (sha256(readRegular(framed, `ref-${r}/image${ext}`)) !== full) fail(`ref-${r}/image${ext} is not the pack screen it names; frame it again`);
+    const rr = latestRender(`ref-${r}`);
+    if (statSync(rr.meta).mtimeMs < statSync(framed).mtimeMs) fail(`ref-${r}'s render is older than its frame; render it again`);
+    items.push({ kind: "reference", source: basename(file, ext), provenance: "reference", pack_sha256: full, path: rr.file, sha256: rr.sha, ext: extname(rr.file).toLowerCase() });
   }
   if (control !== null && !items.some((i) => i.kind === "control")) fail(`--control ${control}: there is no variant-${control} to mark`);
   if (!items.some((i) => i.kind === "variant")) fail("every variant is the control; a jury needs at least one arc variant");
@@ -241,12 +251,20 @@ function deal(argv) {
   const itemsDir = join(ex.jury, "items");
   mkdirSync(itemsDir);
   const key = { id: basename(ex.dir), brief: ex.brief, n, seed, viewport, rubric: { path: rubricRel, sha256: rubricSha }, dealt: new Date().toISOString(), items: [] };
+  // Every item leaves the deal looking the same at the file level: one format, no ancillary metadata, one
+  // timestamp. Checked on the bytes, not assumed from the pipeline (Phase 07 blindness gate, 2026-10-07).
+  const at = new Date(key.dealt);
   items.forEach((it, i) => {
     const label = `item-${LABELS[i]}`;
+    if (it.ext !== ".png") fail(`${label} would be dealt as ${it.ext}; every item is a PNG render, so the format names no kind`);
+    const extra = pngAncillary(readFileSync(it.path));
+    if (extra === null) fail(`${label} is not a well-formed PNG`);
+    if (extra.length) fail(`${label} carries PNG metadata (${extra.join(", ")}); a dealt item carries none`);
     const file = `${label}${it.ext}`;
     copyFileSync(it.path, join(itemsDir, file));
     if (sha256(readFileSync(join(itemsDir, file))) !== it.sha256) fail(`${label} did not copy byte for byte`);
-    key.items.push({ label, file, kind: it.kind, source: it.source, provenance: it.provenance, ...(it.package ? { package: it.package } : {}), sha256: it.sha256 });
+    utimesSync(join(itemsDir, file), at, at);
+    key.items.push({ label, file, kind: it.kind, source: it.source, provenance: it.provenance, ...(it.package ? { package: it.package } : {}), ...(it.pack_sha256 ? { pack_sha256: it.pack_sha256 } : {}), sha256: it.sha256 });
   });
   const body = `${JSON.stringify(key, null, 2)}\n`;
   // Written once: `wx` refuses if another deal got there first.
@@ -474,10 +492,75 @@ function catchRate(argv) {
   console.log(`design-explore catch-rate: ${caught}/${iters} iteration(s) caught a defect (${per.join(", ")})`);
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
-if (cmd === "deal") deal(rest);
-else if (cmd === "check") check(rest);
-else if (cmd === "score") score(rest);
-else if (cmd === "unblind") unblind(rest);
-else if (cmd === "catch-rate") catchRate(rest);
-else fail("usage: design-jury.mjs deal|check|score|unblind|catch-rate --root R --id ID ...");
+// The chunk types of a PNG beyond the four that draw it, or null when the bytes are not a whole PNG.
+// A text, time or EXIF chunk can carry where an image came from; a dealt item carries none of them.
+export function pngAncillary(buf) {
+  const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(SIG)) return null;
+  const extra = [];
+  let at = 8;
+  let ended = false;
+  while (at + 12 <= buf.length) {
+    const len = buf.readUInt32BE(at);
+    const type = buf.subarray(at + 4, at + 8).toString("latin1");
+    if (!/^[A-Za-z]{4}$/.test(type) || at + 12 + len > buf.length) return null;
+    if (!["IHDR", "PLTE", "IDAT", "IEND"].includes(type)) extra.push(type);
+    at += 12 + len;
+    if (type === "IEND") { ended = true; break; }
+  }
+  // Anything after IEND is a place to hide bytes too.
+  if (!ended || at !== buf.length) return null;
+  return [...new Set(extra)];
+}
+
+// frame: one pack screen copied into the explore's gitignored ref-<sha16>/ dir under a one-image page, so the
+// SAME renderer that renders every variant renders it too (REQ-09). Exactly one pack file, its bytes hashed to
+// the prefix, its provenance row in the sha256 column of exactly one row -- the deal's own checks, run first.
+function frame(argv) {
+  const o = parse(argv, new Set(["--root", "--id", "--ref"]));
+  const root = o["--root"];
+  if (!root) fail("--root is required");
+  const ex = exploreOf(root, o["--id"]);
+  const r = o["--ref"] ?? "";
+  if (!/^[0-9a-f]{16}$/.test(r)) fail(`--ref takes a 16-hex sha prefix, got '${r}'`);
+  const packDir = join(root, ".claude", "state", "design", "refpacks", ex.brief);
+  const hits = existsSync(packDir) ? readdirSync(packDir).filter((f) => new RegExp(`^[a-z0-9-]+-${r}\\.(png|jpg|jpeg|webp)$`).test(f)) : [];
+  if (hits.length !== 1) fail(`--ref ${r}: ${hits.length} pack image(s) match in ${packDir}; exactly one is needed`);
+  const file = join(packDir, hits[0]);
+  inside(file, packDir, `--ref ${r}`);
+  const bytes = readRegular(file, `--ref ${r}`);
+  const full = sha256(bytes);
+  if (!full.startsWith(r)) fail(`--ref ${r}: the file's bytes hash to ${full.slice(0, 16)}; the pack was changed`);
+  const sourcesMd = join(root, "docs", "design", "refpacks", ex.brief, "sources.md");
+  const rows = existsSync(sourcesMd) ? readRegular(sourcesMd, "sources.md").toString("utf8") : "";
+  const owning = rows.split(/\r?\n/).filter((l) => l.startsWith("|") && (l.split("|")[3] ?? "").trim() === full);
+  if (owning.length !== 1) fail(`--ref ${r} has ${owning.length} provenance rows in ${sourcesMd}; exactly one row attributes a screen`);
+  const dir = join(ex.dir, `ref-${r}`);
+  let st = null;
+  try { st = lstatSync(dir); } catch { st = null; }
+  if (st && (st.isSymbolicLink() || !st.isDirectory())) fail(`ref-${r} is a link or not a directory`);
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (lstatSync(p).isFile() && /^(image\.(png|jpg|jpeg|webp)|index\.html)$/.test(f)) unlinkSync(p);
+  }
+  const ext = extname(file).toLowerCase();
+  writeFileSync(join(dir, `image${ext}`), bytes, { flag: "wx" });
+  // The page adds nothing the jury could read: no title text, no caption, the image at the viewport width.
+  writeFileSync(join(dir, "index.html"), `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>item</title><style>html,body{margin:0;background:#ffffff}img{display:block;width:100%;height:auto}</style></head><body><main data-arc-surface="product"><img src="image${ext}" alt=""></main></body></html>\n`, { flag: "wx" });
+  console.log(`design-explore ref: framed ${r} at docs/design/explore/${basename(ex.dir)}/ref-${r}/ -- render it next`);
+}
+
+// Runs as a command only when this file IS the command (both sides realpath-d, so a symlinked checkout
+// still runs), so pngAncillary can be imported without the CLI firing.
+const realOf = (p) => { try { return realpathSync(p); } catch { return p; } };
+if (process.argv[1] && realOf(process.argv[1]) === realOf(fileURLToPath(import.meta.url))) {
+  const [cmd, ...rest] = process.argv.slice(2);
+  if (cmd === "deal") deal(rest);
+  else if (cmd === "frame") frame(rest);
+  else if (cmd === "check") check(rest);
+  else if (cmd === "score") score(rest);
+  else if (cmd === "unblind") unblind(rest);
+  else if (cmd === "catch-rate") catchRate(rest);
+  else fail("usage: design-jury.mjs deal|frame|check|score|unblind|catch-rate --root R --id ID ...");
+}
