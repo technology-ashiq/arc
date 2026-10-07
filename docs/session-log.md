@@ -682,3 +682,19 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-09-30 23:23 — feat/arc-org-cycle18
 - Last commit: 3e560efe docs(org): record CI 19/19 green at 3d1a29dc
 - Uncommitted files at exit: 3
+
+## 2026-10-06 01:00 — feat/legal-phase-closes
+- Last commit: 1f6acddf feat(legal): Phase 01 -- the re-publish diff names the facts field that moved, before the stamp
+- Uncommitted files at exit: 4
+
+## 2026-10-06 01:17 — feat/legal-phase-closes
+- Last commit: cef0d6e0 fix(legal): round-1 boundary attack -- a public per-field digest is a guess-and-confirm oracle
+- Uncommitted files at exit: 5
+
+## 2026-10-06 01:40 — feat/legal-phase-closes
+- Last commit: e28fcf1d fix(legal): round-1b boundary findings, and the reachability evidence Phase 02 promised
+- Uncommitted files at exit: 5
+
+## 2026-10-06 01:48 — feat/legal-phase-closes
+- Last commit: 3f82dad6 fix(legal): round-1c boundary -- EAGAIN retried, every non-ASCII name escaped, self-attested PASS said on the row
+- Uncommitted files at exit: 6
