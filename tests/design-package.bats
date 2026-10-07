@@ -104,7 +104,7 @@ _build_clean() {
   run node "$(_pkg)" lint --root "$SANDBOX" --dir docs/design/blind-test/empty/package
   [ "$status" -eq 1 ] && [[ "$output" == *"no images"* ]] || { echo "$status $output"; false; }
   run node "$(_pkg)" build --root "$SANDBOX" --explore ex --render variant-a --out docs/elsewhere/package
-  [ "$status" -eq 1 ] && [[ "$output" == *"--out must be under docs/design/blind-test/"* ]] || { echo "$status $output"; false; }
+  [ "$status" -eq 1 ] && [[ "$output" == *"--out must be a dir inside docs/design/blind-test/<explore>/"* ]] || { echo "$status $output"; false; }
 }
 
 @test "package: the committed lexos-case-workspace-v1 package FAILS CLOSED -- its renders predate provenance" {
@@ -231,9 +231,23 @@ _build_clean() {
   node -e 'if(require(process.argv[1]).provenance!=="rival:stitch")process.exit(1)' "$m" || { echo "a rival render outside explore was stamped: $(cat "$m")"; false; }
 }
 
+# ---------- attack 0b68278 round 2 ----------
+
+@test "package: a README is refused -- prose can carry the mapping -- and the blind-test root is never a package (B5 B2)" {
+  _build_clean
+  printf "direction-1 is the guided workflow
+" > "$PKG/README.md"
+  run node "$(_pkg)" lint --root "$SANDBOX" --dir docs/design/blind-test/ex/package
+  [ "$status" -eq 1 ] && [[ "$output" == *"REFUSED NOT-ALLOWED README.md"* ]] || { echo "a README rode in the package: $status $output"; false; }
+  run node "$(_pkg)" build --root "$SANDBOX" --explore ex --render variant-a --out docs/design/blind-test
+  [ "$status" -eq 1 ] && [[ "$output" == *"--out must be a dir inside"* ]] || { echo "$status $output"; false; }
+  run node "$(_pkg)" build --root "$SANDBOX" --explore ex --render variant-a --out docs/design/blind-test/flat
+  [ "$status" -eq 1 ] && [[ "$output" == *"--out must be a dir inside"* ]] || { echo "$status $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 15 -- a @test was silently dropped"
     false
   }
 }

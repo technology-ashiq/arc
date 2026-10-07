@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-render.sh:826-835",
+      "breaking_input": "On a case-insensitive filesystem (Windows or default macOS), where the real directory is rival-stitch, run design-render.sh docs/design/explore/t/Rival-stitch/index.html --mode explore --session t--variant-a. The same hole opens with a backslash route, docs\\design\\explore\\t\\rival-stitch\\index.html, or with Ref-<16 hex> or .claude/State/Design/Refpacks in the path.",
+      "why": "The route is matched against lowercase, forward-slash glob patterns only, and any route that matches nothing keeps the default PROVENANCE=arc. The filesystem resolves the case or backslash variant to the rival or reference directory, but no pattern matches it. Explore mode then reads variant-a from the session and agrees, so a rival render is stamped arc. The packager trusts that stamp. This is a provenance default that falls through to allow.",
+      "fix": "Normalise the route before matching: lowercase it, convert backslashes to slashes, and collapse dot segments. Match case-insensitively, or realpath the route to its on-disk spelling first. Better, require a positive arc marker such as variant-<letter> and refuse any route that has none.",
+      "twin_of": "Case folded in a path comparison on a case-sensitive filesystem -> fold case only where the filesystem does"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "design-package.mjs:132-136",
+      "breaking_input": "In a checkout with no docs/design/blind-test, run build --root R --explore ex --render variant-a --out docs/design/blind-test",
+      "why": "(out + sep).startsWith(blindRoot + sep) is true when out equals blindRoot. The attack-round-1 B3 fix, requiring out strictly below blindRoot, was not applied. The package lands directly in blind-test and the manifest lands in docs/design/, outside the tree. Any --out directly under blind-test also shares one package-manifest.json path with its siblings.",
+      "fix": "Require out to start with blindRoot + sep and to differ from blindRoot. Put the manifest inside a per-package parent directory that is always at least two levels below blindRoot.",
+      "twin_of": "Paths compared without percent-encoding normalisation -> normalise both sides of a path comparison the same way"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "design-package.mjs:131,164-185",
+      "breaking_input": "Start two builds of the same --explore and --render set at the same moment.",
+      "why": "existsSync(out) is followed by mkdirSync(out, {recursive:true}), which succeeds for both runs, so there is no exclusive claim. Both copy, and both lint clean. The first run writes the manifest. The second run's wx write throws EEXIST, so its catch runs rmSync(out, recursive). That deletes the package the first run built, while the first run's manifest still says provenance arc.",
+      "fix": "Create the parent first, then mkdirSync(out) without recursive so EEXIST is the claim. Record created=true and clean up only when this run created out and the manifest.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "design-package.mjs:174-185",
+      "breaking_input": "The manifest writeFileSync fails after creating the file, for example with ENOSPC or an AV lock.",
+      "why": "The catch removes out but never the manifest. A truncated package-manifest.json stays beside a deleted package, and every later build refuses with 'already exists'. It is the stale-manifest residue B3 was meant to close, left on the throw path.",
+      "fix": "Track whether this run created the manifest. In the catch, unlink the manifest only if this run created it. Write it to a temp name and rename on success.",
+      "twin_of": "The blessing written before the gate -> write the record only after the check passes, exclusively, and clean up on any throw"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "design-package.mjs:30,101",
+      "breaking_input": "Add README.md to a clean package containing 'direction-1 = variant-a, direction-2 = Stitch', or any large or unrelated text, then run lint.",
+      "why": "README.md is exempt from every check: content, size, and what it names. The module comment says the image-to-variant mapping must never be in the package, and the manifest is kept beside the package for that reason. The only enforcement is the file name, so README.md can carry the mapping, a rival's authorship, or a long text blob and still lint clean with exit 0.",
+      "fix": "Do not allow a free-form README. Either drop README.md from TEXT_ALLOWED, or require build to generate it from a fixed template and compare the bytes exactly. At minimum cap its size and refuse variant-, rival, direction-N=, or sha-like content.",
+      "twin_of": "An allow list, never a catch-all exit 0"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:206-208",
+      "breaking_input": "A hq.policy.yaml with `notes: |` followed by an indented line `  spend: { level: L3 }`, or an indented spend line inside a denied or example block, or a spend line under an unrelated kind.",
+      "why": "The fix is still a regex over lines. Any indented spend line counts, whether it sits in a block scalar, a non-kind section, or a disabled entry. The maximum is taken over every kind in the file, not the kind that applies to design. Text that was never a grant raises the cap, and a paid source then turns on.",
+      "fix": "Parse the policy with the engine's frozen YAML subset loader. Read spend only from kinds.<k>.spend for the kind that governs refpack or design, and refuse if the file does not parse.",
+      "twin_of": "An authority read by regex over the whole file -> the repository's own policy, comments dropped, one line at a time"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "design-refpack.mjs:~678-688 (drop)",
+      "breaking_input": "Between lstatSync and openSync, replace the dropped path with a FIFO or with a symlink to another image.",
+      "why": "The B11 fix reads through one descriptor but never calls fstat on it. A FIFO makes openSync or readSync block forever. A swapped symlink is followed and read, so the earlier link and regular-file checks no longer apply to the bytes read.",
+      "fix": "After openSync, call fstatSync(fd). Require isFile() and size <= cap, and compare dev and ino with the lstat result.",
+      "twin_of": "A size checked on a snapshot and the read left unbounded -> one descriptor, read capped at the limit plus one"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "design-package.mjs:40-49,96-101",
+      "breaking_input": "Make a refpacks/<brief> directory a junction to another drive, or make one pack file unreadable (EACCES), then lint a package containing that screen's bytes.",
+      "why": "walk() skips links and swallows readdir errors, and galleryIndex swallows per-file read errors as 'not a pack image'. The GALLERY check silently misses those bytes, and the image then depends only on the receipt checks. An error is read as absent.",
+      "fix": "Make galleryIndex fail closed. If any pack directory or file cannot be read, or a link is found under refpacks, refuse the lint with a named line.",
+      "twin_of": "A failing probe command read as 'not applicable' -> only a positive 'absent' skips; an error is a failure"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-render.sh:826 (_prov_refuse)",
+      "breaking_input": "Render explore session ex--variant-a at iter 1 successfully, then repeat the same session and iter with a route under rival-x so the stamp refuses.",
+      "why": "If the PNG and META paths are keyed by session, viewport and iter, the refusal's rm -f deletes the earlier good render and its receipt, which this run did not create. The new screenshot has already overwritten the file.",
+      "fix": "Capture to a private temp path and move it into place only after provenance is accepted. Remove only that temp file on refusal.",
+      "twin_of": "Cleanup deleted a content-addressed file an earlier run owned -> clean up only what this run created"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "design-package.mjs:127-131",
+      "breaking_input": "build ... --out docs/design/blind-test/ex/aux/package, or an out path whose segment ends in a dot or a space.",
+      "why": "--explore is held to the id grammar and the Windows reserved list, but the free --out path is not. On Windows the reserved name or trailing dot is rewritten by the Win32 layer, so existsSync, mkdir and rmSync can act on different names. The result is a failure with a stack trace or cleanup of the wrong directory.",
+      "fix": "Validate every segment of out below blindRoot against the id grammar plus the reserved-name list, and refuse trailing dot or space.",
+      "twin_of": "A name grammar copied without its reserved-word half -> a name that becomes a path carries both halves of the grammar, everywhere it is accepted"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-sources-lint.mjs:199-201",
+      "breaking_input": "Export ARC_DESIGN_OFFLINE=1 and ARC_DESIGN_POLICY_FILE=<any file with spend level L5> and run the lint on a registry with a paid trial source.",
+      "why": "The owner-only spend authority can be replaced by an environment variable in a production CLI. A paid source then passes with exit 0 and nothing in the output says a fixture policy was used.",
+      "fix": "Stamp the output with 'FIXTURE POLICY' whenever the seam is used. Refuse the seam unless the file path sits under the test temp directory, and never let a seamed run print a clean verdict that looks like the real one.",
+      "twin_of": "A test seam forwarded from the hook's inherited environment -> a seam in a production path needs a second, path-specific switch, and its answers are stamped as fixture"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "design-package.mjs:160-171",
+      "breaking_input": "Between ownRender and copyFileSync, replace variant-a's png with another arc render's bytes (variant-b's), whose own receipt is valid.",
+      "why": "The bytes were judged at ownRender and copied later, with no re-hash of what was copied. The post-copy lint only checks that the bytes match some arc receipt. The manifest still records variant-a's sha and receipt for direction-1, so the unblinding map is wrong while every gate is green.",
+      "fix": "Read the file once, hash it, compare to p.sha, and write those same bytes. After the copy, compare each package file's hash to its own p.sha and refuse on mismatch.",
+      "twin_of": "\"Look before you write\" not bound to the bytes looked at -> bind a judgement to the content hash it was made on"
+    }
+  ]
+}

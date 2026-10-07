@@ -45,7 +45,7 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, closeSync, existsSync, linkSync, lstatSync, mkdirSync, openSync, readSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -677,6 +677,8 @@ function drop(argv) {
   {
     const fd = openSync(src, "r");
     try {
+      // The descriptor itself is a regular file: a FIFO or a device swapped in after the lstat never blocks the read (0b68278 B7).
+      if (!fstatSync(fd).isFile()) fail(1, "the dropped file is a link or not a regular file");
       const buf = Buffer.alloc(MAX_DROP_BYTES + 1);
       let got = 0, n;
       while (got < buf.length && (n = readSync(fd, buf, got, buf.length - got, null)) > 0) got += n;

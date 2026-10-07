@@ -23,9 +23,9 @@ const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
 const clean = (v) => String(v).replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g, " ");
 const sha256 = (b) => createHash("sha256").update(b).digest("hex");
-// The one text file a package may carry beside its images. The image-to-variant mapping is NOT one: it
-// would tell a blind respondent which direction is which, so it is written BESIDE the package, never in it.
-const TEXT_ALLOWED = new Set(["README.md"]);
+// A package carries images and nothing else. A README could say which direction is which as easily as the
+// mapping could, and no check reads prose (attack 0b68278 B5), so any text lives BESIDE the package.
+const TEXT_ALLOWED = new Set();
 
 function fail(msg) {
   console.log(`design-package: ${clean(msg)}`);
@@ -114,7 +114,7 @@ export function lintPackage(dir, renders, gallery) {
     if (e.isDirectory()) { findings.push({ file: e.name, cls: "NOT-ALLOWED", detail: "a directory -- a package is flat" }); continue; }
     if (!e.isFile()) { findings.push({ file: e.name, cls: "NOT-ALLOWED", detail: "not a regular file" }); continue; }
     if (TEXT_ALLOWED.has(e.name)) continue;
-    if (extname(e.name).toLowerCase() !== ".png") { findings.push({ file: e.name, cls: "NOT-ALLOWED", detail: `a ${extname(e.name) || "typeless"} file -- a package carries PNG renders and README.md only` }); continue; }
+    if (extname(e.name).toLowerCase() !== ".png") { findings.push({ file: e.name, cls: "NOT-ALLOWED", detail: `a ${extname(e.name) || "typeless"} file -- a package carries PNG renders only; notes live beside it` }); continue; }
     images++;
     const h = sha256(readFileSync(p));
     // One direction, one file: the same render twice is a package that claims more directions than it has.
@@ -164,7 +164,8 @@ function build(argv) {
   }
   const out = resolve(root, o["--out"] ?? join("docs", "design", "blind-test", id, "package"));
   const blindRoot = resolve(root, "docs", "design", "blind-test");
-  if (!(out + sep).startsWith(blindRoot + sep)) fail("--out must be under docs/design/blind-test/");
+  // Strictly below, one dir per explore: the blind-test root itself is never a package (0b68278 B2).
+  if (!(out + sep).startsWith(blindRoot + sep) || dirname(out) === blindRoot || out === blindRoot) fail("--out must be a dir inside docs/design/blind-test/<explore>/");
   if (existsSync(out)) fail(`${relative(root, out).split(sep).join("/")} already exists; a package is built once, into an empty place`);
   // Lexical containment is not containment: every existing component from the repo root down to the package's
   // parent is a real directory, not a link, so the copies and the cleanup land where the name says (12b79c2 L4 B5).
@@ -201,12 +202,16 @@ function build(argv) {
   // neither behind (12b79c2 L7 B3 B4).
   let findings;
   try {
-    mkdirSync(out, { recursive: true });
+    // The parent may exist; the package dir itself is claimed exclusively, so two builds cannot share it (B3).
+    mkdirSync(dirname(out), { recursive: true });
+    mkdirSync(out);
     for (const p of picked) copyFileSync(p.file, join(out, p.name));
     findings = lintPackage(out, renderIndex(root), galleryIndex(root));
     report(findings, relative(root, out).split(sep).join("/"));
     if (!findings.length) writeFileSync(manifest, `${JSON.stringify({ explore: id, built: new Date().toISOString(), viewport, files: picked.map((p) => ({ file: p.name, sha256: p.sha, receipt: p.meta, provenance: "arc" })) }, null, 2)}\n`, { flag: "wx" });
   } catch (e) {
+    // A manifest this run half-wrote goes too; one from another run was refused up front (B4).
+    try { rmSync(manifest, { force: true }); } catch { /* reported below */ }
     findings = [{ file: basename(out), cls: "NOT-ALLOWED", detail: `the build failed (${e.code || e.message})` }];
     report(findings, relative(root, out).split(sep).join("/"));
   }
