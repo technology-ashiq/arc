@@ -164,9 +164,15 @@ if [ "$MODE" = "explore" ]; then
     echo "  $1" >&2
     exit 1
   }
+  # Every segment is a plain name -- no empty, `.` or `..` segment anywhere in the route -- checked before
+  # any pattern can let `*` cross a `/` (attack ae0aeb8 L9, B10).
+  case "/$ROUTE/" in
+    *//*|*/./*|*/../*) _explore_route_refuse "The route carries an empty, '.' or '..' segment.";;
+  esac
   case "$ROUTE" in
     *:*) _explore_route_refuse "A URL or a drive path is never an explore page.";;
     docs/design/explore/*/variant-?/?*) ;;
+    docs/design/explore/*/rival-*/?*) ;;
     *) _explore_route_refuse "The route is not a page inside a variant directory.";;
   esac
   # `*` in a case pattern crosses `/`, so each part is taken apart and checked on its own.
@@ -180,7 +186,16 @@ if [ "$MODE" = "explore" ]; then
   esac
   case "$_er_variant" in
     variant-[abcdefghijklmnopqrstuvwxyz]) ;;
-    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter>.";;
+    # A rival draft (Phase 07, ADR-1422): its vendored copy, in a gitignored rival-<provider>/ dir,
+    # is served and recorded exactly like a variant -- one render path, the renderer never learns more.
+    # The provider half carries the whole name grammar, reserved device names included (attack 65d01cc B7).
+    # The variant part is the SECOND path segment by construction above, so `*` crossing `/` in the route
+    # pattern never makes a deeper directory the rival dir (B13, L14).
+    rival-*)
+      case "${_er_variant#rival-}" in
+        ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|con|prn|aux|nul|com[0123456789]|lpt[0123456789]) _explore_route_refuse "The rival directory must be rival-<lowercase kebab provider>.";;
+      esac;;
+    *) _explore_route_refuse "The variant directory must be variant-<one lowercase letter> or rival-<provider>.";;
   esac
   case "/$EXPLORE_PAGE/" in
     *//*|*/./*|*/../*) _explore_route_refuse "The page is not a plain path inside the variant.";;
