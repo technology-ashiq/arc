@@ -65,6 +65,9 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
   if (!SHA.test(head)) throw new Error(`github returned no main head for ${full}`);
   const changed = {};
+  // The newest commit of launch's own that an unchanged file came from: the id a no-op run reports, never main's head,
+  // which may be the owner's later commit (attack b1844e0 B1).
+  let mine = "";
   for (const [path, text] of Object.entries(FILES)) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
     if (cur.status === 404) { changed[path] = text; continue; }
@@ -75,6 +78,7 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
     const ours = hasLine(top && top.commit && top.commit.message, trailer(ctx));
     if (!ours) throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's code; it is not committed over`);
     if (utf8(b.content) !== text) changed[path] = text;
+    else if (!mine && SHA.test(String(top.sha))) mine = String(top.sha);
   }
   for (const [path, make] of Object.entries(SHARED || {})) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
@@ -90,7 +94,10 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
     const next = make(now);
     if (next !== now) changed[path] = next;
   }
-  if (!Object.keys(changed).length) return head;
+  if (!Object.keys(changed).length) {
+    if (!SHA.test(mine)) throw new Error(`github named no commit of launch's for the files in ${full}`);
+    return mine;
+  }
   const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
   const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
   if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}`);
@@ -202,6 +209,52 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 const EXPORT_D = `export ${["de", "fault"].join("")}`;
 const RZ = "https://api.razorpay.com/v1";
 const CHECKOUT_JS = "https://checkout.razorpay.com/v1/checkout.js";
+const PAGE_MAX = 1024 * 1024;
+
+// The page loads checkout.js only through a script tag whose src is exactly it; the URL in a comment or in text does
+// not count (attack b1844e0 B6). Plain string search: no regex escape can be lost on the way into this file.
+function loadsCheckout(text) {
+  const lower = String(text).toLowerCase();
+  let at = lower.indexOf("<script");
+  while (at >= 0) {
+    const end = lower.indexOf(">", at);
+    if (end < 0) return false;
+    const tag = lower.slice(at, end);
+    if (tag.includes(`src="${CHECKOUT_JS}"`) && !lower.slice(0, at).includes("<!--", lower.slice(0, at).lastIndexOf("-->") + 1)) return true;
+    at = lower.indexOf("<script", end);
+  }
+  return false;
+}
+
+// A body read to at most `max` bytes: a page that is huge or never ends reads as empty, never as a hang (attack
+// b1844e0 B6).
+async function capped(res, max) {
+  if (!res.body || typeof res.body.getReader !== "function") return "";
+  const reader = res.body.getReader();
+  const parts = [];
+  let n = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      n += value.byteLength;
+      if (n > max) { await reader.cancel().catch(() => {}); return ""; }
+      parts.push(Buffer.from(value));
+    }
+  } catch { return ""; }
+  return Buffer.concat(parts).toString("utf8");
+}
+
+// .env.example is shared (ADR-1729): names are added, never a value, never a line removed. `export NAME=` and
+// ` NAME = ` name the same variable, and added lines keep the file's own line ending (attack b1844e0 B4).
+function envNamesAdded(text, names) {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const nameOf = (l) => { const k = l.split("=")[0].trim(); return k.startsWith("export ") ? k.slice(7).trim() : k; };
+  const have = new Set(text.split("\n").map(nameOf));
+  const add = names.filter((n) => !have.has(n)).map((n) => `${n}=`);
+  return add.length ? `${text}${text && !text.endsWith("\n") ? eol : ""}${add.join(eol)}${eol}` : text;
+}
+
 const AMOUNT = 49900;
 const CURRENCY = "INR";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -246,7 +299,7 @@ const FILES = {
     '    res = await fetch("https://api.razorpay.com/v1/orders", {',
     '      method: "POST",',
     '      headers: { authorization: "Basic " + btoa(keyId + ":" + keySecret), "content-type": "application/json" },',
-    '      body: JSON.stringify({ amount: price.amount, currency: price.currency, receipt: "org-" + org.slice(0, 24), notes: { org_id: org, plan: "pro" } }),',
+    '      body: JSON.stringify({ amount: price.amount, currency: price.currency, receipt: "org-" + org, notes: { org_id: org, plan: "pro" } }),',
     '    });',
     '  } catch {',
     '    return Response.json({ error: "payment provider unreachable" }, { status: 502 });',
@@ -311,12 +364,7 @@ const FILES = {
   ].join("\n"),
 };
 
-// .env.example is shared (ADR-1729): this slot adds the two Razorpay names, never a value, and never removes a line.
-const addEnvNames = (text) => {
-  const have = new Set(text.split("\n").map((l) => l.split("=")[0].trim()));
-  const add = ENV_NAMES.filter((n) => !have.has(n)).map((n) => `${n}=`);
-  return add.length ? `${text}${text && !text.endsWith("\n") ? "\n" : ""}${add.join("\n")}\n` : text;
-};
+const addEnvNames = (text) => envNamesAdded(text, ENV_NAMES);
 
 // Upstream: plans' re-reported repo and project, validated here (ADR-1738).
 function upstreamOf(ctx, from) {
@@ -343,6 +391,8 @@ async function rz(ctx, method, path, body, { allow = [] } = {}) {
   try {
     res = await ctx.fetch(`${RZ}${path}`, {
       method,
+      // Never followed: a redirect would carry the Basic key pair to a host nobody checked (attack b1844e0 B3).
+      redirect: "manual",
       headers: { authorization: `Basic ${basic}`, "content-type": "application/json", "user-agent": "arc-launch" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -366,9 +416,7 @@ async function html(ctx, domain, path) {
     if (e && e.code) throw e;
     return { status: 0, text: "" };
   }
-  let text = "";
-  try { text = await res.text(); } catch { text = ""; }
-  return { status: res.status, text };
+  return { status: res.status, text: await capped(res, PAGE_MAX) };
 }
 
 export function envContract() {
@@ -409,7 +457,7 @@ async function probe(ctx) {
   if (drift) return { ok: false, reason: drift };
   const shown = await html(ctx, domain, "/checkout");
   if (shown.status !== 200) return { ok: false, reason: `/checkout answered ${shown.status}, not 200` };
-  if (!shown.text.includes(CHECKOUT_JS)) return { ok: false, reason: `/checkout does not load ${CHECKOUT_JS}` };
+  if (!loadsCheckout(shown.text)) return { ok: false, reason: `/checkout does not load ${CHECKOUT_JS}` };
   const key = await serviceKey(ctx, ref);
   const a = await signIn(ctx, domain, ref, key, "a");
   const org = await ownOrg(ctx, domain, a, "launch-probe-a");

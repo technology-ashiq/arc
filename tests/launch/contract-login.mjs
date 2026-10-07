@@ -283,7 +283,7 @@ switch (scenario) {
     out.verify = await A[CO].mod.verify(ctxFor(CO));
     const o = rz.store[rz.store.length - 1] || {};
     const probeOrg = orgId("launch-probe-a");
-    out.order = { id: o.id, amount: o.amount, currency: o.currency, forProbeOrg: !!probeOrg && (o.notes || {}).org_id === probeOrg, plan: (o.notes || {}).plan, receipt: o.receipt === `org-${String(probeOrg).slice(0, 24)}` };
+    out.order = { id: o.id, amount: o.amount, currency: o.currency, forProbeOrg: !!probeOrg && (o.notes || {}).org_id === probeOrg, plan: (o.notes || {}).plan, receipt: o.receipt === `org-${String(probeOrg)}` };
     out.verifyAgain = await A[CO].mod.verify(ctxFor(CO));
     out.creates = creates();
     out.kinds = state[CO].map((r) => r.kind);

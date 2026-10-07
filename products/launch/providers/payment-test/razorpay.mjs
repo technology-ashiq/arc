@@ -31,6 +31,8 @@ async function rz(ctx, method, path, body, { allow = [] } = {}) {
   try {
     res = await ctx.fetch(`${API}${path}`, {
       method,
+      // Never followed: a redirect would carry the Basic key pair to a host nobody checked (attack b1844e0 B3).
+      redirect: "manual",
       headers: { authorization: `Basic ${basic}`, "content-type": "application/json", "user-agent": "arc-launch" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

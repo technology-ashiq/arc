@@ -606,6 +606,12 @@ arm() {
   [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: a no-op frontend reports launch's own commit, not the owner's later head, and identical owner bytes are refused (attack b1844e0 B1)" {
+  arm release owner-later-commits
+  [ "$(j 'o.firstId === o.againId')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.headIsOwner + " " + o.adopted.ok + " " + o.adopted.code')" = "false false FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: release does not lift a vercel.json the owner rewrote after hosting" {
   arm release owner-rewrote-hold
   [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }

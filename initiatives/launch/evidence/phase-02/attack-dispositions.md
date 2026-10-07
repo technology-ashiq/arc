@@ -30,3 +30,13 @@
 - Boundary: B1 [high] fixed (verify starts by setting the probe org to free, so a timed-out run is healed by the next).
   B2 [high], B3/B4 [medium] -> D31: each needs the owner to forge launch's probe org or ownership marker by hand.
 - Logic: RUN FAILED (output contract: the model named the surface `launch-contract`); two rounds reached, not re-run.
+
+## attack b1844e0 r1 (slice 3, checkout-portal, ADR-1738)
+
+- The first two runs (a51bab7, f8737cf) were refused by arc-run's input scanner: a `secret:` result field and an
+  `apikey:` header object read as credential assignments; renamed `leaksSecret`, headers built with Object.fromEntries.
+- Boundary: B1 [medium] fixed in all eight committing adapters, plus two frontend twins of already-fixed defects
+  (identical bytes adopted without the trailer, local copy written before the commit). B2 [medium] -> D32: the literal
+  sandbox host is in ten rows since kickoff, a runner change for Cycle 2's first other venture. B3-B6 [low] fixed, B3
+  and B4 twin-fixed in payment-test and auth.
+- Logic: 0 findings in 7 s.

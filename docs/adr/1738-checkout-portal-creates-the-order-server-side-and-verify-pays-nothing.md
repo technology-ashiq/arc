@@ -34,7 +34,7 @@ Option 2.
   - `lib/prices.js` — `pro` costs 49900 paise in INR (₹499), and is the only paid plan.
   - `app/api/checkout/route.js` — `POST {org}` answers 401 when signed out, 400 for an id that is not a uuid, and 403
     when the caller is not a member. Otherwise it creates an order with Basic auth from the server's env: amount and
-    currency from `lib/prices.js`, receipt `org-<first 24 of the org id>`, notes `{ org_id, plan: "pro" }`. It
+    currency from `lib/prices.js`, receipt `org-<the whole org id>` (40 characters, Razorpay's limit; attack b1844e0 B5), notes `{ org_id, plan: "pro" }`. It
     answers 201 `{ order_id, key_id, amount, currency }`. The secret never leaves the server, and a `rzp_live_` key
     id in the server's env answers 503: the portal never sells live from a launch-built route (gate 3, ADR-1720).
   - `app/checkout/page.js` — a page that loads `https://checkout.razorpay.com/v1/checkout.js` and opens it from the
