@@ -1,0 +1,372 @@
+{
+  "subject": "legal.publish",
+  "venture": "fixture-gateway-nogst",
+  "effective_date": "2026-10-14",
+  "facts_sha256": "7be45631513395e8dea79bf7125a5c8a263c1c2ac425694f18cd5456557250d0",
+  "template_set_sha": "4f1e24314935d86d5a7bcc42315762111c7948aa155e350cac4e7531b207e701",
+  "decision": {
+    "id": "01M498QE6KV4T17YESB7DV18WX",
+    "decides": "01M498H3WKN5SNS9TPHYMY2JZT",
+    "recorded_at": "2026-10-07T00:18:29+05:30"
+  },
+  "pages": [
+    {
+      "page": "about",
+      "output_sha256": "2d347d182903ad2eb325a7acefd9cec1eac5c93febbe523a3066acd6dc719bd2"
+    },
+    {
+      "page": "contact",
+      "output_sha256": "d404ecc9a65f960b84a6bea321b5cdb9d5ab38c31d229381942881f1a1ea0e7b"
+    },
+    {
+      "page": "pricing",
+      "output_sha256": "de0ce584583470cf176d21ec3de37a3a1183178905415a520ba07d8074cd5dcb"
+    },
+    {
+      "page": "privacy",
+      "output_sha256": "6b6df4a69f398b5e16ec898265c3567c158ebe160a52b6a787815f55dddbe4f2"
+    },
+    {
+      "page": "refund-cancellation",
+      "output_sha256": "ddbb66c0d08c65ed0a67858d96c00820c9fac1b2d0a233c85b9300f23868002f"
+    },
+    {
+      "page": "shipping-delivery",
+      "output_sha256": "753d3fc4d07667cf25490058af3c737d91ba5b8237afcb089c61b3d8b31bc414"
+    },
+    {
+      "page": "terms",
+      "output_sha256": "8853670252f6fd18b0fb4c47bf7be237fe1dbc976b517b4723d47b658107cc1c"
+    }
+  ],
+  "semantic_diff": null,
+  "run": {
+    "engine_version": "arc-legal/0.1.0",
+    "preimage_version": "arc-legal-canon/1",
+    "template_set": "v1",
+    "template_set_sha": "4f1e24314935d86d5a7bcc42315762111c7948aa155e350cac4e7531b207e701",
+    "venture": "fixture-gateway-nogst",
+    "payment_model": "gateway",
+    "facts_sha256": "7be45631513395e8dea79bf7125a5c8a263c1c2ac425694f18cd5456557250d0",
+    "facts_fields": {
+      "analytics": "56e658ff997f5d440d1f41e3e7a02df42ed2efcb2222a1c5c452aaa9b27a1a3e",
+      "commitments.breach_notice_hours": "29b2cf22c8170a5a5753663f81f7de8726a11baa5dd31c564f48b9ac8d58b4ad",
+      "commitments.deletion_backup_days": "eb2634193964b242479cdc2678d050c24d1af8726b328acbb7a7b030e4fe1dcd",
+      "commitments.deletion_live_days": "bfbac481cafdef471c1668048db3be84c12e6ff4595a0629d356ef78a0a1e48b",
+      "commitments.payment_failure_grace_days": "c8e98c76489b41a586a7a036508464613926282bf958b855f182e03b56566124",
+      "commitments.price_notice_days": "47384e87ca8b7f0f93509cd4f6bcf86d786fa0712f07905507802905d30c318d",
+      "commitments.refund_decision_days": "6a722ef7bbcfeb9e304debf2249f71bfba00faee1702359b2bd156ba63bd0c05",
+      "commitments.renewal_notice_days": "d2007da4c143350f50754648138a3f57d19dcb7f83a9514c4d64649660cba389",
+      "data_categories": "4457aab6e362c4ddcaced2a175a5e47ddb36288abd559ff5ff234df5d7b035e8",
+      "deletion_route.mailbox": "561cfcc7cd74033ce5f7b3cc5dc1456c41cf371621d5b9149cc5b2300d564fea",
+      "delivery.access_within_hours": "e664ecaf55fb74a8d62f8bce9978f38ae03d5f4fb33675158d45dd616965f081",
+      "effective_date": "9058097eee6aba6c5cfa639bde427df3e112713793471f7dd9096cd1605063ae",
+      "geographic_address": "79a522cfb32b710408ca69657d47846ec005f002c402ec077b7f9c23fdffac40",
+      "grievance.address": "f042ad3cd61945aad54d59b5bb9744c3f233253ff4e67682808b4ecc160fd918",
+      "grievance.email": "4aa668e2571fc73146a60d582272064a3587b37176656a5bfd85ca230d07ab3e",
+      "grievance.name": "4f26088949c7b0ec8f6aff9e84e2917b7dff728f42a88882ad618889c26102e4",
+      "operator.legal_name": "2484b9d1e3a6d106ddac66a9c34e1aa0c585d7bbdb6de5903a987a57ce0ed645",
+      "operator.trade_name": "d27c05ef64d7362cdd94d68d945a37d1b9c4b802609261b1637f0fa23bb1dfef",
+      "operator.type": "17bc995b720305afccf8cb4420c5a24c4a8d04adaa98741644696c9f49a74f91",
+      "payment_provider": "6525fa3c6381fd7b4948aeb51560c80da6fa117e72287f00f3c932dd44785a94",
+      "pricing.period": "43779cd747b685ba2f07bbe2ddf5aded1dc41d2c1b2fcf3d6bd0656e3fefe91e",
+      "pricing.plan_amounts_inr": "e3db89d27f3feb4df86d68803453c31c0f5d46d9d0ed849c58084aa76de81863",
+      "pricing.plan_names": "9eda62bf3c65b483c331e89967668aeadceab1a9f7173893c7d0bf14ceb61a97",
+      "purposes": "2c170a81e86289e04e7a8be471edfc03ae222744405c38f47c345c95feec2325",
+      "refund_window_days": "12c7670122845ccfd8aec5eb760130677a264eb2ce00bf64c2fdcbc80106b53c",
+      "retention": "ed9259b41338e0dccda3eb10cb6130136fd0d9c0aff879764ba44d638b36c003",
+      "site_url": "8c12ab8a782017a4a7c43c815f84498308219104bcf26a8396c16d38ceac0317",
+      "sub_processors": "0ef2adcf9c16008b154a126bf79f842c6e0469efcb7db71febdeb8f777869495",
+      "support.email": "585c583ee6807f9a47f3a8f41c4018afd69f03c26d96daa5f33347b3134f94d4",
+      "support.phone": "8dc89291f84e046179f2b79a596e4a8ac7096d89c4f774e88cfbbcd9b5a4fa75",
+      "(fields no page prints)": "d35324b9b3191fe29db2aeb241420eade1d3d4c06e42b454355bff598919fc04"
+    },
+    "effective_date": "2026-10-14",
+    "grievance_windows": {
+      "ack_hours": 48,
+      "resolve_days": 30,
+      "instruments": [
+        "Consumer Protection (E-Commerce) Rules 2020"
+      ],
+      "pending": [
+        "DPDP Rules 2025, Rule 14(3) (from 2027-05-13)"
+      ]
+    },
+    "pages": [
+      {
+        "page": "terms",
+        "title": "Terms and Conditions",
+        "route": "/legal/terms",
+        "provider": "required",
+        "file": "terms.mdx",
+        "output_sha256": "8853670252f6fd18b0fb4c47bf7be237fe1dbc976b517b4723d47b658107cc1c",
+        "clauses": [
+          "TERMS.PARTIES",
+          "TERMS.SERVICE",
+          "TERMS.ELIGIBILITY",
+          "TERMS.ACCOUNT",
+          "TERMS.ACCEPTABLE_USE",
+          "TERMS.FEES.GATEWAY",
+          "TERMS.IP",
+          "TERMS.TERMINATION",
+          "TERMS.LIABILITY",
+          "TERMS.GOVERNING_LAW",
+          "TERMS.CHANGES",
+          "TERMS.NOT_LEGAL_ADVICE",
+          "TERMS.CONTACT"
+        ],
+        "skipped": [
+          {
+            "id": "TERMS.PROCESSOR_ROLE",
+            "when": "stores_third_party_client_data=true"
+          },
+          {
+            "id": "TERMS.FEES.MOR",
+            "when": "payment_model=mor"
+          },
+          {
+            "id": "TERMS.FEES.OFFLINE",
+            "when": "payment_model=none"
+          }
+        ],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      },
+      {
+        "page": "privacy",
+        "title": "Privacy Policy",
+        "route": "/legal/privacy",
+        "provider": "required",
+        "file": "privacy.mdx",
+        "output_sha256": "6b6df4a69f398b5e16ec898265c3567c158ebe160a52b6a787815f55dddbe4f2",
+        "clauses": [
+          "PRIVACY.IDENTITY",
+          "PRIVACY.NOTICE.STATUS",
+          "PRIVACY.NOTICE.ITEMISED",
+          "PRIVACY.NOTICE.PURPOSES",
+          "PRIVACY.SUBPROCESSORS",
+          "PRIVACY.RETENTION",
+          "PRIVACY.DELETION",
+          "PRIVACY.RIGHTS",
+          "PRIVACY.WITHDRAW",
+          "PRIVACY.GRIEVANCE",
+          "PRIVACY.COMPLAINT.BOARD",
+          "PRIVACY.LANGUAGE",
+          "PRIVACY.ANALYTICS",
+          "PRIVACY.SECURITY",
+          "PRIVACY.CHANGES"
+        ],
+        "skipped": [
+          {
+            "id": "PRIVACY.PROCESSOR",
+            "when": "stores_third_party_client_data=true"
+          }
+        ],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      },
+      {
+        "page": "refund-cancellation",
+        "title": "Cancellation and Refunds",
+        "route": "/legal/refunds",
+        "provider": "required",
+        "file": "refund-cancellation.mdx",
+        "output_sha256": "ddbb66c0d08c65ed0a67858d96c00820c9fac1b2d0a233c85b9300f23868002f",
+        "clauses": [
+          "REFUND.SCOPE",
+          "REFUND.WINDOW",
+          "REFUND.PROCESSING",
+          "REFUND.BILLING_ERROR",
+          "REFUND.DELIVERY_FAILURE",
+          "REFUND.HOW_TO_REQUEST",
+          "CANCEL.PATH",
+          "CANCEL.AUTORENEW",
+          "CANCEL.NO_MAZE",
+          "CANCEL.EFFECT",
+          "REFUND.NO_GST",
+          "REFUND.DISPUTE.GATEWAY",
+          "REFUND.CONTACT"
+        ],
+        "skipped": [
+          {
+            "id": "REFUND.MOR",
+            "when": "payment_model=mor"
+          },
+          {
+            "id": "REFUND.OFFLINE",
+            "when": "payment_model=none"
+          },
+          {
+            "id": "REFUND.PROCESSING.MOR",
+            "when": "payment_model=mor"
+          },
+          {
+            "id": "REFUND.PROCESSING.OFFLINE",
+            "when": "payment_model=none"
+          },
+          {
+            "id": "REFUND.GST_INVOICE",
+            "when": "derived.invoice_kind=gst"
+          },
+          {
+            "id": "REFUND.MOR_INVOICE",
+            "when": "derived.invoice_kind=provider"
+          },
+          {
+            "id": "REFUND.DISPUTE.MOR",
+            "when": "payment_model=mor"
+          },
+          {
+            "id": "REFUND.DISPUTE.OFFLINE",
+            "when": "payment_model=none"
+          }
+        ],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      },
+      {
+        "page": "shipping-delivery",
+        "title": "Shipping and Delivery",
+        "route": "/legal/shipping",
+        "provider": "required",
+        "file": "shipping-delivery.mdx",
+        "output_sha256": "753d3fc4d07667cf25490058af3c737d91ba5b8237afcb089c61b3d8b31bc414",
+        "clauses": [
+          "DELIVERY.NATURE",
+          "DELIVERY.WHEN",
+          "DELIVERY.WHERE",
+          "DELIVERY.FAILURE",
+          "DELIVERY.CONTACT"
+        ],
+        "skipped": [
+          {
+            "id": "DELIVERY.WHEN.OFFLINE",
+            "when": "derived.payment_is_automatic=no"
+          }
+        ],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      },
+      {
+        "page": "contact",
+        "title": "Contact Us",
+        "route": "/contact",
+        "provider": "required",
+        "file": "contact.mdx",
+        "output_sha256": "d404ecc9a65f960b84a6bea321b5cdb9d5ab38c31d229381942881f1a1ea0e7b",
+        "clauses": [
+          "CONTACT.WHO",
+          "CONTACT.HOW",
+          "CONTACT.GRIEVANCE",
+          "CONTACT.DELETION"
+        ],
+        "skipped": [],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      },
+      {
+        "page": "pricing",
+        "title": "Pricing",
+        "route": "/pricing",
+        "provider": "conditional",
+        "file": "pricing.mdx",
+        "output_sha256": "de0ce584583470cf176d21ec3de37a3a1183178905415a520ba07d8074cd5dcb",
+        "clauses": [
+          "PRICING.PLANS",
+          "PRICING.NO_GST",
+          "PRICING.CHANGES",
+          "PRICING.WHAT_YOU_PAY_WITH",
+          "PRICING.CONTACT"
+        ],
+        "skipped": [
+          {
+            "id": "PRICING.GSTIN",
+            "when": "derived.invoice_kind=gst"
+          },
+          {
+            "id": "PRICING.WHAT_YOU_PAY_WITH.MOR",
+            "when": "payment_model=mor"
+          },
+          {
+            "id": "PRICING.WHAT_YOU_PAY_WITH.OFFLINE",
+            "when": "payment_model=none"
+          }
+        ],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      },
+      {
+        "page": "about",
+        "title": "About Us",
+        "route": "/about",
+        "provider": "conditional",
+        "file": "about.mdx",
+        "output_sha256": "2d347d182903ad2eb325a7acefd9cec1eac5c93febbe523a3066acd6dc719bd2",
+        "clauses": [
+          "ABOUT.WHO",
+          "ABOUT.WHAT",
+          "ABOUT.HOW_TO_REACH",
+          "ABOUT.NO_CLAIMS"
+        ],
+        "skipped": [
+          {
+            "id": "ABOUT.PROCESSOR_ROLE",
+            "when": "stores_third_party_client_data=true"
+          }
+        ],
+        "transforms": [
+          "crlf-to-lf",
+          "nfc-normalise-on-hash",
+          "html-escape-interpolated-values",
+          "collapse-blank-line-runs",
+          "pluralise-counted-nouns"
+        ]
+      }
+    ],
+    "not_authored": [],
+    "findings": [],
+    "trial_groups": [
+      "completeness",
+      "consistency",
+      "trace",
+      "value"
+    ],
+    "groups_run": [
+      "completeness",
+      "consistency",
+      "trace",
+      "value"
+    ],
+    "exit_code": 0
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:239",
+      "breaking_input": "The owner's Supabase project already has uri_allow_list set to their production and preview redirect URLs, and a customised magic-link template and subject. Only site_url is checked (foreign or localhost). scaffold then sends PATCH /config/auth with uri_allow_list = `${site}/**` and its own mailer subject and template.",
+      "why": "The write replaces the allow-list and the mail template wholesale. The owner's redirect URLs stop working and their template is lost. Nothing records the previous values, and the exit plan has no revert step. A new instance of the branch-protection PUT defect: it must extend, never replace.",
+      "fix": "GET the config first. Merge the allow-list as the union of the existing entries and the launch entry. Overwrite the template or subject only if the current value is empty or the Supabase default. Record the prior values in the auth-config resource so teardown can restore them.",
+      "twin_of": "A PUT replaced the owner's branch protection (reviews, restrictions) to add three checks -> every write to a setting the owner can also edit: extend, never replace"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:75-80 (commitFiles SHARED branch)",
+      "breaking_input": "The owner's .env.example is larger than 1 MB. The GitHub contents API answers type:\"file\", encoding:\"none\", content:\"\". The SHARED branch checks only `typeof content === \"string\"`, so utf8(\"\") gives \"\" and next is the two appended NEXT_PUBLIC_ lines.",
+      "why": "The commit replaces the owner's whole file with two lines. FILES checks encoding === \"base64\" but the SHARED branch dropped that guard. A non-UTF-8 or BOM file is also silently rewritten through TextDecoder with U+FFFD.",
+      "fix": "In the SHARED branch require encoding === \"base64\" and a non-truncated size, and refuse FOREIGN_FILE otherwise. Refuse when the decoded bytes do not round-trip.",
+      "twin_of": "A contents answer with no content (directory, submodule, >1 MB) was read as an empty contract"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/authz/rls-roles.mjs:216-221 and products/launch/providers/tenancy/org-invite.mjs:176-181",
+      "breaking_input": "The worker is killed, or the connection drops, after `query(MIGRATION)` commits and before ctx.report({kind:\"db-tables\"}). On re-run TABLES > 0 and no db-tables resource exists.",
+      "why": "launch refuses its own tables as TABLES_FOREIGN, so authz and tenancy are wedged until the owner drops the tables by hand. The database slot got a killed-before-record fix (IS_PROBE); the new slots did not inherit it.",
+      "fix": "Report an intent before running the migration. Or recognise launch's tables by shape (the exact columns plus the policy names orgs_member_read and memberships_member_read) and adopt them.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign -> every two-step create: is the half-made state recognisable as ours?"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/tenancy/org-invite.mjs:127 and products/launch/providers/auth/supabase-auth.mjs:344",
+      "breaking_input": "After one tenancy verify, invites.invited_by (uuid references auth.users(id), no ON DELETE) points at probe user A. The exit plan then runs auth's \"delete-probe-users\" step, or authz's \"drop-tables\" while invites still references public.orgs.",
+      "why": "The admin DELETE of user A fails on the invites FK. `drop table orgs` fails because invites depends on it. The result depends on teardown step order, which the adapters do not pin. The delete-probe-users step also carries only the project ref, not the user ids.",
+      "fix": "Declare invited_by with ON DELETE CASCADE. Give the drop steps explicit order (invites, then memberships, then orgs), or use cascade. Make delete-probe-users address users by the launch-probe-{a,b,c} emails and tolerate absent users.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:189 and products/launch/providers/auth/supabase-auth.mjs:205",
+      "breaking_input": "Slot `database` found an existing project named like the venture slug that the owner made and recorded it as supabase-project-found. auth then PATCHes that project's auth config and mints three email-confirmed users. authz and tenancy create public.orgs, memberships and invites in it.",
+      "why": "\"Found\" means the project is the owner's, yet nothing downstream refuses to alter it. Its auth config is repointed, probe users are created in its real user table, and tables are created in its schema. Teardown drops tables launch cannot prove it alone made.",
+      "fix": "auth, authz and tenancy should refuse (UPSTREAM_FOREIGN_PROJECT) unless database reported kind supabase-project. Or require an owner approval before touching a found project.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:60 (sb), 104 (healthy); shared call()/page()/admin() in the three login adapters",
+      "breaking_input": "api.supabase.com or the live app accepts the connection and never answers, or answers one byte per minute. healthy() checks its 7-minute deadline only at the top of each iteration, after a 30 s wait, and every ctx.fetch has no AbortSignal.",
+      "why": "The wall-clock bound the fix claimed does not cover a hung request, so the lock can still be held past the 10-minute stale-lock window. page(), admin() and sb() are likewise unbounded, and the slot signal reaches only wait(). The resend probe (8 polls with 4 requests each) still has no total deadline.",
+      "fix": "Pass AbortSignal.any([ctx.signal, AbortSignal.timeout(20000)]) to every fetch. Check the deadline before each request, and cap the wait at the time remaining.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create -> every poll loop: does its worst case fit inside the lock window?"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:81",
+      "breaking_input": "profile.region is \"constructor\" or \"toString\". `REGION[...]` is an inherited property lookup, so the Object or Function constructor is truthy and BAD_REGION is skipped.",
+      "why": "JSON.stringify drops the function value, so the project is created in the provider default region instead of being refused. This is the attack 8a0ae88 B3 finding, still present in the diff.",
+      "fix": "Use Object.hasOwn(REGION, key).",
+      "twin_of": "`typeof null === \"object\"` let `\"slots\": null` past the state shape guard"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/email-transactional/resend.mjs:150",
+      "breaking_input": "launch's own tagged MX record exists with priority 20, and Resend now lists priority 10. The update branch compares only `unquote(rec.content) !== want.content`.",
+      "why": "The MX priority is never patched, so the record stays stale while verify reports a pass or flaps. This is the unfixed remainder of 8a0ae88 B6, and priority is not in the plan.",
+      "fix": "Compare priority for MX and PATCH when it differs.",
+      "twin_of": "A PATCH that compares only part of the object"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/email-transactional/resend.mjs:112; products/launch/providers/database/supabase.mjs:108; initiatives/launch/debt-ledger.md",
+      "breaking_input": "The worker is killed after POST /domains or POST /projects returns and before ctx.report. The re-run finds the resource by name, records it as -found, and leaves launch's own resource out of the exit plan.",
+      "why": "D18's window is reintroduced for two more providers. The new debt-ledger rows (D21) cover neither, and the dispositions record round 2 as \"all high and medium fixed\", so the gap is invisible.",
+      "fix": "Add both providers to the debt ledger with a trigger, or write a pending-create intent to state before each POST.",
+      "twin_of": "A worker killed between Vercel's project-create answer and the synchronous `report()` leaves launch's own project recorded as `-found` on the re-run"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "products/launch/providers/authz/rls-roles.mjs:300-309; shared mint()",
+      "breaking_input": "verify for authz and tenancy (or auth) runs concurrently, for example under a parallel verify --all. Both call generate_link for launch-probe-a@<domain>. Supabase keeps one pending magic-link token per user, so the second call invalidates the first.",
+      "why": "The first run's /auth/confirm answers 401 and verify reports LOGIN_FAILED intermittently. ownOrg's list-then-create can also create two orgs with the same name, because the two verifies run under different slot locks.",
+      "fix": "Serialise probe-user use across the three slots with a shared lock, or retry LOGIN_FAILED once with a fresh link. Create orgs idempotently, for example by unique name per user.",
+      "twin_of": "Gate check-then-emit ran outside the lock, so two applies made two requests -> every check-then-act on shared state"
+    }
+  ]
+}

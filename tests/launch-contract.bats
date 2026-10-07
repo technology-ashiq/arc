@@ -208,6 +208,34 @@ arm() {
   [[ "$(j 'o.scaffold.message')" == *"ADR-1726: record it"* ]] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: under the owner's absent-plan ruling a plan limit records protection ABSENT and three green legs verify (ADR-1735)" {
+  arm ci absent-ruling
+  [ "$(j 'o.scaffold.ok + " " + o.again.ok + " " + o.workflowCommits')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "github-workflow technology-ashiq/arc-sandbox:.github/workflows/arc-ci.yml,protection-absent technology-ashiq/arc-sandbox@main" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.notes.join(",")')" = "required checks ABSENT(plan: private-repo protection) (ADR-1735)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.required')" = "true ABSENT(plan: private-repo protection)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.steps.map(s => s.action).join(",")')" = "delete" ] || { echo "$DONE"; false; }
+  arm ci absent-ruling-red
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"test (windows-latest) failure"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the absent-plan ruling never skips protection GitHub would grant (ADR-1735)" {
+  arm ci absent-ruling-no-limit
+  [ "$(j 'o.scaffold.ok + " " + o.reported.join(",")')" = "true github-workflow,branch-protection" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.contexts.join(",")')" = "test (ubuntu-latest),test (windows-latest),test (macos-latest)" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.required.length')" = "true 3" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.unprotected.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.unprotected.reason')" == *"main does not require test (ubuntu-latest)"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a ci_protection value that is not required or absent-plan refuses before any call (ADR-1735)" {
+  arm ci bad-ruling
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_RULING 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.value.ok')" = "true false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.value.reason')" == "BAD_RULING: "* ]] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: ci refuses a repo upstream that is not owner/name, before any call" {
   arm ci bad-upstream
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_UPSTREAM 0" ] || { echo "$DONE"; false; }
@@ -706,4 +734,81 @@ arm() {
 @test "launch-contract: a path built to backtrack the key-file check answers at once" {
   arm secrets pathological
   [ "$(j 'o.verify.ok + " " + (o.ms < 2000)')" = "true true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: auth -- a minted link signs in, /api/me knows the user, logout clears it, then 401" {
+  arm login thread
+  [[ "$(j 'o.authBefore.ok + " " + o.authBefore.reason')" == "false "*"is not launch's file" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.auth.ok + " " + o.authAgain.ok + " " + o.siteUrl')" = "true true https://sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.env')" == *"NEXT_PUBLIC_SUPABASE_URL="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.authVerify.ok + " " + JSON.stringify(o.authVerify.evidence)')" = 'true {"user":"launch-probe-a@sandbox.automemory.ai","login":303,"me":200,"logout":200,"after":401}' ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.auth.join(",")')" = "auth-config,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.authTeardown.join(",")')" = "delete-probe-users (launch-probe-a/b/c),restore-site-url-if-unchanged" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: authz -- A reads its own org and gets 403 on B's; orgs are created once" {
+  arm login thread
+  [ "$(j 'o.authz.ok + " " + o.authzVerify.ok + " " + o.authzVerifyAgain.ok + " " + o.orgs')" = "true true true 2" ] || { echo "$DONE"; false; }
+  [ "$(j 'JSON.stringify(o.authzVerify.evidence)')" = '{"own":200,"crossTenant":403}' ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "drop memberships, orgs cascade (down migration; after tenancy drops invites)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: tenancy -- a stranger cannot invite, A invites C, C joins and is scoped to A's org" {
+  arm login thread
+  [ "$(j 'o.tenancy.ok + " " + o.tenancyVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'JSON.stringify(o.tenancyVerify.evidence)')" = '{"strangerInvite":403,"invite":201,"join":200,"scopedIn":200,"scopedOut":403}' ] || { echo "$DONE"; false; }
+  [ "$(j 'o.commits.join(",")')" = "1,1,1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a leak across tenants fails authz, and tables without RLS refuse the migration" {
+  arm login leak
+  [ "$(j 'o.authzVerify.ok + " " + o.authzVerify.reason')" = "false A reading B's org answered 200, not 403" ] || { echo "$DONE"; false; }
+  arm login rls-off-authz
+  [ "$(j 'o.authz.code')" = "RLS_OFF" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: auth never repoints the owner's site URL, and authz never adopts the owner's orgs table" {
+  arm login site-url-foreign
+  [ "$(j 'o.auth.code + " " + o.routes')" = "SITE_URL_FOREIGN false" ] || { echo "$DONE"; false; }
+  arm login owner-orgs-table
+  [ "$(j 'o.authz.code + " " + o.rls')" = "TABLES_FOREIGN false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: auth adds its env names to the owner's .env.example and keeps every line" {
+  arm login owner-env
+  [ "$(j 'o.auth.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.env')" = "$(printf '# mine\nSTRIPE_KEY=\nNEXT_PUBLIC_SUPABASE_URL=\nNEXT_PUBLIC_SUPABASE_ANON_KEY=\n')" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: tenancy verify before authz has made the probe orgs says so" {
+  arm login tenancy-before-authz-verify
+  [[ "$(j 'o.tenancyVerify.ok + " " + o.tenancyVerify.reason')" == "false UPSTREAM_MISSING: the probe org launch-probe-a does not exist"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: auth keeps the owner's redirect URLs and template, and refuses a template that lands elsewhere" {
+  arm login owner-auth-config
+  [ "$(j 'o.auth.ok + " " + o.allow + " " + o.kept')" = "true https://staging.example.com/**,https://sandbox.automemory.ai/** true" ] || { echo "$DONE"; false; }
+  arm login owner-template-elsewhere
+  [ "$(j 'o.auth.code')" = "TEMPLATE_FOREIGN" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the login half never alters a Supabase project database only found" {
+  arm login found-project
+  [ "$(j 'o.auth.code')" = "UPSTREAM_FOREIGN_PROJECT" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a kill after the authz migration is resumed by the tables' launch marker" {
+  arm login killed-after-migration
+  [ "$(j 'o.authz.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner template built on ConfirmationURL is the owner's, and refuses" {
+  arm login owner-template-confirmation-url
+  [ "$(j 'o.auth.code')" = "TEMPLATE_FOREIGN" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a .env.example whose base64 spans lines is extended, every line kept" {
+  arm login long-env
+  [ "$(j 'o.auth.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.env')" == "# mine, kept as is"*"SERVICE_SECRET_NAME_11="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
 }

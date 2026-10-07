@@ -1,0 +1,15 @@
+# venture.yaml -- written by arc discover from an owner-approved hunt (ADR-1905); launch reads it (ADR-1710).
+# evidence: invoice-reminders-6e390c.hunt.md
+# money_signal.estimate_minor: ABSENT -- seed for the first revenue.simulated, never emitted by discover (REQ-09); evidence: none
+slug: invoice-reminders-6e390c
+type: saas-b2b
+region: global
+payment_model: gateway
+tenancy: multi
+ai: false
+honesty_class: rehearsal
+compliance:
+  - gdpr
+brand:
+  name: invoice reminders
+  domain: unassigned

@@ -20,7 +20,7 @@ setup() {
 @test "discover-miner: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "discover-miner: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 11 ] || { echo "declared $declared, expected 11"; false; }
+  [ "$declared" -eq 12 ] || { echo "declared $declared, expected 12"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -115,4 +115,15 @@ setup() {
   [ "$status" -eq 2 ] && [[ "$stderr" == *"the niche must be"* ]] || { echo "[grammar] $status $stderr"; false; }
   run --separate-stderr node "$(CLI)" frobnicate
   [ "$status" -eq 2 ] && [[ "$stderr" == *'unknown verb "frobnicate"'* ]] || { echo "[verb] $status $stderr"; false; }
+}
+
+@test "discover-miner: an adapter success with zero tapped responses is COULD_NOT_SCAN" {
+  local loader
+  loader=$(node -e 'process.stdout.write(require("url").pathToFileURL(process.argv[1]).href)' "$(FX stub-adapter/loader.mjs)")
+  run --separate-stderr node --no-warnings --experimental-loader "$loader" "$(CLI)" hunt --niche "invoice reminders" --query "invoice reminders" --query "chasing late payments" --offline-fixture "$(FX recorded/hn.json)" --out "$BATS_TEST_TMPDIR/out"
+  # RAN first: only the stub adapter can make the tap see 0 of 2, so this message proves the swap took.
+  [[ "$stderr" == *"tap recorded 0 of 2"* ]] || { echo "stub adapter path not entered: $status $stderr"; false; }
+  [ "$status" -ne 0 ] || { echo "a never-read source exited 0"; false; }
+  [[ "$stderr" == *"COULD_NOT_SCAN"* ]] || { echo "$stderr"; false; }
+  [ ! -e "$BATS_TEST_TMPDIR/out/clusters.json" ] || { echo "an unread source wrote clusters"; false; }
 }

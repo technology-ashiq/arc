@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:128",
+      "breaking_input": "Apply under the absent-plan ruling on a private repo, so protection-absent is recorded. Upgrade the plan, then re-run scaffold. protect() now succeeds and, because ctx.resources holds no branch-protection entry, reports kind required-checks even though launch created the whole protection.",
+      "why": "The stale protection-absent resource stays in state next to the new protection resource. The kind is also derived from whether state holds branch-protection, and a protection-absent record is not that. Teardown and the receipt then describe a protection that exists as both absent and present. Every other resource launch reports is checked against what it actually created.",
+      "fix": "When protect() succeeds, drop or supersede any recorded protection-absent for that repo. Derive the created-versus-extended kind from the GET answer, not from prior state alone. Add a fixture that re-runs scaffold after the plan limit clears.",
+      "twin_of": "Protection launch only extended was recorded as launch's, so the exit plan would unprotect the owner's branch"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:128-136",
+      "breaking_input": "The existing branch protection is owner-set, and the contexts-add call inside protect() answers a 403 that the classifier maps to PLAN_LIMIT, for example a message containing 'upgrade'. The catch records protection-absent, and scaffold returns done.",
+      "why": "The catch wraps every call in protect(), not only the first protection read. A PLAN_LIMIT from a later write, after an owner rule was read, is recorded as 'no protection possible'. The ruling is meant to take effect only when GitHub's plan limit answers the protection call itself. The PLAN_LIMIT classifier is also keyed on message text, so a 403 with the right words under the ruling silently passes.",
+      "fix": "Accept the absent-plan substitution only when the first protection GET itself returned PLAN_LIMIT. Rethrow PLAN_LIMIT from any later write in protect().",
+      "twin_of": "Any 403 with the right words became PLAN_LIMIT -> every classifier keyed on message text: is it also keyed on the request?"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/ci/github-actions.mjs:85-92",
+      "breaking_input": "arc-sandbox.venture.yaml is checked out with CRLF on Windows, so the value read for ci_protection is 'absent-plan' plus a CR. If the venture-yaml parser keeps the CR, ruling() throws BAD_RULING on Windows only. Every test fixture sets profile as an object, so none exercises the real parser or a CRLF file.",
+      "why": "The ruling is the first consumer of a string field from the YAML parser that must equal an exact literal. No test pushes the real file, with CRLF, through the parser and into ruling(). The failure would show only on the Windows CI leg.",
+      "fix": "Add a bats test that loads the real arc-sandbox.venture.yaml, including a CRLF copy, and asserts ruling() resolves to absent-plan. Or trim the value defensively and assert its type in the parser.",
+      "twin_of": "A quoted YAML list item holding `: ` was parsed as a one-key mapping -> every YAML field the code reads as a string: assert its type, not its presence"
+    }
+  ]
+}

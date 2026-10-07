@@ -1,0 +1,10 @@
+INTACT       facts
+INTACT       template_set
+INTACT       page:about
+INTACT       page:contact
+INTACT       page:pricing
+INTACT       page:privacy
+INTACT       page:refund-cancellation
+INTACT       page:shipping-delivery
+INTACT       page:terms
+verdict: INTACT
