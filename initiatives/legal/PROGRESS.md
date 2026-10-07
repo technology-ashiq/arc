@@ -4,8 +4,8 @@ status: LIVE
 cycle: arc-legal (Cycle 14, opened 2026-08-12)
 phase: 03
 appetite: 5d
-burn: 4d
-blocked-on: owner — five LexOS facts and a DPDP Rule 3 gazette check (Phase 03)
+burn: 5d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -21,7 +21,7 @@ depends-on: —
 | 00 | Steel thread — three core pages end to end: schema, render, three lints, hash fixtures, two-surface adversarial pass, text attack panel | 2d | ✅ 2026-08-13 |
 | 01 | The full set and its receipts — remaining four pages, scenario fixtures, completeness over seven, inbox wiring, hash-chain enforcement | 1.5d | ✅ 2026-10-07 |
 | 02 | Guards and governance — `--verify`, generated venture CI guard, pins + `--bump-templates`, template-edit approval, checklist renderer (all rows manual — probe automation cut at kickoff) | 0.5d | ✅ 2026-10-07 |
-| 03 | The real render — LexOS real facts, approval, commit into its tree, integration handoff, evidence bundle, retro | 1d | pending |
+| 03 | The real render — LexOS real facts, approval, commit into its tree, integration handoff, evidence bundle, retro | 1d | ✅ 2026-10-07 |
 
 ## Done-log
 
@@ -71,12 +71,36 @@ Evidence: `initiatives/legal/evidence/phase-02/bundle.md` plus its 2026-10-06 ad
 
 Appetite: 0.5d budgeted, ~0.5d spent.
 
+**Phase 03 — closed 2026-10-07.** One real venture's real facts became seven approved, receipted
+pages committed into its own tree. Evidence: `initiatives/legal/evidence/phase-03/bundle.md`
+(manifest verified).
+
+- **The engine's first production publish.** LexOS on template set v3: request
+  `01M4AHJZPVC46NN5PDYRAZK2WW`, the owner's full-read stamp `01M4AKZ32VHVY264SBKMHWZZYA`, 7 pages,
+  `0 FAIL, 0 WARN`. Both ids are in `events/` and absent from `_quarantine/`. The spine count reads
+  **1 production, 3 fixture**.
+- **The gazette check found a real gap before publish.** Rule 3(c) wants the privacy notice to give
+  the service's link, and it printed only mailboxes. Template set v3 fixed that (ADR-1215, PR #366)
+  instead of editing the approved v2 in place.
+- **LexOS `feat/legal-pages` `645efcf`:** pages, facts, pins, the publish receipt and the handoff.
+  `verify` reads INTACT, and with one byte appended it reads TAMPERED (exit 2). A CRLF checkout
+  still reads INTACT. **Deviation:** the spec said the branch is never pushed. It was pushed to
+  LexOS's private remote under the owner's standing push permission. Not merged, not deployed.
+- Every live-site row is `OPEN-at-venture-resume` in LexOS `legal/HANDOFF.md`, because LexOS is PAUSED.
+- Tests: CI per-JOB on the close PR. amendments: 2 (ADR-1214 ledger location, ADR-1215 set v3) ·
+  reopened: n.
+
+Appetite: 1d budgeted, ~1d spent. Most of it went to the owner's facts and the two amendments, not
+to code.
+
 ## Appetite burn
 
-**~4d of 5d used (80%).** Re-derived at the 2026-10-07 close: Phase 00 2d, Phase 01 ~2d (0.5d
-over), Phase 02 ~0.5d. Phase 03 holds 1d against a 1d remainder, so there is no slack left. The
-next overrun is a scope cut inside Phase 03 (the integration handoff stays a document; nothing is
-wired into LexOS), not an extension.
+**~5d of 5d used (100%), all four phases closed.** Re-derived at the Phase 03 close: Phase 00 2d,
+Phase 01 ~2d (0.5d over), Phase 02 ~0.5d, Phase 03 ~1d. Phase 01's overrun was absorbed: no
+extension was taken and no cut was needed.
+
+_Previous reading, 2026-10-07 (Phase 02 close):_ **~4d of 5d used (80%).** Phase 03 held 1d
+against a 1d remainder, with the integration handoff staying a document as the pre-named cut.
 
 _Previous reading, 2026-08-15:_ **~3d of 5d used (60%).** Phase 00 closed inside
 its 2d, and Phase 01 had spent roughly 1d of its 1.5d with the receipts half built and the
@@ -99,10 +123,13 @@ recomputed.
 
 ## Now
 
-**Position (2026-10-07):** Phases 00–02 closed. **Phase 03 OPEN, blocked on the owner:** five
-LexOS facts, a gazette check of the DPDP Rule 3 date, then a read and stamp of the seven real
-pages. **Set LexOS's `effective_date` on or after the day the stamp will land.** The fixture's
-August date was refused as BACKDATED on 2026-10-07, and that cost one stamp.
+**Position (2026-10-07):** **all four phases closed.** Phase 03 published LexOS's seven pages on
+real facts and template set v3 (`01M4AHJZPVC46NN5PDYRAZK2WW` → `01M4AKZ32VHVY264SBKMHWZZYA`).
+They are committed to LexOS `feat/legal-pages` `645efcf`. **Next: `/arc-retro`** for Cycle 14,
+which asks the scope-creep question explicitly. Then the reseal sets the lane IDLE. The owner
+still has to sign off on moving past Phase 03 (`phase-done` approval on the spine).
+
+_Below: the Phase 03 build notes, kept for the retro._
 
 **Phase 03 so far (2026-10-07):** at the owner's request the five owed facts carry clearly marked
 PLACEHOLDER values in the private facts file, and the real values come later. Seven pages render
