@@ -96,6 +96,25 @@ export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) 
 }
 
 /**
+ * Declare WHY this attempt failed, in the cost sidecar (ADR-0228). The sidecar is the one channel back
+ * to arc-run, and the exit map stays 0/1/2 (ADR-0219), so the class rides here as one more fact beside
+ * `model` and `runtime`. Merged into whatever cost was already written, never replacing it. arc-run reads
+ * it only on exit 1 and validates it against its own closed set; this side writes what it is given, so a
+ * driver typo surfaces there as `unknown` rather than being silently corrected here.
+ * @param {unknown} cls
+ */
+export function writeFailureClass(cls) {
+  const path = process.env.ARC_DRIVER_COST_FILE;
+  if (!path || cls === undefined || cls === null) return;
+  let cost = {};
+  if (existsSync(path)) {
+    try { cost = JSON.parse(readFileSync(path, "utf8")) || {}; } catch { cost = {}; }
+  }
+  cost.failure_class = cls;
+  writeFileSync(path, `${JSON.stringify(cost)}\n`, "utf8");
+}
+
+/**
  * Parse a model's JSON answer, tolerating a fenced code block.
  *
  * FOUND BY THE FIRST REAL RUN, not by any of the 20 fixture tests: a live model answered
@@ -332,9 +351,11 @@ export async function runDriver(name, produce, opts = {}) {
       // A recording may declare a decline or a failure, so the ladder and the budget path
       // are exercisable offline rather than only against a live endpoint.
       if (fake.__decline_budget) { die(EXIT.BUDGET_DECLINED, `declined: ${fake.__decline_budget}`); return; }
-      if (fake.__driver_fail) { die(EXIT.DRIVER_FAIL, `driver failure: ${fake.__driver_fail}`); return; }
+      // `__failure_class` declares WHY the fake failed (ADR-0228). A `__driver_fail` without one is an
+      // undeclared failure -- `unknown` to arc-run, which never falls back.
+      if (fake.__driver_fail) { writeFailureClass(fake.__failure_class); die(EXIT.DRIVER_FAIL, `driver failure: ${fake.__driver_fail}`); return; }
       if (fake.__cost) writeCost(fake.__cost);
-      const { __cost, __decline_budget, __driver_fail, ...payload } = fake;
+      const { __cost, __decline_budget, __driver_fail, __failure_class, ...payload } = fake;
       process.stdout.write(`${JSON.stringify(payload)}\n`);
       process.exitCode = EXIT.OK;
       return;
@@ -355,8 +376,11 @@ export async function runDriver(name, produce, opts = {}) {
     } else {
       input = JSON.parse(inputJson || "{}");
     }
-    const { output, cost } = await produce({ processName, input, budget });
+    const { output, cost, failureClass } = await produce({ processName, input, budget });
     if (cost) writeCost(cost);
+    // Only the replay driver returns one on success, to fixture ADR-0228's rule that exit 0 decides the
+    // class whatever the sidecar says.
+    if (failureClass !== undefined) writeFailureClass(failureClass);
     process.stdout.write(`${JSON.stringify(output)}\n`);
     process.exitCode = EXIT.OK;
   } catch (e) {
@@ -370,6 +394,9 @@ export async function runDriver(name, produce, opts = {}) {
     // is 0/1/2 and this cycle adds nothing to it (ADR-0219), so an `arcExit` naming anything
     // else is a driver trying to widen the contract and is ignored rather than obeyed.
     const asked = e && e.arcExit;
+    // WHY it failed, when the driver knows (ADR-0228). Written before the exit code is set, so a driver
+    // that dies right after still left its declaration; arc-run reads `unknown` if it never arrives.
+    if (e && e.arcFailureClass !== undefined) writeFailureClass(e.arcFailureClass);
     die(asked === EXIT.BUDGET_DECLINED ? EXIT.BUDGET_DECLINED : EXIT.DRIVER_FAIL, e.message);
   }
 }

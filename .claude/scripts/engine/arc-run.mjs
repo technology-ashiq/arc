@@ -73,6 +73,7 @@ import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
 import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
 import { isExpired, PROFILE_DRIVER, profileRef, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
+import { classifyAttempt, classForReason, familyOf, nextHop, termsCheck } from "./failure-class.mjs";
 // The owner store (ADR-1350), read-only: a router `profile:` names one of its records (ADR-1801).
 import { endpointOf, findModel, loadRegistry } from "../hq/lib/face/models.mjs";
 
@@ -104,6 +105,10 @@ let effectiveModel = null;
 // The provider profile the CURRENT attempt runs on (ADR-1800), or null. Declared up here with the two above, for the
 // same reason: `fail()` reaches `emitRun`, which reads it, from exit paths above the routing block.
 let activeProfile = null;
+// EVERY ATTEMPT, IN ORDER, AS MEASURED (ADR-0228). The one record nextHop decides from and the receipt
+// carries, so the decision and the ledger can never describe two different runs. Declared up here for the
+// reason the three above are: `emitRun` reads it, and `fail()` reaches `emitRun` before the routing block.
+const HOPS = [];
 
 // The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS); hook
 // mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent SIGKILLs
@@ -1250,9 +1255,19 @@ function emitRun(payload) {
   // cost, which is provider-reported or nothing, elapsed time is something arc-run itself observed
   // from its own clock. ADR-0069 b5 governs figures we would have to INFER; this is not one.
   // Monotonic-ish by construction -- both ends come from the same process's Date.now().
+  // THE HOP RECORD, ON EVERY PATH (ADR-0228 item 8, zero new kinds). `reason` keeps its values; the
+  // class and the hops are added beside it. A run that never reached a driver has no attempt to read
+  // a class from, so its refusal reason supplies one -- an absent class on a failed receipt would read
+  // as "not recorded".
+  const lastHop = HOPS[HOPS.length - 1];
+  const failureClass = payload.outcome === "ok"
+    ? undefined
+    : (rest.failure_class ?? (lastHop && lastHop.class) ?? classForReason(String(rest.reason ?? "")));
   const r = emitEvent("run.completed", {
     process: processName,
     ...rest,
+    ...(failureClass ? { failure_class: failureClass } : {}),
+    hops: HOPS,
     ...(tokens ? { tokens } : {}),
     ...(seat ? { model: seat } : {}),
     ...(runtimeId ? { runtime: runtimeId } : {}),
@@ -1492,9 +1507,9 @@ async function runDriverProcess(file, args, opts) {
   return { status: r.exit, signal: r.signal ?? null, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), error };
 }
 
-async function invoke(name) {
+async function invoke(name, capMs) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
-  if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null, spawned: false };
+  if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null, spawned: false, notInstalled: true };
 
   const blocked = policyGate(name);
   if (blocked) {
@@ -1543,9 +1558,13 @@ async function invoke(name) {
   }
   const costFile = join(tmp, "cost.json");
   const rem = msRemaining();
+  // A hop's own cap (ADR-0228: the chain's max_wall_ms less what has passed) binds when it is the
+  // tighter of the two; the RUN's remainder still binds when it is.
+  const cappedByTerm = capMs !== undefined && (rem === undefined || capMs < rem);
+  const bound = cappedByTerm ? capMs : rem;
   // Math.floor: a float `min` produced a non-integer timeout and spawnSync threw a raw
   // RangeError before any scrub or receipt could run.
-  const timeoutMs = rem === undefined ? undefined : Math.max(1, Math.floor(rem));
+  const timeoutMs = bound === undefined ? undefined : Math.max(1, Math.floor(bound));
   // The input travels as a FILE, not an argv element (ADR-0226): one argument is capped at 128 KB
   // on Linux and the command line at ~32 KB on Windows, and a PR diff is bigger than both. The
   // argv slot carries `-` and the path rides ARC_DRIVER_INPUT_FILE -- never `@<path>`, which the
@@ -1628,8 +1647,15 @@ async function invoke(name) {
     },
   });
   let cost = null;
+  let declared;
   if (existsSync(costFile)) {
     try { cost = JSON.parse(readFileSync(costFile, "utf8")); } catch { cost = null; }
+    // WHY the driver says it failed rides the same sidecar (ADR-0228), and it is not a cost: lifted
+    // out here so no cost reader ever sees it, and judged by failure-class.mjs, never trusted raw.
+    if (cost && typeof cost === "object" && Object.prototype.hasOwnProperty.call(cost, "failure_class")) {
+      ({ failure_class: declared, ...cost } = cost);
+      if (!Object.keys(cost).length) cost = null;
+    }
   }
   // A cleanup that throws (EBUSY from a scanner holding a handle on Windows) must never erase the
   // receipt for work already done and paid for (round-2 attack B7). `force` only covers ENOENT.
@@ -1645,7 +1671,7 @@ async function invoke(name) {
   const overflowed = res.error && res.error.code === "ENOBUFS";
   return {
     code: timedOut ? 124 : overflowed ? 125 : (res.status ?? 1),
-    stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut, overflowed,
+    stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut, overflowed, declared, cappedByTerm,
     // `spawned` IS SET ON EVERY RETURN, not only on the two that skip the spawn. Marking the
     // not-installed and policy-denied paths `false` and leaving this one undefined covered two of
     // THREE ways a driver can fail to run: a `spawnSync` that never LAUNCHES reports `res.error`
@@ -1820,9 +1846,25 @@ function storeTranscript(name, streams) {
   }
 }
 
-async function attempt(name) {
+async function attempt(name, capMs) {
   attemptsMade += 1;
-  const r = await invoke(name);
+  const t0 = Date.now();
+  const r = await invoke(name, capMs);
+  const v = verdictOf(name, r);
+  // THE CLASS COMES FROM failure-class.mjs AND NOWHERE ELSE (ADR-0228). The verdict above keeps the
+  // receipt's `reason` exactly as it was; the class is what decides a hop.
+  const c = classifyAttempt({ timedOut: r.timedOut, overflowed: r.overflowed, policyDenied: r.policyDenied, notInstalled: r.notInstalled,
+    code: r.code, declared: r.declared, contractFault: v.verdict === "schema" });
+  if (c.warn) console.error(`arc-run: WARN ${c.warn}`);
+  const hopCost = r.cost && typeof r.cost === "object"
+    ? Object.fromEntries(["inr", "tokens_in", "tokens_out"].filter((k) => Number.isFinite(r.cost[k])).map((k) => [k, r.cost[k]]))
+    : null;
+  // `class: null` is an attempt that succeeded. It is not a seventh class.
+  HOPS.push({ driver: name, tier: tier ?? null, class: c.cls, ms: Math.max(0, Date.now() - t0), ...(hopCost && Object.keys(hopCost).length ? { cost: hopCost } : {}) });
+  return { ...v, failureClass: c.cls };
+}
+
+function verdictOf(name, r) {
   if (r.cost && Number.isFinite(r.cost.inr)) inrSpent += r.cost.inr;
   scrub(`the ${name} driver's stdout`, r.stdout);
   scrub(`the ${name} driver's transcript`, r.stderr);
@@ -1833,7 +1875,7 @@ async function attempt(name) {
   // driver fault made budget exhaustion trigger the fallback chain -- which then spent the
   // budget again, per driver -- and made the receipt read `reason: driver`, so the promise
   // that an over-budget run "reports a budget outcome" was false.
-  if (r.timedOut) return { ...r, verdict: "budget", why: `exceeded the ${budget.min}-minute budget for the RUN` };
+  if (r.timedOut) return { ...r, verdict: "budget", why: r.cappedByTerm ? "exceeded the chain's max_wall_ms (ADR-0228)" : `exceeded the ${budget.min}-minute budget for the RUN` };
   // Same reasoning one line down: our own output ceiling is arc-run's limit, not the driver's
   // misbehaviour, and falling back to another driver cannot help — the next one produces the
   // same volume and hits the same wall, having spent the budget to get there.
@@ -2022,9 +2064,30 @@ if (overBudget()) {
   process.exit(1);
 }
 
-while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbacks.length) {
-  const next = String(fallbacks.shift() ?? "").trim();
-  console.error(`arc-run: ${driver} reported a driver fault (${a.why}); falling back to ${next}`);
+// THE CHAIN'S TERMS (ADR-0228 item 6), read off the routed row on the auto path only. An explicit
+// `--driver` consults no row and has no chain (F4), so it has no terms either.
+const chainTerms = driverArg === "auto" && routedRow
+  ? { max_attempts: routedRow.max_attempts, max_wall_ms: routedRow.max_wall_ms, max_cost: routedRow.max_cost }
+  : {};
+// The model each driver WOULD run, for the family table: the current driver's is what this run chose,
+// a hop's is its pin under the routed tier.
+const modelFor = (d) => (d === driver ? effectiveModel : (tier ? routeFor(d).pin : null)) ?? null;
+const hopCtx = () => ({ elapsedMs: Math.max(0, Date.now() - runStartedAt), runRemainingMs: msRemaining(), familyOf: (d) => familyOf(d, modelFor(d)) });
+// Why the chain stopped, when it did: `byTerms` means a term or the run's clock refused the next
+// attempt, which is a budget outcome however the attempt itself failed.
+let chainStop = null;
+// F1: a cross-family hop for a contract fault IS the one extra attempt ADR-0204 allows, so the
+// same-tier retry after the loop must not run as well.
+let contractHopped = false;
+
+// THE ONE HOP CONDITION IS nextHop (ADR-0228). It used to be `a.verdict === "driver"`, and `driver`
+// was every exit 1 -- a 503, a provider refusal, a crash and an unparseable answer all walked the chain.
+while (a.verdict !== "ok" && !overBudget()) {
+  const d = nextHop({ remaining: fallbacks, terms: chainTerms }, HOPS, hopCtx());
+  if (!d.hop) { chainStop = d; break; }
+  const next = d.to;
+  fallbacks.splice(d.index, 1);
+  console.error(`arc-run: ${driver} failed as ${a.failureClass} (${a.why}); falling back to ${next}`);
   // THE HOP IS VALIDATED LIKE ANY OTHER SELECTION. Without this the closed driver set and the
   // ADR-0225 grant were both bypassed by a fallback entry -- proved, with an arbitrary script
   // outside the drivers directory executed from a router row.
@@ -2034,6 +2097,7 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   // The owner chose a model at ONE endpoint (generic-api, the owner's base URL); another driver, capable or not, would send that
   // id somewhere it was never chosen for (attack b8271c1 B4). An owner-model run does not fall back.
   if (ownerModel) { console.error(`arc-run: no fallback to \`${next}\` -- an owner-model run stays on the driver it was chosen for`); break; }
+  if (a.failureClass === "model-invalid") contractHopped = true;
   driver = next;
   // THE PIN IS PER-DRIVER, SO IT IS RECOMPUTED PER HOP. It was resolved once from the ORIGINAL
   // driver and never revisited, so a fallback was spawned with the previous driver's model --
@@ -2051,7 +2115,16 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
     effectiveModel = trialModel || ownerModel || pinnedModel;
     modelSource = activeProfile ? "profile" : (pinnedModel ? "router" : "none");
   }
-  a = await attempt(driver);
+  a = await attempt(driver, d.timeoutMs);
+}
+
+// A TERM OR THE RUN'S CLOCK REFUSED THE NEXT ATTEMPT, before it spent anything. Reported as budget
+// whatever the attempt's own class was: the chain stopped because it was out of terms, and a receipt
+// saying "driver" would send a reader looking for a driver bug.
+if (a.verdict !== "ok" && chainStop && chainStop.byTerms) {
+  console.error(`arc-run: ${driver} failed as ${a.failureClass} (${a.why}); NOT falling back -- ${chainStop.why}`);
+  emitRun({ outcome: "fail", reason: "budget", failure_class: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
+  process.exit(1);
 }
 
 // A policy denial is its own outcome and its own exit. It never reaches the fallback loop above
@@ -2066,14 +2139,27 @@ if (a.verdict === "policy") {
 
 if (a.verdict === "budget") {
   console.error(`arc-run: ${a.why}`);
-  emitRun({ outcome: "fail", reason: "budget", driver, cost: a.cost ?? undefined });
+  emitRun({ outcome: "fail", reason: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
   process.exit(1);
 }
 
 if (a.verdict === "schema") {
-  // ADR-0204's ladder, rung 1: retry ONCE on the same tier.
-  console.error(`arc-run: output failed the contract (${a.why}); retrying once on the same tier`);
-  const retry = await attempt(driver);
+  // ADR-0204's ladder, rung 1: retry ONCE on the same tier -- UNLESS the loop already hopped across
+  // families for this contract fault (ADR-0228 F1). Whichever fired first is the one extra attempt; a
+  // contract fault costs two attempts, never three.
+  let retry = a;
+  if (!contractHopped) {
+    // The retry is an attempt like any other, so the chain's terms bind it too (`max_attempts`
+    // counts every attempt). A retry that skipped this would be the one place they did not.
+    const tc = termsCheck(chainTerms, HOPS, hopCtx());
+    if (!tc.ok) {
+      console.error(`arc-run: output failed the contract (${a.why}); NOT retrying -- ${tc.why}`);
+      emitRun({ outcome: "fail", reason: "budget", failure_class: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
+      process.exit(1);
+    }
+    console.error(`arc-run: output failed the contract (${a.why}); retrying once on the same tier`);
+    retry = await attempt(driver, tc.timeoutMs);
+  }
   if (retry.verdict === "ok") {
     // Goes through the SAME path as a first-attempt success. Printing and emitting inline
     // here is how the payload scrub got skipped on one of the two success paths -- a secret
@@ -2108,7 +2194,11 @@ if (a.verdict === "schema") {
     fault_hint: faultHint,
     why: faultHint === "process"
       ? `the process is not self-consistent: ${selfCheck.why} — no driver is being blamed`
-      : `retried once on the same tier and the output still failed the contract: ${retry.why}`,
+      : contractHopped
+        ? `hopped to ${driver} (a different model family) and the output still failed the contract: ${retry.why}`
+        : `retried once on the same tier and the output still failed the contract: ${retry.why}`,
+    attempts: attemptsMade,
+    hops: HOPS,
   };
   // The identity flags were MISSING here while the other two call sites carried them, so a
   // rung-2 proposal was attributed to `arc-event@1.0.0` (the emitter's own fallback) instead of
@@ -2128,7 +2218,7 @@ if (a.verdict === "schema") {
 
   console.error(`arc-run: STOPPED. A tier-change PROPOSAL was recorded${id ? ` as ${id}` : ""}; nothing was escalated.`);
   console.error("         Acting on it means editing engine/router.yaml in a reviewed diff citing ADR-0069.");
-  emitRun({ outcome: "fail", reason: "schema", driver, attempts: 2, fault_hint: faultHint, proposal: id || undefined, cost: retry.cost ?? undefined });
+  emitRun({ outcome: "fail", reason: "schema", driver, attempts: attemptsMade, fault_hint: faultHint, proposal: id || undefined, cost: retry.cost ?? undefined });
   process.exit(1);
 }
 

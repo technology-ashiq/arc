@@ -52,9 +52,17 @@ much a fallback may spend is whatever the caller's `--budget` says, or nothing.
 5. **A per-attempt timeout is not the run's deadline.** A driver's own attempt cap expiring with run time left is
    `transport`. The run's deadline passing is `budget`.
 6. **Chain terms.** Every class row and `default:` declares `max_attempts` (integer ≥1, counting every attempt
-   including ADR-0204's retry), `max_wall_ms` (integer ms) and `max_cost` (integer paise, `writeCost`'s unit). A missing
-   or malformed term is a router LOAD fault in `router-row.mjs`. The effective bound is the tighter of the term and
-   the caller's `--budget`.
+   including ADR-0204's retry), `max_wall_ms` (integer ms) and `max_cost` — integer paise (`writeCost`'s unit) **or
+   the literal `unmetered`**. A missing or malformed term is a router LOAD fault in `router-row.mjs`. The effective
+   bound is the tighter of the term and the caller's `--budget`.
+
+   **Why `unmetered` exists (kickoff evidence, 2026-10-07).** No production driver reports `inr`: `claude-code` and
+   `generic-api` write tokens only, `codex` writes `source` alone, `hermes` reports none by design (its own comment),
+   and every FAILED attempt writes no cost at all. A paise figure on such a chain is a cap nothing can ever measure
+   against — a gate that cannot fail, which this lane refuses on sight. So a chain with no metering driver MUST say
+   `unmetered`, and a number on it is a load fault; a chain that holds a metering driver (today only `mock`, whose
+   recordings may carry `__cost`) must give a number. The set of metering drivers is a table in
+   `failure-class.mjs`, and a driver joins it in the reviewed diff that makes it report `inr`.
 7. **Refuse before spend, deterministically.** `nextHop` is pure over the chain terms and the hops so far, each
    recorded as measured `{driver, tier, class, ms, cost?}`. It refuses the next hop when the attempt count would pass
    `max_attempts`, when elapsed is at or past `max_wall_ms`, or when spend so far is at or past `max_cost`. A started
@@ -72,11 +80,15 @@ much a fallback may spend is whatever the caller's `--budget` says, or nothing.
   attempt before the proposal receipt.
 - **F2 — the family of `generic-api`.** It is read from the resolved pin or profile. A family arc cannot name counts as
   the SAME family (fail closed: no cross-family hop on a guess). Families are a fixed table in the module:
-  `claude-code` → `anthropic`, `codex` → `openai`, `hermes` → `runtime:hermes`, `mock` → `mock:<driver-declared>`
-  (so fixtures can pose both cases), `generic-api` → derived from its model id's vendor prefix or `unknown`.
-- **F3 — `max_cost` when a prior hop reported no spend.** Fail closed. An absent figure means the spend is unproven,
-  so no further hop is started under a finite `max_cost`. A finite `max_cost` on a chain whose first driver never
-  reports `inr` therefore forbids every hop, and Phase 10 writes the live rows knowing which drivers report it.
+  `claude-code` → `anthropic`, `codex` → `openai`, `hermes` → `runtime:hermes`, `mock` → `mock`, `generic-api` →
+  the vendor prefix of its model id (`openai/…` → `openai`) or `unknown`.
+- **F3 — `max_cost` when a prior attempt reported no spend. REFINED BY EVIDENCE at kickoff**, because the
+  recommendation as written ("any absent figure forbids the hop") would have forbidden every hop on every chain:
+  a failed attempt never writes a cost. The rule is now per class. A `transport` or `provider-unavailable` attempt
+  served no answer — the class IS the driver's observation of that — so its absent figure counts as 0. Any other
+  attempt with an absent figure leaves the total unproven, and no hop starts under a numeric `max_cost`. An
+  `unmetered` chain skips the money check entirely and says so on the receipt; the caller's `--budget inr=` still
+  binds what IS measured.
 - **F4 — explicit `--driver` runs.** They consult no row and have no chain. They gain only the `failure_class` /
   `hops[]` record. ENG-H governs the routed path.
 
@@ -89,5 +101,8 @@ much a fallback may spend is whatever the caller's `--budget` says, or nothing.
   That is recorded as an assumption with a trigger in the cycle PLAN, not hidden.
 - **Harder:** every fixture `router.yaml` under `tests/` must carry the three terms or the load faults. Counted at
   kickoff: 14 test files write router fixtures (about 40 `classes:` blocks), and 24 copy the real router.
-- **What would be revisited:** if `max_cost` under F3 makes every live chain hop-less because no production driver
-  reports `inr`, the honest fix is a driver that measures spend, never an estimate.
+- **Recorded honestly:** every live chain in `engine/router.yaml` is `max_cost: unmetered` on the day this lands,
+  because no production driver measures spend. The money term exists and is enforced the moment a driver meters;
+  until then the receipt says `unmetered` rather than implying a cap.
+- **What would be revisited:** the first production driver that reports `inr` joins the metering table, and its
+  chains then carry a number.

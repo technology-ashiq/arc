@@ -43,6 +43,31 @@ const MAX_TRANSPORT_RETRIES = 2;
 // rather than being killed mid-line by arc-run's timeout at the same instant.
 const DEADLINE_MARGIN_MS = 1500;
 
+// Words a provider uses when the KEY or the ACCOUNT is out of money, not when the service is busy.
+// A 429 carrying one is a spent quota, and hopping on it spends again (ADR-0228; the capped key's
+// 403 `Key limit exceeded` is the measured case, ADR-0213).
+const MONEY_WORDS = /quota|credit|key limit|billing|insufficient[_ ]funds/i;
+
+/**
+ * WHY the transport failed, from what the endpoint actually returned (ADR-0228). Only structural
+ * facts -- the status, and for 429/403 whether the body names money. Anything this cannot place is
+ * `null`, which arc-run reads as `unknown` and never hops on: a guess is not a classification.
+ * @param {{ status: number, text?: string, timedOut?: boolean } | null} last
+ * @returns {"transport" | "provider-unavailable" | "budget" | null}
+ */
+function failureClassOf(last) {
+  if (!last) return null;
+  const s = last.status;
+  const money = MONEY_WORDS.test(String(last.text || ""));
+  if (s === 0) return "transport";                       // connect error, DNS, abort on our own timeout
+  if (s === 402) return "budget";
+  if (s === 429) return money ? "budget" : "provider-unavailable";
+  if (s === 403) return money ? "budget" : null;
+  if (s === 503) return "provider-unavailable";
+  if (s >= 500 && s < 600) return "transport";
+  return null;                                           // 400, 401, 404 ... nobody else will fix these
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const retryable = (status) => status === 429 || (status >= 500 && status < 600);
 
@@ -171,7 +196,11 @@ await runDriver("generic-api", async ({ processName, input }) => {
   }
 
   if (!last || last.status < 200 || last.status >= 300) {
-    throw new Error(`transport failed after ${MAX_TRANSPORT_RETRIES + 1} attempt(s): status ${last?.status ?? "none"}`);
+    const e = new Error(`transport failed after ${MAX_TRANSPORT_RETRIES + 1} attempt(s): status ${last?.status ?? "none"}`);
+    const cls = failureClassOf(last);
+    if (cls === "budget") e.arcExit = 2;
+    else if (cls) e.arcFailureClass = cls;
+    throw e;
   }
 
   const envelope = parseModelJson(last.text, "the endpoint envelope");
@@ -180,7 +209,11 @@ await runDriver("generic-api", async ({ processName, input }) => {
 
   // The OUTPUT is returned unvalidated on purpose: judging it against the process schema is
   // arc-run's job, and a driver that pre-judges hides a process fault as a driver fault.
-  const output = parseModelJson(content, "the model answer");
+  // An answer that is not JSON at all is still the MODEL's answer, so it is `model-invalid`
+  // (ADR-0228): another model family might answer it, a retry of the transport would not.
+  let output;
+  try { output = parseModelJson(content, "the model answer"); }
+  catch (err) { err.arcFailureClass = "model-invalid"; throw err; }
 
   const u = envelope.usage || {};
   return {

@@ -11,16 +11,24 @@ Serves **REQ-08** and **REQ-09** (PLAN). Decision: **ADR-0228** (ENG-H, forks F1
 
 - [ ] `.claude/scripts/engine/failure-class.mjs` exists and is the ONLY owner of: the six-value `FAILURE_CLASSES`
       set, `classifyAttempt(observation)` (arc-run's observation → class), `familyOf(driver, model)` (F2 table),
-      and the pure `nextHop(chain, hops, terms, now)` returning `{hop: true, to}` or `{hop: false, why}`.
+      and the pure `nextHop(chain, hops, ctx)` returning `{hop: true, to}` or `{hop: false, why}`. `ctx` carries the
+      elapsed time and the RUN's remaining time as inputs; a hop is refused (`byTerms`, receipted as `budget`) when the
+      run has less than the module's fixed `MIN_HOP_MS` left, so a driver that timed out at the run's edge and
+      declared `transport` cannot start a hop that is killed at once (retro-log 2026-08-03#4).
 - [ ] `drivers/common.mjs`: a produce() that throws an error carrying `arcFailureClass` gets `failure_class`
       written to the cost sidecar on its exit-1 path; a value outside the set is written as-is and arc-run reads it
       as `unknown` loudly. Exit map unchanged (0/1/2).
-- [ ] `drivers/mock.mjs`: a recording key `__failure` (`{class, message}`) makes the replay fail with exit 1 and
-      that declared class; `class: null` fails with no declaration. Stripped like `__cost`.
+- [ ] `drivers/mock.mjs`: a recording key `__failure` (`{class, message, exit}`) makes the replay fail with exit 1
+      (or 2 when `exit: 2`) and that declared class; `class: null` fails with no declaration; `exit: 0` returns the
+      recording's output AND writes the declaration, which is how the ignore rule is fixtured — the receipt must carry
+      the OBSERVED class (ADR-0228 item 4). Any other `__`-prefixed key is a load error. Stripped like `__cost`.
 - [ ] `arc-run.mjs`: `attempt()` returns `{verdict, failureClass}` with the class from `classifyAttempt`; the
-      fallback loop's ONLY hop condition is `nextHop(...)`; the loop also runs for `model-invalid` (F1: the
-      cross-family hop replaces ADR-0204's rung 1 when the chain holds a different family, else rung 1 stays);
-      `policy-refusal` / `budget` / `unknown` surface as today's `reason` values.
+      fallback loop's ONLY hop condition is `nextHop(...)`; the loop also runs for `model-invalid` (F1). When it hops
+      cross-family, the post-loop schema ladder MUST NOT run its same-driver retry: whichever of hop or rung 1 fired
+      first is the one extra attempt, so a contract fault costs 2 attempts, never 3. The rung-2 proposal and its
+      `run.completed` take `attempts` from `attemptsMade` (today hardcoded `2`), `driver` from the LAST attempted
+      driver, and `why` from the path actually taken ("hopped to …" or "retried once on the same tier"); both carry
+      `hops[]`. `policy-refusal` / `budget` / `unknown` surface as today's `reason` values.
 - [ ] `run.completed` carries `failure_class` and `hops[]` (`driver`, `tier`, `class`, `ms`, `cost?`) on every
       emit path — success, `fail()`, budget, policy, schema/proposal — with `reason` unchanged.
 - [ ] Invariants (a), (b), (d) green on CI, each with a positive control; the classifier-drop mutant fails ≥1 of them.
@@ -40,6 +48,9 @@ Serves **REQ-08** and **REQ-09** (PLAN). Decision: **ADR-0228** (ENG-H, forks F1
   3. `__failure: {class: null}` → exit 1, `failure_class: unknown`, server count **0**.
   4. mock answers JSON that fails the contract, server answers invalid JSON too → exactly one hop, then the proposal
      receipt, `hops` length 2, both `model-invalid`.
+  5. Deadline pair: `transport` declared with the run's budget nearly spent (under `MIN_HOP_MS` left) → no hop,
+     `reason: budget`; the same declaration with most of the budget left → the hop happens.
+  6. Same-family chain (`mock` → `mock`-family only) answering invalid JSON → rung 1 stays, `attempts` 2, no hop.
 - **Real-system check:** n/a — fakes only this phase (mock + local endpoint); the real drivers' declarations are Phase 10.
 - **Expected evidence:** CI per-job log line `RAN: N checks`, no `FAIL `; the mutant line
   `ok mutant: a classifier that lets every failure hop turns invariant fixtures red`.

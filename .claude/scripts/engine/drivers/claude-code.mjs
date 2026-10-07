@@ -59,12 +59,14 @@ function runStreaming(args, prompt) {
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     let buf = "", total = 0, result = null, errTail = "", settled = false, exited = null, drain = null, overflow = "";
-    const fail = (msg) => {
+    const fail = (msg, cls) => {
       if (settled) return;
       settled = true;
       if (drain) clearTimeout(drain);
       try { child.kill("SIGKILL"); } catch { /* already gone */ }
-      rejectP(new Error(`claude CLI failed: ${msg}`));
+      const err = new Error(`claude CLI failed: ${msg}`);
+      if (cls) err.arcFailureClass = cls;
+      rejectP(err);
     };
     const finish = () => {
       if (settled) return;
@@ -103,7 +105,9 @@ function runStreaming(args, prompt) {
       if (buf.length > STREAM_LINE_CAP) { overflow = `one stream line passed ${STREAM_LINE_CAP} bytes`; finish(); }
     });
     child.stderr.on("data", (c) => { errTail = (errTail + c).slice(-2000); });
-    child.on("error", (e) => fail(e.message));
+    // A CLI that is not there is the one failure this driver can name structurally (ADR-0228); every other
+    // CLI failure reaches it as free text, and guessing a class from words is not a classification.
+    child.on("error", (e) => fail(e.message, e && e.code === "ENOENT" ? "provider-unavailable" : undefined));
     child.on("exit", (code, signal) => {
       exited = { code, signal };
       drain = setTimeout(finish, STREAM_DRAIN_MS);
@@ -167,7 +171,10 @@ await runDriver("claude-code", async ({ processName, input }) => {
       const [bin, argv] = cliCommand(args);
       raw = execFileSync(bin, argv, { input: prompt, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
     } catch (e) {
-      throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
+      const err = new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
+      // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
+      if (e && e.code === "ENOENT") err.arcFailureClass = "provider-unavailable";
+      throw err;
     }
     envelope = parseModelJson(raw, "the claude CLI envelope");
   }
@@ -190,7 +197,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.2.0",
+  version: () => "claude-code@1.3.0",
 });
 
 settle();

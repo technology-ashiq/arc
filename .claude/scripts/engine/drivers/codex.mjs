@@ -47,7 +47,10 @@ await runDriver("codex", async ({ processName, input }) => {
   try {
     raw = execFileSync(CLI, ["exec", "--json", prompt], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
   } catch (e) {
-    throw new Error(`codex CLI failed: ${String(e.message).split("\n")[0]}`);
+    const err = new Error(`codex CLI failed: ${String(e.message).split("\n")[0]}`);
+    // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
+    if (e && e.code === "ENOENT") err.arcFailureClass = "provider-unavailable";
+    throw err;
   }
 
   // The CLI's envelope shape is not a contract arc controls, so take the last JSON object on

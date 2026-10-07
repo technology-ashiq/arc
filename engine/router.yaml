@@ -66,13 +66,29 @@ tiers:
   - high-judgment
   - independent-family-verifier
 
-# A task class is a property of the WORK, not of a vendor. `fallback` is tried in order when
-# the primary driver reports a driver-fault (never when it reports a process-fault -- falling
-# back on a broken schema would just fail three times instead of once).
+# A task class is a property of the WORK, not of a vendor. `fallback` is tried in order, and ONLY
+# for a failure another driver could fix (ADR-0228): `transport` and `provider-unavailable` hop;
+# `model-invalid` hops once, across model families; `policy-refusal`, `budget` and `unknown` never do.
+#
+# EVERY ROW DECLARES ITS CHAIN TERMS (ADR-0228 item 6), and a row without them fails the load:
+#   max_attempts  every attempt, the ADR-0204 retry included -- set to chain length + 1, so no row
+#                 is tighter today than the ladder it already had.
+#   max_wall_ms   no hop or retry starts at or past it. 3600000 is a CEILING chosen to bind no
+#                 tighter than today's longest real budget (arc-attack runs 30 min per surface);
+#                 calibrate it per class from the `hops[].ms` the receipts now carry, in a
+#                 reviewed diff -- never guessed downward.
+#   max_cost      integer paise, or `unmetered`. Every row here is `unmetered` because NO production
+#                 driver reports spend (claude-code and generic-api write tokens only, codex writes
+#                 none, hermes reports none by design), and a paise figure on such a chain would be a
+#                 cap nothing can ever be measured against. A driver that starts reporting `inr`
+#                 joins METERING_DRIVERS in failure-class.mjs, and its rows then carry a number.
 classes:
   commit-msg-draft:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 4
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback:
       - codex
       - generic-api
@@ -82,12 +98,18 @@ classes:
     # under-powered, which is exactly the condition worth paying for.
     tier: high-judgment
     driver: claude-code
+    max_attempts: 3
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback:
       - codex
 
   kickoff-plan:
     tier: high-judgment
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # ===========================================================================================
@@ -159,6 +181,9 @@ classes:
   build-in-public-draft:
     tier: balanced-workhorse
     driver: hermes
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     cap: L1-drafts
     # CLOUD, CORRECTED 2026-08-17 — and this field is not descriptive, it is load-bearing.
     #
@@ -209,6 +234,9 @@ classes:
   face-ask:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # ADR-0226. The BOUNDARY-surface attacker only. Tier is balanced-workhorse because ADR-0069's
@@ -226,6 +254,9 @@ classes:
   attack-diff:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # Phase 06 slice 03b (face lane). This row decides no new tier: it is the Chair's seat, which
@@ -237,6 +268,9 @@ classes:
   council-convene:
     tier: high-judgment
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # Phase 06 slice 04 (face lane, memory ring). One lesson becomes one retro-log row against the log's fixed
@@ -246,6 +280,9 @@ classes:
   lesson-log:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # Phase 06 slice 04 (face lane, memory ring). Choosing a rule's home and writing it in that file's style is
@@ -255,6 +292,9 @@ classes:
   rule-promote:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # Phase 06 (face lane, develop ring). Proving a slice cites evidence CI and the lane already recorded against the
@@ -264,6 +304,9 @@ classes:
   develop-proof:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
   # Phase 06 (face lane, strategy ring). Writing one owner decision into an ADR's fixed sections is production against
@@ -272,6 +315,9 @@ classes:
   adr-record:
     tier: balanced-workhorse
     driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 3600000
+    max_cost: unmetered
     fallback: []
 
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
@@ -280,4 +326,7 @@ classes:
 default:
   tier: balanced-workhorse
   driver: claude-code
+  max_attempts: 2
+  max_wall_ms: 3600000
+  max_cost: unmetered
   fallback: []

@@ -215,7 +215,7 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   mkdir -p "$d/processes" "$d/engine" "$d/.claude"
   cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
   cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$d/processes/"
-  printf 'version: 1\ntiers:\n  - balanced-workhorse\nclasses:\n  something-else:\n    tier: balanced-workhorse\n    driver: claude-code\n' > "$d/engine/router.yaml"
+  printf 'version: 1\ntiers:\n  - balanced-workhorse\nclasses:\n  something-else:\n    tier: balanced-workhorse\n    driver: claude-code\n    max_attempts: 2\n    max_wall_ms: 3600000\n    max_cost: unmetered\n' > "$d/engine/router.yaml"
   run node "$(RUN)" --process commit-msg-draft --driver auto --dry-run --root "$d"
   [ "$status" -eq 1 ]
   [[ "$output" == *"no route for task class"* ]]
