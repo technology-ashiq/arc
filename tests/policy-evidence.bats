@@ -1,0 +1,238 @@
+#!/usr/bin/env bats
+# policy cycle 2, Phase 00 -- evidenced levels (POL-L; REQ-01, REQ-02, REQ-03; ADR-0509, ADR-0510).
+#
+# A configured level is not an evidenced level. The fold says, per (subject x capability) pair, when it last
+# succeeded, was last refused correctly and was last audited, and a pair at effective L1+ on
+# spend/publish/deploy/network/shell with no fresh typed refusal is BELOW-BAR.
+#
+# THE TRAP THIS SUITE IS BUILT AGAINST: a fold that reports EVERYTHING as BELOW-BAR passes every BELOW-BAR test.
+# So every invariant has a positive control a broken fold cannot satisfy, and a named mutant -- a copy of the real
+# module with one line changed -- that its fixture must KILL (ASSERT-FAILED, not a crash). The scenarios live in
+# tests/fixtures/policy-evidence/scenarios.mjs so they run unchanged against the real fold and against each mutant.
+#
+# ASCII-only test names; the file asserts its own registered count at the bottom.
+bats_require_minimum_version 1.5.0
+load 'test_helper'
+
+FX="$BATS_TEST_DIRNAME/fixtures/policy-evidence"
+
+# One sandbox copy of the scripts per file. Mutants are written INTO this copy (beside the module, so relative
+# imports resolve), never into the repo tree.
+setup_file() {
+  export SB="$BATS_FILE_TMPDIR/sb"
+  mkdir -p "$SB/.claude"
+  cp -r "$BATS_TEST_DIRNAME/../.claude/scripts" "$SB/.claude/"
+  [ -f "$SB/.claude/scripts/hq/lib/policy-evidence/fold.mjs" ] || { echo "sandbox copy has no fold.mjs"; return 1; }
+}
+
+FOLD_REL=".claude/scripts/hq/lib/policy-evidence/fold.mjs"
+LOAD_REL=".claude/scripts/hq/lib/policy-evidence/load.mjs"
+
+# Run a scenario against the REAL fold: it must say RAN and PASS.
+_pass() {
+  run node "$FX/scenarios.mjs" "$SB/$FOLD_REL" "$1"
+  [[ "$output" == *"RAN $1"* ]] || { echo "scenario $1 never ran: $output"; return 1; }
+  [ "$status" -eq 0 ] && [[ "$output" == *"PASS $1"* ]] || { echo "scenario $1 failed on the real fold: $output"; return 1; }
+}
+
+# Build mutant $2 of module $1 and run scenario $3 against it: it must be KILLED by an assertion, not by a crash.
+_killed() {
+  local mut
+  mut="$(node "$FX/mutants.mjs" "$SB/$1" "$2")" || { echo "mutant $2 did not apply"; return 1; }
+  [ -f "$mut" ] || { echo "mutant file missing: $mut"; return 1; }
+  run node "$FX/scenarios.mjs" "$mut" "$3"
+  [[ "$output" == *"RAN $3"* ]] || { echo "scenario $3 never ran against $2: $output"; return 1; }
+  [[ "$output" == *"ASSERT-FAILED $3"* ]] || { echo "mutant $2 SURVIVED scenario $3: $output"; return 1; }
+}
+
+# ---------------------------------------------------------------- REQ-01: the fold ran, over every pair
+
+@test "fold RAN: one cell per subject x capability" { _pass ran; }
+@test "carriers: guard run is every cell last_audit, process run is its shell success" { _pass carriers; }
+@test "no clock: Date.now and an argument-less Date throw and the fold still answers" { _pass noClock; }
+
+# ---------------------------------------------------------------- REQ-02: BELOW-BAR and invariants (a)(b)
+
+@test "invariant a: zero receipts is BELOW-BAR, never PASS" { _pass zeroReceipts; }
+@test "invariant a: mutant M-a (absent stops counting) is killed" { _killed "$FOLD_REL" M-a zeroReceipts; }
+@test "positive control: a fresh refusal clears the bar" { _pass freshControl; }
+@test "invariant b: fresh at N, BELOW-BAR at N+1, byte-identical replays" { _pass dayBoundary; }
+@test "invariant b: mutant M-b (age from the clock) is killed" { _killed "$FOLD_REL" M-b dayBoundary; }
+@test "invariant b: mutant M-b2 (boundary one day early) is killed" { _killed "$FOLD_REL" M-b2 dayBoundary; }
+@test "IST bucketing: 23:59:59 and 00:00:00 IST are different days" { _pass istBucketing; }
+@test "IST bucketing: mutant M-utc is killed" { _killed "$FOLD_REL" M-utc istBucketing; }
+@test "future events after as-of are ignored, never a negative age" { _pass future; }
+@test "future events: mutant M-future is killed" { _killed "$FOLD_REL" M-future future; }
+@test "a missing N is BELOW-BAR with reason no-bar-declared" { _pass noBarDeclared; }
+
+# ---------------------------------------------------------------- REQ-03: attribution, and what does not count
+
+@test "an inconsistent level is discarded" { _pass inconsistent; }
+@test "inconsistent: mutant M-noforge is killed" { _killed "$FOLD_REL" M-noforge inconsistent; }
+@test "an L0 refusal from before a promotion does not refresh the L1 pair" { _pass l0BeforePromotion; }
+@test "L0 before promotion: mutant M-l0 is killed" { _killed "$FOLD_REL" M-l0 l0BeforePromotion; }
+@test "a headless refusal with no gate incident behind it is unverified" { _pass unverifiedHeadless; }
+@test "unverified headless: mutant M-ref is killed" { _killed "$FOLD_REL" M-ref unverifiedHeadless; }
+@test "an interactive refusal before any interactive writer exists is forged" { _pass forgedBeforeWriter; }
+@test "forged before writer: mutant M-writer is killed" { _killed "$FOLD_REL" M-writer forgedBeforeWriter; }
+@test "prose is never parsed: an incident naming shell is not a refusal" { _pass proseIgnored; }
+
+# ---------------------------------------------------------------- the profile on the spine (ADR-0509)
+
+_emit() { # $1 payload json; emits note.logged into the per-test spine, strict
+  bash "$ARC_ROOT/.claude/scripts/hq/arc-event.sh" emit note.logged --payload "$1" --strict --process demo@1.0.0 --outcome fail
+}
+
+@test "profile: a well-formed interactive refusal is accepted and lands in events" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"fixture"}'
+  [ "$status" -eq 0 ] || { echo "valid refusal refused: $output"; false; }
+  grep -rq '"policy.refusal"' "$ARC_SPINE_ROOT/events/"*.jsonl || { echo "not in events/"; false; }
+  ! grep -rqs '"policy.refusal"' "$ARC_SPINE_ROOT/events/_quarantine/" || { echo "landed in quarantine"; false; }
+}
+
+@test "profile: an unknown key is refused by name" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"fixture","extra":1}'
+  [ "$status" -ne 0 ] || { echo "an unknown key was accepted"; false; }
+  [[ "$output" == *"BAD_POLICY_REFUSAL"* && "$output" == *"extra"* ]] || { echo "wrong refusal: $output"; false; }
+}
+
+@test "profile: a near-miss subject is refused, not exempted" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run _emit '{"subject":"Policy.Refusal ","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"fixture"}'
+  [ "$status" -ne 0 ] || { echo "a near-miss subject was accepted"; false; }
+  [[ "$output" == *"BAD_POLICY_REFUSAL"* ]] || { echo "wrong refusal: $output"; false; }
+}
+
+@test "profile: a headless refusal without incident_ref is refused" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run _emit '{"subject":"policy.refusal","action_kind":"process:demo","capability":"shell","level":"L0","decision":"deny","surface":"headless","reason":"fixture"}'
+  [ "$status" -ne 0 ] || { echo "a headless refusal with no incident_ref was accepted"; false; }
+  [[ "$output" == *"incident_ref"* ]] || { echo "wrong refusal: $output"; false; }
+}
+
+@test "profile: a propose claimed at L2 is refused" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L2","decision":"propose","surface":"interactive","reason":"fixture"}'
+  [ "$status" -ne 0 ] || { echo "a propose at L2 was accepted"; false; }
+}
+
+@test "zero new kinds: no kind in the closed vocabulary names a refusal" {
+  # cd + a relative import: a POSIX $ARC_ROOT inside a node program is red on the Windows leg only.
+  cd "$ARC_ROOT"
+  run node --input-type=module -e "const { KINDS } = await import('./.claude/scripts/hq/lib/validate.mjs'); console.log('KINDS', KINDS.length, KINDS.filter((k) => /refus/.test(k)).length, KINDS.includes('note.logged'));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" =~ ^KINDS\ [0-9]+\ 0\ true$ ]] || { echo "vocabulary changed: $output"; false; }
+}
+
+# ---------------------------------------------------------------- the loader: shape is not integrity
+
+@test "loader: a sealed line tampered in place is rejected, and mutant M-sha loads it" {
+  local root="$BATS_TEST_TMPDIR/lroot"
+  export ARC_SPINE_ROOT="$root/.claude/state/hq"
+  run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"original"}'
+  [ "$status" -eq 0 ] || { echo "fixture emit failed: $output"; false; }
+  local f; f="$(ls "$ARC_SPINE_ROOT/events/"*.jsonl | head -n 1)"
+  [ -n "$f" ] || { echo "no day file"; false; }
+  # Tamper: same shape, same sha, different reason. Valid to validateEvent; wrong to eventSha.
+  sed 's/"reason":"original"/"reason":"tampered"/' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  grep -q '"tampered"' "$f" || { echo "tamper did not apply"; false; }
+  run node "$FX/loader-probe.mjs" "$SB/$LOAD_REL" "$root"
+  [ "$output" = "LOADED 0 REJECTED 1" ] || { echo "real loader: $output"; false; }
+  local mut; mut="$(node "$FX/mutants.mjs" "$SB/$LOAD_REL" M-sha)" || { echo "M-sha did not apply"; false; }
+  run node "$FX/loader-probe.mjs" "$mut" "$root"
+  [ "$output" = "LOADED 1 REJECTED 0" ] || { echo "M-sha SURVIVED: $output"; false; }
+}
+
+@test "loader: a copied day-file line counts once (idem dedupe)" {
+  local root="$BATS_TEST_TMPDIR/droot"
+  export ARC_SPINE_ROOT="$root/.claude/state/hq"
+  run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"once"}'
+  [ "$status" -eq 0 ] || { echo "fixture emit failed: $output"; false; }
+  local f; f="$(ls "$ARC_SPINE_ROOT/events/"*.jsonl | head -n 1)"
+  cp "$f" "$ARC_SPINE_ROOT/events/2000-01-01.jsonl"
+  run node "$FX/loader-probe.mjs" "$SB/$LOAD_REL" "$root"
+  [ "$output" = "LOADED 1 REJECTED 0" ] || { echo "dedupe: $output"; false; }
+}
+
+# ---------------------------------------------------------------- END TO END: a real arc-run refusal becomes evidence
+
+# The awk helper from policy-runwrapper.bats: the repo policy plus `process:denied` with write at L0, asserted.
+_denying_policy() {
+  awk '
+    /^  "process:kickoff-plan":/ { print "  \"process:denied\":"; inblock = 1; next }
+    /^  [^ ]/                    { inblock = 0 }
+    inblock && /^    write:/     { print "    write: { level: L0 }"; next }
+    { print }
+  ' "$ARC_ROOT/hq.policy.yaml" > "$1"
+  grep -q '"process:denied":' "$1" || { echo "fixture policy carries no process:denied kind"; return 1; }
+  grep -A4 '"process:denied":' "$1" | grep -q 'write: { level: L0 }' || { echo "fixture policy does not deny process:denied/write"; return 1; }
+}
+
+@test "END TO END -- an arc-run refusal is a typed receipt the fold attributes" {
+  # The governing policy root is derived from the module location, so the scripts are copied INTO the root whose
+  # policy is under test; a --root pointing elsewhere would read the real policy and run unpoliced.
+  local d="$BATS_TEST_TMPDIR/e2e"
+  mkdir -p "$d/processes" "$d/.claude/state/hq"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  cat > "$d/processes/denied.process.yaml" <<'EOF'
+name: denied
+version: 1.0.0
+permissions: declared
+inputs: []
+tools:
+  - fs.write
+output:
+  type: object
+EOF
+  _denying_policy "$d/hq.policy.yaml" || return 1
+  cat > "$d/.claude/scripts/engine/drivers/claude-code.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "DRIVER-RAN" > "$(dirname "$0")/../../../../DRIVER-RAN.txt"
+echo '{"ok":true}'
+EOF
+  chmod +x "$d/.claude/scripts/engine/drivers/claude-code.sh" 2>/dev/null || true
+  export ARC_SPINE_ROOT="$d/.claude/state/hq"
+
+  run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
+  [[ "$output" != *"unpoliced"* ]] || { echo "the run was UNPOLICED -- the sandbox is not the governing root: $output"; false; }
+  [[ "$output" == *"policy denied"* ]] || { echo "no policy denial: $output"; false; }
+  [ ! -f "$d/DRIVER-RAN.txt" ] || { echo "the driver RAN despite the denial"; false; }
+
+  # Read back from the spine DIRECTORY, never from the emitter's return value.
+  local n; n="$(cat "$d/.claude/state/hq/events/"*.jsonl | grep -c '"policy.refusal"')"
+  [ "$n" -eq 1 ] || { echo "expected exactly 1 policy.refusal in events/, found $n"; false; }
+  ! grep -rqs '"policy.refusal"' "$d/.claude/state/hq/events/_quarantine/" || { echo "the refusal was quarantined"; false; }
+  local rid; rid="$(cat "$d/.claude/state/hq/events/"*.jsonl | grep '"policy.refusal"' | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>console.log(JSON.parse(s).id))")"
+  [ -n "$rid" ] || { echo "could not read the refusal id"; false; }
+
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
+  [ "$status" -eq 0 ] || { echo "report failed: $output"; false; }
+  printf '%s' "$output" > "$BATS_TEST_TMPDIR/report.json"
+  run node -e "const r=require(process.argv[1]); const c=r.cells.find(c=>c.subject==='process:denied'&&c.capability==='write'); console.log(c&&c.last_refusal, c&&c.state, r.cells.length===r.subjects*8&&r.subjects>0)" "$BATS_TEST_TMPDIR/report.json"
+  [ "$output" = "$rid n/a true" ] || { echo "attribution: got [$output], refusal $rid"; false; }
+}
+
+@test "check: the real policy today is 17 in scope and all BELOW-BAR on an empty spine" {
+  # Not a pinned count of the live repo's levels -- it is derived: every in-scope cell at L1 with no writer.
+  local d="$BATS_TEST_TMPDIR/chk"
+  mkdir -p "$d/.claude/state/hq/events"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  cp "$ARC_ROOT/hq.policy.yaml" "$d/hq.policy.yaml"
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" check --as-of 2026-10-07
+  [ "$status" -eq 3 ] || { echo "check should exit 3 on BELOW-BAR, got $status: $output"; false; }
+  [[ "$output" =~ ([0-9]+)\ in\ scope,\ ([0-9]+)\ BELOW-BAR ]] || { echo "no summary line: $output"; false; }
+  [ "${BASH_REMATCH[1]}" -gt 0 ] && [ "${BASH_REMATCH[1]}" = "${BASH_REMATCH[2]}" ] || { echo "in scope ${BASH_REMATCH[1]} vs BELOW-BAR ${BASH_REMATCH[2]}"; false; }
+}
+
+@test "check: usage errors exit 2 and name the problem" {
+  run node "$ARC_ROOT/.claude/scripts/hq/policy-evidence.mjs" check --as-of 07-10-2026
+  [ "$status" -eq 2 ] && [[ "$output" == *"YYYY-MM-DD"* ]] || { echo "$status $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/hq/policy-evidence.mjs" guess
+  [ "$status" -eq 2 ] && [[ "$output" == *"unknown subcommand"* ]] || { echo "$status $output"; false; }
+}
+
+@test "suite count: every test registered (ASCII names)" {
+  [ "${#BATS_TEST_NAMES[@]}" -eq 35 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 35"; false; }
+}

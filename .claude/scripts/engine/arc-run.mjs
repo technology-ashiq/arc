@@ -1414,6 +1414,31 @@ function verifyLanded(id) {
  * No policy logic lives here -- every decision is the shared library's (POL-D).
  */
 let policyNotInForceAnnounced = false;
+
+// ADR-0509 (POL-L). The incident above names the capability only inside prose, and the evidence fold never parses
+// prose -- so each denied capability ALSO gets a typed `policy.refusal`, citing the incident so the fold can
+// corroborate it. Once per capability per run: a fallback hop calls invoke() again and is refused for the same
+// reason, which is one refusal, not two. Only after the incident sealed -- a refusal citing nothing would be
+// `unverified` by construction. Best effort exactly like the incident: a lost receipt is reported, the deny stands.
+const refusalsReceipted = new Set();
+function receiptRefusals(gate, incidentId) {
+  if (!gate || !Array.isArray(gate.denials) || typeof gate.kind !== "string" || !incidentId) return;
+  for (const d of gate.denials) {
+    if (!d || typeof d.capability !== "string" || refusalsReceipted.has(d.capability)) continue;
+    refusalsReceipted.add(d.capability);
+    const reason = String(d.reason || "denied by policy").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 300);
+    const r = emitEvent("note.logged", {
+      subject: "policy.refusal", action_kind: gate.kind, capability: d.capability,
+      level: d.level, decision: "deny", surface: "headless", reason, incident_ref: incidentId,
+    }, ["--process", `${doc.name}@${doc.version}`, "--outcome", "fail"]);
+    if (!r.ok) {
+      console.error(`arc-run: WARN could not emit the policy.refusal for ${d.capability}: ${r.error}`);
+      console.error("         The DENIAL STANDS and is unaffected; only its evidence receipt is missing.");
+    } else {
+      verifyLanded(r.id);
+    }
+  }
+}
 function policyGate(name) {
   try {
     const gate = authorizeRun({ processName, doc, root });
@@ -1531,6 +1556,7 @@ async function invoke(name) {
       // nothing anywhere reporting it -- silent, which is the one thing an enforcement receipt
       // must never be.
       verifyLanded(inc.id);
+      receiptRefusals(blocked.gate, inc.id);
     }
     return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true, spawned: false };
   }
