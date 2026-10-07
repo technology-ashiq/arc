@@ -1,0 +1,8 @@
+$ arc-run --process denied --driver claude-code
+arc-run: policy denied denied: process:denied/write is denied by policy (ceiling L0, cap L1)
+arc-run: policy denied denied: process:denied/write is denied by policy (ceiling L0, cap L1)
+exit=1 driver-ran=no
+$ policy-evidence report (process:denied/write)
+n/a       process:denied/write L0 n/a N=none refusal=01M4B0N2DT5B9HP3QQSQFJMN7C success=- audit=-
+$ spine refusal receipts
+REFUSALS 1 01M4B0N2DT5B9HP3QQSQFJMN7C INCIDENTS-WITH-DENIALS 1

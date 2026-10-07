@@ -67,3 +67,23 @@ Cycle 2, Phase 01, attack round 2 (`f03f3fe`; 17 findings: 6 fixed, 4 rejected, 
 - **CLEAN said "all fresh" with nothing in scope** — says "no in-scope cell (nothing above L0 to evidence)" (L5) — *a clean message must not claim what it never measured*
 
 Rejected in Phase 01 round 2: L1 (the previous-digest loop reads unvalidated lines) — `already-covered`: every event in `inputs.events` passed `validateEvent` + `eventSha`, and the process id and outcome are matched exactly; L2/L8 (the digest omits the no-writer/clearable split) — `already-covered`: `state` encodes the split (unknown = no-writer); L4 (duplicate cell keys in the door map) — `unsupported`: the fold builds one cell per subject x capability by construction.
+
+Cycle 2, Phase 02, attack round 1 (`9b82c06`; boundary 7 findings: 5 fixed, 1 rejected, 1 to the debt ledger; the logic surface returned an empty list in 11 s, recorded as UNVERIFIED rather than as "no findings"):
+
+- **The drift check ran only AFTER the copy, so a paste generated from a stale file silently reverted another change** — `verify-paste.mjs --pre` gates the copy (B1) — *any check meant to catch drift must run before the overwrite*
+- **Hashes were of raw bytes, so an autocrlf checkout read every file as DIFFERS** — CRLF folded to LF in generator and verifier (B6) — *every byte-compare a Windows owner will run*
+- **The hook checked one spine and spawned the emitter with the whole environment** — `ARC_SPINE_ROOT`/`ARC_ROOT` pinned in the child env (B3) — *the writer/reader twin, fourth time: pin every selector at every spawn*
+- **The failure report inside the catch could itself throw, turning the block into exit 1** — guarded (B5) — *a best-effort path's own logging must be best-effort*
+- **`policy-lint other.yaml --evidence` linted one file and judged the evidence of another** — `--evidence` refuses a non-governing path (B7) — *a delegated verdict must be about the same subject as the caller's*
+
+Rejected in Phase 02 round 1: B4 (a WSL `bash` makes every hook receipt fail silently) — `unsupported`: the hook is spawned by the PreToolUse dispatcher, which is itself bash, so `bash` on its PATH is that same bash.
+
+Cycle 2, Phase 02, attack round 2 (`0da9701`; boundary 8 + logic 15 -- the first logic run failed its output contract and was re-run on the same SHA before any fix): 7 fixed, 9 rejected as written against older code or already covered, the rest LOW to the debt ledger.
+
+- **Parallel tool calls ran parallel hooks, and the check-then-emit sealed two receipts** — an O_EXCL lock around the day check and the emit, taken over after 60 s if stale (r2 L1, closing debt row 10) — *any check-then-write across processes needs the lock, not a comment*
+- **`policy-lint --evidence` spawned the delegate with an inherited root and spine** — `cwd` and both selectors pinned; a spawn failure is named (r2 B1/B7) — *the writer/reader twin, fifth time: every spawn of a judge*
+- **The env-pin and non-throwing-report fixes had no fixture** — a decoy `ARC_ROOT`/`CLAUDE_PROJECT_DIR` test and a closed-stderr test (r2 B3) — *a fix with no test that fails without it is not applied*
+- **A 3000 ms bound measured once on one box makes the first-receipt test flaky on a slow runner** — `ARC_POLICY_REFUSAL_TIMEOUT_MS` (a wait, never a selector) raised in the tests (r2 B5) — *every timing bound inside a test*
+- **A loosened assertion stopped proving the cell was classified** — now `no-writer|clearable`, both states named (r2 B6) — *a test made to pass in two worlds must still assert something in each*
+
+Rejected in Phase 02 round 2: B2 (CRLF bytes hide behaviour) — `already-covered`: `.gitattributes` sets `* text=auto eol=lf`, so no working copy here is CRLF; L2, L4, L7, L9 — `already-covered`: written against the round-1 paste (env pinned, catch guarded, the full field set matched, realpath compare); L5 (the N edit counts matches, not which) — `unsupported`: the design is N on EVERY in-scope L1 grant, and a count change refuses to generate; L11 (hook and emitter clocks differ) — `unsupported`: one host clock, the day computed once per call.

@@ -1,0 +1,68 @@
+{
+  "phase": "07",
+  "commit": "3ace479c7c660d7351f07335e931b5356d8ecfa5",
+  "short": "3ace479c",
+  "generated": "2026-10-07T14:38:16Z",
+  "files": [
+    {
+      "name": "attack-0b68278-r2-boundary.json",
+      "sha256": "6d7d67888a7b0db9bd86ea8eec61bdbd7074a626a81a0379c5a5418140b92023"
+    },
+    {
+      "name": "attack-0b68278-r2-logic.json",
+      "sha256": "671b1bb329eb3d65a94d35c0aeae41b225eedf51b99a1dfa1dd3c2e647228106"
+    },
+    {
+      "name": "attack-12b79c2-r1-boundary.json",
+      "sha256": "cf0b4c3ea96fd94f21deca0e18304814c0a34df6817b7d80b44e2af40892f8e1"
+    },
+    {
+      "name": "attack-12b79c2-r1-logic.json",
+      "sha256": "86465365a269c9fc4487687404b3d8bcd9c16f2b76c4c664ebeea40660732318"
+    },
+    {
+      "name": "attack-1773af3-r1-boundary.json",
+      "sha256": "c1108b251b6607a5edd99ca70426735647a869f77f3dfeb15f3b59da0d3950b0"
+    },
+    {
+      "name": "attack-1773af3-r1-logic.json",
+      "sha256": "16c73258e2e9b077ffdd24c1b197bb95d0f614b367a7f4e4f50bca6fa818190a"
+    },
+    {
+      "name": "attack-65d01cc-r1-boundary.json",
+      "sha256": "fcd0f9d25bd3b3020cdee81201450d09672200aad454e073c950ef7d5b1e8c37"
+    },
+    {
+      "name": "attack-65d01cc-r1-logic.json",
+      "sha256": "c50fe116c4214da5ce486945958dddcb9b5be436c2888786862327431b6a731a"
+    },
+    {
+      "name": "attack-ae0aeb8-r2-boundary.json",
+      "sha256": "7d7969999ba13ff149681f2317099c68352420dfe2f4054e628b19dc5725d077"
+    },
+    {
+      "name": "attack-ae0aeb8-r2-logic.json",
+      "sha256": "4b4bbdecfe67af46195a213015b10cdb25ec5fceaf4dff29fed090743f46c2ca"
+    },
+    {
+      "name": "attack-bb0c9a7-r2-boundary.json",
+      "sha256": "66f58d129e614c26c8e486ab20fddaf751237f37a32e7a9f004abcc1c70e8643"
+    },
+    {
+      "name": "attack-bb0c9a7-r2-logic.json",
+      "sha256": "c02acaa6bd562e160bf240253d31c8265689435e2bc982f75f6e40e05de9b2e7"
+    },
+    {
+      "name": "s2-s3-contract.md",
+      "sha256": "8bce14e5db29a18e821ce883f3c2e927ff8968472dcb8d6034b6e55c2e31f737"
+    },
+    {
+      "name": "s5-live-run.md",
+      "sha256": "d0e07554fbd6db31b60ca50134ff5f72a5f70fbc261cf688417e979acbe7a667"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "64665cb2d7c2aeef1789ca905a13999d4f52586f1a9f4b99be12d4173b2e8c16"
+    }
+  ]
+}

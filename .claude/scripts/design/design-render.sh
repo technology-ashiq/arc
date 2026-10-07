@@ -817,17 +817,49 @@ for m in "$RENDER_ROOT"/*.json "$RENDER_ROOT"/*/*.json; do
   [ "$ITER_GIVEN" -eq 1 ] || UNCHANGED="true"
 done
 
+# Provenance (Phase 08 S1, ADR-1410): who authored the pixels, read from the route's own path and nothing else,
+# so the packager has a record to refuse on. It is read in EVERY mode, not only explore: a rival draft or a pack
+# screen rendered as a plain route was stamped arc by mode alone (attack 12b79c2 L12 B1). A route through a
+# rival-<p>/ dir is the rival's, through ref-<sha16>/ or a pack/rival state dir a third party's; anything else
+# is arc's. The value is held to a closed grammar before either writer sees it (B2), and a refusal removes the
+# PNG already captured, so no picture is left without a receipt (B10).
+PROVENANCE="arc"
+_prov_refuse() { echo "design-render: REFUSED -- $1; a render without a provenance is never written." >&2; rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
+case "/$ROUTE/" in
+  */.claude/state/design/refpacks/*|*/.claude/state/design/rivals/*) PROVENANCE="reference";;
+  */ref-????????????????/*) PROVENANCE="reference";;
+  */rival-*/*)
+    _prov_rival="${ROUTE#*rival-}"; _prov_rival="${_prov_rival%%/*}"
+    PROVENANCE="rival:$_prov_rival";;
+esac
+if [ "$MODE" = "explore" ]; then
+  case "${_er_variant:-}" in
+    variant-?) [ "$PROVENANCE" = "arc" ] || _prov_refuse "an explore variant route also names $PROVENANCE";;
+    rival-*) PROVENANCE="rival:${_er_variant#rival-}";;
+    ref-*) PROVENANCE="reference";;
+    *) _prov_refuse "no provenance for '${_er_variant:-}'";;
+  esac
+fi
+case "$PROVENANCE" in
+  arc|reference) ;;
+  rival:*)
+    case "${PROVENANCE#rival:}" in
+      ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) _prov_refuse "the rival name in '$(printf '%s' "$PROVENANCE" | cut -c1-60)' is not lowercase kebab";;
+    esac;;
+  *) _prov_refuse "provenance '$(printf '%s' "$PROVENANCE" | cut -c1-60)' is outside arc / reference / rival:<p>";;
+esac
+
 # node writes the JSON so the route/url strings are escaped by a real serialiser rather than
 # by printf, which is how a path containing a quote becomes an unparseable meta file.
 if command -v node >/dev/null 2>&1; then
   node -e '
-    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out] = process.argv.slice(1);
+    const [route,url,png,sha,vw,vh,recipe,session,iter,unchanged,out,provenance] = process.argv.slice(1);
     require("fs").writeFileSync(out, JSON.stringify({
       route, url, png: png.replace(/\\/g,"/"),
       screenshot_sha256: sha, viewport: `${vw}x${vh}@1`, recipe,
-      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true",
+      session, iter: iter === "" ? null : Number(iter), unchanged: unchanged === "true", provenance,
     }, null, 2) + "\n");
-  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" \
+  ' "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$ITER" "$UNCHANGED" "$META" "$PROVENANCE" \
     || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 else
   # This branch already emitted a DIFFERENT, smaller object than the node one above -- no url,
@@ -843,8 +875,8 @@ else
     *\"*|*\\*) echo "design-render: REFUSED -- no node on this box, and the route contains a quote or backslash this fallback writer cannot escape safely." >&2
        rm -f "$PNG" "$META" 2>/dev/null; exit 1;;
   esac
-  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s\n}\n' \
-    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" > "$META" \
+  printf '{\n  "route": "%s",\n  "url": "%s",\n  "png": "%s",\n  "screenshot_sha256": "%s",\n  "viewport": "%sx%s@1",\n  "recipe": "%s",\n  "session": "%s",\n  "iter": %s,\n  "unchanged": %s,\n  "provenance": "%s"\n}\n' \
+    "$ROUTE" "$URL" "${PNG#"$ROOT"/}" "$SHA" "$VW" "$VH" "$RECIPE" "$SESSION" "$_iter_json" "$UNCHANGED" "$PROVENANCE" > "$META" \
     || { rm -f "$PNG" "$META" 2>/dev/null; exit 1; }
 fi
 

@@ -200,7 +200,7 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [log-analyzer](../agents/log-analyzer.md) — Diagnoses errors, stack traces and incident logs via differential diagnosis and first-error analysis, returning root cause + minimal fix + prevention. Use when debugging errors, crashes, or incidents.
 - [researcher](../agents/researcher.md) — Researches a topic (competitors, libraries, APIs, tech choices) via web + codebase with source triangulation and confidence labels. Use for open-ended "go find out X" or "compare X vs Y" tasks.
 
-## Scripts (33)
+## Scripts (37)
 
 - [`.claude/scripts/core/arc-gates.sh`](../../../.claude/scripts/core/arc-gates.sh)
 - [`.claude/scripts/core/arc-products.mjs`](../../../.claude/scripts/core/arc-products.mjs)
@@ -208,6 +208,8 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/scripts/core/arc-settings-merge.mjs`](../../../.claude/scripts/core/arc-settings-merge.mjs)
 - [`.claude/scripts/core/arc-status.sh`](../../../.claude/scripts/core/arc-status.sh)
 - [`.claude/scripts/core/board-lint.sh`](../../../.claude/scripts/core/board-lint.sh)
+- [`.claude/scripts/core/brain-drift.mjs`](../../../.claude/scripts/core/brain-drift.mjs)
+- [`.claude/scripts/core/branch-guard.sh`](../../../.claude/scripts/core/branch-guard.sh)
 - [`.claude/scripts/core/common.sh`](../../../.claude/scripts/core/common.sh)
 - [`.claude/scripts/core/concept-define.mjs`](../../../.claude/scripts/core/concept-define.mjs)
 - [`.claude/scripts/core/evolve-manifest.mjs`](../../../.claude/scripts/core/evolve-manifest.mjs)
@@ -219,6 +221,7 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/scripts/core/face-sections.mjs`](../../../.claude/scripts/core/face-sections.mjs)
 - [`.claude/scripts/core/face-tokens.mjs`](../../../.claude/scripts/core/face-tokens.mjs)
 - [`.claude/scripts/core/freeze-check.sh`](../../../.claude/scripts/core/freeze-check.sh)
+- [`.claude/scripts/core/gate-parity.mjs`](../../../.claude/scripts/core/gate-parity.mjs)
 - [`.claude/scripts/core/json-strict.mjs`](../../../.claude/scripts/core/json-strict.mjs)
 - [`.claude/scripts/core/lane-resolve.mjs`](../../../.claude/scripts/core/lane-resolve.mjs)
 - [`.claude/scripts/core/lane-resolve.sh`](../../../.claude/scripts/core/lane-resolve.sh)
@@ -230,6 +233,7 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/scripts/core/profile-request.mjs`](../../../.claude/scripts/core/profile-request.mjs)
 - [`.claude/scripts/core/proposal-branch.mjs`](../../../.claude/scripts/core/proposal-branch.mjs)
 - [`.claude/scripts/core/review-ledger.sh`](../../../.claude/scripts/core/review-ledger.sh)
+- [`.claude/scripts/core/secret-diff-scan.sh`](../../../.claude/scripts/core/secret-diff-scan.sh)
 - [`.claude/scripts/core/spawn-bounded.mjs`](../../../.claude/scripts/core/spawn-bounded.mjs)
 - [`.claude/scripts/core/statusline.sh`](../../../.claude/scripts/core/statusline.sh)
 - [`.claude/scripts/core/toolchain-health.sh`](../../../.claude/scripts/core/toolchain-health.sh)

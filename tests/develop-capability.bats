@@ -331,7 +331,9 @@ JSON
 }
 
 @test "root CLAUDE.md lists /arc-capability among its commands" {
-  run grep -n '/arc-capability' "$ARC_ROOT/CLAUDE.md"
+  # The command list moved to AGENTS.md, which CLAUDE.md imports with @AGENTS.md (distribute ADR-2007).
+  grep -qx '@AGENTS.md' "$ARC_ROOT/CLAUDE.md" || { echo "CLAUDE.md no longer imports AGENTS.md"; false; }
+  run grep -n '/arc-capability' "$ARC_ROOT/AGENTS.md"
   [ "$status" -eq 0 ] || { echo "a new top-level entry point that nothing announces"; false; }
 }
 

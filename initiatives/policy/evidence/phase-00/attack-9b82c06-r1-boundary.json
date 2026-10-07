@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "initiatives/policy/evidence/phase-02/owner-action.md:17 (cp -r paste/. . && verify-paste.mjs) with verify-paste.mjs:11-14",
+      "breaking_input": "Another lane merges a change to hq.policy.yaml or .claude/settings.json (for example a new scheduler process row) after the paste was generated. The owner runs the one-liner. cp overwrites the live file with the stale whole-file copy. verify-paste then compares the live file to the paste hash, finds them equal, and prints APPLIED.",
+      "why": "The live_before hash is only consulted after the copy has already overwritten the file, so a drifted live file is reported as success. The paste silently reverts the other lane's change, and the check meant to catch drift runs too late to see it. lanes.md already documents this collision pattern on shared files.",
+      "fix": "Make the apply step check live_before for every file before any copy. Refuse and print the drifted paths if any live file matches neither live_before nor paste. Or add a --pre mode to verify-paste and chain it first: verify-paste --pre && cp ... && verify-paste.",
+      "twin_of": "validate one read, compare another (the check runs on a different state than the write)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-hook.mjs recordRefusal (paste line ~86-97)",
+      "breaking_input": "Two parallel tool calls (Claude Code runs them concurrently), or two sessions, both hit an L1 propose on the same capability on the same day with no receipt yet. Both run sealedRefusalToday and see none. Both then run execFileSync emit.",
+      "why": "The 'at most 1 per day' guarantee is a check-then-emit with no lock and no idem enforced by the spine, because the plan amendment removed the caller-supplied idem. Both processes write, so the day bound is broken. The same race lets a SIGKILLed emitter whose orphaned child finishes later (Windows does not kill the child tree) write a second receipt after a retry.",
+      "fix": "Serialize with an exclusive lock file (O_EXCL) taken around check and emit, or have the emitter perform the day-bound check atomically inside its own append lock. Add a concurrent-hook fixture.",
+      "twin_of": "every check-then-use on a path"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-hook.mjs recordRefusal execFileSync env (paste line ~93-96)",
+      "breaking_input": "The session environment has ARC_ROOT, CLAUDE_PROJECT_DIR, an events-dir override, or another root-selector variable pointing at a different tree. The hook's pre-check compares only ARC_SPINE_ROOT to canonicalSpine(root) and passes. The child emitter inherits the full process.env and resolves its spine from the other selector, so the receipt is sealed somewhere the reader never looks.",
+      "why": "This is the writer/reader spine twin. The hook validates one selector but spawns the emitter with the entire environment, so the sealed location can differ from the checked one. The pattern list says to close the whole family of selector variables, not just the one named.",
+      "fix": "Pass an explicit env to the child: strip every root and spine selector variable and set ARC_SPINE_ROOT to the verified writerSpine. Alternatively, pass the spine via the emitter's explicit flag and assert it.",
+      "twin_of": "The emitter's root selector was still inherited -> close the whole family of selector variables"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-hook.mjs recordRefusal (execFileSync(\"bash\", ...))",
+      "breaking_input": "The hook is launched from a PowerShell-origin PATH, where `bash` resolves to WSL's bash.exe. It is given the Windows path C:\\Users\\...\\arc-event.sh as argv.",
+      "why": "The repo's own memory records that WSL bash makes every emit fail. Here the catch swallows the failure with 'refusal evidence not recorded', so on that PATH no interactive receipt is ever written. The cells stay absent forever with only a one-line stderr message, and the CI test cannot see it because CI uses Git Bash.",
+      "fix": "Resolve the bash binary explicitly (the Git for Windows path, or the dispatcher's own bash via process.env.BASH or the hook's inherited shell), and record the failure as a spine-visible counter or a loud WARN. Add a fixture with a fake bash on PATH that fails.",
+      "twin_of": "The emit failure said only 'Command failed: bash'"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-hook.mjs recordRefusal catch block (paste line ~97-99)",
+      "breaking_input": "The hook's stderr is a closed pipe (EPIPE), or the stderr write otherwise throws, while the emitter fails or times out.",
+      "why": "The stderr write sits inside the catch block, so a throw there escapes recordRefusal. main's caller catches it, prints 'policy-hook threw: ...' to stdout, and sets exit code 1 instead of 2. That changes both stdout and the exit code, which REQ-05 says must stay unchanged. The fragment still denies, but the words and code differ. The EPIPE handler only covers some paths.",
+      "fix": "Wrap the stderr write in its own try/catch, or make recordRefusal's catch body non-throwing. Add a hostile fixture that closes stderr.",
+      "twin_of": "The EPIPE handler covered the text path only -> every early-return branch that writes"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/verify-paste.mjs:12 and generate-paste.mjs (hashing readFileSync utf8)",
+      "breaking_input": "The owner's checkout has core.autocrlf=true (default Git for Windows). The paste files are checked out with CRLF, `cp -r` copies them as CRLF, and the manifest hashes were computed from LF text.",
+      "why": "Every live file then hashes differently from the manifest, so verify-paste prints DIFFERS for all six files. The owner's one step looks failed even though the content is correct, and the paste proof is never cleanly reproducible on the owner's machine. No byte normalization or .gitattributes guard is cited.",
+      "fix": "Pin the paste directory to `-text` or eol=lf in .gitattributes. Alternatively, have verify-paste hash after normalizing CRLF to LF, and test the check on a CRLF checkout.",
+      "twin_of": null
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-lint.mjs --evidence delegate (paste line ~102-104)",
+      "breaking_input": "`node policy-lint.mjs /tmp/candidate.policy.yaml --evidence` is run, or the command is run from a different cwd.",
+      "why": "The file linted is the [path] argument, but the delegated `policy-evidence.mjs check` is spawned with no path and no cwd or root argument. It judges whichever hq.policy.yaml and spine it resolves on its own. The output says 'is law' about the candidate and then reports BELOW-BAR for a different file, so the verdict can be about the wrong policy. This is the same confident-but-wrong failure the lint's resolved-path message exists to prevent.",
+      "fix": "Pass the resolved policy path to check, or refuse --evidence when [path] is not the governing hq.policy.yaml. Print which policy and spine the delegate used.",
+      "twin_of": "every reader of the spine: a reading of the wrong spine is confident and wrong"
+    }
+  ]
+}

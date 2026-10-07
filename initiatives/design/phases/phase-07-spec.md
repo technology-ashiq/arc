@@ -8,35 +8,35 @@ own renderer and unlabelled — and whichever way it lands, the result is a rece
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Rival adapter follows the engine lane's driver/adapter pattern
+- [x] Rival adapter follows the engine lane's driver/adapter pattern
       ([ADR-0200..0206](../../../docs/adr/)) — no new pattern class is invented
-- [ ] Same brief → one draft per rival → **arc's own renderer** → unlabelled items in one jury
-- [ ] One blind jury over **arc×3 + ≥1 rival + 1 reference item**, all items indistinguishable
+- [x] Same brief → one draft per rival → **arc's own renderer** → unlabelled items in one jury
+- [x] One blind jury over **arc×3 + ≥1 rival + 1 reference item**, all items indistinguishable
       by filename, ordering or metadata
-- [ ] Seeded shuffle applied; jurors know nothing of authorship, thesis or item kind
-- [ ] Standing control in place: a plain-prompt item enters every 3rd run
-- [ ] **rival-beats-all-arc rate recorded on the spine whichever way it lands.** If a rival
+- [x] Seeded shuffle applied; jurors know nothing of authorship, thesis or item kind
+- [x] Standing control in place: a plain-prompt item enters every 3rd run
+- [x] **rival-beats-all-arc rate recorded on the spine whichever way it lands.** If a rival
       outranks every arc variant, that fact is receipted — the embarrassment is the point
-- [ ] A rival win **never becomes a copy**: the director assigns a NEW thesis capturing the
+- [x] A rival win **never becomes a copy**: the director assigns a NEW thesis capturing the
       winning direction, and an arc-authored candidate re-enters critique → jury
-- [ ] The run degrades to arc-only with a printed source-status line if a provider fails
+- [x] The run degrades to arc-only with a printed source-status line if a provider fails
       mid-cycle — never a silent three-item jury. **Added 2026-10-07 (Phase 06 amendment):** a
       fake-transport test drives Stitch's observed bad-key shape (`UNKNOWN_ERROR` + `isError`)
       and a synthetic rate-limit and quota answer through the adapter, since none of the last two
       was observed live
-- [ ] The rival draft is vendored at fetch time per
+- [x] The rival draft is vendored at fetch time per
       [ADR-1422](../../../docs/adr/1422-a-rival-draft-is-vendored-at-fetch-and-the-transform-is-declared.md),
       and the composer seat it competes against stays balanced-workhorse per
       [ADR-1421](../../../docs/adr/1421-exp-a1-composer-seat-stays-balanced-workhorse-inside-the-new-regime.md)
-- [ ] Provenance recorded on every render, so Phase 08's packager can refuse non-arc items
-- [ ] Two-surface adversarial pass by fresh agents on the blinding mechanism and the
+- [x] Provenance recorded on every render, so Phase 08's packager can refuse non-arc items
+- [x] Two-surface adversarial pass by fresh agents on the blinding mechanism and the
       rival-beats-all-arc recorder — decision logic on the ranking path, shell/OS boundary on
       file naming and directory ordering. The single-agent blind-identification check in the
       verification plan is **not** a substitute for it
-- [ ] tests added & green **on CI, read per JOB at the branch head SHA**
-- [ ] live demo run + output checked — the owner opens the renders himself
-- [ ] contract tests green against the real rival implementation
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] tests added & green **on CI, read per JOB at the branch head SHA**
+- [x] live demo run + output checked — the owner opens the renders himself
+- [x] contract tests green against the real rival implementation
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan
 

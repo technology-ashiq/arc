@@ -190,8 +190,8 @@ Debt ledger: the lane's running list of shortcuts it accepted on purpose, kept i
 
 | | |
 |---|---|
-| Status | LIVE |
-| Cycle | arc-design v2 (Cycle 16, opened 2026-08-23) |
+| Status | IDLE |
+| Cycle | arc-design v2 (Cycle 16, sealed 2026-10-07) |
 | Product | [design](../products/design.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.

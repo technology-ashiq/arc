@@ -122,11 +122,12 @@ function readRuleText(path) {
   return text;
 }
 
-/** The home must be CLAUDE.md or a .claude/rules/*.md that main already carries. */
+/** The home must be AGENTS.md, CLAUDE.md or a .claude/rules/*.md that main already carries. A rule every
+ *  harness obeys belongs in AGENTS.md; CLAUDE.md now takes only claude-only blocks (distribute ADR-2007). */
 async function checkHome(home) {
-  if (home === "CLAUDE.md") return;
+  if (home === "CLAUDE.md" || home === "AGENTS.md") return;
   const m = /^\.claude\/rules\/([a-z0-9][a-z0-9-]{0,60}\.md)$/.exec(home);
-  if (!m) die(2, `--home is CLAUDE.md or .claude/rules/<name>.md, not ${JSON.stringify(home).slice(0, 80)}`);
+  if (!m) die(2, `--home is CLAUDE.md or AGENTS.md or .claude/rules/<name>.md, not ${JSON.stringify(home).slice(0, 80)}`);
   const { names } = await mainDirNames({ repo: REPO, dir: RULES_DIR });
   if (!names.includes(m[1])) die(2, `main carries no ${home} -- a rule gets an existing home (known: ${names.join(", ")})`);
 }
@@ -152,7 +153,7 @@ async function main() {
   const tag = createHash("sha256").update(rule).digest("hex").slice(0, 8);
   // CLAUDE.md is `root-claude` and a rules file `rules-<name>`: a .claude/rules/claude.md can never share a branch stem
   // with CLAUDE.md (attack 3e97a85 B6).
-  const stem = args.home === "CLAUDE.md" ? "root-claude" : `rules-${args.home.slice(RULES_DIR.length + 1, -3)}`;
+  const stem = args.home === "CLAUDE.md" ? "root-claude" : args.home === "AGENTS.md" ? "root-agents" : `rules-${args.home.slice(RULES_DIR.length + 1, -3)}`;
   const branch = proposalBranch("memory-rule", `${stem}-${tag}`);
   const files = [{ path: args.home, content: proposed }];
   const approval = (commit) => approvalPayload({ home: args.home, lines, branch, base, commit, why: args.why });
