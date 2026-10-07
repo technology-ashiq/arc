@@ -236,6 +236,21 @@ function deal(argv) {
   if (items.length !== n) fail(`--n ${n} was declared, and ${items.length} items are dealt (${variants.length} variants and ${refs.length} reference(s)${rivals.length ? `, ${rivalCount} rival(s)${rivalsLeftOut ? `, ${rivalsLeftOut} left out` : ""}` : ""}); the count is a contract, so name it right`);
   if (n > LABELS.length) fail(`at most ${LABELS.length} items`);
 
+  // Every item is judged on its bytes BEFORE the jury dir is claimed, so a refusal never leaves a half-dealt
+  // jury behind (attack 1773af3 B1). One format, no chunk that can carry where an image came from, and the
+  // same chunk set on every item -- a chunk all items share tells none apart (attack 1773af3 L8).
+  let chunkSet = null;
+  for (const it of items) {
+    if (it.ext !== ".png") fail(`${it.source} would be dealt as ${it.ext}; every item is a PNG render, so the format names no kind`);
+    const types = pngChunks(readFileSync(it.path));
+    if (types === null) fail(`${it.source}'s render is not a well-formed PNG`);
+    const telling = types.filter((t) => TELLING_CHUNKS.has(t));
+    if (telling.length) fail(`a dealt item carries PNG metadata (${telling.join(", ")}); a dealt item carries none`);
+    const sig = types.join(",");
+    if (chunkSet === null) chunkSet = sig;
+    else if (sig !== chunkSet) fail("the items do not share one PNG chunk set; a different encoder would tell one apart");
+  }
+
   // Fisher-Yates under the seed.
   const next = rng(seed);
   for (let i = items.length - 1; i > 0; i--) {
@@ -256,10 +271,6 @@ function deal(argv) {
   const at = new Date(key.dealt);
   items.forEach((it, i) => {
     const label = `item-${LABELS[i]}`;
-    if (it.ext !== ".png") fail(`${label} would be dealt as ${it.ext}; every item is a PNG render, so the format names no kind`);
-    const extra = pngAncillary(readFileSync(it.path));
-    if (extra === null) fail(`${label} is not a well-formed PNG`);
-    if (extra.length) fail(`${label} carries PNG metadata (${extra.join(", ")}); a dealt item carries none`);
     const file = `${label}${it.ext}`;
     copyFileSync(it.path, join(itemsDir, file));
     if (sha256(readFileSync(join(itemsDir, file))) !== it.sha256) fail(`${label} did not copy byte for byte`);
@@ -492,9 +503,17 @@ function catchRate(argv) {
   console.log(`design-explore catch-rate: ${caught}/${iters} iteration(s) caught a defect (${per.join(", ")})`);
 }
 
-// The chunk types of a PNG beyond the four that draw it, or null when the bytes are not a whole PNG.
-// A text, time or EXIF chunk can carry where an image came from; a dealt item carries none of them.
+// Chunks that can carry where an image came from, or when: text, time, EXIF, colour-profile names.
+const TELLING_CHUNKS = new Set(["tEXt", "zTXt", "iTXt", "tIME", "eXIf", "iCCP"]);
+
+// The ancillary chunk types of a PNG (beyond the four that draw it), or null when the bytes are not a whole PNG.
 export function pngAncillary(buf) {
+  const t = pngChunks(buf);
+  return t === null ? null : t.filter((x) => !["IHDR", "PLTE", "IDAT", "IEND"].includes(x));
+}
+
+// Every chunk type of a PNG, de-duplicated in order of first appearance, or null when it is not a whole PNG.
+export function pngChunks(buf) {
   const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   if (buf.length < 8 || !buf.subarray(0, 8).equals(SIG)) return null;
   const extra = [];
@@ -504,7 +523,7 @@ export function pngAncillary(buf) {
     const len = buf.readUInt32BE(at);
     const type = buf.subarray(at + 4, at + 8).toString("latin1");
     if (!/^[A-Za-z]{4}$/.test(type) || at + 12 + len > buf.length) return null;
-    if (!["IHDR", "PLTE", "IDAT", "IEND"].includes(type)) extra.push(type);
+    extra.push(type);
     at += 12 + len;
     if (type === "IEND") { ended = true; break; }
   }
@@ -554,7 +573,9 @@ function frame(argv) {
 // Runs as a command only when this file IS the command (both sides realpath-d, so a symlinked checkout
 // still runs), so pngAncillary can be imported without the CLI firing.
 const realOf = (p) => { try { return realpathSync(p); } catch { return p; } };
-if (process.argv[1] && realOf(process.argv[1]) === realOf(fileURLToPath(import.meta.url))) {
+const invoked = process.argv[1] ? realOf(process.argv[1]) : "";
+const self = realOf(fileURLToPath(import.meta.url));
+if (invoked && (invoked === self || basename(invoked) === basename(self))) {
   const [cmd, ...rest] = process.argv.slice(2);
   if (cmd === "deal") deal(rest);
   else if (cmd === "frame") frame(rest);

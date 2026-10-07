@@ -620,6 +620,28 @@ _rival_scored() {
   grep -q 'iTXt' "$png" || { echo "fixture: chunk not planted"; false; }
   run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
   [ "$status" -eq 1 ] && [[ "$output" == *"carries PNG metadata (iTXt)"* ]] || { echo "a render with metadata was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal left a half-dealt jury dir (attack 1773af3 B1)"; false; }
+}
+
+# Plant one ancillary chunk of type $3 before IEND in render $1 and re-bind its meta $2 to the new bytes.
+_plant_chunk() {
+  node -e 'const fs=require("fs");const f=process.argv[1],t=process.argv[2];const b=fs.readFileSync(f);const crc=(x)=>{let c=~0;for(const v of x){c^=v;for(let k=0;k<8;k++)c=(c>>>1)^(0xedb88320&-(c&1))}return (~c)>>>0};const td=Buffer.concat([Buffer.from(t),Buffer.from([0])]);const l=Buffer.alloc(4);l.writeUInt32BE(1);const r=Buffer.alloc(4);r.writeUInt32BE(crc(td));const iend=b.length-12;fs.writeFileSync(f,Buffer.concat([b.subarray(0,iend),l,td,r,b.subarray(iend)]))' "$1" "$3"
+  node -e 'const fs=require("fs"),c=require("crypto");const m=JSON.parse(fs.readFileSync(process.argv[1]));m.screenshot_sha256=c.createHash("sha256").update(fs.readFileSync(process.argv[2])).digest("hex");fs.writeFileSync(process.argv[1],JSON.stringify(m))' "$2" "$1"
+  grep -q "$3" "$1" || { echo "fixture: $3 not planted"; return 1; }
+}
+
+@test "jury: a chunk one item carries and the others do not is refused; a chunk all items share is dealt (attack 1773af3 L8)" {
+  _fixture 3 1
+  _plant_chunk .claude/state/design/renders/jx--variant-a/r-1440x900.png .claude/state/design/renders/jx--variant-a/r-1440x900.json sRGB
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 1 ] && [[ "$output" == *"do not share one PNG chunk set"* ]] || { echo "one encoder told apart was dealt: $status $output"; false; }
+  [ ! -e "$(_jury_dir)" ] || { echo "a refused deal left a jury dir"; false; }
+  local s
+  for s in .claude/state/design/renders/jx--variant-b .claude/state/design/renders/jx--variant-c .claude/state/design/renders/jx--ref-"${REFS[3]}"; do
+    _plant_chunk "$s/r-1440x900.png" "$s/r-1440x900.json" sRGB
+  done
+  run bash "$(_explore)" jury jx --n 4 --seed 7 "${REFS[@]}"
+  [ "$status" -eq 0 ] || { echo "a chunk every item shares was refused: $output"; false; }
 }
 
 @test "frame: copies the pack screen into a gitignored ref dir under a text-free page, and refuses a linked dir (S4b)" {
@@ -650,8 +672,8 @@ _rival_scored() {
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 39 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 39 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 40 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 40 -- a @test was silently dropped"
     false
   }
 }
