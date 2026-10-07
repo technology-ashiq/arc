@@ -6,7 +6,7 @@ cycle: arc-growth (Cycle 14, opened 2026-08-12)
 phase: 06
 appetite: 10d
 burn: 8.0d
-blocked-on: elapsed time — 7 days of a CRAWLED site. Google first discovered it 2026-08-19 (the 2026-08-16 flip started nothing: no sitemap was submitted and the site was unknown to Google). Earliest honest read 2026-08-26
+blocked-on: Ashiq — export one Search Console Pages CSV for the ingest
 depends-on: —
 
 ## Phase table
@@ -177,6 +177,50 @@ one real article renders at a real URL.
   start before the Search Console property exists — Search Console does not backfill.
 
 ## Now
+
+**Updated 2026-10-07. RESUMED AFTER SEVEN WEEKS UNTOUCHED. The 2026-08-26 read date passed and nobody took the read.**
+
+The lane sat `LIVE` with a `blocked-on` naming a date six weeks in the past. Nothing failed; nothing
+was looking. Facts read today, not inferred:
+
+- **Spine, main clone, read by this session:** `content.published` = **4** (the four slugs below),
+  `metric.observed` = **0**. Zero growth-kind lines in `_quarantine/`. No ingest has ever run.
+- **Gates 1 and the exemplar gate are both decided** — `01M08QPDEMBF4M397MQV2V0NKR` approves
+  cluster `c-001`, `01M08QPCXVXAJXK3J94J5WMD5B` approves the exemplars (both 2026-08-18). The
+  owner-queue rows below that still call them open are stale.
+- **Phase 05 spec-verify re-run (Phase 06 verification plan): PASS**, the same four deviations
+  ADR-1109 recorded and no fifth. `validate-leads.mjs` has not drifted from the conformance proof.
+- **Four more `c-001` drafts exist and are lint-clean** — pillar `ai agents` (title-a) and spokes
+  `agents build` (title-b), `coding workflows` (title-b), `driven development` (title-a). Generated
+  past the gate, rendered by `arc-growth render`, slop-lint no marker, citation-lint 0 uncited.
+  Every fact cites a file in the public arc repo. The first attempt to open the arc-site PRs was
+  refused by the session's permission layer as a publication the owner had not approved; the owner
+  then said "publish pannu", and **arc-site #7–#10 are open with green Vercel previews**, review pack
+  in each body. **The owner merged all four on 2026-10-08** (E2 held: no machine merge). Live at
+  200 and in `sitemap-0.xml`; sealed from the main clone, each **present in `events/`, absent from
+  `_quarantine/`** — spine total now **8** `content.published`:
+
+  | Slug | Receipt | arm | `pr_ref` |
+  |---|---|---|---|
+  | `ai-agents` (pillar) | `01M4C1RDMS78Z9FRT58Z3Y30SE` | title-a | #7 |
+  | `agents-build` | `01M4C1RE6WPZ8QBKVCPS30GWMV` | title-b | #8 |
+  | `coding-workflows` | `01M4C1REQWWKVX08Q0T30FK8VZ` | title-b | #9 |
+  | `driven-development` | `01M4C1RF7TJ09YN38MEGWSG16J` | title-a | #10 |
+
+  With them `c-001` is
+  pillar + 5 spokes (`multi-agent-ai-coding-workflows`, `ai-coding` and the three above) — **cluster-complete** under criterion 5. `ai voice` and `yc s23` are not
+  drafted: neither has anything arc learned by doing behind it.
+- **A link-check defect surfaced on the first non-empty citation list.** `BARE_URL_RE` in
+  `text.mjs` kept the closing quote of every quoted frontmatter `citations:` entry, so all five real
+  links reported `DEAD_LINK 404` while serving 200. Every earlier article had `citations: []`, so the
+  path had never run on real input. Fixed (a raw `"` is never part of a URL) and pinned in
+  `growth-lints.bats`. WARN-level only, so no review pack was ever blocked by it.
+- **The real-week ingest needs one Search Console CSV export**, which only the owner's Google
+  login can produce. No API credential exists for it.
+
+The earlier entries below are history; the `blocked-on` header now names the two owner actions.
+
+---
 
 **Updated 2026-08-19. THE CLOCK WAS NEVER RUNNING, AND THE CONSOLE IS THE ONLY PLACE THAT SAID SO.**
 
