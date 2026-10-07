@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-lint.mjs:100-106 (the --evidence spawnSync)",
+      "breaking_input": "Run `ARC_ROOT=/some/other/tree node .claude/scripts/hq/policy-lint.mjs hq.policy.yaml --evidence`, or set ARC_SPINE_ROOT to another spine, from the governing checkout. The lint passes the governing-path check against its own script-relative ROOT. The delegate is spawned with the full inherited environment and no cwd, so it resolves its policy and spine from the env selector.",
+      "why": "The round-1 B7 fix compares the path to the script-relative ROOT. The child then picks its policy and spine from different selectors. The output says `<governing path> is law` and then prints a BELOW-BAR or clean verdict about another tree, so the verdict can still be about the wrong subject. The hook's emit got its env pinned; this spawn did not.",
+      "fix": "Spawn with an explicit env that deletes every root and spine selector. Set ARC_ROOT to ROOT and ARC_SPINE_ROOT to the canonical spine of ROOT, and pass cwd: ROOT. Print the policy and spine path the delegate used.",
+      "twin_of": "The hook checked one spine and spawned the emitter with the whole environment -> pin every selector at every spawn"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/verify-paste.mjs:11-12 and generate-paste.mjs:20 (CRLF fold), tests/policy-evidence-paste.bats CRLF test",
+      "breaking_input": "Owner's checkout has core.autocrlf=true, so the paste files are CRLF and `cp -r` writes them into the live tree as CRLF. verify-paste folds CRLF to LF, prints six APPLIED lines and `every file is byte-identical to the paste`. The live hq.policy.yaml is CRLF.",
+      "why": "B6 was fixed by normalizing inside the checker instead of pinning the files to LF. The checker now reports 'byte-identical' while hiding exactly the bytes that can change behavior. The CRLF test only proves that verify reads CRLF as equal. No test lints or loads the CRLF policy through parsePolicyYaml, or runs the hook against it. If the parser or the hook's loadPolicyFromDisk mis-reads a trailing \\r, every tool call is denied as `hq.policy.yaml could not be read`, and the verifier reported success.",
+      "fix": "Add `initiatives/policy/evidence/phase-02/paste/** -text eol=lf` to .gitattributes so the bytes stay LF. Alternatively, make the verifier fail on CR in a file where the manifest's raw hash differs, and add a fixture that lints and hook-runs the CRLF policy. Change the message so it no longer claims 'byte-identical'.",
+      "twin_of": "A gate that transforms what it measures must declare what the transform destroys; every byte-compare a Windows owner will run"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-hook.mjs recordRefusal catch + env pin (paste); tests/policy-evidence-paste.bats",
+      "breaking_input": "Mutant 1: delete `ARC_SPINE_ROOT: writerSpine, ARC_ROOT: root` from the emit env. Mutant 2: make the catch body write to stderr unguarded. Run the 10 paste tests against each.",
+      "why": "The round-1 fixes for B3 (env pin) and B5 (non-throwing report) have no fixture. Every test sets ARC_SPINE_ROOT to the sandbox already, so mutant 1 stays green. No test closes stderr, so mutant 2 stays green. The plan's hostile fixtures (emitter killed mid-write, timeout) are also absent. Only 'emitter absent' exists, and it would pass on any bash failure. A fix with no test that fails without it is not applied.",
+      "fix": "Add a fixture that exports ARC_ROOT and CLAUDE_PROJECT_DIR pointing at a decoy tree and asserts the receipt lands in the checked spine. Add a fixture with stderr closed (`2>&-`) asserting exit 2 and unchanged stdout. Add a fake slow emitter that exceeds the timeout and asserts exit 2 with no receipt.",
+      "twin_of": "7 of 18 tests stayed green with the whole check deleted; the mutant IS the negative control"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "initiatives/policy/evidence/phase-02/paste/.claude/scripts/hq/policy-hook.mjs: execFileSync(\"bash\", ...), and initiatives/policy/fixed-defects.md rejection of B4",
+      "breaking_input": "Claude Code is started from PowerShell, so the hook's PATH lists System32 (WSL bash.exe) before Git for Windows. The hook is spawned by the dispatcher, but node's execFileSync(\"bash\") does its own PATH lookup and picks WSL's bash.exe. Given a C:\\ path for arc-event.sh, the emit fails and the catch prints 'refusal evidence not recorded'.",
+      "why": "The rejection says 'the dispatcher is bash, so bash on PATH is that same bash'. That does not follow: a native node child resolves `bash` by its inherited Windows PATH, not by the parent shell's identity. The repo's own memory records this PATH fault, `hq-must-start-from-git-bash`, as the cause of silent emit failure. Here every interactive receipt is lost with one stderr line, cells stay `absent` forever, and CI (Git Bash) cannot see it.",
+      "fix": "Resolve the bash binary explicitly. Prefer process.env.BASH or the Git for Windows path derived from EXEPATH, and refuse a WSL bash. Add a fixture with a failing fake `bash` first on PATH. Reopen B4 as fixed rather than rejected.",
+      "twin_of": "The emit failure said only \"Command failed: bash\" -> every spawned helper's failure message"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "policy-hook.mjs REFUSAL_EMIT_TIMEOUT_MS = 3000 with tests/policy-evidence-paste.bats hook test",
+      "breaking_input": "A loaded Windows CI shard (the repo already records Windows shard hangs and slow emits) where the first emit takes more than 3 s instead of the measured 2077 ms on the dev box.",
+      "why": "The 3000 ms bound was set from a single dev-box measurement with about 1.4x headroom. The paste test requires exactly one receipt from the first hook call. On a slow runner execFileSync times out and SIGKILLs bash. The receipt is lost, so the test goes red intermittently on the windows leg only. The same timing drops the first receipt of a session for the owner on a busy box.",
+      "fix": "Make the bound an env-overridable constant that only the test may raise. Alternatively, measure on a CI Windows runner and size the bound from the p99. Have the test retry once for the first-emit case.",
+      "twin_of": null
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/policy-evidence.bats guard test, line changed from `no-writer  session:interactive/shell` to `  session:interactive/shell`",
+      "breaking_input": "Mutant: the guard labels every BELOW-BAR cell `clearable`, or drops the no-writer/clearable split entirely. The edited assertion still passes.",
+      "why": "The assertion was loosened so it passes both before and after the paste, and it no longer proves the cell is classified at all. REQ-04 requires the split, and the earlier assertion was the only check on it. A check moved instead of being kept for both states.",
+      "fix": "Keep two assertions: `no-writer` pre-paste and `clearable` post-paste. Alternatively, drive the fixture with an injected writers table so the label is asserted deterministically.",
+      "twin_of": "Every assertion of absence needs a positive marker that the code ran"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "policy-lint.mjs --evidence block: `r.status === null ? 1 : r.status` and process.exit(main(...)) (paste)",
+      "breaking_input": "(a) `policy-lint.mjs hq.policy.yaml --evidence | head -1` closes stdout, so a write in printDerivedTable raises EPIPE and the process dies with 1 before the verdict. (b) policy-evidence.mjs is missing or node is unspawnable, so spawnSync returns r.error with status null.",
+      "why": "The exit code is this CLI's verdict, 3 for BELOW-BAR. A closed pipe can turn it into 1. A spawn failure also returns 1 with no message, because r.error is never printed, which is indistinguishable from a usage error.",
+      "fix": "Catch EPIPE on stdout and compute the exit code before writing. Print r.error.message when status is null and return a distinct code.",
+      "twin_of": "BELOW-BAR exit 3 was set after the output loop, so a closed pipe turned it into exit 1 -> every CLI whose exit code is its verdict"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "policy-lint.mjs: `path !== resolve(ROOT, \"hq.policy.yaml\")` (paste)",
+      "breaking_input": "On Windows, run `node policy-lint.mjs HQ.POLICY.YAML --evidence`, use an 8.3 short path, or run from a junction or subst drive whose resolve() string differs from ROOT's. It is the same governing file.",
+      "why": "The guard compares paths as strings, not by filesystem identity. A legitimate governing invocation is refused with exit 1 and the message 'judges the governing ... not <target>'. The mirror case, a differently named hardlink, passes only if the string happens to match. This is the same string-vs-identity class the project already fixed once elsewhere.",
+      "fix": "Compare by realpath plus statSync dev/ino, or by a resolved-path and case-folded comparison on win32.",
+      "twin_of": "every path compared by string rather than by filesystem identity"
+    }
+  ]
+}

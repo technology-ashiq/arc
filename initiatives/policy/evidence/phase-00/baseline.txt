@@ -1,0 +1,18 @@
+BELOW-BAR process:adr-record/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:brief-materialize/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:build-in-public-draft/network L1 unknown N=none refusal=- success=01M0QZV7A96F29EBR0MMY51SZ1 audit=-
+BELOW-BAR process:commit-msg-draft/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:commit-msg-draft/network L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:council-convene/shell L1 unknown N=none refusal=- success=01M49CAQRVMZ20MA95DJHC7PJN audit=-
+BELOW-BAR process:council-convene/network L1 unknown N=none refusal=- success=01M49CAQRVMZ20MA95DJHC7PJN audit=-
+BELOW-BAR process:day-close-roll/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:develop-proof/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:kickoff-plan/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:kickoff-plan/network L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:lesson-log/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:review-diff/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:review-diff/network L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR process:rule-promote/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR session:interactive/shell L1 unknown N=none refusal=- success=- audit=-
+BELOW-BAR session:interactive/network L1 unknown N=none refusal=- success=- audit=-
+policy-evidence: as-of 2026-10-07 -- 15 subjects, 120 cells, 17 in scope, 17 BELOW-BAR, 0 spine line(s) rejected, 61 day file(s) read from E:\Work_Hub\01_Automemory\arc\.claude\state\hq\events
