@@ -66,7 +66,11 @@ _build_clean() {
   [[ "$output" == *"REFUSED NON-ARC direction-4.png"*"rival:stitch"* ]] || { echo "the rival render was not refused by name: $output"; false; }
   [[ "$output" == *"REFUSED GALLERY direction-5.png"* ]] || { echo "the gallery image was not refused by name: $output"; false; }
   [[ "$output" == *"REFUSED PROVENANCE-ABSENT direction-6.png"* ]] || { echo "the provenance-less render was not refused by name: $output"; false; }
-  [[ "$output" != *"direction-1.png"* ]] || { echo "a clean arc render was refused too: $output"; false; }
+  local d; for d in direction-1.png direction-2.png direction-3.png; do
+    [[ "$output" != *" $d "* ]] || { echo "the clean arc render $d was refused too: $output"; false; }
+  done
+  [ "$(printf "%s
+" "$output" | grep -c "^design-package: REFUSED ")" -eq 3 ] || { echo "not exactly the three planted files refused: $output"; false; }
 }
 
 @test "package: bytes no receipt names, a renamed gallery image, a link, a subdir and a stray file type are refused" {
@@ -178,9 +182,58 @@ _build_clean() {
     || { echo "provenance wrong: $(cat "$va") $(cat "$rv")"; false; }
 }
 
+# ---------- attack 12b79c2 round 1 ----------
+
+@test "package: a bare JSON naming any bytes as arc, or a receipt whose png is a hardlink, attributes nothing (L1 L2)" {
+  _build_clean
+  _png "$BATS_TEST_TMPDIR/foreign.png" "foreign"
+  mkdir -p "$SANDBOX/.claude/state/design/renders/forge"
+  printf '{"screenshot_sha256":"%s","provenance":"arc"}
+' "$(_sha "$BATS_TEST_TMPDIR/foreign.png")" > "$SANDBOX/.claude/state/design/renders/forge/x.json"
+  cp "$BATS_TEST_TMPDIR/foreign.png" "$PKG/direction-4.png"
+  run node "$(_pkg)" lint --root "$SANDBOX" --dir docs/design/blind-test/ex/package
+  [ "$status" -eq 1 ] && [[ "$output" == *"REFUSED UNATTRIBUTED direction-4.png"* ]] || { echo "a forged receipt attributed bytes: $status $output"; false; }
+  rm -f "$PKG/direction-4.png"
+  _png "$BATS_TEST_TMPDIR/outside.png" "outside"
+  local s="$SANDBOX/.claude/state/design/renders/ex--variant-e"; mkdir -p "$s"
+  ln "$BATS_TEST_TMPDIR/outside.png" "$s/r-1440x900.png" 2>/dev/null || skip "this filesystem cannot hardlink"
+  printf '{"png":".claude/state/design/renders/ex--variant-e/r-1440x900.png","screenshot_sha256":"%s","viewport":"1440x900@1","iter":1,"provenance":"arc"}
+' "$(_sha "$s/r-1440x900.png")" > "$s/r-1440x900.json"
+  cp "$BATS_TEST_TMPDIR/outside.png" "$PKG/direction-4.png"
+  run node "$(_pkg)" lint --root "$SANDBOX" --dir docs/design/blind-test/ex/package
+  [ "$status" -eq 1 ] && [[ "$output" == *"REFUSED UNATTRIBUTED direction-4.png"* ]] || { echo "a hardlinked render was attributed: $status $output"; false; }
+}
+
+@test "package: the same render twice is a DUPLICATE, and a refused build leaves no manifest behind (L5 L7)" {
+  _build_clean
+  cp "$PKG/direction-1.png" "$PKG/direction-4.png"
+  run node "$(_pkg)" lint --root "$SANDBOX" --dir docs/design/blind-test/ex/package
+  [ "$status" -eq 1 ] && [[ "$output" == *"REFUSED DUPLICATE direction-4.png"* ]] || { echo "$status $output"; false; }
+  _png "$SANDBOX/.claude/state/design/refpacks/bx/nicelydone-fedcba9876543210.png" "variant-b"
+  run node "$(_pkg)" build --root "$SANDBOX" --explore ex --render variant-b --out docs/design/blind-test/ex2/package
+  [ "$status" -eq 1 ] && [[ "$output" == *"REFUSED GALLERY"* ]] || { echo "a build carrying a gallery match passed: $status $output"; false; }
+  [ ! -e "$SANDBOX/docs/design/blind-test/ex2/package" ] && [ ! -e "$SANDBOX/docs/design/blind-test/ex2/package-manifest.json" ] || { echo "a refused build left a package or a manifest"; false; }
+}
+
+@test "render: a rival route rendered OUTSIDE explore mode is still the rival, not arc (L12 B1)" {
+  mkdir -p "$SANDBOX/bin" "$SANDBOX/fakestate" "$SANDBOX/docs/design/explore/t/rival-stitch"
+  cp "$ARC_ROOT/tests/fixtures/design/fake-agent-browser.sh" "$SANDBOX/bin/agent-browser"; chmod +x "$SANDBOX/bin/agent-browser"
+  PATH="$SANDBOX/bin:$PATH"; export PATH; FAKE_AB_STATE="$SANDBOX/fakestate"; export FAKE_AB_STATE
+  printf '<!doctype html><title>r</title><p>rival page</p>
+' > "$SANDBOX/docs/design/explore/t/rival-stitch/index.html"
+  git -C "$SANDBOX" add -A >/dev/null 2>&1; git -C "$SANDBOX" commit -qm page >/dev/null 2>&1
+  cd "$SANDBOX"
+  FAKE_AB_SHOTS="C C" run bash .claude/scripts/design/design-render.sh docs/design/explore/t/rival-stitch/index.html
+  [ "$status" -eq 0 ] || { echo "the plain render failed: $output"; false; }
+  m="$(ls -t "$SANDBOX"/.claude/state/design/renders/*rival-stitch*.json 2>/dev/null | head -1)"
+  [ -n "$m" ] || m="$(grep -rl '"route": "docs/design/explore/t/rival-stitch' "$SANDBOX/.claude/state/design/renders" | head -1)"
+  [ -n "$m" ] || { echo "no meta was written"; false; }
+  node -e 'if(require(process.argv[1]).provenance!=="rival:stitch")process.exit(1)' "$m" || { echo "a rival render outside explore was stamped: $(cat "$m")"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
     false
   }
 }

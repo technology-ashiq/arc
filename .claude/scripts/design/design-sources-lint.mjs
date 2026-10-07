@@ -200,10 +200,16 @@ for (const s of sources) {
 // registry at the repo root. Read line by line on the one shape the file uses (`spend: { level: Ln }`), and
 // a file with no spend line at all is unknown, never zero-by-silence.
 function spendCap() {
-  const file = join(dirname(target), "hq.policy.yaml");
+  // The repository's own policy, always: a policy beside whatever registry was handed in let the registry's
+  // directory choose its own cap (attack 12b79c2 L10). A test names a fixture policy only through the
+  // offline seam.
+  const seam = process.env.ARC_DESIGN_OFFLINE === "1" ? process.env.ARC_DESIGN_POLICY_FILE : undefined;
+  const file = seam ? resolve(seam) : join(ROOT, "hq.policy.yaml");
   let text;
   try { text = readFileSync(file, "utf8"); } catch (e) { return { why: `${basename(file)} ${e.code || "unreadable"}` }; }
-  const levels = [...text.matchAll(/^\s+spend:\s*\{\s*level:\s*(L[0-9])\s*[,}]/gm)].map((m) => m[1]);
+  // Line by line, comments dropped first: a commented-out example grant is not a grant (L9), and a per-line
+  // match cannot run across blank lines (B7).
+  const levels = text.split(/\r?\n/).map((l) => l.replace(/(^|\s)#.*$/, "")).map((l) => /^[ \t]+spend:[ \t]*\{[ \t]*level:[ \t]*(L[0-9])[ \t]*[,}]/.exec(l)).filter(Boolean).map((m) => m[1]);
   if (!levels.length) return { why: "no spend grant found in hq.policy.yaml" };
   return { max: levels.sort().at(-1) };
 }

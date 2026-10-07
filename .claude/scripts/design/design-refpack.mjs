@@ -45,7 +45,7 @@
 // Exit:   0 added | 1 usage or unreadable registry | 2 registry or host refusal | 3 DISALLOW |
 //         4 UNREADABLE | 5 the screen fetch failed | 6 written but not marked for commit
 
-import { appendFileSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, linkSync, lstatSync, mkdirSync, openSync, readSync, mkdtempSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -671,7 +671,19 @@ function drop(argv) {
   try { st = lstatSync(src); } catch (e) { fail(1, "the dropped file cannot be read (" + (e.code || "error") + ")"); }
   if (st.isSymbolicLink() || !st.isFile()) fail(1, "the dropped file is a link or not a regular file");
   if (st.size === 0 || st.size > MAX_DROP_BYTES) fail(1, "the dropped file is empty or larger than " + MAX_DROP_BYTES + " bytes");
-  const body = readFileSync(src);
+  // Read through one descriptor and bounded by the cap: the lstat above is a snapshot, and a file that grows
+  // or is swapped after it must not be read whole (attack 12b79c2 L8 B11).
+  let body;
+  {
+    const fd = openSync(src, "r");
+    try {
+      const buf = Buffer.alloc(MAX_DROP_BYTES + 1);
+      let got = 0, n;
+      while (got < buf.length && (n = readSync(fd, buf, got, buf.length - got, null)) > 0) got += n;
+      body = buf.subarray(0, got);
+    } finally { closeSync(fd); }
+  }
+  if (body.length === 0 || body.length > MAX_DROP_BYTES) fail(1, "the dropped file is empty or larger than " + MAX_DROP_BYTES + " bytes");
   const ext = Object.keys(MAGIC).find((e) => MAGIC[e](body));
   if (!ext) fail(1, "the dropped file is not a png, jpg, gif, webp or avif image by its bytes");
   const sha = createHash("sha256").update(body).digest("hex");
@@ -684,6 +696,8 @@ function drop(argv) {
   }
   mkdirSync(stateDir, { recursive: true });
   const existed = existsSync(image);
+  // The name carries a 16-hex prefix; a file already there under it must be these exact bytes (L14).
+  if (existed && createHash("sha256").update(readFileSync(image)).digest("hex") !== sha) fail(1, "refused: " + relative(ROOT, image).split("\\").join("/") + " already holds other bytes under the same prefix");
   writeFileSync(image, body);
   try {
     mkdirSync(dirname(sourcesMd), { recursive: true });

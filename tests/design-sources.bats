@@ -254,7 +254,7 @@ teardown() { _arc_teardown 2>/dev/null || true; }
 # ---------- Phase 08 S3: the spend cap is read from hq.policy.yaml, never written ----------
 
 # A policy beside the fixture registry, one kind at spend level $1.
-_policy() { printf 'version: 1\nkinds:\n  "session:interactive":\n    spend: { level: %s }\n  "process:refpack":\n    spend: { level: L0 }\n' "$1" > "$BATS_TEST_TMPDIR/hq.policy.yaml"; }
+_policy() { export ARC_DESIGN_OFFLINE=1 ARC_DESIGN_POLICY_FILE="$BATS_TEST_TMPDIR/hq.policy.yaml"; printf 'version: 1\nkinds:\n  "session:interactive":\n    spend: { level: %s }\n  "process:refpack":\n    spend: { level: L0 }\n' "$1" > "$BATS_TEST_TMPDIR/hq.policy.yaml"; }
 
 @test "spend cap: a paid source switched on is refused while every kind holds spend L0 -- the negative control" {
   _policy L0
@@ -277,6 +277,7 @@ _policy() { printf 'version: 1\nkinds:\n  "session:interactive":\n    spend: { l
 
 @test "spend cap: an unreadable or spend-less policy refuses a paid source -- unknown is never zero-by-silence" {
   _valid_entry | sed 's/^    cost: free$/    cost: paid/' > "$BATS_TEST_TMPDIR/paid.yaml"
+  export ARC_DESIGN_OFFLINE=1 ARC_DESIGN_POLICY_FILE="$BATS_TEST_TMPDIR/hq.policy.yaml"
   rm -f "$BATS_TEST_TMPDIR/hq.policy.yaml"
   run _lint "$BATS_TEST_TMPDIR/paid.yaml"
   [ "$status" -eq 1 ] && [[ "$output" == *"[spend-cap-unreadable]"* ]] || { echo "$status $output"; false; }
@@ -291,9 +292,23 @@ _policy() { printf 'version: 1\nkinds:\n  "session:interactive":\n    spend: { l
   grep -qE '^[[:space:]]+spend: \{ level: L0 \}' "$ARC_ROOT/hq.policy.yaml" || { echo "the real policy no longer holds a spend L0 line"; false; }
 }
 
+@test "spend cap: a commented-out grant is not a grant, and a policy beside the registry is not the policy (attack 12b79c2 L9 L10)" {
+  _policy L0
+  printf '  # example only:
+  #  spend: { level: L3 }
+' >> "$BATS_TEST_TMPDIR/hq.policy.yaml"
+  _valid_entry | sed 's/^    cost: free$/    cost: paid/' > "$BATS_TEST_TMPDIR/paid.yaml"
+  run _lint "$BATS_TEST_TMPDIR/paid.yaml"
+  [ "$status" -eq 1 ] && [[ "$output" == *"[spend-cap] lapa-ninja"* ]] || { echo "a commented grant raised the cap: $status $output"; false; }
+  unset ARC_DESIGN_OFFLINE ARC_DESIGN_POLICY_FILE
+  _policy L5; unset ARC_DESIGN_OFFLINE ARC_DESIGN_POLICY_FILE
+  run _lint "$BATS_TEST_TMPDIR/paid.yaml"
+  [ "$status" -eq 1 ] && [[ "$output" == *"[spend-cap] lapa-ninja"* ]] || { echo "a policy beside the registry set the cap: $status $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 21 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 21 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 22 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 22 -- a @test was silently dropped"
     false
   }
 }

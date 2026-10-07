@@ -16,7 +16,7 @@
 // lint is removed. The receipt binding is written beside the package (package-manifest.json), never in it. Exit 0 clean, 1 refused or usage.
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -67,12 +67,29 @@ export function renderIndex(root) {
     let m;
     try { m = JSON.parse(readFileSync(f, "utf8")); } catch { continue; }
     if (!m || typeof m !== "object" || !/^[0-9a-f]{64}$/.test(String(m.screenshot_sha256 ?? ""))) continue;
+    // A receipt counts only for the render it sits beside: its png is a regular, single-link file inside the
+    // receipt's own session dir, and its bytes are the hash it claims. A bare JSON naming any bytes as arc --
+    // or a receipt pointing at a file elsewhere -- attributes nothing (attack 12b79c2 L1 L2).
+    if (!ownRender(root, f, m)) continue;
     const prov = Object.hasOwn(m, "provenance") && typeof m.provenance === "string" && m.provenance !== "" ? m.provenance : null;
     const list = idx.get(m.screenshot_sha256) ?? [];
     list.push(prov);
     idx.set(m.screenshot_sha256, list);
   }
   return idx;
+}
+
+// The receipt at `metaFile` names a render it owns: `png` resolves (realpath) inside the receipt's own dir,
+// is a regular file with one link, and hashes to the recorded sha. Returns the real path, or null.
+export function ownRender(root, metaFile, m) {
+  if (typeof m.png !== "string" || !m.png) return null;
+  let dir, file;
+  try { dir = realpathSync(join(metaFile, "..")); file = realpathSync(resolve(root, m.png)); } catch { return null; }
+  if (!file.startsWith(dir + sep)) return null;
+  const st = lstatSync(file, { throwIfNoEntry: false });
+  if (!st || !st.isFile() || st.nlink !== 1) return null;
+  try { if (sha256(readFileSync(file)) !== m.screenshot_sha256) return null; } catch { return null; }
+  return file;
 }
 
 // sha256 of every file in every reference pack -- a gallery screenshot under any name is still one.
@@ -90,6 +107,7 @@ export function lintPackage(dir, renders, gallery) {
   let entries;
   try { entries = readdirSync(dir, { withFileTypes: true }); } catch (e) { return [{ file: dir, cls: "NOT-ALLOWED", detail: `the package dir cannot be read (${e.code || e.message})` }]; }
   let images = 0;
+  const seenBytes = new Map();
   for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
     const p = join(dir, e.name);
     if (e.isSymbolicLink()) { findings.push({ file: e.name, cls: "NOT-ALLOWED", detail: "a link -- a package carries files, never pointers" }); continue; }
@@ -99,6 +117,9 @@ export function lintPackage(dir, renders, gallery) {
     if (extname(e.name).toLowerCase() !== ".png") { findings.push({ file: e.name, cls: "NOT-ALLOWED", detail: `a ${extname(e.name) || "typeless"} file -- a package carries PNG renders and README.md only` }); continue; }
     images++;
     const h = sha256(readFileSync(p));
+    // One direction, one file: the same render twice is a package that claims more directions than it has.
+    if (seenBytes.has(h)) { findings.push({ file: e.name, cls: "DUPLICATE", detail: `the same bytes as ${seenBytes.get(h)}` }); continue; }
+    seenBytes.set(h, e.name);
     if (gallery.has(h)) { findings.push({ file: e.name, cls: "GALLERY", detail: "these bytes are a reference-pack image -- a third party's screenshot never leaves the repo" }); continue; }
     const provs = renders.get(h);
     if (!provs || provs.length === 0) { findings.push({ file: e.name, cls: "UNATTRIBUTED", detail: "no render receipt names these bytes -- a package carries only renders arc can show it made" }); continue; }
@@ -145,6 +166,15 @@ function build(argv) {
   const blindRoot = resolve(root, "docs", "design", "blind-test");
   if (!(out + sep).startsWith(blindRoot + sep)) fail("--out must be under docs/design/blind-test/");
   if (existsSync(out)) fail(`${relative(root, out).split(sep).join("/")} already exists; a package is built once, into an empty place`);
+  // Lexical containment is not containment: every existing component from the repo root down to the package's
+  // parent is a real directory, not a link, so the copies and the cleanup land where the name says (12b79c2 L4 B5).
+  const manifest = join(out, "..", "package-manifest.json");
+  for (let p = dirname(out); ; p = dirname(p)) {
+    const st = lstatSync(p, { throwIfNoEntry: false });
+    if (st && (st.isSymbolicLink() || !st.isDirectory())) fail(`${relative(root, p).split(sep).join("/") || "."} is a link or not a directory`);
+    if (p === root || dirname(p) === p) break;
+  }
+  if (existsSync(manifest)) fail(`${relative(root, manifest).split(sep).join("/")} already exists; a package is built once, into an empty place`);
 
   const picked = renders.map((v, i) => {
     const sess = join(root, ".claude", "state", "design", "renders", `${id}--${v}`);
@@ -160,21 +190,30 @@ function build(argv) {
     }
     if (!best) fail(`${v} has no render at ${viewport}`);
     if (best.m.provenance !== "arc") fail(`${v}'s latest render records provenance '${clean(best.m.provenance ?? "absent")}', not arc -- render it again with the current renderer`);
-    const file = resolve(root, best.m.png);
-    if (!(file + sep).startsWith(resolve(sess) + sep) && !file.startsWith(resolve(sess) + sep)) fail(`${v}'s render path leaves its session`);
-    const st = lstatSync(file, { throwIfNoEntry: false });
-    if (!st || st.isSymbolicLink() || !st.isFile()) fail(`${v}'s render is missing or not a regular file`);
-    if (sha256(readFileSync(file)) !== best.m.screenshot_sha256) fail(`${v}'s render bytes no longer match its receipt`);
+    // The same binding the lint uses: realpath inside the receipt's own session, one link, the hashed bytes.
+    const file = ownRender(root, best.meta, best.m);
+    if (!file) fail(`${v}'s render is not a single-link file inside its own session that hashes to its receipt`);
     return { variant: v, file, sha: best.m.screenshot_sha256, meta: relative(root, best.meta).split(sep).join("/"), name: `direction-${i + 1}.png` };
   });
 
-  mkdirSync(out, { recursive: true });
-  for (const p of picked) copyFileSync(p.file, join(out, p.name));
-  writeFileSync(join(out, "..", "package-manifest.json"), `${JSON.stringify({ explore: id, built: new Date().toISOString(), viewport, files: picked.map((p) => ({ file: p.name, sha256: p.sha, receipt: p.meta, provenance: "arc" })) }, null, 2)}\n`);
-  // The package is judged by the same lint anyone runs later; one that fails its own lint does not stay.
-  const findings = lintPackage(out, renderIndex(root), galleryIndex(root));
-  report(findings, relative(root, out).split(sep).join("/"));
-  if (findings.length) { rmSync(out, { recursive: true, force: true }); process.exit(1); }
+  // The package is judged by the same lint anyone runs later, and the manifest -- the record that calls these
+  // files arc's -- is written only after that lint passes; anything that fails, a throw included, leaves
+  // neither behind (12b79c2 L7 B3 B4).
+  let findings;
+  try {
+    mkdirSync(out, { recursive: true });
+    for (const p of picked) copyFileSync(p.file, join(out, p.name));
+    findings = lintPackage(out, renderIndex(root), galleryIndex(root));
+    report(findings, relative(root, out).split(sep).join("/"));
+    if (!findings.length) writeFileSync(manifest, `${JSON.stringify({ explore: id, built: new Date().toISOString(), viewport, files: picked.map((p) => ({ file: p.name, sha256: p.sha, receipt: p.meta, provenance: "arc" })) }, null, 2)}\n`, { flag: "wx" });
+  } catch (e) {
+    findings = [{ file: basename(out), cls: "NOT-ALLOWED", detail: `the build failed (${e.code || e.message})` }];
+    report(findings, relative(root, out).split(sep).join("/"));
+  }
+  if (findings.length) {
+    try { rmSync(out, { recursive: true, force: true }); } catch { /* reported above; left for the operator */ }
+    process.exit(1);
+  }
   console.log(`design-package: built ${picked.length} direction(s) -- the mapping is package-manifest.json beside the package, never inside it`);
 }
 
