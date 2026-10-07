@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "tests/face/phase04-folds.mjs:141",
+      "breaking_input": "A policy cell whose evidence state is exactly the string 'fresh' but whose effective level is L0, plus a receipt whose last_audit is a future date, so the fixture's P04 check accepts a cell that the real fold would mark BELOW-BAR or n/a",
+      "why": "The new P04 check hard-codes 'every cell carries an evidence state from the closed enum' and 'as_of === today', but it never verifies that the evidence's `below_bar` and `reason` fields are consistent with the cell's effective level or with the spine. It asserts only shape and a single n/a case, so a state string can be present while the cell is actually BELOW-BAR and the suite stays green.",
+      "fix": "Assert, for every in-scope cell, that `below_bar` is true iff the evidence state is not fresh and that a fresh cell's `last_refusal` is null; also assert that no BELOW-BAR cell has `below_bar: false`.",
+      "twin_of": "any gate whose subject string differs from the string the runtime actually uses"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:60",
+      "breaking_input": "An environment with `ARC_SPINE_ROOT` set to a different clone's spine and `FX` empty, plus a guard run whose `last_audit` exists only in that other spine",
+      "why": "The guard's `previous` receipt is found by scanning `inputs.events` for `run.completed` events named `GUARD_PROCESS`. The reader never verifies that the receipt's spine root equals the root it is currently reading; the spine root is taken from the environment at the top of the module and the events come from the same input load. A wrong spine can supply a previous digest that matches, so the guard compares digests against a spine it never read.",
+      "fix": "Record the canonical root in each guard receipt and reject any previous receipt whose root does not equal the current run's root.",
+      "twin_of": "The writer chose its spine by `ARC_SPINE_ROOT`/`--root` while the reader pinned the governing root"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:66-70",
+      "breaking_input": "A run whose `run.completed` event has `payload.digest` missing (e.g. an older receipt written before the digest field existed) and a clean set of BELOW-BAR cells",
+      "why": "`previousDigest` is read with `previous && previous.payload ? previous.payload.digest : null`. When the payload exists but the digest field is absent, `undefined` is treated as `null`. The `digest !== previousDigest` comparison then fires on every run, emitting a spurious `approval.requested` even when nothing changed, or — if the receipt is not found at all — the guard is treated as clean by the `!clean` branch only. The missing-field path collapses 'unknown' into 'no prior run'.",
+      "fix": "Distinguish 'no prior receipt' from 'prior receipt without digest' and, for the latter, refuse or treat as not-clean rather than as an approval.",
+      "twin_of": "A declared `evidence_days: 0` read exactly like no N"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "tests/face/phase04-folds.mjs:137-138",
+      "breaking_input": "A policy whose `subjects` array contains a single cell with `evidence: null` and `effective: \"L0\"`; the P04 check's `allCells.length > 0` is satisfied by the other cells, and the absent state is never asserted",
+      "why": "The check verifies only that every cell's `evidence` is present and in `STATES`; it never asserts that a cell's absence of evidence (state `unknown`/`absent`) is accompanied by `below_bar: false` or that the cell is not in-scope. A null evidence is accepted as `unknown` by the fixture's own state list, so the invariant 'a cell with no evidence is n/a' is not tested.",
+      "fix": "For every cell where `evidence.state` is `unknown`/`absent`, assert the cell is out of scope (effective L0) and `below_bar` is false.",
+      "twin_of": "any validator that folds \"invalid\" into \"absent\""
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "tests/face/phase04-folds.mjs:140",
+      "breaking_input": "A cell with `evidence.state: \"fresh\"` but `evidence.evidence_age_days: null` and a `last_refusal` in the future, accepted as fresh",
+      "why": "The new fixture check asserts only that `state` is in `STATES`; it never enforces that `fresh` implies a numeric `evidence_age_days`, nor that `stale` implies a non-null `reason`. A fresh-looking cell with no age is treated as fresh, exactly the class of 'fresh by label, not by content' the ADR intends to prevent.",
+      "fix": "Enforce that `state === 'fresh'` requires `evidence_age_days` to be a non-negative number and `below_bar` to be false; also enforce that `stale` requires `below_bar: true`.",
+      "twin_of": "any 'proof a level works' that accepts a different decision than the level's own"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:60",
+      "breaking_input": "A previous guard receipt whose `run.completed` event has `payload.digest` equal to the current digest but whose `payload.as_of` differs (e.g. a stale receipt from a different date with the same digest)",
+      "why": "The guard compares only the digest of the BELOW-BAR cells, not the as-of date or the set of in-scope cells. A previous receipt from a different day with the same digest makes the guard treat the run as already approved, even though the as-of date changed and the policy may have drifted.",
+      "fix": "Include `as_of` (and ideally the in-scope cell list) in the digest and compare that full digest against the previous receipt.",
+      "twin_of": "any check that runs on one level or branch and is assumed to run on the others"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/face/phase04-folds.mjs:141-142",
+      "breaking_input": "A policy with zero cells in `subjects` and `evidence.as_of` set to today; the fixture's `allCells.length > 0` fails, so the assertion is skipped and the suite stays green",
+      "why": "The new check uses `allCells.length > 0 && ...` so an empty policy is accepted without any evidence assertion. This mirrors the 'zero-cell reading looks clean' defect: a policy with no subjects is reported clean even though no evidence was folded at all.",
+      "fix": "Assert that an empty policy is not allowed unless the fold explicitly returns `n/a` for every cell; require at least one subject in the fixture.",
+      "twin_of": "any summary whose clean state and empty state print alike"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "tests/face/phase04-folds.mjs:143-144",
+      "breaking_input": "A cell whose evidence object has `state: \"n/a\"` but `below_bar: true`; the fixture's check accepts it because it only checks `effective === \"L0\"` for the n/a case",
+      "why": "The invariant 'an L0 cell is n/a and never BELOW-BAR' checks only the L0 case; it does not assert that a non-L0 cell with state `n/a` is impossible, nor that an `n/a` cell has `below_bar: false` in every case. A cell with effective L1 and state `n/a` would pass every check while being logically inconsistent.",
+      "fix": "For every cell where `state === 'n/a'`, assert the effective level is L0 and `below_bar` is false; conversely, for every cell with effective L0, require `state === 'n/a'`.",
+      "twin_of": "any validator that folds \"invalid\" into \"absent\""
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:60",
+      "breaking_input": "A guard run whose `run.completed` event is written by a process with a different `GUARD_PROCESS` value (e.g. an old version that used a different process id), so the previous receipt is never found and the guard emits a spurious approval every run",
+      "why": "The guard finds the previous receipt by scanning for events whose `process` field equals `GUARD_PROCESS`. The constant is a fixed string, so any version skew or a renamed process makes the previous receipt invisible, causing the approval to be emitted even when nothing changed. This is a 'receipt selected by name, not by identity' class of bug.",
+      "fix": "Store the process name inside the payload and compare by that identity, not by the module constant; also verify the event's process matches the payload's process.",
+      "twin_of": "any reference field (a ULID, a receipt id) that is validated for shape but never resolved"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "tests/face/phase04-folds.mjs:139",
+      "breaking_input": "A cell whose `evidence.last_refusal` is a future ISO date and `below_bar` is false, but whose state is `stale`; the check accepts it",
+      "why": "The fixture check validates only the state string and `as_of`; it never validates that a `stale` cell has a non-null `last_refusal` or that a `fresh` cell has a null `last_refusal`. This is the same class as the 'cross-check order, identity and content' pattern: the check verifies only that a field is present, not that it is the right field.",
+      "fix": "Assert for each cell that `last_refusal`, `last_success`, and `last_audit` are mutually exclusive according to the state, and that a future date is rejected.",
+      "twin_of": "any cross-reference check: verify order, identity and content, not just that the id resolves"
+    }
+  ]
+}

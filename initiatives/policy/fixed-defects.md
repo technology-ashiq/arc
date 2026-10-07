@@ -46,3 +46,24 @@ Cycle 2, Phase 00, attack round 2 (`b6f99ff`; 18 findings: 13 fixed, 2 rejected,
 Rejected in round 2: L4 (a nested payload passes the profile) — `already-covered`: the loader runs the closed-shape validator on every event; L8 (a failed receipt retried next denial breaks once-per-day) — `unsupported`: nothing was sealed, and the sanitizer no longer emits lone surrogates.
 
 Rejected in round 1: L6 (n/a cells keep `last_refusal`: that IS REQ-03's acceptance, and an n/a cell never moves the bar) — `already-covered`; L10 (a deny at L1 is impossible) — `unsupported`: `incident.mjs` documents integrity denies at L1.
+
+Cycle 2, Phase 01, attack round 1 (`0993467`; 17 findings: 11 fixed, 4 rejected, 2 LOW to the debt ledger):
+
+- **The guard's emit inherited the spine selector, so a receipt could seal where the guard did not read** — `ARC_SPINE_ROOT` pinned to the read spine, id read back from its day file (L2/B2) — *the writer/reader twin again: every emit in a reader-driven tool*
+- **The "previous verdict" was any line with the guard's name; an approval sealed before a failed run.completed left no digest, so retries stacked approvals** — previous digest only from sealed guard receipts with a 64-hex digest, from run.completed OR the approval (B3/B4) — *any dedupe key stored only in the LAST of several writes*
+- **A guard run with `--as-of` sealed real receipts and became every cell's audit** — `as_of_overridden` recorded; such runs never audit and dedupe only against their own kind (B5) — *every clock override that reaches a durable write*
+- **The emit failure said only "Command failed: bash"** — the emitter's stderr plus the PowerShell/WSL hint (B1) — *every spawned helper's failure message*
+- **One fold refusal blanked the whole Policy room** — cells served with `evidence: null` and a named `evidence.error` (B7) — *a new optional field must not be able to take down the old required ones*
+- **The door test checked evidence shape, not coherence** — n/a iff L0 or out of scope, BELOW-BAR iff in scope and not fresh, fresh carries an age (L1/L4/L5/L8) — *a test that checks a label without its content*
+
+Rejected in Phase 01 round 1: L7 (`allCells.length > 0 &&` sits INSIDE the assertion, so an empty list already fails) — `unsupported`; L3 (a previous receipt without a digest raises an approval) — `already-covered`: that is the safe direction; L6 (dedupe ignores as_of) — `already-covered`: deduping an unchanged BELOW-BAR set is ADR-0511's design (plan-attacker F6); L9 (a renamed guard process) — `non-actionable`: there is no older guard version.
+
+Cycle 2, Phase 01, attack round 2 (`f03f3fe`; 17 findings: 6 fixed, 4 rejected, 7 LOW to the debt ledger):
+
+- **An explicit `--as-of` naming today read as a real run, and an overridden run still raised a real approval** — any explicit `--as-of` is an override; an override never raises an approval (L7/B2) — *a test or back-dated run must have no outward-facing write*
+- **The read-back matched the id as a substring** — it now finds the event: this id, this kind, this guard (L3) — *every read-back: parse the record, never grep its id*
+- **The emitter's root selector was still inherited** — `ARC_ROOT` pinned with `ARC_SPINE_ROOT` (L9/B1) — *close the whole family of selector variables, not the one named*
+- **The interactive day bound accepted any matching line at any level** — it must be at the level being recorded (L6/B3) — *self-declared fields on a no-corroboration path*
+- **CLEAN said "all fresh" with nothing in scope** — says "no in-scope cell (nothing above L0 to evidence)" (L5) — *a clean message must not claim what it never measured*
+
+Rejected in Phase 01 round 2: L1 (the previous-digest loop reads unvalidated lines) — `already-covered`: every event in `inputs.events` passed `validateEvent` + `eventSha`, and the process id and outcome are matched exactly; L2/L8 (the digest omits the no-writer/clearable split) — `already-covered`: `state` encodes the split (unknown = no-writer); L4 (duplicate cell keys in the door map) — `unsupported`: the fold builds one cell per subject x capability by construction.

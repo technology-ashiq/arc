@@ -415,6 +415,106 @@ _root() { # $1 dir: a minimal governing root -- scripts, the real policy, an eve
   [ "$status" -eq 2 ] && [[ "$output" == *"ARC_SPINE_ROOT"* ]] || { echo "$status $output"; false; }
 }
 
+# ---------------------------------------------------------------- Phase 01: the guard (REQ-04, ADR-0511, invariant c)
+
+# A governing root whose policy has NO in-scope cell (every shell/network L1 lowered to L0), or exactly ONE
+# (session:interactive shell put back to L1). Two plain -e expressions: BSD sed has no alternation.
+_guard_root() { # $1 dir, $2 clean|one
+  local d="$1"; _root "$d"
+  sed -e "s/^    shell: { level: L1 }$/    shell: { level: L0 }/" -e "s/^    network: { level: L1 }$/    network: { level: L0 }/" "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
+  ! grep -qE "^    (shell|network): \{ level: L1 \}$" "$d/hq.policy.yaml" || { echo "fixture still holds an L1 shell/network grant"; return 1; }
+  if [ "$2" = "one" ]; then
+    awk '
+      /^  "session:interactive":/ { inblock = 1 }
+      /^  "process:/              { inblock = 0 }
+      inblock && /^    shell: \{ level: L0 \}$/ { print "    shell: { level: L1 }"; next }
+      { print }
+    ' "$d/hq.policy.yaml" > "$d/hq.policy.yaml.tmp" && mv "$d/hq.policy.yaml.tmp" "$d/hq.policy.yaml"
+    [ "$(grep -cE "^    (shell|network): \{ level: L1 \}$" "$d/hq.policy.yaml")" = "1" ] || { echo "fixture does not hold exactly one L1 cell"; return 1; }
+  fi
+  export ARC_SPINE_ROOT="$d/.claude/state/hq"
+}
+
+@test "guard: a policy with no in-scope cell is CLEAN, one run.completed, no approval" {
+  local d="$BATS_TEST_TMPDIR/g-clean"; _guard_root "$d" clean || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  [ "$status" -eq 0 ] && [[ "$output" == *"guard: CLEAN"* ]] || { echo "$status $output"; false; }
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 0\ LAST\ ok\  ]] || { echo "clean run receipts: $output"; false; }
+}
+
+@test "guard: one BELOW-BAR cell is NOT clean, one approval, run.completed partial" {
+  local d="$BATS_TEST_TMPDIR/g-one"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 3 ] && [[ "$output" == *"NOT CLEAN"* && "$output" == *"no-writer  session:interactive/shell"* ]] || { echo "$status $output"; false; }
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 1\ LAST\ partial\  ]] || { echo "receipts: $output"; false; }
+}
+
+@test "guard: an identical second run raises no new approval and is still not clean" {
+  local d="$BATS_TEST_TMPDIR/g-twice"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 3 ] || { echo "first: $status $output"; false; }
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 3 ] && [[ "$output" == *"no new approval"* ]] || { echo "second: $status $output"; false; }
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 2\ APPROVALS\ 1\ LAST\ partial\  ]] || { echo "receipts: $output"; false; }
+}
+
+@test "invariant c: the guard is not clean with a BELOW-BAR cell, and mutant M-c is killed" {
+  local d="$BATS_TEST_TMPDIR/g-real"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 3 ] || { echo "the real guard reported clean with a BELOW-BAR cell: $output"; false; }
+  local m="$BATS_TEST_TMPDIR/g-mut"; _guard_root "$m" one || return 1
+  local mut; mut="$(node "$FX/mutants.mjs" "$m/.claude/scripts/hq/policy-evidence.mjs" M-c)" || { echo "M-c did not apply"; false; }
+  run node "$mut" guard
+  [[ "$output" == *"guard: CLEAN"* ]] || { echo "M-c should have reported clean (so the fixture can kill it): $status $output"; false; }
+}
+
+@test "guard: its run.completed is every cell last_audit" {
+  local d="$BATS_TEST_TMPDIR/g-audit"; _guard_root "$d" clean || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 0 ] || { echo "$status $output"; false; }
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  local rid; rid="$(printf "%s" "$output" | awk '{print $NF}')"
+  [ -n "$rid" ] && [ "$rid" != "-" ] || { echo "no guard run id: $output"; false; }
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf "%s" "$output" > "$BATS_TEST_TMPDIR/g-report.json"
+  run node "$FX/spine-probe.mjs" audits "$BATS_TEST_TMPDIR/g-report.json"
+  [ "$output" = "AUDITS $rid" ] || { echo "last_audit is not the guard run on every cell: $output vs $rid"; false; }
+}
+
+@test "guard: a run judged against an overridden --as-of is never an audit" {
+  local d="$BATS_TEST_TMPDIR/g-override"; _guard_root "$d" clean || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2020-01-01
+  [ "$status" -eq 0 ] || { echo "$status $output"; false; }
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
+  printf "%s" "$output" > "$BATS_TEST_TMPDIR/o-report.json"
+  run node "$FX/spine-probe.mjs" audits "$BATS_TEST_TMPDIR/o-report.json"
+  [ "$output" = "AUDITS null" ] || { echo "an overridden run became an audit: $output"; false; }
+}
+
+@test "guard: an --as-of override never raises an approval, and says it is not an audit" {
+  local d="$BATS_TEST_TMPDIR/g-ovr-appr"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  [ "$status" -eq 3 ] || { echo "$status $output"; false; }
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 0\ LAST\ partial ]] || { echo "an overridden run raised an approval: $output"; false; }
+}
+
+@test "guard: an approval that sealed before a failed run.completed still dedupes the retry" {
+  local d="$BATS_TEST_TMPDIR/g-half"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 3 ] || { echo "first: $status $output"; false; }
+  # Simulate the half failure: the approval is on the spine, the run.completed is not.
+  local f; for f in "$d/.claude/state/hq/events/"*.jsonl; do grep -v '"run.completed"' "$f" > "$f.tmp"; mv "$f.tmp" "$f"; done
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 0\ APPROVALS\ 1 ]] || { echo "fixture did not build the half failure: $output"; false; }
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
+  [ "$status" -eq 3 ] && [[ "$output" == *"no new approval"* ]] || { echo "the retry stacked a second approval: $status $output"; false; }
+}
+
 @test "check: usage errors exit 2 and name the problem" {
   run node "$ARC_ROOT/.claude/scripts/hq/policy-evidence.mjs" check --as-of 07-10-2026
   [ "$status" -eq 2 ] && [[ "$output" == *"YYYY-MM-DD"* ]] || { echo "$status $output"; false; }
@@ -425,5 +525,5 @@ _root() { # $1 dir: a minimal governing root -- scripts, the real policy, an eve
 }
 
 @test "suite count: every test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 59 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 59"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 67 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 67"; false; }
 }

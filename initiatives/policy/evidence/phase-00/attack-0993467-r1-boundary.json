@@ -1,0 +1,61 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (execFileSync(\"bash\", ...))",
+      "breaking_input": "Owner starts the monthly guard from PowerShell. The PATH resolves bare `bash` to the WSL launcher in System32. It is handed the Windows script path `C:\\Users\\...\\arc-event.sh` and a Windows temp `--payload-file`, neither of which exists inside WSL.",
+      "why": "The project's own memory says HQ must start from Git Bash because PowerShell PATH sends `bash` to WSL. Here, every `emit` fails, the guard exits 1, and no receipt is sealed. In the worse case, WSL bash behaves differently from MSYS bash. The failure message is only the first line of `e.message`, which is `Command failed: bash ...`. The emitter's stderr, which holds the real reason, is dropped.",
+      "fix": "Resolve bash once to an explicit Git Bash path or the `ARC_BASH` env var. Refuse with a clear message when the resolved bash is the WSL launcher. Include `e.stderr` in the failure text."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (env: { ...process.env })",
+      "breaking_input": "`ARC_SPINE_ROOT=/elsewhere/spine node policy-evidence.mjs guard`, or an inherited `ARC_ROOT` pointing at a different tree. The child `arc-event.sh emit` inherits the variable and seals the receipt into that spine, while the guard read `inputs.events` from the governing root.",
+      "why": "This is the twin of the defect pattern \"the writer chose its spine by ARC_SPINE_ROOT/--root while the reader pinned the governing root.\" The emit call neither passes `--root` nor clears the selector variables. The sealed receipt can land where nothing reads it, and the next run will not see it as `previous`.",
+      "fix": "Pass the pinned `inputs.root` explicitly (`--root`, plus an env override of `ARC_SPINE_ROOT` and `ARC_ROOT` to the governing values). After emit, read back that the returned run id exists in `inputs.eventsDir`."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (previous-digest loop)",
+      "breaking_input": "Anyone able to append a `run.completed` line, with a process of the form `policy-evidence-guard@x` and payload `{digest:<sha of the current BELOW-BAR set>}`. The digest is deterministic from public state. It could also be a line from another actor, or a run with outcome `fail`.",
+      "why": "The dedupe selects the last event matching only kind and process-name prefix. It ignores the actor, whether the event passed validation, the outcome, and the payload shape. One forged or unrelated line suppresses the genuine approval while the guard still prints \"no new approval\". This is the twin of \"the day bound counted any line matching three fields.\"",
+      "fix": "Count only run.completed events that the reader would validate: the guard's actor, outcome `ok` or `partial`, and a 64-hex digest. Prefer the last event that is a sealed guard receipt."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (approval emit before run emit)",
+      "breaking_input": "The approval seals, then the `run.completed` emit fails or times out (60 s, a lock, a disk error). The guard exits 1. The rerun finds no run.completed carrying the digest, so it raises a second identical approval.",
+      "why": "The dedupe key is stored only in run.completed, which is written after the approval. A partial failure leaves an approval with no digest record. Retries then stack unanswerable approvals, which is exactly what the code comment says it avoids. Two concurrent guard runs behave the same, because there is no lock.",
+      "fix": "Write the run.completed digest first, or put the digest in the approval payload and dedupe on pending approvals. Hold a lock file around read, emit and emit."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (--as-of honored by the sealing path)",
+      "breaking_input": "`policy-evidence.mjs guard --as-of 2020-01-01`, or any back-dated or future day. Every cell reads fresh or n/a, so the run is CLEAN. A real `run.completed` outcome ok is sealed, and it becomes every cell's `last_audit`.",
+      "why": "The guard writes real, permanent receipts judged against an arbitrary clock. A fabricated CLEAN audit appears as evidence on every cell. A fake digest also becomes the `previous` digest, which can suppress the next genuine approval. The as-of override was meant for read-only reports and tests.",
+      "fix": "Reject `--as-of` for `guard` unless an explicit test env flag is set, or seal only with IST today. Alternatively record `as_of_overridden` and exclude such runs from `last_audit` and from the previous-digest lookup."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (timeout: 60000)",
+      "breaking_input": "`arc-event.sh` hangs on a lock. `execFileSync` kills only the `bash` process on timeout. Its children (node validators) are orphaned and may still write the receipt later.",
+      "why": "A late write makes the \"could not seal\" exit 1 untrue. A rerun then double-emits, and the stale temp payload directory is removed while the child may still read it.",
+      "fix": "Spawn with `detached` and kill the process group, or use a longer timeout and confirm absence in the spine before retrying."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:apiPolicy (foldEvidence throw becomes SOURCE_INVALID)",
+      "breaking_input": "One cell, event or as-of that makes `foldEvidence` throw, for example a malformed `note.logged` refusal line in the day file the door reads.",
+      "why": "The whole `/api/policy` door is refused, not just the evidence field. The level table that worked before this change disappears too. This also creates a new failure mode for a read-only room.",
+      "fix": "On a fold error, serve the cells with `evidence: null` and a top-level `evidence_error` string, rather than throwing."
+    }
+  ]
+}

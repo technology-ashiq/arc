@@ -433,6 +433,24 @@ try {
       const readCell = rd && rd.cells.find((c) => c.capability === "read");
       check("P04 policy: the fixture's level change is FOLDED -- read on review-diff is L2 under an L3 ceiling, from exactly 1 transition",
         p.body.transitions === 1 && readCell && readCell.ceiling === "L3" && readCell.cap === "L2" && readCell.effective === "L2", JSON.stringify(readCell));
+      // POL-L (ADR-0510): every cell carries its evidence from the policy lane's own fold, judged against the door's clock.
+      const STATES = ["fresh", "stale", "absent", "unknown", "n/a"];
+      const allCells = (p.body.subjects || []).flatMap((s) => s.cells || []);
+      check("P04 policy: every cell carries an evidence state from the closed enum, and the body says the as-of day",
+        allCells.length > 0 && allCells.every((c) => c.evidence && STATES.includes(c.evidence.state)) && p.body.evidence && p.body.evidence.as_of === today,
+        JSON.stringify({ n: allCells.length, ev: p.body.evidence, bad: allCells.filter((c) => !c.evidence || !STATES.includes(c.evidence.state)).slice(0, 2) }));
+      // Consistency, not just shape: n/a exactly for L0 or an out-of-scope capability; BELOW-BAR exactly for an in-scope
+      // cell that is not fresh; a fresh cell carries a real age. A label without its content is the defect POL-L names.
+      const IN_SCOPE = ["spend", "publish", "deploy", "network", "shell"];
+      const incoherent = allCells.filter((c) => {
+        const ev = c.evidence || {};
+        const na = c.effective === "L0" || !IN_SCOPE.includes(c.capability);
+        if (na !== (ev.state === "n/a")) return true;
+        if (ev.below_bar !== (!na && ev.state !== "fresh")) return true;
+        return ev.state === "fresh" && !(typeof ev.evidence_age_days === "number" && ev.evidence_age_days >= 0);
+      });
+      check("P04 policy: every cell is coherent -- n/a iff L0 or out of scope, BELOW-BAR iff in scope and not fresh, fresh has an age",
+        allCells.length > 0 && incoherent.length === 0 && p.body.evidence.error === "", JSON.stringify(incoherent.slice(0, 2)));
     }
     // /api/jobs -- the schedule file, judged against the fixture's one fire.
     {
