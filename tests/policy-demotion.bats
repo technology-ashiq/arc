@@ -177,10 +177,10 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   run _ask '{"tool_name":"Write","tool_input":{"file_path":".claude/settings.json"}}'
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"un-grantable resource"* ]] || { echo "not the integrity path: $output"; false; }
-  # No demotion and no incident. The integrity deny IS evidence the refusal path works at L1, so it seals exactly one
-  # typed `policy.refusal` (decision deny) since the POL-L Phase 02 paste -- and nothing that moves a level.
-  [ "$(_kinds)" = "note.logged" ] || { echo "an L1 deny wrote more than its evidence receipt: $(_kinds)"; false; }
-  _refusal_is deny L1
+  # Still nothing at all, even after the POL-L Phase 02 paste: authorizeAction reports an un-grantable resource as
+  # effective L0 (authorize.mjs, ADR-0502), and an L0 deny is n/a -- the deny IS the level, so there is nothing to
+  # evidence and the hook seals no policy.refusal. CI caught the first cut of this edit expecting one.
+  [ "$(_kinds)" = "" ] || { echo "an L1 deny wrote receipts: $(_kinds)"; false; }
 }
 
 @test "PHASE 01 REQ-03 -- the NEXT authorization sees the demoted level" {
