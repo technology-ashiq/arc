@@ -498,6 +498,27 @@ export const OPS = Object.freeze([
     apply: (v) => ({ script: "core/lane-status.mjs", args: ["--lane", v.lane, "--status", v.status, ...(v.blocked ? ["--blocked-on", v.blocked] : [])] }),
     expect: true,
   }),
+  // Who sits a role (face Phase 13, ADR-1352): the card's seat and binds on a proposal branch, through org-own's assign
+  // mode, the script a hand-run calls. No tier field: the tier follows the agents (ADR-0069).
+  Object.freeze({
+    id: "org.seat-assign",
+    room: "org",
+    lane: "org",
+    label: "Assign a seat",
+    hint: "Who sits a role is its card's seat and binds: an agent seat names its agents, a vacant seat names none. The card and the chart change on one proposal branch you merge, the tier follows the agents, and the request lands in your inbox.",
+    receipt: Object.freeze({ kind: "approval.requested" }),
+    binding: "org room `assign a seat` -> a proposal branch (one role card's seat, binds.agents and binds.tier, and org/CHART.md + chart.json) and approval.requested (gate org-seat) (ADR-1352)",
+    humanRun: true, spends: false, touchesFiles: true,
+    fields: Object.freeze([
+      Object.freeze({ name: "role", label: "Role", placeholder: "coo-dispatcher", type: "text", max: 64, pattern: "[a-z][a-z0-9-]*", required: true }),
+      Object.freeze({ name: "seat", label: "Seat", placeholder: "", type: "select", options: Object.freeze(["agent", "vacant"]), required: true }),
+      // The tool's own grammar, so the door refuses what the tool would: names, comma-separated, no spaces.
+      Object.freeze({ name: "agents", label: "Agents (empty for a vacant seat)", placeholder: "researcher,code-reviewer", type: "text", max: 1600, pattern: "[a-z0-9][a-z0-9-]{0,63}(,[a-z0-9][a-z0-9-]{0,63}){0,23}", required: false }),
+    ]),
+    plan: (v) => ({ script: "org/org-own.mjs", args: ["--assign", "--role", v.role, "--seat", v.seat, ...(v.agents ? ["--agents", v.agents] : []), "--dry-run"] }),
+    apply: (v) => ({ script: "org/org-own.mjs", args: ["--assign", "--role", v.role, "--seat", v.seat, ...(v.agents ? ["--agents", v.agents] : [])] }),
+    expect: true,
+  }),
   Object.freeze({
     id: "concepts.define-term",
     room: "concepts",
