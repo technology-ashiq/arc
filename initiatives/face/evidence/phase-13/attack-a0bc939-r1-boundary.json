@@ -1,0 +1,40 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-own.mjs:assignCard (text = String(raw).replace(BOM).split(\"\\r\\n\").join(\"\\n\"))",
+      "breaking_input": "A role card committed on main with CRLF line endings (or a leading UTF-8 BOM), e.g. a card edited by hand on Windows with core.autocrlf=false. Run --assign --dry-run, then apply.",
+      "why": "The splice normalises the whole card to LF and drops the BOM before editing, and the output is written back in that form. The branch therefore rewrites every line of the card. This breaks the ADR-1352 promise that every other byte stays identical. The re-parse proof compares parsed values only, so it cannot see the damage. The fixture only uses LF cards, so nothing pins this. The BOM drop is the same class: bytes outside seat, binds.agents and binds.tier change silently.",
+      "fix": "Detect the card's EOL and BOM, edit by line, and re-join with the original EOL and BOM. Alternatively refuse a CRLF or BOM card by name (NOT_LF), and add a CRLF fixture that compares every untouched byte."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/org/org-own.mjs:main error handler / assignMain (written = true only after writeProposal returns)",
+      "breaking_input": "writeProposal creates the branch ref, then throws a non-Stop error. For example, a post-update verification fails, or a git child is killed by timeout or ENOSPC after update-ref. The same applies to a ProposalError raised after the ref moved.",
+      "why": "The handler reports exit 2 and \"nothing written\" whenever `written` is false, and the flag is set only after writeProposal returns. A failure after the ref exists is reported as a clean refusal, which invites a retry. The retry then hits an existing-branch refusal with no explanation. This is the lane's own 'Nothing was written after writing' pattern, left open at the point where the ref is created.",
+      "fix": "On any throw from writeProposal, look at the branch ref, not the exit path. Use a git rev-parse --verify of the branch, and if it exists exit 1 with \"the branch IS written\". Alternatively set `written` inside writeProposal's post-ref step.",
+      "twin_of": "\"Nothing was written\" after writing, again"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/org/org-own.mjs:assignMain openOf (prefix \"feat/face-org-seat-\")",
+      "breaking_input": "An open proposal branch from another writer that also rewrites org/chart.json or the same role card, for example a hire-to-own branch from org-own's other mode or a hand-made feat/org-* branch. Then run --assign on any role.",
+      "why": "The one-open-proposal guard only scans the feat/face-org-seat- prefix. The comment says every proposal rewrites the shared chart, but other writers' branches on the same files are invisible. Two such branches conflict on CHART.md and chart.json at merge. The lock \"org-seat.lock\" also protects only this mode, not the other writers of those files.",
+      "fix": "Call openProposalsChanging without a prefix, or with every prefix that writes org/chart.json or org/roles/**. Alternatively take one shared org-chart lock in both org-own modes.",
+      "twin_of": "A lock the readers do not know"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/org/seat-assign.mjs:tool() spawnSync(..., { timeout: 120_000 })",
+      "breaking_input": "The org-own child hangs on its git or arc-event grandchild on Windows. spawnSync's timeout kills only the node process.",
+      "why": "The grandchildren (git, arc-event) are orphaned and can hold the scratch repo or spine files open. Cleanup of the tmp dir then fails, or the next bats shard is affected. The fixture never removes its tmp directory at all, so litter accumulates. The lane's fixed list says to kill the tree and to warn when a temp dir survives.",
+      "fix": "Use a tree-kill spawn helper with escalation, as face/scripts/proc.mjs does. Remove tmp in a finally block and print a WARN naming the path if removal fails.",
+      "twin_of": "A temp directory that would not delete was dropped silently"
+    }
+  ]
+}

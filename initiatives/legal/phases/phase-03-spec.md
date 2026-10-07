@@ -24,10 +24,12 @@ Read from `E:/Work_Hub/01_Automemory/Lexos` on 2026-08-12, so Phase 3 does not s
 
 - [ ] The GST-posture answer obtained from the owner and recorded in the facts file (assumptions ledger row 3 closed, not carried).
 - [ ] Rule-3 and s.5(3) text re-verified against the gazette by a human or an unblocked fetch BEFORE this publish (assumptions ledger row 2; ADR-1206 is medium-confidence because both government hosts returned HTTP 403).
+- [ ] **Rule 3(c) gap closed (added 2026-10-07 via `/arc-change`, assumptions row 2 FIRED):** template set v3 adds the communication link to the privacy notice (ADR-1215); its prose approval is its own `approval.requested` on the spine, recorded in `approved-sets.json` with the decision id; LexOS is pinned to v3.
 - [ ] `legal/facts.yaml` authored in the LexOS tree from real values — operator identity, geographic address, grievance contact, data categories, purposes, retention, deletion mailbox, sub-processors, route paths, `payment_model: none`, `stores_third_party_client_data: true`.
 - [ ] Seven pages rendered; all three lints green; all ≥ 8 scenarios answered.
 - [ ] `approval.requested` raised with the full page set; the owner reads the actual rendered pages — an agent's summary of a page is not the page — and decides via `arc-inbox` with a reason.
 - [ ] Pages, `pins.yaml` and receipts committed into the LexOS working tree on a branch, never to its `main`, and never pushed or deployed by this cycle.
+- [ ] **The publish ledger for a `--venture-dir` venture is written beside its facts, never into arc's public `products/legal/published/` (ADR-1214, added 2026-10-07 via `/arc-change`)** — proven by a fixture that publishes from a venture dir and asserts the arc ledger path stays absent.
 - [ ] **LexOS-side integration handoff checklist** produced and committed: route wiring for the seven paths · creating the footer that does not exist · signup consent capture · cancel-path UI parity · grievance mailbox provisioning · provider dashboard fields for whenever LexOS's own subscription billing lands.
 - [ ] Live-deploy and production-probe rows recorded `OPEN-at-venture-resume` with the reason (LexOS is PAUSED under the same mandate) — never a fake green.
 - [ ] **The production publish count is read from the spine and reported** at close, alongside the fixture count. An engine proven only by fixtures is the `arc-policy` 2026-08-10 failure shape, and only the ledger can say which this was.

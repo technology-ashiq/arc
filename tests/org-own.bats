@@ -9,3 +9,10 @@ load 'test_helper'
   [[ "$output" == *", 0 failed"* ]] || { echo "$output"; false; }
   [ "$status" -eq 0 ]
 }
+
+@test "org-own --assign: who sits a role, set on a branch with every refusal before any write (face Phase 13, ADR-1352)" {
+  run node "$ARC_ROOT/tests/org/seat-assign.mjs"
+  [[ "$output" == *"RAN seat-assign "* ]] || { echo "the fixture never ran: $output"; false; }
+  [[ "$output" == *", 0 failed"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
+}

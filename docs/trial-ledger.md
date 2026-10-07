@@ -601,3 +601,5 @@ bench, growth, develop and engine may trip it; the real parser measures that bef
 ships. It is to be built through `/arc-change` in its own PR, with a good/mutant bats fixture and
 two fresh attackers. **P2 NOT APPROVED:** a built-but-unclosed WARN. The 2026-09-16 retro-log
 row stays the only record of that pattern.
+| 2026-10-07 | `adr-wired` | arc-discover Cycle 1, kickoff-lint every run from build to close | **yes** (ADR-1916 written at build, cited by PLAN and code but by no phase spec) | **no**: the ADR really was unwired from the specs; fixed by citing it in phase-03-spec, then clean |
+| 2026-10-07 | `pre-mortem-cite` · `adr-confidence` · `architecture` · `current-state-structure` · `verify-red` · `birth-rule(kickoff-lint)` | arc-discover Cycle 1, every run cycle-long | **no** | n/a: silent runs, no promotion |

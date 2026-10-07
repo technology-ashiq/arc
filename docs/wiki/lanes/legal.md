@@ -176,7 +176,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/legal/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/legal/PROGRESS.md)
 
-## Decisions (14)
+## Decisions (16)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -196,6 +196,8 @@ ADRs whose `Product:` line names this lane first.
 | [`1211`](../../../docs/adr/1211-leg-k-payment-model-gains-a-third-value-because-lexos-is-not-a-merchant.md) | LEG-K: `payment_model` gains a THIRD value, because LexOS is not a merchant | accepted | 2026-08-12 |
 | [`1212`](../../../docs/adr/1212-leg-l-a-pricing-page-may-carry-several-plans-each-with-one-all-inclusive-figure.md) | LEG-L: a pricing page may carry SEVERAL plans, each with one all-inclusive figure | accepted | 2026-08-13 |
 | [`1213`](../../../docs/adr/1213-leg-m-a-fourth-lint-because-the-worst-defects-were-between-pages-not-on-them.md) | LEG-M: a fourth lint, because the worst defects were BETWEEN pages, not on them | accepted | 2026-08-13 |
+| [`1214`](../../../docs/adr/1214-leg-n-a-real-ventures-publish-ledger-lives-with-its-facts-not-in-arc.md) | LEG-N: a real venture's publish ledger lives with its facts, not in arc | accepted | 2026-10-07 |
+| [`1215`](../../../docs/adr/1215-leg-o-template-set-v3-the-privacy-notice-names-its-communication-link.md) | LEG-O: template set v3, because the privacy notice must name its communication link | accepted | 2026-10-07 |
 
 ## Source
 

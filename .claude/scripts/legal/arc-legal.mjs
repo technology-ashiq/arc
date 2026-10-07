@@ -529,13 +529,59 @@ function writeStagedInto(staged, out, payloadText) {
 }
 
 /**
+ * Where a venture's publish ledger lives (ADR-1214). A venture rendered from a venture directory
+ * keeps it there, beside the facts it was rendered from: arc is public, and the record's per-field
+ * prints of a real operator's name and contact details are a guess-and-confirm oracle until the
+ * pages are live. Fixtures keep theirs in the product, where the suites read it -- with the name
+ * held to the venture grammar first, since it is joined into a path.
+ */
+function ledgerFileFor(venture, ventureDirOverride) {
+  // The name is checked on BOTH branches: a venture-dir ledger is keyed to the directory, and the
+  // record's own `venture` field is what binds it to a name (ledgerRecordProblem).
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(String(venture)))
+    throw new Fail(3, `"${venture}" is not a venture name (lowercase letters, digits and hyphens)`);
+  // Same precedence as factsPathFor, so the ledger is read from where the facts were read from.
+  // A bare `--venture-dir` with no value parses as `true`, and resolve(true) is a TypeError.
+  const ventureDir = ventureDirOverride || process.env.ARC_LEGAL_VENTURE_DIR || "";
+  if (ventureDir && typeof ventureDir !== "string") throw new Fail(2, "--venture-dir needs a directory");
+  if (ventureDir) return resolve(ventureDir, "published.json");
+  return join(PRODUCT, "published", venture + ".json");
+}
+
+/**
+ * A ledger in a venture directory is keyed to the DIRECTORY, so two ventures pointed at one
+ * directory would read each other's history as their own. The record names its venture; a record
+ * naming another is unusable, never "nothing published before" (round-1 boundary, ADR-1214).
+ */
+function ledgerRecordProblem(record, venture) {
+  if (record && typeof record === "object" && record.venture !== undefined && record.venture !== venture)
+    return `PREVIOUS_UNREADABLE: the publish ledger here belongs to "${String(record.venture).slice(0, 64)}", not "${venture}". One venture directory holds one venture.`;
+  return null;
+}
+
+/**
+ * The ledger written whole or not at all: a temp file in the same directory, then a rename. A
+ * symlink at the ledger's name is refused rather than followed. In a venture's private directory
+ * there is no git history to recover a torn write from.
+ */
+function writeLedger(file, text) {
+  let st = null;
+  try { st = lstatSync(file); } catch (e) { if (!e || e.code !== "ENOENT") throw e; }
+  if (st && !st.isFile()) throw new Fail(3, "the publish ledger's name is a link or a folder, not a file; nothing was overwritten");
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = `${file}.arc-legal-${randomBytes(6).toString("hex")}`;
+  try { writeFileSync(tmp, text, "utf8"); renameSync(tmp, file); }
+  catch (e) { try { rmSync(tmp, { force: true }); } catch { /* our own unique temp name */ } throw e; }
+}
+
+/**
  * The previous published record for a venture from the committed ledger: `{ record, sha }`, both
  * null when nothing was published, or `{ problem }` when a ledger file exists and cannot be used.
  * Unreadable is never "none" -- that would show a reviewer a re-publish as a first publish, the
  * guard-skipped-when-its-input-is-absent class publish already refuses as PREVIOUS_UNREADABLE (B1).
  */
-function publishedRecord(venture) {
-  const file = join(PRODUCT, "published", venture + ".json");
+function publishedRecord(venture, ventureDirOverride) {
+  const file = ledgerFileFor(venture, ventureDirOverride);
   if (!existsSync(file)) return { record: null, sha: null };
   let text, record;
   try { text = readFileSync(file, "utf8"); record = JSON.parse(text); }
@@ -543,6 +589,8 @@ function publishedRecord(venture) {
   if (!record || !record.run || !Array.isArray(record.run.pages)
       || !record.run.pages.every((p) => p && typeof p.page === "string" && (p.clauses === undefined || Array.isArray(p.clauses))))
     return { problem: `PREVIOUS_UNREADABLE: the publish ledger for ${venture} exists and carries no usable run, so what changed cannot be shown.` };
+  const other = ledgerRecordProblem(record, venture);
+  if (other) return { problem: other };
   return { record, sha: bytesHash(text) };
 }
 
@@ -640,7 +688,7 @@ async function proposeMain(args) {
       return 2;
     }
 
-    const prior = publishedRecord(args.venture);
+    const prior = publishedRecord(args.venture, args["venture-dir"]);
     if (prior.problem) { console.error(`propose refuses: ${prior.problem} Nothing was written.`); return 2; }
     const payload = approvalPayload(run, prior.sha);
     const errs = validateApprovalPayload(payload);
@@ -865,9 +913,8 @@ async function publishMain(args) {
   // machine that happened to publish last. A fresh clone, a CI runner, a worktree or a second
   // operator all saw "nothing published before" and a backwards effective_date went through at
   // exit 0. Row 23 moved this off a caller-chosen DIRECTORY; it was still keyed to a
-  // caller-chosen MACHINE.
-  const ledgerDir = join(PRODUCT, "published");
-  const ledgerFile = join(ledgerDir, args.venture + ".json");
+  // caller-chosen MACHINE. A real venture's ledger lives with its facts instead (ADR-1214).
+  const ledgerFile = ledgerFileFor(args.venture, args["venture-dir"]);
   const hadPrevious = existsSync(ledgerFile);
   // ONE read: the bytes hashed for PREVIOUS_MOVED are the bytes the diff and NON_MONOTONIC use.
   // Two reads let the approval match newer bytes while the checks ran on older ones.
@@ -883,6 +930,7 @@ async function publishMain(args) {
   const previousMoved = approved.previous_published_sha256 !== previousSha
     ? [`PREVIOUS_MOVED: the approval was read against ${shown(String(approved.previous_published_sha256).slice(0, 12))} as the previous publish, and the ledger now holds ${previousSha.slice(0, 12)}. Another publish landed in between, so the diff the human read is not this one. Propose again.`]
     : [];
+  const foreignLedger = previous ? ledgerRecordProblem(previous, args.venture) : null;
 
   const approvedSets = existsSync(join(PRODUCT, "approved-sets.json")) ? readJson(join(PRODUCT, "approved-sets.json")) : null;
 
@@ -890,6 +938,7 @@ async function publishMain(args) {
     ...templateSetApprovalErrors({ approvedSets, templateSet: fresh.template_set, sha: fresh.template_set_sha }),
     ...found.problems,
     ...previousMoved,
+    ...(foreignLedger ? [foreignLedger] : []),
     ...(decision ? verifyDecision(decision, approved, args.request) : []),
     ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: listPagesRecursively(args.dir) }),
     ...backdatingErrors({
@@ -928,8 +977,7 @@ async function publishMain(args) {
     run: fresh,
   }, null, 2) + "\n", "utf8");
 
-  mkdirSync(ledgerDir, { recursive: true });
-  writeFileSync(ledgerFile, readFileSync(join(args.dir, "_published.json"), "utf8"), "utf8");
+  writeLedger(ledgerFile, readFileSync(join(args.dir, "_published.json"), "utf8"));
 
   console.log(`published ${approved.pages.length} page(s) for ${fresh.venture}`);
   console.log(`bound to decision ${decision.id} recorded ${decision.recorded_at}`);

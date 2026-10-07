@@ -28,3 +28,15 @@ one line each, with where they came from. Each is paid in a later slice or close
 - **e28fcf1 B9** — the attacker's carried list is condensed by `build-attack-input.mjs`; if two
   rows share a class lead, the condensed line names only one file. Pay: include the file in the
   condensed line.
+
+## Paid 2026-10-07 (ADR-1214)
+
+- **cef0d6e B7 / 3f82dad B8** — the fixture ledger path now holds the venture name to the grammar
+  before joining it (`CON` and case variants refused, exit 3); a `--venture-dir` venture's ledger
+  never touches `products/legal/published/`.
+
+## Phase 03 (attack a544ce1, round 1)
+
+- **B4 (low)** — the venture-dir test's negative control (`products/legal/published` absent) holds
+  only because the sandbox copies a product tree with no `published/` in it. Pay: assert the
+  directory is absent BEFORE the publish too, so the control cannot pass on a stale copy.
