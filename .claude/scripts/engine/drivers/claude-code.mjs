@@ -14,6 +14,7 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
+import { statSync } from "node:fs";
 
 import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
@@ -29,7 +30,12 @@ import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
 // The CLI could not be STARTED at all: not there (ENOENT), not runnable (EACCES, EPERM), or a Windows shim the
 // spawn cannot launch (EINVAL). That is the driver being unavailable -- the one failure it can name structurally
 // (ADR-0228; attack 27dcf39 B8). Anything after the CLI started stays undeclared.
-const cliMissing = (e) => Boolean(e) && (["ENOENT", "EACCES", "EPERM"].includes(e.code) || (e.code === "EINVAL" && String(e.syscall || "").startsWith("spawn")));
+// ONLY when the work root is a usable directory: a deleted or unreadable cwd fails the spawn with the same codes, and
+// that is a fault on this machine -- declaring it unavailable would hop to a gateway and send the work elsewhere
+// (attack a4e3f33 B2).
+const workRootUsable = () => { try { return statSync(WORK_ROOT).isDirectory(); } catch { return false; } };
+const cliMissing = (e) => Boolean(e) && workRootUsable()
+  && (["ENOENT", "EACCES", "EPERM"].includes(e.code) || (e.code === "EINVAL" && String(e.syscall || "").startsWith("spawn")));
 
 /** Run the CLI in stream-json mode, writing a progress line per tool step; resolve with the final result event. */
 /**

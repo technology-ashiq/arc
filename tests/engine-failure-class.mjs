@@ -51,6 +51,7 @@ if (want("unit")) {
   check("U: a declaration outside the set is unknown, and says so", bogus.cls === "unknown" && /outside/.test(String(bogus.warn)));
   check("U: exit 0 with a contract fault is model-invalid whatever the sidecar declares", cl({ code: 0, contractFault: true, declared: "transport" }) === "model-invalid");
   check("U: exit 0 with a clean answer has no class whatever the sidecar declares", FC.classifyAttempt({ code: 0, declared: "transport" }).cls === null);
+  check("U: (r2 B4) exit 0 without an accepted answer is never the success marker null", FC.classifyAttempt({ code: 0, answerOk: false }).cls === "unknown");
 
   check("U: refusal reasons map to a class on a receipt that reached no driver",
     FC.classForReason("budget") === "budget" && FC.classForReason("tenure") === "policy-refusal" && FC.classForReason("boundary") === "policy-refusal" && FC.classForReason("whatever") === "unknown");

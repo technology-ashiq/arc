@@ -73,7 +73,8 @@ tiers:
 # EVERY ROW DECLARES ITS CHAIN TERMS (ADR-0228 item 6), and a row without them fails the load:
 #   max_attempts  every attempt, the ADR-0204 retry included -- set to chain length + 1, so no row
 #                 is tighter today than the ladder it already had.
-#   max_wall_ms   no hop or retry starts at or past it. 3600000 is a CEILING chosen to bind no
+#   max_wall_ms   bounds every attempt on the routed path -- the first is capped by it, and no hop or
+#                 retry starts with under 5 s of it left. 3600000 is a CEILING chosen to bind no
 #                 tighter than today's longest real budget (arc-attack runs 30 min per surface);
 #                 calibrate it per class from the `hops[].ms` the receipts now carry, in a
 #                 reviewed diff -- never guessed downward.

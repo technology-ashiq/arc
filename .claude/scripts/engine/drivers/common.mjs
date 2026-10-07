@@ -405,12 +405,11 @@ export async function runDriver(name, produce, opts = {}) {
     // A failed attempt can still have spent money, and only a measured figure may say so (ADR-0069 b5).
     // GUARDED: a sidecar write that throws (EBUSY, a read-only dir) must never skip die() below, or an exit-2
     // budget decline would leave as a crash code and be read as a different failure (attack 27dcf39 B4).
-    try {
-      if (e && e.arcCost && typeof e.arcCost === "object") writeCost(e.arcCost);
-      if (e && e.arcFailureClass !== undefined) writeFailureClass(e.arcFailureClass);
-    } catch (w) {
-      process.stderr.write(`arc-driver: WARN could not write the failure sidecar (${w && w.code ? w.code : "error"}) -- arc-run reads unknown\n`);
-    }
+    // TWO GUARDS, CLASS FIRST (attack a4e3f33 B6): a cost write that throws must not take the declaration with it.
+    // writeCost replaces the file, so it runs first only when there is a cost, and the class is merged in after.
+    const warnW = (what, w) => process.stderr.write(`arc-driver: WARN could not write the ${what} (${w && w.code ? w.code : "error"})\n`);
+    if (e && e.arcCost && typeof e.arcCost === "object") { try { writeCost(e.arcCost); } catch (w) { warnW("failure's cost", w); } }
+    if (e && e.arcFailureClass !== undefined) { try { writeFailureClass(e.arcFailureClass); } catch (w) { warnW("failure class -- arc-run reads unknown", w); } }
     die(asked === EXIT.BUDGET_DECLINED ? EXIT.BUDGET_DECLINED : EXIT.DRIVER_FAIL, e.message);
   }
 }

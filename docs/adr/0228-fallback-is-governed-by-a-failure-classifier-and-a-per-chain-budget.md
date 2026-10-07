@@ -65,9 +65,10 @@ much a fallback may spend is whatever the caller's `--budget` says, or nothing.
    `failure-class.mjs`, and a driver joins it in the reviewed diff that makes it report `inr`.
 7. **Refuse before spend, deterministically.** `nextHop` is pure over the chain terms and the hops so far, each
    recorded as measured `{driver, tier, class, ms, cost?}`. It refuses the next hop when the attempt count would pass
-   `max_attempts`, when elapsed is at or past `max_wall_ms`, or when spend so far is at or past `max_cost`. A started
-   hop is given `min(run remaining, max_wall_ms − elapsed)`. The clock is an input, never read inside, so replaying
-   recorded hops reproduces the decision.
+   `max_attempts`, when the run or the wall term has under `MIN_HOP_MS` (5 s) left, or when spend so far is at or past
+   `max_cost`. A started hop is given `min(run remaining, max_wall_ms − elapsed)`, and the FIRST attempt on the routed
+   path is capped at `max_wall_ms` too (attack rounds 1 and 2 found the boundary and the first-attempt gap). The clock
+   is an input, never read inside, so replaying recorded hops reproduces the decision.
 8. **The record, zero new kinds.** `run.completed` keeps its existing `reason` values and gains `failure_class` (the
    final attempt's class) and `hops[]`. The escalation proposal stays `approval.requested` (ADR-0204).
 9. **No promotion.** Every hop keeps the routed tier and records it. The pin is recomputed per driver under that tier,

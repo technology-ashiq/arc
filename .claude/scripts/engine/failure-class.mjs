@@ -54,7 +54,7 @@ export function readDeclared(v) {
  * claiming otherwise is ignored.
  *
  * @param {{ timedOut?: boolean, overflowed?: boolean, policyDenied?: boolean, notInstalled?: boolean,
- *           code: number, declared?: unknown, contractFault?: boolean, driver?: string }} o
+ *           code: number, declared?: unknown, contractFault?: boolean, answerOk?: boolean, driver?: string }} o
  * @returns {{ cls: string | null, warn: string | null }}
  */
 export function classifyAttempt(o) {
@@ -70,6 +70,8 @@ export function classifyAttempt(o) {
     return readDeclared(o.declared);
   }
   if (o.contractFault) return { cls: "model-invalid", warn: null };
+  // Exit 0 without an accepted answer is never the success marker `null` (attack a4e3f33 B4).
+  if (o.answerOk === false) return { cls: "unknown", warn: null };
   return { cls: null, warn: null };
 }
 

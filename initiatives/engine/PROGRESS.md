@@ -45,9 +45,52 @@ done → scope cut (REQ-11's claude-code/codex declarations stay `unknown`).
 
 ## Now
 
-**Position:** Phase 09 open on branch `feat/engine-failure-classifier` (worktree `arc-engine-change`, **not merged
-yet** — invisible in the face until merge + pull). **Next:** build `failure-class.mjs` + the probe, wire arc-run,
-push once, read CI per job in the background.
+**Position:** Phases 09 and 10 BUILT on branch `feat/engine-failure-classifier` (worktree `arc-engine-change`, **not
+merged yet** — invisible in the face until merge + pull). Commits `27dcf392` (build) and `a4e3f332` (round-1 fixes).
+**Next:** round 2, push once, CI per job, close both phases.
+
+**Kickoff attack panel (Tier S, one merged A+C plan-attacker run): 7 findings, 6 applied, 1 rejected.** Applied:
+F1 the schema ladder must not retry after a cross-family hop (2 attempts, never 3); F2 a deadline-edge transport
+stops; F3 money-worded 429/403 and 402 are budget; F4 a check over the real router; F5 five named mutants; F6 one
+mock key spelling plus the ignore-rule fixture.
+`REJECTED: F7 a derived glob sweep of every tests/** classes: block — already-covered`
+
+**Evidence that changed a decision at kickoff:** no production driver reports `inr`, and a failed attempt writes no
+cost, so F3 as recommended would have made every chain hop-less. ADR-0228 item 6 and F3 were refined in place:
+`max_cost` is paise or `unmetered` (required when no driver in the chain meters), and an answer-less
+`transport`/`provider-unavailable` attempt's absent spend counts as 0.
+
+**Attack round 1 on `27dcf39`** (`evidence/phase-09/attack-27dcf39-r1-{boundary,logic}.json`). The logic surface
+first FAILED on the trial model (`qwen3.8-27b:free`, input 588 KB) and was re-run as round 1 on the fallback model
+(`deepseek-v4-flash-0731`, reasoning off) before any fix, per the skill. Boundary 10 (1 high, 6 medium, 3 low),
+logic 14 (3 high, 11 medium/low). **Fixed:** B1-B10, L1-L3, L5 (the stop line), L9, L14 — see `fixed-defects.md`.
+**A self-review found one more, worse than most:** the m1/m2 mutants would have survived, because their fixtures
+carried no spend and F3 stopped the hop before the class rule was ever tested. Rejected, one line each:
+```
+REJECTED: L4 a no-family retry counts 3 attempts — unsupported
+REJECTED: L5 max_attempts should bind the first attempt — already-covered
+REJECTED: L6 exit-0 branches treat the sidecar differently — unsupported
+REJECTED: L7 a success can carry a failure_class — already-covered
+REJECTED: L8 hops record a declared class on an exit-0 success — unsupported
+REJECTED: L10 termsCheck skips money for unmetered+mock — already-covered
+REJECTED: L11 a failed cross-family hop leads to 3 attempts — unsupported
+REJECTED: L12 model-invalid must never retry the same driver — already-covered
+REJECTED: L13 a bare generic-api model counts as the same family — already-covered
+```
+(L5's first-attempt half: the load already requires `max_attempts >= 1`. L12 contradicts ADR-0228 F1, L13 F2.)
+
+**Attack round 2 on `a4e3f33`** (`evidence/phase-09/attack-a4e3f33-r2-{boundary,logic}.json`; logic again re-run by
+hand on the fallback model after arc-attack's run failed). Boundary 7 (3 medium, 4 low), logic 1. **All 7 boundary
+findings fixed**, so nothing goes to the debt ledger: B1 the run's money total read spend with a bare `isFinite` while
+the hop record used the round-1 predicate (the twin, one round later) -- one `okInr` now; B2 a missing CLI is declared
+only when the work root is a usable directory, so a local cwd fault cannot hop to a gateway; B3 only ENOENT/EACCES/EPERM
+make a launch failure `provider-unavailable`; B4 an exit-0 attempt that is not an accepted answer is `unknown`, never
+the success marker; B5 a name outside the closed driver set has no family and the router is not consulted for it; B6
+the class and the cost are written under separate guards, class never lost to a cost write; B7 `max_wall_ms` caps the
+first attempt on the routed path too (ADR-0228 item 7 and the router header now say so).
+`REJECTED: L1 (r2) max_attempts should refuse the first dispatch — already-covered`
+(Round 1's L5 again; its own fix text describes the existing behaviour: `max_attempts: 1` allows the first attempt and
+no hop.) Two rounds is the cap; push next.
 
 **Owed to the main clone after merge:** `kickoff.done`, the plan `approval.requested` and its `decision.recorded`,
 and each phase's `phase.closed`.

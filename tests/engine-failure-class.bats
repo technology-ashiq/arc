@@ -16,7 +16,7 @@ section_green() {
 }
 
 @test "failure-class unit: the six classes, the classifier, families, nextHop, terms and the real router" {
-  section_green unit 57
+  section_green unit 58
   [[ "$output" == *"ok U: arc-run's loop asks nextHop exactly once and keeps no hop rule of its own"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok U: (c) nextHop over the same recorded hops is identical twice and mutates nothing"* ]] || { echo "$output"; false; }
 }

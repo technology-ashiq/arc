@@ -109,6 +109,10 @@ let activeProfile = null;
 // carries, so the decision and the ledger can never describe two different runs. Declared up here for the
 // reason the three above are: `emitRun` reads it, and `fail()` reaches `emitRun` before the routing block.
 const HOPS = [];
+// THE ONE READING OF A SPEND FIGURE: a non-negative integer of paise, at most 1e12. The run's money total and the hop
+// record both use it -- the hop record was fixed in round 1 and the run total was left on a bare isFinite, so a
+// negative figure could still drive the total down (attack a4e3f33 B1, the twin of round 1's B5).
+const okInr = (v) => Number.isInteger(v) && v >= 0 && v <= 1e12;
 
 // The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS); hook
 // mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent SIGKILLs
@@ -1693,7 +1697,7 @@ async function invoke(name, capMs) {
     // error", and the two named codes are the ones that mean it did.
     spawned: !(res.error && res.status === null && !timedOut && !overflowed),
     // The same fact, read as a class: no process ever existed, so nothing answered (attack 27dcf39 B7).
-    notInstalled: Boolean(res.error && res.status === null && !timedOut && !overflowed),
+    notInstalled: Boolean(res.error && res.status === null && !timedOut && !overflowed && ["ENOENT", "EACCES", "EPERM"].includes(res.error.code)),
   };
 }
 
@@ -1863,11 +1867,10 @@ async function attempt(name, capMs) {
   // THE CLASS COMES FROM failure-class.mjs AND NOWHERE ELSE (ADR-0228). The verdict above keeps the
   // receipt's `reason` exactly as it was; the class is what decides a hop.
   const c = classifyAttempt({ timedOut: r.timedOut, overflowed: r.overflowed, policyDenied: r.policyDenied, notInstalled: r.notInstalled,
-    code: r.code, declared: r.declared, contractFault: v.verdict === "schema", driver: name });
+    code: r.code, declared: r.declared, contractFault: v.verdict === "schema", answerOk: v.verdict === "ok", driver: name });
   if (c.warn) console.error(`arc-run: WARN ${c.warn}`);
   // Spend is kept only as a non-negative integer of paise; a figure that is PRESENT but unreadable is marked, so
   // the money term reads it as unproven rather than as nothing (attack 27dcf39 B5, L14 -- blank read as zero).
-  const okInr = (v) => Number.isInteger(v) && v >= 0 && v <= 1e12;
   const hopCost = r.cost && typeof r.cost === "object"
     ? {
       ...(okInr(r.cost.inr) ? { inr: r.cost.inr } : {}),
@@ -1881,7 +1884,7 @@ async function attempt(name, capMs) {
 }
 
 function verdictOf(name, r) {
-  if (r.cost && Number.isFinite(r.cost.inr)) inrSpent += r.cost.inr;
+  if (r.cost && okInr(r.cost.inr)) inrSpent += r.cost.inr;
   scrub(`the ${name} driver's stdout`, r.stdout);
   scrub(`the ${name} driver's transcript`, r.stderr);
   if (r.cost) scrub(`the ${name} driver's cost sidecar`, JSON.stringify(r.cost), r.cost);
@@ -2066,7 +2069,10 @@ if (refusal) {
 }
 
 const selfCheck = processIsSelfConsistent();
-let a = await attempt(driver);
+// The chain's wall term binds EVERY attempt on the routed path, the first included (attack a4e3f33 B7); an explicit
+// driver has no chain and no term (F4).
+const firstCap = driverArg === "auto" && routedRow && Number.isInteger(routedRow.max_wall_ms) && routedRow.max_wall_ms > 0 ? routedRow.max_wall_ms : undefined;
+let a = await attempt(driver, firstCap);
 
 // Driver-fault fallback: try the next driver in the chain. NOT for a schema fault -- falling
 // back on a broken schema just fails three times instead of once, slower.
@@ -2088,7 +2094,7 @@ const chainTerms = driverArg === "auto" && routedRow
 // The model each driver WOULD run, for the family table: the current driver's is what this run chose,
 // a hop's is its pin under the routed tier.
 const modelFor = (d) => (d === driver ? effectiveModel : (tier ? routeFor(d).pin : null)) ?? null;
-const hopCtx = () => ({ elapsedMs: Math.max(0, Date.now() - runStartedAt), runRemainingMs: msRemaining(), familyOf: (d) => familyOf(d, modelFor(d)) });
+const hopCtx = () => ({ elapsedMs: Math.max(0, Date.now() - runStartedAt), runRemainingMs: msRemaining(), familyOf: (d) => (DRIVERS.includes(d) ? familyOf(d, modelFor(d)) : "unknown") });
 // Why the chain stopped, when it did: `byTerms` means a term or the run's clock refused the next
 // attempt, which is a budget outcome however the attempt itself failed.
 let chainStop = null;
