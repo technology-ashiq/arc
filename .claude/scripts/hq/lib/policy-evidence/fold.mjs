@@ -49,10 +49,22 @@ export function istDay(ts) {
   return m ? m[1] : null;
 }
 
+/**
+ * A REAL calendar day, not just its shape. `Date.UTC` silently rolls 2026-02-30 to 2026-03-02, so a typo would shift
+ * every age and could flip fresh to stale with no error (attack r1 L7/B4). Round-trip the parts instead.
+ */
+export function isCalendarDay(s) {
+  const m = typeof s === "string" ? DAY_RE.exec(s) : null;
+  if (!m) return false;
+  const t = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return t.getUTCFullYear() === +m[1] && t.getUTCMonth() === +m[2] - 1 && t.getUTCDate() === +m[3];
+}
+
 /** Whole days from `from` to `to`, both YYYY-MM-DD. Calendar arithmetic only; no clock. */
 export function dayDiff(from, to) {
+  if (!isCalendarDay(from) || !isCalendarDay(to))
+    throw new Error(`dayDiff needs two real calendar days, got ${JSON.stringify(from)} and ${JSON.stringify(to)}`);
   const a = DAY_RE.exec(from), b = DAY_RE.exec(to);
-  if (!a || !b) throw new Error(`dayDiff needs two YYYY-MM-DD days, got ${JSON.stringify(from)} and ${JSON.stringify(to)}`);
   return Math.round((Date.UTC(+b[1], +b[2] - 1, +b[3]) - Date.UTC(+a[1], +a[2] - 1, +a[3])) / 86400000);
 }
 
@@ -88,10 +100,14 @@ function consistent(refusal, effectiveThen) {
  *   writers     -- the writer table; tests inject Phase 02's to build a positive control. The CLI never passes it.
  */
 export function foldEvidence({ policy, transitions, events, asOf, writers = REFUSAL_WRITERS } = {}) {
-  if (typeof asOf !== "string" || !DAY_RE.test(asOf))
-    throw new Error(`foldEvidence needs asOf as YYYY-MM-DD (it never reads a clock), got ${JSON.stringify(asOf)}`);
+  if (!isCalendarDay(asOf))
+    throw new Error(`foldEvidence needs asOf as a real YYYY-MM-DD day (it never reads a clock), got ${JSON.stringify(asOf)}`);
   if (!policy || typeof policy !== "object" || !policy.kinds || typeof policy.kinds !== "object")
     throw new Error("foldEvidence needs a parsed policy with a kinds mapping");
+  // A policy with no subject is not "nothing below the bar" -- it is nothing evaluated, and a summary of zero cells
+  // must not read like a clean one (attack r1 L9).
+  if (Object.keys(policy.kinds).length === 0)
+    throw new Error("foldEvidence was handed a policy that declares no subject -- there is no level to evidence");
 
   // Nothing dated after the as-of day exists for this reading: a replay at an earlier day must not see the
   // future, and must never produce a negative age.
@@ -128,9 +144,15 @@ export function foldEvidence({ policy, transitions, events, asOf, writers = REFU
         // A receipt from a surface that writes none at that level is forged by construction -- nothing sanctioned
         // can have produced it (the same reasoning run-gate's loadPolicyEvents applies to kinds the spine cannot emit).
         if (!Object.prototype.hasOwnProperty.call(writers, p.surface) || !writers[p.surface].includes(p.level)) { unverified++; continue; }
+        // Corroboration (ADR-0509, attack r1 L2/L3/L5): the cited incident came from arc-run's gate, BEFORE this
+        // refusal (ULID order), on the same IST day, from the SAME process@version, and its typed `denials` name
+        // this capability at this level. Anyone holding the emitter can still forge both halves; this makes a
+        // forgery cost two coordinated events instead of one, and the guard lists every ULID a cell rests on.
         if (p.surface === "headless") {
           const inc = gateIncidents.get(p.incident_ref);
-          if (!inc || envelopeName(inc) !== envelopeName(e) || istDay(inc.ts) !== istDay(e.ts)) { unverified++; continue; }
+          const denied = inc && Array.isArray(inc.payload.denials) &&
+            inc.payload.denials.some((d) => d && d.capability === p.capability && d.level === p.level);
+          if (!inc || !(inc.id < e.id) || inc.process !== e.process || istDay(inc.ts) !== istDay(e.ts) || !denied) { unverified++; continue; }
         }
         // The effective level at the refusal's own position: the chain up to it, ordered by ULID (time order).
         const then = resolveEffectivePolicy(subject, capability,

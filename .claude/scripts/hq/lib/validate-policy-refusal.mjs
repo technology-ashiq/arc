@@ -62,8 +62,8 @@ export function assertPolicyRefusal(event) {
   } else if ("incident_ref" in p) {
     bad(`incident_ref belongs to a headless refusal only, not surface ${p.surface}`);
   }
-  if (typeof p.reason !== "string" || p.reason.trim() === "" || p.reason.length > MAX_REASON || /[\u0000-\u001f\u007f]/.test(p.reason))
-    bad(`reason must be 1..${MAX_REASON} characters of single-line text`);
+  if (typeof p.reason !== "string" || p.reason.trim() === "" || p.reason.length > MAX_REASON || /[\u0000-\u001f\u007f\u0085\u2028\u2029]/.test(p.reason) || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(p.reason))
+    bad(`reason must be 1..${MAX_REASON} characters of single-line, well-formed text (no C0, NEL, U+2028/2029 or lone surrogate)`);
 }
 
 export function isNearMissPolicyRefusal(event) {

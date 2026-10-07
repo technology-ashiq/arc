@@ -60,7 +60,10 @@ never parses prose**, so the existing `incident.raised` from `arc-run`'s gate do
 **Forgery is detected, not prevented.** Anyone holding the emitter can write a note. The fold
 folds only events that pass `validateEvent` and an `eventSha` recompute, deduped on `idem`; a
 headless refusal counts only when its `incident_ref` resolves to an accepted `incident.raised`
-from `arc-run policy gate` on the same process and IST day. On top of that it discards a `policy.refusal` whose `(decision, level)` is inconsistent with the reducer's
+from `arc-run policy gate` that PRECEDES it (ULID order), on the same IST day, from the same
+`process@version`, whose typed `denials` name the same capability at the same level -- arc-run's
+incident carries that `denials` array for exactly this. The reader also refuses a non-canonical
+spine: a linked worktree, a missing spine, or an `ARC_SPINE_ROOT` naming another spine. On top of that it discards a `policy.refusal` whose `(decision, level)` is inconsistent with the reducer's
 effective level for that pair at the receipt's spine position (a `propose` needs effective
 L1; a `deny` at L2+ needs a cited resource reason). A forged receipt that is consistent still
 refreshes a cell, and that residual is attacked by name in the phase's adversarial pass.

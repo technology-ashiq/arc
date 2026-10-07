@@ -48,7 +48,7 @@ import { dirname, join, resolve } from "node:path";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
-import { sha256Hex } from "../hq/lib/canonical.mjs";
+import { sha256Hex, formatIst, nowMs } from "../hq/lib/canonical.mjs";
 import { liveLine, scanSecrets, sizeScaledCap } from "../hq/lib/redact.mjs";
 import { StringDecoder } from "node:string_decoder";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
@@ -1421,12 +1421,35 @@ let policyNotInForceAnnounced = false;
 // reason, which is one refusal, not two. Only after the incident sealed -- a refusal citing nothing would be
 // `unverified` by construction. Best effort exactly like the incident: a lost receipt is reported, the deny stands.
 const refusalsReceipted = new Set();
+function refusalSealedToday(kind, capability) {
+  // The same spine root verifyLanded reads, because that is the one the emitter wrote to.
+  const spineRoot = process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq");
+  const file = join(spineRoot, "events", `${formatIst(nowMs()).slice(0, 10)}.jsonl`);
+  let text;
+  try { text = readFileSync(file, "utf8"); } catch { return null; }
+  for (const line of text.split("\n")) {
+    if (!line.includes('"policy.refusal"')) continue;
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    const p = e && e.payload;
+    if (e.kind === "note.logged" && p && p.subject === "policy.refusal" && p.action_kind === kind &&
+        p.capability === capability && p.decision === "deny") return e.id;
+  }
+  return null;
+}
 function receiptRefusals(gate, incidentId) {
   if (!gate || !Array.isArray(gate.denials) || typeof gate.kind !== "string" || !incidentId) return;
   for (const d of gate.denials) {
     if (!d || typeof d.capability !== "string" || refusalsReceipted.has(d.capability)) continue;
     refusalsReceipted.add(d.capability);
-    const reason = String(d.reason || "denied by policy").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 300);
+    // Sanitized to the profile's rule and cut by CODE POINT: a UTF-16 cut can leave a lone surrogate that Windows argv
+    // decoding mangles (attack r1 L4/B8).
+    const reason = Array.from(String(d.reason || "denied by policy").replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]/g, " ").replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, " "))
+      .slice(0, 300).join("");
+    // At most one refusal per (action_kind, capability, decision, IST day), bounded HERE at the writer (ADR-0509,
+    // attack r1 B3): a job denied every fifteen minutes would otherwise write thousands of identical receipts.
+    const sealed = refusalSealedToday(gate.kind, d.capability);
+    if (sealed) { console.error(`arc-run: policy.refusal for ${gate.kind}/${d.capability} already sealed today (${sealed}) -- not repeated`); continue; }
     const r = emitEvent("note.logged", {
       subject: "policy.refusal", action_kind: gate.kind, capability: d.capability,
       level: d.level, decision: "deny", surface: "headless", reason, incident_ref: incidentId,
@@ -1540,7 +1563,11 @@ async function invoke(name) {
     const detail = `policy denied ${processName}: ${blocked.reason}`;
     console.error(`arc-run: ${detail}`);
     const inc = emitEvent("incident.raised",
-      { what: detail, severity: "high", source: "arc-run policy gate" },
+      // `denials` is TYPED so the evidence fold can corroborate the refusal that cites this incident without ever
+      // parsing `what` (ADR-0509, attack r1 L3).
+      { what: detail, severity: "high", source: "arc-run policy gate",
+        denials: (blocked.gate && Array.isArray(blocked.gate.denials) ? blocked.gate.denials : [])
+          .filter((d) => d && typeof d.capability === "string").map((d) => ({ capability: d.capability, level: d.level })) },
       ["--process", `${doc.name}@${doc.version}`, "--outcome", "fail"]);
     if (!inc.ok) {
       // A receipt we could not write is reported, never swallowed -- but it does not un-deny

@@ -24,7 +24,15 @@ const MUTANTS = {
   // the level-consistency check deleted
   "M-noforge": ["if (!consistent(e, then)) { inconsistent++; continue; }", "if (false) { inconsistent++; continue; }"],
   // the incident corroboration deleted
-  "M-ref": ["if (!inc || envelopeName(inc) !== envelopeName(e) || istDay(inc.ts) !== istDay(e.ts)) { unverified++; continue; }", "if (false) { unverified++; continue; }"],
+  "M-ref": ["if (!inc || !(inc.id < e.id) || inc.process !== e.process || istDay(inc.ts) !== istDay(e.ts) || !denied) { unverified++; continue; }", "if (false) { unverified++; continue; }"],
+  // the incident-precedes-refusal order check deleted (attack r1 L2)
+  "M-order": ["!(inc.id < e.id) || ", ""],
+  // the typed-denials corroboration deleted (attack r1 L3)
+  "M-denials": [" || !denied) { unverified++", ") { unverified++"],
+  // the same-process@version check weakened to the stem (attack r1 L5)
+  "M-version": ["inc.process !== e.process", "String(inc.process).split(\"@\")[0] !== String(e.process).split(\"@\")[0]"],
+  // calendar validity deleted (attack r1 L7/B4)
+  "M-calendar": ["return t.getUTCFullYear() === +m[1] && t.getUTCMonth() === +m[2] - 1 && t.getUTCDate() === +m[3];", "return true;"],
   // the no-writer-means-forged check deleted
   "M-writer": ["if (!Object.prototype.hasOwnProperty.call(writers, p.surface) || !writers[p.surface].includes(p.level)) { unverified++; continue; }", "if (false) { unverified++; continue; }"],
   // load.mjs: the sha recompute deleted

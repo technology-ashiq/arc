@@ -76,6 +76,16 @@ _killed() {
 @test "an interactive refusal before any interactive writer exists is forged" { _pass forgedBeforeWriter; }
 @test "forged before writer: mutant M-writer is killed" { _killed "$FOLD_REL" M-writer forgedBeforeWriter; }
 @test "prose is never parsed: an incident naming shell is not a refusal" { _pass proseIgnored; }
+@test "corroboration positive control: incident first, same process, typed denial" { _pass corroborated; }
+@test "an incident written after the refusal cannot vouch for it" { _pass incidentAfterRefusal; }
+@test "incident order: mutant M-order is killed" { _killed "$FOLD_REL" M-order incidentAfterRefusal; }
+@test "an incident whose typed denials miss the capability vouches for nothing" { _pass incidentWithoutDenial; }
+@test "typed denials: mutant M-denials is killed" { _killed "$FOLD_REL" M-denials incidentWithoutDenial; }
+@test "another version of the process is another process" { _pass versionMismatch; }
+@test "process version: mutant M-version is killed" { _killed "$FOLD_REL" M-version versionMismatch; }
+@test "an impossible as-of day is refused, never rolled over" { _pass invalidAsOf; }
+@test "calendar days: mutant M-calendar is killed" { _killed "$FOLD_REL" M-calendar invalidAsOf; }
+@test "a policy with no subject is refused, never a clean zero-cell reading" { _pass emptyPolicy; }
 
 # ---------------------------------------------------------------- the profile on the spine (ADR-0509)
 
@@ -112,6 +122,14 @@ _emit() { # $1 payload json; emits note.logged into the per-test spine, strict
   [[ "$output" == *"incident_ref"* ]] || { echo "wrong refusal: $output"; false; }
 }
 
+@test "profile: a Unicode line separator in the reason is refused" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  grep -q 'u2028' "$FX/refusal-line-separator.json" || { echo "fixture lost its escape"; false; }
+  run bash "$ARC_ROOT/.claude/scripts/hq/arc-event.sh" emit note.logged --payload-file "$FX/refusal-line-separator.json" --strict --process demo@1.0.0 --outcome fail
+  [ "$status" -ne 0 ] || { echo "a U+2028 reason was accepted"; false; }
+  [[ "$output" == *"BAD_POLICY_REFUSAL"* ]] || { echo "wrong refusal: $output"; false; }
+}
+
 @test "profile: a propose claimed at L2 is refused" {
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L2","decision":"propose","surface":"interactive","reason":"fixture"}'
@@ -120,8 +138,7 @@ _emit() { # $1 payload json; emits note.logged into the per-test spine, strict
 
 @test "zero new kinds: no kind in the closed vocabulary names a refusal" {
   # cd + a relative import: a POSIX $ARC_ROOT inside a node program is red on the Windows leg only.
-  cd "$ARC_ROOT"
-  run node --input-type=module -e "const { KINDS } = await import('./.claude/scripts/hq/lib/validate.mjs'); console.log('KINDS', KINDS.length, KINDS.filter((k) => /refus/.test(k)).length, KINDS.includes('note.logged'));"
+  run node "$FX/spine-probe.mjs" kinds "$ARC_ROOT/.claude/scripts/hq/lib/validate.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" =~ ^KINDS\ [0-9]+\ 0\ true$ ]] || { echo "vocabulary changed: $output"; false; }
 }
@@ -201,16 +218,21 @@ EOF
   [ ! -f "$d/DRIVER-RAN.txt" ] || { echo "the driver RAN despite the denial"; false; }
 
   # Read back from the spine DIRECTORY, never from the emitter's return value.
-  local n; n="$(cat "$d/.claude/state/hq/events/"*.jsonl | grep -c '"policy.refusal"')"
-  [ "$n" -eq 1 ] || { echo "expected exactly 1 policy.refusal in events/, found $n"; false; }
+  run node "$FX/spine-probe.mjs" refusals "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^REFUSALS\ 1\ ([0-9A-Z]{26})\ INCIDENTS-WITH-DENIALS\ 1$ ]] || { echo "expected 1 refusal and 1 typed incident: $output"; false; }
+  local rid="${BASH_REMATCH[1]}"
   ! grep -rqs '"policy.refusal"' "$d/.claude/state/hq/events/_quarantine/" || { echo "the refusal was quarantined"; false; }
-  local rid; rid="$(cat "$d/.claude/state/hq/events/"*.jsonl | grep '"policy.refusal"' | node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>console.log(JSON.parse(s).id))")"
-  [ -n "$rid" ] || { echo "could not read the refusal id"; false; }
+
+  # A SECOND denied run the same IST day: its incident is written, its refusal is not (ADR-0509, attack r1 B3).
+  run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
+  [[ "$output" == *"already sealed today"* ]] || { echo "the second run did not report the day bound: $output"; false; }
+  run node "$FX/spine-probe.mjs" refusals "$d/.claude/state/hq/events"
+  [[ "$output" == "REFUSALS 1 $rid INCIDENTS-WITH-DENIALS 2" ]] || { echo "day bound broken: $output"; false; }
 
   run node "$d/.claude/scripts/hq/policy-evidence.mjs" report --json
   [ "$status" -eq 0 ] || { echo "report failed: $output"; false; }
   printf '%s' "$output" > "$BATS_TEST_TMPDIR/report.json"
-  run node -e "const r=require(process.argv[1]); const c=r.cells.find(c=>c.subject==='process:denied'&&c.capability==='write'); console.log(c&&c.last_refusal, c&&c.state, r.cells.length===r.subjects*8&&r.subjects>0)" "$BATS_TEST_TMPDIR/report.json"
+  run node "$FX/spine-probe.mjs" cell "$BATS_TEST_TMPDIR/report.json" process:denied write
   [ "$output" = "$rid n/a true" ] || { echo "attribution: got [$output], refusal $rid"; false; }
 }
 
@@ -226,13 +248,43 @@ EOF
   [ "${BASH_REMATCH[1]}" -gt 0 ] && [ "${BASH_REMATCH[1]}" = "${BASH_REMATCH[2]}" ] || { echo "in scope ${BASH_REMATCH[1]} vs BELOW-BAR ${BASH_REMATCH[2]}"; false; }
 }
 
+_root() { # $1 dir: a minimal governing root -- scripts, the real policy, an events dir
+  mkdir -p "$1/.claude/state/hq/events"
+  cp -r "$ARC_ROOT/.claude/scripts" "$1/.claude/"
+  cp "$ARC_ROOT/hq.policy.yaml" "$1/hq.policy.yaml"
+}
+
+@test "root: a linked worktree is refused, never read as the canonical spine" {
+  local d="$BATS_TEST_TMPDIR/wt"; _root "$d"
+  printf 'gitdir: /somewhere/.git/worktrees/x\n' > "$d/.git"
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" check --as-of 2026-10-07
+  [ "$status" -eq 2 ] && [[ "$output" == *"linked git worktree"* ]] || { echo "$status $output"; false; }
+}
+
+@test "root: a missing spine is refused, never read as an empty one" {
+  local d="$BATS_TEST_TMPDIR/nospine"; _root "$d"
+  rm -rf "$d/.claude/state/hq/events"
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" check --as-of 2026-10-07
+  [ "$status" -eq 2 ] && [[ "$output" == *"no spine at"* ]] || { echo "$status $output"; false; }
+}
+
+@test "root: an ARC_SPINE_ROOT naming another spine is refused" {
+  local d="$BATS_TEST_TMPDIR/elsewhere"; _root "$d"
+  mkdir -p "$BATS_TEST_TMPDIR/other-spine/events"
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/other-spine"
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" check --as-of 2026-10-07
+  [ "$status" -eq 2 ] && [[ "$output" == *"ARC_SPINE_ROOT"* ]] || { echo "$status $output"; false; }
+}
+
 @test "check: usage errors exit 2 and name the problem" {
   run node "$ARC_ROOT/.claude/scripts/hq/policy-evidence.mjs" check --as-of 07-10-2026
   [ "$status" -eq 2 ] && [[ "$output" == *"YYYY-MM-DD"* ]] || { echo "$status $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/hq/policy-evidence.mjs" check --as-of 2026-02-30
+  [ "$status" -eq 2 ] && [[ "$output" == *"real YYYY-MM-DD"* ]] || { echo "an impossible day was accepted: $status $output"; false; }
   run node "$ARC_ROOT/.claude/scripts/hq/policy-evidence.mjs" guess
   [ "$status" -eq 2 ] && [[ "$output" == *"unknown subcommand"* ]] || { echo "$status $output"; false; }
 }
 
 @test "suite count: every test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 35 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 35"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 49 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 49"; false; }
 }

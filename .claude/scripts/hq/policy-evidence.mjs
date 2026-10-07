@@ -9,7 +9,7 @@
 // never denies an action -- promotion stays a human `policy.level.changed` (ADR-0508). It is a reported state.
 //
 // The as-of day is resolved ONCE, here, from IST today when not given. The fold never reads a clock.
-import { foldEvidence, istDay } from "./lib/policy-evidence/fold.mjs";
+import { foldEvidence, istDay, isCalendarDay } from "./lib/policy-evidence/fold.mjs";
 import { loadEvidenceInputs } from "./lib/policy-evidence/load.mjs";
 import { formatIst, nowMs } from "./lib/canonical.mjs";
 
@@ -30,7 +30,7 @@ function parseArgs(argv) {
     else if (a === "--as-of") {
       if (out.asOf !== null) return { error: "--as-of given twice" };
       const v = rest[++i];
-      if (typeof v !== "string" || !DAY_RE.test(v)) return { error: `--as-of needs YYYY-MM-DD, got ${JSON.stringify(v)}` };
+      if (typeof v !== "string" || !DAY_RE.test(v) || !isCalendarDay(v)) return { error: `--as-of needs a real YYYY-MM-DD day, got ${JSON.stringify(v)}` };
       out.asOf = v;
     } else return { error: `unknown argument ${JSON.stringify(a)}` };
   }
@@ -63,16 +63,19 @@ function main(argv) {
   catch (e) { return fail(2, `the evidence fold refused: ${String(e && e.message).split("\n")[0]}`); }
 
   if (args.cmd === "report" && args.json) {
-    process.stdout.write(JSON.stringify({ ...r, rejected_lines: inputs.rejected }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ ...r, rejected_lines: inputs.rejected, day_files: inputs.dayFiles, events_dir: inputs.eventsDir }, null, 2) + "\n");
     return;
   }
+  // The verdict is set BEFORE any output: a reader that closes the pipe early must not turn exit 3 into exit 1.
+  if (args.cmd === "check" && r.below_bar > 0) process.exitCode = 3;
+  process.stdout.on("error", () => {});
   const shown = args.cmd === "check" ? r.cells.filter((c) => c.below_bar) : r.cells;
   for (const c of shown) process.stdout.write(cellLine(c) + "\n");
   // The positive marker: printed only when the fold ran to the end, so an assertion of absence above never stands
   // alone (.claude/rules/testing.md, the vacuous pass).
   process.stdout.write(`policy-evidence: as-of ${r.as_of} -- ${r.subjects} subjects, ${r.cells.length} cells, ` +
-    `${r.in_scope} in scope, ${r.below_bar} BELOW-BAR, ${inputs.rejected} spine line(s) rejected\n`);
-  if (args.cmd === "check" && r.below_bar > 0) process.exitCode = 3;
+    `${r.in_scope} in scope, ${r.below_bar} BELOW-BAR, ${inputs.rejected} spine line(s) rejected, ` +
+    `${inputs.dayFiles} day file(s) read from ${inputs.eventsDir}\n`);
 }
 
 main(process.argv.slice(2));

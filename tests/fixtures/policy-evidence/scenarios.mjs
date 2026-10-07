@@ -47,8 +47,13 @@ const refusal = (o) => ({
 });
 const incident = (o) => ({
   id: id(), kind: "incident.raised", ts: ts(o.day), process: o.process ?? "demo@1.0.0", outcome: "fail",
-  payload: { what: o.what ?? "policy denied demo: process:demo/shell is denied", severity: "high", source: o.source ?? "arc-run policy gate" },
+  payload: { what: o.what ?? "policy denied demo: process:demo/shell is denied", severity: "high", source: o.source ?? "arc-run policy gate",
+    denials: o.denials ?? [{ capability: "shell", level: "L0" }] },
 });
+// process:demo/shell held at L0 by a demotion, so a headless L0 deny is consistent and only corroboration decides.
+const demotedToL0 = () => [{ id: id(), kind: "policy.demoted", ts: ts("2026-10-01"), payload: { action_kind: "process:demo", capability: "shell" } }];
+const headlessDeny = (o) => refusal({ kind: "process:demo", level: "L0", decision: "deny", surface: "headless", process: "demo@1.0.0", day: "2026-10-02", ...o });
+const throws = (fn) => { try { fn(); return false; } catch { return true; } };
 const fold = (events, asOf, writers, transitions = []) =>
   F.foldEvidence({ policy, transitions, events, asOf, ...(writers ? { writers } : {}) });
 const cell = (r, subject, cap) => r.cells.find((c) => c.subject === subject && c.capability === cap);
@@ -133,6 +138,51 @@ const S = {
     const ref = refusal({ day: "2026-10-06", kind: "process:demo", level: "L1", decision: "deny", surface: "headless", process: "demo@1.0.0", incident_ref: id() });
     const c = cell(fold([ref], "2026-10-07", WIDE), "process:demo", "shell");
     expect(c.last_refusal === null && c.discarded.unverified === 1 && c.below_bar === true, `unverified: ${JSON.stringify(c)}`);
+  },
+  // The positive control for corroboration: incident first, same day, same process@version, typed denial -- attributed.
+  corroborated() {
+    const chain = demotedToL0();
+    const inc = incident({ day: "2026-10-02" });
+    const ref = headlessDeny({ incident_ref: inc.id });
+    const c = cell(fold([inc, ref], "2026-10-07", null, chain), "process:demo", "shell");
+    expect(c.last_refusal === ref.id && c.discarded.unverified === 0, `corroborated: ${JSON.stringify(c)}`);
+  },
+  // attack r1 L2: an incident written AFTER the refusal it is cited by cannot vouch for it.
+  incidentAfterRefusal() {
+    const chain = demotedToL0();
+    const pre = id();
+    const ref = headlessDeny({ incident_ref: "PLACEHOLDER" });
+    const inc = incident({ day: "2026-10-02" });
+    ref.payload.incident_ref = inc.id;
+    expect(pre < ref.id && ref.id < inc.id, "fixture order");
+    const c = cell(fold([ref, inc], "2026-10-07", null, chain), "process:demo", "shell");
+    expect(c.last_refusal === null && c.discarded.unverified === 1, `later incident: ${JSON.stringify(c)}`);
+  },
+  // attack r1 L3: an incident whose typed denials do not name this capability at this level vouches for nothing.
+  incidentWithoutDenial() {
+    const chain = demotedToL0();
+    const inc = incident({ day: "2026-10-02", denials: [{ capability: "write", level: "L0" }] });
+    const ref = headlessDeny({ incident_ref: inc.id });
+    const c = cell(fold([inc, ref], "2026-10-07", null, chain), "process:demo", "shell");
+    expect(c.last_refusal === null && c.discarded.unverified === 1, `no matching denial: ${JSON.stringify(c)}`);
+  },
+  // attack r1 L5: another VERSION of the same process is another process.
+  versionMismatch() {
+    const chain = demotedToL0();
+    const inc = incident({ day: "2026-10-02", process: "demo@1.0.0" });
+    const ref = headlessDeny({ incident_ref: inc.id, process: "demo@2.0.0" });
+    const c = cell(fold([inc, ref], "2026-10-07", null, chain), "process:demo", "shell");
+    expect(c.last_refusal === null && c.discarded.unverified === 1, `version mismatch: ${JSON.stringify(c)}`);
+  },
+  // attack r1 L7/B4: an impossible day is refused, never rolled over into a plausible one.
+  invalidAsOf() {
+    expect(throws(() => fold([], "2026-02-30")), "2026-02-30 was accepted");
+    expect(throws(() => fold([], "2026-13-01")), "month 13 was accepted");
+    expect(!throws(() => fold([], "2028-02-29")), "a real leap day was refused");
+  },
+  // attack r1 L9: a policy with no subject is nothing evaluated, never a clean zero-cell reading.
+  emptyPolicy() {
+    expect(throws(() => F.foldEvidence({ policy: { kinds: {} }, transitions: [], events: [], asOf: "2026-10-07" })), "an empty policy folded");
   },
   // An interactive refusal before any interactive writer exists is forged by construction.
   forgedBeforeWriter() {
