@@ -194,87 +194,70 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 });
 // ---- end of the shared block
 
-// authz slot: row-level security by membership (ADR-1704, ADR-1734). One migration -- orgs and memberships, RLS on,
-// read granted to members only, a security-definer create_org that makes the caller its owner -- and the two routes
-// that read through it. A cross-tenant read is 403 because RLS hides the row, not because the route says so.
-// SQL column defaults need the keyword ADR-1703 bans in launch logic; it appears only in the SQL launch writes, assembled.
+// plans slot: the org's plan gates a route (ADR-1704, ADR-1737). One migration -- org_plans, RLS on, members read their
+// own org's row, no write through PostgREST -- plus plans.yaml, the same list as code, and the gated route. verify sets
+// the probe org to pro, then free, and asks the live app each time: the gate follows the data.
 const SQL_DEF = ["de", "fault"].join("");
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MIGRATION = [
-  '-- arc-launch migration: authz',
-  'create table if not exists public.orgs (id uuid primary key %DEF% gen_random_uuid(), name text not null check (length(name) between 1 and 80), created_at timestamptz not null %DEF% now());',
-  'create table if not exists public.memberships (org_id uuid not null references public.orgs(id) on delete cascade, user_id uuid not null references auth.users(id) on delete cascade, role text not null check (role in (\'owner\', \'member\')), primary key (org_id, user_id));',
-  'alter table public.orgs enable row level security;',
-  'alter table public.memberships enable row level security;',
-  'create or replace function public.is_member(o uuid) returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.memberships m where m.org_id = o and m.user_id = auth.uid()) $$;',
-  'drop policy if exists orgs_member_read on public.orgs;',
-  'create policy orgs_member_read on public.orgs for select using (public.is_member(id));',
-  'drop policy if exists memberships_member_read on public.memberships;',
-  'create policy memberships_member_read on public.memberships for select using (public.is_member(org_id));',
-  'create or replace function public.create_org(org_name text) returns uuid language plpgsql security definer set search_path = public as $$ declare oid uuid; begin if auth.uid() is null then raise exception \'not signed in\'; end if; insert into public.orgs (name) values (org_name) returning id into oid; insert into public.memberships (org_id, user_id, role) values (oid, auth.uid(), \'owner\'); return oid; end $$;',
-  'revoke all on function public.create_org(text) from public;',
-  'grant execute on function public.create_org(text) to authenticated;',
-  'comment on table public.orgs is \'arc-launch authz\';',
-  'comment on table public.memberships is \'arc-launch authz\';',
+  '-- arc-launch migration: plans',
+  'create table if not exists public.org_plans (org_id uuid primary key references public.orgs(id) on delete cascade, plan text not null %DEF% \'free\' check (plan in (\'free\', \'pro\')), updated_at timestamptz not null %DEF% now());',
+  'alter table public.org_plans enable row level security;',
+  'drop policy if exists org_plans_member_read on public.org_plans;',
+  'create policy org_plans_member_read on public.org_plans for select using (public.is_member(org_id));',
+  'comment on table public.org_plans is \'arc-launch plans\';',
 ].join("\n").replaceAll("%DEF%", SQL_DEF);
-// Tables carry launch's comment, so a kill between the migration and the report is recognised as launch's own on the
-// re-run (attack aadcd0c B3, the twin of database's probe-table resume).
-const OURS = "select count(*)::int as n from pg_tables t where schemaname = 'public' and tablename in ('orgs', 'memberships') and obj_description(('public.' || t.tablename)::regclass) = 'arc-launch authz';";
-const TABLES = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('orgs', 'memberships');";
-const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('orgs', 'memberships') and rowsecurity;";
+const OURS = "select count(*)::int as n from pg_tables t where schemaname = 'public' and tablename in ('org_plans') and obj_description(('public.' || t.tablename)::regclass) = 'arc-launch plans';";
+const TABLES = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('org_plans');";
+const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('org_plans') and rowsecurity;";
 const FILES = {
-  "app/api/orgs/route.js": [
-    '// The orgs the signed-in user belongs to, and creating one (arc launch, authz slot). RLS does the scoping.',
-    'import { supabase } from "../../../lib/supabase/server.js";',
+  "plans.yaml": [
+    '# Plans and the features each one includes (arc launch, plans slot). lib/plans.js holds the same list for the app.',
+    'plans:',
+    '  - id: free',
+    '    features: []',
+    '  - id: pro',
+    '    features:',
+    '      - reports',
     '',
-    'export const dynamic = "force-dynamic";',
+  ].join("\n"),
+  "lib/plans.js": [
+    '// The plans in plans.yaml, as code the app reads without a YAML parser (arc launch, plans slot).',
+    'export const PLANS = Object.freeze({ free: Object.freeze([]), pro: Object.freeze(["reports"]) });',
     '',
-    'async function signedIn(db) {',
-    '  const { data } = await db.auth.getUser();',
-    '  return data && data.user ? data.user : null;',
-    '}',
-    '',
-    'export async function GET() {',
-    '  const db = await supabase();',
-    '  if (!(await signedIn(db))) return Response.json({ error: "not signed in" }, { status: 401 });',
-    '  const { data, error } = await db.from("orgs").select("id, name");',
-    '  if (error) return Response.json({ error: "read failed" }, { status: 500 });',
-    '  return Response.json({ orgs: data });',
-    '}',
-    '',
-    'export async function POST(request) {',
-    '  const db = await supabase();',
-    '  if (!(await signedIn(db))) return Response.json({ error: "not signed in" }, { status: 401 });',
-    '  const body = await request.json().catch(() => ({}));',
-    '  const name = typeof body.name === "string" ? body.name.trim() : "";',
-    '  if (!name || name.length > 80) return Response.json({ error: "a name of 1 to 80 characters" }, { status: 400 });',
-    '  const { data, error } = await db.rpc("create_org", { org_name: name });',
-    '  if (error) return Response.json({ error: "create failed" }, { status: 500 });',
-    '  return Response.json({ id: data }, { status: 201 });',
+    '// A plan the list does not name grants nothing.',
+    'export function includes(plan, feature) {',
+    '  return Object.prototype.hasOwnProperty.call(PLANS, plan) && PLANS[plan].includes(feature);',
     '}',
     '',
   ].join("\n"),
-  "app/api/orgs/[id]/route.js": [
-    '// One org, or 403 when it is not yours: RLS hides another tenant\'s row (arc launch, authz slot).',
-    'import { supabase } from "../../../../lib/supabase/server.js";',
+  "app/api/reports/route.js": [
+    '// A route only the pro plan opens (arc launch, plans slot). The org\'s plan is read under RLS; no row means free.',
+    'import { supabase } from "../../../lib/supabase/server.js";',
+    'import { includes } from "../../../lib/plans.js";',
     '',
     'export const dynamic = "force-dynamic";',
     '',
-    'export async function GET(request, { params }) {',
-    '  const { id } = await params;',
+    'export async function GET(request) {',
     '  const db = await supabase();',
     '  const { data: who } = await db.auth.getUser();',
     '  if (!who || !who.user) return Response.json({ error: "not signed in" }, { status: 401 });',
-    '  if (!/^[0-9a-f-]{36}$/.test(id)) return Response.json({ error: "not an org id" }, { status: 400 });',
-    '  const { data, error } = await db.from("orgs").select("id, name").eq("id", id).maybeSingle();',
+    '  const org = new URL(request.url).searchParams.get("org") || "";',
+    '  if (!/^[0-9a-f-]{36}$/.test(org)) return Response.json({ error: "not an org id" }, { status: 400 });',
+    '  const { data: mine, error } = await db.from("orgs").select("id").eq("id", org).maybeSingle();',
     '  if (error) return Response.json({ error: "read failed" }, { status: 500 });',
-    '  if (!data) return Response.json({ error: "not a member of this org" }, { status: 403 });',
-    '  return Response.json(data);',
+    '  if (!mine) return Response.json({ error: "not a member of this org" }, { status: 403 });',
+    '  const { data: row, error: planError } = await db.from("org_plans").select("plan").eq("org_id", org).maybeSingle();',
+    '  if (planError) return Response.json({ error: "read failed" }, { status: 500 });',
+    '  const plan = row ? row.plan : "free";',
+    '  if (!includes(plan, "reports")) return Response.json({ error: "plan does not include reports", plan }, { status: 403 });',
+    '  return Response.json({ plan, reports: [] });',
     '}',
     '',
   ].join("\n"),
 };
 
-// Upstream: auth's re-reported repo and project, validated here (ADR-1734).
+// Upstream: authz's re-reported repo and project, validated here (ADR-1737).
 function upstreamOf(ctx, from) {
   const up = list(ctx.upstream && ctx.upstream[from]);
   const full = String((up.find((r) => r.kind === "venture-repo") || {}).id || "");
@@ -288,27 +271,27 @@ export function envContract() {
 }
 
 export async function scaffold(ctx) {
-  const { full, ref } = upstreamOf(ctx, "auth");
+  const { full, ref } = upstreamOf(ctx, "authz");
   domainOf(ctx);
-  // Tables of these names launch did not create are the venture's own: never altered (the probe-table rule, ADR-1731).
-  const tid = `${ref}:public.orgs+public.memberships`;
+  // A table of this name launch did not create is the venture's own: never altered (the probe-table rule, ADR-1731).
+  const tid = `${ref}:public.org_plans`;
   // Every table of these names that exists must carry launch's marker, recorded or not: a recorded id is not an
   // ownership check, since the owner may have replaced the table since (attack d1dc8eb B3). A half-made run of
   // launch's own migration still resumes, because each table it made carries the marker.
   const have = count(await query(ctx, ref, TABLES));
   if (have > 0 && count(await query(ctx, ref, OURS)) !== have)
-    throw refuse("TABLES_FOREIGN", "public.orgs or public.memberships already exists and launch did not create it");
+    throw refuse("TABLES_FOREIGN", "public.org_plans already exists and launch did not create it");
   await query(ctx, ref, MIGRATION);
   ctx.report({ kind: "db-tables", id: tid });
-  if (count(await query(ctx, ref, RLS_ON)) !== 2) throw refuse("RLS_OFF", "orgs and memberships do not both have row level security on");
-  const sha = await commitFiles(ctx, full, FILES, {}, "authz: orgs and memberships, member-only reads (ADR-1734)");
-  ctx.report({ kind: "authz-routes", id: `${full}:${sha}` });
+  if (count(await query(ctx, ref, RLS_ON)) !== 1) throw refuse("RLS_OFF", "org_plans does not have row level security on");
+  const sha = await commitFiles(ctx, full, FILES, {}, "plans: org plans and a pro-only route (ADR-1737)");
+  ctx.report({ kind: "plans-routes", id: `${full}:${sha}` });
   ctx.report({ kind: "venture-repo", id: full });
   ctx.report({ kind: "supabase-ref", id: ref });
-  return { files: Object.keys(FILES), resources: [{ kind: "db-tables", id: tid }, { kind: "authz-routes", id: `${full}:${sha}` }], notes: [] };
+  return { files: Object.keys(FILES), resources: [{ kind: "db-tables", id: tid }, { kind: "plans-routes", id: `${full}:${sha}` }], notes: [] };
 }
 
-// One org per probe user, created once and found by name afterwards.
+// The probe user's own org, found by name or created once (the authz probe's org).
 async function ownOrg(ctx, domain, user, name) {
   const mine = await page(ctx, domain, user.cookies, "GET", "/api/orgs");
   if (mine.status !== 200 || !mine.body || !Array.isArray(mine.body.orgs)) throw new Error(`/api/orgs answered ${mine.status}`);
@@ -319,22 +302,39 @@ async function ownOrg(ctx, domain, user, name) {
   return made.body.id;
 }
 
-// Asked of the live app: A reads its own org (200) and not B's (403).
+// The org id is checked as a uuid before it reaches SQL, and the plan is one of two literals.
+async function setPlan(ctx, ref, org, plan) {
+  if (!UUID.test(org)) throw refuse("BAD_ORG", `org id ${JSON.stringify(say(org, 50))} is not a uuid`);
+  if (plan !== "free" && plan !== "pro") throw refuse("BAD_PLAN", `plan ${JSON.stringify(say(plan, 20))} is not free or pro`);
+  await query(ctx, ref, `insert into public.org_plans (org_id, plan) values ('${org}', '${plan}') on conflict (org_id) do update set plan = excluded.plan, updated_at = now();`);
+}
+
+// Asked of the live app: the probe org on pro opens /api/reports (200); downgraded to free it is closed (403).
 async function probe(ctx) {
-  const { full, ref } = upstreamOf(ctx, "auth");
+  const { full, ref } = upstreamOf(ctx, "authz");
   const domain = domainOf(ctx);
   const drift = await oursAtHead(ctx, full, FILES);
   if (drift) return { ok: false, reason: drift };
   const key = await serviceKey(ctx, ref);
   const a = await signIn(ctx, domain, ref, key, "a");
-  const b = await signIn(ctx, domain, ref, key, "b");
-  const orgA = await ownOrg(ctx, domain, a, "launch-probe-a");
-  const orgB = await ownOrg(ctx, domain, b, "launch-probe-b");
-  const own = await page(ctx, domain, a.cookies, "GET", `/api/orgs/${orgA}`);
-  if (own.status !== 200) return { ok: false, reason: `A reading its own org answered ${own.status}, not 200` };
-  const cross = await page(ctx, domain, a.cookies, "GET", `/api/orgs/${orgB}`);
-  if (cross.status !== 403) return { ok: false, reason: `A reading B's org answered ${cross.status}, not 403` };
-  return { ok: true, answerer: `${domain} + ${ref}.supabase.co`, evidence: { own: 200, crossTenant: 403 } };
+  const org = await ownOrg(ctx, domain, a, "launch-probe-a");
+  // Start from free: a verify the slot timeout cut short could not restore it (the abort also stops the restore), so
+  // the next verify does (attack a9a2ec2 B1).
+  await setPlan(ctx, ref, org, "free");
+  let pro;
+  let down;
+  try {
+    await setPlan(ctx, ref, org, "pro");
+    pro = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
+  } finally {
+    // Whatever the pro read did -- an error status, a transport failure, the slot timeout -- the probe org goes back to
+    // free, so no verify leaves it on pro for the next one to start from.
+    await setPlan(ctx, ref, org, "free");
+  }
+  if (pro.status !== 200) return { ok: false, reason: `the probe org on pro read /api/reports with ${pro.status}, not 200` };
+  down = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
+  if (down.status !== 403) return { ok: false, reason: `the probe org downgraded to free read /api/reports with ${down.status}, not 403` };
+  return { ok: true, answerer: `${domain} + ${ref}.supabase.co`, evidence: { pro: 200, downgraded: 403 } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.
@@ -349,7 +349,8 @@ export async function verify(ctx) {
   }
 }
 
+// The plan table goes before authz drops orgs; the committed files are the venture's to keep.
 export async function teardown(ctx) {
-  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop memberships, orgs cascade (down migration; after tenancy drops invites)", resource: r.id }));
+  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop org_plans if it still carries the arc-launch plans marker (down migration; before authz drops orgs)", resource: say(r.id, 80) }));
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
 }

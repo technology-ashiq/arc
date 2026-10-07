@@ -404,10 +404,16 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - SUPABASE_ACCESS_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.supabase.com
+      - supabase.co
+      - api.github.com
     credentials:
-      scope: "none -- probes the live site"
+      scope: "org_plans migration, plans files and the gated route; sets the probe org's plan in verify (ADR-1737)"
     adapter: providers/plans/plans-yaml.mjs
     digest: null
     approved_by: ashiq

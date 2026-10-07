@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (37)
+## Decisions (38)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -65,6 +65,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1734`](../../../docs/adr/1734-the-login-half-is-proved-by-probe-users-on-the-live-app.md) | The login half is proved by probe users driving the live app, minted through the Supabase admin API | accepted | 2026-10-06 |
 | [`1735`](../../../docs/adr/1735-ci-on-a-plan-without-private-protection-records-required-checks-absent.md) | ci on a plan without private-repo protection records its required half ABSENT | accepted | 2026-10-07 |
 | [`1736`](../../../docs/adr/1736-payment-test-proves-test-mode-keys-with-one-tagged-order.md) | payment-test proves test-mode keys with one tagged order; the purchase is checkout's | accepted | 2026-10-07 |
+| [`1737`](../../../docs/adr/1737-plans-gate-a-route-by-the-org-plan-and-verify-a-downgrade.md) | plans gates a route by the org's plan, and verify proves a downgrade closes it | accepted | 2026-10-07 |
 
 ## Source
 

@@ -271,7 +271,11 @@ export async function scaffold(ctx) {
   const { full, ref } = upstreamOf(ctx, "authz");
   domainOf(ctx);
   const tid = `${ref}:public.invites`;
-  if (count(await query(ctx, ref, TABLES)) > 0 && !ctx.resources.some((r) => r.kind === "db-tables" && r.id === tid) && count(await query(ctx, ref, OURS)) !== 1)
+  // Every table of these names that exists must carry launch's marker, recorded or not: a recorded id is not an
+  // ownership check, since the owner may have replaced the table since (attack d1dc8eb B3). A half-made run of
+  // launch's own migration still resumes, because each table it made carries the marker.
+  const have = count(await query(ctx, ref, TABLES));
+  if (have > 0 && count(await query(ctx, ref, OURS)) !== have)
     throw refuse("TABLES_FOREIGN", "public.invites already exists and launch did not create it");
   await query(ctx, ref, MIGRATION);
   ctx.report({ kind: "db-tables", id: tid });

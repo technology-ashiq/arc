@@ -23,4 +23,4 @@ Option 2, under the locked decisions DST-A…K (ADR-2001…2011). DST-L is answe
 
 ADR century 2000–2099 is claimed. The sweep on 2026-10-07 covered 17 worktrees and 272 remote-tracking branches, and none held an ADR numbered 2000 or above (highest found: `1916`). No external consumer is claimed (the design source's honesty note). The lane's falsifiable claims are mechanical: REQ-01, REQ-02, REQ-03 and REQ-09.
 
-Receipts: pending. They are emitted from the main clone after the birth PR merges (a worktree's spine refuses emits). The ruling `approval.requested` id and the owner's `decision.recorded` id are written here at the Phase 00 close.
+Receipts (main clone, 2026-10-07): `kickoff.done` `01M4AJMX1N0ZYRN12H9KSJVF61`; the ruling `approval.requested` `01M4AJMXD7QKGB4G3P8DW08FJY` (gate `lane-birth`), decided by the owner's `decision.recorded` `01M4AKYMN04722WM5QGJSDDW1R` (verdict `approve`). Every 20xx ADR cites this request id.
