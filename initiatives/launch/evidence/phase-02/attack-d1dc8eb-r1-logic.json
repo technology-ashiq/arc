@@ -1,0 +1,101 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:213-217",
+      "breaking_input": "An org_id that passes UUID.test but contains SQL metacharacters (e.g., '00000000-0000-0000-0000-000000000000'\\; DROP TABLE org_plans --)",
+      "why": "The setPlan function validates the org_id as a UUID but then directly interpolates it into a SQL string without parameterization, enabling SQL injection.",
+      "fix": "Use parameterized queries or a SQL builder instead of string interpolation."
+    },
+    {
+      "id": "L2",
+      "severity": "critical",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:213-217",
+      "breaking_input": "plan value 'free'\\; DROP TABLE org_plans --",
+      "why": "The setPlan function validates plan is 'free' or 'pro' but then interpolates it directly into a SQL string, allowing SQL injection through the plan value.",
+      "fix": "Use parameterized queries; do not build SQL by concatenation even with validated inputs."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:39-40",
+      "breaking_input": "A response with status 422 (allowed by plan for unique email violation) where the response body is a string",
+      "why": "The call function returns on statuses in the allow list without checking the body; a 422 with an error body could be misinterpreted as success. The allow list includes 422 for mint, but the caller doesn't validate the response.",
+      "fix": "After accepting an allowed non-2xx status, check that the response body meets expectations."
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:93-94",
+      "breaking_input": "A repo full name like 'owner/repo' where repo starts with uppercase",
+      "why": "The repoShape regex requires the repo part to start with [a-z], rejecting valid GitHub repos that start with an uppercase letter.",
+      "fix": "Change the regex to accept [A-Za-z] for the first character of the repo segment."
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:196",
+      "breaking_input": "An org_plans table that exists with the correct comment marker but no RLS enabled",
+      "why": "Scaffold checks RLS only after completing the migration; it does not verify that an existing table owned by launch has RLS enabled. A previous run that left RLS off (e.g., killed after migration but before RLS check) would not be detected.",
+      "fix": "Check RLS before running the migration as well, or ensure migration always turns RLS on."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:188-189",
+      "breaking_input": "Two authz upstream entries, one with a valid repo and one with a valid ref, but from different contexts (e.g., different repos)",
+      "why": "upstreamOf takes the first match for each kind without verifying they belong to the same project. If authz reported two different repos, plans could use mismatched repo and ref.",
+      "fix": "Verify that the repo and ref relate to each other (e.g., by matching them against each other or requiring a single upstream entry)."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:29",
+      "breaking_input": "A GITHUB_TOKEN that begins with 'ghp_' (personal access token) instead of 'gho_' (OAuth token)",
+      "why": "The regex for GITHUB_TOKEN is /^[A-Za-z0-9_]{20,}$/ which accepts any 20+ alphanumeric or underscore characters. It does not validate the token prefix (gho_, ghp_, github_pat_...), accepting tokens that have different permission models.",
+      "fix": "Validate the token prefix to match known GitHub token formats, or at minimum require a prefix."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:33",
+      "breaking_input": "A SUPABASE_ACCESS_TOKEN that does not start with sbp_ (e.g., sbp_ is present but with extra characters before it)",
+      "why": "The regex /^sbp_[A-Za-z0-9_]{20,}$/ allows underscores in the token body but the sbp_ prefix might appear at any position. A token with 'x_sbp_...' would be rejected but might still be valid under some configurations.",
+      "fix": "Ensure the validation aligns exactly with the Supabase documentation for token format."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:142-148",
+      "breaking_input": "A shared file that is a symlink pointing outside the repository (e.g., pointing to /etc/passwd)",
+      "why": "The utf8 round-trip test for shared files reads the file content, but GitHub's API resolves symlinks. If the owner created a symlink that points to an unexpected location, launch's decoded content would be the symlink target, not a file it should extend.",
+      "fix": "Check that the 'content' field is a plain file, not a symlink or submodule, by verifying the 'type' field."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:117-118",
+      "breaking_input": "A commit with no message (empty string) that still contains the trailer",
+      "why": "hasLine checks for the trailer line in the commit message. If the message is an empty string, String(msg).split('\\n') returns [''] which does not contain the trailer, so the check would fail on empty messages even if the trailer exists in some other representation.",
+      "fix": "Handle empty or undefined message before splitting."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:33",
+      "breaking_input": "A SUPABASE_ACCESS_TOKEN with uppercase letters (e.g., SBP_XXXXXXXXX)",
+      "why": "The regex /^sbp_[A-Za-z0-9_]{20,}$/ accepts uppercase letters after the prefix, but the prefix itself is lowercase-only. Supabase tokens might start with uppercase 'SBP_' in some environments?",
+      "fix": "Match the exact token format documented by Supabase."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "products/launch/providers/plans/plans-yaml.mjs:100-101",
+      "breaking_input": "A ref that contains characters outside the expected set (e.g., uppercase letters)",
+      "why": "REF regex /^[a-z0-9]{20}$/ is strictly lowercase and digits, but Supabase project refs can contain uppercase letters in some historical cases? The actual API behavior may be more permissive.",
+      "fix": "Test against a real Supabase ref to confirm the character set, or use case-insensitive matching."
+    }
+  ]
+}

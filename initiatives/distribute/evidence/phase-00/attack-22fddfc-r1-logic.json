@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "tests/distribute/birth-probe.mjs:75-80",
+      "breaking_input": "A verdict file where a skill name is `source-command-arc-Pr` (uppercase P) or a row is duplicated with the same name; the probe counts rows by prefix `source-command-arc-` and requires exactly 8, but a duplicated row with a different case or a renamed row is counted separately, so 8 rows can be present while a real skill is missing and replaced by a duplicate or a case-mangled twin.",
+      "why": "The probe counts rows by name prefix and requires exactly 8, but it never checks that the 8 names are distinct or that they match the expected exact set of `source-command-arc-commit`, `-pr`, `-resume`, `-retro`, `-review`, `-second-opinion`, `-ship`, `-unfreeze`. A row named `source-command-arc-pr` duplicated (or `source-command-arc-Pr`) passes the count while the real `source-command-arc-ship` row is deleted. This is the (m) row-shape regex skips silently defect: the count is derived from a prefix, not from the actual set.",
+      "fix": "Collect the set of names and require exactly the 8 expected command names plus seo-article-writer, reject duplicates and any other name as illegal.",
+      "twin_of": "m"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "tests/distribute/birth-probe.mjs:75-80",
+      "breaking_input": "A verdict file where the `source-command-arc-pr` row is written with a trailing space or an extra cell (e.g. `| source-command-arc-pr | DIVERGED | extra |`); the probe splits on `|` and takes cells[0] and cells[1], so the extra cell is ignored and the row is counted, but the `faithful` count and the `seeds` comparison in the bats test still pass even though the verdict table is malformed.",
+      "why": "The probe splits each line on `|` and uses only the first two cells, silently ignoring extra cells. A malformed row with an extra column is treated as valid, so the verdict completeness check passes on a table that is not the expected shape. This is (m) row-shape regex skips silently: the row is not validated for the exact number of cells.",
+      "fix": "Require exactly 4 cells (name, verdict, plus the two count columns) and flag any row with a different cell count as illegal.",
+      "twin_of": "m"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:62",
+      "breaking_input": "The mutant arm for the undated check uses `grep -vE '^[[:space:]]+verified: '` which removes every line that starts with whitespace and `verified:`, including the `verified:` lines inside the `cells:` block of the `claude-code` row (which has a `verified:` date) and also the `verified:` lines of unverified rows. If the file has a row whose `verified:` is indented differently (e.g. 2 spaces instead of 4), the mutant removes nothing from that row, so the mutant copy still has a dated row and the probe reports no `undated` problem, making the test fail for the wrong reason.",
+      "why": "The mutant pattern assumes exactly 4-space indentation for the `verified:` key. If indentation differs, the mutant does not remove the date, so the check is not exercised on that row. The test does not assert that the mutant actually removed any `verified:` line (only that the file changed), so a no-op mutant is not distinguished from a real one. This is (n) mutant that may delete nothing.",
+      "fix": "After creating the mutant copy, assert that the number of `verified:` lines decreased by exactly the number of rows (or at least by 1) before running the probe.",
+      "twin_of": "n"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "tests/distribute-birth.bats:76-80",
+      "breaking_input": "The mutant arm for the verdict file uses `grep -vE '^[|][[:space:]]*source-command-arc-pr[[:space:]]*[|]'` which deletes any row whose name starts with `source-command-arc-pr` and is followed by a pipe. A row named `source-command-arc-pr` (the real one) is deleted, but a row named `source-command-arc-pr-extra` is also deleted. If the verdict file has a row named `source-command-arc-pr-extra`, the mutant deletes two rows, and the probe reports `verdict incomplete` for the wrong reason (two rows missing, not one).",
+      "why": "The grep pattern matches any name that begins with `source-command-arc-pr` followed by a pipe, so it also matches `source-command-arc-pr-extra`. The mutant is not anchored to the exact row name, so it can delete more than one row, making the test pass for a reason other than the intended single-row deletion.",
+      "fix": "Anchor the pattern to the exact row name: `grep -vE '^\\|[[:space:]]*source-command-arc-pr[[:space:]]*\\|'` and assert that exactly one line was deleted before running the probe.",
+      "twin_of": "n"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "tests/distribute/birth.bats:66-69",
+      "breaking_input": "The `ran_ok` function checks `[ -z \"$stderr\" ]`, but bats `run --separate-stderr` captures stderr separately. If the probe writes a warning to stderr but still exits 0 and prints `RAN matrix`, the test treats it as a successful run. A probe that prints a non-fatal warning (e.g. a deprecation notice from node) would pass the RAN check even though it did not run cleanly.",
+      "why": "The RAN check requires empty stderr, but the probe's contract is that a file it cannot read throws an error (non-zero exit). A warning on stderr is not an error, so the test would accept a probe that emitted a warning. This weakens the 'assert it RAN' guarantee.",
+      "fix": "Have the probe write nothing to stderr on success, or relax the check to only require exit 0 and the RAN marker, and let a separate test assert stderr is empty.",
+      "twin_of": "j"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "tests/distribute/birth.bats:44-46",
+      "breaking_input": "The test `distribute-birth: the matrix parses with at least 8 rows` uses `run --separate-stderr probe matrix engine/harnesses.yaml`, but the `probe` function runs `( cd \"$ARC_ROOT\" && node tests/distribute/birth-probe.mjs \"$@\" )`. If `$ARC_ROOT` contains a single quote or a backslash, the `cd` command inside the subshell is not quoted, so the path is split or expanded incorrectly, causing the probe to run in the wrong directory or fail.",
+      "why": "The `probe` function does not quote `$ARC_ROOT` in the `cd` command. The bats test file runs on CI where `$ARC_ROOT` is likely a clean path, but the function is not robust to a path with spaces or special characters, which is a common boundary condition on Windows or macOS.",
+      "fix": "Quote the path: `( cd \"$ARC_ROOT\" && node tests/distribute/birth-probe.mjs \"$@\" )`.",
+      "twin_of": "g"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "tests/distribute/birth.bats:44-46",
+      "breaking_input": "The `probe` function passes `\"$@\"` to node, but the bats test calls `probe matrix engine/harnesses.yaml` where the second argument is a relative path. If the test is run from a different working directory (e.g. a worktree root that is not `$ARC_ROOT`), the relative path resolves against the wrong directory. The function does `cd \"$ARC_ROOT\"` first, so it is safe, but the `native()` helper is only applied to the mutant copy paths, not to the real `engine/harnesses.yaml` path, which is fine because it is relative.",
+      "why": "No concrete defect: the function correctly changes to `$ARC_ROOT` first. This is a low-severity observation that the path is not passed through `native()` but is not a bug.",
+      "fix": "No change needed.",
+      "twin_of": "g"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "tests/distribute/birth.bats:72-74",
+      "breaking_input": "The test `distribute-birth: every cell is legal and every row carries all 9 cells` checks `[ \"$cells\" -eq $((rows * 9)) ]`, but the probe's `matrix` case counts `cellsChecked` only for rows that have a `cells` object. If a row has no `cells` key, the probe pushes a problem `no cells` and does not increment `cellsChecked`. The bats test then checks `has_problem ''` which greps for `^PROBLEM ` (any problem), so it would fail. But if a row has a `cells` object with a missing cell, the probe pushes a problem and does not increment `cellsChecked`, so the count is still rows*9 minus the missing cells, and the test fails. However, if a row has an extra unknown cell, the probe pushes a problem but still increments `cellsChecked` for the 9 known cells, so `cells` equals rows*9 and the test passes even though there is an unknown cell, because `has_problem ''` greps for any problem and would catch it. So the test is correct.",
+      "why": "No concrete defect: the probe pushes a problem for unknown cells, and the bats test checks for any problem. The count check is a secondary assertion.",
+      "fix": "No change needed.",
+      "twin_of": "k"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "tests/distribute/birth.bats:87-90",
+      "breaking_input": "The test `distribute-birth: the claude-code golden is the sync golden` checks `[ \"$(field claude-golden)\" = \"tests/fixtures/sync-golden/tree-manifest.txt\" ]`. The `field` function uses `sed -n \"s/^$1 //p\"` on the output. If the probe prints `claude-golden (none)` (because the claude-code row is missing), the `field` function returns `(none)` and the test fails. But if the probe prints `claude-golden tests/fixtures/sync-golden/tree-manifest.txt` with a trailing space, the comparison fails. The probe prints exactly the value, so this is fine.",
+      "why": "No concrete defect.",
+      "fix": "No change needed.",
+      "twin_of": "f"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "tests/distribute/birth.bats:89-90",
+      "breaking_input": "The test checks `field claude-transform | grep -qF 'carriage-return'` and `grep -qF 'arc-registry.json'`. The `field` function uses `sed -n \"s/^$1 //p\"` which removes the first occurrence of the field name and a space. If the `golden_transform` value contains a newline (e.g. a multi-line value), the `field` function only returns the first line, so the grep for `arc-registry.json` may fail even though the value contains it on a later line. The probe prints `claude-transform ${cc.golden_transform || \"(none)\"}` with the raw value, which could contain newlines if the YAML value is multi-line. The harnesses.yaml `golden_transform` for claude-code is a single line, so this is not a current defect, but the test is fragile.",
+      "why": "The test assumes the `golden_transform` value is a single line. If a future edit makes it multi-line, the test would fail incorrectly. This is a low-severity fragility.",
+      "fix": "Have the probe print the value with newlines replaced by spaces, or have the test grep the full output for the words.",
+      "twin_of": "f"
+    },
+    {
+      "id": "L11",
+      "severity": "high",
+      "where": "tests/distribute/birth-probe.mjs:34-36",
+      "breaking_input": "The `matrix` case reads the file with `read(file)`, which throws if the file is empty. But it does not validate that the parsed `harnesses` list is non-empty. If `engine/harnesses.yaml` contains `version: 1` and `harnesses: []`, the probe prints `rows 0` and `RAN matrix`, and the bats test `distribute-birth: the matrix parses with at least 8 rows` checks `[ \"$(field rows)\" -ge 8 ]`, which fails. So the test catches it. However, the probe itself does not treat an empty list as a `COULD NOT SCAN` condition, which is a (e) defect.",
+      "why": "The probe does not check that `rows.length` is greater than zero. An empty harnesses list is a valid parse but means the matrix is empty, which should be a named failure rather than a clean report. The bats test catches it, but the probe's contract says it should fail closed.",
+      "fix": "In the `matrix` case, if `rows.length === 0`, throw an error `COULD NOT SCAN: no harnesses` instead of printing `rows 0`.",
+      "twin_of": "e"
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "tests/distribute/birth-probe.mjs:34-36",
+      "breaking_input": "The `matrix` case uses `parseYamlSubset` which returns `{ok, value}` or `{ok:false, error}`. If the YAML has a duplicate key (e.g. two `id:` lines in one row), `parseYamlSubset` may silently keep the last one, and the probe does not detect the duplicate. The probe checks for duplicate row ids, but not for duplicate keys within a row.",
+      "why": "The probe does not validate that each row has exactly one of each required key. A duplicate `id:` in a row would be silently accepted, and the row's id could be the last value, hiding a malformed row. This is a (f) validate one read, compare another defect: the probe reads the parsed value but does not check the raw text for duplicate keys.",
+      "fix": "Have the probe also scan the raw text for duplicate keys within a row, or rely on `parseYamlSubset` to reject duplicates (if it does).",
+      "twin_of": "f"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "tests/distribute/birth.bats:44-46",
+      "breaking_input": "The `probe` function uses `node tests/distribute/birth-probe.mjs` without specifying the node binary. On a system where `node` is not on PATH (e.g. a Windows runner with node installed via nvm), the test fails with a command-not-found error, and the RAN check catches it as a non-zero exit. This is not a logic defect but an environment assumption.",
+      "why": "The test assumes `node` is on PATH, which is a standard CI assumption but not guaranteed on all Windows setups.",
+      "fix": "Use the `node` binary from the environment or document the requirement.",
+      "twin_of": "g"
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": "tests/distribute/birth.bats:66-69",
+      "breaking_input": "The `ran_ok` function checks `[ \"$status\" -eq 0 ] && [ -z \"$stderr\" ]`. If the probe exits 0 but writes to stderr (e.g. a node warning), the test fails. But the probe's `matrix` case writes problems to stdout, not stderr, and only throws on errors. A node warning (e.g. a deprecation) would go to stderr and cause the test to fail even though the probe ran correctly. This is a false negative.",
+      "why": "The RAN check is too strict: it requires empty stderr, but node may emit warnings (e.g. experimental feature warnings) that are not errors. This could make the test flaky on different node versions.",
+      "fix": "Relax the stderr check to only require that the probe did not throw a fatal error, or have the probe redirect warnings to stdout.",
+      "twin_of": "j"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "tests/distribute/birth.bats:44-46",
+      "breaking_input": "The `probe` function uses `( cd \"$ARC_ROOT\" && node ... )` which runs in a subshell. If `$ARC_ROOT` is a symlink (e.g. on macOS `/var` -> `/private/var`), the `cd` resolves the symlink, and the probe runs in the resolved directory. The bats test later uses `$ARC_ROOT` for other paths (e.g. `$ARC_ROOT/engine/harnesses.yaml`), which may also resolve the symlink. If the test expects the symlink path but the probe uses the resolved path, there could be a mismatch, but since the test uses `$ARC_ROOT` consistently, it is fine.",
+      "why": "No concrete defect: the probe and the test use the same `$ARC_ROOT`, so symlink resolution is consistent.",
+      "fix": "No change needed.",
+      "twin_of": "a"
+    }
+  ]
+}
