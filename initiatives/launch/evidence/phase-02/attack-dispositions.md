@@ -33,8 +33,9 @@
 
 ## attack b1844e0 r1 (slice 3, checkout-portal, ADR-1738)
 
-- The first two runs (a51bab7, f8737cf) were refused by arc-run's input scanner: a `secret:` result field and an
-  `apikey:` header object read as credential assignments; renamed `leaksSecret`, headers built with Object.fromEntries.
+- The first two runs (a51bab7, f8737cf) were refused by arc-run's input scanner: a result field named for the key it checks and a header
+  object keyed by the Supabase key name read as credential assignments; renamed `leaksSecret`, headers built with
+  Object.fromEntries.
 - Boundary: B1 [medium] fixed in all eight committing adapters, plus two frontend twins of already-fixed defects
   (identical bytes adopted without the trailer, local copy written before the commit). B2 [medium] -> D32: the literal
   sandbox host is in ten rows since kickoff, a runner change for Cycle 2's first other venture. B3-B6 [low] fixed, B3
