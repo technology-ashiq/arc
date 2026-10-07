@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (previous-digest loop)",
+      "breaking_input": "A forged `run.completed` event with process `policy-evidence-guard@1.0.0` and payload `{digest: <sha256 of current below_bar set>, as_of_overridden: false}` appended to the day file. The digest is deterministic from public policy state.",
+      "why": "The loop accepts any event with matching process and a 64-hex digest, regardless of actor, outcome, or whether the event passed validation. A forged or unrelated line suppresses the genuine approval, and the guard prints 'no new approval'. This is the twin of 'the day bound counted any line matching three fields' — the dedupe key is the digest alone, not a validated receipt.",
+      "fix": "Only accept run.completed events that the reader would validate: actor matches, outcome is ok/partial, and the event is sealed (exists in the spine with a valid signature).",
+      "twin_of": "The day bound counted any line matching three fields, so one forged line suppressed the genuine receipt all day"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (digest computation)",
+      "breaking_input": "Two different BELOW-BAR sets that serialize to the same sorted JSON array — e.g. a cell whose `reason` changes from 'no-writer' to 'unknown' but whose state and subject/capability are identical, or a subject/capability pair containing characters that JSON.stringify escapes identically.",
+      "why": "The digest is `sha256Hex(JSON.stringify(below.map(c => [c.subject, c.capability, c.state, c.reason]).sort()))`. It omits `below_bar`, `qualifying_refusal`, `last_refusal`, and the as-of date. Two materially different sets with the same state/reason strings produce the same digest, so a changed set is treated as unchanged and no approval is raised — the guard reports NOT CLEAN but 'no new approval' even though the clearable/no-writer split changed.",
+      "fix": "Include the full cell identity plus below_bar, qualifying_refusal, and as_of in the digest; or compare the actual clearable/no-writer lists.",
+      "twin_of": "any dedupe key stored only in the LAST of several writes"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (read-back check)",
+      "breaking_input": "A day file containing two events with the same id (e.g. a forged duplicate) or an id that appears as a substring inside another field. The read-back `text.includes(\"\\\"id\\\":\\\"\" + id + \"\\\"\")` matches the first occurrence, which may be a different event.",
+      "why": "The check only verifies the id string appears somewhere in the day file, not that it belongs to the emitted event or that it is the latest. A pre-existing event with the same id (or a crafted line containing the id in a payload field) makes the guard believe its receipt landed when it did not.",
+      "fix": "Parse the day file and verify the specific event with that id has the expected kind/process/payload, and that it is the last such event.",
+      "twin_of": "any reference field (a ULID, a receipt id) that is validated for shape but never resolved"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:apiPolicy (evidenceOf map)",
+      "breaking_input": "A fold that returns cells with duplicate `subject|capability` keys (e.g. two cells for the same subject/capability with different states). The Map keeps only the last, silently dropping the earlier cell's evidence.",
+      "why": "The map is built as `new Map((evidence ? evidence.cells : []).map(c => [key, c]))`, so duplicate keys overwrite. The API then serves one cell's evidence for a pair that may have conflicting evidence; the fold's own invariants may not guarantee uniqueness.",
+      "fix": "Reject or dedupe explicitly; assert the fold never returns duplicate subject|capability keys.",
+      "twin_of": "any validator that folds \"invalid\" into \"absent\""
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (clean with zero cells)",
+      "breaking_input": "A governing root whose policy has no subjects at all (empty `policy.kinds`). `r.cells` is empty, `all.every(...)` is true, so the guard seals a CLEAN run.completed and becomes every (nonexistent) cell's audit.",
+      "why": "The guard treats an empty policy as CLEAN, mirroring the 'zero-cell reading looks clean' defect. There is no in-scope cell to evidence, but a CLEAN receipt is a durable, real audit that later appears in the spine; a policy added later with BELOW-BAR cells will see this CLEAN run as `last_audit` and as a previous digest.",
+      "fix": "Require at least one in-scope cell for a CLEAN verdict; otherwise refuse to seal or mark the run as 'empty' and not an audit.",
+      "twin_of": "any summary whose clean state and empty state print alike"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/policy-evidence/load.mjs:sealedRefusalToday",
+      "breaking_input": "An interactive refusal event with `surface: 'interactive'` and `decision: 'deny'` but a forged/incorrect `action_kind` or `capability` that matches the query — the function returns `e.id` immediately without checking the incident or the payload's `level` or `process` beyond the initial filter.",
+      "why": "The new `if (surface === 'interactive') return e.id;` short-circuits all corroboration for interactive refusals. The earlier checks only filter on `action_kind`, `capability`, and `process`; they do not verify that the refusal is genuine (e.g. that it came from the actual policy gate, that its `level` matches, or that it has a valid incident). A forged note.logged with the right three fields counts as sealed evidence.",
+      "fix": "For interactive refusals, still verify the payload's `level` and that the event is a real policy refusal (e.g. source or a signature), not just the three matching fields.",
+      "twin_of": "any cross-reference check: verify order, identity and content, not just that the id resolves"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (as_of_overridden flag)",
+      "breaking_input": "A guard run with `--as-of` set to today's date explicitly. `overridden` is `asOf !== today`, which is false, so the run is treated as a normal audit and dedupes against non-overridden runs.",
+      "why": "The flag only distinguishes when the date differs from IST today. An explicit `--as-of 2026-10-07` (today) is indistinguishable from a real run, so it seals a real audit even though the operator explicitly overrode the clock. The distinction between 'defaulted' and 'explicitly today' is lost.",
+      "fix": "Record whether `--as-of` was provided at all, not just whether it differs from today; mark any explicit as-of as overridden.",
+      "twin_of": "every clock override that reaches a durable write"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:guard (digest comparison with approval)",
+      "breaking_input": "A previous approval.requested with digest D, then a run.completed with digest D but a different as_of or different clearable/no-writer split. The approval is treated as the previous digest, so the new run with the same digest suppresses a new approval even though the approval's content (no_writer/clearable) changed.",
+      "why": "The loop sets `previousDigest` from either run.completed or approval.requested, but the digest only covers subject/capability/state/reason — not the no_writer/clearable split or the as_of. Two runs with the same BELOW-BAR set but different clearable assignments (e.g. a writer appeared) produce the same digest, so a needed new approval is suppressed.",
+      "fix": "Include the clearable/no-writer split in the digest, or compare the full approval payload when deduping.",
+      "twin_of": "any dedupe key stored only in the LAST of several writes"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/policy-evidence.mjs:emit (env inheritance)",
+      "breaking_input": "An environment with `ARC_SPINE_ROOT` set to a different clone's spine, but also `ARC_ROOT` set to the governing root. The emit passes `ARC_SPINE_ROOT: dirname(inputs.eventsDir)` but does not clear `ARC_ROOT`; arc-event.sh may use `ARC_ROOT` to pick the spine, overriding the explicit ARC_SPINE_ROOT.",
+      "why": "The fix pins ARC_SPINE_ROOT but leaves ARC_ROOT inherited. If arc-event.sh resolves the spine from ARC_ROOT (or from a combination), a conflicting ARC_ROOT can still send the receipt elsewhere. The read-back check then fails and the guard exits 1 — or, worse, if the other spine's day file coincidentally contains the id, the guard accepts a receipt that landed in the wrong spine.",
+      "fix": "Also pin ARC_ROOT to inputs.root, or clear both variables and pass an explicit --root flag.",
+      "twin_of": "The writer chose its spine by `ARC_SPINE_ROOT`/`--root` while the reader pinned the governing root"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:apiPolicy (evidenceError string)",
+      "breaking_input": "A fold that throws an error whose message contains a newline; the catch takes only the first line, but the error message may contain a literal `\\n` or control characters that corrupt the JSON response when served in the `evidence.error` field.",
+      "why": "The error text is taken from `String(e.message).split(\"\\n\")[0]` and served raw. If the message contains quotes, backslashes, or U+2028, the JSON string may be malformed or the room may render it unsafely. The fix serves the error but does not sanitize it.",
+      "fix": "Sanitize the error text (escape JSON, strip control characters) before serving it in the response body.",
+      "twin_of": "every free-text field bounded by `.length` or a C0-only class"
+    }
+  ]
+}

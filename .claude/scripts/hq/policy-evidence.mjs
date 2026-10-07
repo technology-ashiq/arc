@@ -74,7 +74,8 @@ function main(argv) {
     process.stdout.write(JSON.stringify({ ...r, rejected_lines: inputs.rejected, day_files: inputs.dayFiles, events_dir: inputs.eventsDir }, null, 2) + "\n");
     return;
   }
-  if (args.cmd === "guard") return guard(inputs, r, asOf !== today);
+  // ANY explicit --as-of is an override, even one naming today: the operator chose the clock (attack p01 r2 L7).
+  if (args.cmd === "guard") return guard(inputs, r, args.asOf !== null);
   // The verdict is set BEFORE any output: a reader that closes the pipe early must not turn exit 3 into exit 1.
   if (args.cmd === "check" && r.below_bar > 0) process.exitCode = 3;
   const shown = args.cmd === "check" ? r.cells.filter((c) => c.below_bar) : r.cells;
@@ -125,7 +126,9 @@ function guard(inputs, r, overridden) {
 
   if (!clean) process.exitCode = 3;
   let approval = null;
-  if (!clean && digest !== previousDigest) {
+  // An overridden run never raises an approval: the inbox is the owner's needs-you surface, and a back-dated or test
+  // run must not put an unanswerable item there (attack p01 r2 B2). It still seals its marked run.completed.
+  if (!clean && !overridden && digest !== previousDigest) {
     approval = emit(inputs, "approval.requested", {
       what: `${below.length} policy cell(s) are BELOW-BAR: their refusal path has no fresh evidence`,
       gate: "policy-evidence", as_of: r.as_of, as_of_overridden: overridden, digest, no_writer: noWriter, clearable,
@@ -138,7 +141,9 @@ function guard(inputs, r, overridden) {
   if (!run) return;
   for (const l of [...noWriter.map((x) => `no-writer  ${x}`), ...clearable.map((x) => `clearable  ${x}`)]) process.stdout.write(l + "\n");
   process.stdout.write(clean
-    ? `policy-evidence guard: CLEAN as-of ${r.as_of} -- ${r.in_scope} in-scope cell(s), all fresh; run ${run}\n`
+    ? `policy-evidence guard: CLEAN as-of ${r.as_of} -- ` +
+      (r.in_scope === 0 ? "no in-scope cell (nothing above L0 to evidence)" : `${r.in_scope} in-scope cell(s), all fresh`) +
+      `${overridden ? " [--as-of override: not an audit]" : ""}; run ${run}\n`
     : `policy-evidence guard: NOT CLEAN as-of ${r.as_of} -- ${below.length} BELOW-BAR (${noWriter.length} no-writer, ` +
       `${clearable.length} clearable); ${approval ? `approval ${approval}` : "same set as the last guard run, no new approval"}; run ${run}\n`);
 }
@@ -157,10 +162,17 @@ function emit(inputs, kind, payload, outcome) {
     const id = execFileSync("bash", [join(inputs.root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", kind, "--payload-file", file,
       "--strict", "--process", GUARD_PROCESS_ID, "--outcome", outcome],
     { encoding: "utf8", cwd: inputs.root, timeout: 60000, stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, ARC_MODEL: "", ARC_SPINE_ROOT: dirname(inputs.eventsDir) } }).trim().split("\n").pop().trim();
+      // Both selectors pinned to the tree that was read (attack p01 r2 L9/B1): a receipt sealed under another root's
+      // rules or into another spine is the writer/reader twin this lane keeps closing.
+      env: { ...process.env, ARC_MODEL: "", ARC_ROOT: inputs.root, ARC_SPINE_ROOT: dirname(inputs.eventsDir) } }).trim().split("\n").pop().trim();
     const day = istDay(formatIst(nowMs()));
     const text = readDayFile(join(inputs.eventsDir, `${day}.jsonl`)) || "";
-    if (!text.includes(`"id":"${id}"`)) { fail(1, `${kind} ${id || "(no id)"} is not in ${inputs.eventsDir} -- the receipt did not land where it was read from`); return null; }
+    // The read-back finds THE event -- this id, this kind, this guard -- not a string that happens to contain the id.
+    const landed = text.split("\n").some((l) => {
+      if (!l.includes(id)) return false;
+      try { const e = JSON.parse(l); return e.id === id && e.kind === kind && e.process === GUARD_PROCESS_ID; } catch { return false; }
+    });
+    if (!id || !landed) { fail(1, `${kind} ${id || "(no id)"} is not in ${inputs.eventsDir} -- the receipt did not land where it was read from`); return null; }
     return id;
   } catch (e) {
     const err = String((e && e.stderr) || "").trim().split("\n").pop() || String(e && e.message).split("\n")[0];

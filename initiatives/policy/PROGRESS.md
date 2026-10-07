@@ -21,7 +21,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread: refusal profile + `arc-run`'s typed L0 refusal receipt → pure fold → `check` with BELOW-BAR, invariants (a)(b) + mutants | 1.25 days | 🔨 built, 2 attack rounds, PR #368 on CI |
-| 01 | Guard (invariant (c)) + `/api/policy` evidence + the room's per-cell age | 0.75 days | 🔨 built on `feat/policy-c2-p01` (stacked on #368), attack next |
+| 01 | Guard (invariant (c)) + `/api/policy` evidence + the room's per-cell age | 0.75 days | 🔨 built, 2 attack rounds, stacked PR from `feat/policy-c2-p01` |
 | 02 | Owner paste: `evidence_days`, lint key, hook's interactive receipt, `policy-lint --evidence`, deny floor | 0.5 days | ⏳ |
 
 **Appetite burn: 1.0 of 3 days used (33%).** Under the 50% tripwire, Phase 00 built and on CI. Phases allocate 2.5 of 3 days; 0.5 days of slack.

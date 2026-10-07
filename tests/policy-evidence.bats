@@ -364,7 +364,7 @@ _guard_root() { # $1 dir, $2 clean|one
 
 @test "guard: one BELOW-BAR cell is NOT clean, one approval, run.completed partial" {
   local d="$BATS_TEST_TMPDIR/g-one"; _guard_root "$d" one || return 1
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 3 ] && [[ "$output" == *"NOT CLEAN"* && "$output" == *"no-writer  session:interactive/shell"* ]] || { echo "$status $output"; false; }
   run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
   [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 1\ LAST\ partial\  ]] || { echo "receipts: $output"; false; }
@@ -372,9 +372,9 @@ _guard_root() { # $1 dir, $2 clean|one
 
 @test "guard: an identical second run raises no new approval and is still not clean" {
   local d="$BATS_TEST_TMPDIR/g-twice"; _guard_root "$d" one || return 1
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 3 ] || { echo "first: $status $output"; false; }
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 3 ] && [[ "$output" == *"no new approval"* ]] || { echo "second: $status $output"; false; }
   run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
   [[ "$output" =~ ^RUNS\ 2\ APPROVALS\ 1\ LAST\ partial\  ]] || { echo "receipts: $output"; false; }
@@ -382,11 +382,11 @@ _guard_root() { # $1 dir, $2 clean|one
 
 @test "invariant c: the guard is not clean with a BELOW-BAR cell, and mutant M-c is killed" {
   local d="$BATS_TEST_TMPDIR/g-real"; _guard_root "$d" one || return 1
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 3 ] || { echo "the real guard reported clean with a BELOW-BAR cell: $output"; false; }
   local m="$BATS_TEST_TMPDIR/g-mut"; _guard_root "$m" one || return 1
   local mut; mut="$(node "$FX/mutants.mjs" "$m/.claude/scripts/hq/policy-evidence.mjs" M-c)" || { echo "M-c did not apply"; false; }
-  run node "$mut" guard --as-of 2026-10-07
+  run node "$mut" guard
   [[ "$output" == *"guard: CLEAN"* ]] || { echo "M-c should have reported clean (so the fixture can kill it): $status $output"; false; }
 }
 
@@ -414,15 +414,23 @@ _guard_root() { # $1 dir, $2 clean|one
   [ "$output" = "AUDITS null" ] || { echo "an overridden run became an audit: $output"; false; }
 }
 
+@test "guard: an --as-of override never raises an approval, and says it is not an audit" {
+  local d="$BATS_TEST_TMPDIR/g-ovr-appr"; _guard_root "$d" one || return 1
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  [ "$status" -eq 3 ] || { echo "$status $output"; false; }
+  run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^RUNS\ 1\ APPROVALS\ 0\ LAST\ partial ]] || { echo "an overridden run raised an approval: $output"; false; }
+}
+
 @test "guard: an approval that sealed before a failed run.completed still dedupes the retry" {
   local d="$BATS_TEST_TMPDIR/g-half"; _guard_root "$d" one || return 1
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 3 ] || { echo "first: $status $output"; false; }
   # Simulate the half failure: the approval is on the spine, the run.completed is not.
   local f; for f in "$d/.claude/state/hq/events/"*.jsonl; do grep -v '"run.completed"' "$f" > "$f.tmp"; mv "$f.tmp" "$f"; done
   run node "$FX/spine-probe.mjs" guard "$d/.claude/state/hq/events"
   [[ "$output" =~ ^RUNS\ 0\ APPROVALS\ 1 ]] || { echo "fixture did not build the half failure: $output"; false; }
-  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard --as-of 2026-10-07
+  run node "$d/.claude/scripts/hq/policy-evidence.mjs" guard
   [ "$status" -eq 3 ] && [[ "$output" == *"no new approval"* ]] || { echo "the retry stacked a second approval: $status $output"; false; }
 }
 
@@ -436,5 +444,5 @@ _guard_root() { # $1 dir, $2 clean|one
 }
 
 @test "suite count: every test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 66 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 66"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 67 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 67"; false; }
 }

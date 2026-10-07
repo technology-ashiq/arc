@@ -57,3 +57,13 @@ Cycle 2, Phase 01, attack round 1 (`0993467`; 17 findings: 11 fixed, 4 rejected,
 - **The door test checked evidence shape, not coherence** — n/a iff L0 or out of scope, BELOW-BAR iff in scope and not fresh, fresh carries an age (L1/L4/L5/L8) — *a test that checks a label without its content*
 
 Rejected in Phase 01 round 1: L7 (`allCells.length > 0 &&` sits INSIDE the assertion, so an empty list already fails) — `unsupported`; L3 (a previous receipt without a digest raises an approval) — `already-covered`: that is the safe direction; L6 (dedupe ignores as_of) — `already-covered`: deduping an unchanged BELOW-BAR set is ADR-0511's design (plan-attacker F6); L9 (a renamed guard process) — `non-actionable`: there is no older guard version.
+
+Cycle 2, Phase 01, attack round 2 (`f03f3fe`; 17 findings: 6 fixed, 4 rejected, 7 LOW to the debt ledger):
+
+- **An explicit `--as-of` naming today read as a real run, and an overridden run still raised a real approval** — any explicit `--as-of` is an override; an override never raises an approval (L7/B2) — *a test or back-dated run must have no outward-facing write*
+- **The read-back matched the id as a substring** — it now finds the event: this id, this kind, this guard (L3) — *every read-back: parse the record, never grep its id*
+- **The emitter's root selector was still inherited** — `ARC_ROOT` pinned with `ARC_SPINE_ROOT` (L9/B1) — *close the whole family of selector variables, not the one named*
+- **The interactive day bound accepted any matching line at any level** — it must be at the level being recorded (L6/B3) — *self-declared fields on a no-corroboration path*
+- **CLEAN said "all fresh" with nothing in scope** — says "no in-scope cell (nothing above L0 to evidence)" (L5) — *a clean message must not claim what it never measured*
+
+Rejected in Phase 01 round 2: L1 (the previous-digest loop reads unvalidated lines) — `already-covered`: every event in `inputs.events` passed `validateEvent` + `eventSha`, and the process id and outcome are matched exactly; L2/L8 (the digest omits the no-writer/clearable split) — `already-covered`: `state` encodes the split (unknown = no-writer); L4 (duplicate cell keys in the door map) — `unsupported`: the fold builds one cell per subject x capability by construction.
