@@ -4,6 +4,7 @@
 **Appetite:** 2 days — blown appetite = cut scope or kill, never extend silently
 **Depends on:** phase-02
 **REQs closed here:** REQ-05, REQ-06, REQ-09, REQ-07
+**Decided at build:** ADR-1916 — a rejected winner's `cluster_fp` and tokens ride its `approval.requested`, because `decision.recorded` is closed to `decides · verdict · reason`; REQ-05's reject reader reads them from there.
 
 ## Scope
 

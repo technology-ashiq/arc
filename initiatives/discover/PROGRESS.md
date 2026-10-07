@@ -1,7 +1,7 @@
 # PROGRESS.md — discover v2 "the idea engine"
 
-status: LIVE
-cycle: arc-discover (Cycle 1, opened 2026-10-06)
+status: IDLE
+cycle: arc-discover (Cycle 1, sealed 2026-10-07)
 phase: 03
 appetite: 8d
 burn: 2d
@@ -33,4 +33,4 @@ ADR century 1900–1999; ADR-1900..1912 written at kickoff, 1913–1914 at the P
 ## Now
 
 **Current position:** All four phases are closed (2026-10-07). The real hunt on `invoice reminders` went from hunt to inbox in 28.2 min, gave 2 council verdicts (hold/Medium), and was approved as rehearsal and exported to `products/launch/ventures/invoice-reminders-6e390c.venture.yaml`. Close PR #355.
-**Next step:** merge #355 on per-job green CI, then `/arc-retro --lane discover` and the lane reseal. The owner's own moves are the move-on stamps and, if wanted, `arc launch new invoice-reminders-6e390c`.
+**Next step:** none — Cycle 1 is sealed (retro 2026-10-07). The next discover cycle starts with `/arc-kickoff --lane discover`.
