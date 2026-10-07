@@ -182,8 +182,8 @@ appetite: the time budget a lane sets itself before it starts.
 
 | | |
 |---|---|
-| Status | LIVE |
-| Cycle | arc-scheduler (Cycle 12, opened 2026-08-12) |
+| Status | IDLE |
+| Cycle | arc-scheduler (Cycle 12, sealed 2026-10-07) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.

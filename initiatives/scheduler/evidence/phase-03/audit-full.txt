@@ -1,0 +1,91 @@
+jobs audit 2026-08-17..2026-10-06  (51 days, spine observed from 2026-07-23)
+
+  brief-materialize      weekdays@06:00
+    expected 37  completed 10  failed 0  drift p50 17482000ms
+    gaps: 27 unexplained, 0 explained, 0 failed
+      MISSED 2026-08-20T06:00:00+05:30
+      MISSED 2026-08-24T06:00:00+05:30
+      MISSED 2026-08-25T06:00:00+05:30
+      MISSED 2026-08-26T06:00:00+05:30
+      MISSED 2026-08-27T06:00:00+05:30
+      MISSED 2026-08-28T06:00:00+05:30
+      MISSED 2026-08-31T06:00:00+05:30
+      MISSED 2026-09-01T06:00:00+05:30
+      MISSED 2026-09-02T06:00:00+05:30
+      MISSED 2026-09-03T06:00:00+05:30
+      MISSED 2026-09-04T06:00:00+05:30
+      MISSED 2026-09-07T06:00:00+05:30
+      MISSED 2026-09-08T06:00:00+05:30
+      MISSED 2026-09-09T06:00:00+05:30
+      MISSED 2026-09-10T06:00:00+05:30
+      MISSED 2026-09-11T06:00:00+05:30
+      MISSED 2026-09-14T06:00:00+05:30
+      MISSED 2026-09-15T06:00:00+05:30
+      MISSED 2026-09-16T06:00:00+05:30
+      MISSED 2026-09-17T06:00:00+05:30
+      MISSED 2026-09-18T06:00:00+05:30
+      MISSED 2026-09-21T06:00:00+05:30
+      MISSED 2026-09-22T06:00:00+05:30
+      MISSED 2026-09-23T06:00:00+05:30
+      MISSED 2026-09-24T06:00:00+05:30
+      MISSED 2026-09-25T06:00:00+05:30
+      MISSED 2026-09-28T06:00:00+05:30
+  day-close-roll         daily@00:15
+    expected 51  completed 39  failed 0  drift p50 3000ms
+    gaps: 12 unexplained, 0 explained, 0 failed
+      MISSED 2026-08-20T00:15:00+05:30
+      MISSED 2026-08-27T00:15:00+05:30
+      MISSED 2026-08-30T00:15:00+05:30
+      MISSED 2026-09-01T00:15:00+05:30
+      MISSED 2026-09-02T00:15:00+05:30
+      MISSED 2026-09-03T00:15:00+05:30
+      MISSED 2026-09-04T00:15:00+05:30
+      MISSED 2026-09-06T00:15:00+05:30
+      MISSED 2026-09-07T00:15:00+05:30
+      MISSED 2026-09-08T00:15:00+05:30
+      MISSED 2026-09-21T00:15:00+05:30
+      MISSED 2026-09-28T00:15:00+05:30
+
+metric pack
+  attempted 49  completed 49  failed 0  missed 39
+  drift p50                 4000ms
+  manual starts (target 0)  0
+  incidents                 policy-declined=0 overlap=0 receipt-write-failure=0 timeout=0 crash=0
+  spend (expected 0)        INR 0
+  needs-you days            34
+    2026-08-26  brief-materialize (3 missed)
+    2026-08-27  brief-materialize (4 missed)
+    2026-08-28  brief-materialize (5 missed)
+    2026-08-29  brief-materialize (5 missed)
+    2026-08-30  brief-materialize (5 missed)
+    2026-08-31  brief-materialize (6 missed)
+    2026-09-01  brief-materialize (7 missed)
+    2026-09-02  brief-materialize (8 missed)
+    2026-09-03  brief-materialize (9 missed), day-close-roll (3 missed)
+    2026-09-04  brief-materialize (10 missed), day-close-roll (4 missed)
+    2026-09-05  brief-materialize (10 missed)
+    2026-09-06  brief-materialize (10 missed)
+    2026-09-07  brief-materialize (11 missed)
+    2026-09-08  brief-materialize (12 missed), day-close-roll (3 missed)
+    2026-09-09  brief-materialize (13 missed)
+    2026-09-10  brief-materialize (14 missed)
+    2026-09-11  brief-materialize (15 missed)
+    2026-09-12  brief-materialize (15 missed)
+    2026-09-13  brief-materialize (15 missed)
+    2026-09-14  brief-materialize (16 missed)
+    2026-09-15  brief-materialize (17 missed)
+    2026-09-16  brief-materialize (18 missed)
+    2026-09-17  brief-materialize (19 missed)
+    2026-09-18  brief-materialize (20 missed)
+    2026-09-19  brief-materialize (20 missed)
+    2026-09-20  brief-materialize (20 missed)
+    2026-09-21  brief-materialize (21 missed)
+    2026-09-22  brief-materialize (22 missed)
+    2026-09-23  brief-materialize (23 missed)
+    2026-09-24  brief-materialize (24 missed)
+    2026-09-25  brief-materialize (25 missed)
+    2026-09-26  brief-materialize (25 missed)
+    2026-09-27  brief-materialize (25 missed)
+    2026-09-28  brief-materialize (26 missed)
+
+NOT CLEAN: 39 unexplained gap(s)

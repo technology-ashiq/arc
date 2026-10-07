@@ -20,6 +20,7 @@
 #   design-explore.sh compose-done <id> --variant <x> [--brief <path>]
 #                                                 # release it, then run the composer gates
 #   design-explore.sh render <id>                 # one shared render command, all variants
+#   design-explore.sh rival <id> [--provider stitch] [--viewport WxH]  # a rival draft, vendored + rendered (Phase 07)
 #   design-explore.sh status <id>                 # where this explore stands
 #   design-explore.sh surfaces|coverage|selfreview <id>   # the REQ-03 / REQ-02b gates
 #   design-explore.sh jury <id> --n N --seed S --rubric <path> --ref <sha16> [--ref ...] [--control <v>] [--viewport WxH]
@@ -45,7 +46,7 @@ shift 2>/dev/null || true
 shift 2>/dev/null || true
 
 if [ -z "$CMD" ] || [ -z "$ID" ]; then
-  echo "design-explore: usage: design-explore.sh {init|check|compose|compose-done|render|status|surfaces|coverage|selfreview} <explore-id> [--variant <x>] [--brief <path>]" >&2
+  echo "design-explore: usage: design-explore.sh {init|check|compose|compose-done|render|rival|status|surfaces|coverage|selfreview} <explore-id> [--variant <x>] [--brief <path>]" >&2
   exit 1
 fi
 # Characters spelled out, not `a-z`: a bracket range resolves through the locale's
@@ -873,6 +874,57 @@ EOF
       bash "$DESIGN_DIR/design-render.sh" "$page" --mode explore --session "$ID--variant-$v" $RFLAGS || rc=1
     done
     exit "$rc"
+    ;;
+
+  rival)
+    # Phase 07 (ADR-1409, ADR-1422): one rival draft for this explore brief, vendored into the
+    # gitignored rival-<provider>/ dir, then rendered by the SAME renderer into the same session
+    # shape a variant uses. The adapter prints its one status line; a COULD-NOT-DRAFT is exit 3 and
+    # nothing is rendered, so the jury leaves the rival out by name.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID'" >&2; exit 1; }
+    command -v node >/dev/null 2>&1 || { echo "design-explore: node is not on PATH -- the rival adapter needs it" >&2; exit 1; }
+    PROVIDER="stitch"
+    # An array, expanded quoted, and each value held to its own grammar: a word-split string let a
+    # `--viewport` value smuggle a second `--session` into the renderer (attack 65d01cc B8, L13).
+    RFLAGS=()
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --provider)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          PROVIDER="$2"; shift 2;;
+        --viewport)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          case "$2" in
+            ""|*[!0123456789x]*|x*|*x|*x*x*) echo "design-explore: --viewport takes WxH, got '$(printf '%s' "$2" | cut -c1-40)'" >&2; exit 1;;
+            *x*) ;;
+            *) echo "design-explore: --viewport takes WxH, got '$(printf '%s' "$2" | cut -c1-40)'" >&2; exit 1;;
+          esac
+          RFLAGS+=("$1" "$2"); shift 2;;
+        --media)
+          [ "$#" -ge 2 ] || { echo "design-explore: $1 needs a value" >&2; exit 1; }
+          case "$2" in
+            ""|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: --media takes a lowercase keyword" >&2; exit 1;;
+          esac
+          RFLAGS+=("$1" "$2"); shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
+    done
+    case "$PROVIDER" in
+      ""|-*|*-|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|con|prn|aux|nul|com[0123456789]|lpt[0123456789]) echo "design-explore: --provider must be lowercase kebab, not a device name" >&2; exit 1;;
+    esac
+    # The jury's grammar caps a provider at 32 characters; the same cap here (attack ae0aeb8 B7).
+    [ "${#PROVIDER}" -le 32 ] || { echo "design-explore: --provider is at most 32 characters" >&2; exit 1; }
+    # A CRLF checkout leaves a CR on the line; it is dropped before the strips, as every record reader
+    # here does, so the refusal below names a real problem and not a line ending (attack ae0aeb8 L11).
+    BRIEF_LINE="$(grep '^brief=' "$EX/explore.txt" 2>/dev/null | head -1 | tr -d '\r')"
+    BRIEF_ID="${BRIEF_LINE#brief=docs/design/briefs/}"
+    BRIEF_ID="${BRIEF_ID%/brief.md}"
+    case "$BRIEF_ID" in
+      ""|-*|*/*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: explore.txt names no brief under docs/design/briefs/<id>/brief.md" >&2; exit 1;;
+    esac
+    node "$DESIGN_DIR/design-rival.mjs" draft --brief "$BRIEF_ID" --run "$ID" --provider "$PROVIDER" || exit $?
+    bash "$DESIGN_DIR/design-render.sh" "docs/design/explore/$ID/rival-$PROVIDER/index.html" --mode explore --session "$ID--rival-$PROVIDER" ${RFLAGS[@]+"${RFLAGS[@]}"}
+    exit $?
     ;;
 
   status)
