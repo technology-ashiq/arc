@@ -109,6 +109,11 @@ _ask() {
 # NEWLINES, not spaces -- so `tr '\n' ' '` leaves one behind that survives command substitution,
 # and an expected value written without it can never match.
 _kinds() { cat "$ARC_SPINE_ROOT/events/"*.jsonl 2>/dev/null | grep -o '"kind":"[^"]*"' | sed 's/.*://' | tr -d '"' | sort | tr '\n' ' ' | sed 's/ *$//'; }
+# The one note.logged on the spine is a policy.refusal with this decision and level (POL-L, ADR-0509).
+_refusal_is() {
+  local n; n="$(cat "$ARC_SPINE_ROOT/events/"*.jsonl | grep -F '"subject":"policy.refusal"' | grep -cF "\"decision\":\"$1\",\"level\":\"$2\"")"
+  [ "$n" = "1" ] || { echo "expected one policy.refusal decision=$1 level=$2, found $n"; cat "$ARC_SPINE_ROOT/events/"*.jsonl; false; }
+}
 _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l | tr -d " "; }
 
 @test "AN OVERREACH AT EXECUTE COSTS A LEVEL, and both receipts land sealed" {
@@ -121,7 +126,9 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   # The first two are the promotion chain _raise sealed (approval -> decision), the last three
   # are what this deny produced. Listed in full rather than grepped for: an exact set is what
   # catches a receipt the engine wrote and nobody expected.
-  [ "$(_kinds)" = "approval.requested decision.recorded incident.raised policy.demoted policy.level.changed" ] || {
+  # Since the POL-L Phase 02 paste the hook also seals one `policy.refusal` (a `note.logged` profile, ADR-0509): the
+  # overreach was a deny at L2, which is evidence that the refusal path works. Still an exact set.
+  [ "$(_kinds)" = "approval.requested decision.recorded incident.raised note.logged policy.demoted policy.level.changed" ] || {
     echo "spine holds: $(_kinds)"; false; }
   [ "$(_quarantined)" = "0" ] || { echo "receipts were quarantined"; false; }
 }
@@ -146,7 +153,10 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   run _ask '{"tool_name":"Write","tool_input":{"file_path":"docs/x.md"}}'
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"L1 (propose)"* ]] || { echo "not the propose path: $output"; false; }
-  [ "$(_kinds)" = "" ] || { echo "a propose wrote receipts: $(_kinds)"; false; }
+  # No demotion and no incident -- the ratchet guard. Since the POL-L Phase 02 paste the one receipt a propose writes is
+  # its typed evidence (`note.logged` subject policy.refusal, decision propose, ADR-0509), never an authority receipt.
+  [ "$(_kinds)" = "note.logged" ] || { echo "a propose wrote more than its evidence receipt: $(_kinds)"; false; }
+  _refusal_is propose L1
 }
 
 @test "a deny at L0 writes nothing -- there is nothing to take" {
@@ -167,7 +177,10 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   run _ask '{"tool_name":"Write","tool_input":{"file_path":".claude/settings.json"}}'
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"un-grantable resource"* ]] || { echo "not the integrity path: $output"; false; }
-  [ "$(_kinds)" = "" ] || { echo "an L1 deny wrote receipts: $(_kinds)"; false; }
+  # No demotion and no incident. The integrity deny IS evidence the refusal path works at L1, so it seals exactly one
+  # typed `policy.refusal` (decision deny) since the POL-L Phase 02 paste -- and nothing that moves a level.
+  [ "$(_kinds)" = "note.logged" ] || { echo "an L1 deny wrote more than its evidence receipt: $(_kinds)"; false; }
+  _refusal_is deny L1
 }
 
 @test "PHASE 01 REQ-03 -- the NEXT authorization sees the demoted level" {

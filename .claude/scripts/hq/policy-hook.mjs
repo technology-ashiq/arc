@@ -25,6 +25,11 @@ import { authorizeAction } from "./lib/policy/authorize.mjs";
 import { loadPolicyFromDisk, loadPolicyEvents, policyRoot } from "./lib/policy/run-gate.mjs";
 import { recordOverreach } from "./lib/policy/incident.mjs";
 import { SESSION_KIND } from "./lib/policy/model.mjs";
+import { execFileSync } from "node:child_process";
+import { closeSync, openSync, statSync, unlinkSync } from "node:fs";
+import { canonicalSpine, sameSpine, sealedRefusalToday } from "./lib/policy-evidence/load.mjs";
+import { capReason } from "./lib/validate-policy-refusal.mjs";
+import { formatIst, nowMs } from "./lib/canonical.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +77,47 @@ function capabilitiesFor(toolName, matrix) {
   const b = matrix.builtin || {};
   const own = b.tools && Object.prototype.hasOwnProperty.call(b.tools, toolName) ? b.tools[toolName] : null;
   return own || b.default || null;
+}
+
+// POL-L (REQ-05, ADR-0509): a refusal at L1+ is EVIDENCE that the level's refusal path works, so it becomes a typed
+// `policy.refusal` receipt -- at most one per (capability, decision, IST day), only on the canonical spine, bounded,
+// and never able to change the block: a lost receipt goes to stderr and the exit code is decided before this runs.
+// 3000 ms, not 500: measured 2026-10-07, a warm emit is ~300 ms and the first of a session 2077 ms, so a 500 ms
+// bound would drop the first receipt of every session -- the very evidence this exists to record.
+// A slow runner may raise the bound through ARC_POLICY_REFUSAL_TIMEOUT_MS; it is a wait, never a selector (p02 r2 B5).
+const REFUSAL_EMIT_TIMEOUT_MS = Number(process.env.ARC_POLICY_REFUSAL_TIMEOUT_MS) > 0 ? Number(process.env.ARC_POLICY_REFUSAL_TIMEOUT_MS) : 3000;
+const REFUSAL_PROCESS = "policy-hook@1.0.0";
+function recordRefusal({ root, capability, level, decision, reason }) {
+  if (level === "L0") return; // the deny IS the level: nothing to evidence (ADR-0510, n/a)
+  let lockFd = null, lock = null;
+  try {
+    const writerSpine = process.env.ARC_SPINE_ROOT || join(root, ".claude", "state", "hq");
+    if (!sameSpine(writerSpine, canonicalSpine(root))) return;
+    // ONE writer at a time across the check and the emit (attack p02 r2 L1): parallel tool calls run parallel hooks,
+    // and a check-then-emit with no lock seals two. A fresh lock is another hook mid-write -- its receipt is today's,
+    // so this one has nothing to add. A lock older than a minute is a crashed writer's, taken over once.
+    lock = join(writerSpine, ".policy-refusal.lock");
+    try { lockFd = openSync(lock, "wx"); } catch {
+      if (Date.now() - statSync(lock).mtimeMs < 60000) { lock = null; return; }
+      unlinkSync(lock); lockFd = openSync(lock, "wx");
+    }
+    const day = formatIst(nowMs()).slice(0, 10);
+    if (sealedRefusalToday({ eventsDir: join(writerSpine, "events"), day, actionKind: SESSION_KIND, capability,
+      process: REFUSAL_PROCESS, decision, surface: "interactive", level })) return;
+    execFileSync("bash", [join(root, ".claude", "scripts", "hq", "arc-event.sh"), "emit", "note.logged", "--payload",
+      JSON.stringify({ subject: "policy.refusal", action_kind: SESSION_KIND, capability, level, decision,
+        surface: "interactive", reason: capReason(reason) }),
+      "--strict", "--process", REFUSAL_PROCESS, "--outcome", "fail"],
+    { encoding: "utf8", cwd: root, timeout: REFUSAL_EMIT_TIMEOUT_MS, killSignal: "SIGKILL", stdio: ["ignore", "pipe", "pipe"],
+      // The spine that was checked is the spine that is written: both selectors pinned (attack p02 B3).
+      env: { ...process.env, ARC_SPINE_ROOT: writerSpine, ARC_ROOT: root } });
+  } catch (e) {
+    // Even the report cannot throw: a closed stderr must not turn the block into exit 1 (attack p02 B5).
+    try { process.stderr.write(`policy: refusal evidence not recorded (${String(e && e.message).split("\n")[0]}) -- the block stands\n`); } catch { /* the block stands either way */ }
+  } finally {
+    if (lockFd !== null) try { closeSync(lockFd); } catch { /* released below */ }
+    if (lockFd !== null && lock) try { unlinkSync(lock); } catch { /* a stale lock is taken over after a minute */ }
+  }
 }
 
 function main() {
@@ -136,6 +182,7 @@ function main() {
         // believing the authority chain is intact when it just lost an entry -- the same reason
         // the dispatcher announces a missing fragment instead of quietly allowing.
         process.stdout.write(`policy: WARN the overreach was NOT recorded -- ${bite.reason}\n`);
+      recordRefusal({ root, capability, level: verdict.effective, decision: "deny", reason: verdict.reason });
       return 2;
     }
     if (verdict.decision === "propose") {
@@ -144,6 +191,7 @@ function main() {
         `${SESSION_KIND}. L1 means prepare and record, never perform -- raising it is a human ` +
         `decision citing trial-ledger evidence (${verdict.reason})\n`
       );
+      recordRefusal({ root, capability, level: verdict.effective, decision: "propose", reason: verdict.reason });
       return 2;
     }
   }

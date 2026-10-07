@@ -38,6 +38,9 @@ const policy = {
 // in-scope cell could ever be fresh and every positive control would be impossible to build.
 const PHASE02 = { headless: ["L0"], interactive: ["L1"] };
 const WIDE = { headless: ["L0", "L1"], interactive: ["L1"] };
+// The table as it stood BEFORE the Phase 02 paste: no interactive writer. Pinned explicitly, so the "no writer" and
+// "forged before any writer" scenarios keep testing that rule after the shipped table gained the hook as a writer.
+const PRE = { headless: ["L0"], interactive: [] };
 
 const refusal = (o) => ({
   id: id(), kind: "note.logged", ts: ts(o.day, o.time), process: o.process ?? "policy-hook@1.0.0", outcome: "fail",
@@ -69,7 +72,7 @@ const S = {
   zeroReceipts() {
     const withWriter = cell(fold([], "2026-10-07", PHASE02), "session:interactive", "shell");
     expect(withWriter.below_bar === true && withWriter.state === "absent", `with a writer: ${JSON.stringify(withWriter)}`);
-    const noWriter = cell(fold([], "2026-10-07"), "session:interactive", "shell");
+    const noWriter = cell(fold([], "2026-10-07", PRE), "session:interactive", "shell");
     expect(noWriter.below_bar === true && noWriter.state === "unknown", `without a writer: ${JSON.stringify(noWriter)}`);
   },
   // The positive control: a broken fold that reports everything BELOW-BAR cannot pass this.
@@ -205,7 +208,7 @@ const S = {
   },
   // An interactive refusal before any interactive writer exists is forged by construction.
   forgedBeforeWriter() {
-    const c = cell(fold([refusal({ day: "2026-10-06" })], "2026-10-07"), "session:interactive", "shell");
+    const c = cell(fold([refusal({ day: "2026-10-06" })], "2026-10-07", PRE), "session:interactive", "shell");
     expect(c.last_refusal === null && c.discarded.unverified === 1 && c.state === "unknown", `forged: ${JSON.stringify(c)}`);
   },
   // Prose is never parsed: an incident naming the capability in `what` is not a refusal.
