@@ -30,3 +30,4 @@ and lane finds are appended under their PR.
 - **(r) the machine decides the answer.** A test that asks git runs with `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1` and reads exit codes as three states (0 / 1 / anything else = COULD NOT SCAN). Fixed in `tests/distribute-birth.bats`, attack 22fddfc B2/B3/B4.
 - **(s) a mutant whose assertion is weaker than its change.** A mutant that removes every date asserts every row is reported, not "some row". Fixed in `tests/distribute-birth.bats`, attack 22fddfc B5.
 - **(t) unconfined data paths at birth.** A path in a data file that a later tool reads (`golden:`) is confined when the file is born. Fixed in `tests/distribute/birth-probe.mjs`, attack 22fddfc B7.
+- **(u) a mutant that exercises one probe of several.** A check with N probes plants N rules and asserts all N went red. Fixed in `tests/distribute-birth.bats`, attack 5d3f91b L3/L9 (the deleted-row mutant also pins the surviving count).

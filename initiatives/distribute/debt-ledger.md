@@ -24,3 +24,19 @@ REJECTED: B9 machine path in evidence breaks the public-repo rule — already-co
 REJECTED: B10 relative vs absolute probe arguments — non-actionable
 ```
 (L3/L4/B8: the regexes were already structural in 22fddfc; L5/L14: this probe emits no warning; L6: it is quoted; L12: `parseYamlSubset` rejects a duplicate key by name; B1: `.gitattributes` forces `eol=lf`, and the copy now strips CR anyway; B9: 83 files on `main` already carry that path, and it is not owner PII.)
+
+Attack 5d3f91b round 2 (logic; boundary had its two rounds at c4e1d7d and 22fddfc). Fixed: L3, L9, L11 (`init --template=`). Rejected:
+
+```
+REJECTED: L2 the all-dates mutant should delete exactly one date — already-covered
+REJECTED: L5 an unverified row must carry no date — unsupported
+REJECTED: L7 partial: accepts a leading space — already-covered
+REJECTED: L4 a FAITHFUL seo-article-writer row is accepted — non-actionable
+REJECTED: L6 a pipe inside a cell reclassifies it — already-covered
+REJECTED: L12 compare the raw golden line with the parsed value — non-actionable
+REJECTED: L1 / L14 symlinked ARC_ROOT, POSIX paths — non-actionable
+```
+(L2: the arm asserts every row is reported undated while the real tree reports none; L5: ADR-2003 dates every row, unverified included, so the date says when the absence was declared; L7: the regex is `^partial:\S`; L6: a stray pipe changes the cell count, which is illegal.)
+
+| 5 | attack 5d3f91b r2 logic L8/L13 (medium) | the seed-dir check compares counts (0 = 0) with no named-set equality or planted-seed negative control | deferred: 0 FAITHFUL rows and no `codex-seed/` dir exist, so the check has nothing to compare | any `FAITHFUL` command row or any `codex-seed/` dir appears |
+| 6 | attack 5d3f91b r2 logic L15 (low) | the four probed ignore paths are hard-coded rather than derived from the matrix's rendered directories | deferred to P03, when the adapters declare their rendered directories in `engine/harnesses.yaml` | P03 adds a rendered directory |

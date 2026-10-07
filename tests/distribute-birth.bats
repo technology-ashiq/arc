@@ -47,7 +47,7 @@ check_paths() {
 # The mutant arm: a fresh temp repo carrying a CR-stripped copy of the given .gitignore.
 ignored_in_copy() {
   local repo="$BATS_TEST_TMPDIR/ign-$2"
-  mkdir -p "$repo" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$repo" init -q || return 2
+  mkdir -p "$repo" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$repo" init -q --template= || return 2
   tr -d '\r' < "$1" > "$repo/.gitignore"
   [ -s "$repo/.gitignore" ] || { echo "COULD NOT SCAN: copied .gitignore is empty"; return 2; }
   check_paths "$repo"
@@ -70,10 +70,13 @@ ignored_in_copy() {
   run check_paths "$ARC_ROOT"
   [ "$status" -eq 0 ] && [ "${lines[${#lines[@]}-1]}" = "RAN ignored" ] || { echo "check did not run: $output"; false; }
   [ "${#lines[@]}" -eq 1 ] || { echo "git still ignores: $output"; false; }
-  { cat "$ARC_ROOT/.gitignore"; printf '.codex/*\n'; } > "$BATS_TEST_TMPDIR/gitignore"
+  # One planted rule per probed surface, each spelled differently from a bare line, so every one of
+  # the four probes is shown able to go red.
+  { cat "$ARC_ROOT/.gitignore"; printf '.codex/*\n**/.agents/\n/AGENTS.md\n.opencode\n'; } > "$BATS_TEST_TMPDIR/gitignore"
   run ignored_in_copy "$BATS_TEST_TMPDIR/gitignore" mutant
   [ "$status" -eq 0 ] && [ "${lines[${#lines[@]}-1]}" = "RAN ignored" ] || { echo "mutant check did not run: $output"; false; }
-  [ "${lines[0]}" = ".codex/hooks.json" ] || { echo "the check did not see a planted .codex/* rule: $output"; false; }
+  [ "${#lines[@]}" -eq 5 ] || { echo "the check did not see all four planted rules: $output"; false; }
+  [ "${lines[0]}" = ".codex/hooks.json" ] && [ "${lines[3]}" = ".opencode/commands/x.md" ] || { echo "planted rules seen out of order: $output"; false; }
 }
 
 @test "distribute-birth: the matrix parses with at least 8 rows" {
@@ -134,4 +137,5 @@ ignored_in_copy() {
   run --separate-stderr probe verdict "$(native "$BATS_TEST_TMPDIR/short.md")"
   ran_ok verdict
   printf '%s\n' "$output" | tr -d '\r' | grep -qx 'verdict incomplete' || { echo "the check did not see a deleted row: $output"; false; }
+  [ "$(field command-rows)" -eq 7 ] || { echo "the mutant should leave exactly 7 command rows: $(field command-rows)"; false; }
 }
