@@ -21,7 +21,20 @@ const LEVEL_RE = /^L[0-3]$/;
 export const REFUSAL_CAPABILITIES = Object.freeze(["read", "write", "shell", "network", "message", "publish", "deploy", "spend"]);
 export const REFUSAL_DECISIONS = Object.freeze(["deny", "propose"]);
 export const REFUSAL_SURFACES = Object.freeze(["headless", "interactive", "scheduler"]);
-const MAX_REASON = 300;
+export const MAX_REASON = 300;
+const BAD_CHAR = /[\u0000-\u001f\u007f\u0085\u2028\u2029]/;
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+/**
+ * The ONE reason cap, used by the writer (arc-run) and checked by this validator (attack r2 B2): a writer that cut by
+ * code point and a validator that measured UTF-16 units disagreed on any astral character, and the receipt was lost.
+ * Characters the profile refuses become spaces; an empty result falls back to a fixed reason, never to a blank.
+ */
+export function capReason(s) {
+  const clean = Array.from(String(s ?? "").replace(new RegExp(BAD_CHAR.source, "g"), " ")
+    .replace(new RegExp(LONE_SURROGATE.source, "g"), " ")).slice(0, MAX_REASON).join("");
+  return clean.trim() === "" ? "denied by policy" : clean;
+}
 
 const isPlainObject = (v) =>
   v !== null && typeof v === "object" && !Array.isArray(v) &&
@@ -62,7 +75,7 @@ export function assertPolicyRefusal(event) {
   } else if ("incident_ref" in p) {
     bad(`incident_ref belongs to a headless refusal only, not surface ${p.surface}`);
   }
-  if (typeof p.reason !== "string" || p.reason.trim() === "" || p.reason.length > MAX_REASON || /[\u0000-\u001f\u007f\u0085\u2028\u2029]/.test(p.reason) || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(p.reason))
+  if (typeof p.reason !== "string" || p.reason.trim() === "" || Array.from(p.reason).length > MAX_REASON || /[\u0000-\u001f\u007f\u0085\u2028\u2029]/.test(p.reason) || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(p.reason))
     bad(`reason must be 1..${MAX_REASON} characters of single-line, well-formed text (no C0, NEL, U+2028/2029 or lone surrogate)`);
 }
 

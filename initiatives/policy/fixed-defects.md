@@ -30,4 +30,19 @@ Cycle 2, Phase 00, attack round 1 (`9dc4cbe`, logic on deepseek-v4-flash + bound
 - **A type check then a read by path could be split by a swap (FIFO TOCTOU)** — one descriptor, `fstatSync` then read (B7) — *every check-then-use on a path*
 - **Programs embedded in bats shell strings** — moved to `tests/fixtures/policy-evidence/spine-probe.mjs` (B6) — *CLAUDE.md: a program in a shell string carries no quotes*
 
+Cycle 2, Phase 00, attack round 2 (`b6f99ff`; 18 findings: 13 fixed, 2 rejected, 3 LOW to the debt ledger):
+
+- **The writer chose its spine by `ARC_SPINE_ROOT`/`--root` while the reader pinned the governing root, so evidence sealed where nothing reads it** — arc-run writes a refusal only when its spine is `canonicalSpine()`, and says so when it is not (L1/B4) — *every writer of evidence: compare the spine you write to with the one that is read*
+- **A deny at L1 counted as proof of L1's propose path** — at L1 only a propose qualifies (L2) — *any "proof a level works" that accepts a different decision than the level's own*
+- **A receipt could declare the other surface and borrow its writer** — surface must equal the subject's (L3) — *every self-declared field that selects a trust path*
+- **A declared `evidence_days: 0` read exactly like no N** — `invalid-bar` reason (L7) — *any validator that folds "invalid" into "absent"*
+- **The writer cut the reason by code point but the validator measured UTF-16 units, so astral reasons lost their receipt** — one `capReason`/`MAX_REASON` shared by both (B2) — *every bound enforced in two places: one function, one unit*
+- **The day bound counted any line matching three fields, so one forged line suppressed the genuine receipt all day** — `sealedRefusalToday` requires a sealed, corroborated refusal (B3) — *any dedupe check: count only what the reader would count*
+- **A blocking `open` on a FIFO still hung the reader; a symlinked day file was followed; arc-run re-added a by-path read** — one `readDayFile` (lstat, O_NONBLOCK, O_NOFOLLOW, fstat) shared by reader and writer (B1/L10/B5) — *fix the pattern in every copy, not the file the attacker named*
+- **The dedupe Set was marked before the emit outcome** — marked only once sealed (B6, in-process half) — *any "done" flag set before the work succeeds*
+- **The EPIPE handler covered the text path only** — attached once at the top of `main` (B7) — *every early-return branch that writes*
+- **A BOM was stripped per file, not per line** — per line (L6) — *every line-oriented parser*
+
+Rejected in round 2: L4 (a nested payload passes the profile) — `already-covered`: the loader runs the closed-shape validator on every event; L8 (a failed receipt retried next denial breaks once-per-day) — `unsupported`: nothing was sealed, and the sanitizer no longer emits lone surrogates.
+
 Rejected in round 1: L6 (n/a cells keep `last_refusal`: that IS REQ-03's acceptance, and an n/a cell never moves the bar) — `already-covered`; L10 (a deny at L1 is impossible) — `unsupported`: `incident.mjs` documents integrity denies at L1.

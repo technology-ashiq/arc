@@ -184,6 +184,25 @@ const S = {
   emptyPolicy() {
     expect(throws(() => F.foldEvidence({ policy: { kinds: {} }, transitions: [], events: [], asOf: "2026-10-07" })), "an empty policy folded");
   },
+  // attack r2 L2: at L1 a deny is an integrity check firing, not the propose path -- attributed, never qualifying.
+  l1DenyDoesNotQualify() {
+    const c = cell(fold([refusal({ day: "2026-10-06", decision: "deny" })], "2026-10-07", PHASE02), "session:interactive", "shell");
+    expect(c.last_refusal !== null && c.qualifying_refusal === null && c.state === "absent", `L1 deny: ${JSON.stringify(c)}`);
+  },
+  // attack r2 L3: a receipt declaring the other surface cannot borrow that surface's writer, even fully corroborated.
+  surfaceMismatch() {
+    const inc = incident({ day: "2026-10-06", process: "x@1.0.0", denials: [{ capability: "shell", level: "L1" }] });
+    const ref = refusal({ day: "2026-10-06", surface: "headless", process: "x@1.0.0", incident_ref: inc.id });
+    const c = cell(fold([inc, ref], "2026-10-07", WIDE), "session:interactive", "shell");
+    expect(c.last_refusal === null && c.discarded.unverified === 1 && c.state === "absent", `surface mismatch: ${JSON.stringify(c)}`);
+  },
+  // attack r2 L7: a DECLARED but unusable N reads apart from no N at all.
+  invalidBar() {
+    const bad = { kinds: { ...policy.kinds, "session:interactive": { ...policy.kinds["session:interactive"], shell: { level: "L1", evidence_days: 0 } } } };
+    const c = F.foldEvidence({ policy: bad, transitions: [], events: [refusal({ day: "2026-10-06" })], asOf: "2026-10-07", writers: PHASE02 })
+      .cells.find((x) => x.subject === "session:interactive" && x.capability === "shell");
+    expect(c.below_bar === true && c.reason === "invalid-bar", `invalid N: ${JSON.stringify(c)}`);
+  },
   // An interactive refusal before any interactive writer exists is forged by construction.
   forgedBeforeWriter() {
     const c = cell(fold([refusal({ day: "2026-10-06" })], "2026-10-07"), "session:interactive", "shell");

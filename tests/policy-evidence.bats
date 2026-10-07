@@ -86,6 +86,11 @@ _killed() {
 @test "an impossible as-of day is refused, never rolled over" { _pass invalidAsOf; }
 @test "calendar days: mutant M-calendar is killed" { _killed "$FOLD_REL" M-calendar invalidAsOf; }
 @test "a policy with no subject is refused, never a clean zero-cell reading" { _pass emptyPolicy; }
+@test "at L1 a deny is attributed but never proves the propose path" { _pass l1DenyDoesNotQualify; }
+@test "L1 deny: mutant M-l1deny is killed" { _killed "$FOLD_REL" M-l1deny l1DenyDoesNotQualify; }
+@test "a receipt declaring the other surface cannot borrow its writer" { _pass surfaceMismatch; }
+@test "surface: mutant M-surface is killed" { _killed "$FOLD_REL" M-surface surfaceMismatch; }
+@test "a declared but unusable N reads invalid-bar, apart from no N" { _pass invalidBar; }
 
 # ---------------------------------------------------------------- the profile on the spine (ADR-0509)
 
@@ -130,6 +135,12 @@ _emit() { # $1 payload json; emits note.logged into the per-test spine, strict
   [[ "$output" == *"BAD_POLICY_REFUSAL"* ]] || { echo "wrong refusal: $output"; false; }
 }
 
+@test "profile: 300 astral characters are 300 code points and are accepted" {
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run bash "$ARC_ROOT/.claude/scripts/hq/arc-event.sh" emit note.logged --payload-file "$FX/refusal-astral-300.json" --strict --process demo@1.0.0 --outcome fail
+  [ "$status" -eq 0 ] || { echo "a 300-code-point reason was refused: $output"; false; }
+}
+
 @test "profile: a propose claimed at L2 is refused" {
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L2","decision":"propose","surface":"interactive","reason":"fixture"}'
@@ -162,6 +173,28 @@ _emit() { # $1 payload json; emits note.logged into the per-test spine, strict
   [ "$output" = "LOADED 1 REJECTED 0" ] || { echo "M-sha SURVIVED: $output"; false; }
 }
 
+@test "loader: a FIFO day file is skipped, never blocks the reader" {
+  command -v mkfifo >/dev/null 2>&1 || skip "no mkfifo on this platform"
+  local root="$BATS_TEST_TMPDIR/froot"; mkdir -p "$root/.claude/state/hq/events"
+  mkfifo "$root/.claude/state/hq/events/2026-10-07.jsonl" 2>/dev/null || skip "mkfifo cannot make a FIFO here"
+  [ -p "$root/.claude/state/hq/events/2026-10-07.jsonl" ] || skip "not a FIFO on this filesystem"
+  run timeout 30 node "$FX/loader-probe.mjs" "$SB/$LOAD_REL" "$root"
+  [ "$output" = "LOADED 0 REJECTED 1" ] || { echo "FIFO: status $status, output $output"; false; }
+}
+
+@test "loader: a symlinked day file is refused, not followed" {
+  local root="$BATS_TEST_TMPDIR/sroot"
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/real-spine"
+  run _emit '{"subject":"policy.refusal","action_kind":"session:interactive","capability":"shell","level":"L1","decision":"propose","surface":"interactive","reason":"linked"}'
+  [ "$status" -eq 0 ] || { echo "fixture emit failed: $output"; false; }
+  mkdir -p "$root/.claude/state/hq/events"
+  local f; f="$(ls "$ARC_SPINE_ROOT/events/"*.jsonl | head -n 1)"
+  ln -s "$f" "$root/.claude/state/hq/events/2026-10-07.jsonl" 2>/dev/null || skip "no symlinks here"
+  [ -L "$root/.claude/state/hq/events/2026-10-07.jsonl" ] || skip "ln made a copy, not a link, on this platform"
+  run node "$FX/loader-probe.mjs" "$SB/$LOAD_REL" "$root"
+  [ "$output" = "LOADED 0 REJECTED 1" ] || { echo "symlink followed: $output"; false; }
+}
+
 @test "loader: a copied day-file line counts once (idem dedupe)" {
   local root="$BATS_TEST_TMPDIR/droot"
   export ARC_SPINE_ROOT="$root/.claude/state/hq"
@@ -187,10 +220,9 @@ _denying_policy() {
   grep -A4 '"process:denied":' "$1" | grep -q 'write: { level: L0 }' || { echo "fixture policy does not deny process:denied/write"; return 1; }
 }
 
-@test "END TO END -- an arc-run refusal is a typed receipt the fold attributes" {
-  # The governing policy root is derived from the module location, so the scripts are copied INTO the root whose
-  # policy is under test; a --root pointing elsewhere would read the real policy and run unpoliced.
-  local d="$BATS_TEST_TMPDIR/e2e"
+# A governing root whose policy denies process:denied/write, with a marker driver and its own spine exported.
+_e2e_root() {
+  local d="$1"
   mkdir -p "$d/processes" "$d/.claude/state/hq"
   cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
   cat > "$d/processes/denied.process.yaml" <<'EOF'
@@ -211,6 +243,12 @@ echo '{"ok":true}'
 EOF
   chmod +x "$d/.claude/scripts/engine/drivers/claude-code.sh" 2>/dev/null || true
   export ARC_SPINE_ROOT="$d/.claude/state/hq"
+}
+
+@test "END TO END -- an arc-run refusal is a typed receipt the fold attributes" {
+  # The governing policy root is derived from the module location, so the scripts are copied INTO the root whose
+  # policy is under test; a --root pointing elsewhere would read the real policy and run unpoliced.
+  local d="$BATS_TEST_TMPDIR/e2e"; _e2e_root "$d" || return 1
 
   run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
   [[ "$output" != *"unpoliced"* ]] || { echo "the run was UNPOLICED -- the sandbox is not the governing root: $output"; false; }
@@ -234,6 +272,26 @@ EOF
   printf '%s' "$output" > "$BATS_TEST_TMPDIR/report.json"
   run node "$FX/spine-probe.mjs" cell "$BATS_TEST_TMPDIR/report.json" process:denied write
   [ "$output" = "$rid n/a true" ] || { echo "attribution: got [$output], refusal $rid"; false; }
+}
+
+@test "day bound: a forged same-day refusal does not suppress the genuine receipt" {
+  local d="$BATS_TEST_TMPDIR/e2e-forged"; _e2e_root "$d" || return 1
+  # Schema-valid, sealed, and uncorroborated: its incident_ref names nothing.
+  run bash "$d/.claude/scripts/hq/arc-event.sh" emit note.logged --payload '{"subject":"policy.refusal","action_kind":"process:denied","capability":"write","level":"L0","decision":"deny","surface":"headless","reason":"forged","incident_ref":"01K00000000000000000000000"}' --strict --process denied@1.0.0 --outcome fail
+  [ "$status" -eq 0 ] || { echo "fixture forgery not sealed: $output"; false; }
+  run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
+  [[ "$output" != *"already sealed today"* ]] || { echo "a forged line suppressed the genuine refusal: $output"; false; }
+  run node "$FX/spine-probe.mjs" refusals "$d/.claude/state/hq/events"
+  [[ "$output" =~ ^REFUSALS\ 2\  ]] || { echo "expected the forgery AND the genuine refusal: $output"; false; }
+}
+
+@test "writer: a run whose spine is not the canonical one writes no refusal, and says so" {
+  local d="$BATS_TEST_TMPDIR/e2e-foreign"; _e2e_root "$d" || return 1
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/foreign-spine"
+  run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
+  [[ "$output" == *"policy denied"* ]] || { echo "no denial: $output"; false; }
+  [[ "$output" == *"policy.refusal NOT written"* ]] || { echo "the skipped refusal was silent: $output"; false; }
+  ! grep -rqs '"policy.refusal"' "$BATS_TEST_TMPDIR/foreign-spine/events/" || { echo "a refusal landed on the foreign spine"; false; }
 }
 
 @test "check: the real policy today is 17 in scope and all BELOW-BAR on an empty spine" {
@@ -286,5 +344,5 @@ _root() { # $1 dir: a minimal governing root -- scripts, the real policy, an eve
 }
 
 @test "suite count: every test registered (ASCII names)" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 49 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 49"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq 59 ] || { echo "registered ${#BATS_TEST_NAMES[@]}, expected 59"; false; }
 }

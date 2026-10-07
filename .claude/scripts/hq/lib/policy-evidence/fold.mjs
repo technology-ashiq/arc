@@ -80,6 +80,12 @@ function nFor(policy, subject, capability) {
   return Number.isInteger(v) && v >= 1 ? v : null;
 }
 
+/** Was an `evidence_days` DECLARED but unusable (0, negative, fractional, a string)? Read apart from "none declared". */
+function nInvalid(policy, subject, capability) {
+  const g = grantFor(policy, subject, capability);
+  return !!g && g.evidence_days !== undefined && nFor(policy, subject, capability) === null;
+}
+
 /**
  * Is this refusal consistent with what the authorizer could have decided at that point on the spine? A propose
  * exists only at effective L1; a deny may land at any level (L0 is the level itself, L1 the integrity checks, L2+
@@ -144,6 +150,9 @@ export function foldEvidence({ policy, transitions, events, asOf, writers = REFU
         // A receipt from a surface that writes none at that level is forged by construction -- nothing sanctioned
         // can have produced it (the same reasoning run-gate's loadPolicyEvents applies to kinds the spine cannot emit).
         if (!Object.prototype.hasOwnProperty.call(writers, p.surface) || !writers[p.surface].includes(p.level)) { unverified++; continue; }
+        // The receipt's surface must be the subject's own: an interactive subject is refused interactively, a process
+        // headlessly. A declared surface that disagrees would borrow the other surface's writer (attack r2 L3).
+        if (p.surface !== surface) { unverified++; continue; }
         // Corroboration (ADR-0509, attack r1 L2/L3/L5): the cited incident came from arc-run's gate, BEFORE this
         // refusal (ULID order), on the same IST day, from the SAME process@version, and its typed `denials` name
         // this capability at this level. Anyone holding the emitter can still forge both halves; this makes a
@@ -161,7 +170,9 @@ export function foldEvidence({ policy, transitions, events, asOf, writers = REFU
         lastRefusal = e;
         // Only a refusal at the pair's CURRENT level, and only at L1 or above, proves today's refusal path. An L0
         // receipt from before a promotion says nothing about the level the pair holds now.
-        if (p.level === effective && effective !== "L0") qualifying = e;
+        // At L1 only a PROPOSE exercises the level's own refusal path ("prepare and record, never perform"). A deny at
+        // L1 is an integrity check firing -- real, attributed, but not proof that L1 itself works (attack r2 L2).
+        if (p.level === effective && effective !== "L0" && (effective !== "L1" || p.decision === "propose")) qualifying = e;
       }
 
       const lastSuccess = successFor(evs, { subject, capability, proc });
@@ -171,7 +182,7 @@ export function foldEvidence({ policy, transitions, events, asOf, writers = REFU
       if (!inScope) state = "n/a";
       else if (!writers[surface].includes(effective)) { state = "unknown"; reason = "unknown"; }
       else if (!qualifying) { state = "absent"; reason = "absent"; }
-      else if (n === null) { state = "stale"; reason = "no-bar-declared"; }
+      else if (n === null) { state = "stale"; reason = nInvalid(policy, subject, capability) ? "invalid-bar" : "no-bar-declared"; }
       else if (age > n) { state = "stale"; reason = "stale"; }
       else state = "fresh";
 

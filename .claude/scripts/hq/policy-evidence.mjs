@@ -46,6 +46,8 @@ const cellLine = (c) => {
 };
 
 function main(argv) {
+  // Attached once, before ANY branch writes: a closed pipe must never turn a verdict into exit 1 (attack r1 B5, r2 B7).
+  process.stdout.on("error", () => {});
   const args = parseArgs(argv);
   if (args.error) return fail(2, `${args.error}\n${USAGE}`);
   if (args.cmd !== "report" && args.cmd !== "check") return fail(2, `unknown subcommand ${JSON.stringify(args.cmd)}\n${USAGE}`);
@@ -68,7 +70,6 @@ function main(argv) {
   }
   // The verdict is set BEFORE any output: a reader that closes the pipe early must not turn exit 3 into exit 1.
   if (args.cmd === "check" && r.below_bar > 0) process.exitCode = 3;
-  process.stdout.on("error", () => {});
   const shown = args.cmd === "check" ? r.cells.filter((c) => c.below_bar) : r.cells;
   for (const c of shown) process.stdout.write(cellLine(c) + "\n");
   // The positive marker: printed only when the fold ran to the end, so an assertion of absence above never stands

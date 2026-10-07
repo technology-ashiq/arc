@@ -9,8 +9,8 @@
 // is CHECKED before anything is read (attack r1 L1/B1/B2): a linked worktree's gitignored spine is a real, valid,
 // unreachable copy -- Cycle 9's own close emitted into one -- so reading it answers "17 BELOW-BAR, 0 refusals"
 // confidently and wrongly. The same refusal covers a missing spine and a writer pointed elsewhere.
-import { closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { validateEvent } from "../validate.mjs";
 import { eventSha } from "../canonical.mjs";
 import { policyRoot, loadPolicyFromDisk, loadPolicyEvents } from "../policy/run-gate.mjs";
@@ -24,6 +24,16 @@ const sameDir = (a, b) => {
   const ra = realpathSync(a), rb = realpathSync(b);
   return process.platform === "win32" ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
 };
+
+/** Do two paths name the same spine directory? Realpath when it exists (both sides), else the resolved path. */
+export function sameSpine(a, b) {
+  const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+  const ra = real(a), rb = real(b);
+  return process.platform === "win32" ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
+}
+
+/** The canonical spine of the governing root -- the one the evidence reader reads. Writers compare against this. */
+export const canonicalSpine = (root = policyRoot()) => join(root, ".claude", "state", "hq");
 
 /**
  * Is this root's spine the canonical one? Refuses, by name:
@@ -50,15 +60,62 @@ export function assertCanonicalSpine(root) {
   return events;
 }
 
-/** Read a day file through ONE descriptor: the type check and the read cannot be split by a swap (attack r1 B7). */
-function readDayFile(path) {
+// O_NONBLOCK so opening a FIFO with no writer returns instead of hanging (attack r2 B1); O_NOFOLLOW so a symlinked
+// day file is refused rather than read from wherever it points (attack r2 L10). Both are absent on Windows, where
+// a FIFO cannot sit in a directory and the lstat below already refuses a link.
+const OPEN_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NONBLOCK || 0) | (fsConstants.O_NOFOLLOW || 0);
+
+/**
+ * Read a day file safely, or return null. The path is lstat'ed first (a link, FIFO, socket or directory is not a day
+ * file), then opened non-blocking without following links, then the DESCRIPTOR is checked and read -- so neither a
+ * swap between check and read (attack r1 B7) nor a blocking open (r2 B1) can hang or redirect a reader. Shared by
+ * the evidence reader and arc-run's writer-side day bound, so the hardening exists once (r2 B5).
+ */
+export function readDayFile(path) {
+  try { if (!lstatSync(path).isFile()) return null; } catch { return null; }
   let fd;
   try {
-    fd = openSync(path, "r");
+    fd = openSync(path, OPEN_FLAGS);
     if (!fstatSync(fd).isFile()) return null;
     return readFileSync(fd, "utf8");
   } catch { return null; }
   finally { if (fd !== undefined) try { closeSync(fd); } catch { /* closing a read descriptor cannot lose data */ } }
+}
+
+/** Parse, validate and seal-check one line; null when it is not a sealed, valid event. A BOM is stripped per line. */
+function sealedEvent(line) {
+  const l = line.startsWith(BOM) ? line.slice(1) : line;
+  if (!l.trim()) return null;
+  let e;
+  try { e = JSON.parse(l); validateEvent(e); } catch { return null; }
+  let sealed;
+  try { sealed = eventSha(e); } catch { return null; }
+  return typeof e.sha === "string" && e.sha === sealed ? e : null;
+}
+
+/**
+ * arc-run's day bound (ADR-0509): is a CORROBORATED deny refusal for this pair already sealed in today's file? Only a
+ * sealed, valid refusal whose cited gate incident precedes it, comes from the same process@version and names this
+ * capability in its typed denials counts -- the fold's own rule. A forged or junk line matching three fields must not
+ * suppress the genuine receipt for the rest of the day (attack r2 B3). Any read failure answers "not sealed".
+ */
+export function sealedRefusalToday({ eventsDir, day, actionKind, capability, process: proc }) {
+  const text = readDayFile(join(eventsDir, `${day}.jsonl`));
+  if (text === null) return null;
+  const incidents = new Map();
+  for (const line of text.split("\n")) {
+    if (!line.includes("incident.raised") && !line.includes("policy.refusal")) continue;
+    const e = sealedEvent(line);
+    if (!e) continue;
+    if (e.kind === "incident.raised" && e.payload && e.payload.source === "arc-run policy gate") { incidents.set(e.id, e); continue; }
+    const p = e.payload;
+    if (e.kind !== "note.logged" || !p || p.subject !== "policy.refusal" || p.decision !== "deny") continue;
+    if (p.action_kind !== actionKind || p.capability !== capability || e.process !== proc) continue;
+    const inc = incidents.get(p.incident_ref);
+    if (inc && inc.id < e.id && inc.process === e.process && Array.isArray(inc.payload.denials) &&
+        inc.payload.denials.some((d) => d && d.capability === p.capability && d.level === p.level)) return e.id;
+  }
+  return null;
 }
 
 /** Every sealed, valid event in an events directory, in append order (day files sorted, lines in order). */
@@ -70,17 +127,12 @@ export function loadSpineEvents(eventsDir) {
   // Only the day files. `_quarantine/` is a directory and holds exactly what the spine refused.
   const files = readdirSync(eventsDir).filter((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)).sort();
   for (const file of files) {
-    let text = readDayFile(join(eventsDir, file));
+    const text = readDayFile(join(eventsDir, file));
     if (text === null) { rejected++; continue; }
-    if (text.startsWith(BOM)) text = text.slice(1);
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
-      let e;
-      try { e = JSON.parse(line); } catch { rejected++; continue; }
-      try { validateEvent(e); } catch { rejected++; continue; }
-      let sealed;
-      try { sealed = eventSha(e); } catch { rejected++; continue; }
-      if (typeof e.sha !== "string" || e.sha !== sealed) { rejected++; continue; }
+      const e = sealedEvent(line);
+      if (!e) { rejected++; continue; }
       const key = typeof e.idem === "string" && e.idem ? e.idem : e.id;
       if (seen.has(key)) continue;
       seen.add(key);

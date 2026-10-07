@@ -20,7 +20,11 @@ const MUTANTS = {
   // events after the as-of day folded
   "M-future": ["return d !== null && dayDiff(d, asOf) >= 0;", "return d !== null;"],
   // a refusal at any level refreshes the pair
-  "M-l0": ["if (p.level === effective && effective !== \"L0\") qualifying = e;", "qualifying = e;"],
+  "M-l0": ["if (p.level === effective && effective !== \"L0\" && (effective !== \"L1\" || p.decision === \"propose\")) qualifying = e;", "qualifying = e;"],
+  // a deny at L1 counted as proof of the L1 (propose) path (attack r2 L2)
+  "M-l1deny": ["(effective !== \"L1\" || p.decision === \"propose\")", "true"],
+  // the receipt-surface-must-match-subject check deleted (attack r2 L3)
+  "M-surface": ["if (p.surface !== surface) { unverified++; continue; }", "if (false) { unverified++; continue; }"],
   // the level-consistency check deleted
   "M-noforge": ["if (!consistent(e, then)) { inconsistent++; continue; }", "if (false) { inconsistent++; continue; }"],
   // the incident corroboration deleted
@@ -35,8 +39,10 @@ const MUTANTS = {
   "M-calendar": ["return t.getUTCFullYear() === +m[1] && t.getUTCMonth() === +m[2] - 1 && t.getUTCDate() === +m[3];", "return true;"],
   // the no-writer-means-forged check deleted
   "M-writer": ["if (!Object.prototype.hasOwnProperty.call(writers, p.surface) || !writers[p.surface].includes(p.level)) { unverified++; continue; }", "if (false) { unverified++; continue; }"],
+  // policy-evidence.mjs guard, invariant (c): the guard judges a list with one BELOW-BAR cell dropped
+  "M-c": ["const all = r.cells;", "const all = r.cells.filter((c, i) => i !== r.cells.findIndex((x) => x.below_bar));"],
   // load.mjs: the sha recompute deleted
-  "M-sha": ["if (typeof e.sha !== \"string\" || e.sha !== sealed) { rejected++; continue; }", "void sealed;"],
+  "M-sha": ["return typeof e.sha === \"string\" && e.sha === sealed ? e : null;", "void sealed; return e;"],
 };
 
 const [src, name] = process.argv.slice(2);

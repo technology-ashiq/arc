@@ -70,6 +70,8 @@ import { MODEL_RE } from "../hq/lib/validate.mjs";
 // an adversarial pass are themselves UNATTACKED CODE".
 const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
+import { capReason } from "../hq/lib/validate-policy-refusal.mjs";
+import { canonicalSpine, sameSpine, sealedRefusalToday } from "../hq/lib/policy-evidence/load.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
 import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
 import { isExpired, PROFILE_DRIVER, profileRef, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
@@ -1421,43 +1423,35 @@ let policyNotInForceAnnounced = false;
 // reason, which is one refusal, not two. Only after the incident sealed -- a refusal citing nothing would be
 // `unverified` by construction. Best effort exactly like the incident: a lost receipt is reported, the deny stands.
 const refusalsReceipted = new Set();
-function refusalSealedToday(kind, capability) {
-  // The same spine root verifyLanded reads, because that is the one the emitter wrote to.
-  const spineRoot = process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq");
-  const file = join(spineRoot, "events", `${formatIst(nowMs()).slice(0, 10)}.jsonl`);
-  let text;
-  try { text = readFileSync(file, "utf8"); } catch { return null; }
-  for (const line of text.split("\n")) {
-    if (!line.includes('"policy.refusal"')) continue;
-    let e;
-    try { e = JSON.parse(line); } catch { continue; }
-    const p = e && e.payload;
-    if (e.kind === "note.logged" && p && p.subject === "policy.refusal" && p.action_kind === kind &&
-        p.capability === capability && p.decision === "deny") return e.id;
-  }
-  return null;
-}
 function receiptRefusals(gate, incidentId) {
   if (!gate || !Array.isArray(gate.denials) || typeof gate.kind !== "string" || !incidentId) return;
+  // The spine the emitter writes to is the one verifyLanded reads. A refusal is EVIDENCE, and evidence only counts
+  // where the evidence reader looks -- the governing root's spine. An ARC_SPINE_ROOT or a --root naming another spine
+  // would seal a real receipt nobody ever reads (attack r2 L1/B4), so it is not written at all, and that is said.
+  const writerSpine = process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq");
+  if (!sameSpine(writerSpine, canonicalSpine())) {
+    console.error(`arc-run: policy.refusal NOT written -- this run writes to ${writerSpine}, and the evidence reader reads ${canonicalSpine()}`);
+    return;
+  }
+  const proc = `${doc.name}@${doc.version}`;
   for (const d of gate.denials) {
     if (!d || typeof d.capability !== "string" || refusalsReceipted.has(d.capability)) continue;
-    refusalsReceipted.add(d.capability);
-    // Sanitized to the profile's rule and cut by CODE POINT: a UTF-16 cut can leave a lone surrogate that Windows argv
-    // decoding mangles (attack r1 L4/B8).
-    const reason = Array.from(String(d.reason || "denied by policy").replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]/g, " ").replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, " "))
-      .slice(0, 300).join("");
     // At most one refusal per (action_kind, capability, decision, IST day), bounded HERE at the writer (ADR-0509,
-    // attack r1 B3): a job denied every fifteen minutes would otherwise write thousands of identical receipts.
-    const sealed = refusalSealedToday(gate.kind, d.capability);
+    // attack r1 B3). Only a sealed, corroborated refusal counts, so a forged line cannot suppress the genuine one
+    // (attack r2 B3), and the read goes through the evidence reader's own safe day-file reader (r2 B5).
+    const sealed = sealedRefusalToday({ eventsDir: join(writerSpine, "events"), day: formatIst(nowMs()).slice(0, 10),
+      actionKind: gate.kind, capability: d.capability, process: proc });
     if (sealed) { console.error(`arc-run: policy.refusal for ${gate.kind}/${d.capability} already sealed today (${sealed}) -- not repeated`); continue; }
     const r = emitEvent("note.logged", {
       subject: "policy.refusal", action_kind: gate.kind, capability: d.capability,
-      level: d.level, decision: "deny", surface: "headless", reason, incident_ref: incidentId,
-    }, ["--process", `${doc.name}@${doc.version}`, "--outcome", "fail"]);
+      level: d.level, decision: "deny", surface: "headless", reason: capReason(d.reason), incident_ref: incidentId,
+    }, ["--process", proc, "--outcome", "fail"]);
     if (!r.ok) {
       console.error(`arc-run: WARN could not emit the policy.refusal for ${d.capability}: ${r.error}`);
       console.error("         The DENIAL STANDS and is unaffected; only its evidence receipt is missing.");
     } else {
+      // Marked only once sealed: a transient failure leaves the capability free for a later hop (attack r2 B6).
+      refusalsReceipted.add(d.capability);
       verifyLanded(r.id);
     }
   }
