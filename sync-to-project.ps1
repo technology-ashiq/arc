@@ -113,8 +113,9 @@ if (Test-Path $settingsPath) {
 
 # Machinery. Exclude the personal settings file + the scheduled-tasks runtime lock
 # (/XF), and the per-project working state dir (/XD) -- none belong in a consumer
-# repo. The .sh twin excludes all three; keep them in lockstep (REQ-04).
-robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" "$src\.claude\worktrees" /NFL /NDL /NJH /NJS | Out-Null
+# repo. The .sh twin excludes all three; keep them in lockstep (REQ-04). The headroom wrapper's per-machine
+# files (.headroom_wrap_*) are excluded by both twins too.
+robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock .headroom_wrap_* /XD "$src\.claude\state" "$src\.claude\worktrees" /NFL /NDL /NJH /NJS | Out-Null
 
 if ($settingsBak -and (Test-Path $settingsPath)) {
   $merger = Join-Path $src ".claude\scripts\core\arc-settings-merge.mjs"

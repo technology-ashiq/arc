@@ -117,6 +117,24 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ "$b" -eq 0 ]
 }
 
+@test "sync: never leaks the headroom wrapper's per-machine files (REQ-04 class, pinned)" {
+  # .claude/.headroom_wrap_* are written by a local tool wrapper and rode into every consumer repo through the
+  # rsync of .claude/ until 2026-10-08. Planted, then both sh paths checked, then removed.
+  local probe="$ARC_ROOT/.claude/.headroom_wrap_leaktest-$.json"
+  : > "$probe"
+  bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null                     # rsync path
+  local a=1; [ ! -e "$TARGET/.claude/.headroom_wrap_leaktest-$.json" ] && a=0
+  rm -rf "$TARGET/.claude"
+  ARC_SYNC_NO_RSYNC=1 bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null  # cp-r fallback
+  local b=1; [ ! -e "$TARGET/.claude/.headroom_wrap_leaktest-$.json" ] && b=0
+  # The control: the sync really ran and copied the tree around the probe.
+  local c=1; [ -e "$TARGET/.claude/scripts/core/product-lint.mjs" ] && c=0
+  rm -f "$probe"
+  [ "$a" -eq 0 ] || { echo "rsync path leaked the headroom file"; false; }
+  [ "$b" -eq 0 ] || { echo "cp fallback leaked the headroom file"; false; }
+  [ "$c" -eq 0 ] || { echo "the sync did not run -- the absence above proves nothing"; false; }
+}
+
 @test "sync (ps1): never leaks state/ or scheduled_tasks.lock (REQ-04)" {
   local ps
   command -v cygpath >/dev/null 2>&1 || skip "ps1 is Windows-native (robocopy/cygpath) — only the Windows CI leg runs it"
@@ -124,6 +142,8 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   "$ps" -NoProfile -File "$(cygpath -w "$ARC_ROOT/sync-to-project.ps1")" -Target "$(cygpath -w "$TARGET")" >/dev/null 2>&1 || true
   [ ! -e "$TARGET/.claude/state" ]
   [ ! -e "$TARGET/.claude/scheduled_tasks.lock" ]
+  # The headroom files are excluded by robocopy /XF too; a glob, so asserted by listing.
+  ! ls "$TARGET/.claude"/.headroom_wrap_* >/dev/null 2>&1 || { echo "ps1 leaked a headroom file"; false; }
   # docs/playbooks/ was mirrored into BOTH twins and tested in only one of them -- the twin-fix class
   # inverted, code mirrored and test not. The ps1 uses `robocopy … | Out-Null` and no robocopy call in
   # that file checks $LASTEXITCODE, so a failed playbook copy on the Windows-native path is silent as
@@ -286,7 +306,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
 # registry are excluded (they are intentionally not part of the manifest-mapped payload).
 _claude_set() { ( cd "$1/.claude" && find . -type f \
   -not -path './state/*' -not -path './worktrees/*' -not -name 'settings.local.json' \
-  -not -name 'scheduled_tasks.lock' -not -name 'arc-registry.json' | LC_ALL=C sort ); }
+  -not -name 'scheduled_tasks.lock' -not -name 'arc-registry.json' -not -name '.headroom_wrap_*' | LC_ALL=C sort ); }
 
 @test "invariant: installing all products reproduces the mold's .claude payload exactly (manifests vs reality)" {
   local names
