@@ -97,3 +97,5 @@ docs/design/explore/lexos-*/
 # A rival's vendored draft is local evidence for one jury, never committed, whatever the brief
 # (design v2 Phase 07, ADR-1422 -- no rival draft in git).
 docs/design/explore/*/rival-*/
+# A pack screen framed for the jury is a third-party image: local only, never committed (Phase 07 S4b).
+docs/design/explore/*/ref-*/

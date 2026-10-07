@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:578-587",
+      "breaking_input": "Run `node E:\\WORK_H~1\\01_AUT~1\\...\\DESIGN~1.MJS check --root R --id X` using a Windows 8.3 short path, or reach the file through a junction or subst drive whose name differs from the real file name. `realpathSync` (the JS version) does not expand short names, and the basename differs too.",
+      "why": "The r1 fix only added a basename fallback. When both the realpath and the basename comparisons miss, `check`, `score`, `deal` and `unblind` still do nothing and exit 0. A gate that reads as green with no output is the same fail-open the fix was meant to close. The cause is that dispatch is still keyed on guessing that this module is the entry point.",
+      "fix": "Dispatch unless the module is being imported. Better, move `pngChunks` into its own module so the CLI file has no guard. At minimum, if `argv[2]` is a known verb and the guard is false, print an error and exit non-zero.",
+      "twin_of": "A main guard whose miss is a silent exit 0 -> fall back to the file name, never to doing nothing"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:239-252 and the copy loop at ~270-278",
+      "breaking_input": "Edit a rendered item PNG after the render, so its bytes no longer hash to the meta's screenshot_sha256 (or have another process hold it open on Windows, so `copyFileSync` or `utimesSync` throws EBUSY/EPERM). The pre-claim loop reads `it.path` and never compares the bytes to `it.sha256`, so it passes. The jury dir is then claimed, and the later `did not copy byte for byte` fail, or the uncaught throw, leaves a claimed jury dir with no key.json.",
+      "why": "The r1 B1 fix moved only the PNG-format checks ahead of the claim. A refusal raised after the claim is still possible, and a retry is then blocked as already dealt. The bytes that were judged are also not the bytes that get copied: they are read once for the check and again for the copy.",
+      "fix": "Hash the buffer that `pngChunks` read and compare it to `it.sha256` before the claim. Copy from that buffer rather than the path. Wrap everything after the claim in try/catch, and on any failure remove only the dir this run created.",
+      "twin_of": "A refusal raised after the output dir was claimed -> judge every input before claiming the output"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:555-561",
+      "breaking_input": "`_ab eval` on the real browser prints the result as a JSON string, so `\"true\"` with the quotes, or `true` followed by a banner line.",
+      "why": "The `tr -d` strips only CR, LF and space, then the value is compared to the bare word `true`. Any quoted or decorated output sets TEXT_LEN=0, so every framed reference render is refused as blank. No test drives a ref page through the real renderer, and the debt ledger defers this to a live run. The failure is fail-closed but ships unproven, and the suite gives no evidence that the frame, render and deal chain ever ran together.",
+      "fix": "Normalise the output by also deleting the double-quote characters, or compare with a case pattern that accepts both spellings. Add a test with a recorded real renderer PNG and a recorded eval answer.",
+      "twin_of": "A failing probe command read as \"not applicable\" -> only a positive \"absent\" skips; an error is a failure."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:~636-644 (frame cleanup and writes)",
+      "breaking_input": "Make `ref-<r>/image.png` or `ref-<r>/index.html` a symlink or a directory, or hold it open on Windows, then run `design-explore.sh ref jx --ref <r>`.",
+      "why": "The cleanup unlinks only entries where `lstat().isFile()` is true, so a leftover link or directory is skipped. The `wx` write then throws EEXIST, and a busy file makes `unlinkSync` throw. Both escape as a raw stack trace with exit 1, which `|| exit $?` cannot tell from a named refusal.",
+      "fix": "In the cleanup loop, refuse with a named fail() on any non-regular entry that matches the target names. Wrap the unlink and write steps in try/catch and answer with a named refusal.",
+      "twin_of": "A throw that escapes the one-status-line contract -> every throw after argument parsing becomes COULD-NOT-DRAFT (internal error) and exit 3"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:940-951",
+      "breaking_input": "`design-explore.sh ref jx --ref <r> --viewport 01440x0900`, or `--viewport 1440x900 --viewport 800x600`.",
+      "why": "The new grammar still admits leading zeros and zero values (`0x0`), and a repeated flag is appended twice to RFLAGS. The renderer then names the session file r-01440x0900, which the deal's viewport compare cannot match. This is the leading-zero number grammar recurring in newly written code, so the same pattern was not checked in the new entry point.",
+      "fix": "Use `[1-9]*([0-9])x[1-9]*([0-9])` with a length cap, and refuse a second --viewport.",
+      "twin_of": "A number grammar that admits leading zeros -> `[1-9][0-9]*`, never `[0-9]+`, for anything that names or counts."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/design-jury.bats (frame test)",
+      "breaking_input": "Run the suite on the Windows CI leg, where `ln -s` under MSYS makes a copy.",
+      "why": "The `[ -L ... ] || skip` line silently drops the only assertion that `frame` refuses a linked ref dir, and the dir is never actually a link on that leg. A skip reads as a pass in the green summary. The test also declares nothing about how many assertions ran.",
+      "fix": "Create the link with a method that works on every leg (a junction, or `node fs.symlinkSync` with a type), and fail rather than skip when the fixture cannot be built.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    }
+  ]
+}

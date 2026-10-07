@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:251-267",
+      "breaking_input": "One explore, three variants and a reference. Plant an iTXt chunk in variant-a's render PNG, as the new bats test does, then run `design-explore.sh jury jx ...`. Fix the render and run the deal again.",
+      "why": "mkdirSync(itemsDir) runs before the per-item ext and pngAncillary checks. A fail() inside the forEach therefore leaves a half-dealt jury: items copied, no key.json. If the jury dir was the claim, the retry sees it and refuses as already dealt. The metadata test never asserts that no jury dir remains, and the unframed-ref test does assert it, so the new refusals are the only ones that skip that check.",
+      "fix": "Run the ext check and pngAncillary over every item, before the claim and before any mkdir or copy. Or remove the jury dir on any fail after the claim, and assert that in the metadata test.",
+      "twin_of": "An exclusive write at the end of a job whose middle already wrote shared state -> claim first (an atomic mkdir after every check), then write."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:553-565",
+      "breaking_input": "Run the CLI so that realOf(process.argv[1]) differs from realOf(fileURLToPath(import.meta.url)). Examples: Windows drive-letter or case differences (JS realpathSync does not canonicalise case), a junction or subst drive, or a wrapper passing a relative script path. Then run `node design-jury.mjs check --root R --id X`.",
+      "why": "The whole CLI, deal, check, score and unblind included, now sits behind a guard whose false branch does nothing and exits 0. A mismatch makes `check` and `score` silently pass with no output, where before they always ran. This is the node-main-guard silent no-op, now fail-open for a gate.",
+      "fix": "Dispatch unless the module is being imported, or move pngAncillary into its own module and keep the CLI unconditional. At minimum, when argv[2] is a known verb and the guard is false, fail non-zero.",
+      "twin_of": "A caller read the parser's \"someone else\" code, 1, which is also bash's crash code -> a verdict gets a code the runtime never produces by accident; every unknown code is judged."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:547-562 and design-jury.mjs pngAncillary",
+      "breaking_input": "Run a real `design-explore.sh ref jx --ref <sha16>`, then the jury deal, with the actual Chromium screenshot. If it carries sRGB, gAMA, pHYs, tIME or iCCP, or if `_ab eval` prints a quoted \"true\", the result is wrong.",
+      "why": "Every bats fixture is a synthetic IHDR/IDAT/IEND PNG, and _frame_ref fabricates the render. No test drives design-render.sh on a ref page or deals a real renderer PNG. If the real PNGs carry any chunk beyond the four allowed, every deal refuses. If eval output is not literally `true`, every ref render is refused as blank. Both fail closed but ship untested, and the green suite does not show the renderer, frame and deal chain ever ran.",
+      "fix": "Add a test that renders a framed ref through the real renderer (or a recorded real PNG) and deals it. Assert that the render ran, then what it printed. Normalise the eval output by stripping quotes.",
+      "twin_of": "A subprocess result was ignored -> read status and error of every spawn whose failure matters."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-jury.mjs:526-535",
+      "breaking_input": "A ref-<sha16>/image.png that is a symlink, a directory, or a file held open by the render server on Windows (EBUSY or EPERM on unlinkSync). Alternatively, two concurrent `ref` runs for the same sha.",
+      "why": "The cleanup unlinks only lstat().isFile() entries. A leftover symlink or directory is skipped, so the wx write throws EEXIST. unlinkSync of a busy file throws, and so does a second racing run. All of these escape as an uncaught stack trace with exit 1, which `|| exit $?` cannot tell from a deliberate refusal. The unlink-then-wx sequence also isn't atomic.",
+      "fix": "Wrap the cleanup and writes in try/catch and answer with a named fail(). Refuse a non-regular image.* or index.html explicitly, and stage in a private dir then rename.",
+      "twin_of": "A throw that escapes the one-status-line contract -> every throw after argument parsing becomes COULD-NOT-DRAFT (internal error) and exit 3"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:223-231",
+      "breaking_input": "After framing and rendering, edit ref-<r>/index.html to add a caption, the source domain or an overlay, keeping image.png identical. Re-render, so the render is newer than the image. Then deal.",
+      "why": "The deal binds only the image bytes (sha) and uses mtime as the render-to-frame link. index.html is never re-derived or hashed, and the render meta carries no page hash. A tampered or stale page therefore yields a render that reads as a reference while the pack hash still checks. Likewise any older render touched past the image mtime is accepted.",
+      "fix": "In the deal, regenerate the expected index.html from the same template and compare it byte for byte, or record the page sha in the render meta and compare it. Do not use mtime as the binding.",
+      "twin_of": "A render not bound to the page it shows -> a rival render older than its draft is refused"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:969-972",
+      "breaking_input": "Run `ARC_ROOT=/other/tree design-explore.sh ref jx --ref <sha16>` from a cwd that is not $ROOT, or a launcher that does not cd to $ROOT.",
+      "why": "frame writes under --root \"$ROOT\", but the renderer gets the cwd-relative path `docs/design/explore/$ID/ref-$REF/index.html`. If cwd is not $ROOT, the renderer renders, or refuses, a different tree. The path was framed in one place and rendered from another.",
+      "fix": "cd \"$ROOT\" before the render call, or pass an absolute path that the renderer's route check accepts.",
+      "twin_of": "A relative command path approved without pinning the working directory -> a path that names a program is judged from the directory it will run in."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:940-947",
+      "breaking_input": "`ref jx --ref <sha> --viewport 0x0`, or `--viewport 0001440x00900`, or two `--viewport` flags with different values.",
+      "why": "The grammar admits zeros and leading zeros, and has no upper bound. A repeated flag is appended twice to RFLAGS and handed to the renderer, where the 'last wins' versus 'operator error' behaviour is whatever it happens to do. A zero-padded viewport yields a session file name such as r-0001440x00900 that the deal's viewport compare can't match.",
+      "fix": "Use `[1-9][0-9]*x[1-9][0-9]*` with a length cap, and refuse a second --viewport.",
+      "twin_of": "A number grammar that admits leading zeros -> `[1-9][0-9]*`, never `[0-9]+`, for anything that names or counts."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/design-jury.bats (render: a ref dir that is not ref-<16 lowercase hex> is refused)",
+      "breaking_input": "The three paths ref-0123, ref-0123456789ABCDEF and ref-0123456789abcdeg have no page on disk.",
+      "why": "The test asserts only status 1 and the word REFUSED. The renderer refuses a missing page or other gates just as readily, so the new hex check could be deleted and the test would still pass. It does not reach the new branch, and its reason is not asserted.",
+      "fix": "Create the page files, and assert the output contains 'must be ref-<16 lowercase hex>' for the uppercase and non-hex cases.",
+      "twin_of": "A refusal test aimed at a path another rule already refuses -> aim a gate's test where only that gate can refuse, and assert its reason."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/design/design-explore.sh:951-957",
+      "breaking_input": "An explore.txt with no brief= line, or two brief= lines, under a script that has `set -o pipefail` or `set -e`. Or one where the shell's head -1 picks a different brief than exploreOf does.",
+      "why": "The grep|head|tr assignment can abort the script silently, with no message, when grep finds nothing. BRIEF_ID is validated but then discarded: frame re-reads the brief with its own parser. A value is validated on one read and used from another.",
+      "fix": "Pass the validated BRIEF_ID to node and assert it equals ex.brief, or drop the shell parse. Guard the pipeline with `|| true` and print a named error.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    }
+  ]
+}

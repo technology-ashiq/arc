@@ -1,0 +1,126 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:232",
+      "breaking_input": "A frame rendered by design-render.sh whose PNG carries a tEXt chunk after IEND is impossible, but a frame rendered by a different (older) renderer that emits a tEXt chunk before IDAT is refused. Conversely: a frame whose PNG was produced by a renderer that strips ancillary chunks passes. The real gap: the mtime check `statSync(rr.meta).mtimeMs < statSync(framed).mtimeMs` binds the render to the *frame file's* mtime, not to the frame's content. Attacker runs `design-explore.sh ref` to frame pack screen X, then later copies a *different* valid PNG (also 16-hex-matching some other ref) over `ref-<r>/image.png` — no wait, the sha256 check catches that. Instead: attacker touches `ref-<r>/image.png` to an old mtime, renders once, then touches it newer — the render is still valid but the check re-passes. More directly: the render's meta mtime is compared to the frame's mtime; if the frame file is `touch`ed after the render (mtime bumped), the render is treated as stale and refused — a DoS on the legitimate flow after any mtime-touching operation.",
+      "why": "The staleness check is on filesystem mtime, not on the sha256 of the page/session record. Any operation that bumps the frame file's mtime (a re-checkout, a filesystem restore, a `touch`) invalidates a good render; conversely an old mtime on the frame makes a stale render acceptable. The correct binding is the render record's own page hash, as the deal binds the receipt to the page hash elsewhere.",
+      "fix": "Compare the session record's recorded page sha256 (or the frame's sha256) to the current frame bytes, not mtimes."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-explore.sh:947",
+      "breaking_input": "REF=`????????????????` accepts any 16 characters — the shell case only counts length 16. Then the hex-only case follows, so non-hex is rejected. OK. But the shell check is `?` x16 (16 chars) and then `*[!0123456789abcdef]*` rejects non-hex. Fine for REF. However `--ref` empty (`--ref ''`) gives REF=\\\"\\\", fails the 16-char case — good. `--ref 0000000000000000` (16 zeros) passes the grammar; the frame refuses when no pack file matches. That is fine. The real twin: the same 16-hex grammar appears in design-render.sh as `ref-????????????????` — 16 `?`, so render accepts `ref-0123456789abcdeE` (uppercase) at the glob, then the inner case `*[!0123456789abcdef]*` rejects. Fine. But `ref-0123456789abcde\\t` — argument with a tab — passes the shell case? No, tab is not in [0-9a-f], rejected. So no twin exploit.",
+      "why": "Re-examined — grammar is consistent across the two files.",
+      "fix": "n/a"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:262",
+      "breaking_input": "Every item must be `.png`. But the frame writes `image${ext}` where `ext` is taken from the pack file's extension (`png|jpg|jpeg|webp`). If the pack is `nice-<r>.png`, the frame writes `image.png`. Fine. But `_frame_ref` in the bats fixture writes `image.png`. OK. However: what if the pack file extension is `.PNG` (uppercase)? `extname(file).toLowerCase()` gives `.png` — good. What about `.jpeg`? Frame writes `image.jpeg`, the deal requires `it.ext === '.png'`, so the deal refuses a framed JPEG. But the refpack filter regex `^[a-z0-9-]+-${r}\\.(png|jpg|jpeg|webp)$` allows `.jpg`. A JPEG pack screen is accepted by `frame` (writes `image.jpg`, renders), then the deal refuses every JPEG reference with `would be dealt as .jpg`. The frame command succeeds but the subsequent deal always fails — a pack of JPEGs is unusable.",
+      "why": "The frame accepts four extensions; the deal accepts only `.png`. A JPEG/WebP pack screen frames fine, renders fine, then the deal refuses it. The gate is real but the pipeline's own frame step cannot produce a dealable item for three of the four formats it accepts.",
+      "fix": "Have `frame` transcode/reject non-PNG packs up front, or make the deal convert framed images to PNG before checking."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-render.sh:553",
+      "breaking_input": "For a `ref-*` page, `IMG_STATE` is computed via `_ab eval \"(() => { const i = document.images; return i.length === 1 && i[0].complete && i[0].naturalWidth > 0; })()\"`. The framed page's `<img src=\"image.png\">` is a fixture-derived image; if the browser's decoded image is fine the string `true` sets TEXT_LEN=200. But the eval output could be `true\\n` or have a trailing newline; the code strips `\\r\\n ` — good. What if `_ab` prints an error + `true`? Stripped to non-true, TEXT_LEN=0 — refuses. OK. The twin: `_ER_REF` is keyed on `ref-*` in `_er_variant`, but the route case earlier already validated the ref directory. If `_er_variant` is unset (an older `_ab` invocation path), the check `[ \"$_ER_REF\" = 1 ]` is false and falls to the generic text path — but the ref page has no text so TEXT_LEN<200 and it refuses. So a ref that lands on the generic path is refused, not wrongly accepted. Acceptable.",
+      "why": "Refusal direction is fail-closed.",
+      "fix": "n/a"
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:266",
+      "breaking_input": "`pngAncillary` returns null for a malformed PNG and the deal fails. But the check is on the *frozen copy* (`it.path` = the render's PNG). The `pack_sha256` field stored in the key is the pack screen's hash, computed in `deal` from `sha256(readRegular(framed, ...))`. That value is the frame copy, not the original pack file. But no one re-verifies `pack_sha256` against the original pack after the deal — the key simply records it. An attacker who can write to `docs/design/explore/.../ref-<r>/image.png` after the frame but before the deal can bake arbitrary bytes into the frame, so `pack_sha256` names no pack at all. The frame check (`full.startsWith(r)`) is only in `frame`, not in `deal`. In `deal`, the only check is `sha256(readRegular(framed)) === full`, where `full` is itself recomputed from `framed` — circular. So `pack_sha256` can be any 64-hex the attacker wants.",
+      "why": "In `deal`, the check is `sha256(readRegular(framed)) !== full`, where `full` is `sha256(readRegular(framed))` itself — a tautology. The provenance row is matched to that recomputed value, so any screen whose bytes have *some* row anywhere in sources.md passes, regardless of whether the `--ref r` prefix composes its own bytes. `frame` binds the prefix to the bytes (full.startsWith(r)); `deal` does not. This is exactly the 'validated one read, used another' pattern: the prefix is validated at frame time, but the bytes are re-read at deal time and never re-checked against the prefix.",
+      "fix": "In `deal`, after recomputing `full`, assert `full.startsWith(r)` for the `--ref r` that named this directory; refuse otherwise."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:280",
+      "breaking_input": "`delete` nothing — the deal never deletes the framed dir. But the `frame` command's cleanup `for (const f of readdirSync(dir)) { if (lstatSync(p).isFile() && /^(image\\.(png|jpg|jpeg|webp)|index\\.html)$/.test(f)) unlinkSync(p); }` removes only those exact names. A stale `ref-<r>/` from a previous frame with an extra file (say `image.png.bak`) survives. Then the deal hashes `ref-<r>/image.png` (re-written) — fine. But the render writes its session under `.claude/state/design/renders/<id>--ref-<r>` — that directory is *not* cleared. A stale render from a previous frame of the same prefix whose meta mtime is newer than the *new* frame file (because the frame file was just written and the render is old — no, old render is older) — the check is `rr.meta.mtimeMs < framed.mtimeMs` → fail. But `latestRender` picks the highest iteration; if a stale iteration is higher than the fresh one, the stale render (older mtime) is selected and refused, blocking a legitimate re-frame. This is the 'cleanup deleted what an earlier run owned' twin.",
+      "why": "`frame` does not clear the ref's render session, and `latestRender` picks by iteration number, not by recency of the frame. After a re-frame the session's stale render is the latest and its mtime is older than the new frame, so the deal refuses a correct pipeline.",
+      "fix": "Own the render session: `frame` should remove or bump the `<id>--ref-<r>` session dir, or `deal` should pick the render by iteration monotonically tied to the current frame (e.g. carry the frame's sha in the session record)."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:246",
+      "breaking_input": "The item's `ext` becomes `extname(rr.file).toLowerCase()`. If `latestRender` returns a `.jpg` file (a renderer variant), the deal refuses. But if `rr.file` is `.png` and the file extension case is `.PNG`, `.toLowerCase()` yields `.png` — matched. Fine. If `rr.file` has no extension, `.toLowerCase()` is `''`, refused with `would be dealt as ` — an empty message. Minor.",
+      "why": "Cosmetic refusal message inconsistency.",
+      "fix": "Fall back to the known render suffix."
+    },
+    {
+      "id": "L8",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:499",
+      "breaking_input": "`pngAncillary(buf)` reads `len = buf.readUInt32BE(at)`; for a hostile PNG the declared length can be huge (e.g. 0xFFFFFFFF). The check `at + 12 + len > buf.length` returns null — good, no overflow on a Buffer of limited size. But `at + 12 + len` on a 32-bit safe JS number: `at` and `len` are up to ~4B, sum ~4.3B, no precision loss. Safe. However, a PNG with a `PLTE` chunk of arbitrary length followed by a valid `IHDR` and `IEND` is accepted (`PLTE` is in the allowed set), and the deal then treats it as valid — that's fine because PLTE is legitimate. But a `tRNS` chunk is *not* in the `extra` list check? `tRNS` is not in `[\"IHDR\", \"PLTE\", \"IDAT\", \"IEND\"]`, so it is pushed to `extra` and the deal refuses. tRNS is a legitimate transparency chunk produced by some renderers. A 2x transparent PNG render is refused.",
+      "why": "The allowlist omits common legitimate chunks (`tRNS` for transparency, `gAMA`, `sRGB`, `cHRM`, `bKGD`, `pHYs` for pixel dimensions, `sBIT`) that a real renderer emits. A render of a transparent hero image is refused as 'carries PNG metadata' — the gate is too strict and blocks real renders.",
+      "fix": "Decide the ancillary set from what the renderer emits; whitelist dimension/colour chunks or normalise the PNG in the renderer."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:270",
+      "breaking_input": "The deal stamps one mtime with `utimesSync(join(itemsDir, file), at, at)` where `at = new Date(key.dealt)`. `key.dealt` is the wall-clock ISO of the deal; `utimesSync` on a coarse filesystem (ext3, some Docker mounts) truncates to whole seconds. Two deals in the same second differing only by ms collapse to the same mtime — actually that is the intent. But if `utimesSync` rounds *down* on a sub-second filesystem, the copied file's mtime differs from the intended `at` by up to a second. The test `new Set(fs.readdirSync(d).map(f=>fs.statSync(p.join(d,f)).mtimeMs))` still sees all items equal (all rounded say down identically). Fine. Real issue: `utimesSync` fails on a filesystem that refuses to set past mtimes before the file was created? No, it accepts both directions. OK.",
+      "why": "No concrete break.",
+      "fix": "n/a"
+    },
+    {
+      "id": "L10",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:214",
+      "breaking_input": "In `deal`, for each ref: `const framed = join(ex.dir, `ref-${r}`, `image${ext}`);`. `r` here is the argv `--ref` value, already passed through `REF` in the shell but in `deal` the argv is parsed by `parse`. The `parse` function presumably validates `--ref` as 16 hex? The shell validated it, but `deal` is also callable directly (`node design-jury.mjs deal --ref <value>`) — the bats test invokes via `_explore` shell. But `design-explore.sh jury` delegates to `deal` with the refs. If a caller reaches `deal` directly with `--ref ../../etc/passwd...`, `join(ex.dir, 'ref-../../etc/passwd...', ...)` escapes `ex.dir`. There is no `inside()` containment on `framed` in `deal` (unlike `frame`, which does `inside(file, packDir, ...)`). Whether `parse` enforces the grammar is not shown. If not, `existsSync(framed)` then `readRegular` reads an arbitrary path. The shell's 16-hex check protects the shell entry point only, not the direct CLI.",
+      "why": "The `frame` command validates `--ref` with `/^[0-9a-f]{16}$/` and calls `inside()`. The `deal` command uses the same `--ref` for a path but the diff shows no grammar check or `inside()` in `deal`. A direct CLI invocation with a crafted `--ref` reaches a path outside the explore dir, or `basename(ex.dir)`/`join` traversal. A validation applied at one entry point and absent at the sibling.",
+      "fix": "In `deal`, apply the same `/^[0-9a-f]{16}$/` check and `inside(framed, ex.dir, ...)` containment as `frame`."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-explore.sh:955",
+      "breaking_input": "`BRIEF_ID=\"${BRIEF_LINE#brief=docs/design/briefs/}\"` then `BRIEF_ID=\"${BRIEF_ID%/brief.md}\"`. If `explore.txt` names `brief=docs/design/briefs/foo/brief.md` → `foo`. If the value is `docs/design/briefs/foo/brief.md/extra` → `%/brief.md` doesn't strip (suffix mismatch), leaving `foo/brief.md/extra`; the case `*/*` rejects. If the value is `brief=docs/design/briefs//brief.md` → after stripping prefix, `/brief.md`, after `%/brief.md` → ``, the `\"\"|...` case rejects. Good. But the grep is `grep '^brief=' \"$EX/explore.txt\" | head -1 | tr -d '\\r'`. A `brief=` line with a trailing space (`brief=docs/design/briefs/foo/brief.md `) yields `foo/brief.md ` (trailing space); `%/brief.md` does not strip (suffix is `brief.md `), so BRIEF_ID is `foo/brief.md `; the case `*[!a-z0-9-]*` catches the space → refused. So a trailing space on the brief line silently refuses a valid explore. This is a real DoS but the input is authored by the tool.",
+      "why": "Trailing whitespace in the brief line refuses a valid explore, and the CR strip only handles `\\r`, not spaces or tabs.",
+      "fix": "Trim the line fully (`tr -d ' \\r'`) before parsing."
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:229",
+      "breaking_input": "The provenance lookup in `deal` uses `rows.split(/\\r?\\n/).filter((l) => l.startsWith(\"|\") && (l.split(\"|\")[3] ?? \"\").trim() === full)`. Same pattern as in `frame`. But `deal` compares against a sha256 it recomputed from the frame. If a pack screen has been *legitimately updated* (a new screenshot from the same source), the sources.md row still carries the old hash; the operator re-frames with the new pack, but `sources.md` still names the old hash → `owning.length === 0` → refused. The `frame` command would have already refused at frame time (`full.startsWith(r)` — new file hashes to a new prefix, the row's old hash doesn't match, `owning.length !== 1` → fail). So a pack update requires editing sources.md and the prefix both — expected. Not a code defect.",
+      "why": "Operational, not a bug.",
+      "fix": "n/a"
+    },
+    {
+      "id": "L13",
+      "severity": "high",
+      "where": ".claude/scripts/design/design-jury.mjs:504",
+      "breaking_input": "The new module-level `if (process.argv[1] && realOf(process.argv[1]) === realOf(fileURLToPath(import.meta.url)))` guard changes when the CLI runs. But `design-rival.mjs` (imported for PROVIDERS) may have its own top-level CLI guard; the diff does not change it. If `design-rival.mjs` runs its CLI on import (as it did before this change), the new `import { PROVIDERS }` still fires it — no change. The real twin: the prior code ran the CLI unconditionally; the new code gates it. If `import.meta.url` resolves via a symlink to a path `process.argv[1]` cannot be realpath-matched (e.g., `process.argv[1]` is a symlink into a *deleted* target, realOf returns the unresolved path), the comparison is false and the CLI silently does nothing — `node design-jury.mjs deal ...` prints nothing, exits 0, and no jury is dealt. A caller that shells out to this and checks only the exit code reads success on a no-op.",
+      "why": "The `realOf` fallback catches the error and returns the original path. If `realpathSync` on `process.argv[1]` throws (file deleted between exec and check, or a broken symlink), `realOf` returns the raw argv path; `realOf(fileURLToPath(import.meta.url))` likely returns a resolved path. They differ → the CLI never runs → exit 0 with no output. This is the 'a subprocess that failed produced an empty string read as a positive answer' twin: the shell (`design-explore.sh`) invokes `node ... frame` and checks `|| exit $?`; a silent no-op exits 0 and the shell proceeds to render a page that was never written.",
+      "fix": "Exit nonzero if the guard cannot resolve `process.argv[1]`, or run the CLI when `process.argv[1]` basename matches, or always run and export a separate entry for imports."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/design/design-jury.mjs:512",
+      "breaking_input": "The CLI guard compares realpath of `process.argv[1]` to realpath of `import.meta.url`. When the module is executed via `node --require ./x design-jury.mjs`, `process.argv[1]` is still the script — fine. When invoked as `node -e 'import(\"./design-jury.mjs\")'`, `process.argv[1]` may be undefined or the eval stub, and the CLI correctly does not run — intended. When invoked as `node ./design-jury.mjs`, matches. OK, redundant with L13.",
+      "why": "Same root as L13.",
+      "fix": "See L13."
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": "tests/design-jury.bats:37",
+      "breaking_input": "The `_png` fixture now writes a real PNG via inline node. The new test `jury: every dealt item is a PNG ... and a reference carries its pack hash` asserts `r.pack_sha256 !== r.sha256`. In `_frame_ref`, the render session's PNG is `_png \"$png\" \"ref-render-$s\"` — a *different* PNG from the pack screen. The deal's `pack_sha256` is the frame copy's hash (the pack bytes), `sha256` is the render's hash. They differ — assertion passes. But the assertion `pack_sha256 !== sha256` is not the check the code's (missing) `full.startsWith(r)` should be. The bats test does not exercise the L5 hole (a frame copied from another ref's directory with a matching row). The fix scenario is untested: there is no test that a `ref-<r>` directory holding `ref-<r2>`'s bytes is refused when `r !== r2` — because the code does not refuse it. The prior-findings fix (`A provenance match on any cell of any row -> the sha256 column of exactly one row`) was applied to `frame` and to `deal`, but the `deal` side re-reads bytes and never re-binds the prefix; the test only checks that *some* pack hash is present.",
+      "why": "The fix for the 'provenance match' defect (L6 from a prior attack) was applied: the `sources.md` match now goes through the sha256 column (`l.split(\"|\")[3]`) in both `frame` and `deal`. But `deal`'s `full` is recomputed from the file under `ref-<r>/image${ext}`, not from the pack the prefix `r` names. The test `a reference that was never framed, or whose frame is not the pack screen, is refused` swaps `ref-$r/image.png` with junk; that is caught because junk hashes to no row. It does not try swapping in *another ref's* real pack bytes — the byte-for-byte shipped-as-itself pattern recurs in the deal's prefix binding.",
+      "fix": "Add a test: copy `ref-<r2>/image.png` over `ref-<r>/image.png` (both with valid rows) and assert the deal refuses because `full` does not start with `r`; add the missing `full.startsWith(r)` check in `deal`.",
+      "twin_of": "An id validated on one argument and used raw from another source -> validate every value at the point it becomes a path or a log field, and assert containment."
+    }
+  ]
+}
