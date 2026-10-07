@@ -79,7 +79,7 @@ copy_tree() {
   run --separate-stderr node "$(GP)" --root "$(native "$t")"
   ran || false
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
-  printf '%s\n' "$output" | grep -q '^GAP action-commit-secret: merge_time test not found' || { echo "$output"; false; }
+  printf '%s\n' "$output" | grep -q '^GAP action-commit-credential: merge_time test not found' || { echo "$output"; false; }
 }
 
 @test "distribute-gate-parity: a commit-time command missing from the git hooks is a named gap" {
@@ -89,7 +89,7 @@ copy_tree() {
   run --separate-stderr node "$(GP)" --root "$(native "$t")"
   ran || false
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
-  printf '%s\n' "$output" | grep -q '^GAP action-commit-secret: commit_time command not run by .githooks' || { echo "$output"; false; }
+  printf '%s\n' "$output" | grep -q '^GAP action-commit-credential: commit_time command not run by .githooks' || { echo "$output"; false; }
 }
 
 @test "distribute-gate-parity: a merge-time test that can skip is a named gap" {
@@ -99,7 +99,7 @@ copy_tree() {
   run --separate-stderr node "$(GP)" --root "$(native "$t")"
   ran || false
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
-  printf '%s\n' "$output" | grep -q '^GAP action-commit-secret: merge_time test can skip' || { echo "$output"; false; }
+  printf '%s\n' "$output" | grep -q '^GAP action-commit-credential: merge_time test can skip' || { echo "$output"; false; }
 }
 
 @test "distribute-gate-parity: no blocking fragment at all is COULD NOT SCAN, never clean" {

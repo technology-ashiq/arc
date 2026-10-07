@@ -19,7 +19,7 @@
 version: 1
 rules:
   # ---- repository actions ---------------------------------------------------------------------
-  - id: action-commit-secret
+  - id: action-commit-credential
     source: "action:commit-secret"
     class: blocking
     tool_time: "none in any harness (fragment census 2026-10-07)"
