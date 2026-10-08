@@ -1,0 +1,79 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan (segment-walk loop)",
+      "breaking_input": "`.agents` (or any non-final segment of a multi-segment `rendered:` path such as `.agents/skills/`) is a symlink to a directory holding planted files, or is a Windows junction. At the `skills` segment, `lstatSync(abs).isDirectory()` is false for the link, so `names=[]` and `level` becomes empty. The scan prints `dirty-scan: 3 rendered directories, 0 files, 0 dirty` and exits 0.",
+      "why": "A symlinked parent hides the whole rendered directory. The final segment is listed and flagged as a file, but intermediate segments are silently dropped, so the REQ-05 check passes vacuously. The `catch { names = [] }` swallows the same case for unreadable directories.",
+      "fix": "When an intermediate segment matches but is a symlink or not a directory, list it as `[dirty]` or throw CouldNotScan. Do not map it to an empty listing. Treat a readdir error as CouldNotScan."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:confineRel and arc-compile.mjs:dirtyScan",
+      "breaking_input": "`rendered:` entry `.codex//` or `a//b/` in harnesses.yaml. `confineRel` accepts empty segments and the entry ends with `/`. In the scan, `d.slice(0,-1).split('/')` yields an empty segment `\"\"`, which matches no directory name. The level set empties and the scan reports 0 files and 0 dirty for a directory that holds hand-placed files. Also, `.codx/` (a typo) matches nothing and is still counted in `N rendered directories`.",
+      "why": "A malformed or non-existent declared directory is scanned as empty and counted as scanned (class t, class i). The test 'every declared directory was scanned' only counts declarations and never checks that any was matched.",
+      "fix": "Have confineRel reject empty segments. In dirtyScan, require that each declared directory resolves to at least one existing entry, or report it as unresolved. Report resolved directories in the summary line."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan first line",
+      "breaking_input": "Delete or rename engine/harnesses.yaml (or run with a `--root` that lacks it). `arc-compile --check` prints `dirty-scan: skipped` and exits 0 even when `.codex/` holds planted files.",
+      "why": "A missing input is treated as a clean pass, not COULD NOT SCAN (class e). The skip exists for consumer roots, but nothing distinguishes a consumer root from the arc repo having lost its matrix.",
+      "fix": "Skip only when an explicit marker says this is a consumer root. Otherwise throw CouldNotScan, and print the skip as a counted, named line the caller can assert."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:sourceFiles",
+      "breaking_input": "`.claude/commands` (or `.claude/agents`) is itself a symlink or junction to a directory outside the repo. `existsSync` and `readdirSync(base)` follow it, so the lint and arc-compile read and validate files outside the checkout.",
+      "why": "Only entries below the base are lstat-checked. The base is followed, which contradicts the 'read, not followed' contract.",
+      "fix": "lstat `.claude` and `.claude/<kind>` and throw CouldNotScan if either is a symlink. Also skip non-regular files, since a FIFO named x.md would block `readFileSync`."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/distribute-dirty.bats: 'no rendered directory is ignored by git'",
+      "breaking_input": "For an un-ignored directory, `git check-ignore -q` exits 1. The line sits in the test body as `GIT_CONFIG_GLOBAL=... git ... check-ignore ...` followed by `rc=$?`. Bats runs test bodies under errexit, so the exit-1 case that should increment `n` aborts the test at the git line.",
+      "why": "The `rc=$?` capture is unreachable for a non-zero status, so the intended 1 branch either fails the test or never reaches the case statement. A green result would not prove the case logic ran.",
+      "fix": "Capture with `rc=0; git ... || rc=$?`, or `run git ...`, and assert rc is 0, 1 or other."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:finish and the input-branch tail (`process.exit(finish(bad) ? 1 : 0)`)",
+      "breaking_input": "Run on Windows with stdout piped (as bats `run` does) and a large listing of `[dirty]` or `[byte-diff]` lines. `process.exit` fires immediately after many `console.log` calls and the trailing `dirty-scan:` or `N/N byte-identical` line can be truncated.",
+      "why": "Exit after async I/O (twin of b). The suites match those last lines with `grep -qx`, so a truncated pipe gives a flaky failure on exactly one OS leg.",
+      "fix": "Set `process.exitCode` and return, or write the output with a synchronous write before exiting.",
+      "twin_of": "(b) exit after async I/O"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:finish",
+      "breaking_input": "A rendered directory contains an unreadable subdirectory (EACCES), or a race removes a file between readdir and lstat. `walk` throws a raw ENOENT or EACCES. `finish` rethrows it because it is not CouldNotScan, so Node prints a stack trace and exits 1.",
+      "why": "A scan failure is indistinguishable from a [dirty] failure (exit 1) and carries no COULD NOT SCAN line. The same raw throw applies in `sourceFiles` and `lint`.",
+      "fix": "Wrap fs errors in `walk`, `sourceFiles` and `readFileSync` into CouldNotScan.",
+      "twin_of": "(e) COULD NOT SCAN"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan isForeign",
+      "breaking_input": "On a case-insensitive filesystem the directory is `.OpenCode/` and OpenCode writes `package.json` there. The scan matches the directory case-insensitively and builds `rel` as `.OpenCode/package.json`. `foreign.has(rel)` and `startsWith` are case-sensitive, so OpenCode's own file is reported as [dirty].",
+      "why": "Directory matching is case-insensitive but the foreign comparison is case-sensitive, so the Windows and macOS legs fail on the harness's own files. The exclusion is also case-sensitive in the other direction.",
+      "fix": "Compare `rel` and `foreign` entries case-folded."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/distribute-dirty.bats: 'a symlink is listed, not followed' fallback branch",
+      "breaking_input": "On a Windows runner without symlink rights, `ln -s` copies the directory. The branch then asserts only `status 1`, and never that the planted copies were named.",
+      "why": "The assertion is weaker than the change (class s). Any unrelated dirty file, or an error exit 1, satisfies it, so the test would pass without exercising the symlink path.",
+      "fix": "In the fallback, assert `[dirty] .opencode/linked/a.md` and `b.md` are named and that the count is 2, or skip with an explicit reason."
+    }
+  ]
+}

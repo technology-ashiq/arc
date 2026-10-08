@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": ".claude/scripts/engine/arc-compile.mjs:98-100",
+      "breaking_input": "node arc-compile.mjs --check --all --input commands --target claude-code --root . --target codex",
+      "why": "The `value` function rejects duplicate flags only when the values differ, but a second `--target codex` overwrites the first silently because the map key is the flag name and the check only fires on different values. An attacker could set `--target claude-code` early to pass the identity adapter check, then inject `--target codex` later to write through a different adapter without validation.",
+      "fix": "Use a count or a boolean flag to reject any second occurrence of a flag regardless of value.",
+      "twin_of": "c"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-compile.mjs:109",
+      "breaking_input": "node arc-compile.mjs --check --input commands --target claude-code --root . (no --all, no FILE args)",
+      "why": "When `input !== \"processes\"`, the code requires `--all` and rejects `files.length`. But `--all` is not required elsewhere in the same branch; a user can omit `--all` and provide no FILE arguments, causing the check to silently process zero files and exit 0.",
+      "fix": "Move the guard to cover all source-input paths, or default `--all` to true when `--input` is set.",
+      "twin_of": "j"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:92-100",
+      "breaking_input": "A file with CRLF line endings and a key whose value is exactly '---' on its own line (e.g., 'description: ---\\r')",
+      "why": "CR bytes are removed before parsing, but the closing delimiter check `if (l === \"---\")` does not trim the line. If a key's value is exactly `---` and the file has CRLF endings, the CR is stripped and the line becomes `---`, prematurely closing frontmatter. A command could hide a key after the forged closing delimiter.",
+      "fix": "Check for `l.trim() === \"---\"` or require the line to be exactly `---` with no extra content after stripping CR.",
+      "twin_of": "f"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:107-114",
+      "breaking_input": "A path like '..\\foo' (Windows backslash) or 'C:\\\\foo' in a rendered or foreign field in harnesses.yaml",
+      "why": "`confineRel` rejects backslashes (`/\\\\:/`), but on Windows, `split(\"/\")` on a backslash path returns the whole string as one segment. A path `..\\foo` passes because it contains no `/`, no `:`, and no `..` segment when split by `/`. An attacker can escape the repository with a backslash path that the confine check misses.",
+      "fix": "Normalize separators to forward slash before checking, or reject any path containing a backslash explicitly in addition to the regex.",
+      "twin_of": "d"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:126-130",
+      "breaking_input": "A symlink named '--target' under .codex/ (or any rendered directory)",
+      "why": "`dirtyScan` walks directories with `readdirSync` and `lstatSync`. If a rendered directory contains a symlink whose name is a flag-like string (`--target`), the symlink is listed as a file, but the walker does not handle file names that could be interpreted as options by later tools. This is low-risk in the dirty scan itself, but the symlink's target is not validated.",
+      "fix": "Optionally warn or skip files whose names look like flags, or ensure no downstream tool reads them as arguments.",
+      "twin_of": "y"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:161-166",
+      "breaking_input": "A malformed file that does not end with .md but is still listed by sourceFiles (e.g., a symlink .md that is actually a directory)",
+      "why": "The source input loop checks `f.rel.endsWith(\".md\")` but only after calling `sourceFiles`, which returns symlinks. If a symlink named `.md` points to a directory, the code will try to read it as a file and crash on `readFileSync` of a directory. This is not caught by the `symlink` flag because the file is flagged as symlink but still passed to the read path.",
+      "fix": "Skip symlinks entirely or lstat the target before reading.",
+      "twin_of": "b"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:139-145",
+      "breaking_input": "A foreign file path in harnesses.yaml like '.opencode/package.json' that is a symlink to '/etc/passwd'",
+      "why": "The `isForeign` function checks whether a file's relative path matches a foreign entry or a prefix. If a foreign file is a symlink, the dirty scan still excludes it, but the symlink target is not validated. An attacker could place a symlink pointing to sensitive system files under a foreign-named path and have it be ignored by the dirty check.",
+      "fix": "Check that foreign files are not symlinks, or validate the symlink target is within the repository.",
+      "twin_of": "h"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:178-181",
+      "breaking_input": "A harnesses.yaml row with status 'verified' but with an id that is an empty string",
+      "why": "`verifiedRows` filters by `r.status === \"verified\"` and then tries to test `r.id` with `ROW_ID.test(r.id)`. If `r.id` is an empty string, `ROW_ID` matches because `^[a-z][a-z0-9-]*$` requires at least one character, but the empty string fails and the row is reported as a failure. However, the `ids` array used for target validation will include the empty string as an entry, potentially allowing `targets: ` (empty) to pass.",
+      "fix": "Reject rows with empty or missing id before building the ids list.",
+      "twin_of": "m"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:203-205",
+      "breaking_input": "A command file with `targets: claude-code, claude-code` (duplicate)",
+      "why": "The `targets` check splits on `,`, trims, and then checks for duplicates using a `Set`. But the split does not handle empty entries (e.g., `targets: claude-code, , codex` would produce an empty string). The empty string is not checked by `ROW_ID` (fails) and not added to the `dup` set, so a duplicate `claude-code` after an empty entry would be missed.",
+      "fix": "Filter out empty strings after splitting before the duplicate check.",
+      "twin_of": "n"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:237-239",
+      "breaking_input": "A symlink named '..' inside .claude/commands/ that points to the parent directory",
+      "why": "`sourceFiles` calls `readdirSync(dir).sort()` and then `lstatSync(abs)`. If a symlink named `..` exists (possible on some filesystems), it would be treated as a symlink file and added to the output. On Windows with junction points, this could cause issues. The symlink is flagged but not resolved, so a malicious symlink could point outside the tree.",
+      "fix": "Skip entries named '.' or '..' explicitly, and optionally resolve symlinks to ensure they point inside the repository.",
+      "twin_of": "t"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:255-259",
+      "breaking_input": "A key 'version' in a command or agent file that happens to match a table key (version is not in the declared keys list, so it would be flagged as unknown). However, the table's own version field is 'version: 1'.",
+      "why": "The table file `frontmatter-keys.yaml` uses a top-level `version` key that is not part of the commands/agents key sets. If a command or agent file accidentally uses `version` as a frontmatter key, it will be flagged as unknown. This is by design but could cause confusion if the table file's own format bleeds into the source tree.",
+      "fix": "Document that `version` is reserved for the table file only, or add it to the commands/agents key set with a fate of `consume`.",
+      "twin_of": "o"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:89-92",
+      "breaking_input": "node arc-compile.mjs --check --all --target claude-code --root . (no --input, but the code defaults input to 'processes', which may process zero files if no processes/ directory exists)",
+      "why": "When `--input` is not specified, `input` defaults to `\"processes\"`. But if `--all` is used and the `processes/` directory does not exist, the code logs an error and exits 1. However, the `--input` flag is only validated for `commands`/`agents`/`processes` later; if someone passes `--input` with an unknown value, it exits 2. But the default `processes` path is not validated early enough, potentially causing a confusing error.",
+      "fix": "Check that `input` is valid immediately after parsing, and that the corresponding directory exists before proceeding.",
+      "twin_of": "i"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:116-118",
+      "breaking_input": "A file with a BOM (byte order mark) at the beginning",
+      "why": "The parser checks for `t.startsWith(\"---\\n\")` after removing CR bytes. If a file has a UTF-8 BOM (0xEF 0xBB 0xBF) at the start, the check fails and the file is reported as malformed. This could cause a valid file to be rejected on Windows systems where editors sometimes add a BOM.",
+      "fix": "Strip the BOM before checking the opening delimiter.",
+      "twin_of": "z"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:170-173",
+      "breaking_input": "A cell value of 'false' (without quotes) in the YAML, which YAML parses as boolean false, not the string 'false'",
+      "why": "The code checks `r.cells[cell]` and compares against `\"false\"` (string). If the YAML contains `argument_hint: false` (unquoted), `parseYamlSubset` will return the boolean `false`, not the string. The comparison `v === \"false\"` would fail, and the code would not recognize it as a valid drop condition. However, the existing YAML uses quoted strings, so this is a future-proofing issue.",
+      "fix": "Compare against both `false` (boolean) and `\"false\"` (string), or require all cell values to be quoted strings.",
+      "twin_of": "ae"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/engine/frontmatter-lint.mjs:246-249",
+      "breaking_input": "A file with no frontmatter (no opening '---') but still a .md file",
+      "why": "`checkFile` calls `parseFrontmatter` which returns `ok: false` if the file does not open with `---\\n`. This is reported as a malformed failure. However, if a legitimate .md file without frontmatter exists (e.g., a README), it will always fail. The code assumes every .md file must have frontmatter, which may be too strict.",
+      "fix": "Allow files without frontmatter by treating them as having an empty frontmatter block, or document that all .md files must have frontmatter.",
+      "twin_of": "j"
+    }
+  ]
+}

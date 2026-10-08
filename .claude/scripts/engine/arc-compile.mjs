@@ -116,9 +116,16 @@ root = resolve(root || gitToplevel() || ".");
 
 // ---------- the dirty check (REQ-05) ----------
 // Each declared directory is matched case-insensitively one segment at a time, so `.Codex/` on a
-// case-sensitive filesystem is scanned too. A symlink is listed as a file and never followed.
+// case-sensitive filesystem is scanned too. Nothing is followed: a symlink, junction or non-directory
+// found where a directory segment belongs is itself listed as dirty, so a linked parent cannot hide
+// what is under it (attack 85d2416 B1). An fs error is COULD NOT SCAN, never an empty listing (B7).
 function dirtyScan() {
-  if (!existsSync(join(root, MATRIX_FILE))) return { lines: [`dirty-scan: skipped — no ${MATRIX_FILE} under the root`], dirty: 0 };
+  if (!existsSync(join(root, MATRIX_FILE))) {
+    // A consumer root carries no matrix, and nothing it renders is arc's. The arc repo itself always does,
+    // so losing it there is COULD NOT SCAN rather than a clean pass (attack 85d2416 B3).
+    if (existsSync(join(root, "products", "engine", "manifest.json"))) throw new CouldNotScan(`${MATRIX_FILE} is missing from the arc repo`);
+    return { lines: [`dirty-scan: skipped — no ${MATRIX_FILE} under the root`], dirty: 0 };
+  }
   const rows = verifiedRows(root);
   const dirs = new Set();
   const foreign = new Set();
@@ -129,42 +136,51 @@ function dirtyScan() {
     }
     for (const f of Array.isArray(r.foreign) ? r.foreign : []) {
       if (confineRel(f) === null) throw new CouldNotScan(`${r.id} names a foreign file ${JSON.stringify(f)} that escapes the repository`);
-      foreign.add(f);
+      foreign.add(f.toLowerCase());
     }
   }
   if (!dirs.size) throw new CouldNotScan(`no verified row of ${MATRIX_FILE} names a rendered directory`);
   // What the compiler writes under a rendered directory. Empty until the P03 adapters render there, so
   // today every file found is one the compiler did not write.
   const planned = new Set();
-  const isForeign = (rel) => foreign.has(rel) || [...foreign].some((f) => f.endsWith("/") && rel.startsWith(f));
-  const found = [];
+  // Case-folded both ways, as the directory match is (B8). Only a regular file can be a harness's own
+  // file: a symlink under a foreign name is still dirty (attack 85d2416 L7).
+  const isForeign = (rel) => { const l = rel.toLowerCase(); return foreign.has(l) || [...foreign].some((f) => f.endsWith("/") && l.startsWith(f)); };
+  const stat = (abs) => { try { return lstatSync(abs); } catch (e) { throw new CouldNotScan(`cannot stat ${abs}: ${e.code || e.message}`); } };
+  const list = (abs) => { try { return readdirSync(abs).sort(); } catch (e) { throw new CouldNotScan(`cannot list ${abs}: ${e.code || e.message}`); } };
+  const found = new Map();
   const walk = (abs, rel) => {
-    const st = lstatSync(abs);
-    if (st.isDirectory()) for (const n of readdirSync(abs).sort()) walk(join(abs, n), `${rel}/${n}`);
-    else found.push(rel);
+    const st = stat(abs);
+    if (st.isDirectory() && !st.isSymbolicLink()) for (const n of list(abs)) walk(join(abs, n), `${rel}/${n}`);
+    else found.set(rel, st.isFile() && !st.isSymbolicLink());
   };
+  let present = 0;
   for (const d of [...dirs].sort()) {
     let level = [{ abs: root, rel: "" }];
     for (const seg of d.slice(0, -1).split("/")) {
       const next = [];
       for (const { abs, rel } of level) {
-        let names = [];
-        try { if (lstatSync(abs).isDirectory()) names = readdirSync(abs); } catch { names = []; }
-        for (const n of names) if (n.toLowerCase() === seg.toLowerCase()) next.push({ abs: join(abs, n), rel: rel ? `${rel}/${n}` : n });
+        for (const n of list(abs)) {
+          if (n.toLowerCase() !== seg.toLowerCase()) continue;
+          const at = join(abs, n), r = rel ? `${rel}/${n}` : n;
+          const st = stat(at);
+          if (st.isDirectory() && !st.isSymbolicLink()) next.push({ abs: at, rel: r });
+          else found.set(r, false);
+        }
       }
       level = next;
     }
+    if (level.length) present++;
     for (const { abs, rel } of level) walk(abs, rel);
   }
-  const uniq = [...new Set(found)].sort();
   const lines = [];
   let dirty = 0;
-  for (const rel of uniq) {
-    if (planned.has(rel) || isForeign(rel)) continue;
+  for (const rel of [...found.keys()].sort()) {
+    if (planned.has(rel) || (found.get(rel) && isForeign(rel))) continue;
     lines.push(`[dirty] ${rel} — a file under a rendered directory that arc-compile did not write`);
     dirty++;
   }
-  lines.push(`dirty-scan: ${dirs.size} rendered directories, ${uniq.length} files, ${dirty} dirty`);
+  lines.push(`dirty-scan: ${dirs.size} rendered directories, ${present} present, ${found.size} files, ${dirty} dirty`);
   return { lines, dirty };
 }
 
@@ -194,14 +210,17 @@ if (input !== "processes") {
   }
   let same = 0, bad = 0, n = 0;
   for (const f of list) {
-    if (f.symlink || !f.rel.endsWith(".md")) {
-      console.log(`[unsupported] ${f.rel} — ${f.symlink ? "a symlink" : "not a lowercase .md file"}; frontmatter-lint names it too`);
+    if (f.symlink || f.special || !f.rel.endsWith(".md")) {
+      console.log(`[unsupported] ${f.rel} — ${f.symlink ? "a symlink" : f.special ? "not a regular file" : "not a lowercase .md file"}; frontmatter-lint names it too`);
       bad++; continue;
     }
     n++;
     // CR bytes are removed before both the parse and the comparison, the transform the sync golden
     // hashes through, so an autocrlf checkout renders the same bytes as an LF one (REQ-04).
-    const src = readFileSync(join(root, f.rel), "utf8").replace(/\r/g, "");
+    let src;
+    try { src = readFileSync(join(root, f.rel), "utf8").replace(/\r/g, ""); } catch (e) {
+      console.log(`arc-compile: COULD NOT SCAN — ${f.rel} unreadable: ${e.code || e.message}`); process.exit(2);
+    }
     const parsed = parseFrontmatter(src);
     if (!parsed.ok) { console.log(`[compile] ${f.rel}:${parsed.line} — frontmatter does not parse: ${parsed.what}`); bad++; continue; }
     const got = ADAPTERS[target].renderSource(parsed, { kind: input });

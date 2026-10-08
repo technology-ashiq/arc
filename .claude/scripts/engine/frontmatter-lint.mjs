@@ -70,26 +70,39 @@ export function parseFrontmatter(text) {
  */
 export function confineRel(p) {
   if (typeof p !== "string" || p === "" || /[\\:]/.test(p) || p.startsWith("/")) return null;
-  if (p.split("/").some((s) => s === ".." || s === ".")) return null;
+  // An empty segment (`a//b/`) is refused too: the scan would match it to nothing and call it clean
+  // (attack 85d2416 B2). A trailing slash is the one allowed empty tail.
+  const segs = p.endsWith("/") ? p.slice(0, -1).split("/") : p.split("/");
+  if (segs.some((s) => s === "" || s === ".." || s === ".")) return null;
   return p;
 }
 
 /**
  * Every file under .claude/<kind>/, recursively, as sorted repo-relative paths with forward slashes.
- * A symlink is returned flagged rather than followed, so the bytes validated are the bytes used.
+ * A symlink is returned flagged rather than followed, so the bytes validated are the bytes used; so is
+ * anything that is not a regular file (a FIFO named x.md would block the read). `.claude` and the kind
+ * directory are themselves refused when linked, or the whole walk would read outside the checkout
+ * (attack 85d2416 B4). An fs error is COULD NOT SCAN, never a stack trace (B7).
  */
 export function sourceFiles(root, kind) {
   const base = join(root, ".claude", kind);
   if (!existsSync(base)) throw new CouldNotScan(`.claude/${kind}/ does not exist under ${root}`);
+  const stat = (abs) => { try { return lstatSync(abs); } catch (e) { throw new CouldNotScan(`cannot stat ${abs}: ${e.code || e.message}`); } };
+  for (const [abs, name] of [[join(root, ".claude"), ".claude"], [base, `.claude/${kind}`]]) {
+    const st = stat(abs);
+    if (st.isSymbolicLink() || !st.isDirectory()) throw new CouldNotScan(`${name} is a link or not a directory; it is read, not followed`);
+  }
   const out = [];
   const walk = (dir, rel) => {
-    for (const name of readdirSync(dir).sort()) {
+    let names;
+    try { names = readdirSync(dir).sort(); } catch (e) { throw new CouldNotScan(`cannot list ${dir}: ${e.code || e.message}`); }
+    for (const name of names) {
       const abs = join(dir, name);
       const r = `${rel}/${name}`;
-      const st = lstatSync(abs);
+      const st = stat(abs);
       if (st.isSymbolicLink()) out.push({ rel: r, symlink: true });
       else if (st.isDirectory()) walk(abs, r);
-      else out.push({ rel: r, symlink: false });
+      else out.push({ rel: r, symlink: false, special: !st.isFile() });
     }
   };
   walk(base, `.claude/${kind}`);
@@ -209,6 +222,7 @@ export function lint(root) {
     counts[kind] = 0;
     for (const f of files) {
       if (f.symlink) { fails.push(`FAIL ${f.rel} [symlink] a source file is a symlink; it is read, not followed`); continue; }
+      if (f.special) { fails.push(`FAIL ${f.rel} [not-a-file] a source entry is not a regular file`); continue; }
       if (!f.rel.endsWith(".md")) { fails.push(`FAIL ${f.rel} [not-markdown] only lowercase .md files are ${kind}`); continue; }
       counts[kind]++;
       let text;
@@ -228,7 +242,7 @@ function mutantSelftest(root) {
       if (!existsSync(join(root, p))) throw new CouldNotScan(`mutant-selftest: ${p} missing in ${root}`);
       cpSync(join(root, p), join(tmp, p), { recursive: true });
     }
-    const target = sourceFiles(tmp, "commands").find((f) => !f.symlink && f.rel.endsWith(".md"));
+    const target = sourceFiles(tmp, "commands").find((f) => !f.symlink && !f.special && f.rel.endsWith(".md"));
     if (!target) throw new CouldNotScan("mutant-selftest: no command to plant into");
     const key = `x-mutant-${process.pid}`;
     const abs = join(tmp, target.rel);
