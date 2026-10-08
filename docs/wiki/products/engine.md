@@ -189,7 +189,7 @@ diff: the list of exactly what changed between two versions of the files.
 
 None declared.
 
-## Scripts (35)
+## Scripts (36)
 
 - [`.claude/scripts/engine/adapters/claude-code.mjs`](../../../.claude/scripts/engine/adapters/claude-code.mjs)
 - [`.claude/scripts/engine/adapters/codex.mjs`](../../../.claude/scripts/engine/adapters/codex.mjs)
@@ -218,6 +218,7 @@ None declared.
 - [`.claude/scripts/engine/egress-proxy.py`](../../../.claude/scripts/engine/egress-proxy.py)
 - [`.claude/scripts/engine/egress-session.sh`](../../../.claude/scripts/engine/egress-session.sh)
 - [`.claude/scripts/engine/failure-class.mjs`](../../../.claude/scripts/engine/failure-class.mjs)
+- [`.claude/scripts/engine/frontmatter-lint.mjs`](../../../.claude/scripts/engine/frontmatter-lint.mjs)
 - [`.claude/scripts/engine/narrative-verify.mjs`](../../../.claude/scripts/engine/narrative-verify.mjs)
 - [`.claude/scripts/engine/process-lint.mjs`](../../../.claude/scripts/engine/process-lint.mjs)
 - [`.claude/scripts/engine/propose.mjs`](../../../.claude/scripts/engine/propose.mjs)

@@ -22,17 +22,28 @@
  * Usage:
  *   arc-compile.mjs --check [--all|FILE...] [--target claude-code|codex] [--root PATH]
  *   arc-compile.mjs --write [--all|FILE...] [--target ...] [--root PATH]
+ *   arc-compile.mjs --check --all --input commands|agents [--target claude-code] [--root PATH]
+ *
+ * SOURCE INPUT (distribute P02, ADR-2001/2017). `--input commands|agents` reads .claude/commands/ or
+ * .claude/agents/ through frontmatter-lint's one walker and one parser (ADR-2012). For `claude-code` the
+ * render is the source itself; the other adapters gain a source render in P03.
+ *
+ * THE DIRTY CHECK (REQ-05). Every `--check` also lists each directory a verified row of
+ * engine/harnesses.yaml names under `rendered:` and fails each file the compiler would not write,
+ * `[dirty]` by name. A harness's own first-run files (`rendered_foreign:`) are excluded by name.
+ *
  * Zero dependencies, Node 18+.
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import * as claudeCode from "./adapters/claude-code.mjs";
 import * as codex from "./adapters/codex.mjs";
+import { CouldNotScan, MATRIX_FILE, confineRel, parseFrontmatter, sourceFiles, verifiedRows } from "./frontmatter-lint.mjs";
 
 export const ADAPTERS = Object.freeze({ "claude-code": claudeCode, codex });
 
@@ -73,7 +84,18 @@ let migration = false;
 // tree can only ever run once. Reading the pin gives the same answer forever, and it is the
 // pin doing the job it was recorded for.
 let againstBaseline = false;
+let input = "processes";
 const files = [];
+// A value flag refuses a missing, empty or flag-shaped value by name, and two different values (class c):
+// `--target --root x` used to set the target to "--root".
+const given = new Map();
+function value(flag, i) {
+  const v = argv[i + 1];
+  if (v === undefined || v === "" || v.startsWith("--")) { console.error(`arc-compile: ${flag} needs a value`); process.exit(2); }
+  if (given.has(flag) && given.get(flag) !== v) { console.error(`arc-compile: ${flag} given twice with different values`); process.exit(2); }
+  given.set(flag, v);
+  return v;
+}
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--check") mode = "check";
@@ -81,14 +103,118 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === "--all") all = true;
   else if (a === "--migration") migration = true;
   else if (a === "--against-baseline") { migration = true; againstBaseline = true; }
-  else if (a === "--target") target = argv[++i] ?? "";
-  else if (a === "--root") root = argv[++i] ?? "";
+  else if (a === "--target") target = value(a, i++);
+  else if (a === "--root") root = value(a, i++);
+  else if (a === "--input") input = value(a, i++);
   else if (a.startsWith("--")) { console.error(`arc-compile: unknown option ${a}`); process.exit(2); }
   else files.push(a);
 }
 if (!mode) { console.error("usage: arc-compile.mjs --check|--write [--all|FILE...] [--target claude-code|codex] [--root PATH]"); process.exit(2); }
 if (!ADAPTERS[target]) { console.error(`arc-compile: unknown target \`${target}\` (known: ${Object.keys(ADAPTERS).join(", ")})`); process.exit(2); }
+if (!["processes", "commands", "agents"].includes(input)) { console.error(`arc-compile: unknown input \`${input}\` (known: processes, commands, agents)`); process.exit(2); }
 root = resolve(root || gitToplevel() || ".");
+
+// ---------- the dirty check (REQ-05) ----------
+// Each declared directory is matched case-insensitively one segment at a time, so `.Codex/` on a
+// case-sensitive filesystem is scanned too. A symlink is listed as a file and never followed.
+function dirtyScan() {
+  if (!existsSync(join(root, MATRIX_FILE))) return { lines: [`dirty-scan: skipped — no ${MATRIX_FILE} under the root`], dirty: 0 };
+  const rows = verifiedRows(root);
+  const dirs = new Set();
+  const foreign = new Set();
+  for (const r of rows) {
+    for (const d of Array.isArray(r.rendered) ? r.rendered : []) {
+      if (confineRel(d) === null || !d.endsWith("/")) throw new CouldNotScan(`${r.id} names a rendered directory ${JSON.stringify(d)} that escapes the repository`);
+      dirs.add(d);
+    }
+    for (const f of Array.isArray(r.foreign) ? r.foreign : []) {
+      if (confineRel(f) === null) throw new CouldNotScan(`${r.id} names a foreign file ${JSON.stringify(f)} that escapes the repository`);
+      foreign.add(f);
+    }
+  }
+  if (!dirs.size) throw new CouldNotScan(`no verified row of ${MATRIX_FILE} names a rendered directory`);
+  // What the compiler writes under a rendered directory. Empty until the P03 adapters render there, so
+  // today every file found is one the compiler did not write.
+  const planned = new Set();
+  const isForeign = (rel) => foreign.has(rel) || [...foreign].some((f) => f.endsWith("/") && rel.startsWith(f));
+  const found = [];
+  const walk = (abs, rel) => {
+    const st = lstatSync(abs);
+    if (st.isDirectory()) for (const n of readdirSync(abs).sort()) walk(join(abs, n), `${rel}/${n}`);
+    else found.push(rel);
+  };
+  for (const d of [...dirs].sort()) {
+    let level = [{ abs: root, rel: "" }];
+    for (const seg of d.slice(0, -1).split("/")) {
+      const next = [];
+      for (const { abs, rel } of level) {
+        let names = [];
+        try { if (lstatSync(abs).isDirectory()) names = readdirSync(abs); } catch { names = []; }
+        for (const n of names) if (n.toLowerCase() === seg.toLowerCase()) next.push({ abs: join(abs, n), rel: rel ? `${rel}/${n}` : n });
+      }
+      level = next;
+    }
+    for (const { abs, rel } of level) walk(abs, rel);
+  }
+  const uniq = [...new Set(found)].sort();
+  const lines = [];
+  let dirty = 0;
+  for (const rel of uniq) {
+    if (planned.has(rel) || isForeign(rel)) continue;
+    lines.push(`[dirty] ${rel} — a file under a rendered directory that arc-compile did not write`);
+    dirty++;
+  }
+  lines.push(`dirty-scan: ${dirs.size} rendered directories, ${uniq.length} files, ${dirty} dirty`);
+  return { lines, dirty };
+}
+
+function finish(failed) {
+  if (mode !== "check") return failed;
+  try {
+    const d = dirtyScan();
+    for (const l of d.lines) console.log(l);
+    return failed + d.dirty;
+  } catch (e) {
+    if (!(e instanceof CouldNotScan)) throw e;
+    console.log(`dirty-scan: COULD NOT SCAN — ${e.message}`);
+    return failed + 1;
+  }
+}
+
+// ---------- source input: commands and agents (distribute P02) ----------
+if (input !== "processes") {
+  if (!all || files.length) { console.error(`arc-compile: --input ${input} takes --all and no FILE arguments`); process.exit(2); }
+  if (typeof ADAPTERS[target].renderSource !== "function") { console.error(`arc-compile: the \`${target}\` adapter has no ${input} input yet (P03)`); process.exit(2); }
+  // The claude-code target IS the source: there is nothing to write, and a write would only reformat it.
+  if (mode === "write" && target === "claude-code") { console.error(`arc-compile: --write has nothing to write for --input ${input} --target claude-code (the source is the output)`); process.exit(2); }
+  let list;
+  try { list = sourceFiles(root, input); } catch (e) {
+    if (e instanceof CouldNotScan) { console.log(`arc-compile: COULD NOT SCAN — ${e.message}`); process.exit(2); }
+    throw e;
+  }
+  let same = 0, bad = 0, n = 0;
+  for (const f of list) {
+    if (f.symlink || !f.rel.endsWith(".md")) {
+      console.log(`[unsupported] ${f.rel} — ${f.symlink ? "a symlink" : "not a lowercase .md file"}; frontmatter-lint names it too`);
+      bad++; continue;
+    }
+    n++;
+    // CR bytes are removed before both the parse and the comparison, the transform the sync golden
+    // hashes through, so an autocrlf checkout renders the same bytes as an LF one (REQ-04).
+    const src = readFileSync(join(root, f.rel), "utf8").replace(/\r/g, "");
+    const parsed = parseFrontmatter(src);
+    if (!parsed.ok) { console.log(`[compile] ${f.rel}:${parsed.line} — frontmatter does not parse: ${parsed.what}`); bad++; continue; }
+    const got = ADAPTERS[target].renderSource(parsed, { kind: input });
+    if (got === src) { same++; continue; }
+    const i = firstDiff(got, src);
+    console.log(`[byte-diff] ${f.rel} — differs at byte ${i} (rendered ${got.length} bytes, source ${src.length})`);
+    console.log(`  Expected: ${context(src, i)}`);
+    console.log(`  Found:    ${context(got, i)}`);
+    bad++;
+  }
+  console.log(`\narc-compile: ${same}/${n} byte-identical for target \`${target}\` (input ${input})`);
+  process.exit(finish(bad) ? 1 : 0);
+}
 
 if (all) {
   const dir = join(root, "processes");
@@ -286,4 +412,4 @@ if (mode === "write") {
 // would read as a pass nobody earned. Neither, and the count says which.
 const scope = files.length - retired - noBaseline;
 console.log(`\narc-compile: ${identical}/${scope} byte-identical for target \`${target}\`${retired ? ` (${retired} retired, ADR-0207)` : ""}${noBaseline ? ` (${noBaseline} with no baseline to reproduce)` : ""}`);
-process.exit(failed ? 1 : 0);
+process.exit(finish(failed) ? 1 : 0);

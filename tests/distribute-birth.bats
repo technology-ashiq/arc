@@ -101,12 +101,12 @@ ignored_in_copy() {
   [ "$undated" -eq "$(field rows)" ] || { echo "every row lost its date, but only $undated of $(field rows) were reported undated: $output"; false; }
 }
 
-@test "distribute-birth: every cell is legal and every row carries all 9 cells" {
+@test "distribute-birth: every cell is legal and every row carries all 11 cells" {
   run --separate-stderr probe matrix engine/harnesses.yaml
   ran_ok matrix
   local rows cells
   rows=$(field rows); cells=$(field cells)
-  [ "$cells" -eq $((rows * 9)) ] || { echo "cells $cells for $rows rows"; false; }
+  [ "$cells" -eq $((rows * 11)) ] || { echo "cells $cells for $rows rows"; false; }
   if has_problem ''; then echo "the matrix has problems"; false; fi
 }
 

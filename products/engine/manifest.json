@@ -13,6 +13,7 @@
     ".claude/scripts/engine/schema-subset.mjs",
     ".claude/scripts/engine/process-lint.mjs",
     ".claude/scripts/engine/arc-compile.mjs",
+    ".claude/scripts/engine/frontmatter-lint.mjs",
     ".claude/scripts/engine/arc-run.mjs",
     ".claude/scripts/engine/calibrate-budget.mjs",
     ".claude/scripts/engine/build-pack-input.mjs",

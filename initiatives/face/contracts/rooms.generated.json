@@ -240,6 +240,7 @@
         ],
         "lints": [
           "arc-compile-bytediff",
+          "frontmatter-lint",
           "process-lint"
         ],
         "concepts": [
@@ -256,7 +257,7 @@
           "0200"
         ]
       },
-      "itemCount": 19
+      "itemCount": 20
     },
     {
       "id": "model-policy",
