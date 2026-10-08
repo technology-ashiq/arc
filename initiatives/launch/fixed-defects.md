@@ -118,3 +118,4 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **The probe refund's ids came from the tag alone, so a new upstream payment reused an event id the route had already stored** — ids from tag + charge, B3 — *every derived probe id: derived from everything that names the probed thing*
 - **A refund of the probe payment launch did not send left the probe green** — every other refund row fails it, L7 — *every probe read: assert the whole set it owns, not only that its own row is in it*
 - **A rehearsal gate with two vetted rows recorded the request against provider "none"** — refuses like pickProvider, L11 — *every early-return path: the same refusals the main path gives*
+- **A scripted edit turned a typed newline escape into a real newline inside the probe-id template string** — the hash input is a JSON pair, a1d4452 B2 — *every hash or key built from parts: a structured encoding, never a separator character*

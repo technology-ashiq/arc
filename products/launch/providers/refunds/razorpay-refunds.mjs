@@ -99,8 +99,8 @@ function secretOf(ctx) {
 // owns nothing: it would give every venture the same probe.
 function probeIds(ctx, payment) {
   if (typeof ctx.tag !== "string" || !ctx.tag) throw refuse("BAD_TAG", "the slot has no resource tag; the probe refund has no identity");
-  const h = createHash("sha256").update(`${ctx.tag}
-${payment}`, "utf8").digest("hex");
+  // A JSON pair, not a joined string: no separator spelling can drift and orphan the stored probe (attack a1d4452 B2).
+  const h = createHash("sha256").update(JSON.stringify([ctx.tag, payment]), "utf8").digest("hex");
   return { event: `arcrefund${h.slice(0, 16)}`, refund: `rfnd_ArcProbe0${h.slice(16, 26)}` };
 }
 

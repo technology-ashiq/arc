@@ -65,3 +65,9 @@
   (pinned, `foreign-refund`). L8 [medium] by design (the marker rule, ADR-1731; D31). L9 [medium] not a hole: booking
   is idempotent by refund id. L11 [low] fixed: two vetted rows on a rehearsal gate refuse like pickProvider, and
   `--provider` is honoured. L10, L12, L13, L15 [low] -> D34.
+
+## attack a1d4452 r2 (fixes of r1)
+
+- Logic: 0 findings. Boundary: B1 [low] fixed (the gate request names pickProvider's row id). B2 [low] fixed: a real
+  newline had landed inside the probe-id template string through a scripted edit; the hash input is now a JSON pair.
+  B3 [low] -> D35.

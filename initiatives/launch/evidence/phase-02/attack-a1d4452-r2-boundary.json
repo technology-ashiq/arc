@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:137-139",
+      "breaking_input": "`arc launch apply payment-live --venture arc-sandbox --provider <any string pickProvider accepts>`, for example a differently cased id or an alias form if pickProvider normalises its match. On a slot with a single vetted row, pickProvider validates the flag, but the gate then receives `opts.provider` (the raw argv string) instead of the row pickProvider chose.",
+      "why": "This is a validate-one-value, use-another case. The `approval.requested` payload and the `what` line carry the user's spelling, not the registry id. The result of pickProvider is discarded. The owner's stamp and any later provider matching key on a string that is not a row id. It is also unsanitised argv text written to the spine, where the main path writes `prow.id`.",
+      "fix": "Use the id from pickProvider's return value (`const p = pickProvider(...); providerId = p.id`), and never pass `opts.provider` through to the gate.",
+      "twin_of": "validate one read, use another: every check-then-load pair"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": "products/launch/providers/refunds/razorpay-refunds.mjs:probeIds",
+      "breaking_input": "The hash input is a template literal that contains a raw line break (`${ctx.tag}<LF>${payment}`). A Windows checkout with autocrlf, an editor that re-saves the file, or a shell-written edit can turn that break into CRLF or strip it. JS normalises CRLF inside a template literal, but a normaliser that rewrites the break to a space or removes it changes `event` and `refund` for every venture.",
+      "why": "The probe event id and refund id are the replay identity the route stored. A silent change to the separator makes every re-verify look like a new refund. That is the 'new payment' path, so a stored refund row is orphaned, and the 'launch did not send' check then fails the probe permanently. The separator is invisible in review, and this repo's own rule says a program embedded in shell text must not depend on such characters.",
+      "fix": "Write the separator as an explicit escape in an ordinary string, for example `ctx.tag + \"\\u0000\" + payment` or `JSON.stringify([ctx.tag, payment])`. Pin the expected id for a fixed tag and payment in a test.",
+      "twin_of": "Windows CRLF vs LF in checked-out text: every test fixture or literal that edits or depends on checked-out line endings"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/refunds/razorpay-refunds.mjs:probe (REFUNDS body casts)",
+      "breaking_input": "A `refund.processed` row for the probe payment whose stored body is not valid JSON, or whose `payload.refund.entity` is missing. The CTE filters the rows correctly, but the select list still casts `body::jsonb` for every surviving row, so one such row aborts the whole query.",
+      "why": "The B1 fix only ensures that rows of other events are not cast. A malformed refund.processed row of the same payment still throws a Postgres error for the entire read. verify then reports an opaque 'error: ...' reason and the slot wedges until someone deletes the row by hand. No coded refusal names the cause.",
+      "fix": "Parse each body once in the CTE, guarded by `case when pg_input_is_valid(body, 'jsonb') then body::jsonb end`, or compare `body ~ '^\\s*\\{'`. Report a row with a null refund_id as 'a refund.processed row launch did not send'.",
+      "twin_of": "The refund read cast every stored body to jsonb in the select list: every SQL cast over a column others write: filter first, cast after"
+    }
+  ]
+}
