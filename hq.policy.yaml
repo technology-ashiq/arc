@@ -52,6 +52,11 @@ ungrantable_resources:
   - ".claude/scripts/hq/lib/policy/**"
   - ".claude/scripts/hq/policy-lint.mjs"
   - ".claude/scripts/hq/policy-matrix.mjs"
+  # POL-L (ADR-0511): the evidence fold, its reader and the refusal profile decide whether the guard reports
+  # clean. A guard an agent can edit to report clean is not a guard -- the same sentence as the policy lib above.
+  - ".claude/scripts/hq/lib/policy-evidence/**"
+  - ".claude/scripts/hq/policy-evidence.mjs"
+  - ".claude/scripts/hq/lib/validate-policy-refusal.mjs"
 
 # Closed enums for the capabilities that have no live consumer yet. Empty is the honest state:
 # a grammar written for a capability nobody calls is stale on arrival.
@@ -93,6 +98,9 @@ argv0_classes:
 # here is read-only at L1 and nothing else (POL-B). Nothing is granted above L1 today: the
 # climb is event-earned, one human decision at a time, and this file is the ceiling those
 # decisions may not exceed.
+# evidence_days (POL-L, ADR-0510): how many IST days a refusal receipt stays FRESH for that pair. A pair at
+# effective L1+ on spend/publish/deploy/network/shell with no fresh typed refusal reads BELOW-BAR -- a configured
+# level is not an evidenced one. It never changes a level. 35 = the monthly guard's cadence plus 4 days' grace.
 kinds:
   # NOTE on every `shell` grant below sitting at L1. With ADR-0507's derivation, a shell grant
   # is capped at the minimum of every capability its programs can reproduce -- and every program
@@ -105,8 +113,8 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L2, roots: ["initiatives/**", "docs/**", "tests/**"] }
-    shell: { level: L1 }
-    network: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -116,8 +124,8 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L2, roots: ["initiatives/**", "docs/adr/**"] }
-    shell: { level: L1 }
-    network: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -127,8 +135,8 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L1 }
-    shell: { level: L1 }
-    network: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -138,8 +146,8 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L0 }
-    shell: { level: L1 }
-    network: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -165,7 +173,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L2, roots: [".claude/state/hq/**"] }
-    shell: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -176,7 +184,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L2, roots: [".claude/state/hq/**"] }
-    shell: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -188,7 +196,7 @@ kinds:
     read: { level: L3 }
     write: { level: L0 }
     shell: { level: L0 }
-    network: { level: L1 }
+    network: { level: L1, evidence_days: 35 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -248,8 +256,8 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L1 }
-    shell: { level: L1 }
-    network: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -262,7 +270,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L1 }
-    shell: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -275,7 +283,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L1 }
-    shell: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -289,7 +297,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L1 }
-    shell: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -303,7 +311,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L1 }
-    shell: { level: L1 }
+    shell: { level: L1, evidence_days: 35 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }

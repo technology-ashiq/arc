@@ -36,7 +36,7 @@ export const AVAILABILITY_MAPPING = Object.freeze({ fresh: null, stale: null, ab
  */
 export const REFUSAL_WRITERS = Object.freeze({
   headless: Object.freeze(["L0"]),
-  interactive: Object.freeze([]),
+  interactive: Object.freeze(["L1", "L2", "L3"]),
 });
 
 export const GUARD_PROCESS = "policy-evidence-guard";

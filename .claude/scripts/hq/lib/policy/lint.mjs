@@ -153,6 +153,12 @@ export function lintPolicy(text, opts = {}) {
       }
       const above1 = rank(level) > rank("L1");
 
+      // POL-L (ADR-0510): N is a whole number of days, or absent. A declared 0, a negative, a fraction or a string is a
+      // grant that claims a bar and sets none -- the evidence fold reads it as invalid-bar, and the law refuses it here.
+      if (Object.prototype.hasOwnProperty.call(grant, "evidence_days") &&
+          !(Number.isInteger(grant.evidence_days) && grant.evidence_days >= 1 && grant.evidence_days <= 3650))
+        add(`${where}.${capability}.evidence_days ${JSON.stringify(grant.evidence_days)} must be a whole number of days, 1..3650 (ADR-0510)`);
+
       if (e2NonEmpty && above1)
         add(`${where}.${capability} is ${level} but the kind declares E2 actions ${JSON.stringify(e2)} -- ` +
             `a non-empty e2 caps EVERY capability at L1 (blanket, not per-item)`);
