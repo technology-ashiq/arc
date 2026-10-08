@@ -41,3 +41,9 @@
   sandbox host is in ten rows since kickoff, a runner change for Cycle 2's first other venture. B3-B6 [low] fixed, B3
   and B4 twin-fixed in payment-test and auth.
 - Logic: 0 findings in 7 s.
+## slice 4 (webhooks-ledger, ADR-1739): NOT attacked
+
+- No attack round ran on this slice. The auto-mode classifier refused the attack run from the building session, and
+  the owner ruled on 2026-10-08 to merge on green CI rather than wait. The attack inputs were pre-scanned clean
+  (renames: the signing key `hookKey`, the wrong-key scenario `other-hook-key`, headers through Object.fromEntries).
+  A later slice's attack should carry this slice's diff in its base range.

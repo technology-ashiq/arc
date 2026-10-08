@@ -23,7 +23,7 @@ None declared.
 
 None declared.
 
-## Scripts (11)
+## Scripts (12)
 
 - [`.claude/scripts/launch/arc-launch.mjs`](../../../.claude/scripts/launch/arc-launch.mjs)
 - [`.claude/scripts/launch/launch-coverage.mjs`](../../../.claude/scripts/launch/launch-coverage.mjs)
@@ -34,6 +34,7 @@ None declared.
 - [`.claude/scripts/launch/lib/dag.mjs`](../../../.claude/scripts/launch/lib/dag.mjs)
 - [`.claude/scripts/launch/lib/runner.mjs`](../../../.claude/scripts/launch/lib/runner.mjs)
 - [`.claude/scripts/launch/lib/scan.mjs`](../../../.claude/scripts/launch/lib/scan.mjs)
+- [`.claude/scripts/launch/lib/simulated.mjs`](../../../.claude/scripts/launch/lib/simulated.mjs)
 - [`.claude/scripts/launch/lib/state.mjs`](../../../.claude/scripts/launch/lib/state.mjs)
 - [`.claude/scripts/launch/lib/worker.mjs`](../../../.claude/scripts/launch/lib/worker.mjs)
 

@@ -810,6 +810,94 @@ arm() {
   [ "$(j 'o.scaffold.ok + " " + o.creates + " " + o.lists + " " + o.reported.join(",")')" = "true 0 2 order_Mine00000000001" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: webhooks-ledger commits its route once, makes its table with RLS and the marker, adds two env names, and a re-scaffold creates nothing (ADR-1739)" {
+  arm webhooks thread
+  [ "$(j 'o.first + " " + o.second + " " + o.commits')" = "true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "db-tables,webhook-route,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.table.rls + " " + o.table.comment')" = "true arc-launch webhooks" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.env.split("\n").filter(Boolean).join(",")')" = "RAZORPAY_WEBHOOK_SECRET=,SUPABASE_SERVICE_ROLE_KEY=" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "drop razorpay_webhook_events if it still carries the arc-launch webhooks marker (down migration)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: webhooks-ledger verify delivers one signed event twice and reads back exactly one row, on every verify (ADR-1739)" {
+  arm webhooks thread
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai + api.supabase.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.stored + " " + o.verify.evidence.replays + " " + o.verify.evidence.reserialised + " " + o.verify.evidence.no_event_id')" = "1 2 401 400" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.rowsAfterVerify + " " + o.verifyAgain + " " + o.rowsAfterSecondVerify')" = "1 true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.queued.length + " " + o.queued[0].kind + " " + o.queued[0].payload.amount + " " + o.queued[0].payload.currency')" = "1 revenue.simulated 100 INR" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.queued[0].payload.payment_id')" == pay_ArcProbe0* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the probe payment is booked once as revenue.simulated, a replay adds zero events, and the P&L labels the line simulated (ADR-1739)" {
+  arm webhooks thread
+  [ "$(j 'o.book.state + " " + o.bookAgain.state')" = "landed recorded" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.spine.simulated + " " + o.spine.received')" = "1 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.simulatedLines[0]')" == *"SIMULATED"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.simulatedLines.slice(1).every((l) => l.startsWith("SIMULATED"))')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.simulatedLines.some((l) => l.includes("arc-sandbox")) && o.simulatedLines.some((l) => l.includes("razorpay:pay_ArcProbe0") && l.includes("1.00"))')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.realVentures')" = "0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the committed webhook route stores a valid signed event once, and a replay of it adds no row (ADR-1739)" {
+  arm webhooks route
+  [ "$(j 'o.valid.status + " " + o.valid.body.stored')" = "200 true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.replay.status + " " + o.replay.body.stored + " " + o.rowsAfterReplay')" = "200 false 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.stored.length + " " + o.stored[0].event_id + " " + o.stored[0].payment_id + " " + o.stored[0].amount + " " + o.stored[0].fee + " " + o.stored[0].raw')" = "1 evtRoute000001 pay_RouteFixture01 100 2 true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the committed webhook route answers a bad signature 401 and stores nothing (ADR-1739)" {
+  arm webhooks route
+  [ "$(j 'o.badSig.status + " " + o.rowsAtEnd')" = "401 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.stored.map((r) => r.event_id).join(",")')" = "evtRoute000001" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the committed webhook route refuses a signature over a re-serialised body, and an event with no event id (ADR-1739)" {
+  arm webhooks route
+  [ "$(j 'o.reserialised.status + " " + o.noId.status')" = "401 400" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.rowsAtEnd')" = "1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a missing RAZORPAY_WEBHOOK_SECRET fails the slot as env:RAZORPAY_WEBHOOK_SECRET, and an unset venture secret stores nothing (ADR-1739)" {
+  arm webhooks env-missing
+  [ "$(j 'o.exit + " " + o.state + " " + o.reason')" = "1 failed env:RAZORPAY_WEBHOOK_SECRET" ] || { echo "$DONE"; false; }
+  arm webhooks secret-unset
+  [ "$(j 'o.post.status + " " + o.rows')" = "500 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a venture domain outside the row's hosts[] is refused before any delivery (ADR-1739)" {
+  arm webhooks host-refused
+  [ "$(j 'o.verify.ok + " " + o.queued + " " + o.routeCalls')" = "false 0 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: webhooks-ledger verify is not ok and books nothing when the served route skips or re-serialises the signature, the secret differs, or a policy opens the table (ADR-1739)" {
+  arm webhooks served-accepts-any
+  [ "$(j 'o.mutated + " " + o.verify.ok + " " + o.queued')" = "true false 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.reason')" = "a signature over a re-serialised body was answered 200, not 401" ] || { echo "$DONE"; false; }
+  arm webhooks served-reserialises
+  [ "$(j 'o.mutated + " " + o.verify.ok + " " + o.queued + " " + o.rows')" = "true false 0 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "the route refused launch"*"signature over the raw body (401)"* ]] || { echo "$DONE"; false; }
+  arm webhooks other-hook-key
+  [ "$(j 'o.verify.ok + " " + o.queued + " " + o.rows')" = "false 0 0" ] || { echo "$DONE"; false; }
+  arm webhooks policy
+  [ "$(j 'o.verify.ok + " " + o.queued')" = "false 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "razorpay_webhook_events carries 1 policies"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: an owner's razorpay_webhook_events table is never altered, and no plans upstream refuses before any call (ADR-1739)" {
+  arm webhooks foreign-table
+  [ "$(j 'o.scaffold.code + " " + o.commits + " " + o.reported')" = "TABLES_FOREIGN 0 0" ] || { echo "$DONE"; false; }
+  arm webhooks no-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the simulated path refuses a payment it cannot book as INR money and writes nothing (ADR-1739)" {
+  arm webhooks ledger-refuses
+  [ "$(j 'o.usd.state + " " + o.noId.state + " " + o.feeOver.state')" = "refused refused refused" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.usd.why')" == *"INR only"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.spine.simulated + " " + o.spine.received')" = "0 0" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: auth -- a minted link signs in, /api/me knows the user, logout clears it, then 401" {
   arm login thread
   [[ "$(j 'o.authBefore.ok + " " + o.authBefore.reason')" == "false "*"is not launch's file" ]] || { echo "$DONE"; false; }
