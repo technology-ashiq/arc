@@ -41,7 +41,7 @@ waits on the owner's paste, never on effort.
 
 ## Now
 
-**Current position: Cycle 2 phases all closed (00, 01, 02); the retro is next.** Every configured L1 level in scope
+**Current position: Cycle 2 SEALED 2026-10-09 (retro: `docs/retro-log.md`, HISTORY C22); lane IDLE.** Every configured L1 level in scope
 now carries a declared bar (`N=35`) and a measured age, and a level whose refusal path is unproven reads BELOW-BAR,
 never PASS. The canonical reading is the predicted one: 17 in scope, 17 BELOW-BAR (15 `unknown`, 2 `absent`).
 
@@ -50,4 +50,4 @@ assumption row 1 forced when it fired (archived PLAN, row 1) · naming the lane 
 the four approval stamps (kickoff `01M49X8BNTYZRP2GHTQHQGT2ZD`, Phase 00 `01M4B92Q2TPHGWDPG6NJAMN0QH`, Phase 01
 `01M4BDVHKX8M01CFKPSHPME8P6`, Phase 02 `01M4EHTC6YQM8VJYZEFPP2CMMF`).
 
-**Next:** `/arc-retro --lane policy` seals Cycle 2 (the deny-floor commit row is the headline).
+**Next:** the owner’s call: stamp the four approvals, and decide STOP-or-fund before any Cycle 3 kickoff.
