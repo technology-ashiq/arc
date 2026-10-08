@@ -13,6 +13,10 @@
 > as a list. Adds REQ-08, one assumption row and one next-cycle phase; ENG-A..G untouched.
 > The lane is IDLE (Cycle 7 closed at Phase 08), so this is NOT a live phase spec — it is
 > built at the next `/arc-kickoff --lane engine`. Full text: § Amendment 1 below.
+> → **v2.2 2026-10-08, Amendment 2 (`/arc-change --lane engine`, from the Cycle 8 retro):**
+> ENG-I the logic attacker leaves its trial (a router row, `independent-family-verifier` filled
+> by its own ADR-0069 amendment, a governed chain) · ENG-J ci-digest exits 5 on a CONFLICTING PR
+> with no run · ENG-K `nonneg-drift` skips closed phases. Next cycle; full text: § Amendment 2.
 >
 > **Trigger (pull, any one — the first two are ADR-0069 block (d), checked where it says):**
 > **public-release prep begins** (any lane's PLAN.md names public release or external
@@ -360,6 +364,66 @@ IDLE and Cycle 7 closed at Phase 08, so this is a design-source amendment for th
 
 Adding providers · auto-switching (ADR-0069 b1 forbids it) · changing any tier · a new spine
 kind · a new driver exit code (ADR-0219) · filling `independent-family-verifier`.
+
+---
+
+## Amendment 2 (2026-10-08) — Cycle 8 retro: three items for the next engine cycle
+
+**Routed by** `/arc-change --lane engine` from the Cycle 8 retro (`docs/retro-log.md`, rows dated
+2026-10-08), each item approved by the owner the same day. The lane is IDLE (Cycle 8 closed at
+Phase 10), so this is a design-source amendment for the **next** `/arc-kickoff --lane engine`, not
+a live phase spec. Numbers (REQ, ADR, phase) are assigned at that kickoff, from engine's ADR band.
+
+### ENG-I — the logic attacker leaves its trial: a router row, a tier, a governed chain
+
+- **Verified (main @ `6f7cd6a5`):** `engine/router.yaml` gives the logic-surface attacker no row
+  on purpose and states the exit condition itself: once it "has run on more than one phase's PRs
+  it is production use, and it needs an ADR-0069 amendment filling `independent-family-verifier`
+  plus a row of its own -- or it stops." It has run on PRs in org C17, C18, C20 and engine C8.
+- **The cost of leaving it:** in all four cycles the logic surface failed through `/arc-attack`
+  and was re-run by hand on another model; three advisory retro rows (2026-10-02, -03, -05) did
+  not stop it. Cycle 8 built the exact mechanism that would: a classified failure that hops.
+- **What the kickoff decides:** an ADR amending ADR-0069 that fills `independent-family-verifier`
+  (a production tier change — a reviewed diff citing ADR-0069, per AGENTS.md), and an
+  `attack-diff-logic` row with the three ENG-H chain terms.
+- **Fork, with a recommendation:** router.yaml's attack row says "quietly swapping an attacker onto
+  another model family is not a fallback, it is a different attacker." *Recommendation:* a hop is
+  allowed only inside the non-Claude set the tier names, and the attack report names the model
+  that produced it, so the swap is visible rather than quiet. That is what is done by hand today,
+  unreceipted.
+- **Pin:** a logic run whose first model fails `transport`/`provider-unavailable` produces a
+  report from the second model with no human step, and its receipt carries both hops.
+
+### ENG-J — ci-digest tells "no run yet" from "no run ever"
+
+- **Verified:** `.claude/scripts/review/ci-digest.mjs` exits 3 for both "no run yet" and "jobs
+  still running". GitHub builds no `refs/pull/N/merge` for a CONFLICTING PR, so no run ever comes,
+  and the background watch loop (exit 3 = keep waiting) waits to its deadline. PR #375 lost three
+  hours this way; the 2026-08-13 arc-ledger row had already named the cause.
+- **Change:** when the head SHA has no run, read the PR's `mergeable` state; on `CONFLICTING`,
+  exit with a new code of its own (5) and print the fix: regenerate the generated files on the
+  merged tree. `UNKNOWN` (GitHub still computing) stays 3.
+- **Blast radius counted:** callers are `.claude/commands/arc-attack.md`, `tests/engine-attack-diff.bats`,
+  `tests/engine-attack-probe.mjs`; the watch loops in AGENTS.md and memory break on any non-3 code,
+  so a new code stops them, which is the point. The sync golden lists the file.
+- **Pin:** a fixture `gh` answering no runs + `CONFLICTING` exits 5; no runs + `MERGEABLE` exits 3.
+
+### ENG-K — kickoff-lint's `nonneg-drift` stops judging closed phases
+
+- **Verified:** `kickoff-lint.mjs` § 8d compares every `phases/phase-NN-spec.md` against the live
+  PLAN's non-negotiables, done or not. Engine's `phase-00-spec.md` (parked, shipped in Cycle 6)
+  WARNs against Cycle 8's PLAN on every run, a false positive logged in `docs/trial-ledger.md`
+  2026-10-08 that resets the gate's promotion count.
+- **Change:** skip a spec whose phase row in PLAN/PROGRESS is done (✅) or parked; a closed phase's
+  spec is history, and no executor reads it.
+- **Pin:** a fixture with a drifted done-phase spec is clean; the same drift on an open phase still
+  WARNs (the mutant that skips every spec must fail).
+
+### No-gos (this amendment)
+
+Auto-switching (ADR-0069 b1) · a new spine kind · any change to ENG-H's six classes · ENG-I is the
+ONLY tier change, and it overrides Amendment 1's "filling `independent-family-verifier`" no-go by
+name, through its own ADR.
 
 ---
 

@@ -74,8 +74,15 @@ done → scope cut (REQ-11's claude-code/codex declarations stay `unknown`).
 ## Now
 
 **Position:** CYCLE 8 CLOSED and **MERGED** as PR #375, squash `3ffc2220` (2026-10-07), CI 19/19 at the PR head `8c73e0c4`.
-`git diff origin/main 8c73e0c4` is empty, so the squash carried the whole branch. **Next: the owner's three stamps below;
-a Cycle 8 retro (`/arc-retro --lane engine`) is optional and not started.**
+`git diff origin/main 8c73e0c4` is empty, so the squash carried the whole branch. The owner's three stamps below are
+**recorded** (one `decision.recorded` each, read in the main clone 2026-10-08).
+
+**2026-10-08 — Cycle 8 retro done** (`docs/retro-log.md` two recurring rows + scoreboard, `docs/HISTORY.md` C8,
+`docs/trial-ledger.md` one row). Its three items were routed by `/arc-change --lane engine`, owner-approved, into the
+design source as **Amendment 2** (`docs/strategy/plans/PLAN-engine-process-layer.md`): ENG-I the logic attacker leaves
+its trial (router row + ADR-0069 amendment filling `independent-family-verifier` + a governed chain), ENG-J ci-digest
+exits 5 on a CONFLICTING PR with no run, ENG-K `nonneg-drift` skips closed phases. **Next: `/arc-kickoff --lane engine`
+builds Amendment 2; nothing is live until then.**
 
 **Kickoff attack panel (Tier S, one merged A+C plan-attacker run): 7 findings, 6 applied, 1 rejected.** Applied:
 F1 the schema ladder must not retry after a cross-family hop (2 attempts, never 3); F2 a deadline-edge transport
