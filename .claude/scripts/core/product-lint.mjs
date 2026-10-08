@@ -215,7 +215,7 @@ if (existsSync(claudeDir)) {
         if (e.name === "state" || e.name === "attic" || e.name === "worktrees") continue;
         walk(join(absDir, e.name), rel ? `${rel}/${e.name}` : e.name);
       } else {
-        if (e.name === "settings.local.json" || e.name === "scheduled_tasks.lock") continue;
+        if (e.name === "settings.local.json" || e.name === "scheduled_tasks.lock" || e.name.startsWith(".headroom_wrap_")) continue;
         surface.push(`.claude/${rel ? rel + "/" : ""}${e.name}`);
       }
     }

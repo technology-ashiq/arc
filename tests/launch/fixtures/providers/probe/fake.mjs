@@ -9,6 +9,7 @@
 //   FAKE_WRITE=rel             call ctx.write(rel) before creating anything
 //   FAKE_SENSITIVE=action      call ctx.sensitive(action) before creating anything
 //   FAKE_PRINT_UPSTREAM=1      print `FAKE_UPSTREAM <json of ctx.upstream>` before creating anything
+//   FAKE_SIMULATED=json        a verify that passes queues this stored payment as revenue.simulated (ADR-1739)
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 export const id = "fake";
@@ -54,6 +55,7 @@ export function envContract() {
 export async function verify(ctx) {
   if (process.env.FAKE_PRINT_UPSTREAM) console.log(`FAKE_UPSTREAM ${JSON.stringify(ctx.upstream)}`);
   const mine = read().filter((r) => r.tag === ctx.tag);
+  if (mine.length === 2 && process.env.FAKE_SIMULATED) ctx.emit("revenue.simulated", JSON.parse(process.env.FAKE_SIMULATED));
   return mine.length === 2 ? { ok: true, answerer: "fake-provider-file", evidence: { resources: mine.length } } : { ok: false, reason: `provider holds ${mine.length} of 2` };
 }
 

@@ -642,6 +642,16 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     const spread = smoke.judge({ ...base, runner: [{ room: "engine-room", text: exact }, { room: "memory", text: exact }] });
     check("RUNNER: the class has a ceiling -- two in one room pass, three or two rooms' worth fail the run",
       one.ok && !three.ok && three.reasons.some((r) => /beyond the ceiling/.test(r)) && !spread.ok && spread.reasons.some((r) => /beyond the ceiling/.test(r)), JSON.stringify({ one: one.reasons, three: three.reasons, spread: spread.reasons }));
+    const fl = (list, p) => smoke.pageErrorsOf(list, p);
+    const two = fl([{ room: "review-ship", type: "log", text: exact }, { room: "review-ship", type: "log", text: exact }, { room: "today", type: "exception", text: "boom" }], "win32");
+    const over = fl([1, 2, 3].map(() => ({ room: "review-ship", type: "log", text: exact })), "win32");
+    const apart = fl([{ room: "review-ship", type: "log", text: exact }, { room: "memory", type: "log", text: exact }], "win32");
+    const lin = fl([{ room: "review-ship", type: "log", text: exact }], "linux");
+    check("RUNNER (flows): within the ceiling the runner line is apart and the page's exception still counts",
+      two.runner.length === 2 && two.counted.length === 1 && two.beyond === 0, JSON.stringify(two));
+    check("RUNNER (flows): MUTANT -- three in a room, or one in each of two rooms, all count as page errors",
+      over.counted.length === 3 && over.runner.length === 0 && over.beyond === 3 && apart.counted.length === 2 && apart.beyond === 2, JSON.stringify({ over, apart }));
+    check("RUNNER (flows): on linux the line is the page's and counts", lin.counted.length === 1 && lin.runner.length === 0, JSON.stringify(lin));
     check("LINES: the runner and planned lines are sorted, so a mutant that stops sorting is seen",
       smoke.runnerLine({ mood: "dark", runner: [{ room: "memory", text: exact }, { room: "bench", text: exact }] }) === "smoke: runner-errors mood=dark count=2 rooms=bench:1,memory:1"
       && smoke.plannedLine({ mood: "dark", planned: { rooms: ["trader", "ops"], live: [], expected: 2 } }) === "smoke: planned mood=dark rooms=2 expected=2 live=0 planned-rooms=ops,trader");
