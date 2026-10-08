@@ -606,6 +606,12 @@ arm() {
   [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: a no-op frontend reports launch's own commit, not the owner's later head, and identical owner bytes are refused (attack b1844e0 B1)" {
+  arm release owner-later-commits
+  [ "$(j 'o.firstId === o.againId')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.headIsOwner + " " + o.adopted.ok + " " + o.adopted.code')" = "false false FOREIGN_FILE" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: release does not lift a vercel.json the owner rewrote after hosting" {
   arm release owner-rewrote-hold
   [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
@@ -1009,4 +1015,66 @@ arm() {
   arm login replaced-tables
   [ "$(j 'o.plans.code + " " + o.planRls')" = "TABLES_FOREIGN false" ] || { echo "$DONE"; false; }
   [ "$(j 'o.authz.code + " " + o.orgRls')" = "TABLES_FOREIGN false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: checkout-portal commits once with no Razorpay call, and verify proves the page, a 201 on the slot's key and the 49900 INR order (ADR-1738)" {
+  arm login checkout
+  [ "$(j 'o.before.ok')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.first.ok + " " + o.second.ok + " " + o.commits + " " + o.scaffoldCalls + " " + o.files.join(",")')" = "true true 1 0 true,true,true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.env')" == *"NEXT_PUBLIC_SUPABASE_ANON_KEY="*"RAZORPAY_KEY_ID="*"RAZORPAY_KEY_SECRET="* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.envIds')" = "1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.page + " " + o.verify.evidence.checkout + " " + o.verify.evidence.amount')" = "true sandbox.automemory.ai + api.razorpay.com 200 201 49900" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.order === o.order.id')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.order.amount + " " + o.order.currency + " " + o.order.forProbeOrg + " " + o.order.plan + " " + o.order.receipt')" = "49900 INR true pro true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verifyAgain.ok + " " + o.creates')" = "true 2" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "checkout-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "none (the checkout files stay with the venture; Razorpay keeps its test orders)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the committed checkout route answers 401 signed out, 400 for a non-uuid, 403 for another tenant's org, and orders nothing for any (ADR-1738)" {
+  arm login checkout-refusals
+  [ "$(j 'o.orgs + " " + o.cookie')" = "2 true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.signedOut + " " + o.notUuid + " " + o.notMember + " " + o.refusedCreates')" = "401 400 403 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.member.status + " " + o.member.test + " " + o.member.slotKey + " " + o.member.amount + " " + o.member.currency + " " + o.member.leaksSecret + " " + o.creates')" = "201 true true 49900 INR false 1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a live key refuses in checkout-portal before any call, and in the venture's server env the route answers 503 with no order (gate 3 never crossed)" {
+  arm login checkout-live-server
+  [ "$(j 'o.slotLive.code + " " + o.slotLiveCommits + " " + o.slotLiveCalls')" = "LIVE_KEY 0 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.slotLiveVerify.ok + " " + o.slotLiveVerify.reason')" == "false LIVE_KEY: "* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.reason + " " + o.creates')" = "false POST /api/checkout answered 503, not 201 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a venture deployed with another account's test key never verifies checkout-portal (ADR-1738)" {
+  arm login checkout-key-mismatch
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false the key id /api/checkout gave is not this slot's RAZORPAY_KEY_ID, so the site does not run the keys launch proved" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates')" = "1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: checkout-portal verify refuses an order whose amount, currency or org is not the plan's (ADR-1738)" {
+  arm login checkout-amount
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false order order_"*" is 100 INR, not 49900 INR" ]] || { echo "$DONE"; false; }
+  arm login checkout-currency
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false order order_"*" is 49900 USD, not 49900 INR" ]] || { echo "$DONE"; false; }
+  arm login checkout-org
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false order order_"*" is not for the probe org launch-probe-a" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a missing Razorpay key fails checkout-portal as env:RAZORPAY_KEY_ID in the real worker" {
+  arm login checkout-env-missing
+  [ "$(j 'o.exit + " " + o.state + " " + o.reason')" = "1 failed env:RAZORPAY_KEY_ID" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: checkout-portal verify on a venture domain outside hosts[] is refused by ctx.fetch, and no order is made" {
+  arm login checkout-host
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false HOST_REFUSED: evil.example.com is not in this provider's hosts[]"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates')" = "0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: checkout-portal verify names an owner's repricing before any order, a re-run never commits over it; no upstream refuses" {
+  arm login checkout-owner-prices
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false lib/prices.js at "*" is not launch's file" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates + " " + o.again.code')" = "0 FOREIGN_FILE" ] || { echo "$DONE"; false; }
+  arm login checkout-no-upstream
+  [ "$(j 'o.scaffold.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
 }

@@ -93,6 +93,9 @@ export async function scaffold(ctx) {
   const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
   if (!SHA.test(head)) throw new Error(`github returned no main head for ${full}`);
   const changed = [];
+  // The newest commit of launch's own that an unchanged file came from: the id a no-op run reports, never main's head,
+  // which may be the owner's later commit (attack b1844e0 B1).
+  let mine = "";
   for (const [path, text] of Object.entries(FILES)) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
     if (cur.status === 404) { changed.push(path); continue; }
@@ -102,11 +105,15 @@ export async function scaffold(ctx) {
     // does (attack 3f04230 L3/L4).
     const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
     const top = list(log.body)[0];
-    if (utf8(b.content) === text && hasLine(top && top.commit && top.commit.message, trailer(ctx))) continue;
+    if (utf8(b.content) === text && hasLine(top && top.commit && top.commit.message, trailer(ctx))) {
+      if (!mine && SHA.test(String(top.sha))) mine = String(top.sha);
+      continue;
+    }
     if (!hasLine(top && top.commit && top.commit.message, trailer(ctx))) throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's code; it is not committed over`);
     changed.push(path);
   }
-  let sha = head;
+  let sha = mine;
+  if (!changed.length && !SHA.test(sha)) throw new Error(`github named no commit of launch's for the files in ${full}`);
   if (changed.length) {
     const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
     const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";

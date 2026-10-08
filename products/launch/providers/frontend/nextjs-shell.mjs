@@ -112,24 +112,33 @@ export async function scaffold(ctx) {
   // Each path is either absent, already exactly ours, or last written by launch; any other file there is the owner's
   // code and the shell is not committed over it.
   const changed = [];
+  // The newest commit of launch's own that an unchanged file came from: the id a no-op run reports, never main's head,
+  // which may be the owner's later commit (attack b1844e0 B1).
+  let mine = "";
   for (const [path, text] of Object.entries(want)) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
     if (cur.status === 404) { changed.push(path); continue; }
     const have = decode(cur.body);
     if (have === null) throw refuse("FOREIGN_FILE", `${full}:${path} is not a plain file; the shell is not committed over it`);
-    if (utf8(have) === text) continue;
+    // Identical bytes are still the owner's unless launch committed them: the trailer decides, content alone never
+    // does (twin of attack 3f04230 L3/L4, found by attack b1844e0).
     const log = await gh(ctx, "GET", `/repos/${full}/commits?path=${encodeURIComponent(path)}&sha=${head}&per_page=1`);
-    if (!hasLine(list(log.body)[0] && list(log.body)[0].commit && list(log.body)[0].commit.message, trailer(ctx)))
+    const top = list(log.body)[0];
+    if (!hasLine(top && top.commit && top.commit.message, trailer(ctx)))
       throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's code; the shell is not committed over it`);
+    if (utf8(have) === text) {
+      if (!mine && SHA.test(String(top.sha))) mine = String(top.sha);
+      continue;
+    }
     changed.push(path);
   }
 
   if (!changed.length) {
-    ctx.report({ kind: "frontend-shell", id: `${full}:${head}` });
-    return { files: Object.keys(want), resources: [{ kind: "frontend-shell", id: `${full}:${head}` }], notes: [] };
+    if (!SHA.test(mine)) throw new Error(`github named no commit of launch's for the shell in ${full}`);
+    ctx.report({ kind: "frontend-shell", id: `${full}:${mine}` });
+    return { files: Object.keys(want), resources: [{ kind: "frontend-shell", id: `${full}:${mine}` }], notes: [] };
   }
 
-  for (const path of changed) ctx.write(path, want[path]);
   const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
   const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
   if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}@${head.slice(0, 7)}`);
@@ -147,6 +156,9 @@ export async function scaffold(ctx) {
   if (!SHA.test(sha)) throw new Error(`github returned no commit for the shell of ${full}`);
   // Not forced: if main moved since the read, GitHub refuses the fast-forward and a re-run starts from the new head.
   await gh(ctx, "PATCH", `/repos/${full}/git/refs/heads/main`, { sha, force: false });
+  // The local copy is written only once the commit is on main, so the venture root never holds files the repo lacks
+  // (twin of attack 3a6350b B3, found by attack b1844e0).
+  for (const path of changed) ctx.write(path, want[path]);
   ctx.report({ kind: "frontend-shell", id: `${full}:${sha}` });
   return { files: Object.keys(want), resources: [{ kind: "frontend-shell", id: `${full}:${sha}` }], notes: [] };
 }
