@@ -648,6 +648,19 @@ export function classifyErrors(errors, excluded, platform) {
   return { counted, runner, excludedCount };
 }
 
+/**
+ * The page errors a suite with no ceiling verdict of its own counts: the flows suite counted the runner's line as
+ * the page's and went red on a run whose every flow passed. Within the ceiling and one room the class is the
+ * runner's and is returned apart; past it, nothing is the runner's and every error counts.
+ * @param {{ room: string, type: string, text: string }[]} errors @param {string} platform
+ */
+export function pageErrorsOf(errors, platform) {
+  const { counted, runner } = classifyErrors(errors, [], platform);
+  const rooms = new Set(runner.map((e) => e.room));
+  const within = runner.length <= RUNNER_CEILING && rooms.size <= 1;
+  return { counted: within ? counted : [...errors], runner: within ? runner : [], beyond: within ? 0 : runner.length };
+}
+
 /** The runner-class errors per room: counted on their own line, so they are never folded into a clean zero. */
 export function runnerLine(report) {
   if (!Array.isArray(report.runner)) return `smoke: runner-errors mood=${report.mood ?? "unstated"} count=unread rooms=none`;

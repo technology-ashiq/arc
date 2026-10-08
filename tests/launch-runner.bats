@@ -239,3 +239,27 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
   run env FAKE_PRINT_UPSTREAM=1 node "$(L)" verify after-probe --venture fx-sandbox $FX_FLAGS
   [[ "$output" == *'FAKE_UPSTREAM {"probe":[]}'* ]] || { echo "$output"; false; }
 }
+
+@test "launch-runner: a queued revenue.simulated is booked once through the ledger path, and the same payment from another slot adds nothing (ADR-1739)" {
+  local pay='{"payment_id":"pay_Fixture0123abcd","amount":100,"fee":0,"currency":"INR","paid_at":1791000000}'
+  run env FAKE_SIMULATED="$pay" node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: revenue.simulated booked "* ]] || { echo "$output"; false; }
+  [ "$(spine_kind revenue.simulated)" -eq 1 ]
+  [ "$(spine_kind revenue.received)" -eq 0 ]
+  grep -q '"provider_payment_id":"razorpay:pay_Fixture0123abcd"' "$ARC_SPINE_ROOT"/events/*.jsonl
+  run env FAKE_SIMULATED="$pay" node "$(L)" apply after-probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"after-probe: revenue.simulated already booked -- nothing added"* ]] || { echo "$output"; false; }
+  [ "$(spine_kind revenue.simulated)" -eq 1 ]
+}
+
+@test "launch-runner: a payment the ledger refuses fails the attempt with the ledger's reason and books nothing (ADR-1739)" {
+  run env FAKE_SIMULATED='{"payment_id":"pay_Fixture0123abcd","amount":100,"fee":0,"currency":"USD","paid_at":1791000000}' node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: failed (ledger:refused the ledger would not book it: "*"INR only)"* ]] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "failed" ]
+  [ "$(spine_kind revenue.simulated)" -eq 0 ]
+  [ "$(spine_kind run.completed)" -eq 1 ]
+  grep -q '"outcome":"fail"' "$ARC_SPINE_ROOT"/events/*.jsonl
+}

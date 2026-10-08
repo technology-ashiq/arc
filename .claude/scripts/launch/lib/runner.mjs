@@ -10,6 +10,7 @@ import { ROOT, PATHS, LaunchError, loadCatalog, loadRegistry, loadProfile, resol
 import { adapterDigest } from "./scan.mjs";
 import { clean } from "./board.mjs";
 import { emptyState, loadState, saveState, slotRow, setSlot, receiptKey } from "./state.mjs";
+import { recordSimulated } from "./simulated.mjs";
 import { withLock, spineRoot, eventsDir } from "../../hq/lib/spine-io.mjs";
 
 export const LAUNCH_VERSION = "0.1.0";
@@ -343,7 +344,15 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       const after = slotRow(s, slot.id);
       const key = receiptKey(slug, slot.id, prow.id, attempt);
       const base = { slot: slot.id, provider: prow.id, honesty_class: profile.honesty_class, attempt, key };
-      for (const q of after.queued || []) emit(q.kind, { ...q.payload, venture: slug }, slug, log);
+      // A queued revenue.simulated is booked through the ledger's parser, never emitted as written (ADR-1739). The slot
+      // is verified only once its ledger line exists: a refusal fails the attempt with the ledger's reason.
+      let ledger = null;
+      for (const q of after.queued || []) {
+        if (q.kind !== "revenue.simulated") { emit(q.kind, { ...q.payload, venture: slug }, slug, log); continue; }
+        const got = recordSimulated(slug, q.payload, { process: PROCESS });
+        if (got.state === "landed" || got.state === "recorded") log(`${slot.id}: revenue.simulated ${got.state === "landed" ? `booked ${got.id || "(id line lost)"}` : "already booked -- nothing added"}`);
+        else ledger = ledger || `ledger:${got.state} ${got.why}`;
+      }
       if (r.status === 5 && after.state === "awaiting-approval") {
         const id = emit("approval.requested", { what: `${after.pending_action}: ${slot.id} via ${prow.id} for ${slug}`, gate: `sensitive:${after.pending_action}`, slot: slot.id, provider: prow.id, venture: slug, honesty_class: profile.honesty_class }, slug, log);
         // An unrecorded request is a failure, never a pause: a slot "awaiting" an approval id that does not exist
@@ -358,12 +367,12 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
         return EXIT.AWAITING;
       }
       let outcome;
-      if (r.status === 0 && after.state === "verified") outcome = "ok";
+      if (r.status === 0 && after.state === "verified" && !ledger) outcome = "ok";
       else {
         const timedOut = r.error && r.error.code === "ETIMEDOUT";
         // A worker that recorded no terminal state died mid-attempt; Windows reports a SIGKILL as plain exit 1, so the
         // reason names what is known (no result) rather than guessing the cause from the code.
-        const reason = timedOut ? "timeout" : after.state === "failed" && after.reason ? after.reason
+        const reason = timedOut ? "timeout" : ledger && after.state === "verified" ? ledger : after.state === "failed" && after.reason ? after.reason
           : `error:worker ended without a result (${r.signal ? `signal ${r.signal}` : `exit ${r.status}`})`;
         s = saveState(P.stateDir, setSlot(s, slot.id, { state: "failed", reason }));
         outcome = "fail";

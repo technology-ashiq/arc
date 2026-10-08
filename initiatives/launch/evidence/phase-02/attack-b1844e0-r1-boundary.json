@@ -1,0 +1,57 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/checkout-portal/razorpay-checkout.mjs:scaffold (commitFiles early return and ctx.report)",
+      "breaking_input": "Scaffold once so launch commits the files. The owner then pushes any commit to main, and scaffold re-runs. commitFiles finds nothing changed and returns `head`, which is the owner's commit. scaffold reports `{kind:\"checkout-routes\", id:\"<repo>:<owner sha>\"}`.",
+      "why": "The resource id is the check (main's current head), not the create. Every later main commit adds another `checkout-routes` resource that launch never made, so state fills with ids that are not launch's commits. A later exit plan that compares or acts on that sha treats the owner's commit as launch's. The mirror failure is also possible: the first scaffold records its own sha, and a later no-op re-run overwrites that with a different id.",
+      "fix": "Report the id only when this call created a commit. On the no-op path, report nothing new, or report the sha of the last commit carrying this slot's trailer. Make the id stable, for example the repo plus the file paths.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/launch.providers.yaml (razorpay-checkout hosts[])",
+      "breaking_input": "Run the checkout-portal slot for any real venture whose brand.domain is not sandbox.automemory.ai.",
+      "why": "A per-venture domain is hard-coded into a registry row shared by every venture. verify fetches https://<domain>/..., and ctx.fetch refuses it with HOST_REFUSED. The `checkout-host` test pins exactly that refusal. So verify can only ever pass for the sandbox, and a venture's own domain would need a registry edit and re-approval.",
+      "fix": "Derive the venture domain into the allowed hosts at ctx build time, or declare a placeholder such as `${brand.domain}` that the runner expands. Do not list a literal sandbox host in a product-wide row."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/checkout-portal/razorpay-checkout.mjs:rz",
+      "breaking_input": "api.razorpay.com answers a GET /v1/orders/<id> with a 30x to another host. The call carries `authorization: Basic <key:secret>`.",
+      "why": "call(), page() and html() set `redirect: \"manual\"`. rz() does not, and it is the only caller that sends the Razorpay secret. It relies entirely on ctx.fetch re-checking each hop, and a platform fetch forwards or drops the header depending on its version. Its sibling helpers keep the guard locally.",
+      "fix": "Pass `redirect: \"manual\"` in rz() and treat any 3xx as a failure.",
+      "twin_of": "ctx.fetch checked only the first URL and let fetch follow redirects to a host nobody checked -> every allowlist checked once on an input that the callee may replace"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/checkout-portal/razorpay-checkout.mjs:addEnvNames",
+      "breaking_input": "An owner's .env.example that is CRLF (a Windows checkout round-tripped through the API), or that carries `export RAZORPAY_KEY_ID=` or ` RAZORPAY_KEY_ID = ` lines.",
+      "why": "`have` is built from `l.split(\"=\")[0].trim()`, so `export RAZORPAY_KEY_ID` never matches and the name is appended a second time. On a CRLF file the added lines use bare LF, which leaves the file with mixed line endings and a noisy diff.",
+      "fix": "Strip a leading `export ` and match the name case-sensitively after trimming. Detect `\\r\\n` in the existing text and join the added lines with the same ending.",
+      "twin_of": "The lint self-test edited LF literals into files a Windows checkout gives it as CRLF -> every test fixture that edits checked-out text by literal match"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/checkout-portal/razorpay-checkout.mjs:FILES[\"app/api/checkout/route.js\"] (receipt)",
+      "breaking_input": "Two orgs whose uuids share the first 24 characters, that is the first four groups. Time-ordered uuids and sequential fixture ids do this. Both get the receipt `org-<same 24>`.",
+      "why": "The cut keeps the 8-4-4-4 groups plus the trailing dash and drops the 12 hex digits that make the uuid unique, so distinct orgs can share a provider-side key. Any receipt-based lookup then conflates their orders, and the slot already knows receipt-keyed lookups are fragile. The test pins the 24-character cut itself.",
+      "fix": "Use the whole uuid. `org-` plus 36 characters is 40, which fits Razorpay's 40-character receipt limit.",
+      "twin_of": "A 40-character cut gave two long slugs the same Razorpay receipt -> every provider-side key cut to a length limit: does the cut keep it unique?"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/checkout-portal/razorpay-checkout.mjs:html and probe (/checkout read)",
+      "breaking_input": "/checkout answers 200 with a multi-hundred-MB or never-ending body. Or it answers 200 with an HTML comment or visible text that merely contains `checkout.razorpay.com/v1/checkout.js`.",
+      "why": "`res.text()` reads the whole body with no size cap and no per-call timeout of its own, so a hostile or broken page holds memory until the slot timeout. The check is also a bare substring match, so a comment or text node satisfies it with no `<script src>` present.",
+      "fix": "Cap the bytes read, for example 1 MB, and match `<script[^>]*src=\"https://checkout.razorpay.com/v1/checkout.js\"` rather than the bare URL."
+    }
+  ]
+}

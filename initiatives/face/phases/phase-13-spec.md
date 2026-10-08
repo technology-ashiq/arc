@@ -11,14 +11,16 @@ Why it exists (owner, 2026-10-07, from the org session): the role cards already 
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **A — the route carries binds:** `GET /api/org` returns each role's `binds` (`agents`, `skills`, `scripts`, `process`, `tier`) exactly as the card holds them; a card with no `binds` returns empty lists, never a missing field.
-- [ ] **A — the room says who:** `fold.mjs`'s `RoleRow` carries the binds and the View lists them under each role by name; a `vacant` role reads "no one sits this role"; a staffed seat with empty binds is named as a disagreement, not drawn as filled. Held by the org module's node fixture, with a mutant that draws a vacant seat as filled.
-- [ ] **B — the op plans:** `org.seat-assign` (room `org`, `touchesFiles: true`, `humanRun: true`) takes a role, a seat and its agents; its plan runs `org/org-own.mjs` in assign mode with `--dry-run` and shows the card diff and the derived tier; nothing is written.
-- [ ] **B — the op applies on a branch only:** apply rewrites ONLY `seat`, `binds.agents` and `binds.tier` of ONE card (and re-renders `org/CHART.md` + `org/chart.json` from the cards, which CI checks) on a new proposal branch off `main` and emits one `approval.requested`; `main` and the owner's checkout are untouched; every other byte of the card is identical (a fixture compares the rest of the card before and after).
-- [ ] **B — refusals before any file or event:** an agent with no `.claude/agents/<name>.md`; a card id duplicated across departments; a staffed seat with empty binds or a vacant seat with binds. Each refusal leaves no branch, no file and no spine event (fixture asserts all three).
-- [ ] **B — tier is derived, never typed:** the op has no tier field; `binds.tier` comes from the bound agents' frontmatter as `org-catalog`/`org-own` derive it; a mutant that accepts a typed tier FAILs.
-- [ ] **Browser smoke:** the Org room shows a staffed role's agents and a vacant role's words, and the seat op opens its plan, in dark and in light.
-- [ ] Two fresh attackers (logic · boundary) through `/arc-attack`, one round; CI green per job; the wiki regenerated in the same PR; `/arc-phase-done 13` from the main clone.
+- [x] **A — the route carries binds:** `GET /api/org` returns each role's `binds` (`agents`, `skills`, `scripts`, `process`, `tier`) exactly as the card holds them; a card with no `binds` returns empty lists, never a missing field.
+- [x] **A — the room says who:** `fold.mjs`'s `RoleRow` carries the binds and the View lists them under each role by name; a `vacant` role reads "no one sits this role"; a staffed seat with empty binds is named as a disagreement, not drawn as filled. Held by the org module's node fixture, with a mutant that draws a vacant seat as filled.
+- [x] **B — the op plans:** `org.seat-assign` (room `org`, `touchesFiles: true`, `humanRun: true`) takes a role, a seat and its agents; its plan runs `org/org-own.mjs` in assign mode with `--dry-run` and shows the card diff and the derived tier; nothing is written.
+- [x] **B — the op applies on a branch only:** apply rewrites ONLY `seat`, `binds.agents` and `binds.tier` of ONE card (and re-renders `org/CHART.md` + `org/chart.json` from the cards, which CI checks) on a new proposal branch off `main` and emits one `approval.requested`; `main` and the owner's checkout are untouched; every other byte of the card is identical (a fixture compares the rest of the card before and after).
+- [x] **B — refusals before any file or event:** an agent with no `.claude/agents/<name>.md`; a card id duplicated across departments; a staffed seat with empty binds or a vacant seat with binds. Each refusal leaves no branch, no file and no spine event (fixture asserts all three).
+- [x] **B — tier is derived, never typed:** the op has no tier field; `binds.tier` comes from the bound agents' frontmatter as `org-catalog`/`org-own` derive it; a mutant that accepts a typed tier FAILs.
+- [x] **Browser smoke:** the Org room shows a staffed role's agents and a vacant role's words, and the seat op opens its plan, in dark and in light.
+- [x] Two fresh attackers (logic · boundary) through `/arc-attack`, one round; CI green per job; the wiki regenerated in the same PR; `/arc-phase-done 13` from the main clone.
+
+Closed 2026-10-08 (`/arc-phase-done 13`): every row above is held on CI (PR #361 head `6145114a`, run 37553735013, 19/19, suite 1..4251). The owner read the Org room's seats from the main clone ("org seats pathen ok now"). His words do not say he planned a seat change, and no seat change was applied, so the live check is narrower than the Verification plan's Live row. The logic attacker returned 0 findings. See `evidence/phase-13/owner-demo.md` and the done log.
 
 ## Verification plan
 

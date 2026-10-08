@@ -20,7 +20,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { openPage } from "./cdp.mjs";
-import { withChrome, collectErrors, until, redactSecrets, oneLine } from "./smoke.mjs";
+import { withChrome, collectErrors, until, redactSecrets, oneLine, pageErrorsOf } from "./smoke.mjs";
 import { unescapeDoorText } from "../src/lib/door.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -364,8 +364,11 @@ export async function runFlows(opts, log = (line) => process.stdout.write(line +
     const sessions = await sessionFlow({ ...opts, page, errors, current }, log);
     log(sessionsLine(sessions));
 
-    for (const e of errors.slice(0, 10)) log(`flow: page-error room=${e.room} ${e.type} ${oneLine(redactSecrets(e.text, [opts.token]))}`);
-    return { ops: ops.length, ok, failed, live, sessions, errors: errors.length };
+    // The smoke's runner rule, applied here too (pageErrorsOf): named on its own line, never dropped.
+    const { counted, runner, beyond } = pageErrorsOf(errors, process.platform);
+    log(`flow: runner-errors count=${runner.length} rooms=${[...new Set(runner.map((e) => e.room))].join(",") || "none"}${beyond ? ` beyond-ceiling=${beyond} counted as page errors` : ""}`);
+    for (const e of counted.slice(0, 10)) log(`flow: page-error room=${e.room} ${e.type} ${oneLine(redactSecrets(e.text, [opts.token]))}`);
+    return { ops: ops.length, ok, failed, live, sessions, errors: counted.length };
   });
 }
 

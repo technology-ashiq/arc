@@ -65,6 +65,9 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
   if (!SHA.test(head)) throw new Error(`github returned no main head for ${full}`);
   const changed = {};
+  // The newest commit of launch's own that an unchanged file came from: the id a no-op run reports, never main's head,
+  // which may be the owner's later commit (attack b1844e0 B1).
+  let mine = "";
   for (const [path, text] of Object.entries(FILES)) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
     if (cur.status === 404) { changed[path] = text; continue; }
@@ -75,6 +78,7 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
     const ours = hasLine(top && top.commit && top.commit.message, trailer(ctx));
     if (!ours) throw refuse("FOREIGN_FILE", `${full}:${path} holds the owner's code; it is not committed over`);
     if (utf8(b.content) !== text) changed[path] = text;
+    else if (!mine && SHA.test(String(top.sha))) mine = String(top.sha);
   }
   for (const [path, make] of Object.entries(SHARED || {})) {
     const cur = await gh(ctx, "GET", `/repos/${full}/contents/${path}?ref=${head}`, undefined, [404]);
@@ -90,7 +94,10 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
     const next = make(now);
     if (next !== now) changed[path] = next;
   }
-  if (!Object.keys(changed).length) return head;
+  if (!Object.keys(changed).length) {
+    if (!SHA.test(mine)) throw new Error(`github named no commit of launch's for the files in ${full}`);
+    return mine;
+  }
   const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
   const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
   if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}`);
