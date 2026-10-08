@@ -6,7 +6,18 @@
 //   leakCrossTenant the orgs read ignores membership -- a broken RLS -- so authz must fail
 //   ignorePlan      the reports route ignores the plan -- a gate that does not follow the data -- so plans must fail
 //   reportsFail     the reports route answers 500 on pro -- verify must still leave the probe org on free
-export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false, reportsFail = false } = {}) {
+//   serverEnv       the deployment's env as the checkout route reads it (process.env inside the route)
+//   deployed        (path, text) => text: the live build's copy of a file when it is not main's (a deploy that lags)
+// /api/checkout is not modelled: it RUNS the committed route.js and lib/prices.js (main's bytes, or `deployed`'s) with
+// a Supabase client stub that answers under the same membership rule, so the route's own code is what is tested.
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const DB_STUB = "export async function supabase() { return globalThis.__launchVentureDb; }\n";
+
+export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false, reportsFail = false, serverEnv = {}, deployed = (path, text) => text } = {}) {
   const inner = live.fetch;
   const users = new Map(); // email -> { id, email }
   const links = new Map(); // hash -> email
@@ -19,6 +30,38 @@ export function makeVenture({ github, supabase, live, full, domain, siteUrlNeede
   const cookieName = () => `sb-${project().id}-auth-token`;
   const onMain = (path) => !!github.store.get(full).files[path];
   const tables = () => project().tables;
+  const mainText = (path) => Buffer.from(github.store.get(full).files[path].content, "base64").toString("utf8");
+  const built = (path) => deployed(path, mainText(path));
+
+  // The committed checkout route, run as the deployment would: its two files and a client stub in a fresh directory,
+  // the deployment's env for the length of the call, and the caller as the session user.
+  async function runCheckout(request, who) {
+    const dir = mkdtempSync(join(tmpdir(), "venture-checkout-"));
+    const put = (p, text) => { mkdirSync(dirname(join(dir, p)), { recursive: true }); writeFileSync(join(dir, p), text); };
+    const keys = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
+    const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    try {
+      put("package.json", JSON.stringify({ type: "module" }));
+      put("app/api/checkout/route.js", built("app/api/checkout/route.js"));
+      put("lib/prices.js", built("lib/prices.js"));
+      put("lib/supabase/server.js", DB_STUB);
+      const visible = (o) => o && (leakCrossTenant || (who && member(o.id, who.id)));
+      globalThis.__launchVentureDb = {
+        auth: { getUser: async () => ({ data: { user: who ? { id: who.id, email: who.email } : null }, error: null }) },
+        from: (table) => ({ select: () => ({ eq: (col, v) => ({ maybeSingle: async () => {
+          if (table !== "orgs") return { data: null, error: { message: `fake venture: ${table} not modelled` } };
+          return { data: tables().orgs.rows.find((o) => o[col] === v && visible(o)) || null, error: null };
+        } }) }) }),
+      };
+      for (const k of keys) { if (typeof serverEnv[k] === "string") process.env[k] = serverEnv[k]; else delete process.env[k]; }
+      const mod = await import(pathToFileURL(join(dir, "app/api/checkout/route.js")).href);
+      return await mod.POST(request);
+    } finally {
+      for (const k of keys) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+      delete globalThis.__launchVentureDb;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
 
   function sessionUser(req) {
     const c = String((req.headers || {}).cookie || "");
@@ -97,6 +140,15 @@ export function makeVenture({ github, supabase, live, full, domain, siteUrlNeede
       if (reportsFail && plan === "pro") return json(500, { error: "read failed" });
       if (!ignorePlan && plan !== "pro") return json(403, { error: "plan does not include reports", plan });
       return json(200, { plan, reports: [] });
+    }
+    // The checkout page renders the script tags its file names, as React renders an async <script> into the HTML.
+    if (route === "/checkout" && method === "GET" && served("app/checkout/page.js")) {
+      const srcs = [...built("app/checkout/page.js").matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]);
+      return new Response(`<!doctype html><html><head>${srcs.map((s) => `<script src="${s}" async></script>`).join("")}</head><body><main>checkout</main></body></html>`, { status: 200, headers: { "content-type": "text/html" } });
+    }
+    if (route === "/api/checkout" && method === "POST" && served("app/api/checkout/route.js") && served("lib/prices.js") && tables().orgs) {
+      const headers = { "content-type": String((init.headers || {})["content-type"] || "application/json") };
+      return runCheckout(new Request(url, { method: "POST", headers, body: init.body || "" }), who);
     }
     if (route === "/api/invites" && method === "POST" && served("app/api/invites/route.js") && tables().invites) {
       if (!who) return json(401, { error: "not signed in" });

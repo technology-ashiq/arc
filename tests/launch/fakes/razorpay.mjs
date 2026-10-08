@@ -4,20 +4,22 @@
 //   listShape     "no-items" answers the order list 200 without an items array (a proxy or an API change)
 //   fetchError    { status, description } answers every single-order GET with it
 //   ignoreReceipt the list ignores the receipt filter and pages every order (count + skip), newest first
-export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null, ignoreReceipt = false } = {}) {
+//   alsoAccept    more [keyId, keySecret] pairs Basic auth accepts (a venture deployed with another test account's keys)
+export function makeRazorpay({ inner, keyId = "rzp_test_Fixture0123456", keySecret = "fixtureSecret0123456789ab", orders = [], listShape = null, fetchError = null, ignoreReceipt = false, alsoAccept = [] } = {}) { // gitleaks:allow -- fake Razorpay test keys the fake API accepts
   const store = orders.map((o) => ({ entity: "order", amount: 100, currency: "INR", status: "created", notes: {}, ...o }));
   const calls = [];
   let n = 0;
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   const err = (status, description) => json(status, { error: { code: "BAD_REQUEST_ERROR", description } });
-  const want = `Basic ${Buffer.from(`${keyId}:${keySecret}`, "utf8").toString("base64")}`;
+  const basic = (id, secret) => `Basic ${Buffer.from(`${id}:${secret}`, "utf8").toString("base64")}`;
+  const wants = new Set([basic(keyId, keySecret), ...alsoAccept.map(([id, secret]) => basic(id, secret))]);
 
   async function fetch(input, init = {}) {
     const url = new URL(String(input));
     if (url.hostname !== "api.razorpay.com") return inner ? inner(input, init) : err(404, "fake razorpay: no inner transport");
     const method = String(init.method || "GET").toUpperCase();
     calls.push(`${method} ${url.pathname}`);
-    if ((init.headers || {}).authorization !== want) return err(401, "The api key provided is invalid");
+    if (!wants.has((init.headers || {}).authorization)) return err(401, "The api key provided is invalid");
     const body = init.body ? JSON.parse(init.body) : null;
     const p = url.pathname;
     if (method === "GET" && p === "/v1/orders") {
