@@ -1,0 +1,1 @@
+2026-10-08T19:46:29.3563806Z product-lint: unmapped file (synced but in no product): .claude/hooks/PreToolUse.d/99-planted.sh
