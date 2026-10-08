@@ -1,0 +1,2 @@
+gate-parity: 9 fragments, 7 rules, 22 rows, 0 gaps
+RAN gate-parity

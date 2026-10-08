@@ -1,0 +1,20 @@
+completed failure
+113507686399 ci-tier success
+113507686701 selftest (windows-latest, 20, shard 2/12) failure
+113507686711 selftest (macos-latest, 20, shard 2/3) failure
+113507686749 selftest (ubuntu-latest, 18) failure
+113507686768 selftest (windows-latest, 20, shard 8/12) failure
+113507686787 selftest (ubuntu-latest, 20) failure
+113507686791 selftest (ubuntu-latest, 22) failure
+113507686816 selftest (windows-latest, 20, shard 9/12) failure
+113507686819 selftest (windows-latest, 20, shard 11/12) failure
+113507686833 selftest (macos-latest, 20, shard 1/3) failure
+113507686847 selftest (windows-latest, 20, shard 12/12) failure
+113507686855 selftest (macos-latest, 20, shard 3/3) failure
+113507686874 selftest (windows-latest, 20, shard 1/12) failure
+113507686909 selftest (windows-latest, 20, shard 5/12) failure
+113507686915 selftest (windows-latest, 20, shard 4/12) failure
+113507686923 selftest (windows-latest, 20, shard 6/12) failure
+113507687010 selftest (windows-latest, 20, shard 7/12) failure
+113507687077 selftest (windows-latest, 20, shard 10/12) failure
+113507688151 selftest (windows-latest, 20, shard 3/12) failure

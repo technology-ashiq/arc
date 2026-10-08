@@ -1,0 +1,6 @@
+remote: error: GH006: Protected branch update failed for refs/heads/main.        
+remote: 
+remote: - 19 of 19 required status checks are expected.        
+To https://github.com/technology-ashiq/arc.git
+ ! [remote rejected] HEAD -> main (protected branch hook declined)
+error: failed to push some refs to 'https://github.com/technology-ashiq/arc.git'
