@@ -7,12 +7,14 @@
  * should not is a grant nobody authorised. Every other new lint this cycle starts WARN-first in
  * TRIAL; this one never does.
  *
- *   node .claude/scripts/hq/policy-lint.mjs [path]     default: hq.policy.yaml
+ *   node .claude/scripts/hq/policy-lint.mjs [path] [--evidence]     default: hq.policy.yaml
  *
- * Exit codes: 0 clean · 1 usage/IO · 2 the file is not law.
+ * Exit codes: 0 clean · 1 usage/IO · 2 the file is not law · 3 (--evidence only) law, but a level is BELOW-BAR.
+ * `--evidence` runs `policy-evidence.mjs check` after the file is law -- BELOW-BAR lives there once (POL-L, ADR-0511).
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lintPolicy } from "./lib/policy/lint.mjs";
@@ -65,7 +67,8 @@ function printDerivedTable(text) {
 }
 
 function main(argv) {
-  const args = argv.filter((a) => a !== "--");
+  const evidence = argv.includes("--evidence");
+  const args = argv.filter((a) => a !== "--" && a !== "--evidence");
   const target = args[0] || "hq.policy.yaml";
   const path = resolve(process.cwd(), target);
 
@@ -95,7 +98,23 @@ function main(argv) {
     // "hq.policy.yaml is law" about an entirely different file.
     process.stdout.write(`policy-lint: ${path} is law -- 0 violations\n`);
     printDerivedTable(text);
-    return 0;
+    if (!evidence) return 0;
+    // --evidence judges the GOVERNING policy and spine; a verdict about another file would be confident and wrong.
+    // By filesystem identity, not string: Windows names one temp dir two ways (RUNNER~1 vs runneradmin), and a
+    // string compare refused the governing file itself on CI (attack p02 r2 B8, closed).
+    const real = (p) => { try { const r = realpathSync.native(p); return process.platform === "win32" ? r.toLowerCase() : r; } catch { return null; } };
+    if (real(path) === null || real(path) !== real(resolve(ROOT, "hq.policy.yaml"))) {
+      process.stderr.write(`policy-lint: --evidence judges the governing ${resolve(ROOT, "hq.policy.yaml")}, not ${target}\n`);
+      return 1;
+    }
+    // The delegate judges THIS root: cwd and both selectors pinned, never inherited (attack p02 r2 B1).
+    const r = spawnSync(process.execPath, [join(HERE, "policy-evidence.mjs"), "check"], { stdio: "inherit", cwd: ROOT,
+      env: { ...process.env, ARC_ROOT: ROOT, ARC_SPINE_ROOT: join(ROOT, ".claude", "state", "hq") } });
+    if (r.status === null) {
+      process.stderr.write(`policy-lint: policy-evidence check did not run (${r.error ? r.error.message : r.signal})\n`);
+      return 1;
+    }
+    return r.status;
   }
   process.stderr.write(`policy-lint: ${target} is NOT law -- ${violations.length} violation(s)\n`);
   for (const v of violations) process.stderr.write(`  - ${v}\n`);
