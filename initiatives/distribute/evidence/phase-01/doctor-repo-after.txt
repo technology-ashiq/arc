@@ -1,0 +1,6 @@
+repo: strict-checks    ok
+repo: required-checks  ok
+repo: enforce-admins   ok
+repo: no-force-push    ok
+repo: no-deletion      ok
+RAN doctor-repo

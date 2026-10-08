@@ -75,11 +75,11 @@ of the real repository with no harness running? If NO → STOP the cycle and rec
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-01: `gate-parity` exits 0 on the merged tree and `--mutant-selftest` exits 0 (mutant caught), both on CI per job
-- [ ] REQ-06: `AGENTS.md` tracked, `CLAUDE.md` starts with `@AGENTS.md`, brain-drift green + mutant arm red-as-expected, `grep -c TODO` 0 on both
-- [ ] REQ-09: protection GET returns 200 with the 5 settings; `doctor --repo` prints 5 `ok` lines
-- [ ] kill checkpoint answered with evidence: planted PR `BLOCKED`, direct push refused; or STOP recorded
-- [ ] closed via `/arc-phase-done 01` from the MAIN clone
+- [x] REQ-01: `gate-parity` exits 0 on the merged tree and `--mutant-selftest` exits 0 (mutant caught), both on CI per job
+- [x] REQ-06: `AGENTS.md` tracked, `CLAUDE.md` starts with `@AGENTS.md`, brain-drift green + mutant arm red-as-expected, `grep -c TODO` 0 on both
+- [x] REQ-09: protection GET returns 200 with the 5 settings; `doctor --repo` prints 5 `ok` lines
+- [x] kill checkpoint answered with evidence: planted PR `BLOCKED`, direct push refused; or STOP recorded
+- [x] closed via `/arc-phase-done 01` from the MAIN clone
 
 ## Verification plan
 
