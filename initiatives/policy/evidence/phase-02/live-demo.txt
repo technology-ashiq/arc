@@ -1,0 +1,15 @@
+$ report (session:interactive/shell) before
+BELOW-BAR session:interactive/shell L1 absent N=35 refusal=- success=- audit=-
+$ hook: Bash call 1
+BLOCKED by policy: Bash needs shell, which is at L1 (propose) for session:interactive. L1 means prepare and record, never perform -- raising it is a human decision citing trial-ledger evidence (session:interactive/shell is at L1 -- prepare and record it, never execute it)
+exit=2
+$ hook: Bash call 2
+BLOCKED by policy: Bash needs shell, which is at L1 (propose) for session:interactive. L1 means prepare and record, never perform -- raising it is a human decision citing trial-ledger evidence (session:interactive/shell is at L1 -- prepare and record it, never execute it)
+exit=2
+$ refusal receipts on the sandbox spine
+REFUSALS 1 <ULID> INCIDENTS-WITH-DENIALS 0
+$ report (session:interactive/shell) after
+PASS      session:interactive/shell L1 fresh age 0d N=35 refusal=<ULID> success=- audit=-
+$ policy-lint --evidence (sandbox)
+policy-evidence: as-of 2026-10-08 -- 15 subjects, 120 cells, 17 in scope, 16 BELOW-BAR, 0 spine line(s) rejected, 1 day file(s) read from <sandbox>/.claude/state/hq/events
+exit=3

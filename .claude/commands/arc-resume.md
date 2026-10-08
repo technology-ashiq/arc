@@ -1,6 +1,6 @@
 ---
 description: Reconstruct where we left off — position, health, scoreboard, risks, next action — from the committed tracker + last snapshot. Read-only: resume never writes state.
-allowed-tools: Read, Glob, Grep, Bash(git status), Bash(git branch:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*)
+allowed-tools: Read, Glob, Grep, Bash(git status), Bash(git branch:*), Bash(git log:*), Bash(gh pr list:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*)
 ---
 
 **Lane first** (`.claude/rules/lanes.md`): run
@@ -15,7 +15,9 @@ then report in EXACTLY the 5-block format below (each block 1–3 lines, no padd
 **Gather (deterministic first):**
 1. **Health:** run `node .claude/scripts/plan/kickoff-lint.mjs` (plan drift since last session)
    and `git status` + current branch. Dirty tree, lint failures, or build work sitting on
-   `main` (belongs on `feat/*`) are flags, not footnotes.
+   `main` (belongs on `feat/*`) are flags, not footnotes. Then `gh pr list --state open` and
+   name every PR whose branch or title carries the lane: a PR on a sibling branch is lane state
+   `PROGRESS.md` cannot show (policy C2 re-asked the owner for a paste PR #384 already held).
 2. **Position:** read `PROGRESS.md` `## Now` (single source of truth), the latest
    `.claude/state/` snapshot (PreCompact hook), and the active `phases/phase-NN-spec.md`
    (its DoD + Verification plan).

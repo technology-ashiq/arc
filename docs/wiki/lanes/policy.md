@@ -199,7 +199,7 @@ ADR: a short written record of one decision and why it was taken.
 
 | | |
 |---|---|
-| Status | BLOCKED |
+| Status | IDLE |
 | Cycle | arc-policy cycle 2 (opened 2026-10-07) |
 | Product | — |
 

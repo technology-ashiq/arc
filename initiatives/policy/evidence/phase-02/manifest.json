@@ -1,0 +1,56 @@
+{
+  "phase": "02",
+  "commit": "cc6ac0577aac4273a31952f33e28610ebef6f4b0",
+  "short": "cc6ac057",
+  "generated": "2026-10-08T20:07:16Z",
+  "files": [
+    {
+      "name": "generate-paste.mjs",
+      "sha256": "dcfd2cff6046a9215384a451977e64bcb21153f333dffbca6c3ea42267a3e15f"
+    },
+    {
+      "name": "live-demo.md",
+      "sha256": "6c44e6a6e7faeff12c784f4a3e6ee937c98620a32f8487262cabb20793504b79"
+    },
+    {
+      "name": "live-demo.txt",
+      "sha256": "e60a6dc1a216691c3dff307e1783c18ee334acc210b2c5446186a464aafc0277"
+    },
+    {
+      "name": "owner-action.md",
+      "sha256": "43681408a0fa0b21e24abfc5a041e1f52102ed2f1f31f3a49cb7845d4b32c654"
+    },
+    {
+      "name": "paste-manifest.json",
+      "sha256": "a9bcc9e7a854fb8dc238dd5a40059a89705b25560f31a878fb0dc5e1ab5389ee"
+    },
+    {
+      "name": "paste/.claude/scripts/hq/lib/policy-evidence/fold.mjs",
+      "sha256": "18f2b72674df82d7866275563484ddf3a0b38caed1df747c096abd959770bd79"
+    },
+    {
+      "name": "paste/.claude/scripts/hq/lib/policy/lint.mjs",
+      "sha256": "8617d3d18aca54a92d057261048c99ccef10325a4880f43d0302b42658ef1982"
+    },
+    {
+      "name": "paste/.claude/scripts/hq/policy-hook.mjs",
+      "sha256": "f0d811e5243e820a82a953eef887fcf55afff8135e14d19cc6f10612c009c6ea"
+    },
+    {
+      "name": "paste/.claude/scripts/hq/policy-lint.mjs",
+      "sha256": "b9aa9b86932c95741a7b02fd9ac0d3fb67b1c41882f25077594052b4f6a14e39"
+    },
+    {
+      "name": "paste/.claude/settings.json",
+      "sha256": "31cbd7b15f945634eb6fc032cbdf517fc74ec6aa79b31904a85c671727801785"
+    },
+    {
+      "name": "paste/hq.policy.yaml",
+      "sha256": "7692257bc3659ada69dc0d1c3e45f83eb033a8154f561d022adfa12a0ea1b48f"
+    },
+    {
+      "name": "verify-paste.mjs",
+      "sha256": "4ab3c8bae1d868bc777d04ac52e2edf2357a12f484562fbcb6dcaea11fcb7fbb"
+    }
+  ]
+}
