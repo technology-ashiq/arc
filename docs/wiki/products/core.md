@@ -200,7 +200,7 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [log-analyzer](../agents/log-analyzer.md) — Diagnoses errors, stack traces and incident logs via differential diagnosis and first-error analysis, returning root cause + minimal fix + prevention. Use when debugging errors, crashes, or incidents.
 - [researcher](../agents/researcher.md) — Researches a topic (competitors, libraries, APIs, tech choices) via web + codebase with source triangulation and confidence labels. Use for open-ended "go find out X" or "compare X vs Y" tasks.
 
-## Scripts (37)
+## Scripts (39)
 
 - [`.claude/scripts/core/arc-gates.sh`](../../../.claude/scripts/core/arc-gates.sh)
 - [`.claude/scripts/core/arc-products.mjs`](../../../.claude/scripts/core/arc-products.mjs)
@@ -228,6 +228,8 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/scripts/core/lane-status.mjs`](../../../.claude/scripts/core/lane-status.mjs)
 - [`.claude/scripts/core/one-line.mjs`](../../../.claude/scripts/core/one-line.mjs)
 - [`.claude/scripts/core/ownership-lint.sh`](../../../.claude/scripts/core/ownership-lint.sh)
+- [`.claude/scripts/core/plan-bound-allowlist.json`](../../../.claude/scripts/core/plan-bound-allowlist.json)
+- [`.claude/scripts/core/plan-bound-audit.mjs`](../../../.claude/scripts/core/plan-bound-audit.mjs)
 - [`.claude/scripts/core/plan-expect.mjs`](../../../.claude/scripts/core/plan-expect.mjs)
 - [`.claude/scripts/core/product-lint.mjs`](../../../.claude/scripts/core/product-lint.mjs)
 - [`.claude/scripts/core/profile-request.mjs`](../../../.claude/scripts/core/profile-request.mjs)

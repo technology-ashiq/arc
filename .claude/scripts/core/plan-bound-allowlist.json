@@ -1,0 +1,355 @@
+{
+  "about": "plan-bound-audit.mjs allowlist (face Phase 14, ADR-1353). Every row is a write verb the audit could not show bound to a plan, with why. class: writer (IS the mechanism or derived output), lane-tool (not a face op; that lane's debt), door-gap (a face op the audit cannot prove bound; filed as its own /arc-change in initiatives/face/PROGRESS.md). Remove a row the day its verb becomes bound; the audit FAILs a row that names a verb now bound or gone.",
+  "verbs": [
+    {
+      "verb": "core/plan-expect",
+      "class": "writer",
+      "why": "IS the plan binding: the lock files it takes and the emit it is handed are the mechanism every bound verb calls"
+    },
+    {
+      "verb": "core/proposal-branch",
+      "class": "writer",
+      "why": "IS the one proposal-branch writer (ADR-1340): it writes a feat/face-* branch only when a bound caller (org-own, agent-scaffold, propose) hands it a plan already checked"
+    },
+    {
+      "verb": "hq/lib/spine-io",
+      "class": "writer",
+      "why": "IS the spine's storage: atomic append, lock, quarantine and idem index; every emit lands here"
+    },
+    {
+      "verb": "hq/arc-event",
+      "class": "writer",
+      "why": "IS the spine writer (ADR-0031): it validates and appends what it is handed; the binding belongs to the caller that hands it"
+    },
+    {
+      "verb": "hq/arc-inbox",
+      "class": "writer",
+      "why": "IS the decision writer: POST /api/decide stays byte-parity with it (ADR-1302); a decision answers a request the owner reads, it is not a plan"
+    },
+    {
+      "verb": "discover/lib/spine",
+      "class": "writer",
+      "why": "the discover lane's spine adapter (SPINE-G): it hands events to the emitter; the discover verb carries the binding"
+    },
+    {
+      "verb": "hq/lib/narrative-proof",
+      "class": "writer",
+      "why": "the docs lane's narrative receipt writer (ADR-1514): called by narrative-verify, whose row carries the binding"
+    },
+    {
+      "verb": "core/face-sections",
+      "class": "writer",
+      "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
+    },
+    {
+      "verb": "core/face-tokens",
+      "class": "writer",
+      "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
+    },
+    {
+      "verb": "engine/arc-compile",
+      "class": "writer",
+      "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
+    },
+    {
+      "verb": "core/gate-parity",
+      "class": "lane-tool",
+      "why": "a engine-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the engine lane, visible here"
+    },
+    {
+      "verb": "docs/narrative-anchors",
+      "class": "lane-tool",
+      "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
+    },
+    {
+      "verb": "docs/wiki-coverage",
+      "class": "lane-tool",
+      "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
+    },
+    {
+      "verb": "docs/wiki-drift",
+      "class": "lane-tool",
+      "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
+    },
+    {
+      "verb": "engine/narrative-verify",
+      "class": "lane-tool",
+      "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
+    },
+    {
+      "verb": "review/ci-digest",
+      "class": "lane-tool",
+      "why": "writes only its per-run CI digest report; a reader of CI, not a state change, and never a face op"
+    },
+    {
+      "verb": "review/docs-drift.sh",
+      "class": "lane-tool",
+      "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
+    },
+    {
+      "verb": "absorb/judgement",
+      "class": "lane-tool",
+      "why": "a absorb-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the absorb lane, visible here"
+    },
+    {
+      "verb": "absorb/study",
+      "class": "lane-tool",
+      "why": "a absorb-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the absorb lane, visible here"
+    },
+    {
+      "verb": "council/council-juror",
+      "class": "lane-tool",
+      "why": "a council-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the council lane, visible here"
+    },
+    {
+      "verb": "design/design-critique.sh",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "design/design-expa1",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "design/design-jury",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "design/design-package",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "design/design-refpack",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "design/design-render-serve",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "design/design-rival",
+      "class": "lane-tool",
+      "why": "a design-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the design lane, visible here"
+    },
+    {
+      "verb": "develop/learning",
+      "class": "lane-tool",
+      "why": "a develop-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the develop lane, visible here"
+    },
+    {
+      "verb": "develop/replay-child",
+      "class": "lane-tool",
+      "why": "a develop-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the develop lane, visible here"
+    },
+    {
+      "verb": "develop/stuck",
+      "class": "lane-tool",
+      "why": "a develop-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the develop lane, visible here"
+    },
+    {
+      "verb": "discover/arc-discover",
+      "class": "lane-tool",
+      "why": "a discover-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the discover lane, visible here"
+    },
+    {
+      "verb": "engine/arc-attack",
+      "class": "lane-tool",
+      "why": "a engine-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the engine lane, visible here"
+    },
+    {
+      "verb": "engine/arc-run",
+      "class": "lane-tool",
+      "why": "the engine runner (ADR-0201): its receipt is the record of a run that already happened, not a plan applied; the SESSION door starts it and binds nothing more (ADR-1326)"
+    },
+    {
+      "verb": "engine/build-attack-input",
+      "class": "lane-tool",
+      "why": "a engine-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the engine lane, visible here"
+    },
+    {
+      "verb": "engine/build-pack-input",
+      "class": "lane-tool",
+      "why": "a engine-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the engine lane, visible here"
+    },
+    {
+      "verb": "engine/drivers/common",
+      "class": "lane-tool",
+      "why": "a engine-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "engine/drivers/hermes",
+      "class": "lane-tool",
+      "why": "a engine-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "growth/arc-growth",
+      "class": "lane-tool",
+      "why": "a growth-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the growth lane, visible here"
+    },
+    {
+      "verb": "hq/arc-dash",
+      "class": "lane-tool",
+      "why": "the L2 dash door: its writes are the door's own state; the work it starts is a face op, and each op's row is audited on its own"
+    },
+    {
+      "verb": "hq/arc-replay",
+      "class": "lane-tool",
+      "why": "a hq-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the hq lane, visible here"
+    },
+    {
+      "verb": "hq/face-module",
+      "class": "lane-tool",
+      "why": "the /arc-face-module scaffold: writes four new files into the owner's checkout, shown in his PR diff; a hand-run command, not a face op"
+    },
+    {
+      "verb": "hq/face-modules-contract",
+      "class": "lane-tool",
+      "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
+    },
+    {
+      "verb": "hq/lib/face/reads",
+      "class": "lane-tool",
+      "why": "a face-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "hq/lib/face/session-door",
+      "class": "lane-tool",
+      "why": "a face-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "hq/lib/policy/incident",
+      "class": "lane-tool",
+      "why": "a policy-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "hq/policy-evidence",
+      "class": "lane-tool",
+      "why": "a policy-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the policy lane, visible here"
+    },
+    {
+      "verb": "hq/policy-hook",
+      "class": "lane-tool",
+      "why": "a PreToolUse hook (POL-L): its incident receipt records a refusal as it happens; there is no plan before a hook fires"
+    },
+    {
+      "verb": "hq/policy-matrix",
+      "class": "lane-tool",
+      "why": "a policy-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the policy lane, visible here"
+    },
+    {
+      "verb": "launch/launch-lint",
+      "class": "lane-tool",
+      "why": "a launch-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the launch lane, visible here"
+    },
+    {
+      "verb": "launch/lib/ctx",
+      "class": "lane-tool",
+      "why": "a launch-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "launch/lib/runner",
+      "class": "lane-tool",
+      "why": "a launch-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "launch/lib/simulated",
+      "class": "lane-tool",
+      "why": "a launch-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "launch/lib/state",
+      "class": "lane-tool",
+      "why": "per-venture runner state under .claude/state (gitignored, ADR-1718): the audit reads its path as tracked because the path is held in a variable"
+    },
+    {
+      "verb": "leads/lib/drafts",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "leads/lib/guard",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "leads/lib/ingest",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "leads/lib/journal",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "leads/lib/mail",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "leads/lib/sequencer",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "leads/lib/store",
+      "class": "lane-tool",
+      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "memory/lib/observe",
+      "class": "lane-tool",
+      "why": "a memory-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+    },
+    {
+      "verb": "org/org-catalog",
+      "class": "lane-tool",
+      "why": "a org-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the org lane, visible here"
+    },
+    {
+      "verb": "org/org-coverage",
+      "class": "lane-tool",
+      "why": "a org-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the org lane, visible here"
+    },
+    {
+      "verb": "org/org-dispatch",
+      "class": "lane-tool",
+      "why": "a org-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the org lane, visible here"
+    },
+    {
+      "verb": "org/org-team",
+      "class": "lane-tool",
+      "why": "a org-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the org lane, visible here"
+    },
+    {
+      "verb": "hq/arc-jobs",
+      "class": "door-gap",
+      "why": "GAP, filed 2026-10-09 (face Phase 14): the scheduler.register-job face op applies `arc-jobs register --receipt` with no --expect; its note.logged is written after the OS reads the task back (ADR-1339), with no plan digest checked first"
+    },
+    {
+      "verb": "develop/develop",
+      "class": "door-gap",
+      "why": "UNKNOWN, filed 2026-10-09 (face Phase 14): develop.slice applies with --expect, but the write sits in a helper the guard is not in, so the audit cannot prove the check comes first"
+    },
+    {
+      "verb": "engine/arc-bench",
+      "class": "door-gap",
+      "why": "UNKNOWN, filed 2026-10-09 (face Phase 14): bench.propose applies with --expect and bench.run-model applies a run with none (its receipt records a run already made); the propose write sits in a helper the guard is not in, so the audit cannot prove the check comes first"
+    },
+    {
+      "verb": "leads/arc-leads",
+      "class": "door-gap",
+      "why": "UNKNOWN, filed 2026-10-09 (face Phase 14): leads.daily-send applies with --expect, but the write sits in a helper the guard is not in, so the audit cannot prove the check comes first"
+    },
+    {
+      "verb": "legal/arc-legal",
+      "class": "door-gap",
+      "why": "UNKNOWN, filed 2026-10-09 (face Phase 14): legal.full-read applies with --expect, but the write sits in a helper the guard is not in, so the audit cannot prove the check comes first"
+    }
+  ]
+}
