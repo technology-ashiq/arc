@@ -180,7 +180,10 @@ function scanInlineLinks(s, out) {
   return masked;
 }
 
-const BARE_URL_RE = /<?\bhttps?:\/\/[^\s<>)\]]+>?/g;
+// A raw double quote is never part of a URL (RFC 3986 requires it percent-encoded), and the rendered
+// frontmatter quotes every `citations:` entry -- so without it in the class, every real citation was
+// checked with a trailing quote and reported DEAD_LINK 404 on the first article that had any.
+const BARE_URL_RE = /<?\bhttps?:\/\/[^\s<>)\]"]+>?/g;
 const REF_DEF_RE = /^\s{0,3}\[([^\]]+)\]:\s*(\S+)/;
 
 /** Reference-style definitions and footnote definitions in a whole document: label -> url. */
