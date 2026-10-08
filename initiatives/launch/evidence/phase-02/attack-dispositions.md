@@ -47,3 +47,21 @@
   the owner ruled on 2026-10-08 to merge on green CI rather than wait. The attack inputs were pre-scanned clean
   (renames: the signing key `hookKey`, the wrong-key scenario `other-hook-key`, headers through Object.fromEntries).
   A later slice's attack should carry this slice's diff in its base range.
+
+## attack 55c5065 r1 (slice 5, refunds + gate 3, ADR-1740/1741; base b51a2dcd)
+
+- The diff carries the webhooks-ledger adapter only where this slice changed it (probe-payment report, captures-only
+  read), so slice 4's full adapter is still unattacked as a whole.
+- Boundary: B1 [high] fixed: the refund read filters in a materialized CTE before any body is cast, and is capped at
+  101 rows. B2 [medium] fixed with L11. B3 [medium] fixed: probe ids derive from the tag AND the charge, so a new
+  upstream payment is a new event id (pinned, `new-payment`). B4 [medium] not a hole: `recordSimulated` runs inside
+  the venture lock and a refund books only against its own venture's charge, so two bookings cannot interleave.
+  B5 [low] fixed (`Object.hasOwn`). B6 [low] -> D34.
+- Logic: L1 [high] not a hole: gate() refuses from a recorded `approval_id` before any emit, on every path. L2 [high]
+  fixed (the refund sum is filtered by venture too). L3 [high] and L4 [medium] not holes: the provider is the
+  parser's constant and is part of the namespaced charge id the lookup matches. L5 [medium] not a hole: the P&L orders
+  a refund by its recorded `ts`, not `paid_at`. L6 [medium] and L14 [low] by design: the deterministic id IS the replay
+  identity (ADR-1739/1740). L7 [medium] fixed: any other refund.processed row of the probe payment fails the probe
+  (pinned, `foreign-refund`). L8 [medium] by design (the marker rule, ADR-1731; D31). L9 [medium] not a hole: booking
+  is idempotent by refund id. L11 [low] fixed: two vetted rows on a rehearsal gate refuse like pickProvider, and
+  `--provider` is honoured. L10, L12, L13, L15 [low] -> D34.

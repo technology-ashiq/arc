@@ -950,6 +950,14 @@ arm() {
   [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: a refund of the probe payment launch did not send fails the probe, and a new probe payment gets a fresh refund (55c5065 L7 B3)" {
+  arm refunds foreign-refund
+  [ "$(j 'o.planted + " " + o.verify.ok + " " + o.queued')" = "200 false 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.reason')" = "the probe payment carries 1 refund.processed rows launch did not send" ] || { echo "$DONE"; false; }
+  arm refunds new-payment
+  [ "$(j 'o.first + " " + o.second.ok + " " + o.refundOf + " " + o.refundRows')" = "true true pay_ArcProbe0fedcba9876 2" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: auth -- a minted link signs in, /api/me knows the user, logout clears it, then 401" {
   arm login thread
   [[ "$(j 'o.authBefore.ok + " " + o.authBefore.reason')" == "false "*"is not launch's file" ]] || { echo "$DONE"; false; }

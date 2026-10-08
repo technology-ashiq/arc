@@ -64,15 +64,17 @@ const RFND = /^rfnd_[A-Za-z0-9]{6,40}$/;
 const EVENT_ID = /^[A-Za-z0-9_-]{6,64}$/;
 const OURS = "select count(*)::int as n from pg_tables t where schemaname = 'public' and tablename in ('razorpay_webhook_events') and obj_description(('public.' || t.tablename)::regclass) = 'arc-launch webhooks';";
 const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('razorpay_webhook_events') and rowsecurity;";
-// The refund entity's fields only, read out of the stored body on the venture: the body itself never reaches arc.
+// The refund entity's fields only, read out of the stored body on the venture: the body itself never reaches arc. The
+// rows are filtered in a materialized CTE first, so no other row's body is ever cast (attack 55c5065 B1).
 const REFUNDS = (pid) => [
-  "select event_id, event, payment_id,",
+  `with r as materialized (select event_id, event, payment_id, body from public.${TABLE} where payment_id = '${pid}' and event = 'refund.processed')`,
+  " select event_id, event, payment_id,",
   " body::jsonb #>> '{payload,refund,entity,id}' as refund_id,",
   " body::jsonb #>> '{payload,refund,entity,amount}' as amount,",
   " body::jsonb #>> '{payload,refund,entity,currency}' as currency,",
   " body::jsonb #>> '{payload,refund,entity,created_at}' as refunded_at,",
   " body::jsonb #>> '{payload,refund,entity,payment_id}' as refund_of",
-  ` from public.${TABLE} where payment_id = '${pid}' and event = 'refund.processed' order by event_id;`,
+  " from r order by event_id limit 101;",
 ].join("");
 const AMOUNT = 100;
 
@@ -92,11 +94,13 @@ function secretOf(ctx) {
   return s;
 }
 
-// The probe refund's identity comes from this slot's tag, so every verify replays the same refund. An empty tag owns
-// nothing: it would give every venture the same probe.
-function probeIds(ctx) {
+// The probe refund's identity comes from this slot's tag and the charge it refunds, so every verify replays the same
+// refund, and a new upstream payment gets a new event id the route has not stored (attack 55c5065 B3). An empty tag
+// owns nothing: it would give every venture the same probe.
+function probeIds(ctx, payment) {
   if (typeof ctx.tag !== "string" || !ctx.tag) throw refuse("BAD_TAG", "the slot has no resource tag; the probe refund has no identity");
-  const h = createHash("sha256").update(ctx.tag, "utf8").digest("hex");
+  const h = createHash("sha256").update(`${ctx.tag}
+${payment}`, "utf8").digest("hex");
   return { event: `arcrefund${h.slice(0, 16)}`, refund: `rfnd_ArcProbe0${h.slice(16, 26)}` };
 }
 
@@ -115,7 +119,7 @@ export async function scaffold(ctx) {
   const { ref, payment } = upstreamOf(ctx);
   domainOf(ctx);
   secretOf(ctx);
-  const ids = probeIds(ctx);
+  const ids = probeIds(ctx, payment);
   const bad = await tableIsOurs(ctx, ref);
   if (bad) throw refuse("UPSTREAM_TABLE", bad);
   // Nothing is created: the refund source is webhooks-ledger's table, read by event.
@@ -148,7 +152,7 @@ async function probe(ctx) {
   const { ref, payment } = upstreamOf(ctx);
   const domain = domainOf(ctx);
   const hookKey = secretOf(ctx);
-  const ids = probeIds(ctx);
+  const ids = probeIds(ctx, payment);
   if (!RFND.test(ids.refund) || !EVENT_ID.test(ids.event)) return { ok: false, reason: "the probe ids are not id shapes" };
   const bad = await tableIsOurs(ctx, ref);
   if (bad) return { ok: false, reason: bad };
@@ -169,7 +173,10 @@ async function probe(ctx) {
   if (first !== 200) return { ok: false, reason: `the signed probe refund was answered ${first}, not 200` };
   const replay = await deliver(ctx, domain, raw, sig, ids.event);
   if (replay !== 200) return { ok: false, reason: `the replayed probe refund was answered ${replay}, not 200` };
-  const rows = list(await query(ctx, ref, REFUNDS(payment))).filter((r) => r.refund_id === ids.refund);
+  const all = list(await query(ctx, ref, REFUNDS(payment)));
+  // The probe payment is refunded by the probe alone: any other refund of it is not launch's (attack 55c5065 L7).
+  const rows = all.filter((r) => r.refund_id === ids.refund);
+  if (all.length !== rows.length) return { ok: false, reason: `the probe payment carries ${all.length - rows.length} refund.processed rows launch did not send` };
   if (rows.length !== 1 || rows[0].event_id !== ids.event) return { ok: false, reason: `the probe refund is stored ${rows.length} times; exactly one row, under the probe event id, is the round trip` };
   const row = rows[0];
   const amount = int(row.amount);

@@ -1,0 +1,53 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/refunds/razorpay-refunds.mjs:REFUNDS/probe",
+      "breaking_input": "Probe payment id comes from upstream state (ctx.upstream webhooks-ledger probe-payment) and is validated only by PAY regex, then interpolated into SQL. Regex is safe, but the SELECT filters on payment_id only and trusts `body::jsonb`; a stored row for the same payment_id whose body is not valid JSON (e.g. any non-refund row such as the payment.captured row if its body is non-JSON or an owner-inserted row) makes `body::jsonb` throw for the whole query before the `event = 'refund.processed'` filter is guaranteed to apply (Postgres may evaluate the cast in the select list on rows the planner has not yet filtered).",
+      "why": "A cast error aborts the query, verify returns not-ok with a Postgres error; a planted/malformed row permanently wedges the refunds slot. Check-then-use of the filter vs the select-list cast is not ordered by SQL semantics.",
+      "fix": "Guard the cast with a CASE WHEN event = 'refund.processed' THEN body::jsonb END, or filter in a subquery/CTE with OFFSET 0, or use a text-safe json parse function."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:133-138",
+      "breaking_input": "A rehearsal venture applies a gate-1/gate-3 slot that is already in state awaiting-approval, or has resources recorded from an earlier non-rehearsal apply (profile switched to rehearsal), or whose adapter digest is stale/unvetted. The early branch runs before the unmet-dependency, provider-vetted, and digest checks and before any check that the venture root is valid.",
+      "why": "The refusal path skips the shared guards other verbs restate (venture-root guard, adapter containment, 'no vetted provider' exit). A slot with multiple vetted rows or zero vetted rows is silently recorded with provider 'none', and the approval.requested payload then carries a provider that is not a real row id, polluting the approval record the owner stamps.",
+      "fix": "Keep the early return only for the terminal-refusal outcome, and still run the venture-root and profile validation first; reject (exit 2) when vetted.length > 1 rather than recording 'none'."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/refunds/razorpay-refunds.mjs:probeIds/deliver",
+      "breaking_input": "Two ventures (or two re-scaffolds) whose ctx.tag differ only past the hashed prefix are fine, but the event id derives from sha256(tag) truncated to 16 hex chars and the refund id from chars 16-26; the refund id `rfnd_ArcProbe0`+10 hex is not tied to the probe payment. If webhooks-ledger's probe payment changes (re-scaffold with different tag) while the refund id stays the same, the stored row for the old refund id has refund_of != new payment.",
+      "why": "verify filters on payment_id = new payment so the old row is invisible and a fresh insert under the same event id hits the route's idempotency (same x-razorpay-event-id returns 200 without storing), leaving zero rows and a permanent 'stored 0 times' failure.",
+      "fix": "Derive the event and refund ids from the tag plus the payment id."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/simulated.mjs:recordSimulated refund branch",
+      "breaking_input": "Two concurrent recordSimulated calls for two partial refunds of the same charge (60 and 41 of 100), or the same refund key booked by two runners.",
+      "why": "The over-refund sum is computed from `events` read before emitReceipt with no lock; both calls read before=0 and both land, so refunds total 101 > 100 and the P&L flags over-refund. Check-then-act on shared state, same class as the gate check-then-emit defect.",
+      "fix": "Hold the same lock around the read and emit, or re-validate after landing and compensate."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/simulated.mjs:simulatedPayload",
+      "breaking_input": "p = { payment_id: 'rfnd_Abcdef12', refund_of: undefined } — `\"refund_of\" in p` is true so it is treated as a refund and refused, but p = Object.create({refund_of:'pay_x'}) or an inherited key also flips the mode; conversely a queued payment with refund_of: null is a refund refused with a generic message.",
+      "why": "Mode is chosen by key presence (`in`), including prototype chain keys, not by a validated value; the booking branch later tests `n.payload.refund_of` truthiness, a different read of the same fact.",
+      "fix": "Use Object.hasOwn and one derived boolean passed through both places."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/refunds/razorpay-refunds.mjs:deliver",
+      "breaking_input": "Domain resolves via redirect: the venture route answers 307 to another host; fetch is redirect:'manual' so status 307 is reported, but the signed body and signature were already POSTed to the first host only. With a transport error the function returns 0 and the reason prints 'answered 0, not 200'.",
+      "why": "Reason text misleads (0 is not an HTTP status) and a 3xx is indistinguishable from route failure, so the owner cannot tell a redirect to www from a bad secret.",
+      "fix": "Name transport error and 3xx distinctly in the reason."
+    }
+  ]
+}

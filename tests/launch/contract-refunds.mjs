@@ -142,6 +142,32 @@ switch (scenario) {
     out.queued = v.queued.length;
     break;
   }
+  case "foreign-refund": {
+    // Someone holding the secret refunds the probe payment under another refund id: the probe is not ok (55c5065 L7).
+    const p = await charge();
+    await adapter.scaffold(ctxNow());
+    const { createHmac } = await import("node:crypto");
+    const raw = JSON.stringify({ event: "refund.processed", payload: { refund: { entity: { id: "rfnd_Someone0000001", amount: 50, currency: "INR", payment_id: p.payment_id, created_at: 1791000000 } },
+      payment: { entity: { id: p.payment_id, amount: 100, currency: "INR", fee: 0, created_at: 1791000000 } } } });
+    out.planted = (await fetch(`https://${DOMAIN}/api/webhooks/razorpay`, { method: "POST", headers: { "content-type": "application/json", "x-razorpay-signature": createHmac("sha256", HOOK_KEY).update(raw, "utf8").digest("hex"), "x-razorpay-event-id": "evtSomeone000001" }, body: raw })).status;
+    const v = await verifyQ();
+    out.verify = v.v;
+    out.queued = v.queued.length;
+    break;
+  }
+  case "new-payment": {
+    // webhooks-ledger's probe payment changes (a new tag): the probe refund gets a new event id and stores (55c5065 B3).
+    await charge();
+    await adapter.scaffold(ctxNow());
+    out.first = (await verifyQ()).v.ok;
+    const i = hookState.findIndex((r) => r.kind === "probe-payment");
+    hookState[i] = { kind: "probe-payment", id: "pay_ArcProbe0fedcba9876" };
+    const v = await verifyQ();
+    out.second = v.v;
+    out.refundOf = v.queued.length ? v.queued[0].payload.refund_of : null;
+    out.refundRows = webhook.table().rows.filter((r) => r.event === "refund.processed").length;
+    break;
+  }
   case "no-upstream":
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ upstream: { "webhooks-ledger": [{ kind: "supabase-ref", id: REF }] } })));
     out.calls = github.calls.length + supabase.calls.length + webhook.calls.length;

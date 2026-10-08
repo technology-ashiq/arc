@@ -31,7 +31,7 @@ const decimal = (minor) => { const d = String(minor).padStart(3, "0"); return `$
 export function simulatedPayload(venture, p) {
   if (!p || typeof p !== "object") throw new Error("the queued payment is not an object");
   // A refund is its own positive line naming the charge it returns (ADR-1016): its id is the refund's, never the charge's.
-  const refund = "refund_of" in p;
+  const refund = Object.hasOwn(p, "refund_of");
   if (refund && (typeof p.refund_of !== "string" || !PAY.test(p.refund_of))) throw new Error("the queued refund names no Razorpay payment it refunds");
   if (typeof p.payment_id !== "string" || !(refund ? RFND : PAY).test(p.payment_id)) throw new Error(`the queued ${refund ? "refund has no Razorpay refund" : "payment has no Razorpay payment"} id`);
   const amount = int(p.amount);
@@ -75,11 +75,11 @@ export function recordSimulated(venture, payment, { process: proc }) {
     return { state: "recorded", id: held.id, why: null };
   }
   // A refund of a charge this venture never booked would sit on the spine as the P&L's REFUND_WITHOUT_CHARGE, unnetted.
-  if (n.payload.refund_of) {
+  if (Object.hasOwn(n.payload, "refund_of")) {
     const charge = events.map((r) => r.event).find((e) => e && e.kind === KIND && e.payload && e.payload.provider_payment_id === n.payload.refund_of && !("refund_of" in e.payload));
     if (!charge || charge.venture !== venture) return { state: "refused", id: null, why: `refund ${key} names charge ${n.payload.refund_of}, which is not booked as simulated for ${venture}` };
     // Every refund already booked against the charge counts: two partial refunds may not sum past it.
-    const before = events.map((r) => r.event).filter((e) => e && e.kind === KIND && e.payload && e.payload.refund_of === n.payload.refund_of).reduce((s, e) => s + e.payload.amount, 0);
+    const before = events.map((r) => r.event).filter((e) => e && e.kind === KIND && e.venture === venture && e.payload && e.payload.refund_of === n.payload.refund_of).reduce((s, e) => s + e.payload.amount, 0);
     if (before + n.payload.amount > charge.payload.amount) return { state: "refused", id: null, why: `refund ${key} brings ${n.payload.refund_of}'s refunds to ${before + n.payload.amount}, more than its charge's ${charge.payload.amount}` };
   }
   const got = emitReceipt(ARC_EVENT, KIND, n.payload, { cwd: ROOT, env: { ...process.env, ARC_SPINE_ROOT: root }, command: "ingest", flags: ["--venture", venture, "--process", proc], timeoutMs: 60000 });

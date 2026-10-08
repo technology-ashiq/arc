@@ -134,8 +134,11 @@ export async function apply(opts, log = console.log) {
     // provider: it is exercised first, before anything that could run (ADR-1700, ADR-1741). payment-live has no
     // provider row and depends on Cycle 2 slots, and its refusal is still proven.
     if (profile.honesty_class === "rehearsal" && ROLLING.has(slot.gate)) {
+      // Two vetted rows is the same refusal pickProvider gives, never a request attributed to "none" (attack 55c5065 L11).
       const vetted = rows.filter((r) => r.slot === slot.id && r.status === "vetted");
-      return await gate(P, slug, slot, vetted.length === 1 ? vetted[0].id : "none", profile, state, row, log);
+      if (opts.provider) pickProvider(rows, slot.id, profile, opts.provider, opts.vet);
+      else if (vetted.length > 1) throw new LaunchError("REFUSED", `${vetted.length} vetted providers for ${slot.id}; name one with --provider (plan ranks them)`);
+      return await gate(P, slug, slot, opts.provider || (vetted.length === 1 ? vetted[0].id : "none"), profile, state, row, log);
     }
     const unmet = (slot.depends_on || []).filter((d) => {
       const b = board.get(d);
