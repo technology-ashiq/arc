@@ -144,6 +144,10 @@ Three rules, and they are cheap:
 The general form: **prefer an assertion that fails when the code is deleted.** If ripping out the
 implementation would leave the test green, the test is measuring nothing.
 
+**A timing test asserts ORDER, never a tick count inside a wall-clock window.** "At least 3 heartbeats in
+1.2 s" went red on a loaded Windows runner that fired 2, on a tree that was 19/19 on its PR head (main
+dispatch 37828894878). Assert one event before the change and one after it, and widen the window.
+
 ### The character that is not there
 
 **The Write and Edit tools write the REAL character for a typed backslash-u escape.** A BOM strip, a
