@@ -77,16 +77,6 @@
       "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
     },
     {
-      "verb": "review/ci-digest",
-      "class": "lane-tool",
-      "why": "writes only its per-run CI digest report; a reader of CI, not a state change, and never a face op"
-    },
-    {
-      "verb": "review/docs-drift.sh",
-      "class": "lane-tool",
-      "why": "a docs-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the docs lane, visible here"
-    },
-    {
       "verb": "absorb/judgement",
       "class": "lane-tool",
       "why": "a absorb-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the absorb lane, visible here"
@@ -179,12 +169,12 @@
     {
       "verb": "engine/drivers/common",
       "class": "lane-tool",
-      "why": "a engine-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a engine-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "engine/drivers/hermes",
       "class": "lane-tool",
-      "why": "a engine-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a engine-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "growth/arc-growth",
@@ -214,17 +204,17 @@
     {
       "verb": "hq/lib/face/reads",
       "class": "lane-tool",
-      "why": "a face-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a face-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "hq/lib/face/session-door",
       "class": "lane-tool",
-      "why": "a face-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a face-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "hq/lib/policy/incident",
       "class": "lane-tool",
-      "why": "a policy-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a policy-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "hq/policy-evidence",
@@ -249,17 +239,17 @@
     {
       "verb": "launch/lib/ctx",
       "class": "lane-tool",
-      "why": "a launch-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a launch-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "launch/lib/runner",
       "class": "lane-tool",
-      "why": "a launch-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a launch-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "launch/lib/simulated",
       "class": "lane-tool",
-      "why": "a launch-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a launch-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "launch/lib/state",
@@ -269,42 +259,42 @@
     {
       "verb": "leads/lib/drafts",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "leads/lib/guard",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "leads/lib/ingest",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "leads/lib/journal",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "leads/lib/mail",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "leads/lib/sequencer",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "leads/lib/store",
       "class": "lane-tool",
-      "why": "a leads-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a leads-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "memory/lib/observe",
       "class": "lane-tool",
-      "why": "a memory-lane library: the write runs inside a verb that imports it, and that verb's own row carries the binding"
+      "why": "a memory-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
     },
     {
       "verb": "org/org-catalog",
@@ -325,6 +315,66 @@
       "verb": "org/org-team",
       "class": "lane-tool",
       "why": "a org-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the org lane, visible here"
+    },
+    {
+      "verb": "docs/wiki-build",
+      "class": "writer",
+      "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
+    },
+    {
+      "verb": "council/council-lint",
+      "class": "lane-tool",
+      "why": "the council lane's --claim takes a session number by writing its placeholder file; a hand-run step, not a face op"
+    },
+    {
+      "verb": "engine/egress-proxy.py",
+      "class": "lane-tool",
+      "why": "a Python egress proxy for the attack sandbox; the audit cannot parse Python, so it reads unknown and is listed rather than passed"
+    },
+    {
+      "verb": "hq/lib/jobs/scheduler-task.ps1",
+      "class": "lane-tool",
+      "why": "the scheduler lane's Windows task shim; the audit cannot parse PowerShell, so it reads unknown and is listed rather than passed"
+    },
+    {
+      "verb": "hq/jobs/brief-materialize",
+      "class": "lane-tool",
+      "why": "a scheduler-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the scheduler lane, visible here"
+    },
+    {
+      "verb": "hq/lib/face/models",
+      "class": "lane-tool",
+      "why": "the owner's private models store, ~/.arc-private/face/models.json, outside the repo: an edit he typed on the Settings page is the change itself, not a plan of one (ADR-1350)"
+    },
+    {
+      "verb": "hq/lib/keys",
+      "class": "lane-tool",
+      "why": "the owner's private keys store, ~/.arc-private/keys/keys.json, outside the repo: a key he typed is the change itself, never echoed, never planned (ADR-1351)"
+    },
+    {
+      "verb": "hq/lib/owner-key",
+      "class": "lane-tool",
+      "why": "the owner's signing key pair, written once outside the repo; no plan precedes a key generation"
+    },
+    {
+      "verb": "launch/arc-launch",
+      "class": "lane-tool",
+      "why": "a launch-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the launch lane, visible here"
+    },
+    {
+      "verb": "launch/lib/worker",
+      "class": "lane-tool",
+      "why": "a launch-lane library: the audit also charges each of its writing exports to every importer one call hop up, so the verb that calls it carries its own row; this row is the library's own write, which has no plan of its own"
+    },
+    {
+      "verb": "memory/arc-recall",
+      "class": "lane-tool",
+      "why": "a memory-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the memory lane, visible here"
+    },
+    {
+      "verb": "memory/memory-index",
+      "class": "lane-tool",
+      "why": "a memory-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the memory lane, visible here"
     },
     {
       "verb": "hq/arc-jobs",
@@ -349,7 +399,7 @@
     {
       "verb": "legal/arc-legal",
       "class": "door-gap",
-      "why": "UNKNOWN, filed 2026-10-09 (face Phase 14): legal.full-read applies with --expect, but the write sits in a helper the guard is not in, so the audit cannot prove the check comes first"
+      "why": "NO, filed 2026-10-09 (face Phase 14): legal.full-read applies with --expect, but inside the declaration that holds the check a write (rmSync of the staged dir) comes before it, so the audit reads write-before-check"
     }
   ]
 }

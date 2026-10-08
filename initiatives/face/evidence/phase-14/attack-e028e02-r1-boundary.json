@@ -1,0 +1,140 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites (FS_WRITE loop, `const first = args.split(\",\")[0]`)",
+      "breaking_input": "An unguarded verb that writes atomically: `writeFileSync(join(tmpdir(), \"p.tmp\"), t); renameSync(join(tmpdir(), \"p.tmp\"), \"PLAN.md\");`. The reverse also holds: `copyFileSync(join(TMP, \"x\"), \"initiatives/face/PLAN.md\")`.",
+      "why": "Every primitive is classified by its FIRST argument only. For `renameSync`, `copyFileSync` and `cpSync` the first argument is the source, and the destination is the second. A tmp-then-rename writer is dropped as scratch twice, so a tracked file appears with no row at all and no allowlist entry is needed. A copy from a tracked file into scratch is falsely counted as a tracked write.",
+      "fix": "Classify rename/copy/cp by their destination argument (index 1). Split arguments with a paren-aware splitter rather than `split(\",\")`. Add a mutant that renames from a tmp path onto a tracked file.",
+      "twin_of": "Only a rename makes a tracked file appear"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:FS_WRITE",
+      "breaking_input": "Any of these in an unguarded verb: `import { writeFileSync as wf } from \"node:fs\"; wf(p, t)`, `const w = fs.writeFileSync; w(p, t)`, `fs[\"writeFileSync\"](p, t)`, `await fs.promises.rename(a, b)`, `copyFile(a, b)`, `cp(a, b)`, `openSync(p, \"w\")`, `writeSync(fd, t)`, `truncateSync(p)`.",
+      "why": "The primitive list is a hand-kept set of seven names that must be followed directly by `(`. Aliases and references have no call paren after the name. A bracket-string name is blanked by `blank()`. Async `rename`, `copyFile` and `cp`, plus `openSync`, `writeSync` and `truncateSync`, are not listed. The verb is never listed, so the audit returns 0.",
+      "fix": "Detect imports and aliases of the fs primitives, not only call shapes. Extend the list to the full set of fs mutators, including the async and promises forms. Fail the audit when a file imports `node:fs` or `fs/promises` write members and no site was found.",
+      "twin_of": "A hand-kept list beside a glob"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:GIT_WRITE and shWrites git regex",
+      "breaking_input": "JS: `spawnSync(GIT, [\"branch\", name, sha])` where `const GIT = \"git\"`, or `execSync(\"git branch -f feat/x HEAD\")`, or `[\"add\", \"-A\"]` / `[\"rm\", f]` / `[\"switch\", \"-c\", b]` / `[\"stash\"]` / `[\"apply\", p]`. Shell: `\"$GIT\" commit -m x`, `git -c user.name=x commit`, `git branch -f feat/x HEAD`, `git worktree add`.",
+      "why": "`/[\"'`]git[\"'`]/` requires a literal quoted `git` token, so a variable binary or a single command string is never seen. The subcommand list omits `branch`, `switch`, `add`, `rm`, `mv`, `apply` and `stash`, and the shell list also omits `worktree`, `checkout` and `reset`. Branch creation is exactly what proposal-branch exists to do. The JS pattern is an unanchored substring test, so read-only `merge-base` or `log --grep tag` counts as a write, which costs spurious allowlist rows.",
+      "fix": "Parse the first non-option git argument as the subcommand and compare it to a full write set (including `branch`, `add` and `rm`). Resolve the binary through `GIT`-style constants. Handle `-c k=v` and `-C dir` prefixes in the shell scanner too.",
+      "twin_of": "A fence on one tool left open on its twin"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites emitter detection; shWrites",
+      "breaking_input": "JS: `const EMITTER = join(HQ, \"arc-event.mjs\"); spawnSync(process.execPath, [EMITTER, \"emit\", \"x\"])`. The path literal is not in the call's argument text, and the array opener must be named ARC_EVENT/arcEvent. Shell: `node \"$EMITTER\" emit note.logged`, or `bash arc-event.sh \\` followed by `emit ...` on the next line.",
+      "why": "The spine writer is recognised only by the identifier or literal spelling `arc-event`, `ARC_EVENT` or `arcEvent`, and the shell scanner is line-by-line. A renamed constant or a continued line hides a spine emit from the audit.",
+      "fix": "Resolve which constants hold the emitter path, or flag any `\"emit\"` argument passed to a spawn. Join `\\`-continued shell lines before scanning.",
+      "twin_of": "A structural gate that knew one spelling of the call"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:audit (`/\\.(mjs|js|sh)$/`, `base = .claude/scripts`)",
+      "breaking_input": "A new writer saved as `.claude/scripts/hq/x.cjs`, `x.ts`, `x.mts`, `x.py`, `x.ps1`, `x.cmd` or `x.bash`, or any writer under `.claude/hooks/` or `.githooks/`. A file named `X.MJS` is also skipped.",
+      "why": "Only three lowercase extensions under one directory are scanned, and nothing reports what was skipped. The run says `N write verbs … 0 unbound` and exits 0 while ignoring the file entirely.",
+      "fix": "Walk every file under `.claude/scripts` and `.claude/hooks`. Fail on any extension the audit cannot parse, by name, and match extensions case-insensitively.",
+      "twin_of": "A gate that reads part of a file refuses, by name, what it does not read"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:isScratch / jsWrites",
+      "breaking_input": "`writeFileSync(join(CACHE_DIR, \"..\", \"PLAN.md\"), t)` or `writeFileSync(join(ROOT, \"docs\", \"state-machine.md\"), t)` or `writeFileSync(join(STATE_DIR, rel), t)` with `rel` set to `../../PLAN.md`.",
+      "why": "A scratch word anywhere in the first comma-split segment drops the site entirely. `join(CACHE_DIR` is all that is read. Even a path that escapes the scratch directory, or a tracked doc whose name contains `state`, `cache` or `lock`, vanishes with no row. The header admits this transform hides writes, but no test or counter surfaces it.",
+      "fix": "Count scratch-dropped sites and print the count in the summary. Treat a scratch word as scratch only when the whole path expression is rooted in a tmp/state constant with no `..` segment. Add a mutant for the escaping case.",
+      "twin_of": "Excluding too much -> narrow a fix to the cause it names"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:blank (line comment branch uses `indexOf(\"\\n\")`)",
+      "breaking_input": "Source line `// note\\u2028writeFileSync(target, text);`, with U+2028 or U+2029 written raw, or a lone CR. JS ends the comment at that terminator and the write is live code. A file with CR-only line endings gets everything after the first `//` blanked.",
+      "why": "The comment stripper ends a `//` comment only at LF, while the language also ends it at CR, U+2028 and U+2029. The live write is blanked, the file shows no site, and the audit reports nothing. This is the parser going quiet.",
+      "fix": "End line comments at any of `\\n`, `\\r`, `\\u2028` or `\\u2029`. Report when an unterminated comment, string or template reaches EOF instead of silently blanking the rest.",
+      "twin_of": "A `//` comment ended only at LF"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:audit walk (`e.isDirectory()` then `readFileSync(p)`)",
+      "breaking_input": "A symlink or junction named `evil.mjs` pointing at a directory, or a dangling symlink `x.sh`, or an unreadable file under `.claude/scripts/…`. Separately, a symlinked directory `.claude/scripts/lane -> elsewhere` holding a writer.",
+      "why": "The Dirent says a symlink is neither file nor directory, so a symlinked directory is never walked and its writers are invisible. A symlinked `.mjs` goes to `readFileSync`, which throws EISDIR, ENOENT or EACCES. The throw is uncaught, so the process dies with a stack trace carrying machine paths. Its exit code is 1, which a caller cannot tell from 'unbound found', and it is not the documented usage-error 2. The listing follows links with no lstat or containment check.",
+      "fix": "`lstat` every entry. Report symlinks by name and refuse any that resolve outside root. Wrap per-file reads and exit 2 naming the file and errno.",
+      "twin_of": "A listing that followed symlinks"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:main arg loop",
+      "breaking_input": "`--root --allowlist x.json` (root becomes `<cwd>/--allowlist`); `--root \"\"` (resolves to the cwd); `--allowlist a.json --allowlist b.json` (last wins); `--root <path-to-a-regular-file>`.",
+      "why": "The check is only `argv[i+1] !== undefined`. A value starting with `--` or empty is accepted, a repeated flag silently overrides, and an empty value silently becomes the cwd. With a file as root, `statSync` throws ENOTDIR, which `throwIfNoEntry:false` does not cover, so it exits 1 with a stack instead of 2.",
+      "fix": "Refuse a missing, empty, `--`-led or repeated value by name with exit 2. Wrap the stat in try/catch and exit 2.",
+      "twin_of": "A flag consumed the NEXT flag as its value"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:main output; allowlistProblems",
+      "breaking_input": "A file named `x\\nplan-bound-audit: 99 write verbs · 99 plan-bound · 0 allowlisted · 0 unbound · 0 allowlist problems\\n.mjs` (valid on POSIX), or an allowlist `verb` containing a newline, or a path containing ` · `.",
+      "why": "Verbs and file names read from disk or JSON are printed raw into line-oriented output. A forged summary line appears before the real one, and the bats `sed -n` summary parser then yields multiple values. The four-column row grammar can be forged the same way.",
+      "fix": "Escape or JSON-encode names, or refuse any verb or file name containing a control character, newline or U+2028/U+2029, by name.",
+      "twin_of": "A folder name or finding carrying a newline could print a verdict line of its own"
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": "plan-bound-allowlist.json (all `lane-tool` library rows e.g. leads/lib/*, launch/lib/*) vs audit header",
+      "breaking_input": "`leads/arc-leads.mjs` imports `appendDraft` from `leads/lib/drafts.mjs` and calls it with no guard, while `drafts.mjs` writes. The importer has zero write sites in its own file, so it is never listed.",
+      "why": "The header says an imported write is listed on the library's row. The library rows are then allowlisted with the reason 'that verb's own row carries the binding'. No importer row exists to carry anything, and the audit never checks importers. A write through a lib is therefore covered by neither file, and the justification is circular.",
+      "fix": "Add a one-hop import-graph pass that attributes a library's write sites to each importing verb, and bind or allowlist those importers. Otherwise drop the 'verb's own row carries the binding' claim.",
+      "twin_of": "A gate that parses the ways a thing can be referenced, when it can check the thing itself"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:audit (`verb = … .replace(/\\.(mjs|js)$/, \"\")`)",
+      "breaking_input": "`demo/x.mjs` (bound) and `demo/x.js` (unbound) in one directory, with one allowlist row `demo/x`.",
+      "why": "Both files get the verb name `demo/x`. The allowlist row covers both, and `rows.find(x => x.verb === name)` in allowlistProblems reads only the first, so a stale or now-bound row is judged on the wrong file. An unbound twin inherits the bound file's allowance.",
+      "fix": "Key verbs on the full relative path including extension, or refuse a duplicate verb name by name.",
+      "twin_of": "Two grammars for one value"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:last two lines (main guard)",
+      "breaking_input": "Run where `realpathSync` throws for `import.meta.url` or argv[1] (a removed or renamed path, a subst/UNC drive), or where argv[1] is absent (`node - < plan-bound-audit.mjs`).",
+      "why": "On any realpath failure `self` or `invoked` becomes the empty string, the guard is false, and the script exits 0 having run nothing and printed nothing. A gate that cannot decide whether it is the entry point fails open. Only the bats `_ran` check catches it, and only in the suite.",
+      "fix": "When `process.argv[1]` is set and either realpath throws, print a named error and set exitCode 2 rather than falling through silently.",
+      "twin_of": "argv[1] vs import.meta.url silently no-ops behind a symlink; realpath both sides"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:main (process.stdout.write per row)",
+      "breaking_input": "`node plan-bound-audit.mjs | head -1`, or a consumer closing the pipe early.",
+      "why": "EPIPE is emitted as an unhandled stream 'error' event after the pipe closes. The process dies with a stack trace and exit code 1 mid-report. The final summary line and the true exit code are lost, so a truncated run is indistinguishable from a failed audit.",
+      "fix": "Register a `process.stdout.on(\"error\")` handler that ignores EPIPE. Buffer the report and write it once.",
+      "twin_of": "process.exit after the one parsed line"
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:shWrites (`line.replace(/(^|\\s)#.*$/, \"\")`)",
+      "breaking_input": "`printf '%s' \"build #1\"; bash \"$ROOT/.claude/scripts/hq/arc-event.sh\" emit note.logged --payload \"$P\"`",
+      "why": "The comment stripper treats any whitespace-then-`#` as a comment start, including inside quotes. The live `emit` later on the same line is erased and the shell verb is never listed. Heredoc bodies and `$#` are also mishandled.",
+      "fix": "Tokenise quotes before stripping comments, or only strip a `#` that starts the line. Prefer erring toward flagging.",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string"
+    }
+  ]
+}

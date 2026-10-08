@@ -165,29 +165,29 @@ EOF
 import { writeFileSync } from "node:fs";
 export function apply(target, text) { writeFileSync(target, text); }
 EOF
-  printf '%s\n' '{"verbs": [{"verb": "demo/bare", "why": "a lane tool, not a face op"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
+  printf '%s\n' '{"verbs": [{"verb": "demo/bare", "class": "lane-tool", "why": "a lane tool, not a face op"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
   run node "$(AUDIT)" --root "$T"
   _ran
   [ "$status" -eq 0 ] || { echo "status $status: $output"; false; }
   [[ "$output" == *"demo/bare · .claude/scripts/demo/bare.mjs · tracked-file · plan-bound no · allowlisted"* ]] || { echo "$output"; false; }
-  printf '%s\n' '{"verbs": [{"verb": "demo/bare", "why": "   "}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
+  printf '%s\n' '{"verbs": [{"verb": "demo/bare", "class": "lane-tool", "why": "   "}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
   run node "$(AUDIT)" --root "$T"
   _ran
   [ "$status" -eq 1 ] || { echo "an empty why passed: $output"; false; }
   [[ "$output" == *"ALLOWLIST allowlist row demo/bare has no why"* ]] || { echo "$output"; false; }
-  printf '%s\n' '{"verbs": [{"verb": "demo/bare"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
+  printf '%s\n' '{"verbs": [{"verb": "demo/bare", "class": "lane-tool"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
   run node "$(AUDIT)" --root "$T"
   [ "$status" -eq 1 ] || { echo "a missing why passed: $output"; false; }
 }
 
 @test "plan-bound-audit: a STALE row (a verb the tree no longer holds) FAILs, and so does a row for a verb now bound" {
   _tree; _bound_verb good
-  printf '%s\n' '{"verbs": [{"verb": "demo/gone", "why": "was a lane tool"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
+  printf '%s\n' '{"verbs": [{"verb": "demo/gone", "class": "lane-tool", "why": "was a lane tool"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
   run node "$(AUDIT)" --root "$T"
   _ran
   [ "$status" -eq 1 ] || { echo "a stale row passed: $output"; false; }
   [[ "$output" == *"ALLOWLIST allowlist row demo/gone names no write verb in the tree"* ]] || { echo "$output"; false; }
-  printf '%s\n' '{"verbs": [{"verb": "demo/good", "why": "carried until bound"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
+  printf '%s\n' '{"verbs": [{"verb": "demo/good", "class": "lane-tool", "why": "carried until bound"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
   run node "$(AUDIT)" --root "$T"
   [ "$status" -eq 1 ] || { echo "a row for a bound verb passed: $output"; false; }
   [[ "$output" == *"names a verb that is now plan-bound"* ]] || { echo "$output"; false; }
@@ -202,9 +202,198 @@ EOF
   [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
 }
 
+@test "plan-bound-audit: MUTANT a guard whose result is dropped is no guard (round-1 L2)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/dropped.mjs" <<'EOS'
+import { writeFileSync } from "node:fs";
+import { staleReason } from "../core/plan-expect.mjs";
+function apply(a, target, text) {
+  staleReason(a.expect, "d");
+  writeFileSync(target, text);
+}
+EOS
+  cat > "$T/.claude/scripts/demo/unread.mjs" <<'EOS'
+import { writeFileSync } from "node:fs";
+import { staleReason } from "../core/plan-expect.mjs";
+function apply(a, target, text) {
+  const stale = staleReason(a.expect, "d");
+  writeFileSync(target, text);
+}
+EOS
+  _bound_verb good
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/dropped · .claude/scripts/demo/dropped.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/unread · .claude/scripts/demo/unread.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/good · .claude/scripts/demo/good.mjs · tracked-file · plan-bound yes"* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: MUTANT tmp-then-rename onto a tracked file is judged by its destination (round-1 B1)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/swap.mjs" <<'EOS'
+import { writeFileSync, renameSync } from "node:fs";
+export function apply(tmp, target, text) { writeFileSync(tmp, text); renameSync(tmp, join(target, "PLAN.md")); }
+EOS
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/swap · .claude/scripts/demo/swap.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  # The scratch half is counted and printed, never silently dropped.
+  [[ "$output" == *"SCRATCH demo/swap: 1 write(s) read as scratch"* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: MUTANT aliased, promise and dynamically imported fs writers are seen (round-1 B2 L9)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/alias.mjs" <<'EOS'
+import { writeFileSync as put } from "node:fs";
+export function apply(target, text) { put(target, text); }
+EOS
+  cat > "$T/.claude/scripts/demo/prom.mjs" <<'EOS'
+import { writeFile } from "node:fs/promises";
+export async function apply(target, text) { await writeFile(target, text); }
+EOS
+  cat > "$T/.claude/scripts/demo/dyn.mjs" <<'EOS'
+export async function apply(target, text) { const { appendFileSync: add } = await import("node:fs"); add(target, text); }
+EOS
+  cat > "$T/.claude/scripts/demo/emitas.mjs" <<'EOS'
+import { emitReceipt as send } from "../core/plan-expect.mjs";
+export function apply(p) { send("x", "note.logged", p); }
+EOS
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  for v in alias prom dyn; do
+    [[ "$output" == *"demo/$v · .claude/scripts/demo/$v.mjs · tracked-file · plan-bound no"* ]] || { echo "demo/$v unseen: $output"; false; }
+  done
+  [[ "$output" == *"demo/emitas · .claude/scripts/demo/emitas.mjs · spine · plan-bound no"* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: MUTANT a write through an imported helper is charged to the importer, one hop (round-1 L3 B11)" {
+  _tree
+  mkdir -p "$T/.claude/scripts/demo/lib"
+  cat > "$T/.claude/scripts/demo/lib/store.mjs" <<'EOS'
+import { writeFileSync } from "node:fs";
+export function save(target, text) { writeFileSync(target, text); }
+export function read(target) { return target; }
+EOS
+  cat > "$T/.claude/scripts/demo/caller.mjs" <<'EOS'
+import { save } from "./lib/store.mjs";
+export function apply(target, text) { save(target, text); }
+EOS
+  cat > "$T/.claude/scripts/demo/reader.mjs" <<'EOS'
+import { read } from "./lib/store.mjs";
+export function look(target) { return read(target); }
+EOS
+  cat > "$T/.claude/scripts/demo/guarded.mjs" <<'EOS'
+import { save } from "./lib/store.mjs";
+import { staleReason } from "../core/plan-expect.mjs";
+export function apply(a, target, text) { if (staleReason(a.expect, "d")) return; save(target, text); }
+EOS
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/caller · .claude/scripts/demo/caller.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/guarded · .claude/scripts/demo/guarded.mjs · tracked-file · plan-bound yes"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"demo/reader"* ]] || { echo "a read-only import was charged as a write: $output"; false; }
+}
+
+@test "plan-bound-audit: MUTANT a shell emit with a flag before emit, and a continued line, are caught (round-1 L5 B4)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/flag.sh" <<'EOS'
+#!/usr/bin/env bash
+bash "$ROOT/.claude/scripts/hq/arc-event.sh" --quiet emit note.logged --payload "$P"
+EOS
+  cat > "$T/.claude/scripts/demo/cont.sh" <<'EOS'
+#!/usr/bin/env bash
+bash "$ROOT/.claude/scripts/hq/arc-event.sh" \
+  emit note.logged --payload "$P"
+EOS
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/flag.sh · .claude/scripts/demo/flag.sh · spine · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/cont.sh · .claude/scripts/demo/cont.sh · spine · plan-bound no"* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: MUTANT git branch and add are writes, and their read-only forms are not (round-1 L6 B3)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/gitw.mjs" <<'EOS'
+import { execFileSync } from "node:child_process";
+export function apply(name) { execFileSync("git", ["-C", ".", "branch", name]); }
+EOS
+  cat > "$T/.claude/scripts/demo/gitr.mjs" <<'EOS'
+import { execFileSync } from "node:child_process";
+export function look() { return execFileSync("git", ["branch", "--show-current"]); }
+EOS
+  cat > "$T/.claude/scripts/demo/gitadd.sh" <<'EOS'
+#!/usr/bin/env bash
+git -C "$D" add -- PLAN.md
+EOS
+  cat > "$T/.claude/scripts/demo/gitread.sh" <<'EOS'
+#!/usr/bin/env bash
+b=$(git symbolic-ref --short -q HEAD || git rev-parse HEAD)
+EOS
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/gitw · .claude/scripts/demo/gitw.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/gitadd.sh · .claude/scripts/demo/gitadd.sh · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"demo/gitr "* && "$output" != *"demo/gitread.sh "* ]] || { echo "a read-only git form was counted: $output"; false; }
+}
+
+@test "plan-bound-audit: MUTANT a line comment ended by a bare CR does not hide the write after it (round-1 B7)" {
+  _tree
+  printf 'import { writeFileSync } from "node:fs";\n// note\rwriteFileSync(target, text);\n' > "$T/.claude/scripts/demo/cr.mjs"
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/cr · .claude/scripts/demo/cr.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: a script it cannot parse is listed unknown, never passed (round-1 B5)" {
+  _tree; _bound_verb good
+  printf '%s\n' 'open("PLAN.md", "w").write("x")' > "$T/.claude/scripts/demo/tool.py"
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/tool.py · .claude/scripts/demo/tool.py · tracked-file · plan-bound unknown"* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: an allowlist row with an unknown class FAILs (round-1 L8)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/bare.mjs" <<'EOS'
+import { writeFileSync } from "node:fs";
+export function apply(target, text) { writeFileSync(target, text); }
+EOS
+  printf '%s\n' '{"verbs": [{"verb": "demo/bare", "class": "trusted", "why": "it is fine"}]}' > "$T/.claude/scripts/core/plan-bound-allowlist.json"
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *'ALLOWLIST allowlist row demo/bare has class "trusted"'* ]] || { echo "$output"; false; }
+}
+
+@test "plan-bound-audit: an empty tree, a doubled or empty flag and a shared verb name are refused (round-1 L12 B9 B12)" {
+  _tree
+  run node "$(AUDIT)" --root "$T"
+  [ "$status" -eq 1 ] || { echo "an audit that read nothing passed: $status $output"; false; }
+  [[ "$output" == *"EMPTY the audit read no write verb at all"* ]] || { echo "$output"; false; }
+  _bound_verb good
+  run node "$(AUDIT)" --root "$T" --root "$T"
+  [ "$status" -eq 2 ] || { echo "a doubled flag: $status $output"; false; }
+  run node "$(AUDIT)" --root ""
+  [ "$status" -eq 2 ] || { echo "an empty value: $status $output"; false; }
+  run node "$(AUDIT)" --root --allowlist
+  [ "$status" -eq 2 ] || { echo "a flag as a value: $status $output"; false; }
+  cp "$T/.claude/scripts/demo/good.mjs" "$T/.claude/scripts/demo/good.js"
+  run node "$(AUDIT)" --root "$T"
+  [ "$status" -eq 2 ] || { echo "two files under one verb name: $status $output"; false; }
+  [[ "$output" == *"two files share the verb name demo/good"* ]] || { echo "$output"; false; }
+}
+
 @test "plan-bound-audit: this suite registers all of its tests (a dropped title is a test that never ran)" {
   local declared
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 12 ] || { echo "declared $declared @test blocks, expected 12 -- update this count with the suite"; false; }
-  [ "${BATS_TEST_NUMBER:-0}" -eq 12 ] || { echo "this is test $BATS_TEST_NUMBER, expected the 12th: a title was dropped"; false; }
+  [ "$declared" -eq 22 ] || { echo "declared $declared @test blocks, expected 22 -- update this count with the suite"; false; }
+  [ "${BATS_TEST_NUMBER:-0}" -eq 22 ] || { echo "this is test $BATS_TEST_NUMBER, expected the 22nd: a title was dropped"; false; }
 }
