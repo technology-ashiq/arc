@@ -182,6 +182,11 @@
       "why": "a growth-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the growth lane, visible here"
     },
     {
+      "verb": "growth/lib/exec-allowlist",
+      "class": "writer",
+      "why": "growth's one subprocess gate (ADR-1102, E2): every git it runs is from a fixed allowlist the caller names, and a human merges every publish; the audit cannot read its argv, so it fails closed and is listed here"
+    },
+    {
       "verb": "hq/arc-dash",
       "class": "lane-tool",
       "why": "the L2 dash door: its writes are the door's own state; the work it starts is a face op, and each op's row is audited on its own"

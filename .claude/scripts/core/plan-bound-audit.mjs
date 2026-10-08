@@ -223,19 +223,64 @@ export function jsWrites(src, code = blank(src), hop = new Map()) {
     if (/["'`]emit["'`]/.test(arr) || /\.\.\.\s*\w*emit\w*/i.test(head)) sites.push({ at: m.index, to: "spine", what: "arc-event emit" });
   }
   // git, by a literal "git" or a constant holding it, with a write subcommand as its first non-option argument.
-  for (const m of code.matchAll(/\b(spawnSync|execFileSync|spawn|execFile|execSync|exec)\s*\(/g)) {
-    const raw = argText(src, m.index + m[0].length - 1);
-    const parts = splitArgs(raw, argText(code, m.index + m[0].length - 1)).map((s) => s.trim());
-    const bin = parts[0] || "";
-    const isGit = /^["'`]git(\.exe)?["'`]$/.test(bin) || /^\w*GIT\w*$/.test(bin) || /^["'`]git\s/.test(bin);
-    if (!isGit) continue;
-    const toks = /^["'`]git\s/.test(bin) ? bin.slice(1, -1).split(/\s+/).slice(1) : [...(parts[1] || "").matchAll(/["'`]([^"'`]*)["'`]/g)].map((t) => t[1]);
+  // A constant that holds "git" in any case, so `const Git = "git"` is a git binary too.
+  const gitConsts = new Set([...src.matchAll(/\b(?:const|let|var)\s+(\w+)\s*=\s*["'`]git(?:\.exe)?["'`]/gi)].map((g) => g[1]));
+  const isGitBin = (bin) => /^["'`]git(\.exe)?["'`]$/i.test(bin) || /^\w*GIT\w*$/.test(bin) || gitConsts.has(bin) || /^["'`]git\s/i.test(bin);
+  // A file's own git wrappers: a declaration whose spawn of git takes its argv from a parameter, not a literal array.
+  const units = topLevelUnits(code);
+  const gitHelpers = new Set();
+  const judgeGit = (at, argv) => {
+    // Every element: a string literal's content, or VAR for anything else -- so `-C root` still skips two and a
+    // variable SUBCOMMAND is unknown, which counts as a write (fail closed: it costs a row, never hides one).
+    const toks = splitArgs(argv.raw, argv.blank).map((t) => t.trim()).filter(Boolean).map((t) => (/^["'`][^"'`]*["'`]$/.test(t) ? t.slice(1, -1) : "\0VAR"));
     let k = 0;
     while (k < toks.length && toks[k].startsWith("-")) k += toks[k] === "-C" || toks[k] === "-c" ? 2 : 1;
-    if (isGitWrite(toks.slice(k))) sites.push({ at: m.index, to: "tracked-file", what: `git ${toks[k]}` });
+    if (k >= toks.length) return;
+    if (toks[k] === "\0VAR" || toks[k].startsWith("...") || isGitWrite(toks.slice(k))) sites.push({ at, to: "tracked-file", what: `git ${toks[k] === "\0VAR" ? "(a variable subcommand)" : toks[k]}` });
+  };
+  /** The inside of the array literal at the start of `raw`, or null. */
+  const arrayOf = (raw, blank) => {
+    const r = raw.trimStart(), off = raw.length - r.length;
+    if (r[0] !== "[") return null;
+    let depth = 0;
+    for (let j = 0; j < r.length; j++) {
+      if (blank[off + j] === "[") depth++;
+      else if (blank[off + j] === "]" && --depth === 0) return { raw: r.slice(1, j), blank: blank.slice(off + 1, off + j) };
+    }
+    return null;
+  };
+  for (const m of code.matchAll(/\b(spawnSync|execFileSync|spawn|execFile|execSync|exec)\s*\(/g)) {
+    const open = m.index + m[0].length - 1;
+    const raw = argText(src, open), blk = argText(code, open);
+    const partsRaw = splitArgs(raw, blk), partsBlank = splitArgs(blk, blk);
+    const bin = (partsRaw[0] || "").trim();
+    if (!isGitBin(bin)) continue;
+    if (/^["'`]git\s/i.test(bin)) {
+      const q = bin.slice(1, -1).split(/\s+/).slice(1).map((t) => JSON.stringify(t)).join(",");
+      judgeGit(m.index, { raw: q, blank: q.replace(/"[^"]*"/g, (x) => " ".repeat(x.length)) });
+      continue;
+    }
+    const arr = arrayOf(partsRaw[1] || "", partsBlank[1] || "");
+    if (arr) { judgeGit(m.index, { raw: arr.raw, blank: arr.blank }); continue; }
+    // argv is not a literal: the enclosing declaration is a git wrapper, judged at each of its call sites below.
+    const u = unitOf(units, m.index);
+    const name = u && /\bfunction\s*\*?\s*(\w+)\s*\([^)]*\)\s*$|\b(?:const|let)\s+(\w+)\s*=\s*(?:\([^)]*\)|\w+)\s*=>\s*$/.exec(code.slice(Math.max(0, u[0] - 200), u[0]));
+    if (name) gitHelpers.add(name[1] || name[2]);
+    else sites.push({ at: m.index, to: "tracked-file", what: "git (an argv the audit cannot read)" });
   }
-  // One call hop: a name imported from a library whose declaration of it writes.
-  for (const [local, to] of hop) {
+  for (const h of gitHelpers) {
+    for (const m of code.matchAll(new RegExp(`(?<![.\\w$])${esc(h)}\\s*\\(`, "g"))) {
+      if (/\bfunction\s*\*?\s*$/.test(code.slice(Math.max(0, m.index - 12), m.index))) continue;
+      const open = m.index + m[0].length - 1;
+      const arr = arrayOf(argText(src, open), argText(code, open));
+      if (arr) judgeGit(m.index, arr);
+      else sites.push({ at: m.index, to: "tracked-file", what: `${h}() (git, an argv the audit cannot read)` });
+    }
+  }
+  // One call hop: a name imported from a library whose declaration of it writes -- and any local name rebound to it.
+  const hopNames = new Map(hop);
+  for (const [local, to] of hop) for (const r of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+(\\w+)\\s*=\\s*${esc(local)}\\s*[;,\\n]`, "g"))) hopNames.set(r[1], to);
+  for (const [local, to] of hopNames) {
     for (const m of code.matchAll(new RegExp(`(?<![.\\w$])${esc(local)}\\s*\\(`, "g"))) sites.push({ at: m.index, to, what: `${local}() (imported)` });
   }
   const seen = new Set();

@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:bound() (guard-on-same-unit rule)",
+      "breaking_input": "`function apply(a,t){ staleReason(a.expect, planDigest(t)); writeFileSync(t,\"x\"); }` — the guard's result is dropped, the write is in the same top-level declaration, and the audit reads plan-bound yes. The round-1 L2 mutant test (`demo/dropped.mjs`) has the guard and write in one function, which the audit reports as plan-bound no — but the shipped rule says a guard before the write in the same declaration binds it regardless of use. The bats test only exercises the dropped-guard shape inside a function whose write is unguarded elsewhere; the shipped `bound()` still counts a dropped guard as binding when it precedes the write in the same unit.",
+      "why": "`bound()` continues `guards.filter((g) => inUnit(u, g)).some((g) => g < s.at)` then `verdict = \"yes\"` with no requirement that the guard's result gate. The round-1 L2 finding claimed the result is required; the shipped code did not add that. An apply that calls staleReason and discards it, then writes, is reported plan-bound yes and needs no allowlist row.",
+      "fix": "Require, after a guard before a write, that the guard's value is read by a later `if`/`?`/`&&`/`||` whose failure path cannot reach the write; otherwise score `no` (or `unknown`), and add a mutant with a dropped guard in the SAME unit as the write."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsGuards (assigned-name read window)",
+      "breaking_input": "`const stale = staleReason(a.expect, d); console.log(stale); writeFileSync(t,\"x\");` — the assigned name is read by a later statement, but not by any conditional. `jsGuards` treats any later `\\bname\\b` in the 4000-char window as a gate (`read` matches `\\bname\\b` alone), so the write counts as bound though nothing branches on stale.",
+      "why": "The `read` regex accepts a plain name occurrence (`(?:if|while)\\s*\\(...` alternation plus a bare `\\bname\\b`), so logging or string-building the guard's result makes the write bound. The header says a guard is a call whose result gates; the matcher accepts any read.",
+      "fix": "Only a read inside `if(`/`while(`/ternary/`&&`/`||` counts; a bare name read is not a gate. Add a mutant that logs the guard result then writes."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:audit (writingExports + one-hop attribution)",
+      "breaking_input": "`demo/lib/store.mjs` exports `save` (writes). `demo/caller.mjs` imports `save` and calls it, but `demo/caller.mjs` ALSO has its own direct write with a guard. The audit attributes the imported `save` to `caller` via `hop`, and `bound()` sees the call site `save(...)` plus the direct guarded write in the same unit — the imported write is judged by the caller's guards. Now `reader.mjs` imports `save` but never calls it (or calls it conditionally); no site is emitted because hop only adds sites for `matchAll` — an imported name used in a template string `` `${save}` `` is not a call, so no site. Fine. Real gap: an IMPORTER that destructures a library's write and calls it through a rebound name: `import { save } from './lib/store.mjs'; const put = save; put(t,txt);` — the call `put(` has no site (hop keys on the imported name `save`, not the rebound `put`), so the write is invisible and the verb reports `yes`.",
+      "why": "The one-hop pass matches calls of the imported binding only; a re-aliased call of that binding is invisible. Round-1 B2 fixed aliasing of fs primitives but the hop pass still keys on the import binding.",
+      "fix": "Track name rebinding (`const put = save`) and charge the call of the rebind to the writer library; add a mutant with a rebound imported writer."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites (fs call scanner)",
+      "breaking_input": "`const fsx = require('node:fs'); fsx.writeFileSync(target, x);` — the CJS `require` is not matched by the `import` regexes; `fsNs` is built only from `import * as` / `import ... from`, plus hard-coded `fs`/`fsp`/`promises`. An object named `fsx` is not in `fsNs`, so `obj` fails `/^fs/i` only if it matches `fs` — `fsx` does not (no word boundary after `fs`), so the member call is dropped. A verb written in CJS passes with no write.",
+      "why": "The header says `.cjs` is listed unknown (never passed by default), so a pure `.cjs` file is safe; but a `.mjs` file doing `const fsx = require('node:fs')` (legal in ESM via createRequire) is a `.mjs`, parsed, and the alias `fsx` is invisible.",
+      "fix": "Track `createRequire` aliases and member aliases; or refuse a `.mjs` that calls `require('node:fs')` as unknown."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites (openSync fd tracking)",
+      "breaking_input": "`const fd = fs.openSync('PLAN.md','w'); fs.writeSync(fd,'x'); fs.closeSync(fd);` — `openSync` is NOT in FS_MUTATORS, so no write site is created for the open; `writeSync(fd,...)` is a write with dest `fd`, then the code looks back for `fd = ...openSync(` which matches, so dest becomes `'PLAN.md'` and a tracked-file site IS emitted — good. Gap: `fs.promises.open('PLAN.md','w')` (async) is not in FS_MUTATORS and the promise-form `write` is not matched; a `.mjs` verb using `await fsp.open(...)` then `await fh.writeFile(...)` is invisible.",
+      "why": "`open` (promise form) and `FileHandle.writeFile`/`FileHandle.write` are not in FS_MUTATORS. The audit claims fs mutation is covered in sync, callback and promise forms; the FileHandle API is omitted.",
+      "fix": "Add `open`/`openSync` (promise) and `FileHandle.writeFile`, and treat a write on a handle obtained from a path as that path's write."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:shWrites (git regex)",
+      "breaking_input": "`case x in foo) git checkout -- .;; esac` or `git branch -f` in a `for`/`while` body; more directly, `git submodule update --init` — `submodule` is not in GIT_WRITES, and `git worktree add` IS (worktree is in the set), but `git submodule update` updates the submodule's working tree and refs and is not matched. Also `git branch --force` is matched (branch is in the set), but with `GIT_READ_FLAGS` — `--force` is not a read flag, so it is a write: fine.",
+      "why": "`submodule` (and `remote add`, `remote set-url`, `config --add`) are write subcommands not in GIT_WRITES. A verb using `git submodule update` writes tracked content and is reported with no writes.",
+      "fix": "Add `submodule`, `remote` (write forms), `config` (write forms), `maintenance`, `gc` to the write set, or refuse a git call whose subcommand is unknown."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites (emitter argv array scan)",
+      "breaking_input": "`const argv = [...ARC_EVENT_ARGS, 'emit', 'note.logged']; spawnSync(process.execPath, argv);` where `ARC_EVENT_ARGS` is an array holding `'hq/arc-event.mjs'`. The array-literal scan looks at each `[` literal in `code`; the spread `[...ARC_EVENT_ARGS, ...]` — the literal `[` is present, the head text is `[...ARC_EVENT_ARGS, 'emit'...` which matches `/\\b\\w*(arc_?event|ARC_?EVENT|arcEvent|emitter|EMITTER)\\w*\\b/i` on `ARC_EVENT_ARGS`, and contains `'emit'`, so it is detected. Good. Gap: `const argv = buildArgv(); spawnSync(process.execPath, argv)` — no array literal, so no detection; a helper function returns the emitter argv with `emit`. The write is invisible.",
+      "why": "The array scan only covers array literals in the same file with an event-named token. A helper-built argv with a literal `'emit'` in another function is not seen; the spawn of `process.execPath` with an unknown argv is not flagged.",
+      "fix": "Flag any `spawnSync(process.execPath, X)` where X is not statically provable to be a non-emitter, or charge `emit` by data-flow of the string into argv."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:isGitWrite / jsWrites (git via variable path)",
+      "breaking_input": "`const GIT_BIN = \"/usr/bin/git\"; execFileSync(GIT_BIN, [\"branch\", name]);` — the bin check `isGit = /^[\"'`]git(\\.exe)?[\"'`]$/.test(bin) || /^\\w*GIT\\w*$/.test(bin)` matches `GIT_BIN` via the second alternative, so it IS a git write. Good. Gap: `execFileSync(process.env.GIT, [...])` — bin is `process.env.GIT`, which fails both; the call is not a git write and the verb passes.",
+      "why": "A git binary reached through an env var or a property access is invisible. The round-1 B3 fix added `GIT`-style constants but not env/object access.",
+      "fix": "Treat a spawn whose first arg is any expression resolving to `git` as a git call when the subcommand word is in the write set; fail closed on an unresolvable binary that runs a subcommand."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:allowlistProblems (verb name double-use)",
+      "breaking_input": "Two files `demo/a.mjs` (bound) and `demo/a.sh` (unbound, emits) — both map to verb `demo/a`. The `.mjs` is `yes`, the `.sh` is `no` (or `unknown`). The allowlist row `demo/a` — `writers.get(name)` from `rows` is a Map built by `new Map(rows.map(...))`, so the LAST row wins (the `.sh`'s `no`). Then the row names a verb that is `no`, so it is allowlisted and passes the audit even though the `.mjs` twin is a real bound writer and the `.sh` is the unbound one; the header's two-files-share-a-name error is raised only when BOTH are in `rows` with different verbs? No — `audit()` raises on `names.has(r.verb)` for any duplicate, so this is already refused.",
+      "why": "This is closed by the duplicate-verb refusal. No finding here.",
+      "fix": "—"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:main (empty verb count) — round-1 L12 fix",
+      "breaking_input": "A tree where `.claude/scripts` exists but every file is, e.g., `.gitkeep` or a directory with no scripts — `audit()` returns empty `rows`, `writers.length===0`, `unbound.length===0`, `problems.length===0`. The bats test asserts `EMPTY` and exit 1 — and the shipped code does `if (!writers.length) say(\"EMPTY ...\"); return unbound.length || problems.length || !writers.length ? 1 : 0;` so exit 1 is correct. The fix landed.",
+      "why": "Closed — the `!writers.length` term is present.",
+      "fix": "—"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:blank (regex/line comment) — round-1 B7 fix",
+      "breaking_input": "`// note\\u2028writeFileSync(t,\"x\")` — blank() now builds EOL from code points including U+2028/9, and the line-comment branch uses `lineEnd(i)` which scans for `EOL.test(src[k])`, so U+2028 ends the comment and the write is preserved. The bats test `cr.mjs` pins the bare-CR case.",
+      "why": "Closed — EOL includes LS/PS and CR.",
+      "fix": "—"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:class enum — round-1 L8 fix",
+      "breaking_input": "An allowlist row with `class: \"trusted\"` — `allowlistProblems` now includes `if (!CLASSES.includes(r.class))`, and a bats test asserts the named error and exit 1.",
+      "why": "Closed — CLASSES validation is in.",
+      "fix": "—"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:isGitWrite (read-only flags) — round-1 L6/B3 fix",
+      "breaking_input": "`git branch --show-current` — `isGitWrite` now has `if (sub==='branch'||sub==='tag') return pos.length>0 && !rest.some(t=>GIT_READ_FLAGS.test(t))`; `--show-current` is in GIT_READ_FLAGS, so it is read. Bats pins it.",
+      "why": "Closed — the read-only forms are in GIT_READ_FLAGS.",
+      "fix": "—"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:allowlistProblems (door-gap why not cross-checked)",
+      "breaking_input": "An allowlist row `class:\"door-gap\"`, `why:\"UNKNOWN, filed nowhere\"` — the audit accepts it with no check that a filed /arc-change exists (PROGRESS's GAPS FILED list). The PROGRESS claims each door-gap is filed; the gate trusts the prose. Round-1 L14 named this; it remains.",
+      "why": "The `why` is free text; no machine-readable registry of filed changes is consulted. A verb can be allowlisted as a door-gap with a fabricated reason, and the binding guarantee rests on prose, exactly as the round-1 finding said.",
+      "fix": "Cross-check door-gap rows against a machine-readable registry (or refuse a door-gap without a verifiable filed change id); at minimum validate the `why` names an existing /arc-change id."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsGuards (read-only guard form)",
+      "breaking_input": "`if (spineRefusal(ARC_EVENT, note, p)) throw` — assigned-name form not used; the guard matches the `if (...) ` branch. Fine. Gap: `if (!spineRefusal(...)) return; write(...)` — guard in `if`, result used, bind yes; correct. And `if (stale) return;` where `stale` assigned — `read` matches `(if|while)\\s*\\(\\s*!?\\s*name` — good. The remaining hole: a guard whose result is used only as a truthiness of a NAME ASSIGNED but the write is outside the conditional's reach, e.g. `const ok = staleReason(...); if (ok) { write(t); }` — the guard is BEFORE the write in the unit, the result gates the write — bound yes, correct.",
+      "why": "L2 covered the dropped/unread guard; the conditional-gated guard is the intended case. No independent finding beyond L2's assigned-name-read over-broadness (logged-read) which is L2.",
+      "fix": "Fold into L2 — any read of the assigned name counts as a gate; log-read is the residual un-gated path."
+    }
+  ]
+}

@@ -391,9 +391,45 @@ EOS
   [[ "$output" == *"two files share the verb name demo/good"* ]] || { echo "$output"; false; }
 }
 
+@test "plan-bound-audit: MUTANT git with a variable -C dir, a git wrapper helper and a rebound import are seen (round-2 B1 B2 L3)" {
+  _tree
+  cat > "$T/.claude/scripts/demo/gitvar.mjs" <<'EOS'
+import { execFileSync } from "node:child_process";
+export function apply(root, msg) { execFileSync("git", ["-C", root, "commit", "-m", msg]); }
+EOS
+  cat > "$T/.claude/scripts/demo/wrap.mjs" <<'EOS'
+import { spawnSync } from "node:child_process";
+function git(args) { return spawnSync("git", args, { encoding: "utf8" }); }
+export function apply(name) { git(["branch", name]); }
+export function look() { return git(["rev-parse", "HEAD"]); }
+EOS
+  cat > "$T/.claude/scripts/demo/wrapread.mjs" <<'EOS'
+import { spawnSync } from "node:child_process";
+function git(args) { return spawnSync("git", args, { encoding: "utf8" }); }
+export function look() { return git(["rev-parse", "HEAD"]); }
+EOS
+  mkdir -p "$T/.claude/scripts/demo/lib"
+  cat > "$T/.claude/scripts/demo/lib/store.mjs" <<'EOS'
+import { writeFileSync } from "node:fs";
+export function save(target, text) { writeFileSync(target, text); }
+EOS
+  cat > "$T/.claude/scripts/demo/rebind.mjs" <<'EOS'
+import { save } from "./lib/store.mjs";
+const put = save;
+export function apply(target, text) { put(target, text); }
+EOS
+  run node "$(AUDIT)" --root "$T"
+  _ran
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"demo/gitvar · .claude/scripts/demo/gitvar.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/wrap · .claude/scripts/demo/wrap.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"demo/rebind · .claude/scripts/demo/rebind.mjs · tracked-file · plan-bound no"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"demo/wrapread "* ]] || { echo "a read-only call through a git wrapper was counted: $output"; false; }
+}
+
 @test "plan-bound-audit: this suite registers all of its tests (a dropped title is a test that never ran)" {
   local declared
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 22 ] || { echo "declared $declared @test blocks, expected 22 -- update this count with the suite"; false; }
-  [ "${BATS_TEST_NUMBER:-0}" -eq 22 ] || { echo "this is test $BATS_TEST_NUMBER, expected the 22nd: a title was dropped"; false; }
+  [ "$declared" -eq 23 ] || { echo "declared $declared @test blocks, expected 23 -- update this count with the suite"; false; }
+  [ "${BATS_TEST_NUMBER:-0}" -eq 23 ] || { echo "this is test $BATS_TEST_NUMBER, expected the 23rd: a title was dropped"; false; }
 }
