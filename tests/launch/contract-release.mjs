@@ -89,6 +89,25 @@ switch (scenario) {
     out.frontend = await attempt(() => frontend.mod.scaffold(F()));
     out.page = Buffer.from(repo().files["app/page.js"].content, "base64").toString("utf8");
     break;
+  case "owner-later-commits": {
+    // attack b1844e0 B1: an owner commit after the shell, touching another file, is never reported as launch's own.
+    // Then the owner re-commits app/page.js with the shell's exact bytes: identical content is not launch's (twin of
+    // attack 3f04230 L3/L4), so the shell refuses rather than adopting it.
+    await release.mod.scaffold(R(["deploy-prod-first"]));
+    const first = await attempt(() => frontend.mod.scaffold(F()));
+    out.firstId = first.ok ? first.value.resources[0].id : first.code;
+    // Fixed shas no other commit in this file uses: "a" is the initial commit, so reusing it made the fake resolve the
+    // owner's head to that commit and see no shell at all.
+    repo().files["README.md"] = { sha: "7".repeat(40), content: Buffer.from("owner notes\n").toString("base64") };
+    repo().commits.push({ sha: "7".repeat(40), message: "owner readme", files: { "README.md": "7".repeat(40) } });
+    const again = await attempt(() => frontend.mod.scaffold(F()));
+    out.againId = again.ok ? again.value.resources[0].id : again.code;
+    out.headIsOwner = out.againId === `${FULL}:${"7".repeat(40)}`;
+    const blob = repo().files["app/page.js"].sha;
+    repo().commits.push({ sha: "8".repeat(40), message: "owner touches the page", files: { "app/page.js": blob } });
+    out.adopted = await attempt(() => frontend.mod.scaffold(F()));
+    break;
+  }
   case "owner-rewrote-hold":
     // hosting placed the hold, then the owner rewrote vercel.json with their own config: release does not lift it.
     repo().files["vercel.json"] = { sha: "e".repeat(40), content: Buffer.from("{\"rewrites\":[]}\n").toString("base64") };

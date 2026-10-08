@@ -89,8 +89,10 @@ export function makeCtx({ profile, board, slot, row, root, resources, upstream, 
         return { google: await ask("https://dns.google/resolve"), cloudflare: await ask("https://cloudflare-dns.com/dns-query") };
       },
     }),
+    // revenue.simulated is queued, never emitted as written: the runner books it only through the ledger's own parser
+    // and validator (lib/simulated.mjs, ADR-1739), so no adapter writes a money payload of its own.
     emit(kind, payload) {
-      if (kind !== "note.logged") throw refusal("EMIT_REFUSED", "an adapter may only queue note.logged; receipts are the runner's");
+      if (kind !== "note.logged" && kind !== "revenue.simulated") throw refusal("EMIT_REFUSED", "an adapter may only queue note.logged or revenue.simulated; receipts are the runner's");
       queued.push({ kind, payload });
     },
     get queued() { return queued; },

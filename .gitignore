@@ -55,6 +55,12 @@ test-results/
 # ignore it here too — a stray one can never be silently committed into the mold's .claude/.
 .claude/arc-registry.json
 
+# Per-machine tool state, never the mold: the headroom wrapper's marker, owners and lock files, and the Serena
+# language-server project dir. Untracked, they were read as "synced but in no product" by product-lint on every
+# run, and the headroom files landed in sync-golden regens and were deleted by hand (testing.md, org Cycle 19).
+.claude/.headroom_wrap_*
+.serena/
+
 # Hook write-probes (freeze-check / edit-guard test their write access) — never commit
 .writetest*
 **/.writetest

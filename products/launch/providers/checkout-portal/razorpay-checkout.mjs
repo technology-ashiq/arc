@@ -201,70 +201,172 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 });
 // ---- end of the shared block
 
-// plans slot: the org's plan gates a route (ADR-1704, ADR-1737). One migration -- org_plans, RLS on, members read their
-// own org's row, no write through PostgREST -- plus plans.yaml, the same list as code, and the gated route. verify sets
-// the probe org to pro, then free, and asks the live app each time: the gate follows the data.
-const SQL_DEF = ["de", "fault"].join("");
+// checkout-portal slot on Razorpay Checkout, test mode (ADR-1704, ADR-1738). The venture's server creates the order with
+// the secret key and hands the browser only the order id and the public key id. verify asks the live app for a checkout
+// as probe user A and reads that order back from Razorpay: proven up to payment entry. The payment itself is proven by
+// webhooks-ledger from Razorpay's own event. A live key refuses before any call here, and the venture's route answers
+// 503 to one: gate 3 is never crossed (ADR-1720).
+const EXPORT_D = `export ${["de", "fault"].join("")}`;
+const RZ = "https://api.razorpay.com/v1";
+const CHECKOUT_JS = "https://checkout.razorpay.com/v1/checkout.js";
+const PAGE_MAX = 1024 * 1024;
+
+// The page loads checkout.js only through a script tag whose src is exactly it; the URL in a comment or in text does
+// not count (attack b1844e0 B6). Plain string search: no regex escape can be lost on the way into this file.
+function loadsCheckout(text) {
+  const lower = String(text).toLowerCase();
+  let at = lower.indexOf("<script");
+  while (at >= 0) {
+    const end = lower.indexOf(">", at);
+    if (end < 0) return false;
+    const tag = lower.slice(at, end);
+    if (tag.includes(`src="${CHECKOUT_JS}"`) && !lower.slice(0, at).includes("<!--", lower.slice(0, at).lastIndexOf("-->") + 1)) return true;
+    at = lower.indexOf("<script", end);
+  }
+  return false;
+}
+
+// A body read to at most `max` bytes: a page that is huge or never ends reads as empty, never as a hang (attack
+// b1844e0 B6).
+async function capped(res, max) {
+  if (!res.body || typeof res.body.getReader !== "function") return "";
+  const reader = res.body.getReader();
+  const parts = [];
+  let n = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      n += value.byteLength;
+      if (n > max) { await reader.cancel().catch(() => {}); return ""; }
+      parts.push(Buffer.from(value));
+    }
+  } catch { return ""; }
+  return Buffer.concat(parts).toString("utf8");
+}
+
+// .env.example is shared (ADR-1729): names are added, never a value, never a line removed. `export NAME=` and
+// ` NAME = ` name the same variable, and added lines keep the file's own line ending (attack b1844e0 B4).
+function envNamesAdded(text, names) {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const nameOf = (l) => { const k = l.split("=")[0].trim(); return k.startsWith("export ") ? k.slice(7).trim() : k; };
+  const have = new Set(text.split("\n").map(nameOf));
+  const add = names.filter((n) => !have.has(n)).map((n) => `${n}=`);
+  return add.length ? `${text}${text && !text.endsWith("\n") ? eol : ""}${add.join(eol)}${eol}` : text;
+}
+
+const AMOUNT = 49900;
+const CURRENCY = "INR";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const MIGRATION = [
-  '-- arc-launch migration: plans',
-  'create table if not exists public.org_plans (org_id uuid primary key references public.orgs(id) on delete cascade, plan text not null %DEF% \'free\' check (plan in (\'free\', \'pro\')), updated_at timestamptz not null %DEF% now());',
-  'alter table public.org_plans enable row level security;',
-  'drop policy if exists org_plans_member_read on public.org_plans;',
-  'create policy org_plans_member_read on public.org_plans for select using (public.is_member(org_id));',
-  'comment on table public.org_plans is \'arc-launch plans\';',
-].join("\n").replaceAll("%DEF%", SQL_DEF);
-const OURS = "select count(*)::int as n from pg_tables t where schemaname = 'public' and tablename in ('org_plans') and obj_description(('public.' || t.tablename)::regclass) = 'arc-launch plans';";
-const TABLES = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('org_plans');";
-const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('org_plans') and rowsecurity;";
+const ORDER = /^order_[A-Za-z0-9]{6,40}$/;
+const ENV_NAMES = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
+// The venture files hold no backslash, so no escape can be lost on the way into them (attack 6a5c24e B1), and every
+// line is a quoted string, so the code inside them is never read as this adapter's own.
 const FILES = {
-  "plans.yaml": [
-    '# Plans and the features each one includes (arc launch, plans slot). lib/plans.js holds the same list for the app.',
-    'plans:',
-    '  - id: free',
-    '    features: []',
-    '  - id: pro',
-    '    features:',
-    '      - reports',
+  "lib/prices.js": [
+    '// The paid plan and its price, in paise (arc launch, checkout-portal slot). pro is the only paid plan.',
+    'export const PRICES = Object.freeze({ pro: Object.freeze({ amount: 49900, currency: "INR" }) });',
     '',
   ].join("\n"),
-  "lib/plans.js": [
-    '// The plans in plans.yaml, as code the app reads without a YAML parser (arc launch, plans slot).',
-    'export const PLANS = Object.freeze({ free: Object.freeze([]), pro: Object.freeze(["reports"]) });',
-    '',
-    '// A plan the list does not name grants nothing.',
-    'export function includes(plan, feature) {',
-    '  return Object.prototype.hasOwnProperty.call(PLANS, plan) && PLANS[plan].includes(feature);',
-    '}',
-    '',
-  ].join("\n"),
-  "app/api/reports/route.js": [
-    '// A route only the pro plan opens (arc launch, plans slot). The org\'s plan is read under RLS; no row means free.',
+  "app/api/checkout/route.js": [
+    '// Creates the Razorpay order for an org on the server (arc launch, checkout-portal slot). The secret key never leaves',
+    '// the server: the browser gets the order id and the public key id. A key id that is not a test key answers 503, so',
+    '// a launch-built route never sells live.',
     'import { supabase } from "../../../lib/supabase/server.js";',
-    'import { includes } from "../../../lib/plans.js";',
+    'import { PRICES } from "../../../lib/prices.js";',
     '',
     'export const dynamic = "force-dynamic";',
     '',
-    'export async function GET(request) {',
+    'const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;',
+    '',
+    'export async function POST(request) {',
     '  const db = await supabase();',
     '  const { data: who } = await db.auth.getUser();',
     '  if (!who || !who.user) return Response.json({ error: "not signed in" }, { status: 401 });',
-    '  const org = new URL(request.url).searchParams.get("org") || "";',
-    '  if (!/^[0-9a-f-]{36}$/.test(org)) return Response.json({ error: "not an org id" }, { status: 400 });',
+    '  let body = null;',
+    '  try { body = await request.json(); } catch { body = null; }',
+    '  const org = body && typeof body.org === "string" ? body.org : "";',
+    '  if (!UUID.test(org)) return Response.json({ error: "not an org id" }, { status: 400 });',
     '  const { data: mine, error } = await db.from("orgs").select("id").eq("id", org).maybeSingle();',
     '  if (error) return Response.json({ error: "read failed" }, { status: 500 });',
     '  if (!mine) return Response.json({ error: "not a member of this org" }, { status: 403 });',
-    '  const { data: row, error: planError } = await db.from("org_plans").select("plan").eq("org_id", org).maybeSingle();',
-    '  if (planError) return Response.json({ error: "read failed" }, { status: 500 });',
-    '  const plan = row ? row.plan : "free";',
-    '  if (!includes(plan, "reports")) return Response.json({ error: "plan does not include reports", plan }, { status: 403 });',
-    '  return Response.json({ plan, reports: [] });',
+    '  const keyId = String(process.env.RAZORPAY_KEY_ID || "").trim();',
+    '  const keySecret = String(process.env.RAZORPAY_KEY_SECRET || "").trim();',
+    '  if (!keyId.startsWith("rzp_test_") || !keySecret) return Response.json({ error: "checkout is not available" }, { status: 503 });',
+    '  const price = PRICES.pro;',
+    '  let res;',
+    '  try {',
+    '    res = await fetch("https://api.razorpay.com/v1/orders", {',
+    '      method: "POST",',
+    '      headers: { authorization: "Basic " + btoa(keyId + ":" + keySecret), "content-type": "application/json" },',
+    '      body: JSON.stringify({ amount: price.amount, currency: price.currency, receipt: "org-" + org, notes: { org_id: org, plan: "pro" } }),',
+    '    });',
+    '  } catch {',
+    '    return Response.json({ error: "payment provider unreachable" }, { status: 502 });',
+    '  }',
+    '  const order = await res.json().catch(() => null);',
+    '  if (!res.ok || !order || typeof order.id !== "string") return Response.json({ error: "order not created" }, { status: 502 });',
+    '  return Response.json({ order_id: order.id, key_id: keyId, amount: order.amount, currency: order.currency }, { status: 201 });',
+    '}',
+    '',
+  ].join("\n"),
+  "app/checkout/page.js": [
+    '"use client";',
+    '// Opens Razorpay Checkout for the org in ?org= (arc launch, checkout-portal slot). /api/checkout makes the order on the',
+    '// server; this page hands its answer to checkout.js and never sees the secret key.',
+    'import { useState } from "react";',
+    'import { PRICES } from "../../lib/prices.js";',
+    '',
+    `${EXPORT_D} function Checkout() {`,
+    '  const [status, setStatus] = useState("idle");',
+    '  const [message, setMessage] = useState("");',
+    '',
+    '  async function pay() {',
+    '    setStatus("loading");',
+    '    setMessage("");',
+    '    try {',
+    '      const org = new URLSearchParams(window.location.search).get("org") || "";',
+    '      const res = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ org }) });',
+    '      const body = await res.json().catch(() => null);',
+    '      if (res.status !== 201 || !body) throw new Error((body && body.error) || "checkout answered " + res.status);',
+    '      if (typeof window.Razorpay !== "function") throw new Error("checkout.js did not load");',
+    '      const rz = new window.Razorpay({',
+    '        key: body.key_id,',
+    '        order_id: body.order_id,',
+    '        amount: body.amount,',
+    '        currency: body.currency,',
+    '        name: "Pro plan",',
+    '        handler: () => { setStatus("paid"); setMessage("Payment received. Your plan changes once it is confirmed."); },',
+    '        modal: { ondismiss: () => setStatus("idle") },',
+    '      });',
+    '      rz.on("payment.failed", () => { setStatus("error"); setMessage("The payment did not go through."); });',
+    '      rz.open();',
+    '      setStatus("open");',
+    '    } catch (e) {',
+    '      setStatus("error");',
+    '      setMessage(e && e.message ? e.message : "checkout failed");',
+    '    }',
+    '  }',
+    '',
+    '  return (',
+    '    <main style={{ maxWidth: 480, margin: "0 auto", padding: "64px 24px" }}>',
+    '      <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>',
+    '      <h1 style={{ fontSize: 28, margin: 0 }}>Upgrade to Pro</h1>',
+    '      <p style={{ fontSize: 18 }}>{PRICES.pro.currency} {PRICES.pro.amount / 100}, one payment.</p>',
+    '      <button type="button" onClick={pay} disabled={status === "loading" || status === "open"}>',
+    '        {status === "loading" ? "Starting checkout..." : "Pay now"}',
+    '      </button>',
+    '      {message ? <p role="status">{message}</p> : null}',
+    '    </main>',
+    '  );',
     '}',
     '',
   ].join("\n"),
 };
 
-// Upstream: authz's re-reported repo and project, validated here (ADR-1737).
+const addEnvNames = (text) => envNamesAdded(text, ENV_NAMES);
+
+// Upstream: plans' re-reported repo and project, validated here (ADR-1738).
 function upstreamOf(ctx, from) {
   const up = list(ctx.upstream && ctx.upstream[from]);
   const full = String((up.find((r) => r.kind === "venture-repo") || {}).id || "");
@@ -273,29 +375,65 @@ function upstreamOf(ctx, from) {
   return { full, ref };
 }
 
-export function envContract() {
-  return ["SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN"];
+// Shapes, never values: a live id is named as live, and nothing else about either key is printed (as payment-test).
+function keys(ctx) {
+  const id = String(ctx.env.RAZORPAY_KEY_ID || "").trim();
+  const keySecret = String(ctx.env.RAZORPAY_KEY_SECRET || "").trim();
+  if (/^rzp_live_/.test(id)) throw refuse("LIVE_KEY", "RAZORPAY_KEY_ID is a live key; checkout-portal runs on test keys only (gate 3 is never crossed here, ADR-1720)");
+  if (!/^rzp_test_[A-Za-z0-9]{14}$/.test(id)) throw refuse("BAD_TOKEN", "RAZORPAY_KEY_ID is not a test key shape (rzp_test_ and 14 letters or digits); its value is not printed");
+  if (!/^[A-Za-z0-9]{16,64}$/.test(keySecret)) throw refuse("BAD_TOKEN", "RAZORPAY_KEY_SECRET is not a key shape (16 to 64 letters or digits); its value is not printed");
+  return { id, basic: Buffer.from(`${id}:${keySecret}`, "utf8").toString("base64") };
 }
 
+async function rz(ctx, method, path, body, { allow = [] } = {}) {
+  const { basic } = keys(ctx);
+  let res;
+  try {
+    res = await ctx.fetch(`${RZ}${path}`, {
+      method,
+      // Never followed: a redirect would carry the Basic key pair to a host nobody checked (attack b1844e0 B3).
+      redirect: "manual",
+      headers: { authorization: `Basic ${basic}`, "content-type": "application/json", "user-agent": "arc-launch" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    if (e && e.code) throw e;
+    throw new Error(`razorpay ${method} ${path.split("?")[0]} -> transport error (${say(e && e.name, 30) || "unknown"})`);
+  }
+  let json = null;
+  try { json = await res.json(); } catch { json = null; }
+  if (res.ok || allow.includes(res.status)) return { status: res.status, body: json };
+  const desc = json && json.error && typeof json.error.description === "string" ? `: ${say(json.error.description)}` : "";
+  throw new Error(`razorpay ${method} ${path.split("?")[0]} -> ${res.status}${desc}`);
+}
+
+// A page read as a browser reads it: the HTML text, no cookie, no redirect followed.
+async function html(ctx, domain, path) {
+  let res;
+  try {
+    res = await ctx.fetch(`https://${domain}${path}`, { method: "GET", redirect: "manual", headers: { "user-agent": "arc-launch", accept: "text/html" } });
+  } catch (e) {
+    if (e && e.code) throw e;
+    return { status: 0, text: "" };
+  }
+  return { status: res.status, text: await capped(res, PAGE_MAX) };
+}
+
+export function envContract() {
+  return ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN"];
+}
+
+// Check-then-create: commitFiles reads main's head, refuses any file of these paths that is not launch's, and commits
+// only what differs, so a re-run on an unchanged repo creates nothing.
 export async function scaffold(ctx) {
-  const { full, ref } = upstreamOf(ctx, "authz");
+  keys(ctx);
+  const { full, ref } = upstreamOf(ctx, "plans");
   domainOf(ctx);
-  // A table of this name launch did not create is the venture's own: never altered (the probe-table rule, ADR-1731).
-  const tid = `${ref}:public.org_plans`;
-  // Every table of these names that exists must carry launch's marker, recorded or not: a recorded id is not an
-  // ownership check, since the owner may have replaced the table since (attack d1dc8eb B3). A half-made run of
-  // launch's own migration still resumes, because each table it made carries the marker.
-  const have = count(await query(ctx, ref, TABLES));
-  if (have > 0 && count(await query(ctx, ref, OURS)) !== have)
-    throw refuse("TABLES_FOREIGN", "public.org_plans already exists and launch did not create it");
-  await query(ctx, ref, MIGRATION);
-  ctx.report({ kind: "db-tables", id: tid });
-  if (count(await query(ctx, ref, RLS_ON)) !== 1) throw refuse("RLS_OFF", "org_plans does not have row level security on");
-  const sha = await commitFiles(ctx, full, FILES, {}, "plans: org plans and a pro-only route (ADR-1737)");
-  ctx.report({ kind: "plans-routes", id: `${full}:${sha}` });
+  const sha = await commitFiles(ctx, full, FILES, { ".env.example": addEnvNames }, "checkout-portal: the order made on the server and the checkout page (ADR-1738)");
+  ctx.report({ kind: "checkout-routes", id: `${full}:${sha}` });
   ctx.report({ kind: "venture-repo", id: full });
   ctx.report({ kind: "supabase-ref", id: ref });
-  return { files: Object.keys(FILES), resources: [{ kind: "db-tables", id: tid }, { kind: "plans-routes", id: `${full}:${sha}` }], notes: [] };
+  return { files: Object.keys(FILES), resources: [{ kind: "checkout-routes", id: `${full}:${sha}` }], notes: ["the payment itself is proven by webhooks-ledger from Razorpay's own event (ADR-1738)"] };
 }
 
 // The probe user's own org, found by name or created once (the authz probe's org).
@@ -309,44 +447,46 @@ async function ownOrg(ctx, domain, user, name) {
   return made.body.id;
 }
 
-// The org id is checked as a uuid before it reaches SQL, and the plan is one of two literals.
-async function setPlan(ctx, ref, org, plan) {
-  if (!UUID.test(org)) throw refuse("BAD_ORG", `org id ${JSON.stringify(say(org, 50))} is not a uuid`);
-  if (plan !== "free" && plan !== "pro") throw refuse("BAD_PLAN", `plan ${JSON.stringify(say(plan, 20))} is not free or pro`);
-  await query(ctx, ref, `insert into public.org_plans (org_id, plan) values ('${org}', '${plan}') on conflict (org_id) do update set plan = excluded.plan, updated_at = now();`);
-}
-
-// Asked of the live app: the probe org on pro opens /api/reports (200); downgraded to free it is closed (403).
+// Asked of the live app and of Razorpay: the page loads checkout.js, probe user A gets a 201 carrying this slot's own
+// test key id, and Razorpay holds that order for the probe org at the plan's price. One INR 499 test order per verify.
 async function probe(ctx) {
-  const { full, ref } = upstreamOf(ctx, "authz");
+  const { id: keyId } = keys(ctx);
+  const { full, ref } = upstreamOf(ctx, "plans");
   const domain = domainOf(ctx);
   const drift = await oursAtHead(ctx, full, FILES);
   if (drift) return { ok: false, reason: drift };
+  const shown = await html(ctx, domain, "/checkout");
+  if (shown.status !== 200) return { ok: false, reason: `/checkout answered ${shown.status}, not 200` };
+  if (!loadsCheckout(shown.text)) return { ok: false, reason: `/checkout does not load ${CHECKOUT_JS}` };
   const key = await serviceKey(ctx, ref);
   const a = await signIn(ctx, domain, ref, key, "a");
   const org = await ownOrg(ctx, domain, a, "launch-probe-a");
-  // Start from free: a verify the slot timeout cut short could not restore it (the abort also stops the restore), so
-  // the next verify does (attack a9a2ec2 B1).
-  await setPlan(ctx, ref, org, "free");
-  let pro;
-  let down;
-  try {
-    await setPlan(ctx, ref, org, "pro");
-    pro = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
-  } finally {
-    // Whatever the pro read did -- an error status, a transport failure, the slot timeout -- the probe org goes back to
-    // free, so no verify leaves it on pro for the next one to start from.
-    await setPlan(ctx, ref, org, "free");
-  }
-  if (pro.status !== 200) return { ok: false, reason: `the probe org on pro read /api/reports with ${pro.status}, not 200` };
-  down = await page(ctx, domain, a.cookies, "GET", `/api/reports?org=${org}`);
-  if (down.status !== 403) return { ok: false, reason: `the probe org downgraded to free read /api/reports with ${down.status}, not 403` };
-  return { ok: true, answerer: `${domain} + ${ref}.supabase.co`, evidence: { pro: 200, downgraded: 403 } };
+  if (!UUID.test(org)) return { ok: false, reason: `the probe org id ${JSON.stringify(say(org, 50))} is not a uuid` };
+  const made = await page(ctx, domain, a.cookies, "POST", "/api/checkout", { org });
+  if (made.status !== 201 || !made.body || typeof made.body !== "object") return { ok: false, reason: `POST /api/checkout answered ${made.status}, not 201` };
+  const given = made.body;
+  // The key id is public, but only its shape is named: a live one says live, a foreign one says foreign.
+  if (typeof given.key_id !== "string" || !given.key_id.startsWith("rzp_test_")) return { ok: false, reason: "the key id /api/checkout gave is not a test key; a launch-built route never sells live" };
+  if (given.key_id !== keyId) return { ok: false, reason: "the key id /api/checkout gave is not this slot's RAZORPAY_KEY_ID, so the site does not run the keys launch proved" };
+  if (typeof given.order_id !== "string" || !ORDER.test(given.order_id)) return { ok: false, reason: "/api/checkout gave no usable order id" };
+  const id = given.order_id;
+  const r = await rz(ctx, "GET", `/orders/${encodeURIComponent(id)}`, undefined, { allow: [400, 404] });
+  // Only Razorpay's own "does not exist" (or a 404) means absent; any other 400 is reported as itself (attack 1cb6b9a B6).
+  const desc = r.body && r.body.error && typeof r.body.error.description === "string" ? r.body.error.description : "";
+  if (r.status === 404 || (r.status === 400 && /does not exist/i.test(desc))) return { ok: false, reason: `razorpay has no order ${id} for these keys` };
+  if (r.status !== 200) return { ok: false, reason: `razorpay GET /orders/${id} -> ${r.status}: ${say(desc)}` };
+  const o = r.body;
+  if (!o || typeof o !== "object" || o.id !== id) return { ok: false, reason: `razorpay answered order ${id} with another id` };
+  if (o.amount !== AMOUNT || o.currency !== CURRENCY) return { ok: false, reason: `order ${id} is ${say(o.amount, 12)} ${say(o.currency, 6)}, not ${AMOUNT} ${CURRENCY}` };
+  // The org is a checked uuid, so an order whose notes carry no org id (or an empty one) can never match it.
+  const notes = o.notes && typeof o.notes === "object" && !Array.isArray(o.notes) ? o.notes : {};
+  if (notes.org_id !== org) return { ok: false, reason: `order ${id} is not for the probe org launch-probe-a` };
+  return { ok: true, answerer: `${domain} + api.razorpay.com`, evidence: { page: 200, checkout: 201, order: id, amount: AMOUNT } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.
 export async function verify(ctx) {
-  // Every answer below comes over ctx.fetch from the live app and Supabase; the probe is a browser, never state.
+  // Every answer below comes over ctx.fetch from the live app, Supabase and Razorpay; the probe is a browser, never state.
   const ask = ctx.fetch.bind(ctx);
   try {
     return await probe({ ...ctx, fetch: ask });
@@ -356,8 +496,8 @@ export async function verify(ctx) {
   }
 }
 
-// The plan table goes before authz drops orgs; the committed files are the venture's to keep.
+// Nothing to undo: the committed files are the venture's to keep, Razorpay keeps its orders (a test order moves no
+// money), and the .env.example lines are shared with other slots.
 export async function teardown(ctx) {
-  const steps = ctx.resources.filter((r) => r.kind === "db-tables").map((r) => ({ action: "drop org_plans if it still carries the arc-launch plans marker (down migration; before authz drops orgs)", resource: say(r.id, 80) }));
-  return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
+  return { steps: ctx.resources.filter((r) => r.kind === "checkout-routes").map((r, i) => ({ order: i + 1, action: "none (the checkout files stay with the venture; Razorpay keeps its test orders)", resource: say(r.id, 80) })) };
 }
