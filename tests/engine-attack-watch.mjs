@@ -80,11 +80,14 @@ try {
   // ---- F. a line split across two writes is never quoted as a fragment (L3) ----
   {
     const status = join(tmp, "f.status");
-    const code = "process.stderr.write('generic-api: attempt 1/3: tim'); setTimeout(() => process.stderr.write('eout after 1s\\n'), 400); setInterval(() => {}, 1e9);";
-    const w = await watched(code, { minutes: 0.02, heartbeatMs: 100, graceMs: 0 }, status);
+    // A beat COUNT was the vacuous-pass guard, and a loaded Windows runner fired only 2 of ~12 in 1.2 s (main dispatch
+    // 37828894878). What the check needs is a beat on each side of the line completing, so it asserts exactly that,
+    // with a window wide enough that a stalled event loop still lands one in each.
+    const code = "process.stderr.write('generic-api: attempt 1/3: tim'); setTimeout(() => process.stderr.write('eout after 1s\\n'), 1500); setInterval(() => {}, 1e9);";
+    const w = await watched(code, { minutes: 0.06, heartbeatMs: 100, graceMs: 0 }, status);
     const beats = w.said.filter((l) => l.startsWith("LOGIC: running "));
     check("F: no heartbeat ever quotes half a line; once the line completes, the whole line is quoted",
-      beats.length >= 3 && beats.every((l) => !/· last: generic-api: attempt 1\/3: tim$/.test(l)) && beats.some((l) => l.endsWith("· last: generic-api: attempt 1/3: timeout after 1s")), JSON.stringify(beats.slice(0, 6)));
+      beats.some((l) => !l.includes("· last:")) && beats.every((l) => !/· last: generic-api: attempt 1\/3: tim$/.test(l)) && beats.some((l) => l.endsWith("· last: generic-api: attempt 1/3: timeout after 1s")), JSON.stringify(beats.slice(0, 6)));
   }
   // ---- G. a secret-shaped line never reaches the heartbeat or the status file (B3) ----
   {
