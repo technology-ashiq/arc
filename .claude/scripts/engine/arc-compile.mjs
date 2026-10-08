@@ -130,11 +130,14 @@ function dirtyScan() {
   const dirs = new Set();
   const foreign = new Set();
   for (const r of rows) {
-    for (const d of Array.isArray(r.rendered) ? r.rendered : []) {
+    // A field that is present but not a list is COULD NOT SCAN, never an empty list (class ae, attack a32c3ae B2).
+    if (!Array.isArray(r.rendered)) throw new CouldNotScan(`${r.id}.rendered is not a list`);
+    if (!Array.isArray(r.foreign)) throw new CouldNotScan(`${r.id}.rendered_foreign is not a list`);
+    for (const d of r.rendered) {
       if (confineRel(d) === null || !d.endsWith("/")) throw new CouldNotScan(`${r.id} names a rendered directory ${JSON.stringify(d)} that escapes the repository`);
       dirs.add(d);
     }
-    for (const f of Array.isArray(r.foreign) ? r.foreign : []) {
+    for (const f of r.foreign) {
       if (confineRel(f) === null) throw new CouldNotScan(`${r.id} names a foreign file ${JSON.stringify(f)} that escapes the repository`);
       foreign.add(f.toLowerCase());
     }
@@ -145,13 +148,17 @@ function dirtyScan() {
   const planned = new Set();
   // Case-folded both ways, as the directory match is (B8). Only a regular file can be a harness's own
   // file: a symlink under a foreign name is still dirty (attack 85d2416 L7).
-  const isForeign = (rel) => { const l = rel.toLowerCase(); return foreign.has(l) || [...foreign].some((f) => f.endsWith("/") && l.startsWith(f)); };
+  // A foreign FILE entry excuses one regular file by name. A foreign DIRECTORY entry is a prune point: the
+  // harness owns everything under it (npm puts symlinks in node_modules/.bin), so it is not walked or
+  // counted (attack a32c3ae B1). Both are case-folded, as the directory match is.
+  const isForeign = (rel) => foreign.has(rel.toLowerCase());
+  const isForeignDir = (rel) => foreign.has(`${rel.toLowerCase()}/`);
   const stat = (abs) => { try { return lstatSync(abs); } catch (e) { throw new CouldNotScan(`cannot stat ${abs}: ${e.code || e.message}`); } };
   const list = (abs) => { try { return readdirSync(abs).sort(); } catch (e) { throw new CouldNotScan(`cannot list ${abs}: ${e.code || e.message}`); } };
   const found = new Map();
   const walk = (abs, rel) => {
     const st = stat(abs);
-    if (st.isDirectory() && !st.isSymbolicLink()) for (const n of list(abs)) walk(join(abs, n), `${rel}/${n}`);
+    if (st.isDirectory() && !st.isSymbolicLink()) { if (!isForeignDir(rel)) for (const n of list(abs)) walk(join(abs, n), `${rel}/${n}`); }
     else found.set(rel, st.isFile() && !st.isSymbolicLink());
   };
   let present = 0;
@@ -184,16 +191,18 @@ function dirtyScan() {
   return { lines, dirty };
 }
 
+// The exit code: 0 clean, 1 a finding, 2 COULD NOT SCAN -- the same 2 a source walk that cannot read
+// exits with, so a caller never reads an infrastructure failure as a hand-edit (attack a32c3ae B4).
 function finish(failed) {
-  if (mode !== "check") return failed;
+  if (mode !== "check") return failed ? 1 : 0;
   try {
     const d = dirtyScan();
     for (const l of d.lines) console.log(l);
-    return failed + d.dirty;
+    return failed + d.dirty ? 1 : 0;
   } catch (e) {
     if (!(e instanceof CouldNotScan)) throw e;
     console.log(`dirty-scan: COULD NOT SCAN — ${e.message}`);
-    return failed + 1;
+    return 2;
   }
 }
 
@@ -232,7 +241,7 @@ if (input !== "processes") {
     bad++;
   }
   console.log(`\narc-compile: ${same}/${n} byte-identical for target \`${target}\` (input ${input})`);
-  process.exit(finish(bad) ? 1 : 0);
+  process.exit(finish(bad));
 }
 
 if (all) {
@@ -431,4 +440,4 @@ if (mode === "write") {
 // would read as a pass nobody earned. Neither, and the count says which.
 const scope = files.length - retired - noBaseline;
 console.log(`\narc-compile: ${identical}/${scope} byte-identical for target \`${target}\`${retired ? ` (${retired} retired, ADR-0207)` : ""}${noBaseline ? ` (${noBaseline} with no baseline to reproduce)` : ""}`);
-process.exit(finish(failed) ? 1 : 0);
+process.exit(finish(failed));

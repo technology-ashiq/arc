@@ -35,7 +35,7 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
 @test "distribute-dirty: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-dirty: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 11 ] || { echo "declared $declared, expected 11"; false; }
+  [ "$declared" -eq 12 ] || { echo "declared $declared, expected 12"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -57,7 +57,7 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
   check "$t"
   ran || false
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
-  [ "$(count '^\[dirty\] \.codex/agents/planted\.toml ')" -eq 1 ] && [ "$(count ' 1 dirty$')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^\[dirty\] \.codex/agents/planted\.toml ')" -eq 1 ] && [ "$(count ' rendered directories, 1 present, 1 files, 1 dirty$')" -eq 1 ] || { echo "$output"; false; }
 }
 
 @test "distribute-dirty: a hand-placed file under .opencode/ is named" {
@@ -66,7 +66,7 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
   check "$t"
   ran || false
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
-  [ "$(count '^\[dirty\] \.opencode/commands/planted\.md ')" -eq 1 ] && [ "$(count ' 1 dirty$')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^\[dirty\] \.opencode/commands/planted\.md ')" -eq 1 ] && [ "$(count ' rendered directories, 1 present, 1 files, 1 dirty$')" -eq 1 ] || { echo "$output"; false; }
 }
 
 @test "distribute-dirty: a hand-placed file in the skills bundle is named" {
@@ -75,17 +75,23 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
   check "$t"
   ran || false
   [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
-  [ "$(count '^\[dirty\] \.agents/skills/arc-planted/SKILL\.md ')" -eq 1 ] && [ "$(count ' 1 dirty$')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^\[dirty\] \.agents/skills/arc-planted/SKILL\.md ')" -eq 1 ] && [ "$(count ' rendered directories, 1 present, 1 files, 1 dirty$')" -eq 1 ] || { echo "$output"; false; }
 }
 
 @test "distribute-dirty: OpenCode's own first-run files are seen and excluded by name" {
   local t; t=$(tree) || false
   plant "$t/.opencode/package.json" || false
   plant "$t/.opencode/node_modules/x/index.js" || false
+  mkdir -p "$t/.opencode/node_modules/.bin"
+  ln -s ../x/index.js "$t/.opencode/node_modules/.bin/x" 2>/dev/null || plant "$t/.opencode/node_modules/.bin/x" || false
   check "$t"
   ran || false
   [ "$status" -eq 0 ] || { echo "status $status: $output"; false; }
-  [ "$(count ' rendered directories, [0-9]+ present, 2 files, 0 dirty$')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count ' rendered directories, 1 present, 1 files, 0 dirty$')" -eq 1 ] || { echo "$output"; false; }
+  plant "$t/.opencode/stray.md" || false
+  check "$t"
+  ran || false
+  [ "$status" -eq 1 ] && [ "$(count '^\[dirty\] \.opencode/stray\.md ')" -eq 1 ] && [ "$(count ' 1 present, 2 files, 1 dirty$')" -eq 1 ] || { echo "control: $output"; false; }
 }
 
 @test "distribute-dirty: a symlink is listed, not followed" {
@@ -144,7 +150,7 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
   grep -qF -- '- .open//code/' "$t/engine/harnesses.yaml" || { echo "the mutant changed nothing"; false; }
   check "$t"
   ran || false
-  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
   [ "$(count '^dirty-scan: COULD NOT SCAN — opencode names a rendered directory ".open//code/"')" -eq 1 ] || { echo "$output"; false; }
 }
 
@@ -159,6 +165,17 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
   mkdir -p "$t/products/engine" && printf '{}\n' > "$t/products/engine/manifest.json"
   check "$t"
   ran || false
-  [ "$status" -eq 1 ] || { echo "arc root: status $status: $output"; false; }
+  [ "$status" -eq 2 ] || { echo "arc root: status $status: $output"; false; }
   [ "$(count '^dirty-scan: COULD NOT SCAN — engine/harnesses\.yaml is missing from the arc repo$')" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "distribute-dirty: a rendered field that is not a list is COULD NOT SCAN, never an empty list" {
+  local t; t=$(tree) || false
+  awk '/^  - id: codex$/{c=1} /^  - id: opencode$/{c=0} { if (c && $0 ~ /^    rendered:$/) { print "    rendered: .codex/"; skip=1; next } if (skip && $0 ~ /^      - /) next; skip=0; print }' "$t/engine/harnesses.yaml" > "$t/h" && mv "$t/h" "$t/engine/harnesses.yaml"
+  grep -qx '    rendered: .codex/' "$t/engine/harnesses.yaml" || { echo "the mutant changed nothing"; false; }
+  plant "$t/.codex/planted.toml" || false
+  check "$t"
+  ran || false
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
+  [ "$(count '^dirty-scan: COULD NOT SCAN — codex\.rendered is not a list$')" -eq 1 ] || { echo "$output"; false; }
 }

@@ -50,3 +50,5 @@ and lane finds are appended under their PR.
 - **(al) errexit eats `rc=$?`.** In a bats body, `cmd; rc=$?` aborts on a non-zero status before the capture; write `rc=0; cmd || rc=$?`. Fixed in `tests/distribute-dirty.bats`, attack 85d2416 B5.
 - **(am) case-folded on one side only.** When a match is case-insensitive, every comparison made on its result is case-folded too. Fixed in `arc-compile.mjs` (isForeign), attack 85d2416 B8.
 - **(an) an exclusion by name honoured on a link.** A file excluded by name (a harness's own first-run file) is excluded only as a regular file; a symlink under that name is still a finding. Fixed in `arc-compile.mjs`, attack 85d2416 L7.
+- **(ao) a foreign directory walked file by file.** A directory a harness owns (`node_modules/`) is a prune point, never walked; only an exact foreign FILE name is held to the regular-file rule of (an). Fixed in `arc-compile.mjs` (dirtyScan), attack a32c3ae B1.
+- **(ap) one failure, two exit codes.** COULD NOT SCAN exits 2 from every stage of one tool, never 1 from one stage and 2 from another. Fixed in `arc-compile.mjs` (finish), attack a32c3ae B4.
