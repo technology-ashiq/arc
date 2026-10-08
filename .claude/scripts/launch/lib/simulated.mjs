@@ -18,6 +18,7 @@ const KIND = "revenue.simulated";
 // The parser's pinned header (parsers/razorpay.mjs COL). Built here as one row; the parser decides whether it is money.
 const HEADER = ["record_type", "payment_id", "settlement_id", "gross_amount", "fee", "tax", "net_amount", "currency", "settled_at"];
 const PAY = /^pay_[A-Za-z0-9]{6,40}$/;
+const RFND = /^rfnd_[A-Za-z0-9]{6,40}$/;
 
 const int = (v) => (typeof v === "number" ? v : typeof v === "string" && /^[0-9]{1,15}$/.test(v) ? Number(v) : NaN);
 // Minor units to the export's decimal spelling, by string, never by float: 100 -> "1.00".
@@ -29,7 +30,10 @@ const decimal = (minor) => { const d = String(minor).padStart(3, "0"); return `$
  */
 export function simulatedPayload(venture, p) {
   if (!p || typeof p !== "object") throw new Error("the queued payment is not an object");
-  if (typeof p.payment_id !== "string" || !PAY.test(p.payment_id)) throw new Error("the queued payment has no Razorpay payment id");
+  // A refund is its own positive line naming the charge it returns (ADR-1016): its id is the refund's, never the charge's.
+  const refund = "refund_of" in p;
+  if (refund && (typeof p.refund_of !== "string" || !PAY.test(p.refund_of))) throw new Error("the queued refund names no Razorpay payment it refunds");
+  if (typeof p.payment_id !== "string" || !(refund ? RFND : PAY).test(p.payment_id)) throw new Error(`the queued ${refund ? "refund has no Razorpay refund" : "payment has no Razorpay payment"} id`);
   const amount = int(p.amount);
   const fee = int(p.fee);
   const paid = int(p.paid_at);
@@ -43,7 +47,9 @@ export function simulatedPayload(venture, p) {
   const row = ["payment", p.payment_id, "simulated", decimal(amount), decimal(fee), "0.00", decimal(amount - fee), "INR", formatIst(paid * 1000)];
   const rows = parseRazorpayExport(`${HEADER.join(",")}\n${row.join(",")}\n`);
   if (rows.length !== 1) throw new Error(`the ledger parser read ${rows.length} rows from one payment`);
-  return normalizeRow(rows[0], { venture, interval: "one_time" });
+  const n = normalizeRow(rows[0], { venture, interval: "one_time" });
+  if (refund) n.payload.refund_of = `${n.payload.provider}:${p.refund_of}`;
+  return n;
 }
 
 /**
@@ -67,6 +73,14 @@ export function recordSimulated(venture, payment, { process: proc }) {
   if (held) {
     if (held.venture !== venture) return { state: "refused", id: null, why: `payment ${key} is already booked for ${String(held.venture).slice(0, 64)}, not ${venture}` };
     return { state: "recorded", id: held.id, why: null };
+  }
+  // A refund of a charge this venture never booked would sit on the spine as the P&L's REFUND_WITHOUT_CHARGE, unnetted.
+  if (n.payload.refund_of) {
+    const charge = events.map((r) => r.event).find((e) => e && e.kind === KIND && e.payload && e.payload.provider_payment_id === n.payload.refund_of && !("refund_of" in e.payload));
+    if (!charge || charge.venture !== venture) return { state: "refused", id: null, why: `refund ${key} names charge ${n.payload.refund_of}, which is not booked as simulated for ${venture}` };
+    // Every refund already booked against the charge counts: two partial refunds may not sum past it.
+    const before = events.map((r) => r.event).filter((e) => e && e.kind === KIND && e.payload && e.payload.refund_of === n.payload.refund_of).reduce((s, e) => s + e.payload.amount, 0);
+    if (before + n.payload.amount > charge.payload.amount) return { state: "refused", id: null, why: `refund ${key} brings ${n.payload.refund_of}'s refunds to ${before + n.payload.amount}, more than its charge's ${charge.payload.amount}` };
   }
   const got = emitReceipt(ARC_EVENT, KIND, n.payload, { cwd: ROOT, env: { ...process.env, ARC_SPINE_ROOT: root }, command: "ingest", flags: ["--venture", venture, "--process", proc], timeoutMs: 60000 });
   if (got.state === "landed") return { state: "landed", id: got.id, why: got.why };

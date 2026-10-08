@@ -548,12 +548,13 @@ providers:
     region: in
     payment_model: gateway
     env_keys:
-      - RAZORPAY_KEY_ID
-      - RAZORPAY_KEY_SECRET
+      - RAZORPAY_WEBHOOK_SECRET
+      - SUPABASE_ACCESS_TOKEN
     hosts:
-      - api.razorpay.com
+      - sandbox.automemory.ai
+      - api.supabase.com
     credentials:
-      scope: "test-mode refund"
+      scope: "webhook signing secret and Supabase Management API: reads refund.processed rows webhooks-ledger stored (ADR-1740)"
     adapter: providers/refunds/razorpay-refunds.mjs
     digest: null
     approved_by: ashiq
