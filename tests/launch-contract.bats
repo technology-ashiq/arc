@@ -922,7 +922,8 @@ arm() {
   [ "$(j 'o.cashIn.join(",") + " " + o.flags.length')" = "arc-sandbox:0 0" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.simulatedLines[0]')" == *"SIMULATED"* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.simulatedLines.slice(1).every((l) => l.startsWith("SIMULATED"))')" = "true" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.simulatedLines.some((l) => l.includes("razorpay:rfnd_ArcProbe0")) && o.simulatedLines.some((l) => l.includes("razorpay:pay_ArcProbe0"))')" = "true" ] || { echo "$DONE"; false; }
+  # The render names a refund row by the charge it refunds, negated: "-1.00  refund of razorpay:pay_...".
+  [ "$(j 'o.simulatedLines.some((l) => l.includes("-1.00") && l.includes("refund of razorpay:" + o.charge)) && o.simulatedLines.some((l) => l.includes(" 1.00 ") && l.includes("razorpay:" + o.charge))')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.realVentures')" = "0" ] || { echo "$DONE"; false; }
 }
 
