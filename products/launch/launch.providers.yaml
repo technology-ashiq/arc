@@ -275,6 +275,27 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  - id: neon
+    slot: database
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - NEON_API_KEY
+    hosts:
+      - neon.tech
+    credentials:
+      scope: "project create and SQL over HTTP on the venture project; RLS proved through a no-bypass role (ADR-1721)"
+    adapter: providers/database/neon.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
   - id: drizzle
     slot: orm
     status: candidate
@@ -589,10 +610,14 @@ providers:
       - api-product
     region: any
     payment_model: any
+    env_keys:
+      - GITHUB_TOKEN
     hosts:
       - sandbox.automemory.ai
+      - api.github.com
+      - observatory-api.mdn.mozilla.net
     credentials:
-      scope: "none -- probes the live site"
+      scope: "GitHub contents on the venture repo (next.config.mjs); probes the live site and asks the Observatory for a grade (ADR-1742)"
     adapter: providers/security-headers/next-headers.mjs
     digest: null
     approved_by: ashiq
@@ -631,10 +656,13 @@ providers:
     payment_model: any
     env_keys:
       - SENTRY_AUTH_TOKEN
+      - GITHUB_TOKEN
     hosts:
       - sentry.io
+      - sandbox.automemory.ai
+      - api.github.com
     credentials:
-      scope: "project issues read in one org"
+      scope: "Sentry project, client keys and issues read in one org; GitHub contents for the probe route (ADR-1747)"
     adapter: providers/errors/sentry.mjs
     digest: null
     approved_by: ashiq
@@ -651,11 +679,11 @@ providers:
     region: any
     payment_model: any
     env_keys:
-      - SUPABASE_DB_URL
+      - GITHUB_TOKEN
     hosts:
-      - pooler.supabase.com
+      - api.github.com
     credentials:
-      scope: "read-only dump role"
+      scope: "GitHub contents on the venture repo (the drill workflow) and its Actions runs; the dump runs on the venture CI under the owner Actions secret SUPABASE_DB_URL, which launch never reads (ADR-1746)"
     adapter: providers/backup/pg-dump.mjs
     digest: null
     approved_by: ashiq
@@ -672,11 +700,11 @@ providers:
     region: any
     payment_model: any
     env_keys:
-      - SUPABASE_DB_URL
+      - GITHUB_TOKEN
     hosts:
-      - pooler.supabase.com
+      - api.github.com
     credentials:
-      scope: "read-only dump role; restore target is local scratch"
+      scope: "GitHub Actions runs of the venture drill; the restore target is a scratch Postgres service inside the run (ADR-1746)"
     adapter: providers/restore-drill/pg-restore-scratch.mjs
     digest: null
     approved_by: ashiq
@@ -716,7 +744,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- runs venture-register --dry-run"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/passport/venture-register.mjs
     digest: null
     approved_by: ashiq
@@ -735,7 +763,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- registers the ledger feed"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/ledger-source/ledger-source.mjs
     digest: null
     approved_by: ashiq
@@ -754,7 +782,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- face contract row"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/face-room/face-planned.mjs
     digest: null
     approved_by: ashiq
@@ -773,7 +801,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- renders the exit plan"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/teardown-plan/teardown-render.mjs
     digest: null
     approved_by: ashiq

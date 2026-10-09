@@ -6,6 +6,8 @@ import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
 import { makeCtx } from "./ctx.mjs";
+import { clean } from "./board.mjs";
+import { makeArcProbe } from "./arc-probe.mjs";
 
 const a = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const profile = loadProfile(a.venture, a.venturesDir);
@@ -20,8 +22,8 @@ const save = (patch) => {
   saveState(a.stateDir, setSlot(s, a.slot, patch));
 };
 // In verify mode a refusal (missing key, drift) is recorded as the probe's answer; the slot's state is never touched.
-const fail = (reason) => {
-  save(a.mode === "verify" ? { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } } : { state: "failed", reason });
+const fail = (reason, flags = {}) => {
+  save(a.mode === "verify" ? { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason, ...flags } } : { state: "failed", reason });
   process.exit(1);
 };
 
@@ -45,7 +47,8 @@ const keys = mod.envContract();
 const undeclared = keys.filter((k) => !declared.has(k));
 if (undeclared.length) fail(`refused:ENV_UNDECLARED ${undeclared.join(", ")} not in the row's env_keys`);
 const missing = keys.filter((k) => !kept[k]);
-if (missing.length) fail(`env:${missing[0]}`);
+// missing_env is set here and only here, so an adapter whose reason merely starts "env:" is not a skipped slot (attack 143525f B9).
+if (missing.length) fail(`env:${missing[0]}`, { missing_env: true });
 
 const ac = new AbortController();
 const timer = setTimeout(() => ac.abort(), Math.max(1, Number(a.timeout) * 1000 - 100));
@@ -57,6 +60,7 @@ const upstream = Object.fromEntries((slot.depends_on || []).map((d) => { const r
 const ctx = makeCtx({
   profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, upstream, tag: resourceTag(a.venture, a.slot, row.id),
   attempt: a.attempt, signal: ac.signal, env: Object.fromEntries(keys.map((k) => [k, kept[k]])), approvals: prior.approvals || [],
+  arcProbe: makeArcProbe({ venture: a.venture, profile, catalog: a.catalog, stateDir: a.stateDir }),
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
     if (cur.resources.some((r) => r.kind === resource.kind && r.id === resource.id)) return;
@@ -82,6 +86,15 @@ try {
   clearTimeout(timer);
   if (v && v.ok === true && typeof v.answerer === "string" && v.answerer) {
     save({ state: "verified", answerer: v.answerer, evidence: v.evidence ?? null, queued: ctx.queued, verified_at: new Date().toISOString() });
+    process.exit(0);
+  }
+  // A named ABSENT is an answer only where the slot's own exit criteria allow one, and only when something outside the
+  // repo observed the absence; an adapter can never mark any other slot absent (ADR-1745).
+  const allowsAbsent = (slot.exit_criteria || []).some((c) => /\bABSENT\b/.test(String(c)));
+  if (v && v.ok === false && allowsAbsent && typeof v.absent === "string" && v.absent && typeof v.answerer === "string" && v.answerer) {
+    // Adapter text is data: controls and bidi marks replaced, cut by code point so no surrogate is split (b6ffd12 B2).
+    const cut = (t, n) => [...clean(t)].slice(0, n).join("");
+    save({ state: "absent", reason: `ABSENT(${cut(v.absent, 160)})`, answerer: cut(v.answerer, 120), queued: [], verified_at: new Date().toISOString() });
     process.exit(0);
   }
   fail(v && v.ok === true ? "verify:no answerer named (a probe names what answered it)" : `verify:${(v && v.reason) || "failed"}`);

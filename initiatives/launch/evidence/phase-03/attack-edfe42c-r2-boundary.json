@@ -1,0 +1,71 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:396",
+      "breaking_input": "Any slot attempt that ends failed with a non-empty reason, such as a verify failure or a timeout. The fix calls `clean(fin.reason)` in the log line, but the runner.mjs hunk adds no import of `clean`. Only worker.mjs gains `import { clean } from \"./board.mjs\"`.",
+      "why": "If runner.mjs does not already import `clean`, the template expression throws a ReferenceError after the receipt is emitted and state is saved. It only runs when `fin.reason` is truthy, so a verified slot never hits it and the contract arms, which drive the worker directly, would not either. The failing attempt's log line, its exit code and the lock callback's result are then replaced by an uncaught exception, which the surrounding catch only handles for `e.exit`.",
+      "fix": "Confirm runner.mjs imports `clean`, or add the import. Add a runner-level test with a failed slot that has a reason, asserting the exit is FAILED and the line is printed."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/legal-pages/arc-legal.mjs:9",
+      "breaking_input": "/privacy answers 200 with up to 1 MB of the text `<!-- clause:a -->` repeated and no closing `<!-- /clause:a -->`. That is about 60,000 openers.",
+      "why": "MARK is `/<!-- clause:(ID) -->[\\s\\S]*?<!-- \\/clause:\\1 -->/`. Every opener starts a lazy scan to the end of the buffer with no closer, so the match costs O(n²), roughly 6e10 steps. `MARK.test` is synchronous, so the worker's timeout timer cannot fire and the slot hangs past its own timeout. The B4 cap bounds the bytes read but not the match cost.",
+      "fix": "Find openers and closers with indexOf over a bounded loop, or cap the opener count. Alternatively require the closing tag by a non-backtracking scan.",
+      "twin_of": "A key-file regex with overlapping groups backtracked exponentially on `.env.a.a…/x`, freezing the worker past its own timeout"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/errors/sentry.mjs:231",
+      "breaking_input": "verify is run twice with different nonces. Sentry's message grouping parameterizes hex and number tokens, so the second event, `arc-launch probe arcprobeX <nonce2>`, joins the first run's issue.",
+      "why": "The match is `x.title.includes(msg)`, and the issue title stays the first event's message with the first nonce. The second verify never finds its nonce and reports 'Sentry shows no issue' although ingestion works. The fake groups by exact message, so the contract arm cannot see this.",
+      "fix": "Match on a tag value, such as `arc_launch_probe` plus the nonce as a tag, through the issues `query` or the latest event of the issue. Do not match on the title."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/legal-pages/arc-legal.mjs:48",
+      "breaking_input": "/privacy answers 200 and then drips one byte every few seconds, staying below the 1 MB cap.",
+      "why": "`capped` awaits `reader.read()` in a loop with no deadline or signal check of its own. It depends on `ctx.fetch` wiring the slot signal into the stream. If it does not, the read holds the slot lock until the worker is killed. An abort surfaces as an uncoded or numeric-code error and reads as 'error: …' rather than ABORTED.",
+      "fix": "Check `ctx.signal.aborted` between reads, and race each read against a short timer. Map abort rejections to code ABORTED."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "products/launch/providers/backup/pg-dump.mjs:30",
+      "breaking_input": "GitHub answers a runs, jobs or contents call with a very large JSON body, or the Observatory scan answer at next-headers.mjs `scan.json()` is huge.",
+      "why": "`call` and the Observatory read use unbounded `res.json()`, so the bound is on the result and not on the read. The fix for the capped-read pattern was applied only to the legal-pages page reads.",
+      "fix": "Read through a capped reader in `call`, or reject early on a content-length above a limit. Do the same for the Observatory answer.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs:176",
+      "breaking_input": "The live-site GET in security-headers, the route GET in errors, and the non-200 branch of other probes. Their bodies are never read or cancelled.",
+      "why": "After status and headers are read, the response body stays open until garbage collection. A site that streams slowly holds sockets and the worker's event loop past the verify result. The legal-pages adapter cancels its bodies, so these probes are inconsistent with it.",
+      "fix": "Call `res.body?.cancel().catch(() => {})` after reading status and headers in each probe."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/legal-pages/arc-legal.mjs:75",
+      "breaking_input": "brand.domain resolves to a parking or catch-all host that answers 200 on `/` and 404 on every other path.",
+      "why": "The B8 fix requires only that `/` answer 200. Parking pages, an un-routed Vercel wildcard, or a generic placeholder site pass, so launch records a named ABSENT with answerer = domain and exits 0 for a site that is not the venture's.",
+      "fix": "Require a venture-specific marker on `/`, such as the brand name or a launch-owned meta tag. Alternatively require that the page's response carries the venture's deployment header."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/backup/pg-dump.mjs:188",
+      "breaking_input": "The drill's `schedule` trigger was dropped by GitHub (60 days of repo inactivity disables scheduled workflows), and a push-triggered run from within the last 8 days is the newest.",
+      "why": "A push run of the exact file passes the age check and the slot verifies. The consequence note says weekly runs keep the receipt fresh. After inactivity disables the schedule, a single run triggered by editing the file keeps both slots green for eight days with no standing schedule. This is a weak guarantee, though not an outright bypass.",
+      "fix": "Require the newest qualifying run's event to be `schedule` or `workflow_dispatch` at some interval, or check that the workflow's state is `active` through the workflows API."
+    }
+  ]
+}

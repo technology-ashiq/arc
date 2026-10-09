@@ -1,0 +1,57 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/database/neon.mjs:111",
+      "breaking_input": "scaffold gets as far as `neon POST /projects`. The project is created, then the worker hits its slot timeout, the network drops, or it is killed before `ctx.report({kind:\"neon-project\"})` runs. This also happens when the POST response carries no usable id. On re-run `findProject` returns the project launch itself just made, `recorded` is empty, and the new guard throws FOREIGN_PROJECT.",
+      "why": "The B1 fix refuses every unrecorded same-named project. launch's own half-made project is therefore treated as the owner's, and the slot is wedged permanently until someone deletes the project by hand. This is the twin of 'a kill between creating a branch and committing left a branch the re-run refused as foreign' and of 'new migrations refused their own half-made tables'. The project name is deterministic and carries no ownership marker, so launch's project and an owner's look the same.",
+      "fix": "Give a launch-made project a marker that the owner would not also type, such as a random suffix, or record an intent resource (`neon-project-pending` with the name and a nonce) before the POST. On re-run, adopt a project that matches a recorded pending intent. Keep refusing any other unrecorded project, and add a bats arm that kills between POST and report.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign -> every two-step create: is the half-made state recognisable as ours?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/jobs/launch-watch.mjs:56",
+      "breaking_input": "Two boards exist. `aa` has a real regression, which the runner raises as incident.raised, and its watch counts as done. `zz` has a corrupt or unreadable state file, so it fails every day. The week is never stamped, so the next daily run re-verifies every board, `aa` included.",
+      "why": "The stamp is all-or-nothing, so one permanently failing board re-runs the whole fleet every day. Each run emits a fresh incident.raised for every still-regressed slot, so the same regression is raised daily instead of once. ADR-1750 says 'exactly one needs-you line per regression'. A broken board also spawns a child every day with no backoff.",
+      "fix": "Keep a per-board stamp, or retry only the boards that failed. Dedupe the incident per (venture, slot, reason) against open incidents on the spine before emitting.",
+      "twin_of": "A failed weekly run stamped the week done -> every \"last ran\" stamp"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/jobs/launch-watch.mjs:50",
+      "breaking_input": "One `arc-launch verify` runs past BOARD_MS (8 minutes), so spawnSync sends SIGKILL to the arc-launch node process only. That process had already spawned a worker child to run a slot and was holding the board lock.",
+      "why": "On Windows SIGKILL does not take down the process tree. The orphaned worker keeps running and writing state while the lock file is left behind. The next board, or tomorrow's retry, then reports 'SKIPPED -- locked' and exits LOCKED. `watched()` reads that as not watched, so the watch can fail repeatedly on a stale lock. The pattern about long critical sections versus the lock stale window applies here too.",
+      "fix": "Kill the process tree (`taskkill /T /F` on win32, or a process group on POSIX). Release or break the lock the killed runner held. Make the BOARD_MS timeout shorter than arc-launch's own per-slot timeouts and let the runner exit on its own deadline."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/arc-probe.mjs:37",
+      "breaking_input": "`venture-register --dry-run` times out at 120s, or fails to spawn (ENOENT, EACCES, or ENOBUFS on output). `r.status` is null and `r.signal` or `r.error` is set.",
+      "why": "Only `r.status` is returned. The slot's reason then reads 'venture-register --dry-run exited null: ...', so the cause is inferred from the exit code and not from signal or error. The synchronous spawn also blocks the worker's event loop for up to 120s, so the slot's AbortController timer cannot fire during that time.",
+      "fix": "Return `error` and `signal` alongside the exit code, and have the passport adapter name them. Use an async spawn that honours the abort signal.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause -> any code that infers a cause from `status` or `signal`"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/launch/owner-apply-watch-policy.mjs:48",
+      "breaking_input": "(a) hq.policy.yaml has mixed line endings, or the anchor line is LF in a file where CRLF is the majority. `eolOf` picks CRLF, the CRLF anchor is not found, and the script exits 2 with 'add by hand'. (b) A comment that contains the text \"process:launch-watch\": makes the idempotency check say 'already holds' and add nothing. (c) The policy write succeeds and the jobs write then throws (EPERM, a file locked by an editor). The two files are now out of step, and jobs-lint fails on the next run.",
+      "why": "The idempotency checks are substring matches on free text. The EOL is a guess from the first CRLF seen. The two file writes are not atomic as a pair, and the apply is the owner's one shot.",
+      "fix": "Anchor the existence checks to a line (`^  \"process:launch-watch\":`). Match the anchor with `\\r?\\n` on a normalised copy. Write both files to temp files first and rename them both only after both succeed."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/launch-cli.bats:200",
+      "breaking_input": "The fixture registry.yaml lacks a trailing newline. `printf '%s\\n' \"  - id: aa-new\" ... >> registry.yaml` appends directly to the last line, so the first row's `- id:` is glued onto the previous value.",
+      "why": "The fixture is appended to without checking that it ends in a newline. YAML then parses wrongly or the row is dropped, and the failure shows up only on a checkout or editor setting that strips the final newline.",
+      "fix": "Before appending, ensure the file ends in a newline (`tail -c1 | od` check, or `printf '\\n'` when the last byte is not LF). Assert that the three rows loaded.",
+      "twin_of": "Two bats fixtures edited a checked-out YAML with a sed `$` anchor that misses on a CRLF line -> every test that edits a checked-out file by pattern"
+    }
+  ]
+}

@@ -38,7 +38,7 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   run node "$(L)" new --venture fx-sandbox $FX_FLAGS
   run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"probe: recommended fake -- why: type saas-b2b, region in, payment_model gateway · status vetted"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"probe: recommended fake -- why: FIT-1 type saas-b2b, FIT-2 region any, FIT-3 payment_model any · status vetted"* ]] || { echo "$output"; false; }
   [[ "$output" == *"no-money: skipped (predicate false: payment_model == none)"* ]] || { echo "$output"; false; }
 }
 
@@ -193,4 +193,100 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"never crosses gate-3 (already recorded: "* ]] || { echo "$output"; false; }
   [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"approval.requested"')" -eq 1 ]
+}
+
+# Three more vetted rows on the fixture's probe slot: two that fit, one whose region does not (ADR-1706, ADR-1748).
+add_probe_rows() {
+  local d; d=$(grep -m1 "digest:" "$FX_DIR/registry.yaml" | awk '{print $2}' | tr -d '\r')
+  [ -n "$d" ] || { echo "no digest in the fixture registry"; return 1; }
+  local spec
+  for spec in "aa-new 2026-09-01 in" "zz-old 2026-01-01 in" "far-row 2026-09-05 global"; do
+    set -- $spec
+    printf '%s\n' "  - id: $1" "    slot: probe" "    status: vetted" "    region: $3" "    hosts:" "      - fixture.invalid" \
+      "    adapter: providers/probe/$1.mjs" "    digest: $d" "    approved_by: ashiq" "    vetted_by: 01M40ZHP72PYVBJT17R7A4WZ3W" \
+      "    scout: tests/launch/fixtures/scout.md" "    last_verified: \"$2\"" >> "$FX_DIR/registry.yaml"
+  done
+}
+
+@test "launch-cli: plan ranks vetted fitting rows by RANK-1 then RANK-2 and names the fit rule a vetted row failed (ADR-1706)" {
+  add_probe_rows
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: recommended aa-new -- why: FIT-1 type saas-b2b, FIT-2 region in, FIT-3 payment_model any · status vetted · last_verified 2026-09-01 · ranked by RANK-1 last_verified newest first, RANK-2 row id"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"alternatives: zz-old ("*"), fake ("*"far-row (vetted: FIT-2 region global excludes in)"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: an override is a request until the owner approves it, and then plan cites the decision id (ADR-1748)" {
+  add_probe_rows
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" override probe --venture fx-sandbox --provider zz-old --reason "owner prefers the older row for this fixture" $FX_FLAGS
+  [ "$status" -eq 5 ] || { echo "$output"; false; }
+  local ask; ask=$(printf '%s\n' "$output" | sed -n 's/.*approval.requested \([0-9A-Z]\{26\}\);.*/\1/p')
+  [ -n "$ask" ] || { echo "no request id: $output"; false; }
+  run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
+  [[ "$output" == *"probe: recommended aa-new"* ]] || { echo "an undecided override was taken: $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-inbox.mjs" approve "$ask" --reason "fixture approval of the override"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
+  [[ "$output" == *"probe: recommended zz-old -- why: owner override, decision "* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: override refuses a blocked or unknown row and a missing reason, and requests nothing (ADR-1748)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" override probe --venture fx-sandbox --provider nope --reason "a reason long enough" $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"no provider row nope for slot probe"* ]] || { echo "$output"; false; }
+  run node "$(L)" override probe --venture fx-sandbox --provider fake $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"--reason must say why"* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c '"launch.override"' || true)" -eq 0 ]
+}
+
+@test "launch-cli: the weekly watch raises one needs-you line for a regressed slot and none for a slot whose token is not here (REQ-10, ADR-1750)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The forced regression: the provider lost a resource after verify (the expired-cert stand-in for a fake provider).
+  node -e 'const fs=require("fs");const f=process.argv[1];fs.writeFileSync(f,JSON.stringify(JSON.parse(fs.readFileSync(f,"utf8")).slice(1)))' "$FAKE_PROVIDER_FILE"
+  run node "$(L)" verify --all --public-only --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 raised to needs-you"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"watch-result failed=1 raised=1"* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"incident.raised"')" -eq 1 ]
+  # The same watch on a box without the slot's token: skipped(env), no new incident, exit 0.
+  run env FAKE_NEEDS_KEY=LAUNCH_FIXTURE_ABSENT_KEY node "$(L)" verify --all --public-only --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: skipped(env:LAUNCH_FIXTURE_ABSENT_KEY)"* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"incident.raised"')" -eq 1 ]
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-brief.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The brief lists each needs-you event by kind: exactly one incident line, from the regression, none from skipped(env).
+  [[ "$output" == *"needs-you ("* ]] || { echo "$output"; false; }
+  [ "$(printf '%s\n' "$output" | grep -cx '  incident.raised')" -eq 1 ] || { echo "$output"; false; }
+  grep '"kind":"incident.raised"' "$ARC_SPINE_ROOT"/events/*.jsonl | grep -q 'launch verify: probe regressed for fx-sandbox'
+}
+
+@test "launch-watch: a board is stamped only when watched, a stamp holds it seven days, a future stamp is no stamp (attack 143525f B5 B6, 530c056 B2)" {
+  local sd="$BATS_TEST_TMPDIR/wst" job="$ARC_ROOT/.claude/scripts/hq/jobs/launch-watch.mjs" today
+  mkdir -p "$sd"
+  today=$(cd "$ARC_ROOT" && node --input-type=module -e 'import { formatIst, dayOf, nowMs } from "./.claude/scripts/hq/lib/canonical.mjs"; console.log(dayOf(formatIst(nowMs())))')
+  [[ "$today" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "no day: $today"; false; }
+  # A board the runner refuses (not a board at all) is not watched: exit 1, and it gets no stamp, so tomorrow retries it.
+  printf 'not json' > "$sd/zz-broken.json"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 of 1 board(s) due"*"1 not watched, retried next run"* ]] || { echo "$output"; false; }
+  [ "$(tr -d '\r\n' < "$sd/.watch-last")" = "{}" ] || { cat "$sd/.watch-last"; false; }
+  # A stamp in the future would skip the board for ever: it is read as no stamp, and the board is due again.
+  printf '{"zz-broken":"2099-01-01"}' > "$sd/.watch-last"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 of 1 board(s) due"* ]] || { echo "$output"; false; }
+  # A board stamped today waits its seven days: nothing is due, exit 0, and a stamp for a board that is gone is dropped.
+  printf '{"zz-broken":"%s","gone":"%s"}' "$today" "$today" > "$sd/.watch-last"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"0 of 1 board(s) due"*"all due boards watched"* ]] || { echo "$output"; false; }
+  [ "$(tr -d '\r\n' < "$sd/.watch-last")" = "{\"zz-broken\":\"$today\"}" ] || { cat "$sd/.watch-last"; false; }
 }

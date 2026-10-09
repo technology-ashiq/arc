@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "bin/arc.mjs:77-79",
+      "breaking_input": "arc init --target claude-code --dir <linked worktree> (made with `git worktree add`) in a repo that already runs its own .git/hooks/pre-commit, with core.hooksPath unset.",
+      "why": "In a linked worktree `git rev-parse --git-path hooks` prints an absolute path, such as /main/.git/hooks. `join(dir, hooksDir)` then yields /wt/main/.git/hooks. That does not exist, so readdirSync throws, `theirs` becomes [], and the guard against disabling existing hooks never fires. `git config core.hooksPath` writes the repo-wide config shared by every worktree, so the main checkout and the other worktrees now resolve .claude/templates/githooks against their own roots. Where those files are missing, the project's hooks silently stop running everywhere. The B2 fix is bypassed, and the test only covers the plain-clone case.",
+      "fix": "Use `resolve(dir, hooksDir)` so an absolute path stays absolute. Refuse to wire in a linked worktree (compare `--git-common-dir` with `--git-dir`), or write to the worktree config instead.",
+      "twin_of": "(bg) a hooks path set for someone else's repo"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "bin/arc.mjs:80-83",
+      "breaking_input": "An install where .claude/templates/githooks/pre-commit exists but pre-push is absent, for example removed by hand or dropped by a future adapter. Also a read-only filesystem or foreign owner on the hook, so chmodSync fails with EPERM.",
+      "why": "The only presence check is existsSync on pre-commit. `statSync(p)` for pre-push then throws ENOENT, and chmodSync can throw. Neither is wrapped, so init ends in an uncaught stack trace and exit 1 after the files are already written. This is the (bh) crash, left in the code the B4 fix did not cover. Nothing checks that .claude/scripts/core/branch-guard.sh and secret-diff-scan.sh exist either. If they are missing and the hooks are wired, every commit fails with bash exit 127, which locks the project out of committing.",
+      "fix": "Wrap the stat and chmod calls in try/catch and report 'hooks: not set'. Require both hooks and both scripts to exist before setting core.hooksPath.",
+      "twin_of": "(bh) a missing tool read as a crash"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "bin/arc.mjs:70-72",
+      "breaking_input": "On Windows, run `arc init --dir c:\\proj` or a path written in 8.3 short form such as C:\\PROGRA~1\\x, where the real path is C:\\Proj or C:\\Program Files\\x.",
+      "why": "The check compares `realpathSync(top)` with `realpathSync(dir)`. The JS realpath does not normalise drive-letter case or expand 8.3 names, and git prints its own casing. The strings differ, so `same` is false, and a real repo root is reported as 'not its root'. The hooks are silently not wired, which fails open. The walk-and-compare also follows a junction on one side only.",
+      "fix": "Use `realpathSync.native` on both sides and compare case-insensitively on win32, or compare `git -C dir rev-parse --show-prefix`, which is empty at the root.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "bin/arc.mjs:34, 109-113",
+      "breaking_input": "`arc doctor` where a child plan run hangs, for example a stuck arc-install.mjs. Or a child that overflows the 64 MiB buffer or fails to spawn.",
+      "why": "The B8 fix raised maxBuffer only. `run()` still has no timeout, so a hung child blocks doctor forever. An overflow or spawn failure leaves `r.status` null and `r.error` set, and the report is still 'no plan (exit null)'. That reads as a broken package, not a buffer limit or ENOENT.",
+      "fix": "Pass `timeout` (for example 120000) to spawnSync. Print `r.error && r.error.code` in the failure line.",
+      "twin_of": "(be) a child script's stdout read through a pipe it exits on"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "bin/arc.mjs:33",
+      "breaking_input": "Run `arc init --dir /other/proj` from inside a git hook, `git rebase --exec` or `git submodule foreach`, where GIT_DIR and GIT_WORK_TREE are exported. Example: GIT_DIR=/repoA/.git, GIT_WORK_TREE=/other/proj.",
+      "why": "`git()` inherits the GIT_* variables, so `-C dir` does not select the repo. `--show-toplevel` and `config` act on repo A, and the root-equality check can pass because GIT_WORK_TREE equals dir. core.hooksPath is then written into repo A's config.",
+      "fix": "Spawn git with GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE and GIT_COMMON_DIR deleted from the env.",
+      "twin_of": "(f) validate one read, compare another"
+    }
+  ]
+}

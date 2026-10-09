@@ -1,0 +1,126 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "bin/arc.mjs:40-42",
+      "breaking_input": "arc init --target claude-code --dir ''",
+      "why": "The `--dir` option accepts the empty string as a valid value because the check `v === undefined || v === '' || v.startsWith('--')` is performed on the next argument. When `--dir` is the last argument, `v` is undefined, not empty. But the logic fails when `--dir` is followed by an empty string argument: `v` is `''`, which triggers the error. However, if the shell drops the empty string, `v` becomes the next `--target` flag, making `dir = '--target'` and silently corrupting the install path.",
+      "fix": "Validate that `dir` and `target` are non-empty strings after argument parsing; fail with exit 2 if not.",
+      "twin_of": "(c) flag values."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "bin/arc.mjs:36",
+      "breaking_input": "arc init --target claude-code --dir /some/path -- --dry-run",
+      "why": "The init parser breaks on `--` because it does not skip it. When `--` is encountered, `a` is `'--'`, which does not match `'--dir'`, `'--target'`, `'--dry-run'`, `'--force'`, or `'--quiet'`, so the else branch prints `arc init: unknown argument --` and returns 2. This breaks conventional end-of-options handling.",
+      "fix": "Add a check `if (a === '--') { break; }` before the else branch to ignore remaining flags."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "bin/arc.mjs:37",
+      "breaking_input": "arc init --target codex --dir $(mkdir -p '/tmp/arc-test')/nonexistent",
+      "why": "The `--dir` argument is stored as-is and passed to `arc-install.mjs`, which may fail later. However, the function `init` does not check if `dir` is a directory or even exists before calling `run(INSTALL, ...)`. This means a non-existent directory is silently accepted at the invocation level, leading to a confusing error from the install script.",
+      "fix": "After parsing, verify that `dir` is an existing directory (or a path that can be created) before invoking the installer; fail early with a clear error."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "bin/arc.mjs:47-49",
+      "breaking_input": "arc init --target claude-code --dir /tmp --fork",
+      "why": "The `--fork` argument is not recognized, so the else branch fires: `console.error('arc init: unknown argument --fork'); return 2`. This breaks any future extension or typo tolerance, but the real defect is that the init function also drops `--quiet` into `out` silently even though `--quiet` is not a recognized flag for the consumer — it is added to `...out` which goes to the installer without validation that the installer supports it.",
+      "fix": "Remove `--quiet` from the init parser's known flags, or document that it is forwarded. Better: forward only `--dry-run` and `--force` explicitly, not a generic spread."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "bin/arc.mjs:49",
+      "breaking_input": "arc init --target claude-code --dir /tmp --dry-run --force --quiet",
+      "why": "The flags `--dry-run`, `--force`, and `--quiet` are accumulated in `out` and passed to the installer. But `--quiet` is not a documented option for `arc-install.mjs`. If the installer does not expect `--quiet`, it may interpret it as an unknown argument and fail, or worse, interpret it as a positional value for another flag.",
+      "fix": "Only forward `--dry-run` and `--force`; do not forward `--quiet`."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": "bin/arc.mjs:95",
+      "breaking_input": "arc doctor --dir",
+      "why": "The doctor command's `--dir` branch `rest[0] === '--dir'` matches when `--dir` is the only argument after doctor, but then checks `rest.length === 2`. When the user forgets the directory, `rest.length` is 1, not 2, so it falls to `usage(2)`. This is correct, but the error message is generic 'usage:', not specific. The real issue: if the user types `arc doctor --dir /nonexistent`, it passes `/nonexistent` to `arc-install.mjs --doctor /nonexistent`, which may or may not check existence.",
+      "fix": "Add a pre-check that the path exists and is a directory before invoking the installer."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "bin/arc.mjs:80",
+      "breaking_input": "arc doctor (on a system where Node is older than 18)",
+      "why": "The self-doctor checks the Node version after importing modules. The import of `spawnSync`, `readFileSync`, `existsSync`, etc. uses `node:child_process` and `node:fs`, which exist in older Node versions — but the `spawnSync` API changed subtly. The real risk: the version-check is a runtime check, not a package.json `engines` enforcement. If the system Node is v16, the check `major >= 18` will fail, but the script already loaded and potentially used features from v18+ Node internals.",
+      "fix": "Add a shebang-level version check or a pre-import guard at the very top of the file using `process.versions.node`."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "tests/distribute-cli.bats:20",
+      "breaking_input": "Running the test suite on a system where `native()` is not defined for Windows paths",
+      "why": "The `native()` function uses `cygpath -m` if available, otherwise returns the path unchanged. On Windows without cygpath (e.g., plain Git Bash), paths like `/c/Users/...` will be passed to Node which expects Windows paths like `C:\\Users\\...`. The test `@test \"distribute-cli: arc init installs\"` uses `native(\"$d\")`, which may produce a POSIX-style path that Node cannot resolve.",
+      "fix": "Use `cygpath -m -p \"$1\"` or convert with `shell-to-win` before Node calls."
+    },
+    {
+      "id": "L9",
+      "severity": "high",
+      "where": "tests/distribute-install-clean.bats:12",
+      "breaking_input": "A test run where the pre-created `npm-cache` directory already exists from a previous test's leftover",
+      "why": "The `setup()` function sets `npm_config_cache` to a fixed path per test, but does not clear it. If a previous test crashed or left files, the next test may reuse a stale cache that contains different versions of the package, leading to false positives.",
+      "fix": "Add `rm -rf \"$BATS_TEST_TMPDIR/npm-cache\"` at the start of `setup()`."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "tests/distribute-install-clean.bats:53",
+      "breaking_input": "The git-URL arm when the PR head SHA is not fully specified (e.g., a branch name that resolves to the SHA but npx expects a refspec)",
+      "why": "The test uses `npx --yes \"github:technology-ashiq/arc#$sha\" doctor`. The `$sha` must be a full 40-character hex. The code reads it from the GitHub event JSON. If the event is malformed or the environment variables are unset, `$sha` could be empty or a branch name, causing npx to fail. The regex `^[0-9a-f]{40}$` is tested, but if it fails, the test exits with a false-negative that doesn't indicate a security issue.",
+      "fix": "Print the error and exit non-zero only when the SHA is missing; skip gracefully if CI is not running on a PR event."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "tests/develop-capability.bats:394-395",
+      "breaking_input": "A modified package.json where `dependencies` is `{}` but `optionalDependencies` contains a bom-removal package",
+      "why": "The test checks all four dependency fields are empty: `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies`. However, the test uses `_arc_json` which parses the JSON. If `optionalDependencies` is absent (undefined), `Object.keys(j[k] || {}).length` gives 0, which passes. This is correct. But the real issue: the test asserts the count is 0,0,0,0, but if someone adds a dependency in a field not checked (e.g., `bundledDependencies`), it passes.",
+      "fix": "Inspect all known dependency fields explicitly, including `bundledDependencies`."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "bin/arc.mjs:90",
+      "breaking_input": "arc compile (with no arguments after 'compile')",
+      "why": "When `verb` is `'compile'` and `rest` is empty, the code runs `run(S('engine/arc-compile.mjs'), rest).status`. The arc-compile script might expect at least one argument (e.g., an action). Passing zero arguments may cause it to print usage and exit 1, which is acceptable. But the bigger issue: `run(...).status` uses `?? 1`. If `run` returns null or undefined (which it does not in practice, but if `spawnSync` fails), the exit code would be undefined coerced to null via `?? 1`. Should be `?? 1` but the status is always a number.",
+      "fix": "No change needed, but note that `??` is unnecessary since `spawnSync` always returns an object with a numeric `status` property."
+    },
+    {
+      "id": "L13",
+      "severity": "high",
+      "where": "tests/distribute-cli.bats:61-67",
+      "breaking_input": "A git repository where the `main` branch has been renamed to `master`",
+      "why": "The test `distribute-cli: the installed pre-commit hook refuses a commit on main` creates a branch named `main` by force, commits on it, and expects the pre-commit hook to refuse. The test is hardcoded to the branch name `main`. If the project's default branch is `master`, the test would still pass because it creates a branch named `main`, but the hook's `branch-guard.sh` may guard `master` instead, making the test pass even though the hook doesn't block the actual main branch.",
+      "fix": "Read the actual default branch from `git symbolic-ref refs/remotes/origin/HEAD` or `git config --get init.defaultBranch` and use that instead of hardcoding `main`."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": "tests/distribute-cli.bats:35",
+      "breaking_input": "A test run where the BATS test names array is not populated (older bats version)",
+      "why": "The test `distribute-cli: every test in the file is registered` compares `$declared` (from grep) with `${#BATS_TEST_NAMES[@]}`. In bats versions before 1.5.0, `BATS_TEST_NAMES` may not be populated at all, causing an empty array and a spurious failure. The test uses `bats_require_minimum_version 1.5.0` but this is a separate file.",
+      "fix": "Add `bats_require_minimum_version 1.5.0` at the top of the file (already present at line 8) but note that the test inside may be skipped by older bats versions, causing false positives."
+    },
+    {
+      "id": "L15",
+      "severity": "high",
+      "where": "docs/runbooks/distribute.md:68-69",
+      "breaking_input": "A user who runs `node .claude/scripts/engine/arc-install.mjs --doctor DIR` (as documented) instead of `arc doctor --dir DIR`",
+      "why": "The runbook documents two equivalent commands for reading an install back. The second form `node .claude/scripts/engine/arc-install.mjs --doctor DIR` invokes the installer script directly. However, the script is inside `.claude/scripts/` and may have different path resolution than the `arc` CLI (e.g., it may not know the package root relative to its own location if invoked from a different working directory). This bypasses the `arc doctor` dispatch which uses `process.execPath` and the ROOT variable.",
+      "fix": "Document only `arc doctor --dir /path` as the user-facing command; remove the raw script invocation from the runbook."
+    }
+  ]
+}

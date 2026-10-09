@@ -693,6 +693,7 @@ slots:
     verify: backup-probe
     depends_on:
       - database
+      - orm
     gate: none
     approval: false
     timeout: 900

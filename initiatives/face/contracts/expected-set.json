@@ -835,7 +835,8 @@
       "rule-promote": "memory",
       "develop-proof": "develop",
       "adr-record": "strategy",
-      "face-ask": "ask-arc"
+      "face-ask": "ask-arc",
+      "launch-watch": "engine-room"
     }
   },
   "gates": {
@@ -1404,7 +1405,8 @@
   "jobs": {
     "map": {
       "brief-materialize": "scheduler",
-      "day-close-roll": "scheduler"
+      "day-close-roll": "scheduler",
+      "launch-watch": "scheduler"
     }
   },
   "ventures": {

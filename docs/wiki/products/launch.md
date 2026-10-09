@@ -23,11 +23,13 @@ None declared.
 
 None declared.
 
-## Scripts (12)
+## Scripts (15)
 
+- [`.claude/scripts/hq/jobs/launch-watch.mjs`](../../../.claude/scripts/hq/jobs/launch-watch.mjs)
 - [`.claude/scripts/launch/arc-launch.mjs`](../../../.claude/scripts/launch/arc-launch.mjs)
 - [`.claude/scripts/launch/launch-coverage.mjs`](../../../.claude/scripts/launch/launch-coverage.mjs)
 - [`.claude/scripts/launch/launch-lint.mjs`](../../../.claude/scripts/launch/launch-lint.mjs)
+- [`.claude/scripts/launch/lib/arc-probe.mjs`](../../../.claude/scripts/launch/lib/arc-probe.mjs)
 - [`.claude/scripts/launch/lib/board.mjs`](../../../.claude/scripts/launch/lib/board.mjs)
 - [`.claude/scripts/launch/lib/catalog.mjs`](../../../.claude/scripts/launch/lib/catalog.mjs)
 - [`.claude/scripts/launch/lib/ctx.mjs`](../../../.claude/scripts/launch/lib/ctx.mjs)
@@ -37,6 +39,7 @@ None declared.
 - [`.claude/scripts/launch/lib/simulated.mjs`](../../../.claude/scripts/launch/lib/simulated.mjs)
 - [`.claude/scripts/launch/lib/state.mjs`](../../../.claude/scripts/launch/lib/state.mjs)
 - [`.claude/scripts/launch/lib/worker.mjs`](../../../.claude/scripts/launch/lib/worker.mjs)
+- [`.claude/scripts/launch/owner-apply-watch-policy.mjs`](../../../.claude/scripts/launch/owner-apply-watch-policy.mjs)
 
 ## Files (3)
 
