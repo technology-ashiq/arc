@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-launch (Cycle 1, opened 2026-10-03)
 phase: 01
 appetite: 18d
-burn: 1d
+burn: 6d
 blocked-on: —
 depends-on: —
 
@@ -33,16 +33,19 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
   37144642041 was red on two causes (CATALOG row, a Windows-only CR guard), both fixed. 1 day vs 2.5d.
   amendments: 0 · reopened: n · t-to-phase0: 1 day (kickoff 2026-10-03).
 
-**Appetite burn:** 1 of 15.5 days planned (18-day cap; 6%). 50% tripwire at the Phase 02 exit (9 days).
+**Appetite burn:** 6 of 15.5 days planned (calendar, 2026-10-03..09; 18-day cap; 33%). Day-7.5 checkpoint (Phase 01
+closed?) falls 2026-10-10: Phase 01 is built on fakes and waits only on the owner tokens below, so that checkpoint is a
+scope-cut conversation unless the tokens land. 50% tripwire at the Phase 02 exit (9 days).
 
 ## Now
 
-**Current position:** Phase 01, fakes-first. Merged: read verbs (#322), dns (#323, ADR-1725), repo + ci (#326,
-ADR-1726), hosting + gate-2 hold (#327, ADR-1727), environments + tls (#329, ADR-1728), secrets (#336, ADR-1729).
-No real provider called.
-**Next step:** every Phase 01 slot built on fakes. Merged: release + frontend #340 (ADR-1730), database + email #344
-(ADR-1731, ADR-1732), backend + orm #345 (ADR-1733). Open: auth · authz · tenancy #349 (ADR-1734), ci ABSENT ruling #359
-(ADR-1735). Real, 2026-10-07: `repo` verified (arc-sandbox private); `ci` refused PLAN_LIMIT, so ADR-1735; `hosting` next.
+**Current position:** Phase 01 every slot built on fakes (#322..#359, ADR-1725..1735); its real half waits on the owner
+actions below. Phase 02 built on fakes, fakes-first by the owner ruling: payment-test #360 (ADR-1736), plans #363
+(ADR-1737), checkout-portal #386 (ADR-1738), webhooks-ledger #387 (ADR-1739), and on `feat/launch-p02-gate3` refunds
+(ADR-1740: a stored `refund.processed` books against its charge, `arc pnl --simulated` nets to 0) + gate 3 (ADR-1741:
+`apply payment-live` on arc-sandbox records `approval.requested` and exits 2 before dependencies or provider).
+**Next step:** ledger-source (REQ-10 `ledger-source` registered), then Phase 03 on fakes. Phase 02 closes on the real
+test-mode purchase once the Razorpay keys and the Phase 01 tokens land.
 
 **Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
 a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the

@@ -59,38 +59,50 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ -f "$out/CONSTITUTION.md" ]        # later still
 }
 
-# NEGATIVE CONTROL, rewritten. The first version was vacuous in the exact way the rule it protects
-# forbids, and an adversarial pass reproduced it: the mutant is written into $TARGET, sync-to-project.sh
-# derives SRC from `dirname "${BASH_SOURCE[0]}"`, so the mutant's SRC became an empty mktemp dir. It
-# copied NOTHING, and "no playbook present" passed on total failure. The old paired half ran the REAL
-# script from a different SRC, so it could never have detected that. Two fixes:
-#   * pin SRC back to the real tree, so the mutant is the original minus the mechanism;
-#   * assert the mutant RAN, by a later artifact, before asserting what it did not do.
-# And the deletion is `SRC/docs/playbooks`, not `docs/playbooks`: the broad pattern also matched the
-# `mkdir -p` line, so the mutant lost every parent directory and died on the cp path -- failing on the
-# Windows leg for a reason unrelated to the mechanism under test.
-@test "sync: a mutant with the docs/playbooks COPY lines deleted ships NO playbook (control)" {
-  [ "$(grep -c 'SRC/docs/playbooks' "$ARC_ROOT/sync-to-project.sh")" -eq 2 ]
+# NEGATIVE CONTROL. Since distribute P03 the copy lives in ONE place, the claude-code install target
+# (.claude/scripts/engine/install-targets/claude-code.mjs), and sync-to-project.sh full mode calls it. The
+# mutant is a copy of the arc tree whose install target has `docs/playbooks` deleted from its directory
+# list, run through that copy's own sync-to-project.sh (SRC is derived from the script, so the mutant is
+# the original minus exactly the mechanism). It must RUN, by a later artifact, before what it did not do
+# is believed; and the real script, same shape, must ship the playbook, or the absence proves nothing.
+# Earlier rounds of this control were vacuous twice: a mutant whose SRC was an empty dir copied nothing,
+# and a broad deletion pattern also removed the mkdir line and died for an unrelated reason.
+@test "sync: a mutant with docs/playbooks deleted from the install target ships NO playbook (control)" {
+  local it=".claude/scripts/engine/install-targets/claude-code.mjs"
+  [ "$(grep -c '"docs/templates", "docs/playbooks"\]' "$ARC_ROOT/$it")" -eq 1 ]
 
-  local mutant="$TARGET/mutant-sync.sh"
-  grep -v 'SRC/docs/playbooks' "$ARC_ROOT/sync-to-project.sh" \
-    | sed "s|^SRC=.*|SRC=\"$ARC_ROOT\"|" > "$mutant"
-  [ "$(grep -c 'SRC/docs/playbooks' "$mutant")" -eq 0 ]
-  grep -q "^SRC=\"$ARC_ROOT\"$" "$mutant"
+  local fake="$TARGET/fake-src"
+  cp -r "$ARC_ROOT/." "$fake" 2>/dev/null || true
+  rm -rf "${fake:?}/.git"
+  sed -e 's|"docs/templates", "docs/playbooks"\]|"docs/templates"]|' "$ARC_ROOT/$it" > "$fake/$it"
+  [ "$(grep -c '"docs/templates", "docs/playbooks"\]' "$fake/$it")" -eq 0 ]
+  [ "$(grep -c '\["docs/templates"\]' "$fake/$it")" -eq 1 ]
 
   local mtarget="$TARGET/mutant-out"
   mkdir -p "$mtarget/.git"
-  run bash "$mutant" "$mtarget"
+  run bash "$fake/sync-to-project.sh" "$mtarget"
   [ "$status" -eq 0 ]                                        # the mutant RAN...
   [ -f "$mtarget/docs/how-it-works.md" ]                     # ...and got past the playbook step...
   [ ! -f "$mtarget/docs/playbooks/finding-verification.md" ] # ...and shipped no playbook.
 
-  # The real script, same shape, does ship it. Both halves, or the assertion above is satisfied by a
-  # mutant that merely differs from the original in some other way.
   local rtarget="$TARGET/real-out"
   mkdir -p "$rtarget/.git"
   bash "$ARC_ROOT/sync-to-project.sh" "$rtarget" >/dev/null
   [ -f "$rtarget/docs/playbooks/finding-verification.md" ]
+}
+
+# The claude-code install is one transaction: a failure mid-run leaves the target as it was, where the old
+# copy loop left a half-installed consumer. The failure is injected through the installer's test hook.
+@test "sync: a failed full sync rolls back and leaves no arc file behind" {
+  local out="$TARGET/rollback-out"
+  mkdir -p "$out/.git"
+  export ARC_INSTALL_INJECT_FAIL_AT=40
+  run bash "$ARC_ROOT/sync-to-project.sh" "$out"
+  unset ARC_INSTALL_INJECT_FAIL_AT
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"apply: FAILED"*"injected failure at file 40"* ]] || { echo "the failure never fired: $output"; false; }
+  [[ "$output" == *"rollback: 0 restored, 39 removed; this run left 0 files"* ]] || { echo "$output"; false; }
+  [ "$(find "$out" -type f | wc -l | tr -d ' ')" -eq 0 ] || { echo "files left behind:"; find "$out" -type f | head; false; }
 }
 
 @test "sync: never leaks personal settings or working state" {

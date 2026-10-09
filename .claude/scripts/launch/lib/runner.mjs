@@ -130,6 +130,18 @@ export async function apply(opts, log = console.log) {
       log(`${slot.id}: verified -- no-op (receipt ${row.receipt})`);
       return EXIT.OK;
     }
+    // A rehearsal never crosses gate-1 or gate-3, so its refusal path needs neither its dependencies nor a vetted
+    // provider: it is exercised first, before anything that could run (ADR-1700, ADR-1741). payment-live has no
+    // provider row and depends on Cycle 2 slots, and its refusal is still proven.
+    if (profile.honesty_class === "rehearsal" && ROLLING.has(slot.gate)) {
+      // Two vetted rows is the same refusal pickProvider gives, never a request attributed to "none" (attack 55c5065 L11).
+      const vetted = rows.filter((r) => r.slot === slot.id && r.status === "vetted");
+      // The request names the row id pickProvider returned, never the caller's spelling (attack a1d4452 B1).
+      let providerId = vetted.length === 1 ? vetted[0].id : "none";
+      if (opts.provider) providerId = pickProvider(rows, slot.id, profile, opts.provider, opts.vet).id;
+      else if (vetted.length > 1) throw new LaunchError("REFUSED", `${vetted.length} vetted providers for ${slot.id}; name one with --provider (plan ranks them)`);
+      return await gate(P, slug, slot, providerId, profile, state, row, log);
+    }
     const unmet = (slot.depends_on || []).filter((d) => {
       const b = board.get(d);
       if (b && !b.applies) return false;
@@ -142,7 +154,7 @@ export async function apply(opts, log = console.log) {
 
     // Gates: rehearsal ventures exercise gate-1 and gate-3 through their refusal path only (ADR-1700, ADR-1720).
     if (slot.gate && slot.gate !== "none") {
-      const res = await gate(P, slug, slot, prow, profile, state, row, log);
+      const res = await gate(P, slug, slot, prow.id, profile, state, row, log);
       if (res !== null) return res;
       state = loadState(P.stateDir, slug) || state;
       row = slotRow(state, slot.id);
@@ -159,7 +171,7 @@ export async function apply(opts, log = console.log) {
   }
 }
 
-async function gate(P, slug, slot, prow, profile, state, row, log) {
+async function gate(P, slug, slot, providerId, profile, state, row, log) {
   const rehearsalRefuses = profile.honesty_class === "rehearsal" && ROLLING.has(slot.gate);
   // A rehearsal's refusal is terminal: a re-run refuses again from the record, never "awaiting" a decision that
   // could not change the answer, and never a second approval.requested (attack 06cbc03 L2).
@@ -186,12 +198,12 @@ async function gate(P, slug, slot, prow, profile, state, row, log) {
     id = underLock(P, slug, () => {
       const fresh = slotRow(loadState(P.stateDir, slug) || emptyState(profile), slot.id);
       if (fresh.approval_id) return { already: fresh.approval_id };
-      const got = emit("approval.requested", { what: `${slot.gate}: ${slot.id} via ${prow.id} for ${slug}`, gate: slot.gate, slot: slot.id, provider: prow.id, venture: slug, honesty_class: profile.honesty_class }, slug, log);
+      const got = emit("approval.requested", { what: `${slot.gate}: ${slot.id} via ${providerId} for ${slug}`, gate: slot.gate, slot: slot.id, provider: providerId, venture: slug, honesty_class: profile.honesty_class }, slug, log);
       if (got) {
         const s = loadState(P.stateDir, slug) || emptyState(profile);
         saveState(P.stateDir, setSlot(s, slot.id, rehearsalRefuses
           ? { state: "absent", approval_id: got, reason: `rehearsal never crosses ${slot.gate} (approval.requested ${got} recorded, refusal path exercised)` }
-          : { state: "awaiting-approval", approval_id: got, provider: prow.id }));
+          : { state: "awaiting-approval", approval_id: got, provider: providerId }));
       }
       return got;
     }, log);

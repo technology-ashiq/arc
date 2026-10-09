@@ -23,10 +23,16 @@
  *   arc-compile.mjs --check [--all|FILE...] [--target claude-code|codex] [--root PATH]
  *   arc-compile.mjs --write [--all|FILE...] [--target ...] [--root PATH]
  *   arc-compile.mjs --check --all --input commands|agents [--target claude-code] [--root PATH]
+ *   arc-compile.mjs --check|--write --all --input source --target codex|opencode|skills-only [--root PATH]
  *
  * SOURCE INPUT (distribute P02, ADR-2001/2017). `--input commands|agents` reads .claude/commands/ or
  * .claude/agents/ through frontmatter-lint's one walker and one parser (ADR-2012). For `claude-code` the
- * render is the source itself; the other adapters gain a source render in P03.
+ * render is the source itself.
+ *
+ * SOURCE RENDER (distribute P03, ADR-2018). `--input source` renders commands, agents and skills for a
+ * non-claude target through source-render.mjs, the module the installer also writes from, and compares
+ * every file with tests/fixtures/distribute/goldens/<target>/. A golden file the render does not produce
+ * is `[dirty]`; `--write` writes the render there and removes those.
  *
  * THE DIRTY CHECK (REQ-05). Every `--check` also lists each directory a verified row of
  * engine/harnesses.yaml names under `rendered:` and fails each file the compiler would not write,
@@ -36,16 +42,19 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import * as claudeCode from "./adapters/claude-code.mjs";
 import * as codex from "./adapters/codex.mjs";
+import * as opencode from "./adapters/opencode.mjs";
+import * as skillsOnly from "./adapters/skills-only.mjs";
+import { SOURCE_TARGETS, goldenDir, renderSourceTree } from "./source-render.mjs";
 import { CouldNotScan, MATRIX_FILE, confineRel, parseFrontmatter, sourceFiles, verifiedRows } from "./frontmatter-lint.mjs";
 
-export const ADAPTERS = Object.freeze({ "claude-code": claudeCode, codex });
+export const ADAPTERS = Object.freeze({ "claude-code": claudeCode, codex, opencode, "skills-only": skillsOnly });
 
 const lf = (s) => s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
@@ -109,9 +118,10 @@ for (let i = 0; i < argv.length; i++) {
   else if (a.startsWith("--")) { console.error(`arc-compile: unknown option ${a}`); process.exit(2); }
   else files.push(a);
 }
-if (!mode) { console.error("usage: arc-compile.mjs --check|--write [--all|FILE...] [--target claude-code|codex] [--root PATH]"); process.exit(2); }
+if (!mode) { console.error("usage: arc-compile.mjs --check|--write [--all|FILE...] [--target claude-code|codex|opencode|skills-only] [--input processes|commands|agents|source] [--root PATH]"); process.exit(2); }
 if (!ADAPTERS[target]) { console.error(`arc-compile: unknown target \`${target}\` (known: ${Object.keys(ADAPTERS).join(", ")})`); process.exit(2); }
-if (!["processes", "commands", "agents"].includes(input)) { console.error(`arc-compile: unknown input \`${input}\` (known: processes, commands, agents)`); process.exit(2); }
+if (!["processes", "commands", "agents", "source"].includes(input)) { console.error(`arc-compile: unknown input \`${input}\` (known: processes, commands, agents, source)`); process.exit(2); }
+if (input === "processes" && typeof ADAPTERS[target].render !== "function") { console.error(`arc-compile: the \`${target}\` adapter renders no processes (use --input source)`); process.exit(2); }
 root = resolve(root || gitToplevel() || ".");
 
 // ---------- the dirty check (REQ-05) ----------
@@ -206,10 +216,81 @@ function finish(failed) {
   }
 }
 
+// ---------- source render: one non-claude target's whole tree (distribute P03) ----------
+if (input === "source") {
+  if (!all || files.length) { console.error("arc-compile: --input source takes --all and no FILE arguments"); process.exit(2); }
+  if (!SOURCE_TARGETS[target]) { console.error(`arc-compile: --input source renders a non-claude target (${Object.keys(SOURCE_TARGETS).join(", ")}); claude-code is the source itself, so check it with --input commands|agents`); process.exit(2); }
+  let r;
+  try { r = renderSourceTree(root, target); } catch (e) {
+    if (e instanceof CouldNotScan) { console.log(`arc-compile: COULD NOT SCAN — ${e.message}`); process.exit(2); }
+    throw e;
+  }
+  for (const l of r.lines) console.log(l);
+  const gdir = goldenDir(target);
+  const gabs = join(root, gdir);
+  // Every regular file under the golden, by path relative to it. A link or special file there is dirty
+  // by itself, and is never followed.
+  const golden = new Map();
+  const walkGolden = (abs, rel) => {
+    let names;
+    try { names = readdirSync(abs).sort(); } catch (e) { if (e.code === "ENOENT" && rel === "") return; console.log(`arc-compile: COULD NOT SCAN — cannot list ${gdir}${rel}: ${e.code || e.message}`); process.exit(2); }
+    for (const n of names) {
+      const a = join(abs, n), sub = rel ? `${rel}/${n}` : n;
+      const st = lstatSync(a);
+      if (st.isDirectory() && !st.isSymbolicLink()) walkGolden(a, sub);
+      else golden.set(sub, st.isFile() && !st.isSymbolicLink());
+    }
+  };
+  if (existsSync(gabs)) {
+    const st = lstatSync(gabs);
+    if (!st.isDirectory() || st.isSymbolicLink()) { console.log(`arc-compile: COULD NOT SCAN — ${gdir} is not a plain directory`); process.exit(2); }
+    walkGolden(gabs, "");
+  }
+  // An [unsupported] file is a declared limit, reported and counted, not a diff. The P03 stop rule makes
+  // it a failure: more than 5 commands a target cannot hold reopens the matrix and ADR-2017.
+  const STOP = 5;
+  let same = 0, bad = r.unsupportedCommands > STOP ? 1 : 0;
+  if (bad) console.log(`[stop-rule] ${r.unsupportedCommands} commands are [unsupported] on \`${target}\`, more than ${STOP}: reopen engine/harnesses.yaml and ADR-2017`);
+  if (mode === "write") {
+    for (const [sub, isFile] of golden) if (!r.files.has(sub)) { rmSync(join(gabs, sub), { force: true }); console.log(`[removed] ${gdir}${sub}${isFile ? "" : " (not a regular file)"}`); }
+    // A directory or link where the render writes a file is removed first, and a write that still fails is
+    // COULD NOT SCAN by name, never a stack trace after half the golden is written (attack 74bcf43 B11).
+    for (const [sub, text] of r.files) {
+      const at = join(gabs, sub);
+      try {
+        const st = lstatSync(at, { throwIfNoEntry: false });
+        if (st && (st.isDirectory() || st.isSymbolicLink())) { rmSync(at, { recursive: true, force: true }); console.log(`[removed] ${gdir}${sub} (not a regular file)`); }
+        mkdirSync(dirname(at), { recursive: true });
+        writeFileSync(at, text, "utf8");
+      } catch (e) { console.log(`arc-compile: COULD NOT SCAN — cannot write ${gdir}${sub}: ${e.code || e.message}`); process.exit(2); }
+    }
+    console.log(`\narc-compile: wrote ${r.files.size} file(s) into ${gdir} for target \`${target}\` (${r.counts.commands} commands, ${r.counts.agents} agents, ${r.counts.skills} skills; ${r.counts.skipped} skipped by targets:, ${r.counts.unsupported} unsupported)`);
+    console.log(`unsupported-commands: ${r.unsupportedCommands}`);
+    process.exit(bad ? 1 : 0);
+  }
+  for (const [sub, text] of [...r.files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (!golden.has(sub)) { console.log(`[missing] ${gdir}${sub} — rendered but not in the golden (run --write to record it)`); bad++; continue; }
+    if (!golden.get(sub)) { console.log(`[dirty] ${gdir}${sub} — not a regular file where the render writes one`); bad++; continue; }
+    const disk = readFileSync(join(gabs, sub), "utf8");
+    // A CR in the golden is its own finding, before the LF comparison erases it (the lf-only instrument).
+    if (/\r/.test(disk)) { console.log(`[lf-only] ${gdir}${sub} — the golden contains a CR byte at offset ${disk.indexOf("\r")}`); bad++; continue; }
+    if (disk === text) { same++; continue; }
+    const i = firstDiff(text, disk);
+    console.log(`[byte-diff] ${gdir}${sub} — differs at byte ${i} (rendered ${text.length} bytes, golden ${disk.length})`);
+    console.log(`  Expected: ${context(disk, i)}`);
+    console.log(`  Found:    ${context(text, i)}`);
+    bad++;
+  }
+  for (const sub of [...golden.keys()].sort()) if (!r.files.has(sub)) { console.log(`[dirty] ${gdir}${sub} — a golden file the render does not produce`); bad++; }
+  console.log(`\narc-compile: ${same}/${r.files.size} byte-identical for target \`${target}\` (input source: ${r.counts.commands} commands, ${r.counts.agents} agents, ${r.counts.skills} skills; ${r.counts.skipped} skipped by targets:, ${r.counts.unsupported} unsupported)`);
+  console.log(`unsupported-commands: ${r.unsupportedCommands}`);
+  process.exit(finish(bad));
+}
+
 // ---------- source input: commands and agents (distribute P02) ----------
 if (input !== "processes") {
   if (!all || files.length) { console.error(`arc-compile: --input ${input} takes --all and no FILE arguments`); process.exit(2); }
-  if (typeof ADAPTERS[target].renderSource !== "function") { console.error(`arc-compile: the \`${target}\` adapter has no ${input} input yet (P03)`); process.exit(2); }
+  if (typeof ADAPTERS[target].renderSource !== "function") { console.error(`arc-compile: the \`${target}\` adapter renders ${input} only as part of its whole tree: use --input source`); process.exit(2); }
   // The claude-code target IS the source: there is nothing to write, and a write would only reformat it.
   if (mode === "write" && target === "claude-code") { console.error(`arc-compile: --write has nothing to write for --input ${input} --target claude-code (the source is the output)`); process.exit(2); }
   let list;

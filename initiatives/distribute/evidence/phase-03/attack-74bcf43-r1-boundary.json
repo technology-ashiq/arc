@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply (undo/journal)",
+      "breaking_input": "Rollback when a later rename fails after earlier ones: journal.push happens after renameSync(dest, bak) but before renameSync(staged.shift(), dest). If the second rename throws (EPERM/EBUSY on Windows, AV lock), journal has {dest,bak} but dest is gone; undo does rmSync(dest) then renameSync(bak,dest) which is fine. But if the FIRST rename (dest->bak) throws, nothing is journaled and the staged.shift() was never consumed; fine. However undo's renameSync(j.bak, j.dest) is not in a try/catch: one failure throws out of undo(), skipping the remaining journal entries, staged cleanup and dir removal, and masks the original error (e.rollback never set).",
+      "why": "A failed restore aborts the whole rollback mid-way, leaving a half-installed tree and losing the original error; the caller's `if (!e.rollback) throw e` rethrows a raw stack.",
+      "fix": "Wrap each restore in try/catch, continue, collect failures, always set e.rollback with the failures listed.",
+      "twin_of": "(ap) one failure, two exit codes"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply (staging loop)",
+      "breaking_input": "A temp file for a dest that exists as a directory or symlink: preflight checks lst() once, apply writes later. Between preflight and rename (TOCTOU), or when `--force` is used, a dest that is a symlink is already rejected, but staged tmp paths `dest+'.arc-tmp-PID'` are written via writeFileSync which follows a pre-planted symlink at that tmp name (a symlink named `X.arc-tmp-<pid>` in the project).",
+      "why": "writeFileSync/copyFileSync follow a symlink at the predictable tmp name and write attacker-chosen bytes to its target outside the install dir.",
+      "fix": "Open tmp with flag 'wx' (O_EXCL) and unique random suffix; copyFileSync with COPYFILE_EXCL.",
+      "twin_of": "(ak) the walk base is followed"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply",
+      "breaking_input": "Backup path `dest.arc-bak-PID` left in the tree if the process is killed (Ctrl-C/SIGKILL) between rename-to-bak and the final cleanup; there is no signal handler or startup recovery. Also a pre-existing file named `dest.arc-bak-PID` is silently overwritten by renameSync on POSIX.",
+      "why": "Crash leaves the user's original file only under a .arc-bak name and a half-installed tree with no manifest; the next run sees the original path missing.",
+      "fix": "Install SIGINT/SIGTERM handler that runs undo; refuse if a bak/tmp name exists; document recovery.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:targetDir/preflight",
+      "breaking_input": "--dir whose realpath lies inside the arc source tree (e.g. --dir . run from the arc checkout, or --dir pointing at the --source) with --force: the install overwrites its own source files (.claude/scripts/engine/*.mjs) while reading them as op.from, and staging reads after earlier renames have replaced sources.",
+      "why": "op.from reads happen at stage time, but sync reads of later files and the manifest generation can see already-replaced files; with source==target, merge/rename corrupts the tree.",
+      "fix": "Refuse when realpath(dir) equals or contains/is contained by realpath(source).",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:preflight",
+      "breaking_input": "Case-insensitive collisions against EXISTING files: project has `.Claude/Rules` or `.AGENTS` directory differing only by case on Windows/macOS; lst(join(dir, rel)) resolves it as the directory, but a case-sensitive Linux CI differs, and the manifest/doctor then record paths whose on-disk spelling differs. A parent that is a symlink on a case-folded name still passes.",
+      "why": "Path identity compared case-sensitively against the filesystem on one side and case-folded among ops on the other.",
+      "fix": "Compare realpath of the parent chain against dir after resolution; reject if realpath(parent) is not inside dir.",
+      "twin_of": "(am) case-folded on one side only"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:preflight",
+      "breaking_input": "Parent chain checked only for existence/symlink at planning; Windows junctions/reparse points report isSymbolicLink() false for some junction types under lstat in older Node, so `.agents` as a junction to another directory passes as isDirectory and writes land outside the target.",
+      "why": "Linked-parent detection relies on lstat isSymbolicLink alone; junctions are the Windows norm without developer mode.",
+      "fix": "After computing each parent, compare realpathSync(parent) to join(realDir, rel) and refuse on mismatch.",
+      "twin_of": "(ah) a linked parent hides a scanned directory"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "sync-to-project.sh:full mode",
+      "breaking_input": "TARGET passed as a POSIX path under MSYS (/c/Users/x/proj) or with spaces to native node via --dir \"$TARGET\" and --source \"$SRC\": MSYS converts args for native exe heuristically, but a path like /tmp/x passed as `--dir=...` style is fine; yet `$SRC` derived from BASH_SOURCE is POSIX-style and node resolve() treats /c/Users/... as C:\\c\\Users\\... when conversion is skipped (e.g. MSYS2_ARG_CONV_EXCL set or path inside a quoted compound).",
+      "why": "POSIX path handed to native node; targetDir then reports 'missing' or installs into a wrong drive-relative directory.",
+      "fix": "Convert with cygpath -m when available before calling node, as the bats helpers do.",
+      "twin_of": "(g) POSIX path into node"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "sync-to-project.sh:full mode (_out capture)",
+      "breaking_input": "`_out=\"$(node ... --quiet)\"` captures stdout only; on a Refused (e.g. symlinked .claude/ in the consumer, exit 1/2) the message goes to stdout and is printed on failure, but uncaught exceptions (non-Refused throw e) go to stderr, which passes through; the exit code collapsed to 3 for every failure including conflict-free usage errors (2) and the rollback (1).",
+      "why": "One failure, several distinct exit codes (usage, refused, rollback) are folded into 3, so callers can't distinguish a refused symlinked target from a rolled-back apply.",
+      "fix": "Propagate the installer's exit code or map reasons explicitly.",
+      "twin_of": "(ap) one failure, two exit codes"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-install.mjs:main (--force with claude-code in sync)",
+      "breaking_input": "sync full mode always passes --force, so preflight conflicts (a consumer's own docs/playbooks/x.md or .claude/commands/custom.md colliding with an arc path that differs) are silently overwritten with no backup kept after success (bak is deleted on commit); the previous sync only overwrote the same set, but the new manifest also covers .claude/rules etc. identically—yet a consumer file now at a path under .claude/ that the manifest-less first sync never recorded is destroyed irrecoverably.",
+      "why": "Overwrite of unmanaged user files is irreversible once the baks are removed; only the path list survives in `forced`.",
+      "fix": "Keep backups for forced paths (e.g. .arc-forced-backup/) or require explicit consent.",
+      "twin_of": null
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/source-render.mjs:read / sourceUnit",
+      "breaking_input": "Command file with CRLF endings: read() strips every \\r from the content including those inside body code fences or literal \\r in the file; also a source file containing a lone \\r within a line is silently altered.",
+      "why": "Data transform destroys signal and the golden hashes the altered render, so the installed command differs from the source bytes.",
+      "fix": "Normalise only \\r\\n to \\n.",
+      "twin_of": "(aq) grep for a CR on Windows"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:walkGolden / --write",
+      "breaking_input": "--write with golden containing a directory symlink or a dir where the render writes a file: walkGolden records symlink as non-regular and rmSync(force) removes only matching-key entries; but a golden path that is a DIRECTORY at a rendered file path (e.g. goldens/codex/.agents/skills/arc-commit/SKILL.md/ as a dir) is walked into, never keyed as the file, then writeFileSync throws EISDIR uncaught.",
+      "why": "Unhandled exception, partial writes already made, no COULD NOT SCAN.",
+      "fix": "Detect dir-at-file-path and rmSync recursive, or fail with named error before writing.",
+      "twin_of": "(ao) a foreign directory walked file by file"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply (undo ordering)",
+      "breaking_input": "journal.reverse() mutates the journal in place; the success path afterwards iterates the same array, fine, but undo called after partial rename where staged.shift() already consumed the tmp: the renamed-in file is rm'd and bak restored, yet `staged` still holds remaining tmp entries correctly. However failAt counts include the manifest, and on a throw during the staging loop (disk full) `journal` is empty while staged tmp files exist for ops whose dest is untouched, which is fine; but mkdirTree-created dirs from the first loop are removed only if empty, and an unrelated file the user created concurrently keeps the dir.",
+      "why": "Minor: leftover directories after rollback.",
+      "fix": "Report leftover created dirs in rollback output.",
+      "twin_of": null
+    }
+  ]
+}

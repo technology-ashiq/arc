@@ -31,8 +31,18 @@ export function makeWebhook({ github, supabase, full, domain, inner, hookKey = n
     if (s.includes(lead)) {
       if (!table()) return { error: `relation "public.${T}" does not exist` };
       const pid = s.slice(s.indexOf(lead) + lead.length).split("'")[0];
-      return table().rows.filter((r) => r.payment_id === pid).sort((a, b) => (a.event_id < b.event_id ? -1 : 1))
-        .map((r) => ({ event_id: r.event_id, event: r.event, payment_id: r.payment_id, amount: r.amount, fee: r.fee, currency: r.currency, paid_at: r.paid_at === null ? null : Math.floor(Date.parse(r.paid_at) / 1000) }));
+      const ev = s.includes("' and event = '") ? s.split("' and event = '")[1].split("'")[0] : null;
+      const hits = table().rows.filter((r) => r.payment_id === pid && (ev === null || r.event === ev)).sort((a, b) => (a.event_id < b.event_id ? -1 : 1));
+      // The refunds read (ADR-1740): the refund entity's fields out of the stored raw body, as Postgres jsonb #>> returns them (text).
+      if (s.includes("#>> '{payload,refund,entity,id}'")) {
+        return hits.map((r) => {
+          let e = null;
+          try { e = JSON.parse(r.body).payload.refund.entity; } catch { e = null; }
+          const t = (v) => (v === undefined || v === null ? null : String(v));
+          return { event_id: r.event_id, event: r.event, payment_id: r.payment_id, refund_id: t(e && e.id), amount: t(e && e.amount), currency: t(e && e.currency), refunded_at: t(e && e.created_at), refund_of: t(e && e.payment_id) };
+        });
+      }
+      return hits.map((r) => ({ event_id: r.event_id, event: r.event, payment_id: r.payment_id, amount: r.amount, fee: r.fee, currency: r.currency, paid_at: r.paid_at === null ? null : Math.floor(Date.parse(r.paid_at) / 1000) }));
     }
     return null;
   }

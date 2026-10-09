@@ -91,3 +91,20 @@ REJECTED: L9 an empty targets entry hides a duplicate -- unsupported (every entr
 REJECTED: L10 a symlink named .. -- unsupported (readdir never returns it)
 REJECTED: L11-L15 version key, missing processes dir, BOM, unquoted false, no frontmatter -- non-actionable (each fails closed by design)
 ```
+
+Attack 74bcf43 round 1 (P03), boundary. B1-B7, B9, B11 and B12 fixed ((ar)-(ay); B12: the rollback line names directories kept because something else is in them). Logic round 1 on qwen3.8-27b failed to run; the re-run on deepseek-v4-flash returned `findings: []` in 19 s on a 126 KB diff, recorded as an unconfirmed clean result, and round 2 attacks logic again.
+```
+REJECTED: B8 sync folds every installer failure into exit 3 -- by design (exit 3 is sync's documented install-failure code since Phase 04 of the products lane; the installer's own lines, with its reason, are printed to stderr first)
+REJECTED: B10 every CR is stripped, not only CRLF -- by design (REQ-04 hashes through the sync golden's own transform, tr -d '\r', so identity and the golden agree byte for byte)
+```
+
+Attack d32e714 round 2 (P03). Fixed: B1-B5 and L8, as (at) revised and (az)-(bd).
+```
+REJECTED: L1/L2 a/../../x escapes the target -- already-covered (confineRel refuses every `..`, `.` and empty segment)
+REJECTED: L3/L4/L9 a non-string frontmatter value -- unsupported (parseFrontmatter yields raw strings only; targets entries are checked by frontmatter-lint against the verified rows)
+REJECTED: L5 JSON.stringify escapes an apostrophe -- unsupported (it does not)
+REJECTED: L6 a tab forces the basic string -- unsupported (the control-character class already excludes 0x09)
+REJECTED: L7 the wildcard check runs before :* is stripped -- unsupported (it runs on the stripped scope)
+REJECTED: L10-L15 -- non-actionable (the attacker's own text says no defect, or N/A)
+```
+| 13 | B6 (attack d32e714): sync always passes `--force`, so the first sync over a consumer with no install record backs up every arc file whose bytes changed into `.arc-install-backup/` | `sync-to-project.sh` full mode, `install-targets/common.mjs` | it keeps a recoverable copy of anything overwritten, which the old copy loop never did | consumer repos gain an untracked backup directory per upgrade | a consumer reports the directory as noise, or a second upgrade: then seed the record from the previous sync golden's sha set |

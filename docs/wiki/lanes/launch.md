@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (40)
+## Decisions (42)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -68,6 +68,8 @@ ADRs whose `Product:` line names this lane first.
 | [`1737`](../../../docs/adr/1737-plans-gate-a-route-by-the-org-plan-and-verify-a-downgrade.md) | plans gates a route by the org's plan, and verify proves a downgrade closes it | accepted | 2026-10-07 |
 | [`1738`](../../../docs/adr/1738-checkout-portal-creates-the-order-server-side-and-verify-pays-nothing.md) | checkout-portal creates the order on the server, and verify reads it back without paying | accepted | 2026-10-07 |
 | [`1739`](../../../docs/adr/1739-webhooks-ledger-stores-each-signed-event-once-and-books-it-simulated.md) | webhooks-ledger stores each signed event once on the venture, and books it as simulated revenue through the ledger's own parser | accepted | 2026-10-07 |
+| [`1740`](../../../docs/adr/1740-refunds-books-a-stored-refund-against-its-charge-and-nets-it-simulated.md) | refunds books a stored `refund.processed` against its charge, so the simulated P&L nets to zero | accepted | 2026-10-09 |
+| [`1741`](../../../docs/adr/1741-a-rehearsal-gate-refusal-runs-before-dependencies-and-provider.md) | a rehearsal's gate-1 and gate-3 refusal runs before dependencies and provider choice | accepted | 2026-10-09 |
 
 ## Source
 

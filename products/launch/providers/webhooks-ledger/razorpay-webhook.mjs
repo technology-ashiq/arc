@@ -150,8 +150,9 @@ const TABLES = "select count(*)::int as n from pg_tables where schemaname = 'pub
 const RLS_ON = "select count(*)::int as n from pg_tables where schemaname = 'public' and tablename in ('razorpay_webhook_events') and rowsecurity;";
 // No policy at all: a policy would open the table to a signed-in user or the anon key; only the service role writes.
 const POLICIES = "select count(*)::int as n from pg_policies where schemaname = 'public' and tablename = 'razorpay_webhook_events';";
-// The payment columns only: the raw body stays on the venture and never reaches arc.
-const STORED = (pid) => `select event_id, event, payment_id, amount::bigint as amount, fee::bigint as fee, currency, extract(epoch from paid_at)::bigint as paid_at from public.${TABLE} where payment_id = '${pid}' order by event_id;`;
+// The payment columns only: the raw body stays on the venture and never reaches arc. Captures only: a refund of the
+// probe payment is its own row (refunds slot, ADR-1740) and is not a second delivery of this one.
+const STORED = (pid) => `select event_id, event, payment_id, amount::bigint as amount, fee::bigint as fee, currency, extract(epoch from paid_at)::bigint as paid_at from public.${TABLE} where payment_id = '${pid}' and event = 'payment.captured' order by event_id;`;
 const FILES = {
   "app/api/webhooks/razorpay/route.js": [
     '// Razorpay webhooks land here (arc launch, webhooks-ledger slot). The signature is HMAC-SHA256 of the RAW body,',
@@ -239,7 +240,7 @@ export async function scaffold(ctx) {
   const { full, ref } = upstreamOf(ctx, "plans");
   domainOf(ctx);
   secretOf(ctx);
-  probeIds(ctx);
+  const ids = probeIds(ctx);
   // A table of this name launch did not create is the venture's own: never altered (the probe-table rule, ADR-1731).
   // Every existing table of the name must carry the marker, recorded or not (attack d1dc8eb B3).
   const tid = `${ref}:public.${TABLE}`;
@@ -260,9 +261,11 @@ export async function scaffold(ctx) {
   ctx.report({ kind: "webhook-route", id: `${full}:${sha}` });
   ctx.report({ kind: "venture-repo", id: full });
   ctx.report({ kind: "supabase-ref", id: ref });
+  // The charge verify books: refunds returns exactly this payment (ADR-1740).
+  ctx.report({ kind: "probe-payment", id: ids.payment });
   return {
     files: Object.keys(FILES),
-    resources: [{ kind: "db-tables", id: tid }, { kind: "webhook-route", id: `${full}:${sha}` }],
+    resources: [{ kind: "db-tables", id: tid }, { kind: "webhook-route", id: `${full}:${sha}` }, { kind: "probe-payment", id: ids.payment }],
     notes: [`the owner adds the Razorpay dashboard webhook to https://${domainOf(ctx)}/api/webhooks/razorpay with the same secret (ADR-1739)`],
   };
 }
