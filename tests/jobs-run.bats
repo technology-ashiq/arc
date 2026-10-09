@@ -127,7 +127,8 @@ for(const e of entries){
 process.stdout.write('ENTRIES-OK '+entries.length);
 " "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  echo "$output" | grep -q "ENTRIES-OK 2" || { echo "$output"; false; }
+  # As many entries as the schedule declares jobs: a lane adding a job does not edit this file.
+  echo "$output" | grep -q "ENTRIES-OK $(grep -c "^  - name: " "$ARC_ROOT/hq.jobs.yaml")$" || { echo "$output"; false; }
 }
 
 @test "arc-jobs: a run leaves a receipt carrying the slot it claims" {

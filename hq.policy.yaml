@@ -191,6 +191,19 @@ kinds:
     deploy: { level: L0 }
     spend: { level: L0 }
 
+  # launch REQ-10 (ADR-1750): the weekly watch shells out to arc-launch verify --public-only, which asks the venture's
+  # public endpoints (network) and writes the board's last_verify and the watch stamp under .claude/state/.
+  "process:launch-watch":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/launch/**", ".claude/state/hq/**"] }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
   "process:build-in-public-draft":
     e2: []
     read: { level: L3 }

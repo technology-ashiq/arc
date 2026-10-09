@@ -93,13 +93,15 @@ _hook() { # run the sandbox hook on a Bash tool call; stdin is the PreToolUse pa
   done
 }
 
-_verify_root() { # $1 dir: the six LIVE files, the manifest and the verifier, at their repo-relative paths
+_verify_root() { # $1 dir: the six files AS PASTED, the manifest and the verifier, at their repo-relative paths
+  # From the paste, not the live tree: the paste was applied (#384) and the live policy has moved on since
+  # (launch-watch, ADR-1750), so a live copy would read DIFFERS for a reason this verifier test is not about.
   local d="$1" rel
   mkdir -p "$d/initiatives/policy/evidence/phase-02"
   cp "$ARC_ROOT/initiatives/policy/evidence/phase-02/paste-manifest.json" "$ARC_ROOT/initiatives/policy/evidence/phase-02/verify-paste.mjs" "$d/initiatives/policy/evidence/phase-02/"
   for rel in hq.policy.yaml .claude/scripts/hq/lib/policy/lint.mjs .claude/scripts/hq/policy-lint.mjs .claude/scripts/hq/policy-hook.mjs \
              .claude/scripts/hq/lib/policy-evidence/fold.mjs .claude/settings.json; do
-    mkdir -p "$d/$(dirname "$rel")"; cp "$ARC_ROOT/$rel" "$d/$rel"
+    mkdir -p "$d/$(dirname "$rel")"; cp "$PASTE/$rel" "$d/$rel"
   done
 }
 

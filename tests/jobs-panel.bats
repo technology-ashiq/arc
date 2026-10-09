@@ -20,6 +20,12 @@ setup() {
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE/events"
   export ARC_SPINE_ROOT="$SPINE"
   export ARC_SPINE_RAND="00112233445566778899"
+  # catchup runs every job for real; launch-watch keeps its per-board stamps here, not in the clone.
+  export ARC_LAUNCH_STATE_DIR="$BATS_TEST_TMPDIR/launch-state"
+  # Every enabled job in the COMMITTED schedule. A lane that adds a job must not have to edit
+  # this suite, so the counts below are derived, never typed.
+  NJOBS="$(grep -c "^  - name: " "$ARC_ROOT/hq.jobs.yaml")"
+  [ "$NJOBS" -ge 2 ] || { echo "hq.jobs.yaml lists $NJOBS jobs"; false; }
 }
 
 # Put one real event on a named past day, so the spine has a witness window to reason over.
@@ -61,7 +67,7 @@ _seed_run() {
   echo "$output" | grep -q "day-close-roll .*OVERDUE (12 missed)" || { echo "$output"; false; }
   # weekdays@06:00 over the same window skips two weekends = 8 slots.
   echo "$output" | grep -q "brief-materialize .*OVERDUE (8 missed)" || { echo "$output"; false; }
-  echo "$output" | grep -q "needs-you (2)" || { echo "$output"; false; }
+  echo "$output" | grep -q "needs-you ($NJOBS)" || { echo "$output"; false; }
 }
 
 @test "panel: a recent run clears the overdue state" {
@@ -124,10 +130,10 @@ _seed_run() {
   # locally and would have failed the Windows leg for the same reason.
   run node "$ARC_ROOT/tests/fixtures/jobs/panel-harness.mjs" "$BATS_TEST_TMPDIR" 2026-08-12 2026-08-01
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  echo "$output" | grep -q "HARNESS-DONE 2" || { echo "harness never finished:"; echo "$output"; false; }
+  echo "$output" | grep -q "HARNESS-DONE $NJOBS" || { echo "harness never finished:"; echo "$output"; false; }
   ! echo "$output" | grep -q "overdue=true" || { echo "a disabled job was counted overdue:"; echo "$output"; false; }
   echo "$output" | grep -q "NEEDSYOU:0" || { echo "$output"; false; }
-  [ "$(printf '%s\n' "$output" | grep -c 'state=disabled')" -eq 2 ] || { echo "$output"; false; }
+  [ "$(printf '%s\n' "$output" | grep -c 'state=disabled')" -eq "$NJOBS" ] || { echo "$output"; false; }
 }
 
 @test "panel: the weaker logon guarantee is STATED, and derived from the pin" {
@@ -182,11 +188,11 @@ _seed_run() {
   _seed 2026-08-01
   run node "$JOBS" catchup
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  echo "$output" | grep -q "ran=2" || { echo "$output"; false; }
+  echo "$output" | grep -q "ran=$NJOBS " || { echo "$output"; false; }
   # Second call: both slots are already receipted, so nothing re-executes.
   run node "$JOBS" catchup
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  echo "$output" | grep -q "ran=0 up_to_date=2" || { echo "$output"; false; }
+  echo "$output" | grep -q "ran=0 up_to_date=$NJOBS " || { echo "$output"; false; }
 }
 
 @test "list --next shows the coming slots and skips the weekend for a weekdays job" {
@@ -195,7 +201,7 @@ _seed_run() {
   echo "$output" | grep -q "brief-materialize" || { echo "$output"; false; }
   # Three slots printed per enabled job.
   local n; n="$(printf '%s\n' "$output" | grep -c '^  20')"
-  [ "$n" -eq 6 ] || { echo "expected 6 slot lines (2 jobs x 3), got $n"; echo "$output"; false; }
+  [ "$n" -eq $((NJOBS * 3)) ] || { echo "expected $((NJOBS * 3)) slot lines ($NJOBS jobs x 3), got $n"; echo "$output"; false; }
 }
 
 @test "nudge: the SessionStart fragment may read and print, and may never RUN a job" {
