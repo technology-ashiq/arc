@@ -407,7 +407,8 @@ _src_native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; els
   cp -R "$ARC_ROOT/.claude/commands" "$d/.claude/"
   n=$(find "$d/.claude/commands" -type f -name '*.md' | wc -l | tr -d ' ')
   awk '{ printf "%s\r\n", $0 }' "$d/.claude/commands/arc-freeze.md" > "$d/x" && mv "$d/x" "$d/.claude/commands/arc-freeze.md"
-  grep -q $'\r' "$d/.claude/commands/arc-freeze.md" || { echo "the CRLF copy has no CR"; false; }
+  # Count CR bytes rather than grep for one: Git-for-Windows grep reads in text mode and never sees them.
+  [ "$(tr -cd '\r' < "$d/.claude/commands/arc-freeze.md" | wc -c | tr -d ' ')" -gt 0 ] || { echo "the CRLF copy has no CR"; false; }
   run --separate-stderr node "$(CC)" --check --all --input commands --target claude-code --root "$(_src_native "$d")"
   [ "$status" -eq 0 ] || { echo "status $status: $output"; false; }
   printf '%s\n' "$output" | tr -d '\r' | grep -qx "arc-compile: $n/$n byte-identical for target \`claude-code\` (input commands)" || { echo "$output"; false; }

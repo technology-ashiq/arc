@@ -52,3 +52,4 @@ and lane finds are appended under their PR.
 - **(an) an exclusion by name honoured on a link.** A file excluded by name (a harness's own first-run file) is excluded only as a regular file; a symlink under that name is still a finding. Fixed in `arc-compile.mjs`, attack 85d2416 L7.
 - **(ao) a foreign directory walked file by file.** A directory a harness owns (`node_modules/`) is a prune point, never walked; only an exact foreign FILE name is held to the regular-file rule of (an). Fixed in `arc-compile.mjs` (dirtyScan), attack a32c3ae B1.
 - **(ap) one failure, two exit codes.** COULD NOT SCAN exits 2 from every stage of one tool, never 1 from one stage and 2 from another. Fixed in `arc-compile.mjs` (finish), attack a32c3ae B4.
+- **(aq) grep for a CR on Windows.** Git-for-Windows grep reads text mode and never matches `\r`; count CR bytes with `tr -cd '\r' | wc -c`. Fixed in `tests/engine-compile.bats`, CI windows shard 7 on 02d589f.
