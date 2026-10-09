@@ -1,0 +1,9 @@
+#!/bin/sh
+# arc commit-time line for a CONSUMER repo (distribute ADR-2013, P04). `arc init` points core.hooksPath here.
+# The two checks that hold in any project: never commit on main, and never commit a secret. arc's own
+# .githooks/pre-commit also runs arc-compile, which needs arc's processes/ and so does not belong here.
+# This is the second line, never the gate: --no-verify skips it, and the project's CI is the truth (ADR-2002).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+bash .claude/scripts/core/branch-guard.sh
+bash .claude/scripts/core/secret-diff-scan.sh --staged

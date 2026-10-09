@@ -108,3 +108,21 @@ REJECTED: L7 the wildcard check runs before :* is stripped -- unsupported (it ru
 REJECTED: L10-L15 -- non-actionable (the attacker's own text says no defect, or N/A)
 ```
 | 13 | B6 (attack d32e714): sync always passes `--force`, so the first sync over a consumer with no install record backs up every arc file whose bytes changed into `.arc-install-backup/` | `sync-to-project.sh` full mode, `install-targets/common.mjs` | it keeps a recoverable copy of anything overwritten, which the old copy loop never did | consumer repos gain an untracked backup directory per upgrade | a consumer reports the directory as noise, or a second upgrade: then seed the record from the previous sync golden's sha set |
+
+Attack 188f724 round 1 (P04). Boundary B1-B7 fixed as (bg)-(bj); B8 (spawnSync maxBuffer) fixed with a 64 MiB cap on the dispatcher's child runs. Logic re-run on deepseek-v4-flash after the first logic run failed: L6, L11 fixed.
+```
+REJECTED: L1 an empty --dir value -- unsupported (the value check refuses "" by name)
+REJECTED: L2/L4 `--` and an unknown flag exit 2 -- by design (a closed flag set; an unknown flag is a usage error, the lane's flag rule)
+REJECTED: L3 --dir is not checked before the installer -- by design (arc-install judges the directory after printing its plan, REQ-10's RAN contract)
+REJECTED: L5 --quiet is undocumented for arc-install -- unsupported (arc-install accepts --quiet; the dispatcher forwards it)
+REJECTED: L7 the node check runs after the imports -- non-actionable (node: imports exist on every Node package.json's engines admits)
+REJECTED: L8/L14 cygpath absent, bats array semantics -- already-covered (the same helpers run on all 3 legs in 7 P03 suites)
+REJECTED: L9 the npm cache is not cleared -- unsupported (BATS_TEST_TMPDIR is fresh per test)
+REJECTED: L10 the head SHA may be short -- unsupported (the test asserts 40 hex before use)
+REJECTED: L12 compile with no args -- by design (arc-compile prints its own usage, exit 2)
+REJECTED: L13 a repo whose trunk is master -- out of scope (the fixture names its branches; branch-guard's own rule is main, ADR-2015)
+REJECTED: L15 the runbook names the script form -- by design (the script form works in a project that installed arc without the bin)
+```
+
+Attack 45490ca round 2 (P04): logic 0 findings; boundary B1, B2 fixed as (bk), (bl).
+| 14 | B3-B5 (attack 45490ca, low): realpath vs git's own case and 8.3 forms on Windows, no timeout on the dispatcher's children, inherited GIT_* variables | `bin/arc.mjs` | each fails closed (hooks not wired, named) or needs a hostile environment; two rounds are spent | a Windows user sees "not its root" at their real root, a hung doctor, or a GIT_DIR-set CI | normalise both sides through `git rev-parse --show-toplevel` run in each path; add a timeout; clear GIT_* in git() |

@@ -20,7 +20,7 @@ The design source asks for "CI jobs named so they can be required checks" and fo
 Option 2:
 
 - **The gates.** `tests/distribute-gate-parity.bats`, `tests/distribute-brain-drift.bats`, `tests/distribute-matrix.bats` and `tests/distribute-compile-<target>.bats` run inside `selftest`.
-- **The REQ-08 clean-machine proof.** `tests/distribute-install-clean.bats` runs on each OS leg's fresh runner. It runs `npm pack` into a temp dir, then `npm i -g --prefix <tmp>` from the tarball, then `npx --yes github:technology-ashiq/arc#<head-sha>`, then `arc doctor` against a temp target. It asserts each step RAN before asserting its output.
+- **The REQ-08 clean-machine proof.** `tests/distribute-install-clean.bats` runs on each OS leg's fresh runner. It runs `npm pack` into a temp dir, then `npm i -g --prefix <tmp>` from the tarball, then `npm i -g --prefix <tmp> github:technology-ashiq/arc#<head-sha>` (amended 2026-10-09: `npx --yes` with a git spec fails on npm 10 with "GitFetcher requires an Arborist constructor", on all 3 legs of PR #406), then `arc doctor` against a temp target. It asserts each step RAN before asserting its output.
 - **The required checks.** REQ-09 names every `selftest` check-run plus `ci-tier`. A gate's bats file therefore cannot go red without blocking the merge.
 
 ## Consequences

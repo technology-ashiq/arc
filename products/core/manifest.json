@@ -50,6 +50,8 @@
     ".claude/scripts/core/wip-line.sh",
     ".claude/scripts/core/brain-drift.mjs",
     ".claude/scripts/core/branch-guard.sh",
+    ".claude/templates/githooks/pre-commit",
+    ".claude/templates/githooks/pre-push",
     ".claude/scripts/core/gate-parity.mjs",
     ".claude/scripts/core/secret-diff-scan.sh"
   ],
