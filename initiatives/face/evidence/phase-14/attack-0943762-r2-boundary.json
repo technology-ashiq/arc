@@ -1,0 +1,130 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites git block (toks built from quoted strings only, then the -C skip)",
+      "breaking_input": "execFileSync(\"git\", [\"-C\", root, \"commit\", \"-m\", msg]) or spawnSync(\"git\", [\"-C\", dir, \"branch\", name]) in an unguarded verb.",
+      "why": "toks keeps only quoted tokens, so the unquoted variable `root` disappears. The loop then skips `-C` plus the next token, which is now the real subcommand. For [\"-C\",root,\"commit\",\"-m\",msg], toks is [\"-C\",\"commit\",\"-m\"] and k ends at 3, so isGitWrite([]) is false. The write is invisible. The new bats test passes only because it uses the literal \".\" as the -C value.",
+      "fix": "Tokenise the whole array literal, keeping non-literal elements as placeholders. Skip -C/-c plus exactly one element. Add a mutant whose -C argument is a variable.",
+      "twin_of": "A gate that knew one spelling of the call, and a comment stripper that deleted real code"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites isGit test (`/^\\w*GIT\\w*$/`) and parts[1] literal extraction",
+      "breaking_input": "const gitBin = \"git\"; spawnSync(gitBin, [\"commit\",\"-m\",m]). Or: const args = [\"branch\", n]; spawnSync(\"git\", args). Or a shared helper `export function git(args){ return spawnSync(\"git\", args) }` called as git([\"branch\", n]).",
+      "why": "A lower- or camel-case binary variable is not matched, because the pattern needs upper-case GIT. A variable argv gives toks=[], so the shared helper itself reads as non-writing. Its callers (git([\"branch\",n]), runGit(...)) are never matched, and the one-hop pass only follows detected writers. This is the \"one bounded git, used by every caller\" shape, so it is the normal case in this repo.",
+      "fix": "Treat any spawn whose binary resolves to git, or any variable argv, as unknown and fail closed. Flag calls to a helper that spawns git. Resolve constants assigned \"git\" case-insensitively.",
+      "twin_of": "A gate that knew one spelling of the call, and a comment stripper that deleted real code"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites emitter-argv block; shWrites emit regex",
+      "breaking_input": "const SPINE = join(HQ,\"arc-event.mjs\"); spawnSync(process.execPath,[SPINE,\"emit\",\"note.logged\",\"--payload\",p]). Shell: node \"$EMITTER\" emit note.logged.",
+      "why": "The earlier B4 fix only widened the accepted constant names (arc-event, emitter and similar). The array head must still name one of them or contain the literal path. Any other constant name hides a spine emit. The shell scanner still needs the literal arc-event.sh or arc-event.mjs on the same line, so a variable emitter path is missed.",
+      "fix": "Flag any spawn argv or shell command containing a bare `emit` token followed by a kind-shaped token, unless --dry-run is present. Do not rely on the emitter's spelling.",
+      "twin_of": "A gate that knew one spelling of the call, and a comment stripper that deleted real code"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites fsLocal/fsNs resolution",
+      "breaking_input": "const nodeFs = require(\"node:fs\"); nodeFs.writeFileSync(p,t). Or: const m = await import(\"node:fs\"); m.writeFileSync(p,t). Or: const { writeFileSync } = fs; writeFileSync(p,t). Or: const { writeFileSync } = deps.",
+      "why": "A bare call counts only if the name was imported from fs by name or by a destructured import()/require() call. Destructuring from an existing object is not seen. A member call counts only if the object is named fs, fsp or promises, starts with `fs`, or is the static-import default or namespace. `nodeFs`, `m` and `_fs` are ignored, and bare names with no fsLocal entry are dropped.",
+      "fix": "Track every identifier assigned from require/import of fs, including namespace objects and destructuring from them. Fail closed when a file imports fs and the mutator names appear without a site.",
+      "twin_of": "A detector that matches spellings, not bindings"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:FS_MUTATORS",
+      "breaking_input": "const fh = await fsp.open(target,\"w\"); await fh.writeFile(text). Or symlinkSync(src, \"PLAN.md\"). Or linkSync, chmodSync, utimesSync, ftruncateSync, writevSync, openSync(p,\"w\") followed by closeSync.",
+      "why": "The list still omits open-for-write, symlink, link, chmod, utimes, ftruncate and writev. `fh.writeFile` has an object that is not fs-like. Each of these changes a tracked file or its git-visible mode, yet the verb has no site and no row.",
+      "fix": "Add the remaining mutators. Treat open with a w/a/+ flag as a write. Treat fs.promises.open handles as fs objects.",
+      "twin_of": "A hand-kept list beside a glob"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:GIT_WRITES",
+      "breaking_input": "spawnSync(\"git\",[\"pull\",\"--ff-only\"]), [\"clean\",\"-fd\"], [\"update-index\",\"--add\",f], [\"commit-tree\",t], [\"write-tree\"], [\"read-tree\",\"-u\",ref], [\"fetch\"], [\"init\"], [\"clone\",u], [\"config\",k,v], [\"remote\",\"add\",...].",
+      "why": "The write-subcommand set is hand-kept and misses commands that change the working tree, index, objects, refs or config. A verb using only these has no write site and is never listed.",
+      "fix": "Invert the rule: treat every git subcommand as a write unless it is on a short read-only allowlist (status, log, diff, rev-parse, show, ls-files, cat-file, and similar).",
+      "twin_of": "A hand-kept list beside a glob"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:shWrites and the `if (!real.length && !scratch) continue` skip",
+      "breaking_input": "A .sh verb whose only writes are `sed -i s/a/b/ PLAN.md`, `cp tmpl PLAN.md`, `printf x > docs/x.md`, `tee file` or `mv a b`.",
+      "why": "Shell redirections and file commands are not read, so sites is empty and the file produces no row. The verb is absent from the inventory, not listed as unknown. The header discloses this, but the audit's job is to list every write verb, and a gate that reads part of a file should refuse by name what it does not read.",
+      "fix": "List every .sh containing a redirect to a non-scratch path, or sed -i, cp, mv, rm, tee or touch, as plan-bound unknown, which fails closed.",
+      "twin_of": "A gate that reads part of a file refuses, by name, what it does not read"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:writingExports",
+      "breaking_input": "lib/store.mjs: `function save(t,x){ writeFileSync(t,x); } export { save };` or `export default function save(...){...}` or `export const api = { save(t,x){ writeFileSync(t,x) } }`. The importer calls save() or api.save() with no guard.",
+      "why": "Only `export function name(` and `export const|let name =` directly before the body are recognised. An export list, a default export or an object-method export produces no entry in lib.exports, so the hop never charges the importer. The allowlist reason for library rows says the importer carries the binding, so a write through such a library is covered by neither row.",
+      "fix": "Resolve `export { a as b }`, `export default` and exported object members. Otherwise, when a relative-imported library has any write site and its exports cannot be resolved, charge every importer unknown.",
+      "twin_of": "A write charged to the library and never to its caller"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:audit hop (`resolve(dirname(p), im.from)` looked up in `own`)",
+      "breaking_input": "import { save } from \"./lib/st%6fre.mjs\" or \"./lib/store.mjs?v=2\" (node loads store.mjs for both), or a specifier given as a file: URL.",
+      "why": "The specifier is resolved as a literal filesystem path. Node decodes percent-encoding and strips queries, so the audit looks up a nonexistent key and silently skips the hop. The importer's write is not charged, and no finding says the import could not be followed.",
+      "fix": "Refuse or name any relative specifier containing `%`, `?` or `#`. Otherwise resolve it exactly as node does, and report an unresolved relative import as unknown.",
+      "twin_of": "A percent-encoded relative specifier resolved to one file in the lint and another in node"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:last two lines (main guard)",
+      "breaking_input": "Run when realpathSync throws for argv[1] or import.meta.url (a subst or UNC drive, a path removed after launch).",
+      "why": "Both realpaths fall back to \"\", so the guard is false. The process then exits 0 having printed nothing, and the gate fails open. Only the bats `_ran` check notices, and only inside that suite. The round-1 B13 is unfixed and sits in the debt ledger.",
+      "fix": "When process.argv[1] is set and either realpath throws, print a named error and set process.exitCode = 2.",
+      "twin_of": "Main guard compared `argv[1].endsWith(...)` -> every new script with a `main()`: realpath BOTH `argv[1]` and `import.meta.url`."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:say / main",
+      "breaking_input": "node plan-bound-audit.mjs | head -1, or any consumer that closes stdout early.",
+      "why": "Each row is a separate process.stdout.write. After the pipe closes, EPIPE arrives as an unhandled stream error and the process dies with a stack, so the true exit code and the summary line are lost. Round-1 B14 is unfixed.",
+      "fix": "Buffer the report and write it once, with a stdout error handler that ignores EPIPE while keeping exitCode."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:jsWrites `what` and the SCRATCH output line",
+      "breaking_input": "writeFileSync(join(TMP, \"\\u001b[2K\\u001b[1A...forged text\"), x) with real ESC bytes in the string literal of the scanned source.",
+      "why": "The destination text is taken from raw source. It is collapsed for whitespace only, then printed on the SCRATCH line. Terminal escape and other control characters pass through into CI logs and terminals. The fix for B10 covered verbs and files but not this free text.",
+      "fix": "Strip or escape every control character and Unicode line break (\\p{Cc}, U+2028/9) from `what` before printing, or JSON.stringify it.",
+      "twin_of": "The smoke's `oneLine` and face-pure's left ESC and other controls in a printed line"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:files / OTHER_SCRIPT",
+      "breaking_input": "A writer saved as .claude/scripts/hq/x.cmd, x.bat, x.zsh, x.rb, an extensionless shebang file, or any file under a directory named node_modules; or a writer under .claude/hooks/ or .githooks/.",
+      "why": "Only a fixed extension list is read, and everything else is silently ignored. Directories named node_modules are skipped by name. Hook directories are outside the walk. The run still reports `0 unbound` and exits 0 while ignoring those files. Round-1 B5 was only half fixed.",
+      "fix": "List every non-skipped regular file whose extension or shebang is not known as plan-bound unknown. Do not skip node_modules by name. Walk the hook directories too, or name that scope boundary in the output.",
+      "twin_of": "A gate that reads part of a file refuses, by name, what it does not read"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "tests/plan-bound-audit.bats:34 (`[ \"$total\" -ge 75 ]`)",
+      "breaking_input": "A detector regression that drops up to 22 of the 97 write verbs, for example breaking alias detection.",
+      "why": "The floor is hand-kept at 75 against a real count of 97 (PROGRESS says 97; the comment says 87). A collapse of roughly 20 verbs still passes the gate and the floor test.",
+      "fix": "Derive the floor from the allowlist plus the bound set, or pin it within a few of the real count. Assert that the number of rows with an `allowlisted` column equals the allowlist size.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}

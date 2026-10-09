@@ -163,6 +163,7 @@
     "leads-ordering.bats": 15,
     "face-dash.bats": 15,
     "face-l3.bats": 14,
+    "plan-bound-audit.bats": 14,
     "growth-publish-thread.bats": 13,
     "growth-deploy.bats": 13,
     "spine-reader-lint.bats": 12,

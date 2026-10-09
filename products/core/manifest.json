@@ -32,6 +32,8 @@
     ".claude/scripts/core/json-strict.mjs",
     ".claude/scripts/core/one-line.mjs",
     ".claude/scripts/core/plan-expect.mjs",
+    ".claude/scripts/core/plan-bound-audit.mjs",
+    ".claude/scripts/core/plan-bound-allowlist.json",
     ".claude/scripts/core/proposal-branch.mjs",
     ".claude/scripts/core/spawn-bounded.mjs",
     ".claude/scripts/core/profile-request.mjs",
