@@ -52,6 +52,11 @@
       "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
     },
     {
+      "verb": "engine/frontmatter-lint",
+      "class": "lane-tool",
+      "why": "the distribute lane frontmatter lint (ADR-2017): its one write is --mutant-selftest planting a key into a mkdtemp COPY of the tree, removed in a finally; the audit reads the destination as a local binding it does not follow, so it lists it here"
+    },
+    {
       "verb": "core/gate-parity",
       "class": "lane-tool",
       "why": "a engine-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the engine lane, visible here"
