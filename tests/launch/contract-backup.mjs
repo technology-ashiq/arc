@@ -53,7 +53,8 @@ switch (scenario) {
     const wf = text(".github/workflows/backup-drill.yml");
     // The drill's shape, read as text: one job, a checksum check, the count diff that fails it, and no upload of the dump.
     out.workflow = {
-      jobs: [...wf.matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1]),
+      // Job names are the two-space keys BELOW `jobs:` only: `on:` holds push and schedule at the same indent.
+      jobs: [...wf.slice(Math.max(0, wf.search(/^jobs:$/m))).matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1]),
       noUpload: !wf.includes("upload-artifact"),
       checksum: wf.includes("sha256sum -c dump.sha256"),
       diff: wf.includes("diff counts.src counts.dst"),
