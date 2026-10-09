@@ -90,6 +90,8 @@ doctored() { [ "$(count '^doctor: [0-9]+ placed, [0-9]+ degraded, [0-9]+ missing
   [ "$status" -eq 0 ] && [ "$(count '^apply: wrote [0-9]+ file\(s\) .*, 1 forced; ')" -eq 1 ] || { echo "status $status: $output"; false; }
   [ "$(_arc_json "$d/.arc-install.json" 'j.forced.join(",")')" = ".agents/skills/arc-commit/SKILL.md" ] || { echo "the record does not list the forced path"; false; }
   grep -qx 'name: arc-commit' "$f" || { echo "the file was not overwritten"; false; }
+  # The overwritten original is kept, so --force can be undone by hand (attack 74bcf43 B9).
+  [ "$(find "$d/.arc-install-backup" -type f -path '*/.agents/skills/arc-commit/SKILL.md' -exec cat {} \; )" = "theirs" ] || { echo "no backup of the forced file"; find "$d/.arc-install-backup" 2>&1; false; }
 }
 
 @test "distribute-install: a directory with no install record doctors as not-installed, exit 2" {

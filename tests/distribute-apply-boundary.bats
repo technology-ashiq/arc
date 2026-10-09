@@ -34,7 +34,7 @@ real_link() { ln -s "$1" "$2" 2>/dev/null && [ -L "$2" ]; }
 @test "distribute-apply-boundary: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-apply-boundary: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 9 ] || { echo "declared $declared, expected 9"; false; }
+  [ "$declared" -eq 10 ] || { echo "declared $declared, expected 10"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -125,4 +125,14 @@ real_link() { ln -s "$1" "$2" 2>/dev/null && [ -L "$2" ]; }
   planned skills-only || false
   [ "$status" -eq 1 ] && [ "$(count '^refused \[linked-parent\] \.agents is a symlink, and \.agents/skills/')" -eq 1 ] || { echo "status $status: $output"; false; }
   [ "$(files_in "$elsewhere")" -eq 1 ] || { echo "the install wrote through the link"; false; }
+}
+
+# An install into its own source would overwrite the files it is still reading (attack 74bcf43 B4).
+@test "distribute-apply-boundary: a target inside the arc source is refused as inside-source" {
+  local s; s=$(src) || false
+  mkdir -p "$s/nested-project"
+  install_ codex "$(native "$s/nested-project")" "$s"
+  planned codex || false
+  [ "$status" -eq 1 ] && [ "$(count '^refused \[inside-source\] .* overlap; install into a separate project$')" -eq 1 ] || { echo "status $status: $output"; false; }
+  [ "$(find "$s/nested-project" -type f | wc -l | tr -d ' ')" -eq 0 ] || { echo "the refusal wrote into the source"; false; }
 }

@@ -141,7 +141,9 @@ fi
 # contract, which has always been to overwrite what an earlier sync left; the install record in
 # .claude/arc-registry.json lists every file it overwrote that it had not written. Mirrored in
 # sync-to-project.ps1 only as far as the old copy semantics go (the ps1 is Windows-native and not CI-gated).
-_out="$(node "$SRC/.claude/scripts/engine/arc-install.mjs" --target claude-code --source "$SRC" --dir "$TARGET" --force --quiet)" \
+# Native node gets native paths: a POSIX /c/... path that MSYS leaves unconverted resolves to C:\c\... there.
+_n() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+_out="$(node "$SRC/.claude/scripts/engine/arc-install.mjs" --target claude-code --source "$(_n "$SRC")" --dir "$(_n "$TARGET")" --force --quiet)" \
   || { printf '%s\n' "$_out" >&2; echo "sync: the claude-code install failed and rolled back; nothing of this run was left" >&2; exit 3; }
 
 _arc_env_block "$SRC/.env.example" "^JUROR_BASE_URL="

@@ -18,9 +18,9 @@
  * an installed file still reads `placed`.
  */
 
-import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { createHash, randomBytes } from "node:crypto";
+import { constants as fsConstants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, posix, resolve, sep } from "node:path";
 
 import { confineRel } from "../frontmatter-lint.mjs";
 
@@ -34,6 +34,13 @@ export class Refused extends Error {
 export const sha = (buf) => createHash("sha256").update(Buffer.from(buf).filter((b) => b !== 13)).digest("hex");
 
 const lst = (p) => { try { return lstatSync(p); } catch (e) { if (e.code === "ENOENT" || e.code === "ENOTDIR") return null; throw e; } };
+
+// Path identity the way the filesystem sees it: Windows and macOS fold case, Linux does not.
+const fold = (p) => (process.platform === "win32" || process.platform === "darwin" ? p.toLowerCase() : p);
+/** True when `real` is `want` itself, compared as the filesystem compares names. */
+const inside = (real, want) => fold(resolve(real)) === fold(resolve(want));
+/** True when one path is the other or sits under it. */
+export const overlaps = (a, b) => { const x = fold(resolve(a)) + sep, y = fold(resolve(b)) + sep; return x.startsWith(y) || y.startsWith(x); };
 
 /** The target directory, resolved through realpath, or a named refusal (REQ-10). */
 export function targetDir(dir) {
@@ -85,6 +92,9 @@ export function preflight(ops, dir, prior) {
       if (!st) { dirs.add(rel); continue; }
       if (st.isSymbolicLink()) throw new Refused("linked-parent", `${rel} is a symlink, and ${op.path} would be written through it`);
       if (!st.isDirectory()) throw new Refused("file-as-dir", `${rel} is a file where ${op.path} needs a directory`);
+      // A junction or other reparse point can read as a plain directory under lstat, so the parent's
+      // realpath must still be the path itself, inside the target (attack 74bcf43 B5, B6).
+      if (!inside(realpathSync(join(dir, rel)), join(dir, rel))) throw new Refused("linked-parent", `${rel} resolves outside the target, and ${op.path} would be written through it`);
     }
     if (op.kind === "mkdir") { const st = lst(join(dir, op.path)); if (!st) dirs.add(op.path); else if (!st.isDirectory() || st.isSymbolicLink()) throw new Refused("file-as-dir", `${op.path} must be a directory`); continue; }
     const st = lst(join(dir, op.path));
@@ -107,38 +117,64 @@ export const opBytes = (op) => (op.text !== undefined ? Buffer.from(op.text, "ut
  * Write the ops, transactionally. `manifestOp` is written last. Returns `{ written }`, or throws after
  * rolling back with `e.rollback = { restored, removed }` set, so the caller can print what was undone.
  */
-export function apply(ops, dir, manifestOp, { log = () => {} } = {}) {
-  const tag = `.arc-tmp-${process.pid}`;
+export function apply(ops, dir, manifestOp, { log = () => {}, backup = [] } = {}) {
+  // A random tag per run, and every temp and backup name opened exclusively, so a file or link planted at
+  // a predictable name is never written through or overwritten (attack 74bcf43 B2, B3).
+  const tag = `.arc-tmp-${randomBytes(6).toString("hex")}`;
+  const backupStamp = new Date().toISOString().replace(/[:.]/g, "-");
   const created = [];
   const staged = [];
+  const copies = [];
   const journal = [];
   const failAt = Number(process.env.ARC_INSTALL_INJECT_FAIL_AT || 0); // test hook: fail the Nth commit rename
   const all = [...ops.filter((o) => o.kind !== "mkdir"), manifestOp];
+  // Each restore is its own step: one that fails is listed and the rest still run (attack 74bcf43 B1).
   const undo = () => {
     let restored = 0, removed = 0;
-    for (const j of journal.reverse()) {
-      try { rmSync(j.dest, { force: true }); } catch { /* the restore below reports what it could not do */ }
-      if (j.bak) { renameSync(j.bak, j.dest); restored++; } else removed++;
+    const failed = [];
+    for (const j of journal.slice().reverse()) {
+      try {
+        rmSync(j.dest, { force: true });
+        if (j.bak) { renameSync(j.bak, j.dest); restored++; } else removed++;
+      } catch (err) { failed.push(`${j.dest}${j.bak ? ` (its original is at ${j.bak})` : ""}: ${err.code || err.message}`); }
     }
-    for (const t of staged) rmSync(t, { force: true });
-    for (const d of created.slice().reverse()) { try { rmdirSync(d); } catch { /* not empty: something else lives there */ } }
-    return { restored, removed };
+    for (const t of [...staged, ...copies]) { try { rmSync(t, { force: true }); } catch (err) { failed.push(`${t}: ${err.code || err.message}`); } }
+    let left = 0;
+    for (const d of created.slice().reverse()) { try { rmdirSync(d); } catch { left++; } }
+    return { restored, removed, failed, left };
   };
+  // A signal mid-run rolls back before the process ends, so Ctrl-C never strands a file under its backup name.
+  const onSignal = (sig) => { const r = undo(); console.log(`rollback: ${sig} — ${r.restored} restored, ${r.removed} removed`); process.exit(130); };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
   try {
     for (const op of ops.filter((o) => o.kind === "mkdir")) mkdirTree(dir, op.path, created);
     for (const op of all) {
       for (let d = dirname(op.path); d !== "."; d = dirname(d)) if (!existsSync(join(dir, d))) { mkdirTree(dir, d, created); break; }
       const tmp = join(dir, op.path) + tag;
-      if (op.text !== undefined) writeFileSync(tmp, op.text, "utf8"); else copyFileSync(op.from, tmp);
+      if (op.text !== undefined) writeFileSync(tmp, op.text, { encoding: "utf8", flag: "wx" });
+      else copyFileSync(op.from, tmp, fsConstants.COPYFILE_EXCL);
       staged.push(tmp);
+    }
+    // A file --force overwrites is kept under .arc-install-backup/<stamp>/ before anything is renamed, so an
+    // overwrite of a project's own file can be undone by hand after a successful run (attack 74bcf43 B9).
+    for (const p of backup) {
+      const to = join(dir, ".arc-install-backup", backupStamp, p);
+      mkdirTree(dir, posix.dirname(`.arc-install-backup/${backupStamp}/${p}`), created);
+      copyFileSync(join(dir, p), to, fsConstants.COPYFILE_EXCL);
+      copies.push(to); // removed by a rollback, kept by a success
     }
     let n = 0;
     for (const op of all) {
       n++;
       if (failAt && n === failAt) throw new Error(`injected failure at file ${n} (${op.path})`);
       const dest = join(dir, op.path);
-      const bak = existsSync(dest) ? `${dest}.arc-bak-${process.pid}` : null;
-      if (bak) renameSync(dest, bak);
+      let bak = null;
+      if (existsSync(dest)) {
+        bak = `${dest}${tag}.bak`;
+        if (lst(bak)) throw new Error(`${bak} already exists; refusing to overwrite it`);
+        renameSync(dest, bak);
+      }
       journal.push({ dest, bak });
       renameSync(staged.shift(), dest);
       log(op);
@@ -146,9 +182,12 @@ export function apply(ops, dir, manifestOp, { log = () => {} } = {}) {
   } catch (e) {
     e.rollback = undo();
     throw e;
+  } finally {
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
   }
   for (const j of journal) if (j.bak) rmSync(j.bak, { force: true });
-  return { written: all.length };
+  return { written: all.length, backup: backup.length ? `.arc-install-backup/${backupStamp}/` : null };
 }
 
 function mkdirTree(dir, rel, created) {

@@ -253,7 +253,17 @@ if (input === "source") {
   if (bad) console.log(`[stop-rule] ${r.unsupportedCommands} commands are [unsupported] on \`${target}\`, more than ${STOP}: reopen engine/harnesses.yaml and ADR-2017`);
   if (mode === "write") {
     for (const [sub, isFile] of golden) if (!r.files.has(sub)) { rmSync(join(gabs, sub), { force: true }); console.log(`[removed] ${gdir}${sub}${isFile ? "" : " (not a regular file)"}`); }
-    for (const [sub, text] of r.files) { mkdirSync(dirname(join(gabs, sub)), { recursive: true }); writeFileSync(join(gabs, sub), text, "utf8"); }
+    // A directory or link where the render writes a file is removed first, and a write that still fails is
+    // COULD NOT SCAN by name, never a stack trace after half the golden is written (attack 74bcf43 B11).
+    for (const [sub, text] of r.files) {
+      const at = join(gabs, sub);
+      try {
+        const st = lstatSync(at, { throwIfNoEntry: false });
+        if (st && (st.isDirectory() || st.isSymbolicLink())) { rmSync(at, { recursive: true, force: true }); console.log(`[removed] ${gdir}${sub} (not a regular file)`); }
+        mkdirSync(dirname(at), { recursive: true });
+        writeFileSync(at, text, "utf8");
+      } catch (e) { console.log(`arc-compile: COULD NOT SCAN — cannot write ${gdir}${sub}: ${e.code || e.message}`); process.exit(2); }
+    }
     console.log(`\narc-compile: wrote ${r.files.size} file(s) into ${gdir} for target \`${target}\` (${r.counts.commands} commands, ${r.counts.agents} agents, ${r.counts.skills} skills; ${r.counts.skipped} skipped by targets:, ${r.counts.unsupported} unsupported)`);
     console.log(`unsupported-commands: ${r.unsupportedCommands}`);
     process.exit(bad ? 1 : 0);

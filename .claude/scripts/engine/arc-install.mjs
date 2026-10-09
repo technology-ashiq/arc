@@ -22,7 +22,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
-import { Refused, apply, doctor, manifestRecord, preflight, readManifest, sha, targetDir } from "./install-targets/common.mjs";
+import { Refused, apply, doctor, manifestRecord, overlaps, preflight, readManifest, sha, targetDir } from "./install-targets/common.mjs";
 import * as claudeCode from "./install-targets/claude-code.mjs";
 import * as codex from "./install-targets/codex.mjs";
 import * as opencode from "./install-targets/opencode.mjs";
@@ -85,6 +85,8 @@ export function main(argv) {
     for (const l of p.notes) console.log(l);
     for (const d of p.degraded) console.log(`${d.kind === "false" ? "degraded" : "partial"}: ${d.cell} — ${d.why}`);
     const dir = opt.dir ? targetDir(opt.dir) : "";
+    // An install into its own source, or around it, would overwrite the files it is still reading (attack 74bcf43 B4).
+    if (dir && overlaps(dir, tree)) throw new Refused("inside-source", `${dir} and the arc source ${tree} overlap; install into a separate project`);
     if (dir && typeof mod.finishPlan === "function") p = mod.finishPlan(p, tree, dir);
     const prior = dir ? readManifest(dir) : null;
     const pre = dir ? preflight(p.ops, dir, prior?.manifest) : { conflicts: [], dirs: [] };
@@ -104,13 +106,15 @@ export function main(argv) {
     const text = mod.MANIFEST_PATH === ".arc-install.json" ? `${JSON.stringify(record, null, 2)}\n` : mod.manifestText(tree, record);
     const manifestOp = { kind: "write", path: mod.MANIFEST_PATH, text, sha: sha(Buffer.from(text)) };
     try {
-      const r = apply(p.ops, dir, manifestOp);
-      console.log(`apply: wrote ${r.written} file(s) into ${dir}${pre.conflicts.length ? `, ${pre.conflicts.length} forced` : ""}; record ${mod.MANIFEST_PATH}`);
+      const r = apply(p.ops, dir, manifestOp, { backup: pre.conflicts });
+      console.log(`apply: wrote ${r.written} file(s) into ${dir}${pre.conflicts.length ? `, ${pre.conflicts.length} forced` : ""}; record ${mod.MANIFEST_PATH}${r.backup ? `; the overwritten originals are in ${r.backup}` : ""}`);
       return 0;
     } catch (e) {
       if (!e.rollback) throw e;
       console.log(`apply: FAILED — ${e.message}`);
-      console.log(`rollback: ${e.rollback.restored} restored, ${e.rollback.removed} removed; this run left 0 files`);
+      const rb = e.rollback;
+      for (const f of rb.failed) console.log(`rollback: COULD NOT UNDO ${f}`);
+      console.log(`rollback: ${rb.restored} restored, ${rb.removed} removed; ${rb.failed.length ? `${rb.failed.length} could not be undone (listed above)` : "this run left 0 files"}${rb.left ? `; ${rb.left} directory(ies) kept because something else is in them` : ""}`);
       return 1;
     }
   } catch (e) {
