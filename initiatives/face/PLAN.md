@@ -228,7 +228,7 @@ flowchart TB
 | 1353 | FV2-U — the plan-bound guarantee is measured, not assumed: an audit lists every write verb and fails an unbound one off the allowlist; Phase 14 | accepted |
 | 1354 | FV2-V — "not served" becomes one five-state `Availability`; an unreachable source is `unknown`, never 0; Phase 15 | accepted |
 | 1355 | FV2-W — an approval carries `bound_to`, `depends_on` and `decision_key` on its open payload; the inbox folds STALE, WAITING and DUPLICATE_OF from the spine alone; Phase 16 | accepted |
-| 1356 | FV2-X — the discover room goes live on discover's own receipts through a read-only `GET /api/discover` that imports discover's `PROCESS` and `WINNER_GATE`; the planned row and its pins flip in the same PR (amends ADR-1328 for discover only, closes ADR-1914's handoff); Phase 17 | proposed |
+| 1356 | FV2-X — the discover room goes live on discover's own receipts through a read-only `GET /api/discover` that imports discover's `PROCESS` and `WINNER_GATE`; the planned row and its pins flip in the same PR (amends ADR-1328 for discover only, closes ADR-1914's handoff); Phase 17 | accepted |
 | 1513 | DOC-M (docs lane, amends ADR-1508): a model-drafted narrative ships only source-anchored, independently verified and owner-read | accepted |
 
 ## Standing decisions this cycle leans on
@@ -351,5 +351,5 @@ door-plus-six PR, a live-rooms PR and three verb-ring PRs (ADR-1339).
 | 14 | Plan-bound audit — every write verb under `.claude/scripts` listed with plan-bound yes/no, CI fails an unbound one off the allowlist; read-only, each gap its own `/arc-change` (REQ-18, ADR-1353); runs BEFORE 08 | 0.5d | spec'd — ADR-1353 accepted 2026-10-07 |
 | 15 | Five-state availability — one `Availability` enum, every non-served field names its source and owner lane, a failed source is `unknown` never 0, `FIELD_UNKNOWN` on the listed verbs (REQ-19, ADR-1354); runs BEFORE 08 | 1.5d | spec'd — ADR-1354 accepted 2026-10-07 |
 | 16 | Approval bindings — `bound_to` · `depends_on` · `decision_key` on `approval.requested`, the inbox folds STALE / WAITING / DUPLICATE_OF, the face Inbox badges the same fold (REQ-20, ADR-1355); depends on 15; runs BEFORE 08 | 2d | spec'd — ADR-1355 accepted 2026-10-07 |
-| 17 | The discover room goes live — `GET /api/discover` reads discover's captures, hunts, judges and winner requests through discover's own constants; `money/discover` drops its planned markings; the contract, F3 and discover-birth flip in the same PR (REQ-21, ADR-1356); depends on 16; runs BEFORE 08 | 1.5d | spec'd — ADR-1356 proposed 2026-10-07 |
+| 17 | The discover room goes live — `GET /api/discover` reads discover's captures, hunts, judges and winner requests through discover's own constants; `money/discover` drops its planned markings; the contract, F3 and discover-birth flip in the same PR (REQ-21, ADR-1356); depends on 16; runs BEFORE 08 | 1.5d | spec'd — ADR-1356 accepted 2026-10-08 |
 | 08 | Dogfood + retro — 2 real days on the final surface; retro; HISTORY entry | 2d | spec'd |

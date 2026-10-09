@@ -1,6 +1,6 @@
 # ADR 1356 — FV2-X: the discover room goes live on discover's own receipts
 
-**Status:** proposed 2026-10-07 (the discover lane's handoff `initiatives/discover/handoffs/face-discover-room.md`, pasted by the owner: "ithayum serthuka")
+**Status:** accepted 2026-10-08 by the owner ("ok, approved"); proposed 2026-10-07 (the discover lane's handoff `initiatives/discover/handoffs/face-discover-room.md`, pasted by the owner: "ithayum serthuka")
 **Lane:** face (Cycle 16) · **REQ:** REQ-21 · **Phase:** 17
 **Reversibility:** two-way
 **Revisit trigger:** discover emits a receipt the room does not read (a new `step`, a new gate) and the room still says "nothing yet"; or the discover lane changes `PROCESS` / `WINNER_GATE` and the room keeps reading the old value.
