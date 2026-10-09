@@ -357,7 +357,7 @@
 .claude/scripts/launch/lib/simulated.mjs	b0cb15746d7de6efca03adf451f0b0a85b0d343f5c95111c151fa031f0c526af
 .claude/scripts/launch/lib/state.mjs	cbea51f8bec8ae50e3525861b8c05417ca14f83468264649e2a9ff494276e07b
 .claude/scripts/launch/lib/worker.mjs	bdf2e46f7f8dbebf33216db79147d1ce8fa86459ade56d3cf1c1d238e907ac3e
-.claude/scripts/launch/owner-apply-watch-policy.mjs	96973d308d7705dc01df0f9dfa57ff3fd9b55067b1246b5a846b949371c942fa
+.claude/scripts/launch/owner-apply-watch-policy.mjs	d1a81aeb3ab7a9a5f6922eee5e44cfb129a9b2e3bf6d54a217e64a647071aed5
 .claude/scripts/leads/arc-leads.mjs	31444c1f302d32be90dfa5a011bb0ed8fa3cb208c628646137123e1eb03d8a7c
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
 .claude/scripts/leads/lib/deps.mjs	eebf5ab87ee1cdcf1f7a3371ebbe900356ddabab64970ba457004bc4b7de6f40

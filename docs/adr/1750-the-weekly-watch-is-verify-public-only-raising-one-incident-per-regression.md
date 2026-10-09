@@ -37,5 +37,8 @@ exactly one `needs-you` line, and a `skipped(env)` slot produces zero. The jobs 
 
 - The `hq.jobs.yaml` row ships with the policy row, not before it. `jobs-lint` fails any job whose `policy_kind` the
   live policy lacks, so a row merged ahead of the subject would turn CI red. One owner apply,
-  `owner-apply-watch-policy.mjs`, writes both rows, and a second run of it changes nothing. Until then the job script
+  `owner-apply-watch-policy.mjs`, writes both rows, and a second run of it changes nothing. The process stub follows
+  the same rule: it ships declaring `fs.read` only, because the every-process gate blocks a process that declares
+  more than its absent subject allows. The same apply widens it to `fs.write` and `shell.run` of arc-launch, then
+  rebuilds the wiki. Until then the job script
   and its stub exist, nothing schedules them, and the job never runs ungoverned.

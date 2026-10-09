@@ -13,10 +13,9 @@
 | Version | 1.0.0 |
 | Permissions | declared |
 
-## Tools (2)
+## Tools (1)
 
 - `fs.read`
-- `fs.write`
 
 ## Inputs
 
