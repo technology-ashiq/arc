@@ -52,6 +52,11 @@
       "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
     },
     {
+      "verb": "engine/install-targets/common",
+      "class": "writer",
+      "why": "the installer transaction (distribute ADR-2018): it writes only into the consumer directory named by --dir, refused when that directory overlaps the arc source, after printing the full plan; --dry-run is the plan the operator reads, and it never writes arc's own tracked tree"
+    },
+    {
       "verb": "engine/frontmatter-lint",
       "class": "lane-tool",
       "why": "the distribute lane frontmatter lint (ADR-2017): its one write is --mutant-selftest planting a key into a mkdtemp COPY of the tree, removed in a finally; the audit reads the destination as a local binding it does not follow, so it lists it here"

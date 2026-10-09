@@ -423,7 +423,7 @@ _src_native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; els
   run --separate-stderr node "$(CC)" --write --all --input commands --target claude-code --root "$ARC_ROOT"
   [ "$status" -eq 2 ] && [[ "$stderr" == *"nothing to write"* ]] || { echo "write: $status $stderr"; false; }
   run --separate-stderr node "$(CC)" --check --all --input agents --target codex --root "$ARC_ROOT"
-  [ "$status" -eq 2 ] && [[ "$stderr" == *"has no agents input yet"* ]] || { echo "codex: $status $stderr"; false; }
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"renders agents only as part of its whole tree: use --input source"* ]] || { echo "codex: $status $stderr"; false; }
   run --separate-stderr node "$(CC)" --check --all --input --target claude-code
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--input needs a value"* ]] || { echo "flag: $status $stderr"; false; }
   run --separate-stderr node "$(CC)" --check --all --input skills
