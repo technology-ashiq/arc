@@ -12,19 +12,31 @@ import { slotRow, STATES } from "./state.mjs";
 const SEPARATORS = new RegExp("[" + String.fromCharCode(0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0x200e, 0x200f) + "]", "g");
 export const clean = (v) => String(v ?? "").replace(/[\x00-\x1f\x7f-\x9f]/g, "?").replace(SEPARATORS, "?");
 
-// Phase 01 recommendation: the vetted rows that fit the profile. Fit rules with ids arrive in Phase 04 (ADR-1706);
-// until then a slot with zero vetted providers prints REFUSED and never a fallback (ADR-1703).
+// The fit rules (ADR-1706): each compares one provider-row field with the venture profile, and plan prints the id of
+// every rule a pick passed, or the one rule a row failed. A slot with zero vetted fitting providers is REFUSED, never a
+// fallback (ADR-1703). Adding a rule is an ADR plus a line here.
+export const FIT_RULES = Object.freeze([
+  { id: "FIT-1", field: "type", ok: (row, p) => !row.fits || (Array.isArray(row.fits) && row.fits.includes(p.type)), says: (row, p) => `type ${p.type}` },
+  { id: "FIT-2", field: "region", ok: (row, p) => !row.region || row.region === "any" || row.region === p.region, says: (row, p) => `region ${row.region === "any" || !row.region ? "any" : p.region}` },
+  { id: "FIT-3", field: "payment_model", ok: (row, p) => !row.payment_model || row.payment_model === "any" || row.payment_model === p.payment_model, says: (row, p) => `payment_model ${row.payment_model === "any" || !row.payment_model ? "any" : p.payment_model}` },
+]);
+// Among vetted fitting rows: RANK-1 the most recently verified first; RANK-2 the row id, so the order is stable and is
+// never read as a preference. Receipt weighting is Cycle 2 (ADR-1706).
+export const RANK_RULES = Object.freeze(["RANK-1 last_verified newest first", "RANK-2 row id"]);
+
 export function fits(row, profile) {
-  const why = [];
-  if (row.fits && !(Array.isArray(row.fits) && row.fits.includes(profile.type))) return { ok: false, why: [`fits excludes ${profile.type}`] };
-  if (row.region && row.region !== "any" && row.region !== profile.region) return { ok: false, why: [`region ${row.region} != ${profile.region}`] };
-  if (row.payment_model && row.payment_model !== "any" && row.payment_model !== profile.payment_model)
-    return { ok: false, why: [`payment_model ${row.payment_model} != ${profile.payment_model}`] };
-  why.push(`type ${profile.type}`, `region ${profile.region}`, `payment_model ${profile.payment_model}`);
-  return { ok: true, why };
+  for (const r of FIT_RULES) if (!r.ok(row, profile)) return { ok: false, why: [`${r.id} ${r.field} ${clean(row[r.field === "type" ? "fits" : r.field])} excludes ${clean(profile[r.field])}`] };
+  return { ok: true, why: FIT_RULES.map((r) => `${r.id} ${clean(r.says(row, profile))}`) };
 }
 
-export function planLines(slots, rows, board, state, profile) {
+export function rank(rows) {
+  const t = (r) => { const n = Date.parse(r.last_verified || ""); return Number.isFinite(n) ? n : -1; };
+  return [...rows].sort((a, b) => t(b) - t(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+// overrides: Map slot -> { provider, decision } from approved `launch.override` requests (ADR-1748). The newest approved
+// one wins; plan cites its decision id. An override naming a blocked, retired or unknown row is shown and not taken.
+export function planLines(slots, rows, board, state, profile, overrides = new Map()) {
   const out = [];
   for (const id of topoOrder(slots)) {
     const b = board.get(id);
@@ -33,11 +45,20 @@ export function planLines(slots, rows, board, state, profile) {
     // A slot that already holds resources is on its provider: plan never recommends another one over it (L7).
     if (r.state === "verified" || r.state === "applied") { out.push({ id, line: `${id}: ${r.state} via ${clean(r.provider)}${r.receipt ? ` (receipt ${clean(r.receipt)})` : ""}` }); continue; }
     const forSlot = rows.filter((x) => x.slot === id);
-    const vetted = forSlot.filter((x) => x.status === "vetted" && fits(x, profile).ok);
-    const alts = forSlot.filter((x) => !vetted.includes(x)).map((x) => `${clean(x.id)} (${clean(x.status)}${x.reason ? `: ${clean(x.reason)}` : ""})`);
+    const vetted = rank(forSlot.filter((x) => x.status === "vetted" && fits(x, profile).ok));
+    const alts = forSlot.filter((x) => !vetted.includes(x)).map((x) => `${clean(x.id)} (${clean(x.status)}${x.reason ? `: ${clean(x.reason)}` : ""}${x.status === "vetted" ? `: ${fits(x, profile).why[0]}` : ""})`);
+    const ov = overrides.get(id);
+    const ovRow = ov && forSlot.find((x) => x.id === ov.provider && x.status !== "blocked" && x.status !== "retired");
+    if (ov && !ovRow) out.push({ id, line: `${id}: override ${clean(ov.provider)} (decision ${clean(ov.decision)}) not taken -- no such usable row` });
+    if (ovRow) {
+      const others = forSlot.filter((x) => x !== ovRow).map((x) => clean(x.id));
+      out.push({ id, line: `${id}: recommended ${clean(ovRow.id)} -- why: owner override, decision ${clean(ov.decision)} · status ${clean(ovRow.status)} · last_verified ${clean(ovRow.last_verified ?? "never")}${others.length ? ` · alternatives: ${others.join(", ")}` : ""}` });
+      continue;
+    }
     if (!vetted.length) { out.push({ id, refused: true, line: `${id}: REFUSED -- no vetted provider for ${id}${alts.length ? ` · candidates: ${alts.join(", ")}` : ""}` }); continue; }
     const [rec, ...more] = vetted;
-    out.push({ id, line: `${id}: recommended ${clean(rec.id)} -- why: ${fits(rec, profile).why.join(", ")} · status ${clean(rec.status)} · last_verified ${clean(rec.last_verified ?? "never")}${more.length || alts.length ? ` · alternatives: ${[...more.map((x) => clean(x.id)), ...alts].join(", ")}` : ""}` });
+    const ranked = more.length ? ` · ranked by ${RANK_RULES.join(", ")}` : "";
+    out.push({ id, line: `${id}: recommended ${clean(rec.id)} -- why: ${fits(rec, profile).why.join(", ")} · status ${clean(rec.status)} · last_verified ${clean(rec.last_verified ?? "never")}${ranked}${more.length || alts.length ? ` · alternatives: ${[...more.map((x) => `${clean(x.id)} (${fits(x, profile).why.join(", ")})`), ...alts].join(", ")}` : ""}` });
   }
   return out;
 }

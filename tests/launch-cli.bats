@@ -38,7 +38,7 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   run node "$(L)" new --venture fx-sandbox $FX_FLAGS
   run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"probe: recommended fake -- why: type saas-b2b, region in, payment_model gateway · status vetted"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"probe: recommended fake -- why: FIT-1 type saas-b2b, FIT-2 region any, FIT-3 payment_model any · status vetted"* ]] || { echo "$output"; false; }
   [[ "$output" == *"no-money: skipped (predicate false: payment_model == none)"* ]] || { echo "$output"; false; }
 }
 
@@ -193,4 +193,52 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [ "$status" -eq 2 ] || { echo "$output"; false; }
   [[ "$output" == *"never crosses gate-3 (already recorded: "* ]] || { echo "$output"; false; }
   [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"approval.requested"')" -eq 1 ]
+}
+
+# Three more vetted rows on the fixture's probe slot: two that fit, one whose region does not (ADR-1706, ADR-1748).
+add_probe_rows() {
+  local d; d=$(grep -m1 "digest:" "$FX_DIR/registry.yaml" | awk '{print $2}')
+  [ -n "$d" ] || { echo "no digest in the fixture registry"; return 1; }
+  local spec
+  for spec in "aa-new 2026-09-01 in" "zz-old 2026-01-01 in" "far-row 2026-09-05 global"; do
+    set -- $spec
+    printf '%s\n' "  - id: $1" "    slot: probe" "    status: vetted" "    region: $3" "    hosts:" "      - fixture.invalid" \
+      "    adapter: providers/probe/$1.mjs" "    digest: $d" "    approved_by: ashiq" "    vetted_by: 01M40ZHP72PYVBJT17R7A4WZ3W" \
+      "    scout: tests/launch/fixtures/scout.md" "    last_verified: \"$2\"" >> "$FX_DIR/registry.yaml"
+  done
+}
+
+@test "launch-cli: plan ranks vetted fitting rows by RANK-1 then RANK-2 and names the fit rule a vetted row failed (ADR-1706)" {
+  add_probe_rows
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: recommended aa-new -- why: FIT-1 type saas-b2b, FIT-2 region in, FIT-3 payment_model any · status vetted · last_verified 2026-09-01 · ranked by RANK-1 last_verified newest first, RANK-2 row id"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"alternatives: zz-old ("*"), fake ("*"far-row (vetted: FIT-2 region global excludes in)"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: an override is a request until the owner approves it, and then plan cites the decision id (ADR-1748)" {
+  add_probe_rows
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" override probe --venture fx-sandbox --provider zz-old --reason "owner prefers the older row for this fixture" $FX_FLAGS
+  [ "$status" -eq 5 ] || { echo "$output"; false; }
+  local ask; ask=$(printf '%s\n' "$output" | sed -n 's/.*approval.requested \([0-9A-Z]\{26\}\);.*/\1/p')
+  [ -n "$ask" ] || { echo "no request id: $output"; false; }
+  run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
+  [[ "$output" == *"probe: recommended aa-new"* ]] || { echo "an undecided override was taken: $output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-inbox.mjs" approve "$ask" --reason "fixture approval of the override"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$(L)" plan --venture fx-sandbox $FX_FLAGS
+  [[ "$output" == *"probe: recommended zz-old -- why: owner override, decision "* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: override refuses a blocked or unknown row and a missing reason, and requests nothing (ADR-1748)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" override probe --venture fx-sandbox --provider nope --reason "a reason long enough" $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"no provider row nope for slot probe"* ]] || { echo "$output"; false; }
+  run node "$(L)" override probe --venture fx-sandbox --provider fake $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"--reason must say why"* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c '"launch.override"' || true)" -eq 0 ]
 }
