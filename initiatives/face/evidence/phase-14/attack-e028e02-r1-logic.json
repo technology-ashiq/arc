@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:200-215",
+      "breaking_input": "A verb file whose write call has its scratch word in a variable: `const p = \"cache/x\"; writeFileSync(p, ...)` — isScratch sees the raw arg text \"p\" which has no scratch word, so the write is counted as tracked-file, but the audit's comment says a scratch path held in a variable named for nothing costs an allowlist row. Conversely a tracked file path with a variable containing \"state\" is dropped. The attack: place a write to a tracked file inside a template literal: `` writeFileSync(`${dir}/state/out`, x) `` — isScratch sees \"state\" in the arg and drops the write entirely, hiding an unbound write from the audit.",
+      "why": "The scratch classification reads only the call's own argument text by word; a path expression that carries a scratch word is dropped, and the audit explicitly says this is the one way it hides a write. A verb can write a tracked file whose path includes a variable or literal containing 'state', 'cache', 'lock', 'tmp', etc., and the audit will not list it, so it needs no allowlist row and the plan binding is not measured.",
+      "fix": "For a write dropped as scratch, verify the target is actually outside tracked files by realpath-resolving the argument and checking containment under .claude/state/hq/events; if the path cannot be resolved, treat it as a tracked write (never drop on a word alone).",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string -> a parser reports when it stops scanning; it never goes quiet."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:141-147",
+      "breaking_input": "A verb that writes through `appendFile` (async) or `createWriteStream` — those are in FS_WRITE and counted. But `writeFile` async is counted too. The attack: a verb calls `await writeFile` inside an async helper that is defined AFTER the guard; topLevelUnits treats the whole function body as one declaration, so a guard that appears before the write in the same function is accepted as binding even if the guard's RESULT is ignored. Example: `function apply(a,t){ staleReason(a.expect, planDigest(t)); writeFileSync(t,\"x\"); }` — the audit counts this as plan-bound yes even though the stale result is never thrown; the write happens regardless. The audit's own header admits \"Whether the guard's RESULT is honoured (an `if` on it) is not seen; the attack on this gate is told so.\"",
+      "why": "The audit's bound() treats any guard call before the write in the same top-level declaration as binding, regardless of whether the guard's return value is checked. A verb can call `staleReason` (or `spineRefusal`) and discard the result, then write; the audit reports plan-bound yes, so the allowlist does not need a row and the gate passes. This is a false positive on the core guarantee the audit exists to measure.",
+      "fix": "After finding a guard before a write in a declaration, require the guard's return value to be used in a conditional that can prevent the write (e.g., an `if` that throws or returns) — score as 'unknown' or 'no' when the result is unused.",
+      "twin_of": "`confirmStep` was dead data -> A declared guard that nothing reads is no guard."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:105-120",
+      "breaking_input": "A verb that writes through an imported function from another file: the write is attributed to the OTHER file, and the audit's rows are per-file. If a file imports `writeFileSync` from a helper module in the same lane, the helper's row is the one listed; but the audit only walks files under `.claude/scripts`, and if the helper is also under scripts it gets its own row. Attack: a verb in `core/face-tokens.mjs` writes through a function imported from `hq/lib/face/reads.mjs`; the audit lists `hq/lib/face/reads` as a write verb (it is allowlisted as lane-tool). The caller `core/face-tokens` is the face op the owner reads, but the audit never attributes the write to it, so the allowlist row for the library is accepted and `core/face-tokens` is not listed as a writer at all — a face op with an unbound write is invisible.",
+      "why": "The header says 'a write reached through a function imported from another file is that file's write, listed on that file's row', but the calling verb (the one the owner's PR diff shows, the face op) is never audited for the binding. A writer can be allowlisted in the library's row while the real face op has no audit row at all.",
+      "fix": "Attribute an imported write to the importing verb as well (one call hop), and refuse when the audit cannot prove which file the binding lives in; a face op must never be absent from the verb list.",
+      "twin_of": "A write in a helper the guard is not in -> the audit reads `unknown`; here the write is never seen."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:78-84",
+      "breaking_input": "A verb whose write target is on the spine but written through `appendFileSync` with a path computed by joining variables: `appendFileSync(join(EVENTS_DIR, \"x\"), ...)` — isSpine checks `words(first)` for 'events' or 'spine'; if EVENTS_DIR is a variable named `dir` and the literal \"events\" is in a template literal already blanked, the first arg text is `` `dir` `` which has no spine word, so the write is classified tracked-file, then isScratch may drop it if 'state' appears, or list it as tracked-file. Either way the binding analysis treats a spine write as a tracked-file write, possibly dropping it as scratch (state word) and hiding the write.",
+      "why": "isSpine and isScratch use word presence on the raw argument slice, but the arg is often a variable reference or a concatenation; the classification is wrong for any spine path built dynamically, and a spine emit that writes events under `.claude/state/hq/events` contains 'state' which is a scratch word, so the write is dropped as scratch when the path is spelled literally.",
+      "fix": "Resolve the first argument to a realpath and check containment under `.claude/state/hq/events` for spine, and under tracked files otherwise; never classify by word alone.",
+      "twin_of": "A `phases/` containment check used `isFile()` -> containment resolves realpaths first."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:109-118",
+      "breaking_input": "A shell verb that emits via `arc-event` with `emit` but with an extra flag before `emit`, e.g. `arc-event.mjs --debug emit note.logged` — shWrites regex `/arc-event\\.(sh|mjs)\\S*\\s+emit\\b/` requires `emit` immediately after the script name (only `\\S*` between). An invocation `bash arc-event.sh --foo emit` writes to the spine but is not caught; the shell verb is listed as having no writes (plan-bound yes) and needs no allowlist, while it actually emits unbound.",
+      "why": "shWrites only matches the exact `script emit` adjacency; any flag inserted between the script and `emit` bypasses detection, so a shell verb that emits is silently reported as plan-bound yes with no allowlist, defeating the audit.",
+      "fix": "Match `emit` as a standalone word anywhere after the script name in the same command, not only immediately adjacent.",
+      "twin_of": "A flag taxonomy with no member for the effect"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:116-120",
+      "breaking_input": "`GIT_WRITE` regex includes `commit`, `push`, `merge`, etc., but a shell `git` write through `git -C repo commit` is matched. However the regex is applied to the args after the first comma of a spawnSync; a `git` call written as `spawnSync(\"git\", [\"-C\", repo, \"commit\", \"-m\", msg])` — args text is `\"git\", [\"-C\", repo, \"commit\", \"-m\", msg]`; the `args.split(\",\").slice(1).join(\",\")` is ` [\"-C\", repo, \"commit\", \"-m\", msg]` which contains `commit`, so it counts. But a write via `git update-ref refs/heads/x` is in GIT_WRITE. Fine. Attack: a verb uses `git hash-object -w` — GIT_WRITE includes `hash-object`, good. But a write via `git branch` (creating a branch) — GIT_WRITE does not include `branch`; the row lists `checkout` and `reset` but `branch` is a write verb missing. A verb creating a branch via `git branch feat/x` writes a ref and is not counted, so it is reported plan-bound yes.",
+      "why": "GIT_WRITE omits `branch` (and `symbolic-ref`, `replace`, `mktag`), so a git write that creates a ref is invisible to the audit; the verb is listed as having no writes and passes with an empty allowlist even though it writes a tracked ref.",
+      "fix": "Include `branch` and every git write subcommand (symbolic-ref, update-ref, replace, mktag, rebase, revert) in GIT_WRITE.",
+      "twin_of": "A fixed list of 17 where a derived list belonged -> grep the pattern forward into the generator and every consumer."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:167-169",
+      "breaking_input": "`bound()` returns `yes` when `sites.length === 0`; `audit()` skips a file with no sites, so a verb that writes only through an external command not matched (e.g., `execSync(\"node some-other-tool\")` that writes files) is reported with no writes and passes. The audit's own header admits shell verbs never bind, but a `.mjs` verb spawning an arbitrary `node` child that writes is invisible. The attack: a verb calls `execFileSync(process.execPath, [\"helper.js\"])` where helper.js writes a tracked file; the audit sees no write in the verb and reports plan-bound yes.",
+      "why": "The audit counts only fs primitives, git writes, and arc-event emits; any write performed by a spawned external program is completely invisible, so the verb is reported as having no writes and passes without an allowlist.",
+      "fix": "Treat any spawn of an external script that could write (node, bash, python, a lane tool) as an unbound write unless the child is audited with the same guard; refuse to call a verb 'yes' when it spawns an unaudited writer.",
+      "twin_of": "`gather()` was an untested seam -> one test arm crosses every wiring layer end to end."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:189-198",
+      "breaking_input": "`allowlistProblems` only checks that each allowlist row names a verb that exists and is not bound; it does not check that the row's `class` is one of the documented values (writer, lane-tool, door-gap). An allowlist with `class: \"anything\"` and a `why` passes, and the audit's summary reports the verb as allowlisted. The gate is a data-integrity guard, but it validates only the verb name and why, not the class enum. In practice a row with a typoed class is still allowlisted; the 'class' is cosmetic.",
+      "why": "The allowlist is the gate's allow list; a row with an arbitrary class still permits an unbound verb. While the class is metadata, the audit's PROGRESS claim is that classes are writer/lane-tool/door-gap; an unvalidated class undermines the documented taxonomy but not the binding itself. Still a logic gap in the gate's own data validation.",
+      "fix": "Validate `class` is one of the three documented values and fail (exit 1) on any other.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:200-215",
+      "breaking_input": "`jsWrites` scans for `emitReceipt|appendEvent|appendEventUnlocked` as spine writes; a verb that emits through an aliased import (e.g., `import { appendEvent as app } from ...; app(...)`) is not matched, so the write is invisible and the verb passes as having no writes. Similarly `ARC_EVENT` constant detection requires the array to start with `ARC_EVENT`/`arcEvent`; if the constant is aliased (`const ev = \"hq/arc-event.mjs\"; spawnSync(process.execPath, [ev, \"emit\", ...])`) it is not seen.",
+      "why": "The spine-write detection is lexically hard-coded to the exact names `emitReceipt`, `appendEventUnlocked`, and `ARC_EVENT`/`arcEvent`; any alias or indirection hides a spine write, so a verb that emits through an aliased import is reported plan-bound yes with no allowlist.",
+      "fix": "Resolve imports/exports to canonical names (one call hop) before matching, or fail closed on any call to a function imported from a known spine module.",
+      "twin_of": "`FILE_ALLOW[id]` resolved inherited keys -> allow-list lookups use `Object.hasOwn`."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:92-96",
+      "breaking_input": "`blank()` wipes the inside of a template literal by scanning to the next unmatched backtick, but does not account for `${...}` — the inner expression is blanked along with the literal. A guard or write inside a template's `${}` is blanked and not seen, as the header admits. Attack: a verb builds its write target inside a template expression: `const p = `${dir}/cache/x`; writeFileSync(p, ...)` — `isScratch` sees raw first arg `p` (no scratch word), so it is a tracked-file write; that's fine. But a guard inside `${ staleReason(...) }` is blanked, so a write after a template that interpolates a guard is seen as unguarded. More importantly, the header says writes inside template `${}` are not seen — so `writeFileSync(`${...}`) ...` where the first arg is a template with an expression containing \"state\" is dropped as scratch (as L1) — already covered. The specific gap: a `//` comment inside a template literal is blanked as comment, but a `//` in a URL string is also blanked as string (fine). Low severity; the twin is the parser-that-goes-quiet.",
+      "why": "The blanker treats the whole template literal as a single literal and wipes `${}` expressions, so a guard or write spelled inside an interpolation is invisible, making a verb appear unguarded or unwritten.",
+      "fix": "Blank the literal text but preserve `${...}` expressions as code, or report that a template containing expressions was not fully scanned.",
+      "twin_of": "The parser that goes quiet, again (HIGH)."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:130-134",
+      "breaking_input": "`topLevelUnits` tracks only `{` and `}`; a write inside a top-level `if` block without braces (`if (x) writeFileSync(...)`) is at brace depth 0 and is treated as its own unit (the unitOf returns null), so a guard outside (inside the if body) won't count. Conversely a guard after such a write is not in the same unit, so the write is `unknown`, not `no` — fails, which is safe. The bug is the reverse: a single-statement `if (stale) throw ...` then a write outside the if — the write's unit is the top-level, and a guard inside an `if (stale) throw` is also top-level (since no brace), so the guard may count before the write even though it is conditional on `stale` being truthy. But that's the same dead-guard issue as L2. Low, covered.",
+      "why": "Brace-depth tracking ignores single-statement control flow, so guard/write ordering can be misjudged; a guard inside an `if` with no braces is seen as a top-level guard before a later top-level write, counting as binding even though it only fires on a condition.",
+      "fix": "Parse control-flow statements (if/for/while) as boundaries even without braces, and require the guard's result to gate the write.",
+      "twin_of": "A check too eager to be usable"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:210-215",
+      "breaking_input": "`main` returns exit code 1 when `unbound.length || problems.length`, but the summary line prints `plan-bound-audit: ... 0 unbound · 0 allowlist problems` when the audit scans a tree with no `.claude/scripts` files (e.g., `--root` pointed at a directory with `.claude/scripts` containing only subdirectories with no `.mjs/.js/.sh`). `audit()` returns `[]`, `rows.length = 0`, `unbound = []`, `problems = []`, exit 0. The bats helper `_ran` requires `n > 0`, so the suite catches it, but a caller invoking the audit directly (CI without the bats gate) would see exit 0 and \"0 write verbs\" as a pass. The audit does not fail on an empty verb set.",
+      "why": "An audit that reads no write verbs reports success; the header says 'Exit 0 when every verb not bound is allowlisted' but `every` is vacuously true for zero verbs. The bats gate protects the real tree, but any re-invocation with a mis-rooted path silently passes.",
+      "fix": "Return exit 2 (usage error) when `rows.length === 0` and the root has a scripts directory; never report '0 write verbs' as a pass.",
+      "twin_of": "A coverage gate checked KEYS, not values; its FAIL message named 'regenerate' as the fix."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:156-158",
+      "breaking_input": "`jsWrites` checks `code.matchAll(/\\b(emitReceipt|appendEvent|appendEventUnlocked)\\s*\\(/g)`, but the function `appendEvent` is typically called with a leading `.` (e.g., `spine.appendEvent(...)`) — the regex's `\\b` matches the boundary before `appendEvent` after a dot, so it is seen. However an aliased method call `const a = spine.appendEvent; a(...)` is not seen (covered in L9). Also `emitReceipt` may be called as a method on an object; the `\\b` matches. Fine. The specific gap: a spine emit through `emit` function of `arc-event` imported as `import { emit } from \"...\"; emit(...)` — the regex covers `appendEvent` but not the bare `emit` function; the array/spawn detection covers `ARC_EVENT` literals, but a direct `emit(...)` call from an imported function is invisible. A verb that imports the emit function and calls it with a payload writes to the spine but is not detected.",
+      "why": "The spine-write detection misses a direct import of the emitter's `emit` function (not through ARC_EVENT array or spawn); such a write is invisible, so the verb is reported with no writes and passes.",
+      "fix": "When a module imports `emit` or `appendEvent` from a spine module, treat any call to that binding as a spine write, or fail closed on the import.",
+      "twin_of": "A new import in a shared module -> before pushing a change to a module under `.claude/scripts/hq/`, grep the tests for every place that copies files by name."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:180-183",
+      "breaking_input": "`allowlistProblems` checks `rows.find((x) => x.verb === name).bound === \"yes\"` — if the verb appears more than once in `rows` (possible if the same verb path is under two extensions? Not here; rows are per file) but also: it uses `rows.find` which returns the first; fine. The real issue: the allowlist is compared only against `rows` from this run; but a verb that is unbound in `rows` and is allowlisted passes; a verb that is `unknown` and allowlisted passes. The bug: a row for a verb that is `unknown` is treated the same as `no`; but the audit's `bound()` returns `unknown` when a write has no guard in its unit and guards exist elsewhere. The bats test 'helper' expects `unknown` to FAIL. The allowlist row for a `door-gap` verb like `develop/develop` is accepted with class door-gap, so the gate passes for a verb the audit itself says cannot prove the check. That is the intended door-gap mechanism. No bug. However: a row with `class: \"door-gap\"` but no filed change (the PROGRESS claims each door-gap is filed) is not validated — a verb can be allowlisted as door-gap with a `why` that is a lie (the why is free text). The audit never verifies the why names a filed change or that the class matches the actual documentation. Low.",
+      "why": "The allowlist gate trusts the row's `why` and `class` without checking them against any external record (e.g., PROGRESS.md's filed gaps), so a verb can be allowlisted with a fabricated reason and the audit passes; the binding guarantee then rests on prose, not on a check.",
+      "fix": "Cross-check door-gap rows against a machine-readable registry of filed /arc-changes, or refuse to accept a door-gap class when no filed change is discoverable.",
+      "twin_of": "ADR rules no code enforced -> every clause of the ADR the wiring cites is a check or a refusal."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/core/plan-bound-audit.mjs:96-98",
+      "breaking_input": "`scratchWords` includes `state`, and `isScratch` drops a write whose first argument contains the word 'state'. Any tracked file whose path legitimately contains 'state' (e.g., `.claude/scripts/core/state-machine.mjs` written by a generator, or a file under a directory named `stateful`) is dropped as scratch, so the write is invisible and the verb passes as having no writes. A generator that writes `docs/state/index.md` would be silently excused from the plan binding even though it writes a tracked file. The audit's own comment says 'a tracked file whose path expression carries a scratch word is dropped' — admitted.",
+      "why": "The scratch-word classifier uses a single word ('state') to drop a write, so a tracked file path containing 'state', 'cache', 'lock', 'temp', 'snapshot' is treated as scratch and never audited, allowing an unbound tracked-file write to pass without an allowlist row.",
+      "fix": "Drop a write as scratch only when the resolved realpath is outside the tracked tree (under `.claude/state`), never by word presence in the argument text.",
+      "twin_of": "A `//` comment ended only at LF -> every line terminator the language has ends what a line ends (the parser-that-goes-quiet class)."
+    }
+  ]
+}
