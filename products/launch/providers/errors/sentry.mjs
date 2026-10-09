@@ -148,7 +148,7 @@ function routeFor(dsn) {
     "    const res = await fetch(store, {",
     "      method: \"POST\",",
     "      headers: { \"content-type\": \"application/json\", \"x-sentry-auth\": auth },",
-    "      body: JSON.stringify({ message: e.message, level: \"error\", platform: \"javascript\", logger: \"arc-launch\", tags: { arc_launch_probe: probe } }),",
+    "      body: JSON.stringify({ message: e.message, level: \"error\", platform: \"javascript\", logger: \"arc-launch\", tags: { arc_launch_probe: probe, arc_launch_nonce: nonce }, fingerprint: [probe, nonce] }),",
     "    }).catch(() => null);",
     "    return answer(500, { reported: !!(res && res.ok) });",
     "  }",

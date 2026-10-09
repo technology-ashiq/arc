@@ -21,7 +21,9 @@ const DOMAIN = "sandbox.automemory.ai";
 const LEGAL = "<html><body><!-- clause:privacy.controller -->\nWe are arc sandbox.\n<!-- /clause:privacy.controller -->\n</body></html>";
 const site = {
   published: { "/privacy": [200, LEGAL], "/terms": [200, LEGAL] },
-  absent: { "/": [200, "<h1>shell</h1>"] },
+  absent: { "/": [200, "<head><meta name=\"generator\" content=\"arc-launch\"/></head><h1>shell</h1>"] },
+  parked: { "/": [200, "<h1>This domain is parked</h1>"] },
+  hostile: { "/privacy": [200, "<!-- clause:a -->".repeat(50000)], "/terms": [200, LEGAL] },
   dead: {},
   huge: { "/privacy": [200, "x".repeat(3 * 1024 * 1024) + LEGAL], "/terms": [200, LEGAL] },
   half: { "/privacy": [200, LEGAL] },
@@ -46,6 +48,8 @@ const out = { scenario };
 switch (scenario) {
   case "published":
   case "absent":
+  case "parked":
+  case "hostile":
   case "dead":
   case "huge":
   case "half":

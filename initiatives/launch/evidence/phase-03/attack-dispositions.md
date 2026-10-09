@@ -14,3 +14,11 @@
   - B8 [medium] ABSENT needs the home page to answer 200; a dead site is not ok.
   - B9 [low] the rollback test is `.mjs`.
   - B10 [low] the Sentry probe carries a per-verify nonce, so no stale event can match.
+
+## attack edfe42c r2 (fixes of r1)
+
+- Logic: 0. Boundary: 8. B1 [medium] not a hole: `runner.mjs` imports `clean` at line 11. B2 [medium] fixed: clause
+  pairs are found by indexOf over at most 200 openers (pinned, `hostile`). B3 [low] fixed: each probe event carries
+  `fingerprint: [probe, nonce]`, so every verify's event is its own issue whatever Sentry's grouping. B6 [low] fixed:
+  the headers probe releases the body. B7 [low] fixed: ABSENT needs the launch shell's generator tag on `/` (pinned,
+  `parked`). B4, B5, B8 [low] -> D37.

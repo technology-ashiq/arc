@@ -209,6 +209,8 @@ async function probe(ctx) {
     if (e && e.code) throw e;
     return { ok: false, reason: `https://${domain}/ did not answer (${say(e && e.name, 30) || "transport error"})` };
   }
+  // Status and headers are all this probe reads: the body is released at once (edfe42c B6).
+  if (res.body) await res.body.cancel().catch(() => {});
   if (res.status !== 200) return { ok: false, reason: `https://${domain}/ answered ${res.status}, not 200` };
   const gap = missing(res.headers);
   if (gap.length) return { ok: false, reason: `the live response lacks ${gap.join(", ")}` };

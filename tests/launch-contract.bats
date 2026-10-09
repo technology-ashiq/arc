@@ -1235,6 +1235,10 @@ arm() {
   [[ "$(j 'o.reason')" == "ABSENT(legal renderer not ready"* ]] || { echo "$DONE"; false; }
   arm legal dead
   [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined) + " " + o.verify.reason')" = "false true /privacy 404, /terms 404" ] || { echo "$DONE"; false; }
+  arm legal parked
+  [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined)')" = "false true" ] || { echo "$DONE"; false; }
+  arm legal hostile
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
   arm legal huge
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
   arm legal worker-absent-not-allowed

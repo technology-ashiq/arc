@@ -7,7 +7,16 @@ const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,6
 const PAGES = ["/privacy", "/terms"];
 // arc-legal wraps every rendered clause in `<!-- clause:ID -->` ... `<!-- /clause:ID -->` (legal lib/template.mjs); a
 // served page that keeps one closed pair is traceable to the renderer.
-const MARK = /<!-- clause:([A-Za-z0-9._-]{1,80}) -->[\s\S]*?<!-- \/clause:\1 -->/;
+const OPEN = /<!-- clause:([A-Za-z0-9._-]{1,80}) -->/g;
+// One closed pair, found by indexOf: a lazy regex scan from every unclosed opener is quadratic on a hostile page, and
+// a synchronous regex cannot be interrupted by the slot timeout (attack edfe42c B2). At most 200 openers are tried.
+function traced(text) {
+  OPEN.lastIndex = 0;
+  for (let i = 0, m; i < 200 && (m = OPEN.exec(text)); i++) if (text.indexOf(`<!-- /clause:${m[1]} -->`, m.index + m[0].length) >= 0) return true;
+  return false;
+}
+// The launch shell's own generator tag (frontend slot, ADR-1730): a home page carrying it is this venture's site.
+const SHELL = '<meta name="generator" content="arc-launch"';
 const CAP = 1024 * 1024;
 
 const refuse = (code, message) => Object.assign(new Error(message), { code });
@@ -42,7 +51,8 @@ async function page(ctx, url) {
     return { status: 0, arc: false };
   }
   if (res.status !== 200) { if (res.body) await res.body.cancel().catch(() => {}); return { status: res.status, arc: false }; }
-  return { status: 200, arc: MARK.test(await capped(res)) };
+  const text = await capped(res);
+  return { status: 200, arc: traced(text), shell: text.includes(SHELL) };
 }
 
 // At most CAP bytes are read, then the stream is cancelled: a huge or slow-drip page cannot hold the slot (b6ffd12 B4).
@@ -71,7 +81,9 @@ async function probe(ctx) {
   if (got.every((g) => g.status === 200 && g.arc)) return { ok: true, answerer: domain, evidence: { pages: PAGES } };
   // Both answered 404 by a site that is itself up (its home page answers 200): the absence is observed outside the repo,
   // and the slot allows naming it. A dead or wrong site 404s everything and is never read as ABSENT (b6ffd12 B8).
-  if (got.every((g) => g.status === 404) && (await page(ctx, `https://${domain}/`)).status === 200)
+  // The home page must be the launch shell, not any 200: a parking page or a wildcard is not this venture (edfe42c B7).
+  const home = got.every((g) => g.status === 404) ? await page(ctx, `https://${domain}/`) : null;
+  if (home && home.status === 200 && home.shell)
     return { ok: false, absent: "legal renderer not ready: /privacy and /terms are not served", answerer: domain, reason: "ABSENT: legal renderer not ready" };
   return { ok: false, reason: got.map((g) => `${g.path} ${g.status === 0 ? "unreachable" : g.status}${g.status === 200 && !g.arc ? " (not an arc-legal page)" : ""}`).join(", ") };
 }
