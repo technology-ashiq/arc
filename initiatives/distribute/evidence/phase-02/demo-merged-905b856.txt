@@ -1,0 +1,13 @@
+frontmatter-lint: 29 commands, 32 agents, 9 keys, 0 failures
+RAN frontmatter-lint
+mutant-selftest: caught x-mutant-45864 (.claude/commands/arc-absorb.md)
+RAN frontmatter-lint
+arc-compile: 29/29 byte-identical for target `claude-code` (input commands)
+dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty
+exit 0
+arc-compile: 32/32 byte-identical for target `claude-code` (input agents)
+dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty
+exit 0
+arc-compile: 3/3 byte-identical for target `claude-code` (9 with no baseline to reproduce)
+dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty
+exit 0
