@@ -4,7 +4,7 @@
 //   arc-launch new   --venture SLUG [--venture-root D]
 //   arc-launch apply SLOT --venture SLUG --venture-root D [--provider ID] [--vet]
 //   arc-launch plan | status | teardown --plan  --venture SLUG
-//   arc-launch verify SLOT|--all --venture SLUG [--venture-root D]
+//   arc-launch verify SLOT|--all --venture SLUG [--venture-root D] [--public-only]   (--public-only: the weekly watch)
 //   arc-launch override SLOT --venture SLUG --provider ID --reason TEXT   (asks the owner; plan cites the decision)
 //
 //   path overrides (fixtures): --catalog P --registry P --providers-dir D --ventures-dir D --state-dir D
@@ -34,6 +34,7 @@ export function parseArgs(argv) {
     if (a === "--vet") { o.vet = true; continue; }
     if (a === "--all") { o.all = true; continue; }
     if (a === "--plan") { o.plan = true; continue; }
+    if (a === "--public-only") { o.publicOnly = true; continue; }
     if (VALUE_FLAGS[a]) {
       const v = argv[i + 1];
       if (v === undefined || v === "" || v.startsWith("--")) throw new LaunchError("BAD_ARGS", `${a} needs a value`);

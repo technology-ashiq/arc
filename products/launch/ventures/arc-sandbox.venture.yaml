@@ -15,3 +15,8 @@ compliance:
 brand:
   name: arc sandbox
   domain: sandbox.automemory.ai
+# Passport inputs (ADR-1751). A rehearsal venture's passport is a venture-register --dry-run only.
+repository: technology-ashiq/arc-sandbox
+kill_lines:
+  days_without_revenue: 90
+  traffic_floor_monthly: 100

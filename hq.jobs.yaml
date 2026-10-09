@@ -56,3 +56,15 @@ jobs:
     cadence: daily@00:15
     enabled: true
     catchup: run
+
+  # The weekly watch on every launched venture (launch REQ-10, ADR-1750). Daily cadence, because the grammar has no
+  # weekly form; the script acts once every seven days and keeps its last day in instance state.
+  - name: launch-watch
+    type: script
+    entry: .claude/scripts/hq/jobs/launch-watch.mjs
+    budget:
+      min: 30
+    policy_kind: process:launch-watch
+    cadence: daily@07:30
+    enabled: true
+    catchup: skip

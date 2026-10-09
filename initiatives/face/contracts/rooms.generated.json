@@ -235,6 +235,7 @@
           "commit-msg-draft",
           "day-close-roll",
           "kickoff-plan",
+          "launch-watch",
           "narrative-verify",
           "review-diff"
         ],
@@ -362,10 +363,11 @@
         ],
         "jobs": [
           "brief-materialize",
-          "day-close-roll"
+          "day-close-roll",
+          "launch-watch"
         ]
       },
-      "itemCount": 10
+      "itemCount": 11
     },
     {
       "id": "memory",
@@ -1375,7 +1377,8 @@
     },
     "jobs": {
       "brief-materialize": "scheduler",
-      "day-close-roll": "scheduler"
+      "day-close-roll": "scheduler",
+      "launch-watch": "scheduler"
     },
     "ventures": {
       "lexos": "ventures"

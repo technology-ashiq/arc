@@ -242,3 +242,26 @@ add_probe_rows() {
   [[ "$output" == *"--reason must say why"* ]] || { echo "$output"; false; }
   [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c '"launch.override"' || true)" -eq 0 ]
 }
+
+@test "launch-cli: the weekly watch raises one needs-you line for a regressed slot and none for a slot whose token is not here (REQ-10, ADR-1750)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The forced regression: the provider lost a resource after verify (the expired-cert stand-in for a fake provider).
+  node -e 'const fs=require("fs");const f=process.argv[1];fs.writeFileSync(f,JSON.stringify(JSON.parse(fs.readFileSync(f,"utf8")).slice(1)))' "$FAKE_PROVIDER_FILE"
+  run node "$(L)" verify --all --public-only --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 raised to needs-you"* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"incident.raised"')" -eq 1 ]
+  # The same watch on a box without the slot's token: skipped(env), no new incident, exit 0.
+  run env FAKE_NEEDS_KEY=LAUNCH_FIXTURE_ABSENT_KEY node "$(L)" verify --all --public-only --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"probe: skipped(env:LAUNCH_FIXTURE_ABSENT_KEY)"* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"incident.raised"')" -eq 1 ]
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-brief.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The brief lists each needs-you event by kind: exactly one incident line, from the regression, none from skipped(env).
+  [[ "$output" == *"needs-you ("* ]] || { echo "$output"; false; }
+  [ "$(printf '%s\n' "$output" | grep -cx '  incident.raised')" -eq 1 ] || { echo "$output"; false; }
+  grep '"kind":"incident.raised"' "$ARC_SPINE_ROOT"/events/*.jsonl | grep -q 'launch verify: probe regressed for fx-sandbox'
+}

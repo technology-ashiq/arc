@@ -1,0 +1,20 @@
+name: launch-watch
+version: 1.0.0
+intent: "Re-verify every launched venture's public slots weekly and raise a regression to needs-you."
+permissions: declared
+job_stub: true
+inputs: []
+tools:
+  - fs.read
+  - fs.write
+  - shell.run:
+      - "node .claude/scripts/launch/arc-launch.mjs:*"
+body: |
+
+  NOT AN ENGINE PROCESS. This file exists so the launch-watch job has a POLICY SUBJECT (ADR-0504,
+  ADR-0802), exactly as brief-materialize does. `job_stub: true` makes `arc-run --process
+  launch-watch` a loud refusal.
+
+  The real work lives in `.claude/scripts/hq/jobs/launch-watch.mjs` and is run by `arc-jobs`, never
+  from here: once every seven days, `arc-launch verify --all --public-only` per venture board
+  (launch REQ-10, ADR-1716, ADR-1750).

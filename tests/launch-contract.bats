@@ -1331,3 +1331,24 @@ arm() {
   local hits; hits=$(cd "$ARC_ROOT" && git ls-files products/launch .claude/scripts/launch | xargs grep -lis 'neon' | sort | tr '\n' ' ')
   [ "$hits" = "products/launch/launch.providers.yaml products/launch/providers/database/neon.mjs " ] || { echo "named neon: $hits"; false; }
 }
+
+@test "launch-contract: ledger-source is verified by the venture's first revenue event on arc's spine, and only its own (ADR-1751)" {
+  arm wiring ledger
+  [ "$(j 'o.before.scaffold.kinds.join(",") + " " + o.before.verify.ok')" = "ledger-feed false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.book + " " + o.after.verify.ok + " " + o.after.verify.answerer + " " + o.after.verify.evidence.events')" = "landed true arc spine 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.other.verify.ok + " " + o.noRoute.scaffold.code')" = "false UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: passport runs the real venture-register --dry-run and carries its refusal; face-room reads the face contract; teardown-plan checks all five steps (ADR-1751)" {
+  arm wiring passport
+  [[ "$(j 'o.result.verify.ok + " " + o.result.verify.reason')" == "false venture-register --dry-run exited "*": venture-register"* ]] || { echo "$DONE"; false; }
+  arm wiring face
+  [ "$(j 'o.unseated.verify.ok + " " + o.seated.verify.ok + " " + o.seated.verify.evidence.room')" = "false true ventures" ] || { echo "$DONE"; false; }
+  arm wiring teardown
+  [ "$(j 'o.result.verify.ok + " " + o.result.verify.evidence.steps + " " + o.result.verify.evidence.resources')" = "true 5 1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a slot outside the wiring group cannot ask arc's organs (ADR-1751)" {
+  arm wiring not-wiring
+  [ "$(j 'o.code')" = "ARC_PROBE_REFUSED" ] || { echo "$DONE"; false; }
+}

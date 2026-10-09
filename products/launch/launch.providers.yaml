@@ -744,7 +744,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- runs venture-register --dry-run"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/passport/venture-register.mjs
     digest: null
     approved_by: ashiq
@@ -763,7 +763,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- registers the ledger feed"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/ledger-source/ledger-source.mjs
     digest: null
     approved_by: ashiq
@@ -782,7 +782,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- face contract row"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/face-room/face-planned.mjs
     digest: null
     approved_by: ashiq
@@ -801,7 +801,7 @@ providers:
     hosts:
       - sandbox.automemory.ai
     credentials:
-      scope: "none -- renders the exit plan"
+      scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/teardown-plan/teardown-render.mjs
     digest: null
     approved_by: ashiq

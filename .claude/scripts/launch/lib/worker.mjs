@@ -7,6 +7,7 @@ import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
 import { makeCtx } from "./ctx.mjs";
 import { clean } from "./board.mjs";
+import { makeArcProbe } from "./arc-probe.mjs";
 
 const a = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const profile = loadProfile(a.venture, a.venturesDir);
@@ -58,6 +59,7 @@ const upstream = Object.fromEntries((slot.depends_on || []).map((d) => { const r
 const ctx = makeCtx({
   profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, upstream, tag: resourceTag(a.venture, a.slot, row.id),
   attempt: a.attempt, signal: ac.signal, env: Object.fromEntries(keys.map((k) => [k, kept[k]])), approvals: prior.approvals || [],
+  arcProbe: makeArcProbe({ venture: a.venture, profile, catalog: a.catalog, stateDir: a.stateDir }),
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
     if (cur.resources.some((r) => r.kind === resource.kind && r.id === resource.id)) return;

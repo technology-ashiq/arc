@@ -280,7 +280,7 @@ export async function verifySlots(opts, log = console.log) {
     if (opts.slot && !slots.some((s) => s.id === opts.slot)) throw new LaunchError("REFUSED", `unknown slot ${opts.slot}`);
     const ids = opts.slot ? [opts.slot] : slots.map((s) => s.id).filter((id) => ["verified", "applied"].includes(slotRow(state0, id).state));
     if (!ids.length) { log(`${slug}: nothing applied yet -- nothing to verify`); return EXIT.OK; }
-    let ok = 0, failed = 0, skipped = 0;
+    let ok = 0, failed = 0, skipped = 0, envSkipped = 0, paused = 0, raised = 0;
     for (const id of ids) {
       const slot = slots.find((s) => s.id === id);
       let res;
@@ -291,9 +291,16 @@ export async function verifySlots(opts, log = console.log) {
         if (e instanceof LaunchError || e.code === "DIGEST_DRIFT") { log(`${id}: UNVERIFIABLE -- ${e.message}`); failed++; continue; }
         throw e;
       }
-      if (res) ok++; else failed++;
+      if (res.good) { ok++; continue; }
+      // --public-only is the weekly watch (ADR-1716, ADR-1750): a slot whose token is not on this box is skipped(env) and
+      // stays out of the brief; a pause the provider reports is PAUSED(reason); any other answer is a regression, raised
+      // once as incident.raised, which the brief shows under needs-you.
+      if (opts.publicOnly && /^env:/.test(String(res.reason))) { log(`${id}: skipped(${clean(res.reason)})`); envSkipped++; continue; }
+      if (opts.publicOnly && String(res.reason).startsWith("PAUSED(")) { log(`${id}: ${clean(res.reason)}`); paused++; continue; }
+      failed++;
+      if (opts.publicOnly && emit("incident.raised", { what: `launch verify: ${id} regressed for ${slug}: ${clean(res.reason).slice(0, 200)}`, venture: slug, slot: id, honesty_class: profile.honesty_class }, slug, log)) raised++;
     }
-    log(`${slug}: ${ok}/${ids.length} slot(s) verified now${failed ? ` · ${failed} failed` : ""}${skipped ? ` · ${skipped} skipped (locked)` : ""}`);
+    log(`${slug}: ${ok}/${ids.length} slot(s) verified now${failed ? ` · ${failed} failed` : ""}${skipped ? ` · ${skipped} skipped (locked)` : ""}${envSkipped ? ` · ${envSkipped} skipped(env)` : ""}${paused ? ` · ${paused} paused` : ""}${raised ? ` · ${raised} raised to needs-you` : ""}`);
     return failed ? EXIT.FAILED : skipped ? EXIT.LOCKED : EXIT.OK;
   } catch (e) {
     if (e.exit) { log(e.message); return e.exit; }
@@ -328,7 +335,7 @@ function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
   if (!lv) saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } }));
   emit("run.completed", { slot: id, provider: prow.id, honesty_class: profile.honesty_class, attempt: r0.attempt || 0, mode: "verify", outcome: good ? "ok" : "fail" }, slug, log);
   log(`${id}: ${good ? `verified now (answered by ${clean(lv.answerer)})` : `VERIFY FAILED -- ${clean(reason)}`}`);
-  return good;
+  return { good, reason };
 }
 
 function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
