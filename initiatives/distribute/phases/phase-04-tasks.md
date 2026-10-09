@@ -37,7 +37,7 @@ expected-proof-failures: the npx git-URL arm on one leg (network), or the consum
 title: REQ-08 green on 3 legs per job; `grep -rn "npm publish"` outside this lane = 0
 kind: logic
 risk: high
-proof: CI per job on 3 legs: tests/distribute-install-clean.bats (npm pack -> npm i -g --prefix -> arc doctor exit 0 -> arc init a project from the installed copy -> doctor clean; npx github:technology-ashiq/arc#<PR head> doctor; no npm publish outside the lane; no package row in the sync golden) and tests/distribute-cli.bats (package.json private, bin, dependencies {}; doctor plans 4 targets; init sets core.hooksPath and the hook refuses a main commit).
+proof: CI per job on 3 legs: tests/distribute-install-clean.bats (npm pack -> npm i -g --prefix -> arc doctor exit 0 -> arc init a project from the installed copy -> doctor clean; npm i -g --prefix github:technology-ashiq/arc#<PR head> -> arc doctor (npx refuses git specs: GitFetcher needs Arborist); no npm publish outside the lane; no package row in the sync golden) and tests/distribute-cli.bats (package.json private, bin, dependencies {}; doctor plans 4 targets; init sets core.hooksPath and the hook refuses a main commit).
 tier: integration
 sources: phase-04-spec.md
 decision: package.json is private (npm refuses to publish it) with a files allowlist and no lifecycle scripts; bin/arc.mjs only dispatches; consumer hooks ship at .claude/templates/githooks (branch guard + secret scan), since arc own pre-commit runs arc-compile.

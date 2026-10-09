@@ -69,7 +69,7 @@ gitrepo() {
   git -C "$d" checkout -q -b main
   printf 'y\n' > "$d/y.txt" && git -C "$d" add y.txt
   run git -C "$d" commit -q -m "on main"
-  [ "$status" -ne 0 ] && [[ "$output" == *"branch-guard: refuses commit on main"* ]] || { echo "status $status: $output"; false; }
+  [ "$status" -ne 0 ] && [[ "$output" == *"branch-guard: refuses a commit on main"* ]] || { echo "status $status: $output"; false; }
 }
 
 @test "distribute-cli: a project's own hooks path is left alone and named" {

@@ -4,9 +4,11 @@
 #
 # Two arms on every CI leg. The tarball arm: `npm pack` the checkout, `npm i -g --prefix TMP` the .tgz, run
 # the installed `arc doctor`, then `arc init` a project from that installed copy and doctor it, which proves
-# the `files` allowlist carries everything an install reads. The git-URL arm: `npx --yes
-# github:technology-ashiq/arc#SHA doctor`, where SHA is the PR head (a pull request's merge ref is not
-# fetchable by npx). Off CI the git-URL arm skips, by name. Every run asserts `RAN arc-doctor` first.
+# the `files` allowlist carries everything an install reads. The git-URL arm: `npm i -g --prefix TMP
+# github:technology-ashiq/arc#SHA`, then the installed `arc doctor`, where SHA is the PR head (a pull request merge ref
+# is not fetchable). Not `npx`: npm 10 npx refuses a git spec ("GitFetcher requires an Arborist constructor",
+# seen on all 3 legs), so the runbook names the install that works. Off CI the git-URL arm skips, by name.
+# Every run asserts `RAN arc-doctor` first.
 
 bats_require_minimum_version 1.5.0
 load 'test_helper'
@@ -64,12 +66,17 @@ setup() {
   diff "$d/golden.manifest" "$d/cc.manifest" || { echo "the packed claude-code install differs from the sync golden"; false; }
 }
 
-@test "distribute-install-clean: the git URL at the PR head runs arc doctor through npx" {
+@test "distribute-install-clean: the git URL at the PR head installs globally and runs arc doctor" {
   [ -n "${GITHUB_ACTIONS:-}" ] || skip "the git-URL arm needs CI: it installs the pushed PR head from GitHub"
-  local sha
+  local sha bin d="$BATS_TEST_TMPDIR"
   sha=$(node -e 'const fs=require("fs");const p=process.env.GITHUB_EVENT_PATH;let s="";try{const e=JSON.parse(fs.readFileSync(p,"utf8"));s=(e.pull_request&&e.pull_request.head&&e.pull_request.head.sha)||""}catch{};process.stdout.write(s||process.env.GITHUB_SHA||"")')
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "no head SHA from the event or GITHUB_SHA: $sha"; false; }
-  run --separate-stderr npx --yes "github:technology-ashiq/arc#$sha" doctor
+  mkdir -p "$d/prefix"
+  run npm install --global --prefix "$(native "$d/prefix")" "github:technology-ashiq/arc#$sha"
+  [ "$status" -eq 0 ] || { echo "npm install from the git URL: $output"; false; }
+  bin="$d/prefix/bin/arc"; [ -e "$bin" ] || bin="$d/prefix/arc"
+  [ -e "$bin" ] || { echo "no arc shim under the prefix:"; find "$d/prefix" -maxdepth 2 -name 'arc*'; false; }
+  run --separate-stderr "$bin" doctor
   ran_doctor || false
   [ "$status" -eq 0 ] && [ "$(count ': ready to install$')" -eq 1 ] || { echo "status $status: $output $stderr"; false; }
 }

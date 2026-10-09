@@ -17,7 +17,7 @@ Or without a checkout. The package is never published (ADR-2008), so it installs
 tarball:
 
 ```bash
-npx --yes github:technology-ashiq/arc#<commit> init --target opencode --dir .
+npm i -g github:technology-ashiq/arc#<commit> && arc init --target opencode --dir .
 npm pack /path/to/arc && npm i -g ./arc-*.tgz && arc init --target codex --dir .
 ```
 
