@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v2 (Cycle 16, opened 2026-09-16)
-phase: 14
+phase: 15
 appetite: 49d
-burn: 18d
+burn: 18.5d
 blocked-on: —
 depends-on: —
 
@@ -37,7 +37,7 @@ depends-on: —
 | 11 | One Settings page — Models with Test (ok/why, seconds, last test kept) and Voice (pick, speed, preview) (REQ-15, ADR-1350 Amendments 1 and 2); runs BEFORE 08 | 2d | ✅ **CLOSED 2026-10-07** — 2d of 2d (built 10-03..10-06); REQ-15 validated. The Settings page (header, rail, ⌘K) with Models (Test, Edit, a declared cost, used by, the remove guard) and Voice; five PRs (#319 #324 #328 #332 #346). One DoD row ticked narrower than written: the remove guard and Test were proven on CI, not pressed by the owner (see the done log) |
 | 12 | The owner's keys — a Keys section on the Settings page (any `NAME : value`, never returned), read by arc's `generic-api` driver (REQ-16, ADR-1351); runs BEFORE 08 | 2d | ✅ **CLOSED 2026-10-06** — 1d of 2d (built 10-05..10-06); REQ-16 validated. A Keys tab on the Settings page (any `NAME : value`, never returned), the store outside the repo, the environment first and the store second, and the `generic-api` driver reading through it; the owner set his OpenRouter key there. One DoD row ticked narrower than written: the logic attacker answered 0 findings in 5 s (see the done log) |
 | 13 | Who fills each role — the Org room shows every role's binds or says it is vacant, and `org.seat-assign` reassigns one seat on a proposal branch through `org-own.mjs` (REQ-17, ADR-1352); runs BEFORE 08 | 2.5d | ✅ **CLOSED 2026-10-08** — 1d of 2.5d (built 10-07); REQ-17 validated. The Org room names who sits each role from its binds and says so when no one does; `org.seat-assign` plans a seat change and applies it on a proposal branch through `org-own.mjs --assign`, with the tier derived and never typed; one PR (#361). One DoD row ticked narrower than written: the owner read the seats but his words do not cover planning a seat change (see the done log) |
-| 14 | Plan-bound audit — every write verb listed with plan-bound yes/no, CI fails an unbound one off the allowlist; read-only (REQ-18, ADR-1353); runs BEFORE 08 | 0.5d | spec'd — ADR-1353 accepted 2026-10-07 |
+| 14 | Plan-bound audit — every write verb listed with plan-bound yes/no, CI fails an unbound one off the allowlist; read-only (REQ-18, ADR-1353); runs BEFORE 08 | 0.5d | ✅ closed 2026-10-09 — #400, 99 verbs, 0 unbound |
 | 15 | Five-state availability — one `Availability` enum, a failed source is `unknown` never 0, `FIELD_UNKNOWN` on the listed verbs (REQ-19, ADR-1354); runs BEFORE 08 | 1.5d | spec'd — ADR-1354 accepted 2026-10-07 |
 | 16 | Approval bindings — `bound_to` · `depends_on` · `decision_key`, the inbox folds STALE / WAITING / DUPLICATE_OF (REQ-20, ADR-1355); depends on 15; runs BEFORE 08 | 2d | spec'd — ADR-1355 accepted 2026-10-07 |
 | 17 | The discover room goes live — `GET /api/discover` reads discover's own receipts, `money/discover` drops its planned markings, the contract and its pins flip in one PR (REQ-21, ADR-1356); depends on 16; runs BEFORE 08 | 1.5d | spec'd — ADR-1356 accepted 2026-10-08 |
@@ -500,6 +500,8 @@ stay bespoke folds.
   Receipts (main clone spine, `2026-10-01.jsonl`): `phase.closed` `01M3VR2HF2DYNZZ9N3JP6YES8G` · `approval.requested{gate: phase-done}` `01M3VR2JTVMM5XRTK66QQ25SYY`. The second waits on the owner's stamp, which also accepts the narrower attacker row.
 
 ## Now
+
+**PHASE 14 CLOSED (2026-10-09, `/arc-phase-done 14 --lane face`):** every write verb measured. REQ-18 is validated. `node .claude/scripts/core/plan-bound-audit.mjs` on main (0805f787) reads **99 write verbs · 17 plan-bound · 82 allowlisted · 0 unbound · 0 allowlist problems · 69 scratch writes**; two verbs joined after the build entry below, both from main merges (`engine/frontmatter-lint` from distribute Phase 02, allowlisted as a lane-tool). One PR, #400. CI per job on #400's head 285b6289: run 37876716306, 19/19, suite 1..4523. Evidence bundle `initiatives/face/evidence/phase-14` (verified). Two attack rounds on two surfaces (e028e02 r1, 0943762 r2): every critical, high and medium fixed and pinned as a mutant in `tests/plan-bound-audit.bats` (23 tests, the suite asserts its own count); LOW leftovers in the debt ledger. No verb's code changed. The five door gaps are filed (below) and routed after Phase 16. No owner demo is owed: the spec's verification plan is CI and tracker only. amendments: 0 · reopened: n · 0.5d against 0.5d. Burn 18.5d of 49d (38%), no tripwire near. **RESUME HERE: Phase 15 is next**, five-state availability (REQ-19, ADR-1354, `phases/phase-15-spec.md`, branch `feat/face-v2-15-availability`); then 16, 17 (ADR-1356 accepted), then Phase 08, the owner's two dogfood days. Assumptions ledger: nothing fired.
 
 **PHASE 14 BUILT (2026-10-09, `feat/face-v2-14-plan-bound-audit`, owner: "next ella phase pannu ... don't wait for me"):** `node .claude/scripts/core/plan-bound-audit.mjs` lists **97 write verbs** under `.claude/scripts`: **17 plan-bound** and **80 allowlisted** (after the round-1 attack widened what it sees: aliases, dynamic imports, fd writes, one import hop, destinations; 67 scratch writes are counted and printed, never dropped) in `core/plan-bound-allowlist.json`, each with a `why` and a class. The classes are `writer` (IS the mechanism, or derived output CI regenerates with `--check`), `lane-tool` (a lane's hand-run tool, not a face op: that lane's debt, visible) and `door-gap`. The gate runs from `tests/plan-bound-audit.bats` on every leg, asserting it RAN before what it printed. The mutants: no `--expect`, write-before-check, emit-before-guard, an empty or missing `why`, a stale row and a row for a now-bound verb, and each one FAILs. No verb's code changed. ADR-1356 flipped to accepted (owner, 2026-10-08) in this PR, as he asked. Assumptions ledger: nothing fired.
 
