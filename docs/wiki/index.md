@@ -22,7 +22,7 @@ Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 394 of 
 | Product | Version | Requires | Commands | Agents | Scripts |
 |---|---|---|---|---|---|
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
-| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 39 |
+| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 41 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 20 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |

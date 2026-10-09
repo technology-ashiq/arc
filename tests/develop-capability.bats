@@ -388,13 +388,12 @@ JSON
 @test "vetting a real candidate added no dependency to this repo" {
   # The whole point of ADR-0110's separation. If vetting ever installs, this fails.
   [ ! -e "$ARC_ROOT/node_modules" ] || { echo "node_modules exists in arc"; false; }
-  # Guarded: arc has no package.json today, and `grep` on a missing file also exits non-zero.
-  # An assertion that passes because the file is absent proves nothing about dependencies --
-  # that is the vacuous pass Phase 05 shipped and CI caught.
-  if [ -f "$ARC_ROOT/package.json" ]; then
-    run grep -nE '"(dependencies|devDependencies)"' "$ARC_ROOT/package.json"
-    [ "$status" -ne 0 ] || { echo "arc gained dependencies: $output"; false; }
-  fi
+  # Since distribute P04 arc has a package.json whose `dependencies` must be present and EMPTY (REQ-08),
+  # so the check reads the parsed object: any package in any dependency field fails. An assertion that
+  # passes because the file is absent proves nothing -- that is the vacuous pass Phase 05 shipped.
+  [ -f "$ARC_ROOT/package.json" ] || { echo "no package.json"; false; }
+  run _arc_json "$ARC_ROOT/package.json" '["dependencies","devDependencies","optionalDependencies","peerDependencies"].map((k) => Object.keys(j[k] || {}).length).join(",")'
+  [ "$status" -eq 0 ] && [ "$output" = "0,0,0,0" ] || { echo "arc gained dependencies: $output"; false; }
 }
 
 # ---------------------------------------------------------------------------
