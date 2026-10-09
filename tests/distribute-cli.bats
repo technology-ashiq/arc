@@ -22,7 +22,7 @@ gitrepo() {
 @test "distribute-cli: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-cli: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 7 ] || { echo "declared $declared, expected 7"; false; }
+  [ "$declared" -eq 8 ] || { echo "declared $declared, expected 8"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -88,4 +88,23 @@ gitrepo() {
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--target must be one of claude-code, codex, opencode, skills-only"* ]] || { echo "target: $status $stderr"; false; }
   run --separate-stderr node "$(ARC)" init --target --dir x
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--target needs a value"* ]] || { echo "value: $status $stderr"; false; }
+  run --separate-stderr node "$(ARC)" doctor --dir --repo
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"usage: arc init"* ]] || { echo "doctor flag-shaped dir: $status $stderr"; false; }
+  run --separate-stderr node "$(ARC)" init --target codex --target opencode --dir "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"--target given twice with different values"* ]] || { echo "twice: $status $stderr"; false; }
+}
+
+# Hooks are wired only where they take nothing away (attack 188f724 B1, B2).
+@test "distribute-cli: hooks are not wired in a subdirectory of a repo, nor over hooks the project already runs" {
+  local r sub; r=$(gitrepo outer) || false
+  mkdir -p "$r/packages/app"; sub=$(cd "$r/packages/app" && pwd -P)
+  run --separate-stderr node "$(ARC)" init --target claude-code --dir "$(native "$sub")"
+  [ "$(count '^plan: claude-code — ')" -eq 1 ] || { echo "$output $stderr"; false; }
+  [ "$status" -eq 0 ] && [ "$(count '^hooks: not set -- .* is inside the repo at .*, not its root')" -eq 1 ] || { echo "subdir: $status $output"; false; }
+  [ -z "$(git -C "$r" config --get core.hooksPath)" ] || { echo "the outer repo's hooks path was changed"; false; }
+  local h; h=$(gitrepo hooked) || false
+  printf '#!/bin/sh\nexit 0\n' > "$h/.git/hooks/pre-commit"
+  run --separate-stderr node "$(ARC)" init --target claude-code --dir "$(native "$h")"
+  [ "$status" -eq 0 ] && [ "$(count '^hooks: not set -- the project runs pre-commit from .*, which core\.hooksPath would disable')" -eq 1 ] || { echo "hooked: $status $output"; false; }
+  [ -z "$(git -C "$h" config --get core.hooksPath)" ] || { echo "the project's own hooks were disabled"; false; }
 }

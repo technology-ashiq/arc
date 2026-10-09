@@ -392,8 +392,8 @@ JSON
   # so the check reads the parsed object: any package in any dependency field fails. An assertion that
   # passes because the file is absent proves nothing -- that is the vacuous pass Phase 05 shipped.
   [ -f "$ARC_ROOT/package.json" ] || { echo "no package.json"; false; }
-  run _arc_json "$ARC_ROOT/package.json" '["dependencies","devDependencies","optionalDependencies","peerDependencies"].map((k) => Object.keys(j[k] || {}).length).join(",")'
-  [ "$status" -eq 0 ] && [ "$output" = "0,0,0,0" ] || { echo "arc gained dependencies: $output"; false; }
+  run _arc_json "$ARC_ROOT/package.json" '["dependencies","devDependencies","optionalDependencies","peerDependencies","bundledDependencies","bundleDependencies"].map((k) => Object.keys(j[k] || {}).length).join(",")'
+  [ "$status" -eq 0 ] && [ "$output" = "0,0,0,0,0,0" ] || { echo "arc gained dependencies: $output"; false; }
 }
 
 # ---------------------------------------------------------------------------

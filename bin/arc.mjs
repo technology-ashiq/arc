@@ -19,7 +19,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,8 +29,9 @@ const INSTALL = S("engine/arc-install.mjs");
 const HOOKS = ".claude/templates/githooks";
 const TARGETS = ["claude-code", "codex", "opencode", "skills-only"];
 
-const run = (script, args, opts = {}) => spawnSync(process.execPath, [script, ...args], { stdio: opts.capture ? ["ignore", "pipe", "pipe"] : "inherit", encoding: "utf8", cwd: opts.cwd });
-const git = (dir, args) => spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const run = (script, args, opts = {}) => spawnSync(process.execPath, [script, ...args], { stdio: opts.capture ? ["ignore", "pipe", "pipe"] : "inherit", encoding: "utf8", cwd: opts.cwd, maxBuffer: 64 * 1024 * 1024 });
+// A git that cannot start reads as empty output and a non-zero status, never a TypeError (attack 188f724 B4).
+const git = (dir, args) => { const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); return { status: r.error ? -1 : r.status, stdout: (r.stdout || "").trim() }; };
 
 function usage(code) {
   (code ? console.error : console.log)("usage: arc init --target <claude-code|codex|opencode|skills-only> [--dir DIR] [--dry-run] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc compile <arc-compile args>\n       arc --version");
@@ -43,13 +44,14 @@ function version() {
 
 function init(args) {
   const out = [];
-  let dir = process.cwd(), dryRun = false, target = "";
+  let dir = process.cwd(), dirGiven = false, dryRun = false, target = "";
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--dir" || a === "--target") {
       const v = args[i + 1];
       if (v === undefined || v === "" || v.startsWith("--")) { console.error(`arc init: ${a} needs a value`); return 2; }
-      if (a === "--dir") dir = v; else target = v;
+      if (a === "--dir" ? dirGiven && v !== dir : target && v !== target) { console.error(`arc init: ${a} given twice with different values`); return 2; }
+      if (a === "--dir") { dir = v; dirGiven = true; } else target = v;
       i++;
     } else if (a === "--dry-run" || a === "--force" || a === "--quiet") { if (a === "--dry-run") dryRun = true; out.push(a); }
     else { console.error(`arc init: unknown argument ${a}`); return 2; }
@@ -57,14 +59,35 @@ function init(args) {
   if (!TARGETS.includes(target)) { console.error(`arc init: --target must be one of ${TARGETS.join(", ")}`); return 2; }
   const r = run(INSTALL, ["--target", target, "--dir", dir, "--source", ROOT, ...out]);
   if (r.status !== 0 || dryRun) return r.status ?? 1;
-  // The commit-time line (ADR-2013) in a git repo, unless the project already chose its own hooks path.
-  if (git(dir, ["rev-parse", "--is-inside-work-tree"]).stdout.trim() === "true") {
-    const have = git(dir, ["config", "--get", "core.hooksPath"]).stdout.trim();
-    if (!existsSync(join(dir, HOOKS, "pre-commit"))) console.log(`hooks: not set -- ${HOOKS} was not installed by the \`${target}\` target`);
-    else if (have && have !== HOOKS) console.log(`hooks: left as core.hooksPath=${have}; the project chose its own (arc's are in ${HOOKS})`);
-    else if (git(dir, ["config", "core.hooksPath", HOOKS]).status === 0) console.log(`hooks: core.hooksPath=${HOOKS} (branch guard + secret scan at commit time)`);
-    else { console.log("hooks: could not set core.hooksPath"); return 1; }
+  return wireHooks(dir, target);
+}
+
+/**
+ * The commit-time line (ADR-2013), wired only where it cannot take something away:
+ * - at the repo root, never for a subdirectory of someone else's repo (attack 188f724 B1);
+ * - never over hooks the project already runs from .git/hooks, which core.hooksPath would silently
+ *   disable (B2), and never over a hooks path the project chose;
+ * - only once both hooks are executable, fixed where a tarball dropped the bit (B3).
+ */
+function wireHooks(dir, target) {
+  if (git(dir, ["rev-parse", "--is-inside-work-tree"]).stdout !== "true") return 0;
+  const top = git(dir, ["rev-parse", "--show-toplevel"]).stdout;
+  let same = false;
+  try { same = top !== "" && realpathSync(top) === realpathSync(dir); } catch { same = false; }
+  if (!same) { console.log(`hooks: not set -- ${dir} is inside the repo at ${top || "an unknown root"}, not its root; run arc init there to wire them`); return 0; }
+  const have = git(dir, ["config", "--get", "core.hooksPath"]).stdout;
+  if (have && have !== HOOKS) { console.log(`hooks: left as core.hooksPath=${have}; the project chose its own (arc's are in ${HOOKS})`); return 0; }
+  if (!existsSync(join(dir, HOOKS, "pre-commit"))) { console.log(`hooks: not set -- ${HOOKS} was not installed by the \`${target}\` target`); return 0; }
+  const hooksDir = git(dir, ["rev-parse", "--git-path", "hooks"]).stdout;
+  let theirs = [];
+  try { theirs = readdirSync(join(dir, hooksDir)).filter((n) => !n.endsWith(".sample")); } catch { theirs = []; }
+  if (!have && theirs.length) { console.log(`hooks: not set -- the project runs ${theirs.join(", ")} from ${hooksDir}, which core.hooksPath would disable; arc's are in ${HOOKS}`); return 0; }
+  for (const h of ["pre-commit", "pre-push"]) {
+    const p = join(dir, HOOKS, h);
+    if (process.platform !== "win32" && (statSync(p).mode & 0o111) === 0) chmodSync(p, 0o755);
   }
+  if (git(dir, ["config", "core.hooksPath", HOOKS]).status !== 0) { console.log("hooks: could not set core.hooksPath"); return 1; }
+  console.log(`hooks: core.hooksPath=${HOOKS} (branch guard + secret scan at commit time)`);
   return 0;
 }
 
@@ -91,7 +114,8 @@ function main(argv) {
   if (verb === undefined || verb === "help" || verb === "--help" || verb === "-h") return usage(verb === undefined ? 2 : 0);
   if (verb === "init") return init(rest);
   if (verb === "doctor") {
-    if (rest[0] === "--dir") return rest.length === 2 ? run(INSTALL, ["--doctor", rest[1]]).status ?? 1 : usage(2);
+    // A missing, empty or flag-shaped directory is a usage error, never handed on as a path (attack 188f724 L6, B7).
+    if (rest[0] === "--dir") return rest.length === 2 && rest[1] !== "" && !rest[1].startsWith("--") ? run(INSTALL, ["--doctor", rest[1]]).status ?? 1 : usage(2);
     if (rest[0] === "--repo") return run(S("engine/arc-doctor.mjs"), rest).status ?? 1;
     return rest.length ? usage(2) : selfDoctor();
   }

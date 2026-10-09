@@ -50,6 +50,18 @@ setup() {
   [ "$status" -eq 0 ] && [ "$(count '^apply: wrote [0-9]+ file\(s\) ')" -eq 1 ] || { echo "init from the installed copy: $status $output $stderr"; false; }
   run --separate-stderr "$bin" doctor --dir "$(native "$proj")"
   [ "$status" -eq 0 ] && [ "$(count '^doctor: [0-9]+ placed, [0-9]+ degraded, 0 missing, 0 unmanaged-conflict$')" -eq 1 ] || { echo "status $status: $output"; false; }
+  # The strongest target: claude-code from the INSTALLED copy must place exactly the sync golden, so a path
+  # the files allowlist leaves out fails here rather than on a user's machine (attack 188f724 B5).
+  local cc; mkdir -p "$d/cc"; cc=$(cd "$d/cc" && pwd -P)
+  run --separate-stderr "$bin" init --target claude-code --dir "$(native "$cc")"
+  [ "$status" -eq 0 ] && [ "$(count '^apply: wrote [0-9]+ file\(s\) ')" -eq 1 ] || { echo "claude-code from the installed copy: $status $output $stderr"; false; }
+  _arc_tree_manifest "$cc" > "$d/cc.manifest"
+  [ -s "$d/cc.manifest" ] || { echo "the claude-code install placed nothing"; false; }
+  # `.env.example` is the one row the sync adds beyond the install (its council JUROR_* block is bash's
+  # _arc_env_block), so it alone is set aside, and the golden must still hold it.
+  [ "$(grep -c "^\.env\.example$(printf '\t')" "$ARC_ROOT/tests/fixtures/sync-golden/tree-manifest.txt")" -eq 1 ] || { echo "the golden has no .env.example row to set aside"; false; }
+  grep -v "^\.env\.example$(printf '\t')" "$ARC_ROOT/tests/fixtures/sync-golden/tree-manifest.txt" > "$d/golden.manifest"
+  diff "$d/golden.manifest" "$d/cc.manifest" || { echo "the packed claude-code install differs from the sync golden"; false; }
 }
 
 @test "distribute-install-clean: the git URL at the PR head runs arc doctor through npx" {
