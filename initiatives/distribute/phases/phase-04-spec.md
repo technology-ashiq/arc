@@ -13,8 +13,8 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-08 green on 3 legs per job; `grep -rn "npm publish"` outside this lane = 0
-- [ ] closed via `/arc-phase-done 04`; retro written
+- [x] REQ-08 green on 3 legs per job; `grep -rn "npm publish"` outside this lane = 0
+- [x] closed via `/arc-phase-done 04`; retro written
 
 ## Verification plan
 
