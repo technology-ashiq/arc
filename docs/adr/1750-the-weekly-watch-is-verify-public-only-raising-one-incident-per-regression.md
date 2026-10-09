@@ -17,16 +17,18 @@ exactly one `needs-you` line, and a `skipped(env)` slot produces zero. The jobs 
 ## Decision
 
 - `verify --public-only` changes three outcomes in `verifySlots`:
-  - a verify that failed for `env:KEY` is logged `skipped(env:KEY)` and counted apart;
+  - a verify the worker refused for a missing key (its `missing_env` flag, never the reason text) is logged
+    `skipped(env:KEY)` and counted apart;
   - a reason starting `PAUSED(` is logged as given;
-  - any other failure emits `incident.raised` once for that slot (`what: launch verify: <slot> regressed for
+  - any other failure, a thrown or unverifiable slot included, emits `incident.raised` once for that slot (`what: launch verify: <slot> regressed for
     <venture>: <reason>`), which the brief lists under needs-you.
 
   A skipped or paused slot does not fail the run.
 - Job `launch-watch` (`.claude/scripts/hq/jobs/launch-watch.mjs`) runs `daily@07:30` with `catchup: skip`. It acts
-  only when its last run, an IST day kept in `.claude/state/launch/.watch-last` (instance state, never the repo), is
-  seven or more days old. Acting means one `arc-launch verify --all --public-only` per board in the launch state
-  directory.
+  on a board only when that board's last watched IST day, kept per board in `.claude/state/launch/.watch-last` (instance
+  state, never the repo), is seven or more days old, or absent, or in the future. Acting means one
+  `arc-launch verify --all --public-only` for that board. A board is stamped only when it was watched: the runner
+  finished and its `watch-result` line shows every failed slot raised. A board that failed retries the next day, alone.
 - The policy subject is `process:launch-watch`, with the `processes/launch-watch.process.yaml` stub (`job_stub:
   true`), as brief-materialize has. Its `hq.policy.yaml` row is the owner's: that file is on the deny floor, and the
   birth rule gates every process on it.

@@ -29,8 +29,11 @@ export function fits(row, profile) {
   return { ok: true, why: FIT_RULES.map((r) => `${r.id} ${clean(r.says(row, profile))}`) };
 }
 
+// last_verified counts only as a calendar day, YYYY-MM-DD: anything else ranks and prints as never, so the line cannot
+// show a date the ranking ignored (attack 530c056 L2, L9).
+export const verifiedDay = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) ? v : null);
 export function rank(rows) {
-  const t = (r) => { const n = Date.parse(r.last_verified || ""); return Number.isFinite(n) ? n : -1; };
+  const t = (r) => { const d = verifiedDay(r.last_verified); return d ? Date.parse(d) : -1; };
   return [...rows].sort((a, b) => t(b) - t(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
@@ -52,13 +55,13 @@ export function planLines(slots, rows, board, state, profile, overrides = new Ma
     if (ov && !ovRow) out.push({ id, line: `${id}: override ${clean(ov.provider)} (decision ${clean(ov.decision)}) not taken -- no such usable row` });
     if (ovRow) {
       const others = forSlot.filter((x) => x !== ovRow).map((x) => clean(x.id));
-      out.push({ id, line: `${id}: recommended ${clean(ovRow.id)} -- why: owner override, decision ${clean(ov.decision)} · status ${clean(ovRow.status)} · last_verified ${clean(ovRow.last_verified ?? "never")}${others.length ? ` · alternatives: ${others.join(", ")}` : ""}` });
+      out.push({ id, line: `${id}: recommended ${clean(ovRow.id)} -- why: owner override, decision ${clean(ov.decision)}${fits(ovRow, profile).ok ? "" : ` (outside the fit rules: ${fits(ovRow, profile).why[0]})`} · status ${clean(ovRow.status)} · last_verified ${(verifiedDay(ovRow.last_verified) ?? "never")}${others.length ? ` · alternatives: ${others.join(", ")}` : ""}` });
       continue;
     }
     if (!vetted.length) { out.push({ id, refused: true, line: `${id}: REFUSED -- no vetted provider for ${id}${alts.length ? ` · candidates: ${alts.join(", ")}` : ""}` }); continue; }
     const [rec, ...more] = vetted;
     const ranked = more.length ? ` · ranked by ${RANK_RULES.join(", ")}` : "";
-    out.push({ id, line: `${id}: recommended ${clean(rec.id)} -- why: ${fits(rec, profile).why.join(", ")} · status ${clean(rec.status)} · last_verified ${clean(rec.last_verified ?? "never")}${ranked}${more.length || alts.length ? ` · alternatives: ${[...more.map((x) => `${clean(x.id)} (${fits(x, profile).why.join(", ")})`), ...alts].join(", ")}` : ""}` });
+    out.push({ id, line: `${id}: recommended ${clean(rec.id)} -- why: ${fits(rec, profile).why.join(", ")} · status ${clean(rec.status)} · last_verified ${(verifiedDay(rec.last_verified) ?? "never")}${ranked}${more.length || alts.length ? ` · alternatives: ${[...more.map((x) => `${clean(x.id)} (${fits(x, profile).why.join(", ")})`), ...alts].join(", ")}` : ""}` });
   }
   return out;
 }

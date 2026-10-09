@@ -267,25 +267,26 @@ add_probe_rows() {
   grep '"kind":"incident.raised"' "$ARC_SPINE_ROOT"/events/*.jsonl | grep -q 'launch verify: probe regressed for fx-sandbox'
 }
 
-@test "launch-watch: stamps the week only when every board was watched; a future stamp is no stamp (attack 143525f B5, B6)" {
-  local sd="$BATS_TEST_TMPDIR/wst" job="$ARC_ROOT/.claude/scripts/hq/jobs/launch-watch.mjs"
+@test "launch-watch: a board is stamped only when watched, a stamp holds it seven days, a future stamp is no stamp (attack 143525f B5 B6, 530c056 B2)" {
+  local sd="$BATS_TEST_TMPDIR/wst" job="$ARC_ROOT/.claude/scripts/hq/jobs/launch-watch.mjs" today
   mkdir -p "$sd"
-  # A board the runner refuses (not a board at all) is not watched: exit 1, and no stamp, so tomorrow retries.
+  today=$(cd "$ARC_ROOT" && node --input-type=module -e 'import { formatIst, dayOf, nowMs } from "./.claude/scripts/hq/lib/canonical.mjs"; console.log(dayOf(formatIst(nowMs())))')
+  [[ "$today" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "no day: $today"; false; }
+  # A board the runner refuses (not a board at all) is not watched: exit 1, and it gets no stamp, so tomorrow retries it.
   printf 'not json' > "$sd/zz-broken.json"
   run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
   [ "$status" -eq 1 ] || { echo "$output"; false; }
-  [[ "$output" == *"1 not watched, retried next run"* ]] || { echo "$output"; false; }
-  [ ! -e "$sd/.watch-last" ] || { echo "stamped after a failed watch"; false; }
-  # No boards at all: every board (none) was watched, the week is stamped, and a second run waits.
-  rm "$sd/zz-broken.json"
+  [[ "$output" == *"1 of 1 board(s) due"*"1 not watched, retried next run"* ]] || { echo "$output"; false; }
+  [ "$(tr -d '\r\n' < "$sd/.watch-last")" = "{}" ] || { cat "$sd/.watch-last"; false; }
+  # A stamp in the future would skip the board for ever: it is read as no stamp, and the board is due again.
+  printf '{"zz-broken":"2099-01-01"}' > "$sd/.watch-last"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 of 1 board(s) due"* ]] || { echo "$output"; false; }
+  # A board stamped today waits its seven days: nothing is due, exit 0, and a stamp for a board that is gone is dropped.
+  printf '{"zz-broken":"%s","gone":"%s"}' "$today" "$today" > "$sd/.watch-last"
   run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"all watched"* ]] || { echo "$output"; false; }
-  [ -s "$sd/.watch-last" ] || { echo "no stamp written"; false; }
-  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
-  [[ "$output" == *"next in 7 day(s)"* ]] || { echo "$output"; false; }
-  # A stamp in the future would skip for ever: it is read as no stamp, and the watch runs.
-  printf '2099-01-01\n' > "$sd/.watch-last"
-  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
-  [[ "$output" == *"all watched"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"0 of 1 board(s) due"*"all due boards watched"* ]] || { echo "$output"; false; }
+  [ "$(tr -d '\r\n' < "$sd/.watch-last")" = "{\"zz-broken\":\"$today\"}" ] || { cat "$sd/.watch-last"; false; }
 }

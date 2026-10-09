@@ -107,14 +107,18 @@ export function envContract() {
 export async function scaffold(ctx) {
   const name = nameOf(ctx);
   const recorded = ctx.resources.filter((r) => r.kind === "neon-project").map((r) => r.id);
+  // launch records its intent to create before the POST: a run killed between the POST and the report finds its own
+  // project on the next run and adopts it, while any project with no intent on record stays foreign (attack 530c056 B1).
+  const intended = ctx.resources.some((r) => r.kind === "neon-project-intent" && r.id === name);
   const hits = await findProject(ctx, name);
   if (hits.length > 1) throw refuse("NEON_AMBIGUOUS", `${hits.length} Neon projects are named ${name}`);
   let id = hits[0] && typeof hits[0].id === "string" ? hits[0].id : "";
   // A same-named project launch never recorded is the owner's, even on a first run: adopting it would migrate and later
   // tear down data launch does not own (attack 143525f B1). It also keeps B2 shut: every launch_probe is in a project launch made.
-  if (id && !recorded.includes(id)) throw refuse("FOREIGN_PROJECT", `a Neon project named ${name} exists that launch did not record`);
+  if (id && !recorded.includes(id) && !intended) throw refuse("FOREIGN_PROJECT", `a Neon project named ${name} exists that launch did not record`);
   if (!id) {
     const region = REGION[ctx.profile && ctx.profile.region] || REGION.any;
+    ctx.report({ kind: "neon-project-intent", id: name });
     const made = await neon(ctx, "POST", "/projects", { project: { name, region_id: region } });
     id = made.body && made.body.project && typeof made.body.project.id === "string" ? made.body.project.id : "";
     if (!PROJECT_ID.test(id)) throw new Error("neon returned no usable project id");

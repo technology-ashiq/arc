@@ -21,3 +21,21 @@
     PAUSED stays the adapter's word, as `ok` is.
   - B10 [low] the trust sweep's CRLF copy doubled the CRs on an autocrlf checkout. It now normalises first.
   - B11 [low] the fixture digest can carry a CR. `tr -d '\r'` strips it.
+
+## attack 530c056 r1 (both surfaces again at the fixed head; base bd4c444e) — the last round under the two-round cap
+
+- Logic: 15. Boundary: 6. High and medium fixed; the lows go to D38.
+  - L1/L8 [high/medium] a thrown error under `--public-only` ended the loop before the watch-result line. Every thrown
+    error now raises and is counted.
+  - L2/L9 [high/low] an unparseable `last_verified` ranked as never but printed raw. Only a YYYY-MM-DD day counts; anything
+    else ranks and prints as never.
+  - L3/L12 [medium/low] an override skipped the fit rules silently. It stays the owner's call (ADR-1748), and the line now
+    says `outside the fit rules: <rule>`.
+  - L4, L5, L10, L11, L14: the attacker gave no breaking input, or the behaviour is intended. Rejected.
+  - L6/L7/L13 [medium] PAUSED read from a reason prefix. Rejected with a reason: unlike `env:` (a fact the runner owns),
+    the pause is the adapter's own verdict, and a digest-pinned adapter could answer `ok` outright. Listed in D38.
+  - B1 [high] the r1 fix refused launch's own half-made project on a rerun. launch now records a `neon-project-intent`
+    before the POST and adopts a hit when the intent is on record. New `half-made` arm.
+  - B2 [medium] one failing board re-ran the whole fleet daily and re-raised the others' incidents. Stamps are now per
+    board, and a failed board retries alone.
+  - L15, B4, B5, B6 [low]: D38.

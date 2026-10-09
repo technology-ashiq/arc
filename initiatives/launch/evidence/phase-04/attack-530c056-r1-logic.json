@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:291",
+      "breaking_input": "A slot whose adapter throws a coded refusal that is not a LaunchError and not DIGEST_DRIFT (e.g. ARC_PROBE_REFUSED, WRITE_REFUSED, HOST_REFUSED, NEON_AMBIGUOUS) during verify --all --public-only. The catch block only handles LaunchError and DIGEST_DRIFT; any other coded error rethrows out of the loop, so the run aborts before the watch-result line and before raising incident.raised for that slot. launch-watch then sees a non-zero exit (the thrown error propagates to main and exits 1) but no watch-result line, so watched() returns false and the board counts as failed -- but no incident was raised, so the regression is silent to the brief.",
+      "why": "The public-only incident raising is only wired into the LaunchError/DIGEST_DRIFT branch. Coded refusals from adapters (which verify() deliberately converts to {ok:false,reason} for most cases, but some like ARC_PROBE_REFUSED are thrown from ctx.probe.arc and caught by the adapter's verify catch, which returns {ok:false,reason:'ARC_PROBE_REFUSED: ...'} -- so actually those become answers. But a refusal thrown from probeOne's own code, e.g. the state-shape guard or a LaunchError with a code like REFUSED, is handled. The gap is any non-LaunchError coded error, e.g. a TypeError from a malformed state file, or a coded error from underLock that is not LaunchError. The watch's contract is 'every regression raises one incident'; this path raises none and the watch treats the board as failed, so the week is not stamped and tomorrow retries -- but the incident is never raised, so the brief never shows needs-you.",
+      "fix": "In publicOnly mode, catch every error from probeOne (not just LaunchError/DIGEST_DRIFT), emit incident.raised, and continue; only rethrow non-coded unexpected errors. Ensure the watch-result line always prints even when a slot throws.",
+      "twin_of": "A runner exit code became a deny-list of one failure label, so any other label exited 0"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/board.mjs:57",
+      "breaking_input": "A registry row for a slot has status 'vetted' and fits the profile, but its `last_verified` is a non-date string like '2026-99-99' or 'not-a-date'. rank() parses it with Date.parse, gets NaN, and maps it to -1, so a row with an invalid date sorts below rows with valid dates. But the plan line prints `last_verified 2026-99-99` raw (clean only strips controls), and the ranking is by the parsed value, so a row with an invalid date is ranked last even if it is actually the most recently verified. More critically, two rows with invalid dates both get -1 and tie-break by id, which is stable but the 'most recently verified' claim is wrong.",
+      "why": "rank() treats an unparseable last_verified as -1 (never), but the printed line shows the raw string, so the display contradicts the ranking. A provider row with a typo in last_verified silently ranks as oldest, and the plan's 'ranked by RANK-1' claim is false.",
+      "fix": "Validate last_verified format in the registry loader or refuse rows with unparseable dates; or sort unparseable dates to the end and print them as 'invalid date' rather than the raw string.",
+      "twin_of": "Provider record names were guessed absolute-or-relative against the brand domain, doubling a subdomain"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/board.mjs:62",
+      "breaking_input": "An override decision is approved for slot X, but the override's provider row is in `forSlot` and not blocked/retired, so ovRow is set. However, the override's provider may not actually fit the profile (e.g. the owner approved an override to a provider whose type is excluded). planLines prints 'recommended <ovRow.id> -- why: owner override' without checking fits(). The plan recommends a provider that fails the fit rules, and apply (which is unchanged and still requires --provider for two vetted rows) would refuse or, if the override row is the only vetted one, apply would use it even though it does not fit.",
+      "why": "The override path bypasses the fit-rule check entirely. ADR-1748 says an override is the plan's recommendation, but the plan recommends a row that the fit rules would exclude, and apply's own checks may or may not re-check fits. If apply trusts the plan's recommendation (it does not, it re-filters), but the plan's 'recommended' line is misleading and the owner may apply it.",
+      "fix": "In the override branch, still run fits() on ovRow and either refuse the override (show 'not taken -- does not fit') or print the fit-rule failure alongside the override.",
+      "twin_of": "plan recommended a provider for a slot that already held resources from another apply"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/arc-probe.mjs:36",
+      "breaking_input": "The passport probe validates repository against /^[A-Za-z0-9_.-]{1,100}\\/[A-Za-z0-9_.-]{1,100}$/ and rejects values starting with '-'. But the check `profile.repository.startsWith(\"-\")` is redundant because the regex already disallows a leading '-' in the first segment (the first character class includes '-' but the regex requires the first char to be from the class, and '-' is in the class, so a repository of '-owner/name' passes the regex? Let's see: the regex is ^[A-Za-z0-9_.-]{1,100}\\/... and '-' is allowed as the first character, so '-owner/name' matches the regex and does NOT start with '-'? It does start with '-', so the startsWith check catches it. But a repository like 'owner/-name' passes the regex (second segment can start with '-') and does not start with '-', so it passes. Then spawnSync passes '--repository', 'owner/-name' -- the value 'owner/-name' does not start with '--', so it is safe as an argument. However, a repository of 'owner/--name' also passes and does not start with '-', and '--name' as the value after '--repository' is fine because it is a separate argv element. The real gap: the regex allows a repository with a leading '-' in the first segment? No, startsWith('-') catches that. So this is actually safe. But the check `profile.repository.startsWith(\"-\")` is redundant and the regex is the real guard. The finding is that the regex allows a first segment that is just '-' (e.g. '-/name'), which is a weird but harmless value. Not a real issue.",
+      "why": "No concrete breaking input; the guard is sufficient.",
+      "fix": "No fix needed.",
+      "twin_of": ""
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:91",
+      "breaking_input": "ctx.probe.arc(question) checks `!slot || slot.group !== \"wiring\"`. The slot object passed to makeCtx is the catalog slot, which has a `group` field. But in trust-all.mjs, the fenced row is `{ ...row, hosts: [\"fixture.invalid\"] }` and the slot is `{ id: row.slot }` -- no group. In the real worker, slot comes from loadCatalog, which has group. However, an adapter could call ctx.probe.arc with a question that is a string like 'ledger' but also a string like 'ledger\\n...' -- arcProbe(String(question)) passes it to makeArcProbe, which only answers the four exact strings and throws ARC_PROBE_UNKNOWN for anything else. That is fine. The real gap: the check `slot.group !== \"wiring\"` trusts the catalog's group, but the catalog is a repo file the agent can edit. An adapter (or a malicious registry row) could set group: wiring on a non-wiring slot and then ask arc's organs. But the catalog is the trust boundary; the runner builds the slot from the catalog, and the catalog is the product's manifest. If the agent can edit the catalog, they can do worse. Not a real finding.",
+      "why": "No concrete breaking input beyond editing the catalog, which is already a trust boundary.",
+      "fix": "No fix needed.",
+      "twin_of": ""
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:299",
+      "breaking_input": "In verifySlots, for a non-publicOnly run (normal verify), a slot that returns {good:false, reason:'PAUSED(...)'} or {good:false, reason:'env:KEY'} is counted as failed and the run exits 1. That is correct. But for publicOnly, the code checks `String(res.reason).startsWith(\"PAUSED(\")` to treat it as paused. An adapter that legitimately fails with a reason that happens to start with 'PAUSED(' (e.g. a provider returns 'PAUSED(server error)') is silently treated as paused and not raised as an incident, even though it is a real regression. The ADR-1750 says 'a pause the provider reports is PAUSED(reason)', but the provider's reason is free text from the adapter, which is adapter-controlled. An adapter could return 'PAUSED(we are down)' for a real outage and the watch would not raise it.",
+      "why": "The pause status is inferred from a free-text prefix, which is exactly the pattern attack 143525f B9 fixed for 'env:' but left for 'PAUSED('. The dispositions say 'PAUSED stays the adapter's word, as ok is', but 'ok' is a typed boolean, while PAUSED is a string prefix. An adapter can accidentally or maliciously start any failure reason with 'PAUSED(' and silence the regression.",
+      "fix": "Have adapters return a typed status field (e.g. {ok:false, status:'paused', reason}) and validate it, rather than matching a prefix of free text.",
+      "twin_of": "A free-text reason prefix (`env:`) chose the outcome -> every branch on adapter text: is the text adapter-controlled?"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:299",
+      "breaking_input": "The same PAUSED prefix check is applied to res.reason, but res.reason comes from probeOne's return, which for a missing-env slot is 'env:KEY' and for a paused slot is whatever the adapter returned. However, probeOne also returns missingEnv based on lv.missing_env. The check `opts.publicOnly && res.missingEnv` is correct. But the PAUSED check uses `String(res.reason).startsWith(\"PAUSED(\")` -- if an adapter returns a reason like 'PAUSED(we are down)' for a real regression, it is skipped. Also, if an adapter returns a reason that is exactly 'PAUSED(' with no closing paren, it still matches.",
+      "why": "Duplicate of L6, but the fix should be to use a typed field.",
+      "fix": "Same as L6.",
+      "twin_of": "A free-text reason prefix (`env:`) chose the outcome"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:296",
+      "breaking_input": "In verifySlots, the `res` variable is assigned inside the try block: `res = underLock(...)`. If underLock throws a LockError (exit EXIT.LOCKED), the catch handles it and `continue`s, so res is undefined. If underLock succeeds, res is the return of probeOne, which is now an object {good, reason, missingEnv}. But the code later does `if (res.good)` -- if underLock throws a LaunchError that is not LOCKED (e.g. REFUSED), the catch handles it and continues, so res is undefined and the loop continues. That is fine. However, if probeOne itself throws a non-LaunchError coded error (e.g. a TypeError from a bad state file), the catch block checks `if (e instanceof LaunchError || e.code === \"DIGEST_DRIFT\")` -- a TypeError has no code, so it rethrows and aborts the whole verify --all. In publicOnly mode, this aborts before the watch-result line, so the watch sees exit 1 with no watch-result and counts the board as failed, but no incident is raised for the slot that threw. The regression is silent.",
+      "why": "Same as L1 but for the rethrow path. The watch's contract is that every regression raises one incident; a thrown error from a slot aborts the loop and raises nothing.",
+      "fix": "In publicOnly mode, catch all errors from probeOne, emit incident.raised, and continue; only rethrow truly unexpected errors after logging.",
+      "twin_of": "A runner exit code became a deny-list of one failure label"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:57",
+      "breaking_input": "rank() uses Date.parse(r.last_verified || '') and treats NaN as -1. A row with last_verified '2026-10-01' (a date) and another with '2026-10-01T00:00:00Z' (a timestamp) both parse to the same time, so the tie-break by id is fine. But a row with last_verified '2026-10-01 00:00:00' (space instead of T) parses to NaN on some engines (Node's Date.parse is implementation-defined for non-ISO strings), so it sorts as -1. The registry is a repo file, so a human could write a date with a space. The plan then ranks it as oldest even if it is the newest.",
+      "why": "Date.parse on non-ISO strings is engine-dependent; the registry format is not validated.",
+      "fix": "Validate last_verified as an ISO date in the registry loader, or parse with a strict regex.",
+      "twin_of": "Provider record names were guessed absolute-or-relative against the brand domain"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/arc-probe.mjs:36",
+      "breaking_input": "The passport probe spawns venture-register with `--repository`, profile.repository. The repository is validated against a regex that allows owner/name with characters [A-Za-z0-9_.-]. A repository like 'owner/name' is fine. But the regex allows a first segment that is just '-' (e.g. '-/name') which passes the regex and does not start with '-' (it starts with '-', actually '-/name' starts with '-', so the startsWith check catches it). A repository like 'owner/-' passes and does not start with '-', so it is passed as '--repository', 'owner/-'. That is a valid argument, not a flag. The real gap: the regex allows a repository with a leading '-' in the second segment, e.g. 'owner/-name', which is fine as an argument. So no issue.",
+      "why": "No concrete breaking input.",
+      "fix": "No fix needed.",
+      "twin_of": ""
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/arc-probe.mjs:36",
+      "breaking_input": "The passport probe validates repository against /^[A-Za-z0-9_.-]{1,100}\\/[A-Za-z0-9_.-]{1,100}$/. This allows a repository like 'a/b' but also 'a/b' is fine. However, the regex allows a repository with a trailing dot or hyphen, e.g. 'owner/name.' which is a valid git repo name but unusual. Not a security issue.",
+      "why": "No concrete breaking input.",
+      "fix": "No fix needed.",
+      "twin_of": ""
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:62",
+      "breaking_input": "In planLines, the override branch: `if (ov && !ovRow) out.push({... 'not taken'})`. If ov is set but ovRow is undefined (because the provider is blocked/retired or not in forSlot), it prints 'not taken'. But if ovRow is set, it prints 'recommended <ovRow.id>' and continues, even if ovRow does not fit the profile. As L3 says, the override bypasses fits(). A concrete input: a venture with profile type 'api-product', and an approved override to a provider whose fits list does not include 'api-product'. The plan recommends it, and if apply is run with --provider that row, apply's own logic (which re-filters by fits) would refuse or, if the row is the only vetted one, apply would use it anyway? Let's check apply: it filters vetted fitting rows; if the override row does not fit, it would not be in the vetted list, so apply would refuse unless --provider is given and the row is vetted but not fitting -- apply likely checks fits too. The plan's recommendation is misleading.",
+      "why": "The override path skips the fit-rule check, so the plan can recommend a provider that the fit rules exclude.",
+      "fix": "In the override branch, run fits() on ovRow and either refuse or print the fit failure.",
+      "twin_of": "plan recommended a provider for a slot that already held resources from another apply"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:299",
+      "breaking_input": "In verifySlots, the PAUSED check is `String(res.reason).startsWith(\"PAUSED(\")`. An adapter could return a reason like 'PAUSED(we are down)' for a real regression, and it would be counted as paused (not failed, not raised). The watch then reports 'all watched' and stamps the week, hiding the regression. This is the same as L6 but with a concrete input: a provider's verify returns {ok:false, reason:'PAUSED(service unavailable)'} due to an actual outage.",
+      "why": "The pause status is inferred from a free-text prefix, which is adapter-controlled text.",
+      "fix": "Use a typed status field from the adapter, not a prefix match.",
+      "twin_of": "A free-text reason prefix (`env:`) chose the outcome"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/board.mjs:57",
+      "breaking_input": "rank() sorts by Date.parse(last_verified) descending, then by id. If two rows have the same last_verified (e.g. both '2026-10-01'), the tie-break is by id, which is stable but not necessarily the intended 'most recently verified first' -- it is arbitrary. The ADR says RANK-2 is row id for stability, so this is intended. Not a finding.",
+      "why": "Intended behavior.",
+      "fix": "No fix needed.",
+      "twin_of": ""
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/arc-probe.mjs:36",
+      "breaking_input": "The passport probe's spawnSync uses `timeout: 120000` and `killSignal: 'SIGKILL'`. On Windows, a SIGKILLed child reports status 1 and no signal, so the probe returns {exit: 1, ...} and the adapter reports 'venture-register --dry-run exited 1', which is a not-ok answer. That is fine. But the spawnSync blocks the worker's event loop for up to 120s, so the slot's abort timeout (set in worker.mjs) cannot fire during that time. If the slot timeout is 60s and venture-register hangs for 120s, the worker will not abort at 60s; it will wait the full 120s. The abort signal is never checked during spawnSync. This is a real issue: the slot timeout is not honoured for the passport probe.",
+      "why": "spawnSync blocks the event loop, so the AbortController's timer cannot fire. The worker's timeout is effectively ignored for this probe.",
+      "fix": "Use an async spawn (spawn) and await its completion with a timeout that respects the abort signal, or check the signal before and after.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll"
+    }
+  ]
+}

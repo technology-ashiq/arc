@@ -129,3 +129,6 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **The watch read exit 1 as "already raised" while the drift path raised nothing** — every failed slot raises, and the run ends with a `watch-result` count line, B3 — *every exit code another program interprets: does each path that sets it do what the reader assumes?*
 - **A failed weekly run stamped the week done** — stamp only on full success, B5 — *every "last ran" stamp: written after the work succeeded, never before or regardless*
 - **A free-text reason prefix (`env:`) chose the outcome** — a typed flag only the worker sets, B9 — *every branch on adapter text: is the text adapter-controlled?*
+- **A fix refused launch's own half-made resource as foreign** — record intent before create, adopt on intent, B1 (530c056) — *every refuse-the-unrecorded guard: can launch itself leave an unrecorded resource?*
+- **One failing member re-ran the whole fleet and re-raised every incident** — per-member stamps, B2 (530c056) — *every batch stamp: is success all-or-nothing when the members are independent?*
+- **A ranking key and its printed value disagreed** — one validated value feeds both, L2 (530c056) — *every sort key that is also displayed*

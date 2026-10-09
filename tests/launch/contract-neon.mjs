@@ -19,7 +19,7 @@ const row = rows.find((r) => r.id === "neon");
 if (!row) { console.error("no neon row in the registry"); process.exit(1); }
 const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 const KEY = "neon_fixture_key_0123456789abcdefABCDEF"; // gitleaks:allow -- fixture key, never real
-const fake = makeNeon({ key: KEY, rlsOff: scenario === "rls-off", anonBypass: scenario === "anon-bypass", foreign: scenario === "foreign" });
+const fake = makeNeon({ key: KEY, rlsOff: scenario === "rls-off", anonBypass: scenario === "anon-bypass", foreign: scenario === "foreign" || scenario === "half-made" });
 globalThis.fetch = fake.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-neon-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
@@ -52,6 +52,14 @@ switch (scenario) {
     out.recorded = state.length;
     out.sql = fake.calls.filter((c) => c.endsWith("/sql")).length;
     out.listed = fake.calls.some((c) => c.startsWith("GET ") && c.endsWith("/projects"));
+    break;
+  case "half-made":
+    // The project exists because launch's own earlier run died between the POST and the report: its intent is on
+    // record, so this run adopts the project instead of refusing it as foreign (attack 530c056 B1).
+    state.push({ kind: "neon-project-intent", id: "arc-launch-arc-sandbox" });
+    out.scaffold = (await attempt(() => adapter.scaffold(ctxNow()))).ok;
+    out.projects = fake.projects.length;
+    out.kinds = state.map((r) => r.kind).sort();
     break;
   case "bad-key":
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ NEON_API_KEY: "short" })));

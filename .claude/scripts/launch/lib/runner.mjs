@@ -288,7 +288,9 @@ export async function verifySlots(opts, log = console.log) {
         res = underLock(P, slug, () => probeOne(P, slug, slot, rows, profile, ventureRoot, log), log);
       } catch (e) {
         if (e.exit === EXIT.LOCKED) { log(`${id}: SKIPPED -- ${e.message}`); skipped++; continue; }
-        if (e instanceof LaunchError || e.code === "DIGEST_DRIFT") {
+        // Under --public-only every thrown error is a slot the watch could not see, raised and counted, never a loop
+        // that dies before the watch-result line (attack 530c056 L1, L8).
+        if (e instanceof LaunchError || e.code === "DIGEST_DRIFT" || opts.publicOnly) {
           log(`${id}: UNVERIFIABLE -- ${e.message}`);
           failed++;
           // A drifted or unverifiable slot is a regression the watch must raise too, not only a failed probe (attack 143525f B3).

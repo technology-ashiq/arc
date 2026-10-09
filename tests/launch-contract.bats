@@ -1310,7 +1310,7 @@ arm() {
 
 @test "launch-contract: neon makes one tagged project once, and verify proves RLS: the owner reads 1 row and launch_anon reads 0 (ADR-1721)" {
   arm neon thread
-  [ "$(j 'o.first + " " + o.second + " " + o.projects + " " + o.kinds.join(",")')" = "true true 1 neon-project" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.first + " " + o.second + " " + o.projects + " " + o.kinds.join(",")')" = "true true 1 neon-project-intent,neon-project" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.evidence.owner_rows + " " + o.verify.evidence.anon_rows')" = "true 1 0" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.verify.answerer')" == "console.neon.tech + ep-"*".neon.tech" ]] || { echo "$DONE"; false; }
   arm neon rls-off
@@ -1320,6 +1320,8 @@ arm() {
   arm neon bad-key
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_TOKEN 0" ] || { echo "$DONE"; false; }
   # A same-named project launch never recorded is refused on the FIRST run too, after the list and before any SQL (attack 143525f B1).
+  arm neon half-made
+  [ "$(j 'o.scaffold + " " + o.projects + " " + o.kinds.join(",")')" = "true 1 neon-project,neon-project-intent" ] || { echo "$DONE"; false; }
   arm neon foreign
   [ "$(j 'o.scaffold.code + " " + o.recorded + " " + o.sql + " " + o.listed')" = "FOREIGN_PROJECT 0 0 true" ] || { echo "$DONE"; false; }
 }
