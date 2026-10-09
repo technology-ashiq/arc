@@ -75,3 +75,19 @@ REJECTED: L14 / L15 heading and fragment counts not exact — already-covered
 | 9 | attack 7c55982 r2 L5 | a `skip` reached through a loaded helper escapes the lexical skip check | accepted: catching it needs executing the test; the merge-time test body itself is checked | a merge-time row's test is found skipping on a CI log |
 | 10 | attack 7c55982 r2 B7 | `.githooks/*` call bare `bash`; a PowerShell-launched git could resolve WSL bash | watch (A-04): git for Windows runs hooks inside its own MSYS environment; the owner's main clone is checked when `core.hooksPath` is set | a commit from PowerShell shows the hook running under WSL or silent |
 | 11 | attack 7c55982 r2 B10 | `arc-doctor` trusts gh stdout on a non-zero exit when it contains "Branch not protected" | accepted: the text must still parse as GitHub's exact 404 object | a gh wrapper is found printing that body on another failure |
+| 12 | attack 85d2416 r1 boundary B6 (low) | `arc-compile` calls `process.exit` right after `console.log`, so a large `[dirty]` listing on a Windows pipe could lose its last line | accepted: the pattern predates P02 across the whole file and its output is a few lines; the suites assert the summary line, so a truncation fails loudly rather than passing | a CI leg fails with the summary line missing, or a listing grows past a screen |
+
+Rejected in attack 85d2416 round 1 (ADR-0067 taxonomy):
+
+```
+REJECTED: L1 a repeated --target with a different value overwrites -- unsupported (value() refuses it, exit 2)
+REJECTED: L2 --input without --all processes zero files -- unsupported (refused, exit 2)
+REJECTED: L3 description: --- read as the closing line -- unsupported (only an exact --- line closes)
+REJECTED: L4 a backslash path passes confineRel -- unsupported (the regex refuses any backslash)
+REJECTED: L5 a flag-shaped file name under a rendered dir -- non-actionable (no reader passes it as argv)
+REJECTED: L6 a symlink named x.md is read -- already-covered (flagged before the read)
+REJECTED: L8 an empty row id joins the id list -- unsupported (ROW_ID refuses every empty target)
+REJECTED: L9 an empty targets entry hides a duplicate -- unsupported (every entry joins the duplicate set)
+REJECTED: L10 a symlink named .. -- unsupported (readdir never returns it)
+REJECTED: L11-L15 version key, missing processes dir, BOM, unquoted false, no frontmatter -- non-actionable (each fails closed by design)
+```

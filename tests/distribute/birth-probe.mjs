@@ -9,6 +9,7 @@ const out = (s) => process.stdout.write(s + "\n");
 const CELLS = [
   "commands", "agents", "hooks", "skills", "mcp", "brain_file",
   "subagents", "user_only_invocation", "argument_substitution",
+  "argument_hint", "model_tier",
 ];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
