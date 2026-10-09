@@ -1307,3 +1307,27 @@ arm() {
   arm errors host-refused
   [ "$(j 'o.verify.ok + " " + o.routeCalls')" = "false 0" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: neon makes one tagged project once, and verify proves RLS: the owner reads 1 row and launch_anon reads 0 (ADR-1721)" {
+  arm neon thread
+  [ "$(j 'o.first + " " + o.second + " " + o.projects + " " + o.kinds.join(",")')" = "true true 1 neon-project" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.owner_rows + " " + o.verify.evidence.anon_rows')" = "true 1 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.answerer')" == "console.neon.tech + ep-"*".neon.tech" ]] || { echo "$DONE"; false; }
+  arm neon rls-off
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false launch_probe is missing or does not have row level security on" ] || { echo "$DONE"; false; }
+  arm neon anon-bypass
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false launch_anon reads 1 rows"* ]] || { echo "$DONE"; false; }
+  arm neon bad-key
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_TOKEN 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: with both database rows vetted, plan ranks neon and supabase with their fit-rule ids (REQ-08)" {
+  arm neon plan-both
+  [[ "$(j 'o.line')" == "database: recommended neon -- why: FIT-1 type saas-b2b, FIT-2 region any, FIT-3 payment_model any · status vetted"*"ranked by RANK-1"*"alternatives: supabase (FIT-1 "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: neon entered by its row and its adapter only -- no other launch code names it (REQ-08, ADR-1721)" {
+  # The tree is the contract, not one commit's file list: CI checks out one commit, so the history is not there to read.
+  local hits; hits=$(cd "$ARC_ROOT" && git ls-files products/launch .claude/scripts/launch | xargs grep -lis 'neon' | sort | tr '\n' ' ')
+  [ "$hits" = "products/launch/launch.providers.yaml products/launch/providers/database/neon.mjs " ] || { echo "named neon: $hits"; false; }
+}

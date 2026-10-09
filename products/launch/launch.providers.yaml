@@ -275,6 +275,27 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  - id: neon
+    slot: database
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - NEON_API_KEY
+    hosts:
+      - neon.tech
+    credentials:
+      scope: "project create and SQL over HTTP on the venture project; RLS proved through a no-bypass role (ADR-1721)"
+    adapter: providers/database/neon.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
   - id: drizzle
     slot: orm
     status: candidate
