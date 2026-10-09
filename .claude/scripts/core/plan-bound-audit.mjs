@@ -109,7 +109,7 @@ export function isGitWrite(toks) {
 
 // Words, not substrings: "attempt" holds "temp" and "block" holds "lock", and a substring match would drop a tracked
 // write as scratch.
-const words = (text) => new Set(text.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+const words = (text) => new Set(text.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[\W_]+/).filter(Boolean));
 const SCRATCH_WORDS = ["tmp", "temp", "tmpdir", "mkdtemp", "scratch", "cache", "lock", "locks", "state", "snapshot"];
 const isScratch = (text) => { if (/\.\./.test(text)) return false; const w = words(text); return SCRATCH_WORDS.some((s) => w.has(s)); };
 const isSpine = (text) => { const w = words(text); return w.has("events") || w.has("spine"); };
