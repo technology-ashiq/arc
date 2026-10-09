@@ -17,6 +17,10 @@ Why it exists (owner, 2026-10-07, `/arc-change --lane face`): the Money, Venture
 - [ ] **One component:** `NotServed` becomes one five-state component; it keeps `data-not-served` for the harness and adds `data-availability="<state>"`.
 - [ ] **Counts on screen:** each room header shows its count of `unknown` and `not-instrumented` fields; zero of each shows nothing, never a silent default.
 - [ ] **`FIELD_UNKNOWN`:** a room verb whose plan reads a field at `unknown` refuses `FIELD_UNKNOWN` rather than planning on 0. The verbs this gates are listed here, by name, as the phase's first step (before any code) and nothing else is gated.
+  **Gated verbs (listed 2026-10-09, before any code):** exactly two, both in `.claude/scripts/hq/face-ops.mjs`, both reading the `venture` field from `registeredVentures()`, which today collapses an absent or unparseable `ventures.yaml` into an empty list, i.e. plans on 0:
+  1. `money.ingest`: records revenue against a venture picked from that list.
+  2. `ventures.kill-review`: raises a kill review against a venture picked from that list.
+  `money.criteria`, `money.close-month` and `ventures.register` read no availability-bearing field and are NOT gated.
 - [ ] **Replay:** Tape as-of replay reproduces every field's state byte-identically (ADR-1305).
 - [ ] **Browser smoke:** the five states render in Money, Ventures, Legal, Growth and Leads in dark and in light, counted by `data-availability`.
 - [ ] Two fresh attackers (logic · shell) through `/arc-attack`, one round — the logic prompt carries: a fold returning numeric 0 where the source was unreachable; a fold hard-coding `served` without reading. CI green per job; the wiki regenerated; `/arc-phase-done 15` from the main clone.
