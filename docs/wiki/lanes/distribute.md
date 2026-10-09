@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/distribute/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/distribute/PROGRESS.md)
 
-## Decisions (18)
+## Decisions (19)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -46,6 +46,7 @@ ADRs whose `Product:` line names this lane first.
 | [`2015`](../../../docs/adr/2015-req-09-protection-binds-admins-and-requires-checks-not-reviews.md) | REQ-09's protection binds admins and requires checks, not reviews; the merge row is corrected | accepted | 2026-10-07 |
 | [`2016`](../../../docs/adr/2016-new-gates-run-as-bats-suites-inside-existing-ci-jobs.md) | new merge-time gates and the clean-machine proof run as bats suites inside the existing CI jobs | accepted | 2026-10-07 |
 | [`2017`](../../../docs/adr/2017-every-frontmatter-key-has-a-declared-fate-per-target.md) | every frontmatter key has a declared fate per target | accepted | 2026-10-09 |
+| [`2018`](../../../docs/adr/2018-one-render-module-feeds-the-goldens-and-the-installer.md) | one render module feeds the goldens and the installer | accepted | 2026-10-09 |
 
 ## Source
 
