@@ -176,3 +176,21 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [[ "$output" == *"slot slow has state"* ]] || { echo "$output"; false; }
   [[ "$output" != *$'\n''verified forged'* ]] || { echo "forged line printed: $output"; false; }
 }
+
+@test "launch-cli: apply payment-live on arc-sandbox records gate-3's request and exits 2, before any dependency or provider (ADR-1741)" {
+  mkdir -p "$BATS_TEST_TMPDIR/vr"
+  run node "$(L)" new --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$(L)" apply payment-live --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st" --venture-root "$BATS_TEST_TMPDIR/vr"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"payment-live: REFUSED -- a rehearsal venture never crosses gate-3; approval.requested "* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"approval.requested"')" -eq 1 ]
+  grep '"kind":"approval.requested"' "$ARC_SPINE_ROOT"/events/*.jsonl | grep -q '"gate":"gate-3"'
+  grep '"kind":"approval.requested"' "$ARC_SPINE_ROOT"/events/*.jsonl | grep -q '"provider":"none"'
+  [ "$(node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));console.log(s.slots["payment-live"].state)' "$BATS_TEST_TMPDIR/st/arc-sandbox.json")" = "absent" ]
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"run.completed"' || true)" -eq 0 ]
+  run node "$(L)" apply payment-live --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st" --venture-root "$BATS_TEST_TMPDIR/vr"
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"never crosses gate-3 (already recorded: "* ]] || { echo "$output"; false; }
+  [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"approval.requested"')" -eq 1 ]
+}

@@ -813,7 +813,7 @@ arm() {
 @test "launch-contract: webhooks-ledger commits its route once, makes its table with RLS and the marker, adds two env names, and a re-scaffold creates nothing (ADR-1739)" {
   arm webhooks thread
   [ "$(j 'o.first + " " + o.second + " " + o.commits')" = "true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.join(",")')" = "db-tables,webhook-route,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "db-tables,webhook-route,venture-repo,supabase-ref,probe-payment" ] || { echo "$DONE"; false; }
   [ "$(j 'o.table.rls + " " + o.table.comment')" = "true arc-launch webhooks" ] || { echo "$DONE"; false; }
   [ "$(j 'o.env.split("\n").filter(Boolean).join(",")')" = "RAZORPAY_WEBHOOK_SECRET=,SUPABASE_SERVICE_ROLE_KEY=" ] || { echo "$DONE"; false; }
   [ "$(j 'o.teardown.join(",")')" = "drop razorpay_webhook_events if it still carries the arc-launch webhooks marker (down migration)" ] || { echo "$DONE"; false; }
@@ -896,6 +896,67 @@ arm() {
   [ "$(j 'o.usd.state + " " + o.noId.state + " " + o.feeOver.state')" = "refused refused refused" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.usd.why')" == *"INR only"* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.spine.simulated + " " + o.spine.received')" = "0 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: refunds scaffold creates nothing, reads webhooks-ledger's table, and reports its source and probe refund (ADR-1740)" {
+  arm refunds thread
+  [[ "$(j 'o.charge')" == pay_ArcProbe0* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.scaffold + " " + o.scaffoldAgain + " " + o.githubWrites')" = "true true 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "refund-source,probe-refund" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "none (reads webhooks-ledger's table; nothing created)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: refunds verify delivers one signed refund twice, stores one row, and webhooks-ledger still verifies beside it (ADR-1740)" {
+  arm refunds thread
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai + api.supabase.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.stored + " " + o.verify.evidence.replays + " " + o.verify.evidence.amount')" = "1 2 100" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.refundRows + " " + o.verifyAgain + " " + o.refundRowsAgain + " " + o.hooksStillOk')" = "1 true 1 true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.queued.length + " " + o.queued[0].kind + " " + (o.queued[0].payload.refund_of === o.charge)')" = "1 revenue.simulated true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.queued[0].payload.payment_id')" == rfnd_ArcProbe0* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the probe refund books once against its charge, a replay adds zero events, and the simulated P&L nets to 0 (ADR-1740)" {
+  arm refunds thread
+  [ "$(j 'o.book.state + " " + o.bookAgain.state')" = "landed recorded" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.spine.simulated + " " + o.spine.refunds + " " + o.spine.received')" = "2 1 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.cashIn.join(",") + " " + o.flags.length')" = "arc-sandbox:0 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.simulatedLines[0]')" == *"SIMULATED"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.simulatedLines.slice(1).every((l) => l.startsWith("SIMULATED"))')" = "true" ] || { echo "$DONE"; false; }
+  # The render names a refund row by the charge it refunds, negated: "-1.00  refund of razorpay:pay_...".
+  [ "$(j 'o.simulatedLines.some((l) => l.includes("-1.00") && l.includes("refund of razorpay:" + o.charge)) && o.simulatedLines.some((l) => l.includes(" 1.00 ") && l.includes("razorpay:" + o.charge))')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.realVentures')" = "0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a refund is refused when its charge is not booked, over-refunds, names no refund id, or belongs to another venture (ADR-1740)" {
+  arm refunds refund-before-charge
+  [ "$(j 'o.verify + " " + o.book.state + " " + o.spine.simulated')" = "true refused 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.book.why')" == *"not booked as simulated for arc-sandbox"* ]] || { echo "$DONE"; false; }
+  arm refunds ledger-refuses
+  [ "$(j 'o.over.state + " " + o.partOne.state + " " + o.partTwo.state')" = "refused landed refused" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.partTwo.why')" == *"refunds to 101, more than its charge"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.badId.state + " " + o.badOf.state + " " + o.otherVenture.state')" = "refused refused refused" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.spine.simulated + " " + o.spine.refunds + " " + o.spine.received')" = "2 1 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: refunds is not ok and books nothing on another secret, an owner's table, a missing upstream, or a host outside hosts[] (ADR-1740)" {
+  arm refunds other-hook-key
+  [ "$(j 'o.verify.ok + " " + o.queued')" = "false 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "the route refused launch"*"(401)"* ]] || { echo "$DONE"; false; }
+  arm refunds foreign-table
+  [ "$(j 'o.scaffold.code + " " + o.reported + " " + o.verify.ok + " " + o.queued')" = "UPSTREAM_TABLE 0 false 0" ] || { echo "$DONE"; false; }
+  arm refunds no-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+  arm refunds host-refused
+  [ "$(j 'o.verify.ok + " " + o.queued + " " + o.routeCalls')" = "false 0 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a refund of the probe payment launch did not send fails the probe, and a new probe payment gets a fresh refund (55c5065 L7 B3)" {
+  arm refunds foreign-refund
+  [ "$(j 'o.planted + " " + o.verify.ok + " " + o.queued')" = "200 false 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.reason')" = "the probe payment carries 1 refund.processed rows launch did not send" ] || { echo "$DONE"; false; }
+  arm refunds new-payment
+  [ "$(j 'o.first + " " + o.second.ok + " " + o.refundOf + " " + o.refundRows')" = "true true pay_ArcProbe0fedcba9876 2" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: auth -- a minted link signs in, /api/me knows the user, logout clears it, then 401" {
