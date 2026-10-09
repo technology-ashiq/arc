@@ -15,7 +15,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Refused, REGISTRY, opBytes, sha } from "./common.mjs";
@@ -80,7 +81,7 @@ export function finishPlan(p, tree, dir) {
   if (at < 0 || !existsSync(join(dir, path))) return p;
   let merged;
   try {
-    merged = execFileSync(process.execPath, [join(tree, ".claude/scripts/core/arc-settings-merge.mjs"), join(tree, path), join(dir, path)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    merged = runNode(join(tree, ".claude/scripts/core/arc-settings-merge.mjs"), [join(tree, path), join(dir, path)]);
   } catch (e) {
     throw new Refused("settings-merge", `the project's .claude/settings.json could not be merged, and nothing was written: ${String(e.stderr || e.message).trim()}`);
   }
@@ -90,11 +91,26 @@ export function finishPlan(p, tree, dir) {
   return { ...p, ops };
 }
 
+/**
+ * Run one of arc's node scripts and return its stdout. Both scripts this target calls write and then exit, and
+ * on macOS stdout to a pipe is asynchronous, so the exit cut the output at 8192 bytes (CI macos shard 3 on
+ * 88c2fb6). A file descriptor is written synchronously, so stdout goes to a temp file instead of a pipe.
+ */
+function runNode(script, args) {
+  const tmp = mkdtempSync(join(tmpdir(), "arc-install-"));
+  const out = join(tmp, "stdout");
+  try {
+    const fd = openSync(out, "w");
+    try { execFileSync(process.execPath, [script, ...args], { stdio: ["ignore", fd, "pipe"] }); } finally { closeSync(fd); }
+    return readFileSync(out, "utf8");
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+}
+
 /** The registry the resolver writes, carrying the install record under `install`. */
 export function manifestText(tree, record) {
   let reg;
   try {
-    reg = JSON.parse(execFileSync(process.execPath, [join(tree, ".claude/scripts/core/arc-products.mjs"), "--registry", "--root", tree], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+    reg = JSON.parse(runNode(join(tree, ".claude/scripts/core/arc-products.mjs"), ["--registry", "--root", tree]));
   } catch (e) {
     throw new Refused("registry", `registry generation failed: ${String(e.stderr || e.message).trim()}`);
   }

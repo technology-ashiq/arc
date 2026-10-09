@@ -66,3 +66,4 @@ and lane finds are appended under their PR.
 - **(bb) two targets, one record.** Each target reads only its own record, and a `.arc-install.json` naming another target refuses `other-target`. Fixed in `arc-install.mjs` + `common.mjs` (readManifest), attack d32e714 B4.
 - **(bc) the record shipped as a payload file.** `arc-registry.json` is excluded from the claude-code payload. Fixed in `install-targets/claude-code.mjs`, attack d32e714 B5.
 - **(bd) an empty scope rendered as an empty rule.** `Bash()` is `[unsupported]`. Fixed in `adapters/opencode.mjs`, attack d32e714 L8.
+- **(be) a child script's stdout read through a pipe it exits on.** A script that writes then calls process.exit truncates a pipe at 8192 bytes on macOS; the installer reads every child script's stdout from a file descriptor. Fixed in `install-targets/claude-code.mjs` (runNode), CI macos shard 3 on 88c2fb6.
