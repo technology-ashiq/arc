@@ -3,9 +3,16 @@
 //   runConclusions  what each of the three legs concludes when a commit lands on main (all success unless set)
 //   planLimit       branch protection answers 403 the way GitHub Free does for a private repo
 //   pendingPolls    how many runs-list reads show a new run as in_progress before it completes
+//   auditConclusion what the dependency-scan workflow's audit job concludes on a push (success unless set)
+//   jobConclusions  { job: conclusion } for the other workflows' jobs (backup, restore); success unless set
+//   secrets         names of Actions secrets the repo holds (values are never modelled)
 export const LEGS = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
-export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0 } = {}) {
+export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, auditConclusion = "success", jobConclusions = {} } = {}) {
+  // The workflows other than arc-ci a fixture models, each with its jobs; a run of one has id + 10000 * (index + 1).
+  const EXTRA = { "dependency-scan.yml": ["audit"], "backup-drill.yml": ["backup", "restore"] };
+  const EXTRA_NAMES = Object.keys(EXTRA);
+  const conclude = (job) => (job === "audit" ? auditConclusion : jobConclusions[job] || "success");
   const fresh = (r) => ({ private: true, description: "", files: {}, runs: [], protection: null, commits: [], ...r });
   const store = new Map(repos.map((r) => [`${r.owner || login}/${r.name}`, fresh(r)]));
   const calls = [];
@@ -16,11 +23,13 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
   const view = (full, r) => ({ full_name: full, name: full.split("/")[1], private: r.private, description: r.description, default_branch: "main", archived: !!r.archived });
 
   // The contents API answers base64 wrapped in 60-character lines with a trailing newline; readers must not care.
+  // The workflow files on main when a push lands: a push runs every workflow main holds, and only those.
+  const workflows = (r) => Object.keys(r.files).filter((f) => f.startsWith(".github/workflows/")).map((f) => f.slice(".github/workflows/".length));
   const wrap64 = (b64) => `${(String(b64).match(/.{1,60}/g) || []).join("\n")}\n`;
   function commit(r, message, files) {
     const c = { sha: sha(), message, files };
     r.commits.push(c);
-    r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha, branch: "main", pending: pendingPolls,
+    r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha, branch: "main", pending: pendingPolls, workflows: workflows(r), created_at: new Date().toISOString(),
       jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
     return c;
   }
@@ -91,7 +100,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       p.c.app = p.entries.some((e) => e.path === "package.json");
       r.commits.push(p.c);
       // A push to main runs arc-ci, like any other commit (ADR-1733's orm verify reads it).
-      r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: p.c.sha, branch: "main", pending: pendingPolls,
+      r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: p.c.sha, branch: "main", pending: pendingPolls, workflows: workflows(r), created_at: new Date().toISOString(),
         jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
       return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
     }
@@ -195,16 +204,24 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     }
 
     // A run answers the branch and head_sha filters the way GitHub does; `pending` polls show it in progress first.
-    if (method === "GET" && rest === "actions/workflows/arc-ci.yml/runs") {
+    const sm = rest.match(/^actions\/secrets\/([A-Z0-9_]+)$/);
+    if (method === "GET" && sm) return (r.secrets || []).includes(sm[1]) ? json(200, { name: sm[1], created_at: "2026-10-01T00:00:00Z" }) : err(404, "Not Found");
+    const wm = rest.match(/^actions\/workflows\/([a-z0-9-]+\.yml)\/runs$/);
+    if (method === "GET" && wm) {
       const branch = url.searchParams.get("branch"), head = url.searchParams.get("head_sha");
-      const hits = r.runs.filter((x) => (!branch || (x.branch || "main") === branch) && (!head || x.head_sha === head));
-      const shown = hits.slice(0, Number(url.searchParams.get("per_page") || 30)).map(({ jobs, pending, ...run }) => (pending > 0 ? { ...run, status: "in_progress" } : run));
+      // arc-ci runs on every push (the fixtures predate other workflows); any other workflow runs only once main holds it.
+      const hits = r.runs.filter((x) => (wm[1] === "arc-ci.yml" || (x.workflows || []).includes(wm[1])) && (!branch || (x.branch || "main") === branch) && (!head || x.head_sha === head));
+      const shown = hits.slice(0, Number(url.searchParams.get("per_page") || 30)).map(({ jobs, pending, workflows: _w, ...run }) => ({ ...run, id: wm[1] === "arc-ci.yml" ? run.id : run.id + 10000 * (EXTRA_NAMES.indexOf(wm[1]) + 1) })).map((run) => (hits.find((x) => x.head_sha === run.head_sha).pending > 0 ? { ...run, status: "in_progress" } : run));
       for (const x of hits.slice(0, 1)) if (x.pending > 0) x.pending--;
       return json(200, { total_count: hits.length, workflow_runs: shown });
     }
     const jm = rest.match(/^actions\/runs\/(\d+)\/jobs$/);
     if (jm && method === "GET") {
-      const run = r.runs.find((x) => String(x.id) === jm[1]);
+      // Ids past 10000 are another workflow's run of the same push, with that workflow's own jobs.
+      const id = Number(jm[1]);
+      const k = Math.floor(id / 10000);
+      const run = r.runs.find((x) => x.id === id - 10000 * k);
+      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name) })) });
       return run ? json(200, { jobs: run.jobs }) : err(404, "Not Found");
     }
     return err(404, `fake github: ${method} ${p} not modelled`);

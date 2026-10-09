@@ -380,6 +380,7 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       }
       let outcome;
       if (r.status === 0 && after.state === "verified" && !ledger) outcome = "ok";
+      else if (r.status === 0 && after.state === "absent" && !ledger) outcome = "absent";
       else {
         const timedOut = r.error && r.error.code === "ETIMEDOUT";
         // A worker that recorded no terminal state died mid-attempt; Windows reports a SIGKILL as plain exit 1, so the
@@ -394,7 +395,7 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       const fin = slotRow(loadState(P.stateDir, slug), slot.id);
       log(`${slot.id}: ${fin.state}${fin.reason ? ` (${fin.reason})` : ""} -- attempt ${attempt}, receipt ${receipt || "UNRECEIPTED"}`);
       if (!receipt) return EXIT.FAILED;
-      return outcome === "ok" ? EXIT.OK : EXIT.FAILED;
+      return outcome === "fail" ? EXIT.FAILED : EXIT.OK;
     }, log);
   } catch (e) {
     if (e.exit === EXIT.LOCKED) { log(e.message); return EXIT.LOCKED; }

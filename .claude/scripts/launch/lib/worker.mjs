@@ -84,6 +84,13 @@ try {
     save({ state: "verified", answerer: v.answerer, evidence: v.evidence ?? null, queued: ctx.queued, verified_at: new Date().toISOString() });
     process.exit(0);
   }
+  // A named ABSENT is an answer only where the slot's own exit criteria allow one, and only when something outside the
+  // repo observed the absence; an adapter can never mark any other slot absent (ADR-1745).
+  const allowsAbsent = (slot.exit_criteria || []).some((c) => /\bABSENT\b/.test(String(c)));
+  if (v && v.ok === false && allowsAbsent && typeof v.absent === "string" && v.absent && typeof v.answerer === "string" && v.answerer) {
+    save({ state: "absent", reason: `ABSENT(${v.absent.slice(0, 160)})`, answerer: v.answerer, queued: [], verified_at: new Date().toISOString() });
+    process.exit(0);
+  }
   fail(v && v.ok === true ? "verify:no answerer named (a probe names what answered it)" : `verify:${(v && v.reason) || "failed"}`);
 } catch (e) {
   clearTimeout(timer);
