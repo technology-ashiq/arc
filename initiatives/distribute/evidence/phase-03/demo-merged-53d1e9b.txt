@@ -1,0 +1,26 @@
+merged tree 53d1e9b6
+arc-compile: 62/62 byte-identical for target `codex` (input source: 26 commands, 32 agents, 4 skills; 3 skipped by targets:, 0 unsupported)
+unsupported-commands: 0
+dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty
+arc-compile: 83/83 byte-identical for target `opencode` (input source: 25 commands, 32 agents, 4 skills; 3 skipped by targets:, 1 unsupported)
+unsupported-commands: 1
+dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty
+arc-compile: 62/62 byte-identical for target `skills-only` (input source: 26 commands, 32 agents, 4 skills; 3 skipped by targets:, 0 unsupported)
+unsupported-commands: 0
+dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty
+plan: skills-only — 445 file(s), 0 dir(s) into <dir>
+partial: commands — rendered as skills only; invocation depends on the reading harness
+partial: agents — role skills, single-session (ADR-2009)
+degraded: hooks — `skills-only` cannot hold it
+partial: mcp — .mcp.json shipped as-is; the reading harness must understand that format
+partial: subagents — single-session role skills, never a nested harness call (ADR-2009)
+degraded: user_only_invocation — `skills-only` cannot hold it
+degraded: argument_substitution — `skills-only` cannot hold it
+degraded: argument_hint — `skills-only` cannot hold it
+degraded: model_tier — `skills-only` cannot hold it
+dry-run: nothing written
+plan: opencode — 466 file(s), 0 dir(s) into <scratch>/demo
+apply: wrote 467 file(s) into <scratch>/demo; record .arc-install.json
+doctor: 466 placed, 4 degraded, 0 missing, 0 unmanaged-conflict
+missing .opencode/commands/arc-commit.md
+doctor: 465 placed, 4 degraded, 1 missing, 0 unmanaged-conflict

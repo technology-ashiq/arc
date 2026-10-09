@@ -1,0 +1,345 @@
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:02.2208480Z ok 1320 distribute-compile-opencode: every test in the file is registered
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:02.3793920Z ok 1321 distribute-compile-opencode: the real tree renders byte-identical to the golden
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:02.6138010Z ok 1322 distribute-compile-opencode: a source edit is a byte-diff naming the rendered command
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:02.8250120Z ok 1323 distribute-compile-opencode: a golden file the render does not produce is dirty
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:02.9667210Z ok 1324 distribute-compile-opencode: the unsupported command count is printed and under the stop rule
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:03.2581280Z ok 1325 distribute-compile-opencode: six unsupported commands trip the stop rule
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:03.3208270Z ok 1326 distribute-compile-opencode: a tool fence renders as a companion agent and an exact scope stays exact
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:04.0646450Z ok 1331 distribute-install: every test in the file is registered
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:04.4664130Z ok 1332 distribute-install: a clean install doctors as every path placed
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:04.8092540Z ok 1333 distribute-install: deleting one installed file flips exactly one row to missing
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:05.3415300Z ok 1334 distribute-install: a hand-placed file at a managed path is unmanaged-conflict, and a re-install refuses it
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:05.6146860Z ok 1335 distribute-install: --force overwrites the conflict and the record lists it
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:05.7384470Z ok 1336 distribute-install: a directory with no install record doctors as not-installed, exit 2
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:05.9097930Z ok 1337 distribute-install: a dry-run plans every op and writes nothing
+selftest (macos-latest, 20, shard 1/3)	UNKNOWN STEP	2026-10-09T06:05:06.1784130Z ok 1338 distribute-install: a second target into the same project is refused as other-target
+selftest (windows-latest, 20, shard 11/12)	UNKNOWN STEP	2026-10-09T06:03:10.6634073Z ok 350 distribute-compile-skills-only: every test in the file is registered
+selftest (windows-latest, 20, shard 11/12)	UNKNOWN STEP	2026-10-09T06:03:12.2933293Z ok 351 distribute-compile-skills-only: the real tree renders byte-identical to the golden
+selftest (windows-latest, 20, shard 11/12)	UNKNOWN STEP	2026-10-09T06:03:14.1810857Z ok 352 distribute-compile-skills-only: a source edit is a byte-diff naming the rendered skill
+selftest (windows-latest, 20, shard 11/12)	UNKNOWN STEP	2026-10-09T06:03:16.1011537Z ok 353 distribute-compile-skills-only: a golden file the render does not produce is dirty
+selftest (windows-latest, 20, shard 11/12)	UNKNOWN STEP	2026-10-09T06:03:21.3252088Z ok 354 distribute-compile-skills-only: every rendered skill is named for its directory
+selftest (windows-latest, 20, shard 11/12)	UNKNOWN STEP	2026-10-09T06:03:23.3827217Z ok 355 distribute-compile-skills-only: a tool holding a space outside its parentheses is unsupported
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:04:50.1742450Z ok 348 distribute-apply-boundary: every test in the file is registered
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:04:51.8338057Z ok 349 distribute-apply-boundary: a target that is a file is refused as not-a-directory
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:04:52.4491387Z ok 350 distribute-apply-boundary: a target that is a symlink is refused by name # skip this filesystem made no real symlink (Git for Windows without developer mode copies instead)
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:04:55.9293822Z ok 351 distribute-apply-boundary: a path with spaces is handled and doctors clean
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:04:57.7072565Z ok 352 distribute-apply-boundary: a drive-letter path is handled on Windows and refused by name elsewhere
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:04:59.8181386Z ok 353 distribute-apply-boundary: an injected failure on the 5th file leaves 0 files and restores what it overwrote
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:03.0141367Z ok 354 distribute-apply-boundary: a failure on the record itself rolls back the whole run
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:04.7340965Z ok 355 distribute-apply-boundary: a parent that is a file is refused as file-as-dir before any write
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:05.5214453Z ok 356 distribute-apply-boundary: a parent that is a symlink is refused as linked-parent # skip this filesystem made no real symlink (Git for Windows without developer mode copies instead)
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:07.2546008Z ok 357 distribute-apply-boundary: a target inside the arc source is refused as inside-source
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:09.9894368Z ok 358 distribute-matrix: every test in the file is registered
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:13.8398670Z ok 359 distribute-matrix: skills-only names one degraded line per false cell
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:23.9635760Z ok 360 distribute-matrix: every verified row names exactly its false and partial cells
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:27.0074106Z ok 361 distribute-matrix: claude-code claims everything and degrades nothing
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T06:05:30.5307031Z ok 362 distribute-matrix: a cell flipped to false adds exactly its degraded line
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:34.4488039Z ok 336 distribute-install: every test in the file is registered
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:37.6142412Z ok 337 distribute-install: a clean install doctors as every path placed
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:40.8608683Z ok 338 distribute-install: deleting one installed file flips exactly one row to missing
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:45.4310409Z ok 339 distribute-install: a hand-placed file at a managed path is unmanaged-conflict, and a re-install refuses it
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:47.5583450Z ok 340 distribute-install: --force overwrites the conflict and the record lists it
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:48.9203869Z ok 341 distribute-install: a directory with no install record doctors as not-installed, exit 2
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:50.7817973Z ok 342 distribute-install: a dry-run plans every op and writes nothing
+selftest (windows-latest, 20, shard 4/12)	UNKNOWN STEP	2026-10-09T06:05:53.8755292Z ok 343 distribute-install: a second target into the same project is refused as other-target
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:26.7692690Z ok 1210 distribute-apply-boundary: every test in the file is registered
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:26.9174200Z ok 1211 distribute-apply-boundary: a target that is a file is refused as not-a-directory
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:27.0673560Z ok 1212 distribute-apply-boundary: a target that is a symlink is refused by name
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:27.3345630Z ok 1213 distribute-apply-boundary: a path with spaces is handled and doctors clean
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:27.4719850Z ok 1214 distribute-apply-boundary: a drive-letter path is handled on Windows and refused by name elsewhere
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:27.6515300Z ok 1215 distribute-apply-boundary: an injected failure on the 5th file leaves 0 files and restores what it overwrote
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:27.8967060Z ok 1216 distribute-apply-boundary: a failure on the record itself rolls back the whole run
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.0396530Z ok 1217 distribute-apply-boundary: a parent that is a file is refused as file-as-dir before any write
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.1929030Z ok 1218 distribute-apply-boundary: a parent that is a symlink is refused as linked-parent
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.3321450Z ok 1219 distribute-apply-boundary: a target inside the arc source is refused as inside-source
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.4325280Z ok 1220 distribute-compile-claude-code: every test in the file is registered
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.5788760Z ok 1221 distribute-compile-claude-code: every command and agent renders itself
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.7819420Z ok 1222 distribute-compile-claude-code: an LF and a CRLF copy of one command render to one sha256
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:28.8908460Z ok 1223 distribute-compile-skills-only: every test in the file is registered
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:29.0127360Z ok 1224 distribute-compile-skills-only: the real tree renders byte-identical to the golden
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:29.1750040Z ok 1225 distribute-compile-skills-only: a source edit is a byte-diff naming the rendered skill
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:29.3427500Z ok 1226 distribute-compile-skills-only: a golden file the render does not produce is dirty
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:30.0582130Z ok 1227 distribute-compile-skills-only: every rendered skill is named for its directory
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:30.2295090Z ok 1228 distribute-compile-skills-only: a tool holding a space outside its parentheses is unsupported
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:31.7630530Z ok 1240 distribute-matrix: every test in the file is registered
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:32.1944040Z ok 1241 distribute-matrix: skills-only names one degraded line per false cell
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:33.5316070Z ok 1242 distribute-matrix: every verified row names exactly its false and partial cells
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:33.8628380Z ok 1243 distribute-matrix: claude-code claims everything and degrades nothing
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T05:57:34.1287520Z ok 1244 distribute-matrix: a cell flipped to false adds exactly its degraded line
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:32.1558246Z ok 283 distribute-compile-opencode: every test in the file is registered
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:33.6042892Z ok 284 distribute-compile-opencode: the real tree renders byte-identical to the golden
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:35.4003159Z ok 285 distribute-compile-opencode: a source edit is a byte-diff naming the rendered command
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:37.1886433Z ok 286 distribute-compile-opencode: a golden file the render does not produce is dirty
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:38.6400330Z ok 287 distribute-compile-opencode: the unsupported command count is printed and under the stop rule
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:40.7325260Z ok 288 distribute-compile-opencode: six unsupported commands trip the stop rule
+selftest (windows-latest, 20, shard 10/12)	UNKNOWN STEP	2026-10-09T06:06:41.1609144Z ok 289 distribute-compile-opencode: a tool fence renders as a companion agent and an exact scope stays exact
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:17.5020510Z ok 1271 distribute-apply-boundary: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:17.6504177Z ok 1272 distribute-apply-boundary: a target that is a file is refused as not-a-directory
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:17.7984451Z ok 1273 distribute-apply-boundary: a target that is a symlink is refused by name
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:18.0477065Z ok 1274 distribute-apply-boundary: a path with spaces is handled and doctors clean
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:18.1877928Z ok 1275 distribute-apply-boundary: a drive-letter path is handled on Windows and refused by name elsewhere
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:18.3679413Z ok 1276 distribute-apply-boundary: an injected failure on the 5th file leaves 0 files and restores what it overwrote
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:18.6472206Z ok 1277 distribute-apply-boundary: a failure on the record itself rolls back the whole run
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:18.7953611Z ok 1278 distribute-apply-boundary: a parent that is a file is refused as file-as-dir before any write
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:18.9495490Z ok 1279 distribute-apply-boundary: a parent that is a symlink is refused as linked-parent
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:19.0933620Z ok 1280 distribute-apply-boundary: a target inside the arc source is refused as inside-source
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:20.4027356Z ok 1294 distribute-compile-claude-code: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:20.5731996Z ok 1295 distribute-compile-claude-code: every command and agent renders itself
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:20.7740116Z ok 1296 distribute-compile-claude-code: an LF and a CRLF copy of one command render to one sha256
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:20.9112578Z ok 1297 distribute-compile-codex: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.0335237Z ok 1298 distribute-compile-codex: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.1736951Z ok 1299 distribute-compile-codex: a source edit is a byte-diff naming the rendered skill
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.3175247Z ok 1300 distribute-compile-codex: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.4393834Z ok 1301 distribute-compile-codex: every agent is one toml and a Claude-only command renders nothing
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.5787919Z ok 1302 distribute-compile-codex: a body holding three quotes falls back to a basic toml string
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.7170399Z ok 1303 distribute-compile-opencode: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.8422115Z ok 1304 distribute-compile-opencode: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:21.9846521Z ok 1305 distribute-compile-opencode: a source edit is a byte-diff naming the rendered command
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.1301669Z ok 1306 distribute-compile-opencode: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.2535126Z ok 1307 distribute-compile-opencode: the unsupported command count is printed and under the stop rule
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.4132969Z ok 1308 distribute-compile-opencode: six unsupported commands trip the stop rule
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.4471479Z ok 1309 distribute-compile-opencode: a tool fence renders as a companion agent and an exact scope stays exact
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.5838200Z ok 1310 distribute-compile-skills-only: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.7090960Z ok 1311 distribute-compile-skills-only: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:22.8536861Z ok 1312 distribute-compile-skills-only: a source edit is a byte-diff naming the rendered skill
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:23.0009771Z ok 1313 distribute-compile-skills-only: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:23.4110106Z ok 1314 distribute-compile-skills-only: every rendered skill is named for its directory
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:23.5503668Z ok 1315 distribute-compile-skills-only: a tool holding a space outside its parentheses is unsupported
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:27.9611975Z ok 1352 distribute-install: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:28.2613011Z ok 1353 distribute-install: a clean install doctors as every path placed
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:28.5213737Z ok 1354 distribute-install: deleting one installed file flips exactly one row to missing
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:28.9252327Z ok 1355 distribute-install: a hand-placed file at a managed path is unmanaged-conflict, and a re-install refuses it
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:29.1294348Z ok 1356 distribute-install: --force overwrites the conflict and the record lists it
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:29.2227930Z ok 1357 distribute-install: a directory with no install record doctors as not-installed, exit 2
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:29.3802343Z ok 1358 distribute-install: a dry-run plans every op and writes nothing
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:29.6418112Z ok 1359 distribute-install: a second target into the same project is refused as other-target
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:29.7718247Z ok 1360 distribute-matrix: every test in the file is registered
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:30.3799542Z ok 1361 distribute-matrix: skills-only names one degraded line per false cell
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:32.5121226Z ok 1362 distribute-matrix: every verified row names exactly its false and partial cells
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:33.0394290Z ok 1363 distribute-matrix: claude-code claims everything and degrades nothing
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T05:57:33.2901291Z ok 1364 distribute-matrix: a cell flipped to false adds exactly its degraded line
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:47.5730471Z ok 4435 sync: copies machinery into target .claude
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:48.2206612Z ok 4436 sync: copies the meta docs
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:49.9424771Z ok 4437 sync: docs/playbooks/ is a directory sync on BOTH copy paths (rsync and cp fallback)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:50.9593759Z ok 4438 sync: a source tree with NO docs/playbooks/ still completes the install
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:52.5879771Z ok 4439 sync: a mutant with docs/playbooks deleted from the install target ships NO playbook (control)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:53.2191869Z ok 4440 sync: a failed full sync rolls back and leaves no arc file behind
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:53.8416746Z ok 4441 sync: never leaks personal settings or working state
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:54.4699883Z ok 4442 sync: never leaks the scheduled_tasks.lock runtime file (REQ-04)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:56.1495973Z ok 4443 sync: never leaks a .claude/worktrees/ dir into the target (REQ-04 class, pinned)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:57.3840297Z ok 4444 sync: never leaks the headroom wrapper's per-machine files (REQ-04 class, pinned)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:14:58.0400512Z ok 4446 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:01.1968772Z ok 4447 sync: bare install is byte-identical to the golden fixture, rsync path (REQ-02)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:04.4092057Z ok 4448 sync: bare install is byte-identical to the golden fixture, cp-r fallback path (REQ-02)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:04.4833204Z ok 4449 sync: --list prints product names (no target needed)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:04.9971787Z ok 4450 sync: --products council installs council + core only (REQ-01)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:05.0714906Z ok 4451 sync: --products unknown name fails (exit 2) and prints the valid list
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:05.1067705Z ok 4452 sync: an unknown option is rejected (exit 2)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:06.2186609Z ok 4454 sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:06.2557214Z ok 4455 sync: missing target dir fails cleanly (exit 1)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:06.2923228Z ok 4456 sync: requires a target argument
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:06.8733351Z ok 4457 sync: --products writes a registry naming exactly core+council (REQ-08)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:07.5952410Z ok 4458 sync: bare install writes a registry naming every product in products/ (REQ-08)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:08.6642911Z ok 4459 sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)
+selftest (ubuntu-latest, 18)	Run bats self-tests	2026-10-09T06:15:10.7403033Z ok 4460 sync: the registry is present in a bare target but EXCLUDED from the golden manifest (REQ-02)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:05.7820758Z ok 1271 distribute-apply-boundary: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:05.9303825Z ok 1272 distribute-apply-boundary: a target that is a file is refused as not-a-directory
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:06.0767333Z ok 1273 distribute-apply-boundary: a target that is a symlink is refused by name
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:06.3186875Z ok 1274 distribute-apply-boundary: a path with spaces is handled and doctors clean
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:06.4575808Z ok 1275 distribute-apply-boundary: a drive-letter path is handled on Windows and refused by name elsewhere
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:06.6320417Z ok 1276 distribute-apply-boundary: an injected failure on the 5th file leaves 0 files and restores what it overwrote
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:06.8951168Z ok 1277 distribute-apply-boundary: a failure on the record itself rolls back the whole run
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:07.0435563Z ok 1278 distribute-apply-boundary: a parent that is a file is refused as file-as-dir before any write
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:07.1962313Z ok 1279 distribute-apply-boundary: a parent that is a symlink is refused as linked-parent
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:07.3371528Z ok 1280 distribute-apply-boundary: a target inside the arc source is refused as inside-source
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:08.6992590Z ok 1294 distribute-compile-claude-code: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:08.8675162Z ok 1295 distribute-compile-claude-code: every command and agent renders itself
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.0695565Z ok 1296 distribute-compile-claude-code: an LF and a CRLF copy of one command render to one sha256
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.2092287Z ok 1297 distribute-compile-codex: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.3328983Z ok 1298 distribute-compile-codex: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.4821925Z ok 1299 distribute-compile-codex: a source edit is a byte-diff naming the rendered skill
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.6253051Z ok 1300 distribute-compile-codex: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.7443194Z ok 1301 distribute-compile-codex: every agent is one toml and a Claude-only command renders nothing
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:09.8794049Z ok 1302 distribute-compile-codex: a body holding three quotes falls back to a basic toml string
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.0245924Z ok 1303 distribute-compile-opencode: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.1512477Z ok 1304 distribute-compile-opencode: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.2936113Z ok 1305 distribute-compile-opencode: a source edit is a byte-diff naming the rendered command
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.4411392Z ok 1306 distribute-compile-opencode: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.5629843Z ok 1307 distribute-compile-opencode: the unsupported command count is printed and under the stop rule
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.7274432Z ok 1308 distribute-compile-opencode: six unsupported commands trip the stop rule
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.7643432Z ok 1309 distribute-compile-opencode: a tool fence renders as a companion agent and an exact scope stays exact
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:10.9070305Z ok 1310 distribute-compile-skills-only: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:11.0289447Z ok 1311 distribute-compile-skills-only: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:11.1724901Z ok 1312 distribute-compile-skills-only: a source edit is a byte-diff naming the rendered skill
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:11.3210802Z ok 1313 distribute-compile-skills-only: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:11.7633417Z ok 1314 distribute-compile-skills-only: every rendered skill is named for its directory
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:11.9066212Z ok 1315 distribute-compile-skills-only: a tool holding a space outside its parentheses is unsupported
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:16.3569130Z ok 1352 distribute-install: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:16.6395874Z ok 1353 distribute-install: a clean install doctors as every path placed
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:16.8899705Z ok 1354 distribute-install: deleting one installed file flips exactly one row to missing
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:17.2723100Z ok 1355 distribute-install: a hand-placed file at a managed path is unmanaged-conflict, and a re-install refuses it
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:17.4668667Z ok 1356 distribute-install: --force overwrites the conflict and the record lists it
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:17.5597235Z ok 1357 distribute-install: a directory with no install record doctors as not-installed, exit 2
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:17.7113245Z ok 1358 distribute-install: a dry-run plans every op and writes nothing
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:17.9631046Z ok 1359 distribute-install: a second target into the same project is refused as other-target
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:18.0991147Z ok 1360 distribute-matrix: every test in the file is registered
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:18.7148041Z ok 1361 distribute-matrix: skills-only names one degraded line per false cell
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:20.7535137Z ok 1362 distribute-matrix: every verified row names exactly its false and partial cells
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:21.2925152Z ok 1363 distribute-matrix: claude-code claims everything and degrades nothing
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T05:57:21.5408530Z ok 1364 distribute-matrix: a cell flipped to false adds exactly its degraded line
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:37.2328897Z ok 4435 sync: copies machinery into target .claude
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:37.8104719Z ok 4436 sync: copies the meta docs
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:39.3794225Z ok 4437 sync: docs/playbooks/ is a directory sync on BOTH copy paths (rsync and cp fallback)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:40.3735151Z ok 4438 sync: a source tree with NO docs/playbooks/ still completes the install
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:41.9296404Z ok 4439 sync: a mutant with docs/playbooks deleted from the install target ships NO playbook (control)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:42.4943747Z ok 4440 sync: a failed full sync rolls back and leaves no arc file behind
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:43.1049516Z ok 4441 sync: never leaks personal settings or working state
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:43.7044806Z ok 4442 sync: never leaks the scheduled_tasks.lock runtime file (REQ-04)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:45.2498593Z ok 4443 sync: never leaks a .claude/worktrees/ dir into the target (REQ-04 class, pinned)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:46.3663601Z ok 4444 sync: never leaks the headroom wrapper's per-machine files (REQ-04 class, pinned)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:46.9741179Z ok 4446 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:50.1069989Z ok 4447 sync: bare install is byte-identical to the golden fixture, rsync path (REQ-02)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:53.2716327Z ok 4448 sync: bare install is byte-identical to the golden fixture, cp-r fallback path (REQ-02)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:53.3437171Z ok 4449 sync: --list prints product names (no target needed)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:53.8661689Z ok 4450 sync: --products council installs council + core only (REQ-01)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:53.9389802Z ok 4451 sync: --products unknown name fails (exit 2) and prints the valid list
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:53.9775761Z ok 4452 sync: an unknown option is rejected (exit 2)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:55.0675694Z ok 4454 sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:55.1050083Z ok 4455 sync: missing target dir fails cleanly (exit 1)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:55.1416195Z ok 4456 sync: requires a target argument
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:55.7201810Z ok 4457 sync: --products writes a registry naming exactly core+council (REQ-08)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:56.3511715Z ok 4458 sync: bare install writes a registry naming every product in products/ (REQ-08)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:57.4276809Z ok 4459 sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)
+selftest (ubuntu-latest, 22)	Run bats self-tests	2026-10-09T06:17:59.5001406Z ok 4460 sync: the registry is present in a bare target but EXCLUDED from the golden manifest (REQ-02)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:36.6274350Z ok 1271 distribute-apply-boundary: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:36.7725379Z ok 1272 distribute-apply-boundary: a target that is a file is refused as not-a-directory
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:36.9174526Z ok 1273 distribute-apply-boundary: a target that is a symlink is refused by name
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:37.1511235Z ok 1274 distribute-apply-boundary: a path with spaces is handled and doctors clean
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:37.2903213Z ok 1275 distribute-apply-boundary: a drive-letter path is handled on Windows and refused by name elsewhere
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:37.4632774Z ok 1276 distribute-apply-boundary: an injected failure on the 5th file leaves 0 files and restores what it overwrote
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:37.7245775Z ok 1277 distribute-apply-boundary: a failure on the record itself rolls back the whole run
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:37.8686886Z ok 1278 distribute-apply-boundary: a parent that is a file is refused as file-as-dir before any write
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:38.0174085Z ok 1279 distribute-apply-boundary: a parent that is a symlink is refused as linked-parent
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:38.1542530Z ok 1280 distribute-apply-boundary: a target inside the arc source is refused as inside-source
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:39.4852013Z ok 1294 distribute-compile-claude-code: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:39.6486983Z ok 1295 distribute-compile-claude-code: every command and agent renders itself
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:39.8428509Z ok 1296 distribute-compile-claude-code: an LF and a CRLF copy of one command render to one sha256
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:39.9817135Z ok 1297 distribute-compile-codex: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.1016125Z ok 1298 distribute-compile-codex: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.2408613Z ok 1299 distribute-compile-codex: a source edit is a byte-diff naming the rendered skill
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.3793419Z ok 1300 distribute-compile-codex: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.4984154Z ok 1301 distribute-compile-codex: every agent is one toml and a Claude-only command renders nothing
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.6325549Z ok 1302 distribute-compile-codex: a body holding three quotes falls back to a basic toml string
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.7733549Z ok 1303 distribute-compile-opencode: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:40.8927458Z ok 1304 distribute-compile-opencode: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.0289956Z ok 1305 distribute-compile-opencode: a source edit is a byte-diff naming the rendered command
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.1728113Z ok 1306 distribute-compile-opencode: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.2918130Z ok 1307 distribute-compile-opencode: the unsupported command count is printed and under the stop rule
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.4516511Z ok 1308 distribute-compile-opencode: six unsupported commands trip the stop rule
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.4872309Z ok 1309 distribute-compile-opencode: a tool fence renders as a companion agent and an exact scope stays exact
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.6272271Z ok 1310 distribute-compile-skills-only: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.7489193Z ok 1311 distribute-compile-skills-only: the real tree renders byte-identical to the golden
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:41.8900425Z ok 1312 distribute-compile-skills-only: a source edit is a byte-diff naming the rendered skill
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:42.0367665Z ok 1313 distribute-compile-skills-only: a golden file the render does not produce is dirty
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:42.4772997Z ok 1314 distribute-compile-skills-only: every rendered skill is named for its directory
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:42.6134183Z ok 1315 distribute-compile-skills-only: a tool holding a space outside its parentheses is unsupported
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:47.0880022Z ok 1352 distribute-install: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:47.3762537Z ok 1353 distribute-install: a clean install doctors as every path placed
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:47.6268115Z ok 1354 distribute-install: deleting one installed file flips exactly one row to missing
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:48.0163399Z ok 1355 distribute-install: a hand-placed file at a managed path is unmanaged-conflict, and a re-install refuses it
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:48.2125257Z ok 1356 distribute-install: --force overwrites the conflict and the record lists it
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:48.3024214Z ok 1357 distribute-install: a directory with no install record doctors as not-installed, exit 2
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:48.4533962Z ok 1358 distribute-install: a dry-run plans every op and writes nothing
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:48.7074391Z ok 1359 distribute-install: a second target into the same project is refused as other-target
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:48.8389292Z ok 1360 distribute-matrix: every test in the file is registered
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:49.4555883Z ok 1361 distribute-matrix: skills-only names one degraded line per false cell
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:51.5825811Z ok 1362 distribute-matrix: every verified row names exactly its false and partial cells
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:52.1034415Z ok 1363 distribute-matrix: claude-code claims everything and degrades nothing
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T05:57:52.3611492Z ok 1364 distribute-matrix: a cell flipped to false adds exactly its degraded line
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:27.3248916Z ok 4435 sync: copies machinery into target .claude
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:27.9399438Z ok 4436 sync: copies the meta docs
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:29.5117920Z ok 4437 sync: docs/playbooks/ is a directory sync on BOTH copy paths (rsync and cp fallback)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:30.5311957Z ok 4438 sync: a source tree with NO docs/playbooks/ still completes the install
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:32.1297468Z ok 4439 sync: a mutant with docs/playbooks deleted from the install target ships NO playbook (control)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:32.7608630Z ok 4440 sync: a failed full sync rolls back and leaves no arc file behind
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:33.3713809Z ok 4441 sync: never leaks personal settings or working state
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:33.9729354Z ok 4442 sync: never leaks the scheduled_tasks.lock runtime file (REQ-04)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:35.6064704Z ok 4443 sync: never leaks a .claude/worktrees/ dir into the target (REQ-04 class, pinned)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:36.8305220Z ok 4444 sync: never leaks the headroom wrapper's per-machine files (REQ-04 class, pinned)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:37.4670186Z ok 4446 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:40.6022483Z ok 4447 sync: bare install is byte-identical to the golden fixture, rsync path (REQ-02)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:43.7991999Z ok 4448 sync: bare install is byte-identical to the golden fixture, cp-r fallback path (REQ-02)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:43.8672981Z ok 4449 sync: --list prints product names (no target needed)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:44.3772269Z ok 4450 sync: --products council installs council + core only (REQ-01)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:44.4511322Z ok 4451 sync: --products unknown name fails (exit 2) and prints the valid list
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:44.4876057Z ok 4452 sync: an unknown option is rejected (exit 2)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:45.6032870Z ok 4454 sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:45.6412277Z ok 4455 sync: missing target dir fails cleanly (exit 1)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:45.6781489Z ok 4456 sync: requires a target argument
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:46.2487811Z ok 4457 sync: --products writes a registry naming exactly core+council (REQ-08)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:46.8848662Z ok 4458 sync: bare install writes a registry naming every product in products/ (REQ-08)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:47.9483605Z ok 4459 sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)
+selftest (ubuntu-latest, 20)	Run bats self-tests	2026-10-09T06:18:50.0693232Z ok 4460 sync: the registry is present in a bare target but EXCLUDED from the golden manifest (REQ-02)
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T06:15:05.8792925Z ok 375 distribute-compile-claude-code: every test in the file is registered
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T06:15:08.4651227Z ok 376 distribute-compile-claude-code: every command and agent renders itself
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T06:15:11.6821639Z ok 377 distribute-compile-claude-code: an LF and a CRLF copy of one command render to one sha256
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:41.9233600Z ok 1 sync: copies machinery into target .claude
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:42.4717350Z ok 2 sync: copies the meta docs
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:43.9091460Z ok 3 sync: docs/playbooks/ is a directory sync on BOTH copy paths (rsync and cp fallback)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:47.2114040Z ok 4 sync: a source tree with NO docs/playbooks/ still completes the install
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:49.9814320Z ok 5 sync: a mutant with docs/playbooks deleted from the install target ships NO playbook (control)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:50.6403580Z ok 6 sync: a failed full sync rolls back and leaves no arc file behind
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:51.1681520Z ok 7 sync: never leaks personal settings or working state
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:51.7142380Z ok 8 sync: never leaks the scheduled_tasks.lock runtime file (REQ-04)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:53.2007490Z ok 9 sync: never leaks a .claude/worktrees/ dir into the target (REQ-04 class, pinned)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:54.2514880Z ok 10 sync: never leaks the headroom wrapper's per-machine files (REQ-04 class, pinned)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:54.8687010Z ok 12 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:50:59.9335680Z ok 13 sync: bare install is byte-identical to the golden fixture, rsync path (REQ-02)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:04.5536430Z ok 14 sync: bare install is byte-identical to the golden fixture, cp-r fallback path (REQ-02)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:04.6364720Z ok 15 sync: --list prints product names (no target needed)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:05.3382630Z ok 16 sync: --products council installs council + core only (REQ-01)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:05.4174010Z ok 17 sync: --products unknown name fails (exit 2) and prints the valid list
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:05.4661770Z ok 18 sync: an unknown option is rejected (exit 2)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:06.9039780Z ok 20 sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:06.9507220Z ok 21 sync: missing target dir fails cleanly (exit 1)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:06.9969350Z ok 22 sync: requires a target argument
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:07.8196750Z ok 23 sync: --products writes a registry naming exactly core+council (REQ-08)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:08.3450610Z ok 24 sync: bare install writes a registry naming every product in products/ (REQ-08)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:09.7068950Z ok 25 sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:51:12.7884180Z ok 26 sync: the registry is present in a bare target but EXCLUDED from the golden manifest (REQ-02)
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:58:09.8584260Z ok 1328 distribute-compile-codex: every test in the file is registered
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:58:09.9920610Z ok 1329 distribute-compile-codex: the real tree renders byte-identical to the golden
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:58:10.3224310Z ok 1330 distribute-compile-codex: a source edit is a byte-diff naming the rendered skill
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:58:10.5887800Z ok 1331 distribute-compile-codex: a golden file the render does not produce is dirty
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:58:10.7231840Z ok 1332 distribute-compile-codex: every agent is one toml and a Claude-only command renders nothing
+selftest (macos-latest, 20, shard 3/3)	UNKNOWN STEP	2026-10-09T05:58:10.8968500Z ok 1333 distribute-compile-codex: a body holding three quotes falls back to a basic toml string
+selftest (windows-latest, 20, shard 9/12)	UNKNOWN STEP	2026-10-09T06:09:47.3565311Z ok 495 distribute-compile-codex: every test in the file is registered
+selftest (windows-latest, 20, shard 9/12)	UNKNOWN STEP	2026-10-09T06:09:48.3761353Z ok 496 distribute-compile-codex: the real tree renders byte-identical to the golden
+selftest (windows-latest, 20, shard 9/12)	UNKNOWN STEP	2026-10-09T06:09:49.5094488Z ok 497 distribute-compile-codex: a source edit is a byte-diff naming the rendered skill
+selftest (windows-latest, 20, shard 9/12)	UNKNOWN STEP	2026-10-09T06:09:50.6995137Z ok 498 distribute-compile-codex: a golden file the render does not produce is dirty
+selftest (windows-latest, 20, shard 9/12)	UNKNOWN STEP	2026-10-09T06:09:51.6872243Z ok 499 distribute-compile-codex: every agent is one toml and a Claude-only command renders nothing
+selftest (windows-latest, 20, shard 9/12)	UNKNOWN STEP	2026-10-09T06:09:52.8553172Z ok 500 distribute-compile-codex: a body holding three quotes falls back to a basic toml string
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:01.0594511Z ok 1 sync: copies machinery into target .claude
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:03.0057673Z ok 2 sync: copies the meta docs
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:08.8042635Z ok 3 sync: docs/playbooks/ is a directory sync on BOTH copy paths (rsync and cp fallback)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:18.4151753Z ok 4 sync: a source tree with NO docs/playbooks/ still completes the install
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:29.5608767Z ok 5 sync: a mutant with docs/playbooks deleted from the install target ships NO playbook (control)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:31.6554276Z ok 6 sync: a failed full sync rolls back and leaves no arc file behind
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:33.5040277Z ok 7 sync: never leaks personal settings or working state
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:35.3521905Z ok 8 sync: never leaks the scheduled_tasks.lock runtime file (REQ-04)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:39.6619024Z ok 9 sync: never leaks a .claude/worktrees/ dir into the target (REQ-04 class, pinned)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:43.3059548Z ok 10 sync: never leaks the headroom wrapper's per-machine files (REQ-04 class, pinned)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:53:46.9888549Z ok 12 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:54:26.4767953Z ok 13 sync: bare install is byte-identical to the golden fixture, rsync path (REQ-02)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:03.3367142Z ok 14 sync: bare install is byte-identical to the golden fixture, cp-r fallback path (REQ-02)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:04.0860600Z ok 15 sync: --list prints product names (no target needed)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:10.6736677Z ok 16 sync: --products council installs council + core only (REQ-01)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:11.4132142Z ok 17 sync: --products unknown name fails (exit 2) and prints the valid list
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:12.0847894Z ok 18 sync: an unknown option is rejected (exit 2)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:25.7138464Z ok 20 sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:26.3981868Z ok 21 sync: missing target dir fails cleanly (exit 1)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:27.1081621Z ok 22 sync: requires a target argument
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:33.4089484Z ok 23 sync: --products writes a registry naming exactly core+council (REQ-08)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:35.3354746Z ok 24 sync: bare install writes a registry naming every product in products/ (REQ-08)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:55:47.3115826Z ok 25 sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)
+selftest (windows-latest, 20, shard 3/12)	UNKNOWN STEP	2026-10-09T05:56:24.3186514Z ok 26 sync: the registry is present in a bare target but EXCLUDED from the golden manifest (REQ-02)
