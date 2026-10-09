@@ -1139,3 +1139,221 @@ arm() {
   arm login checkout-no-upstream
   [ "$(j 'o.scaffold.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
 }
+
+@test "launch-contract: security-headers commits next.config.mjs once, and verify reads six headers live with an Observatory A (ADR-1742)" {
+  arm headers thread
+  [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "headers-config" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.config')" == *"Content-Security-Policy"*"frame-ancestors 'none'"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.grade + " " + o.observatoryCalls')" = "true sandbox.automemory.ai + observatory-api.mdn.mozilla.net A 1" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.teardown[0]')" == keep* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: security-headers is not ok when the served build drops the CSP or the grade is below A, and UNSCANNED when the Observatory cannot answer (ADR-1742)" {
+  arm headers csp-dropped
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "the live response lacks content-security-policy"* ]] || { echo "$DONE"; false; }
+  arm headers grade-b
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false observatory grades sandbox.automemory.ai B"* ]] || { echo "$DONE"; false; }
+  arm headers rate-limited
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false UNSCANNED(observatory rate-limited)" ] || { echo "$DONE"; false; }
+  arm headers unreachable
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false UNSCANNED(observatory unreachable)" ] || { echo "$DONE"; false; }
+  arm headers down
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false https://sandbox.automemory.ai/ answered 404, not 200" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: security-headers accepts a host's own HSTS beside it, never commits over an owner's config, and refuses without hosting or off hosts[] (ADR-1742)" {
+  arm headers host-hsts
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+  arm headers foreign-config
+  [ "$(j 'o.scaffold.code + " " + o.commits')" = "FOREIGN_FILE 0" ] || { echo "$DONE"; false; }
+  arm headers no-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+  arm headers host-refused
+  [ "$(j 'o.verify.ok + " " + o.siteCalls')" = "false 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: dependency-scan commits its own workflow and Dependabot once, beside ci's, and verify reads a green audit run for main's head (ADR-1743)" {
+  arm depscan thread
+  [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "github-workflow,github-file" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.workflow')" == *"npm audit --audit-level=high"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.ciUntouched')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.job')" = "true api.github.com audit" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.length')" = "2" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: dependency-scan is not ok on a red audit or an owner-rewritten workflow, and refuses without ci (ADR-1743)" {
+  arm depscan audit-red
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false run "*": audit failure -- the dependency gate is red or missing" ]] || { echo "$DONE"; false; }
+  arm depscan owner-edits
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false .github/workflows/dependency-scan.yml at "* ]] || { echo "$DONE"; false; }
+  arm depscan no-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: migration-rollback commits a paired up/down migration and its test once, and verify reads arc-ci green on main's head (ADR-1744)" {
+  arm rollback thread
+  [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "rollback-fixture" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.length')" = "1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the committed rollback test passes on launch's migrations and fails on a down that drops nothing (ADR-1744)" {
+  arm rollback thread
+  [ "$(j 'o.fixture.status + " " + o.fixture.pass')" = "0 2" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.brokenDown.status')" = "1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: migration-rollback is not ok on a red leg, and refuses without orm (ADR-1744)" {
+  arm rollback red-ci
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false run "*"test (windows-latest) failure"* ]] || { echo "$DONE"; false; }
+  arm rollback no-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: legal-pages creates nothing, and verify is ok only when both pages are served as arc-legal pages (ADR-1745)" {
+  arm legal published
+  [ "$(j 'o.scaffold.join(",")')" = "https://sandbox.automemory.ai/privacy,https://sandbox.automemory.ai/terms" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+  arm legal half
+  [ "$(j 'o.verify.ok + " " + o.verify.reason + " " + (o.verify.absent === undefined)')" = "false /privacy 200, /terms 404 true" ] || { echo "$DONE"; false; }
+  arm legal foreign
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
+  arm legal host-refused
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false HOST_REFUSED: pay.evil-example.com"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: both legal pages absent is a named ABSENT the worker records as state absent, and only where the slot's exit criteria allow it (ADR-1745)" {
+  arm legal absent
+  [ "$(j 'o.verify.ok + " " + o.verify.absent + " | " + o.verify.answerer')" = "false legal renderer not ready: /privacy and /terms are not served | sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+  arm legal worker-absent
+  [ "$(j 'o.exit + " " + o.state + " " + o.answerer')" = "0 absent sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.reason')" == "ABSENT(legal renderer not ready"* ]] || { echo "$DONE"; false; }
+  arm legal dead
+  [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined) + " " + o.verify.reason')" = "false true /privacy 404, /terms 404" ] || { echo "$DONE"; false; }
+  arm legal parked
+  [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined)')" = "false true" ] || { echo "$DONE"; false; }
+  arm legal hostile
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
+  arm legal huge
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
+  arm legal worker-absent-not-allowed
+  [ "$(j 'o.exit + " " + o.state')" = "1 failed" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.reason')" == "verify:ABSENT: legal renderer not ready"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backup commits the drill once -- dump, checksum, restore into scratch, row-count diff -- and verify needs both jobs green (ADR-1746)" {
+  arm backup thread
+  [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.noUpload + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs')" = "drill true true true true false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.steps.join("+")')" = "true api.github.com dump and checksum+restore and compare row counts" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: restore-drill creates nothing and is verified by the drill's green restore job (ADR-1746)" {
+  arm backup thread
+  [ "$(j 'o.rScaffold + " " + o.rKinds.join(",")')" = "true restore-source" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.rVerify.ok + " " + o.rVerify.evidence.step')" = "true restore and compare row counts" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.length')" = "2" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a red restore fails both slots, a red backup fails both, a missing secret and a stale drill are not ok (ADR-1709, ADR-1746)" {
+  arm backup restore-red
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false drill run "*": dump success, restore failure"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.rVerify.ok + " " + o.rVerify.reason')" == "false drill run "*": restore failure"* ]] || { echo "$DONE"; false; }
+  arm backup backup-red
+  [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "false false" ] || { echo "$DONE"; false; }
+  arm backup no-db-url
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false technology-ashiq/arc-sandbox has no SUPABASE_DB_URL Actions secret"* ]] || { echo "$DONE"; false; }
+  arm backup stale
+  [[ "$(j 'o.verify.reason + " | " + o.rVerify.reason')" == *"older than eight days | "*"older than eight days" ]] || { echo "$DONE"; false; }
+  arm backup no-upstream
+  [ "$(j 'o.backup.code + " " + o.restore.code + " " + o.noDigest.code + " " + o.calls')" = "UPSTREAM_MISSING UPSTREAM_MISSING UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+  arm backup cancelled-newer
+  [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
+  arm backup foreign-drill
+  [[ "$(j 'o.rVerify.ok + " " + o.rVerify.reason')" == "false no completed backup-drill.yml run on main ran launch"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: errors finds the venture's Sentry project, commits the probe route with its DSN once, and verify sees the thrown error as an issue (ADR-1747)" {
+  arm errors thread
+  [ "$(j 'o.first + " " + o.second + " " + o.commits + " " + o.dsnInRoute')" = "true true 1 true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "sentry-project,error-probe-route" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.project')" = "true sentry.io automemory/arc-sandbox" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.issues[0]')" == "arc-launch probe arcprobe"*":1" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verifyAgain + " " + o.issueCount')" = "true 2" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: errors refuses a missing, ambiguous or keyless Sentry project before any commit, and without hosting (ADR-1747)" {
+  arm errors no-project
+  [ "$(j 'o.scaffold.code + " " + o.commits')" = "SENTRY_PROJECT_MISSING 0" ] || { echo "$DONE"; false; }
+  arm errors two-projects
+  [ "$(j 'o.scaffold.code + " " + o.commits')" = "SENTRY_PROJECT_AMBIGUOUS 0" ] || { echo "$DONE"; false; }
+  arm errors no-key
+  [ "$(j 'o.scaffold.code + " " + o.commits')" = "SENTRY_NO_DSN 0" ] || { echo "$DONE"; false; }
+  arm errors no-upstream
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: errors is not ok when the route swallows the error, Sentry ingests nothing, or the domain is off hosts[] (ADR-1747)" {
+  arm errors swallows
+  [ "$(j 'o.verify.ok + " " + o.verify.reason + " " + o.issues')" = "false the probe route answered 200, not 500 (the thrown error) 0" ] || { echo "$DONE"; false; }
+  arm errors no-ingest
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false Sentry shows no issue"* ]] || { echo "$DONE"; false; }
+  arm errors host-refused
+  [ "$(j 'o.verify.ok + " " + o.routeCalls')" = "false 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: neon makes one tagged project once, and verify proves RLS: the owner reads 1 row and launch_anon reads 0 (ADR-1721)" {
+  arm neon thread
+  [ "$(j 'o.first + " " + o.second + " " + o.projects + " " + o.kinds.join(",")')" = "true true 1 neon-project-intent,neon-project" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.owner_rows + " " + o.verify.evidence.anon_rows')" = "true 1 0" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.answerer')" == "console.neon.tech + ep-"*".neon.tech" ]] || { echo "$DONE"; false; }
+  arm neon rls-off
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false launch_probe is missing or does not have row level security on" ] || { echo "$DONE"; false; }
+  arm neon anon-bypass
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false launch_anon reads 1 rows"* ]] || { echo "$DONE"; false; }
+  arm neon bad-key
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_TOKEN 0" ] || { echo "$DONE"; false; }
+  # A same-named project launch never recorded is refused on the FIRST run too, after the list and before any SQL (attack 143525f B1).
+  arm neon half-made
+  [ "$(j 'o.scaffold + " " + o.projects + " " + o.kinds.join(",")')" = "true 1 neon-project,neon-project-intent" ] || { echo "$DONE"; false; }
+  arm neon foreign
+  [ "$(j 'o.scaffold.code + " " + o.recorded + " " + o.sql + " " + o.listed')" = "FOREIGN_PROJECT 0 0 true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: with both database rows vetted, plan ranks neon and supabase with their fit-rule ids (REQ-08)" {
+  arm neon plan-both
+  [[ "$(j 'o.line')" == "database: recommended neon -- why: FIT-1 type saas-b2b, FIT-2 region any, FIT-3 payment_model any · status vetted"*"ranked by RANK-1"*"alternatives: supabase (FIT-1 "* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: neon entered by its row and its adapter only -- no other launch code names it (REQ-08, ADR-1721)" {
+  # The tree is the contract, not one commit's file list: CI checks out one commit, so the history is not there to read.
+  local hits; hits=$(cd "$ARC_ROOT" && git ls-files products/launch .claude/scripts/launch | xargs grep -lis 'neon' | sort | tr '\n' ' ')
+  [ "$hits" = "products/launch/launch.providers.yaml products/launch/providers/database/neon.mjs " ] || { echo "named neon: $hits"; false; }
+}
+
+@test "launch-contract: ledger-source is verified by the venture's first revenue event on arc's spine, and only its own (ADR-1751)" {
+  arm wiring ledger
+  [ "$(j 'o.before.scaffold.kinds.join(",") + " " + o.before.verify.ok')" = "ledger-feed false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.book + " " + o.after.verify.ok + " " + o.after.verify.answerer + " " + o.after.verify.evidence.events')" = "landed true arc spine 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.other.verify.ok + " " + o.noRoute.scaffold.code')" = "false UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: passport runs the real venture-register --dry-run and carries its refusal; face-room reads the face contract; teardown-plan checks all five steps (ADR-1751)" {
+  arm wiring passport
+  [[ "$(j 'o.result.verify.ok + " " + o.result.verify.reason')" == "false venture-register --dry-run exited "*": venture-register"* ]] || { echo "$DONE"; false; }
+  arm wiring face
+  [ "$(j 'o.unseated.verify.ok + " " + o.seated.verify.ok + " " + o.seated.verify.evidence.room')" = "false true ventures" ] || { echo "$DONE"; false; }
+  arm wiring teardown
+  [ "$(j 'o.result.verify.ok + " " + o.result.verify.evidence.steps + " " + o.result.verify.evidence.resources')" = "true 5 1" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a slot outside the wiring group cannot ask arc's organs (ADR-1751)" {
+  arm wiring not-wiring
+  [ "$(j 'o.code')" = "ARC_PROBE_REFUSED" ] || { echo "$DONE"; false; }
+}
