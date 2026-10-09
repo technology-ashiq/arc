@@ -22,7 +22,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 404 of 
 | Product | Version | Requires | Commands | Agents | Scripts |
 |---|---|---|---|---|---|
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
-| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 39 |
+| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 41 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 20 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
@@ -51,7 +51,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 404 of 
 | [design](lanes/design.md) | IDLE | arc-design v2 (Cycle 16, sealed 2026-10-07) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
 | [discover](lanes/discover.md) | IDLE | arc-discover (Cycle 1, sealed 2026-10-07) |
-| [distribute](lanes/distribute.md) | LIVE | arc-distribute (Cycle 1, opened 2026-10-07) |
+| [distribute](lanes/distribute.md) | IDLE | arc-distribute (Cycle 1, opened 2026-10-07) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 8, opened 2026-10-07) |
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |

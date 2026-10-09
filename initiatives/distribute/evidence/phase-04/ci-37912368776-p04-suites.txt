@@ -1,0 +1,60 @@
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:48.5599295Z ok 1294 distribute-cli: every test in the file is registered
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:48.7031459Z ok 1295 distribute-cli: package.json installs a bin, carries no dependency and cannot publish
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:50.1583008Z ok 1296 distribute-cli: arc doctor checks the package and plans every target
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:51.0928465Z ok 1297 distribute-cli: arc init installs, sets the consumer hooks path, and arc doctor --dir reads it clean
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:52.1924810Z ok 1298 distribute-cli: the installed pre-commit hook refuses a commit on main
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:52.6922588Z ok 1299 distribute-cli: a project's own hooks path is left alone and named
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:52.8907541Z ok 1300 distribute-cli: a bad verb or a missing target is a usage error, exit 2
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:42:53.9319564Z ok 1301 distribute-cli: hooks are not wired in a subdirectory of a repo, nor over hooks the project already runs
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:43:00.3231328Z ok 1360 distribute-install-clean: every test in the file is registered
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:43:07.0801589Z ok 1361 distribute-install-clean: the tarball installs globally, doctors clean, and installs a project from itself
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:43:17.2457660Z ok 1362 distribute-install-clean: the git URL at the PR head installs globally and runs arc doctor
+selftest (ubuntu-latest, 18)	UNKNOWN STEP	2026-10-09T09:43:17.2957210Z ok 1363 distribute-install-clean: no script, workflow or doc outside this lane names npm publish, and the sync golden has no package row
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T09:51:33.5495212Z ok 358 distribute-install-clean: every test in the file is registered
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T09:52:38.4810953Z ok 359 distribute-install-clean: the tarball installs globally, doctors clean, and installs a project from itself
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T09:54:49.6391064Z ok 360 distribute-install-clean: the git URL at the PR head installs globally and runs arc doctor
+selftest (windows-latest, 20, shard 12/12)	UNKNOWN STEP	2026-10-09T09:54:50.1976863Z ok 361 distribute-install-clean: no script, workflow or doc outside this lane names npm publish, and the sync golden has no package row
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:09.2793791Z ok 375 distribute-cli: every test in the file is registered
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:09.8415613Z ok 376 distribute-cli: package.json installs a bin, carries no dependency and cannot publish
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:12.5083166Z ok 377 distribute-cli: arc doctor checks the package and plans every target
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:16.4802782Z ok 378 distribute-cli: arc init installs, sets the consumer hooks path, and arc doctor --dir reads it clean
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:21.3556545Z ok 379 distribute-cli: the installed pre-commit hook refuses a commit on main
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:28.5102127Z ok 380 distribute-cli: a project's own hooks path is left alone and named
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:32.3523020Z ok 381 distribute-cli: a bad verb or a missing target is a usage error, exit 2
+selftest (windows-latest, 20, shard 6/12)	UNKNOWN STEP	2026-10-09T09:59:38.8880085Z ok 382 distribute-cli: hooks are not wired in a subdirectory of a repo, nor over hooks the project already runs
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:35.0787702Z ok 1294 distribute-cli: every test in the file is registered
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:35.2476401Z ok 1295 distribute-cli: package.json installs a bin, carries no dependency and cannot publish
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:36.9702871Z ok 1296 distribute-cli: arc doctor checks the package and plans every target
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:38.0974532Z ok 1297 distribute-cli: arc init installs, sets the consumer hooks path, and arc doctor --dir reads it clean
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:39.4457316Z ok 1298 distribute-cli: the installed pre-commit hook refuses a commit on main
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:40.0389878Z ok 1299 distribute-cli: a project's own hooks path is left alone and named
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:40.2643340Z ok 1300 distribute-cli: a bad verb or a missing target is a usage error, exit 2
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:41.4794510Z ok 1301 distribute-cli: hooks are not wired in a subdirectory of a repo, nor over hooks the project already runs
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:48.8388423Z ok 1360 distribute-install-clean: every test in the file is registered
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:43:57.3699992Z ok 1361 distribute-install-clean: the tarball installs globally, doctors clean, and installs a project from itself
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:44:12.9986720Z ok 1362 distribute-install-clean: the git URL at the PR head installs globally and runs arc doctor
+selftest (ubuntu-latest, 22)	UNKNOWN STEP	2026-10-09T09:44:13.0605822Z ok 1363 distribute-install-clean: no script, workflow or doc outside this lane names npm publish, and the sync golden has no package row
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:21.3534050Z ok 1220 distribute-cli: every test in the file is registered
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:21.5988820Z ok 1221 distribute-cli: package.json installs a bin, carries no dependency and cannot publish
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:23.0617220Z ok 1222 distribute-cli: arc doctor checks the package and plans every target
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:24.3086510Z ok 1223 distribute-cli: arc init installs, sets the consumer hooks path, and arc doctor --dir reads it clean
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:26.0094650Z ok 1224 distribute-cli: the installed pre-commit hook refuses a commit on main
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:26.7254670Z ok 1225 distribute-cli: a project's own hooks path is left alone and named
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:27.1331430Z ok 1226 distribute-cli: a bad verb or a missing target is a usage error, exit 2
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:28.8440490Z ok 1227 distribute-cli: hooks are not wired in a subdirectory of a repo, nor over hooks the project already runs
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:31.5484400Z ok 1239 distribute-install-clean: every test in the file is registered
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:46:42.7561470Z ok 1240 distribute-install-clean: the tarball installs globally, doctors clean, and installs a project from itself
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:47:00.0989400Z ok 1241 distribute-install-clean: the git URL at the PR head installs globally and runs arc doctor
+selftest (macos-latest, 20, shard 2/3)	UNKNOWN STEP	2026-10-09T09:47:00.4634870Z ok 1242 distribute-install-clean: no script, workflow or doc outside this lane names npm publish, and the sync golden has no package row
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:37.0440073Z ok 1294 distribute-cli: every test in the file is registered
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:37.2074627Z ok 1295 distribute-cli: package.json installs a bin, carries no dependency and cannot publish
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:39.0492598Z ok 1296 distribute-cli: arc doctor checks the package and plans every target
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:40.1797904Z ok 1297 distribute-cli: arc init installs, sets the consumer hooks path, and arc doctor --dir reads it clean
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:41.5737722Z ok 1298 distribute-cli: the installed pre-commit hook refuses a commit on main
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:42.1888979Z ok 1299 distribute-cli: a project's own hooks path is left alone and named
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:42.4188622Z ok 1300 distribute-cli: a bad verb or a missing target is a usage error, exit 2
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:43.6789355Z ok 1301 distribute-cli: hooks are not wired in a subdirectory of a repo, nor over hooks the project already runs
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:51.2232462Z ok 1360 distribute-install-clean: every test in the file is registered
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:43:59.6375673Z ok 1361 distribute-install-clean: the tarball installs globally, doctors clean, and installs a project from itself
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:44:12.6498942Z ok 1362 distribute-install-clean: the git URL at the PR head installs globally and runs arc doctor
+selftest (ubuntu-latest, 20)	UNKNOWN STEP	2026-10-09T09:44:12.7123537Z ok 1363 distribute-install-clean: no script, workflow or doc outside this lane names npm publish, and the sync golden has no package row

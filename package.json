@@ -1,0 +1,38 @@
+{
+  "name": "arc",
+  "version": "0.1.0",
+  "description": "arc: tracked plans, deterministic gates, a receipt spine and agent workflows, installable into a project for Claude Code, Codex, OpenCode or any agentskills reader.",
+  "private": true,
+  "license": "UNLICENSED",
+  "bin": {
+    "arc": "bin/arc.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    ".claude/",
+    "!.claude/settings.local.json",
+    "!.claude/state/",
+    "!.claude/worktrees/",
+    "!.claude/scheduled_tasks.lock",
+    "!.claude/arc-registry.json",
+    "!.claude/.headroom_wrap_*",
+    "engine/",
+    "products/",
+    "docs/templates/",
+    "docs/playbooks/",
+    "docs/blueprint.md",
+    "docs/how-it-works.md",
+    "docs/build-playbook.md",
+    "docs/product-runbook.md",
+    "docs/plugins.md",
+    "docs/usermanual.md",
+    "docs/council/README.md",
+    "docs/council/references/fairness.md",
+    "CONSTITUTION.md",
+    "sync-to-project.sh"
+  ],
+  "dependencies": {}
+}

@@ -11,12 +11,12 @@ Why it exists (owner, 2026-10-07, `/arc-change --lane face`, "three honesty gaps
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **The listing:** `node .claude/scripts/core/plan-bound-audit.mjs` prints one line per write verb, `verb · file · writes-to · plan-bound yes/no`, where `writes-to` is `spine`, `tracked-file` or both, and plan-bound means the verb's write path is reachable only through `--expect` (or a `spineRefusal` / `staleReason` check before the write).
-- [ ] **The gate:** it exits non-zero on any unbound write verb absent from `plan-bound-allowlist.json` beside it; every allowlist row carries a `why` (e.g. `arc-event emit` IS the writer); a row with an empty `why` FAILs, and a row naming a verb that no longer exists FAILs (a stale allowlist is a lie).
-- [ ] **Mutants FAIL from birth:** a planted write verb with no `--expect` path FAILs; an allowlist row with no reason FAILs; a planted verb that reads `--expect` but writes before checking it FAILs (the check must come before the write, not merely exist).
-- [ ] **In CI:** it runs from a bats suite beside `face-coverage` on every leg (`.github/` is not edited, per the standing route), and the run asserts it RAN (a counted line total above zero) before asserting the exit.
-- [ ] **No behaviour changes:** no verb's code changes in this phase. Each unbound verb found that is not allowlisted is filed as its own `/arc-change` row in PROGRESS `## Now`; the allowlist carries it until that change lands.
-- [ ] Two fresh attackers (logic · shell) through `/arc-attack`, one round; CI green per job; the wiki regenerated in the same PR; `/arc-phase-done 14` from the main clone.
+- [x] **The listing:** `node .claude/scripts/core/plan-bound-audit.mjs` prints one line per write verb, `verb · file · writes-to · plan-bound yes/no`, where `writes-to` is `spine`, `tracked-file` or both, and plan-bound means the verb's write path is reachable only through `--expect` (or a `spineRefusal` / `staleReason` check before the write).
+- [x] **The gate:** it exits non-zero on any unbound write verb absent from `plan-bound-allowlist.json` beside it; every allowlist row carries a `why` (e.g. `arc-event emit` IS the writer); a row with an empty `why` FAILs, and a row naming a verb that no longer exists FAILs (a stale allowlist is a lie).
+- [x] **Mutants FAIL from birth:** a planted write verb with no `--expect` path FAILs; an allowlist row with no reason FAILs; a planted verb that reads `--expect` but writes before checking it FAILs (the check must come before the write, not merely exist).
+- [x] **In CI:** it runs from a bats suite beside `face-coverage` on every leg (`.github/` is not edited, per the standing route), and the run asserts it RAN (a counted line total above zero) before asserting the exit.
+- [x] **No behaviour changes:** no verb's code changes in this phase. Each unbound verb found that is not allowlisted is filed as its own `/arc-change` row in PROGRESS `## Now`; the allowlist carries it until that change lands.
+- [x] Two fresh attackers (logic · shell) through `/arc-attack`, one round; CI green per job; the wiki regenerated in the same PR; `/arc-phase-done 14` from the main clone.
 
 ## Verification plan
 

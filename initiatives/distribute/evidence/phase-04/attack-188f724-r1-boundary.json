@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "bin/arc.mjs:67-73",
+      "breaking_input": "arc init --target claude-code --dir /work/monorepo/packages/app, where /work/monorepo is the git root and packages/app is a plain subdirectory.",
+      "why": "`git -C dir rev-parse --is-inside-work-tree` prints true for any subdirectory, so the code runs `git -C dir config core.hooksPath .claude/templates/githooks`. That writes the PARENT repo's config. Git resolves a relative hooksPath against the work-tree top, not against dir, so it points at /work/monorepo/.claude/templates/githooks, which does not exist. Every hook in the parent repo is then silently disabled, including the project's own .git/hooks. The `existsSync(join(dir, HOOKS, ...))` check passes because it looks under dir, not the top-level.",
+      "fix": "Resolve `git -C dir rev-parse --show-toplevel` and compare it with realpath(dir). Wire hooks only when they are equal. Otherwise print that hooks were not wired because dir is not the repo root, and do not touch the config.",
+      "twin_of": "(d) path confinement / (f) validate one read, compare another"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "bin/arc.mjs:68-73",
+      "breaking_input": "Run arc init in a repo whose existing hooks live in .git/hooks (the pre-commit framework, lefthook or a hand-written pre-commit) with core.hooksPath unset.",
+      "why": "Setting core.hooksPath makes git ignore .git/hooks completely. init only checks whether hooksPath is already set. It never checks for existing non-sample hooks, so the project's current commit-time checks are silently replaced and the output only says `hooks: core.hooksPath=...`.",
+      "fix": "If .git/hooks (resolved through `git rev-parse --git-path hooks`) holds any non-.sample file, refuse to set hooksPath and name those hooks. Alternatively chain them.",
+      "twin_of": "(ax) --force destroys the project's file"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "bin/arc.mjs:70-73 and .claude/templates/githooks/pre-commit",
+      "breaking_input": "`npm pack` run on a Windows checkout and installed on Linux or macOS, or any copy that drops the exec bit. The result is .claude/templates/githooks/pre-commit with mode 0644, then `arc init`, then a commit on main.",
+      "why": "Success is judged only by existsSync, so init prints `hooks: core.hooksPath=... (branch guard + secret scan)`. On POSIX git skips a non-executable hook with only a hint, so the commit on main succeeds and the guard fails open with no signal. arc doctor does not check the bit either.",
+      "fix": "After install, on non-win32, verify `statSync(...).mode & 0o111` for both hooks and chmod or report FAIL. Add a doctor check for it.",
+      "twin_of": "(x) an executable exists read as the tool ran"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "bin/arc.mjs:66",
+      "breaking_input": "Run arc init on a machine where `git` is not on PATH (or spawn fails with ENOENT), after a successful install.",
+      "why": "spawnSync returns stdout:null when the spawn fails, so `git(...).stdout.trim()` throws a TypeError. That gives an uncaught stack trace and a non-zero exit even though the install already wrote files. The same applies to the `have` read.",
+      "fix": "Use `(r.stdout || \"\").trim()` and treat r.error as 'git unavailable, hooks skipped'. Print that and return 0.",
+      "twin_of": "(be) / (i) missing vs empty"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "package.json:14-24",
+      "breaking_input": "`npm pack`, `npm i -g`, then `arc init --target claude-code --dir proj`. The files allowlist omits root files that the claude-code install and the sync golden ship: .env.example, AGENTS.md, CLAUDE.md, .mcp.json, the council skeleton under docs/council beyond README and fairness.md, and PORTFOLIO and initiatives templates.",
+      "why": "The clean-machine test installs only `--target opencode` from the tarball. A claude-code install from the packed copy can therefore miss or refuse files that the checkout install places. The tarball and checkout installs diverge and no test catches it. Negated `!.claude/state/` patterns are also never asserted to actually exclude those paths from the tarball.",
+      "fix": "In install-clean, run `init --target claude-code` from the installed copy. Diff the placed tree against the sync golden manifest. Assert that `npm pack --dry-run --json` lists no .claude/state or settings.local.json.",
+      "twin_of": "(bc) the record shipped as a payload file"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "bin/arc.mjs:50-60",
+      "breaking_input": "arc init --target codex --target opencode --dir a --dir b",
+      "why": "A repeated --target or --dir is silently resolved last-wins. The lane rules treat two different values for one flag as an operator error. `--target=codex` is also rejected as an unknown argument. A mistyped command quietly installs the wrong target or into the wrong directory.",
+      "fix": "Track whether each flag was already seen. Exit 2 on a repeat with a differing value, or on any repeat.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "bin/arc.mjs:93",
+      "breaking_input": "arc doctor --dir --repo, or arc doctor --dir --anything",
+      "why": "The doctor branch does not apply the 'flag value must not start with --' check that init does. It forwards `--repo` to arc-install --doctor as if it were the directory, giving a confusing error or exit code instead of a usage error (exit 2).",
+      "fix": "Reuse init's value validation: reject an empty value or one starting with `--`, and call usage(2).",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "bin/arc.mjs:81-86",
+      "breaking_input": "selfDoctor's `run(..., {capture:true})` per target on a plan that prints more than 1 MiB, or a hung child.",
+      "why": "spawnSync has a 1 MiB default maxBuffer and no timeout. Overflow returns status null and a killed child. This is reported as 'no plan (exit null)', which looks like a broken package rather than a buffer limit, and a hung child blocks doctor forever.",
+      "fix": "Set maxBuffer to a few MB and a timeout. Report r.error.code when it is present.",
+      "twin_of": "(be) a child script's stdout read through a pipe it exits on"
+    }
+  ]
+}
