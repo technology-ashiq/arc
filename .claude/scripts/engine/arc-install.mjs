@@ -88,7 +88,9 @@ export function main(argv) {
     // An install into its own source, or around it, would overwrite the files it is still reading (attack 74bcf43 B4).
     if (dir && overlaps(dir, tree)) throw new Refused("inside-source", `${dir} and the arc source ${tree} overlap; install into a separate project`);
     if (dir && typeof mod.finishPlan === "function") p = mod.finishPlan(p, tree, dir);
-    const prior = dir ? readManifest(dir) : null;
+    const prior = dir ? readManifest(dir, mod.MANIFEST_PATH) : null;
+    // Two targets in one project would overwrite one record with the other (attack d32e714 B4).
+    if (prior && prior.manifest.target !== opt.target) throw new Refused("other-target", `${dir} already holds a \`${prior.manifest.target}\` install in ${prior.rel}; one record names one target`);
     const pre = dir ? preflight(p.ops, dir, prior?.manifest) : { conflicts: [], dirs: [] };
     if (opt.dryRun) {
       if (!opt.quiet) for (const o of p.ops) console.log(`${o.kind === "mkdir" ? "mkdir" : o.kind} ${o.path}`);

@@ -25,7 +25,8 @@ export const MANIFEST_PATH = REGISTRY;
 
 // rsync's excludes in the old full sync, which matched these names at any depth under .claude/.
 const EXCLUDED_DIR = new Set(["state", "worktrees"]);
-const EXCLUDED_FILE = new Set(["settings.local.json", "scheduled_tasks.lock"]);
+// arc-registry.json is the install record, written by the run itself, so a copy in the source never rides along (attack d32e714 B5).
+const EXCLUDED_FILE = new Set(["settings.local.json", "scheduled_tasks.lock", "arc-registry.json"]);
 const META_DOCS = ["blueprint.md", "how-it-works.md", "build-playbook.md", "product-runbook.md", "plugins.md", "usermanual.md"];
 
 // What only Claude Code reads. Every other target installs the rest as its support payload, because

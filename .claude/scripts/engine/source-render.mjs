@@ -115,6 +115,9 @@ export function renderSourceTree(root, target) {
   if (!held("skills")) lines.push(`[skipped] .claude/skills/ — the \`skills\` cell of \`${target}\` is false`);
   else for (const rel of skillFiles(root, (l) => { lines.push(l); counts.unsupported++; })) {
     const sub = rel.slice(".claude/skills/".length);
+    // A skill file is copied as text with CR bytes removed (the golden transform), which would corrupt a binary
+    // asset or a CRLF script, so only markdown is carried (attack d32e714 B3).
+    if (!rel.endsWith(".md")) { lines.push(`[unsupported] ${rel} — not a markdown file; a skill copy carries markdown only`); counts.unsupported++; continue; }
     const name = sub.split("/")[0];
     const path = `${t.skills}${sub}`;
     if (owner.has(path) && !owner.get(path).startsWith(".claude/skills/")) {

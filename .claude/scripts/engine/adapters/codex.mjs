@@ -103,7 +103,8 @@ export function render(doc) {
 import { Unsupported, fate, markdown, plainValue, yamlScalar } from "./source-common.mjs";
 
 /** A TOML basic string: JSON's escapes are TOML's, plus DEL, which TOML forbids unescaped. */
-export const tomlString = (s) => JSON.stringify(s).replace(/\x7f/g, "\u007f");
+// The replacement is the six characters \u007f (a TOML escape), never the DEL byte itself (attack d32e714 B2).
+export const tomlString = (s) => JSON.stringify(s).replace(/\x7f/g, "\\u007f");
 
 /** A TOML multi-line literal string when the body allows one, else a basic string, so no escape is read. */
 export function tomlBlock(body) {

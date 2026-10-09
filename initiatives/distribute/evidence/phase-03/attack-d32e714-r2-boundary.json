@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply (onSignal, process.once SIGINT/SIGTERM)",
+      "breaking_input": "Run `arc-install --target codex --dir P` on a large tree and press Ctrl-C (or send SIGTERM) midway through the rename loop. The fix (at) claims the rollback runs before exit.",
+      "why": "apply() is entirely synchronous (writeFileSync, renameSync, copyFileSync). Node cannot run a JS signal handler until the event loop turns, which only happens after apply() returns. The handler never fires mid-run. The Ctrl-C is swallowed, and then `finally` removes the listener, so the signal is lost. Nothing is rolled back during a hard kill, and the default kill behaviour has been replaced by a no-op. No test exercises this path.",
+      "fix": "Make the commit phase yield between steps (async with `await setImmediate`) so the handler can run. Alternatively, write an on-disk journal and have the next run or doctor recover from it. Or drop the claim and register no handler.",
+      "twin_of": "(at) a signal strands a half-applied install"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/codex.mjs:tomlString",
+      "breaking_input": "An agent whose body or description contains a DEL byte (0x7f). tomlBlock sends it to tomlString, which replaces /\\x7f/ with \"\\u007f\".",
+      "why": "In JS source, \"\\u007f\" is the DEL character itself, so the replace is a no-op. The emitted `.codex/agents/NAME.toml` contains a raw DEL inside a basic string, which TOML forbids. Codex fails to parse the agent file, and the golden and install both bless it.",
+      "fix": "Use the replacement string \"\\\\u007f\" (an escaped backslash) so the output contains the six characters \\u007f. Add a fixture with a DEL byte.",
+      "twin_of": "(p) escapes in data"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/source-render.mjs:read / skillFiles loop",
+      "breaking_input": "A `.claude/skills/<name>/` containing a binary asset (png, zip, font) or a script that needs CRLF (.bat, .ps1). `place(path, read(...))` decodes the file as UTF-8 and strips every CR.",
+      "why": "Skills are described as copied \"as they are\", but binary bytes become U+FFFD replacement characters and CRs are deleted. The installed skill is corrupt, while the golden and the manifest sha are computed over the corrupted text, so every check passes.",
+      "fix": "Copy skill files as Buffers (op.from or a bytes op). Apply CR normalisation only to the .md and text files that are rendered.",
+      "twin_of": "(p) escapes in data"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:readManifest / arc-install.mjs:main",
+      "breaking_input": "Install `codex` into dir P, then install `claude-code` or `opencode` into the same P. A single prior manifest is read (`.arc-install.json` first, then the registry), and each target overwrites or ignores the other's record.",
+      "why": "claude-code writes its record into `.claude/arc-registry.json` and leaves the stale `.arc-install.json` behind. `--doctor` then reads `.arc-install.json` first, so it reports the old target and never checks the files the new install placed. Switching between two `.arc-install.json` targets overwrites the first target's file list, so its files are orphaned and an unmanaged-conflict is never detected for them.",
+      "fix": "Refuse a re-install when the existing record names a different target. Or merge records per target, and make doctor check every record present.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-install.mjs:main (record) + install-targets/common.mjs:preflight",
+      "breaking_input": "`--source` is a tree that already contains `.claude/arc-registry.json` (a previously synced project, or an untracked file in a checkout). payload() includes it as an ordinary op, and the manifest op writes the same path.",
+      "why": "manifestOp is not in preflight's duplicate check. The path is renamed twice, and the second rename takes a .bak of the first. `record.files` holds the payload file's sha, but the file on disk is the registry with its `install` key. Every doctor run then reports `.claude/arc-registry.json` as unmanaged-conflict on a clean install.",
+      "fix": "Exclude MANIFEST_PATH from the payload and the files map. Add manifestOp to the duplicate check.",
+      "twin_of": "(aj) optional in one root, required in another"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:preflight + apply (backup) + sync-to-project.sh --force",
+      "breaking_input": "The first sync after upgrading an existing consumer (it has no `install` record), or any consumer that edited arc files. sync always passes --force.",
+      "why": "With no prior manifest, every file that changed between arc versions counts as an unmanaged conflict. Each is copied to `<project>/.arc-install-backup/<stamp>/` and never pruned or gitignored. Hundreds of untracked backup files land in the consumer repo on upgrade. They can be committed by `git add .`, and they accumulate on every later sync of a locally edited file. The old sync was silent and idempotent.",
+      "fix": "Treat a missing prior manifest as 'ours' when the file matches a known earlier arc sha. Or write backups outside the repo. Or add the backup dir to .git/info/exclude and cap the number retained.",
+      "twin_of": "(ax) --force destroys the project's file"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply (failAt)",
+      "breaking_input": "A consumer shell that exports ARC_INSTALL_INJECT_FAIL_AT=3 (leaked from a CI job or a dev shell) and then runs sync-to-project.sh or arc-install.",
+      "why": "A production code path reads a test hook from the ambient environment without any guard. The install fails and rolls back with an 'injected failure' message, and sync exits 3 with no hint where the variable came from.",
+      "fix": "Honour the hook only when a second, explicit test flag is set (such as ARC_TEST=1). Or print a loud notice when it is active.",
+      "twin_of": null
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply (parent creation loop)",
+      "breaking_input": "A dangling symlink or a broken junction at `.agents` in the project. preflight sees lst() as a symlink and throws, but if it is swapped in after preflight (TOCTOU), existsSync follows it and returns false.",
+      "why": "existsSync is false for a dangling link, so mkdirTree calls mkdirSync, which throws EEXIST outside the named-refusal path. The user gets a raw stack from a path that was supposed to be refused by name. The check and the use are two separate reads of the filesystem.",
+      "fix": "Use lstat (not existsSync) in apply's parent and dest checks. Re-verify the parents just before the rename.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/adapters/source-common.mjs:yamlScalar",
+      "breaking_input": "A description whose raw value contains U+2028 or U+0085 (NEL), for example pasted from a rich-text editor. JSON.stringify leaves both unescaped.",
+      "why": "YAML 1.1 and some YAML 1.2 loaders treat these as line breaks inside a double-quoted scalar and fold them. OpenCode or agentskills readers may read a changed description or reject the frontmatter, while the claim is that a JSON string is a safe YAML scalar.",
+      "fix": "Escape U+0085, U+2028 and U+2029 as \\u escapes after JSON.stringify.",
+      "twin_of": "(p) escapes in data"
+    }
+  ]
+}

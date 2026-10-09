@@ -39,6 +39,7 @@ export function permission(raw, catchAll) {
     if (t === "Bash") { bash.push("*"); continue; }
     if ((m = /^Bash\((.+)\)$/.exec(t))) {
       const inner = m[1].replace(/:\*$/, "");
+      if (inner.trim() === "") throw new Unsupported(`the scope \`${t}\` is empty`);
       // OpenCode reads `*` and `?` as wildcards: a literal one in a Claude scope would widen the grant.
       if (/[*?]/.test(inner)) throw new Unsupported(`the scope \`${t}\` holds a wildcard character OpenCode would widen`);
       // `git diff:*` is the command alone or followed by arguments: two rules, so `git diff-tree` stays out.

@@ -55,8 +55,8 @@ export function targetDir(dir) {
 }
 
 /** The manifest an earlier install left, or null. claude-code keeps it inside the registry (ADR-2018). */
-export function readManifest(dir) {
-  for (const [rel, pick] of [[MANIFEST, (j) => j], [REGISTRY, (j) => j.install]]) {
+export function readManifest(dir, only) {
+  for (const [rel, pick] of [[MANIFEST, (j) => j], [REGISTRY, (j) => j.install]].filter(([r]) => !only || r === only)) {
     const p = join(dir, rel);
     const st = lst(p);
     if (!st) continue;
@@ -143,10 +143,6 @@ export function apply(ops, dir, manifestOp, { log = () => {}, backup = [] } = {}
     for (const d of created.slice().reverse()) { try { rmdirSync(d); } catch { left++; } }
     return { restored, removed, failed, left };
   };
-  // A signal mid-run rolls back before the process ends, so Ctrl-C never strands a file under its backup name.
-  const onSignal = (sig) => { const r = undo(); console.log(`rollback: ${sig} — ${r.restored} restored, ${r.removed} removed`); process.exit(130); };
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
   try {
     for (const op of ops.filter((o) => o.kind === "mkdir")) mkdirTree(dir, op.path, created);
     for (const op of all) {
@@ -182,9 +178,6 @@ export function apply(ops, dir, manifestOp, { log = () => {}, backup = [] } = {}
   } catch (e) {
     e.rollback = undo();
     throw e;
-  } finally {
-    process.removeListener("SIGINT", onSignal);
-    process.removeListener("SIGTERM", onSignal);
   }
   for (const j of journal) if (j.bak) rmSync(j.bak, { force: true });
   return { written: all.length, backup: backup.length ? `.arc-install-backup/${backupStamp}/` : null };

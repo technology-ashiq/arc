@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "critical",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:preflight",
+      "breaking_input": "Provide an op with path \"../../../etc/passwd\" which passes confineRel (it expects a relative path inside the target) but is not actually confined: the code checks `confineRel(op.path) === null` and rejects it, but if op.path is something like \"a/../../../etc/passwd\", `confineRel` normalizes it to \"etc/passwd\" which is inside, but `join(dir, \"a/../../../etc/passwd\")` resolves it outside the target via the '..' segments.",
+      "why": "preflight checks `confineRel` on the raw path but later join(dir, op.path) resolves `..` segments, which can escape the target directory.",
+      "fix": "Resolve op.path through `resolve` or normalize `..` segments before confinement check, or use `join(dir, op.path)` and then check that result starts with `resolve(dir)`.",
+      "twin_of": "(d) path confinement"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:preflight",
+      "breaking_input": "An op with path \"a/../../b\" where \"a\" does not exist: the check `lst(join(dir, \"a\"))` returns null, dirs is set, and later `join(dir, \"a/../../b\")` resolves outside the target but the loop never checks the resolved path.",
+      "why": "For non-existent parent segments, the code skips the symlink/file-as-dir checks but does not ensure that the resolved path stays inside the target.",
+      "fix": "After computing each parent segment, compute `realpathSync(join(dir, segs.slice(0, i).join('/')))` and compare it to `join(dir, segs.slice(0, i).join('/'))` only if the directory exists; for non-existent parents, ensure the full resolved path stays inside the target.",
+      "twin_of": "(d) path confinement"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/engine/source-render.mjs:renderSourceTree",
+      "breaking_input": "A command file with a `targets:` key containing a value like \"[object Object]\" or a non-string entry: `plainValue(unit.fields.targets).split(\",\")` will split on commas inside a JSON object representation, leading to a wrong target list, potentially including targets that don't exist or skipping valid ones.",
+      "why": "The `targets:` field is expected to be a comma-separated string, but `plainValue` can return a stringified Object like '[object Object]' if the YAML reader interpreted the value as something else, and no validation of individual entries against the known target list is done before checking `wants.includes(target)`.",
+      "fix": "After splitting, validate each trimmed entry against the known target IDs (e.g., `SOURCE_TARGETS` keys plus 'claude-code') and throw Unsupported if any entry is unknown.",
+      "twin_of": "(ae) a malformed field read as absent"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/engine/adapters/source-common.mjs:plainValue",
+      "breaking_input": "A frontmatter description value that is the number 123 (not quoted): `plainValue(123)` returns 123 (a number), which is then passed to `yamlScalar` or `tomlString` which call `JSON.stringify(raw)` — for a number, `JSON.stringify(123)` returns `\"123\"` (a string), but the original number 123 is not a string, and the downstream code (e.g. `tomlString(123)` called on a number) would work incorrectly because `tomlString` expects a string.",
+      "why": "plainValue is documented to return a string, but if the raw value from YAML is already a number, it returns the number unchanged, leading to downstream type mismatches.",
+      "fix": "In plainValue, if the raw value is not a string, convert it to a string first (e.g., `String(raw)`), or reject non-string values.",
+      "twin_of": "(ae) a malformed field read as absent"
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/engine/adapters/source-common.mjs:yamlScalar",
+      "breaking_input": "A description value containing a single quote: `yamlScalar(\"it's\")` returns `JSON.stringify(\"it's\")` which is `'\"it\\'s\"'` (backslash-escaped). But `yamlScalar` is used to emit YAML scalars in frontmatter which is later read by Claude Code which reads the raw line; a backslash before a single quote inside double quotes is invalid YAML, potentially causing a parse error or misinterpretation.",
+      "why": "JSON.stringify escapes single quotes with backslash, which is not valid YAML double-quoted string escaping; an agent's description with an apostrophe could break the frontmatter parser.",
+      "fix": "Use proper YAML double-quoted string escaping (only backslash, double quote, and control characters need escaping), or use single-quoted strings for values containing apostrophes.",
+      "twin_of": "(p) escapes in data"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/codex.mjs:tomlString",
+      "breaking_input": "A control character or double quote in a skill body that forces fallback to tomlString: `JSON.stringify(s).replace(/\\x7f/g, \"\\u007f\")` does not handle all characters that TOML forbids in basic strings (like 0x00), nor does it handle the case where double quotes are inside the string but the fallback to basic string is needed (but tomlBlock already only falls back for three quotes or control characters). However if the body contains a double quote AND three quotes, tomlString is called which JSON.stringify will escape the double quote as `\\\"` which is valid in TOML basic strings, so this is actually correct — the issue is that JSON.stringify already handles all escaped characters properly for TOML basic strings. So this is not a defect; the check is correct. But the `tomlBlock` function's test `!/[\\x00-\\x08\\x0b-\\x1f\\x7f]/.test(body)` excludes 0x09 (tab) and 0x0a (LF) and 0x0d (CR) which are allowed in literal strings? Actually tab is 0x09 which is excluded, LF is 0x0a which is excluded, both are allowed in TOML literal strings. But that's fine — they cause fallback to basic string which can represent them. Actually TAB 0x09 is allowed in literal strings and is excluded from the test, so it would be treated as invalid and fall back to basic string unnecessarily but not incorrectly.",
+      "why": "Minor inefficiency: tab characters (0x09) are allowed in TOML literal strings but cause a fallback to basic string unnecessarily. Not a security defect.",
+      "fix": "Add 0x09 to the acceptable range in the regex: `!/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]/`",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/opencode.mjs:permission",
+      "breaking_input": "A Bash tool scope like `Bash(git diff:*)` where the inner string has a colon at the end: `m[1].replace(/:\\*$/, \"\")` strips the `:*` suffix, but if the scope is `Bash(git diff:?)` where `?` is a wildcard in OpenCode, the `?` is not detected and the path with `?` is emitted. The check `/[*?]/.test(inner)` runs on the inner string BEFORE stripping `:*`, so `Bash(x:*)` passes the check because `:*` includes `*`, but the code then strips `:*` and emits just `x`. If the original is `Bash(x:?)`, the `?` is detected and rejected; if it's `Bash(x:abc`)` it passes and emits `x:abc`. So the question mark is correctly caught. However if the scope is `Bash(git diff:*)` the check catches `*` and rejects it BEFORE stripping, which means a legitimate `:*` scope that should be split into two rules is rejected as unsupported, which is overly restrictive.",
+      "why": "The wildcard check runs on the inner string BEFORE the `:*` suffix is stripped, so a legitimate scoped Bash like `Bash(git diff:*)` is rejected instead of being split into `git diff` and `git diff *`.",
+      "fix": "Move the wildcard check to after the `:*` stripping, or only check the portion after the colon that represents the command pattern.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/opencode.mjs:permission",
+      "breaking_input": "A Bash tool scope `Bash()` (empty parentheses): `m[1].replace(/:\\*$/, \"\")` produces an empty string, and `bash.push(inner)` pushes an empty string. Then later `[...new Set(bash)].filter((p) => p !== \"*\")` filters out just opencoded commands but keeps the empty string, resulting in a line like `      \"\": allow` which is invalid.",
+      "why": "Empty Bash scope produces an empty string which becomes an invalid permission line.",
+      "fix": "Reject or skip empty Bash scopes before pushing them.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/source-common.mjs:splitTools",
+      "breaking_input": "A tool list that is already an array (not a string): `splitTools(raw)` is called with `raw` expected to be a string, but if the frontmatter parsed `tools:` as a YAML list (e.g., `tools: [Read, Bash]`), `plainValue` returns the string `\"Read, Bash\"` which is correct. But if the YAML gets interpreted as something else (e.g., a number), `plainValue` returns that non-string and `splitTools` iterates over its characters, producing nonsense.",
+      "why": "splitTools expects a string but receives potentially non-string data from YAML parsing; iterating over a number yields single digits, producing garbage tool names.",
+      "fix": "Validate that the input to splitTools is a string before iterating.",
+      "twin_of": "(ae) a malformed field read as absent"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/adapters/skills-only.mjs:allowedTools",
+      "breaking_input": "A tool like `Bash(git diff:*)`: the check `bad = tools.find((t) => /\\s/.test(t.replace(/\\([^()]*\\)$/, \"\")))` correctly handles this case — the replace removes the `(git diff:*)` part, leaving `Bash`, which has no space. But if the raw input had `Bash (git diff:*)` with a space BEFORE the parentheses, the regex `\\([^()]*\\)$` would require the parentheses to be at the end of the string, so `t.replace(/\\([^()]*\\)$/, \"\")` on `\"Bash (git diff:*)\"` would produce `\"Bash \"` which has a trailing space that passes the test `\\s` and is rejected as unsupported. That's actually correct. However if the input has a space AFTER the parentheses, like `Bash(git diff:*) `, the `$` anchor means the parentheses are not at the end, so the replace does nothing, and the trailing space is caught. Correct. So this is fine.",
+      "why": "No actual defect found on further analysis.",
+      "fix": "N/A",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:firstDiff context function",
+      "breaking_input": "Context extraction for byte-diff reporting: the `context` function is not shown in the diff but presumably exists in arc-compile.mjs; if it truncates at invalid byte positions (e.g., multi-byte UTF-8 boundaries), it could produce garbled output or crash.",
+      "why": "Missing implementation visibility, but by pattern (t) suggests context display may slice multi-byte characters.",
+      "fix": "Ensure context extraction is safe for arbitrary UTF-8 input, slicing only at valid code point boundaries.",
+      "twin_of": "(t) unconfined data paths at birth"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/source-render.mjs:renderSourceTree",
+      "breaking_input": "A source skill file with the exact name as a rendered command file (path collision): `place(path, ...)` checks `if (owner.has(path)) throw new Unsupported(...)`, but this check happens in the loops for commands and agents. First a command renders `.agents/skills/arc-commit/SKILL.md`, then a source skill under `.claude/skills/` tries to place the same path (because skills are copied to `.agents/skills/` too). The collision is detected at `owner.has(path)` and the skill is reported as unsupported. However, the check `if (owner.has(path) && !owner.get(path).startsWith(\".claude/skills/\"))` means that multiple skills (from the skills directory) that render to the same path are silently overwritten; the last one wins, losing data.",
+      "why": "Multiple source skills can produce the same output path silently; the collision detection is only one-directional (command/agent vs skill, not skill vs skill).",
+      "fix": "Track all owners for a path and reject if any two source files (including two skills) produce the same path.",
+      "twin_of": null
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:manifestRecord",
+      "breaking_input": "A path with trailing slash or newline: `op.path` is used directly as the key in `files[op.path] = op.sha`. If the path contains a newline, the JSON output will have a string with an embedded newline, which may cause parsing issues or injection in some JSON parsers.",
+      "why": "Path values are not sanitized before being used as JSON keys; a crafted path with a newline or special character could break the manifest.",
+      "fix": "Validate or sanitize op.path to ensure it contains no special characters that could break JSON or downstream processing.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:apply",
+      "breaking_input": "A forced path whose backup fails (disk full, permissions): `copyFileSync(join(dir, p), to, fsConstants.COPYFILE_EXCL)` is called inside the backup loop. If it throws, the catch block runs `undo()` which tries to restore any renamed backups, but the staged tmp files from the main loop are also cleaned up. However if the backup copy fails after some renames have happened, those renames are undone correctly, but the fact that a backup was attempted (and failed) means the original file at `join(dir, p)` is still present (since backup is a copy), so after undo the file is restored to its original state. However if the backup copy fails BEFORE any rename, the staged tmp files are still present and cleaned up. So this is correct. But if the backup copy fails between renames (during the backup loop which runs before the rename loop), no renames have happened yet (the rename loop hasn't started), so undo just cleans up staged tmp files and dirs. This is correct.",
+      "why": "No actual defect found on further analysis.",
+      "fix": "N/A",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:overlaps",
+      "breaking_input": "Paths with trailing slashes or '.' segments: `overlaps(\"/a/b/\", \"/a/b/c\")` — `fold(resolve(\"/a/b/\")) + sep` produces, say, \"/a/b/\" on Unix; `fold(resolve(\"/a/b/c\")) + sep` produces \"/a/b/c/\". Then \"/a/b/\" startsWith \"/a/b/c/\" is false, and \"/a/b/c/\" startsWith \"/a/b/\" is true, so `overlaps` returns true. That's correct (\"/a/b/\" contains \"/a/b/c\"). If paths have \".\" segments like \"/a/b/./c/\": resolve removes them. So this is actually correct.",
+      "why": "No actual defect found.",
+      "fix": "N/A",
+      "twin_of": null
+    }
+  ]
+}

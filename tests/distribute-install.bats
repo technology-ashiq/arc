@@ -33,7 +33,7 @@ doctored() { [ "$(count '^doctor: [0-9]+ placed, [0-9]+ degraded, [0-9]+ missing
 @test "distribute-install: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-install: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 7 ] || { echo "declared $declared, expected 7"; false; }
+  [ "$declared" -eq 8 ] || { echo "declared $declared, expected 8"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -108,4 +108,15 @@ doctored() { [ "$(count '^doctor: [0-9]+ placed, [0-9]+ degraded, [0-9]+ missing
   planned codex || false
   [ "$status" -eq 0 ] && [ "$(count '^dry-run: nothing written$')" -eq 1 ] && [ "$(count '^write \.codex/agents/plan-attacker\.toml$')" -eq 1 ] || { echo "status $status: $output"; false; }
   [ "$(find "$d" -type f | wc -l | tr -d ' ')" -eq 1 ] || { echo "a dry-run wrote into the project"; find "$d"; false; }
+}
+
+# One record names one target: a second, different target in the same project refuses (attack d32e714 B4).
+@test "distribute-install: a second target into the same project is refused as other-target" {
+  local s d; s=$(src) || false; d=$(proj p)
+  install_ codex "$d" "$s"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  install_ opencode "$d" "$s"
+  planned opencode || false
+  [ "$status" -eq 1 ] && [ "$(count '^refused \[other-target\] .* already holds a .codex. install in \.arc-install\.json')" -eq 1 ] || { echo "status $status: $output"; false; }
+  [ ! -e "$d/.opencode" ] || { echo "the refused run wrote"; false; }
 }
