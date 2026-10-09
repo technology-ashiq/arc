@@ -77,14 +77,17 @@ function wireHooks(dir, target) {
   if (!same) { console.log(`hooks: not set -- ${dir} is inside the repo at ${top || "an unknown root"}, not its root; run arc init there to wire them`); return 0; }
   const have = git(dir, ["config", "--get", "core.hooksPath"]).stdout;
   if (have && have !== HOOKS) { console.log(`hooks: left as core.hooksPath=${have}; the project chose its own (arc's are in ${HOOKS})`); return 0; }
-  if (!existsSync(join(dir, HOOKS, "pre-commit"))) { console.log(`hooks: not set -- ${HOOKS} was not installed by the \`${target}\` target`); return 0; }
+  if (!["pre-commit", "pre-push"].every((h) => existsSync(join(dir, HOOKS, h)))) { console.log(`hooks: not set -- ${HOOKS} was not installed by the \`${target}\` target`); return 0; }
   const hooksDir = git(dir, ["rev-parse", "--git-path", "hooks"]).stdout;
   let theirs = [];
-  try { theirs = readdirSync(join(dir, hooksDir)).filter((n) => !n.endsWith(".sample")); } catch { theirs = []; }
+  // git prints this relative to the repo root, or absolute in a linked worktree (attack 45490ca B1).
+  try { theirs = readdirSync(resolve(dir, hooksDir)).filter((n) => !n.endsWith(".sample")); } catch { theirs = []; }
   if (!have && theirs.length) { console.log(`hooks: not set -- the project runs ${theirs.join(", ")} from ${hooksDir}, which core.hooksPath would disable; arc's are in ${HOOKS}`); return 0; }
+  // A hook that cannot be made executable is named, never a stack trace (attack 45490ca B2).
   for (const h of ["pre-commit", "pre-push"]) {
     const p = join(dir, HOOKS, h);
-    if (process.platform !== "win32" && (statSync(p).mode & 0o111) === 0) chmodSync(p, 0o755);
+    try { if (process.platform !== "win32" && (statSync(p).mode & 0o111) === 0) chmodSync(p, 0o755); }
+    catch (e) { console.log(`hooks: not set -- ${HOOKS}/${h} could not be made executable: ${e.code || e.message}`); return 1; }
   }
   if (git(dir, ["config", "core.hooksPath", HOOKS]).status !== 0) { console.log("hooks: could not set core.hooksPath"); return 1; }
   console.log(`hooks: core.hooksPath=${HOOKS} (branch guard + secret scan at commit time)`);

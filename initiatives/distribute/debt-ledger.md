@@ -123,3 +123,6 @@ REJECTED: L12 compile with no args -- by design (arc-compile prints its own usag
 REJECTED: L13 a repo whose trunk is master -- out of scope (the fixture names its branches; branch-guard's own rule is main, ADR-2015)
 REJECTED: L15 the runbook names the script form -- by design (the script form works in a project that installed arc without the bin)
 ```
+
+Attack 45490ca round 2 (P04): logic 0 findings; boundary B1, B2 fixed as (bk), (bl).
+| 14 | B3-B5 (attack 45490ca, low): realpath vs git's own case and 8.3 forms on Windows, no timeout on the dispatcher's children, inherited GIT_* variables | `bin/arc.mjs` | each fails closed (hooks not wired, named) or needs a hostile environment; two rounds are spent | a Windows user sees "not its root" at their real root, a hung doctor, or a GIT_DIR-set CI | normalise both sides through `git rev-parse --show-toplevel` run in each path; add a timeout; clear GIT_* in git() |
