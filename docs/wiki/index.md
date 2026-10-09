@@ -7,15 +7,15 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 |---|---|---|
 | [Products](#products) | 20 | 17 |
 | [Lanes](#lanes) | 21 | 17 |
-| [Processes](#processes) | 15 | 0 |
+| [Processes](#processes) | 14 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 21 | 0 |
 | [Commands](#commands) | 29 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **152** | **34** |
+| **Total** | **151** | **34** |
 
-Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 403 of 473 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 403 of 473 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -82,7 +82,6 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 403 of 
 | [develop-proof](processes/develop-proof.md) | 1.0.0 | Prove the next unproven slice of a LIVE lane from evidence already recorded, and end on its slice.done receipt. |
 | [face-ask](processes/face-ask.md) | 1.0.0 | Answer the owner's question in the face: about arc from arc's own record with citations, or a general question from the owner's chosen model, always saying which. |
 | [kickoff-plan](processes/kickoff-plan.md) | 1.0.0 | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
-| [launch-watch](processes/launch-watch.md) | 1.0.0 | Re-verify every launched venture's public slots weekly and raise a regression to needs-you. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
 | [narrative-verify](processes/narrative-verify.md) | 1.0.0 | Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block. |
 | [review-diff](processes/review-diff.md) | 1.0.0 | Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/. |

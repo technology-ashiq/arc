@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // The owner's one apply for launch REQ-10 (ADR-1750): adds the `process:launch-watch` subject to hq.policy.yaml, which is
 // on the deny floor, so the agent cannot write it, the launch-watch row to hq.jobs.yaml, and the full tools of the
-// process stub (then rebuilds the wiki). They land together:
+// process stub, written whole (then rebuilds the wiki). They land together:
 // jobs-lint fails a job whose policy_kind the live policy does not hold, so the row cannot ship ahead of the subject.
 // Idempotent: a second run changes nothing. The policy block goes before `process:build-in-public-draft`; the job row
 // is appended. jobs-lint is the check that follows.
 //   node .claude/scripts/launch/owner-apply-watch-policy.mjs
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,8 +15,32 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const POLICY = join(ROOT, "hq.policy.yaml");
 const JOBS = join(ROOT, "hq.jobs.yaml");
 const STUB = join(ROOT, "processes", "launch-watch.process.yaml");
-const NARROW = "tools:\n  - fs.read\nbody: |\n";
-const WIDE = "tools:\n  - fs.read\n  - fs.write\n  - shell.run:\n      - \"node .claude/scripts/launch/arc-launch.mjs:*\"\nbody: |\n";
+const STUB_TEXT = [
+  "name: launch-watch",
+  "version: 1.0.0",
+  "intent: \"Re-verify every launched venture's public slots weekly and raise a regression to needs-you.\"",
+  "permissions: declared",
+  "job_stub: true",
+  "inputs: []",
+  "tools:",
+  "  - fs.read",
+  "  - fs.write",
+  "  - shell.run:",
+  "      - \"node .claude/scripts/launch/arc-launch.mjs:*\"",
+  "body: |",
+  "",
+  "  NOT AN ENGINE PROCESS. This file exists so the launch-watch job has a POLICY SUBJECT (ADR-0504,",
+  "  ADR-0802), exactly as brief-materialize does. `job_stub: true` makes `arc-run --process",
+  "  launch-watch` a loud refusal.",
+  "",
+  "  The owner apply `owner-apply-watch-policy.mjs` wrote this file together with its hq.policy.yaml",
+  "  subject and its hq.jobs.yaml row: none of the three may land without the others (ADR-1750).",
+  "",
+  "  The real work lives in `.claude/scripts/hq/jobs/launch-watch.mjs` and is run by `arc-jobs`, never",
+  "  from here: once every seven days, `arc-launch verify --all --public-only` per venture board",
+  "  (launch REQ-10, ADR-1716, ADR-1750).",
+  "",
+].join("\n");
 const ANCHOR = "  \"process:build-in-public-draft\":\n";
 const BLOCK = [
   "  # launch REQ-10 (ADR-1750): the weekly watch shells out to arc-launch verify --public-only, which asks the venture's",
@@ -69,17 +93,14 @@ if (/^\s*- name: launch-watch\s*$/m.test(jobs)) console.log("hq.jobs.yaml alread
 else if (rc) console.log("hq.jobs.yaml: launch-watch not added, the policy subject is missing");
 else { writeFileSync(JOBS, jobs.replace(/(\r?\n)*$/, je) + inEol(ROW, je)); console.log("hq.jobs.yaml: launch-watch added (daily@07:30, acts every 7 days)"); }
 
-// The stub ships declaring fs.read only, because the every-process gate blocks a process that declares more than its
-// absent subject allows. Once the subject exists, the stub declares what the job really does, and the wiki that
-// renders the stub is rebuilt.
-const stub = readFileSync(STUB, "utf8");
-const se = eolOf(stub);
-if (/shell\.run:/.test(stub)) console.log("processes/launch-watch.process.yaml already declares fs.write and shell.run -- unchanged");
-else if (rc) console.log("processes/launch-watch.process.yaml: not widened, the policy subject is missing");
-else if (!stub.includes(inEol(NARROW, se))) { console.log("processes/launch-watch.process.yaml: no fs.read-only tools block -- unchanged; widen it by hand"); rc = 2; }
+// The process stub cannot ship before its subject either: the birth rule fails any processes/*.process.yaml with no
+// policy row, and the every-process gate fails one that declares more than an absent subject allows. So this apply
+// writes it, in the same change as the subject, and rebuilds the wiki that renders it.
+if (existsSync(STUB)) console.log("processes/launch-watch.process.yaml already exists -- unchanged");
+else if (rc) console.log("processes/launch-watch.process.yaml: not written, the policy subject is missing");
 else {
-  writeFileSync(STUB, stub.replace(inEol(NARROW, se), inEol(WIDE, se)));
-  console.log("processes/launch-watch.process.yaml: tools widened to fs.write and shell.run of arc-launch");
+  writeFileSync(STUB, inEol(STUB_TEXT, pe));
+  console.log("processes/launch-watch.process.yaml: written (fs.read, fs.write, shell.run of arc-launch)");
   const w = spawnSync(process.execPath, [join(ROOT, ".claude", "scripts", "docs", "wiki-build.mjs")], { cwd: ROOT, stdio: "inherit" });
   if (w.status !== 0) { console.log("wiki-build failed -- run it by hand before committing"); rc = 2; }
 }

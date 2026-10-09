@@ -131,7 +131,7 @@
 .claude/scripts/core/money-surfaces.json	8157fd70e9940c23e873846f9df93a482deca702330629e369138dd480d97f1c
 .claude/scripts/core/one-line.mjs	de7576a87c7710b049a6984a6f60b48937b44d626a9ebd347f5af12b74625a65
 .claude/scripts/core/ownership-lint.sh	f6f24f2afaf6b845cca533728a85693926fa4c22b73d741fc868ce28bddc82dc
-.claude/scripts/core/plan-bound-allowlist.json	2432e7f760d93b7f1de0c6c3ca81fa8b3c5b0cf2ccfda7c409dc9a0847dfae77
+.claude/scripts/core/plan-bound-allowlist.json	3cf2362a67c2e1e4036d2936d07a6b2bad79cb3b1522aa80fbe985e967f8c0eb
 .claude/scripts/core/plan-bound-audit.mjs	c8b375c36c494d647aa2f55d9c9bc966a9496eca2ef44601f62407868ff34f4c
 .claude/scripts/core/plan-expect.mjs	94d5d89b19db14ab02c6121f4dc5ec8218f4c01ba69c60ffd9cb5500cd14bc4c
 .claude/scripts/core/product-lint.mjs	9f2c1edd27b93f4649ec25a9dae1439eee040ea377f8a7dcd1b97b18e93247e3
@@ -357,7 +357,7 @@
 .claude/scripts/launch/lib/simulated.mjs	b0cb15746d7de6efca03adf451f0b0a85b0d343f5c95111c151fa031f0c526af
 .claude/scripts/launch/lib/state.mjs	cbea51f8bec8ae50e3525861b8c05417ca14f83468264649e2a9ff494276e07b
 .claude/scripts/launch/lib/worker.mjs	bdf2e46f7f8dbebf33216db79147d1ce8fa86459ade56d3cf1c1d238e907ac3e
-.claude/scripts/launch/owner-apply-watch-policy.mjs	d1a81aeb3ab7a9a5f6922eee5e44cfb129a9b2e3bf6d54a217e64a647071aed5
+.claude/scripts/launch/owner-apply-watch-policy.mjs	5a863ca56f61ca5ce2fd95be4122e6e9b080b4717206c7b739b4e8ed513d29c3
 .claude/scripts/leads/arc-leads.mjs	31444c1f302d32be90dfa5a011bb0ed8fa3cb208c628646137123e1eb03d8a7c
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
 .claude/scripts/leads/lib/deps.mjs	eebf5ab87ee1cdcf1f7a3371ebbe900356ddabab64970ba457004bc4b7de6f40

@@ -29,16 +29,15 @@ exactly one `needs-you` line, and a `skipped(env)` slot produces zero. The jobs 
   state, never the repo), is seven or more days old, or absent, or in the future. Acting means one
   `arc-launch verify --all --public-only` for that board. A board is stamped only when it was watched: the runner
   finished and its `watch-result` line shows every failed slot raised. A board that failed retries the next day, alone.
-- The policy subject is `process:launch-watch`, with the `processes/launch-watch.process.yaml` stub (`job_stub:
-  true`), as brief-materialize has. Its `hq.policy.yaml` row is the owner's: that file is on the deny floor, and the
+- The policy subject is `process:launch-watch`, with a `processes/launch-watch.process.yaml` stub (`job_stub:
+  true`) as brief-materialize has, written by the owner apply. Its `hq.policy.yaml` row is the owner's: that file is on the deny floor, and the
   birth rule gates every process on it.
 
 ## Consequences
 
 - The `hq.jobs.yaml` row ships with the policy row, not before it. `jobs-lint` fails any job whose `policy_kind` the
   live policy lacks, so a row merged ahead of the subject would turn CI red. One owner apply,
-  `owner-apply-watch-policy.mjs`, writes both rows, and a second run of it changes nothing. The process stub follows
-  the same rule: it ships declaring `fs.read` only, because the every-process gate blocks a process that declares
-  more than its absent subject allows. The same apply widens it to `fs.write` and `shell.run` of arc-launch, then
-  rebuilds the wiki. Until then the job script
-  and its stub exist, nothing schedules them, and the job never runs ungoverned.
+  `owner-apply-watch-policy.mjs`, writes both rows, and a second run of it changes nothing. The process stub
+  follows the same rule. The birth rule fails any `processes/*.process.yaml` with no policy row, so the stub ships in
+  the apply too, written whole, and the apply then rebuilds the wiki. Until then the job script exists,
+  nothing schedules it, and the job never runs ungoverned.

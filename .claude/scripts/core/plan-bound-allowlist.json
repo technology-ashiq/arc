@@ -410,6 +410,16 @@
       "verb": "legal/arc-legal",
       "class": "door-gap",
       "why": "NO, filed 2026-10-09 (face Phase 14): legal.full-read applies with --expect, but inside the declaration that holds the check a write (rmSync of the staged dir) comes before it, so the audit reads write-before-check"
+    },
+    {
+      "verb": "hq/jobs/launch-watch",
+      "class": "lane-tool",
+      "why": "the launch lane weekly watch job (ADR-1750): its only write is its own per-board stamp in instance state, .claude/state/launch/.watch-last; the slots it re-verifies are written by the runner. Not a face op. Debt carried by the launch lane, visible here"
+    },
+    {
+      "verb": "launch/owner-apply-watch-policy",
+      "class": "lane-tool",
+      "why": "the owner one-shot apply for the deny-floor policy row, the job row and the stub tools (ADR-1750); the owner runs it by hand and commits the result, so the commit is the record. Not a face op"
     }
   ]
 }
