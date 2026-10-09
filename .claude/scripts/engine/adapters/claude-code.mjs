@@ -183,6 +183,17 @@ export function render(doc, { withHeader = false } = {}) {
 }
 
 /**
+ * A command or agent SOURCE file -> itself (distribute P02, ADR-2001: the claude-code target is the identity).
+ * Takes what frontmatter-lint's parseFrontmatter returned and rebuilds the file from it, so a 0-byte diff
+ * proves the one parser every adapter reads through lost nothing; returning the input text would prove
+ * only that a string equals itself.
+ * @param {{ lines: { key: string, raw: string }[], rest: string }} parsed
+ */
+export function renderSource(parsed) {
+  return "---\n" + parsed.lines.map((l) => `${l.key}: ${l.raw}\n`).join("") + "---" + parsed.rest;
+}
+
+/**
  * One progress line for one tool step of a streamed headless run (face Phase 06 slice 03c): the driver writes it to
  * stderr the moment the CLI reports the step, and the face's session door shows it live.
  *

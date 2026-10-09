@@ -879,6 +879,7 @@
       "kickoff-lint": "lane",
       "develop-lint": "develop",
       "process-lint": "engine-room",
+      "frontmatter-lint": "engine-room",
       "arc-compile-bytediff": "engine-room",
       "policy-lint": "policy",
       "policy-matrix": "policy",

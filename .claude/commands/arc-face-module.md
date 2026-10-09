@@ -2,6 +2,7 @@
 description: Scaffold one face module (module.mjs, fold.mjs, ops.mjs, View.tsx) for a room the door serves, and prove it green on face-pure and face-coverage in the same command. Refuses an id /api/rooms does not serve.
 argument-hint: "<ring>/<id>"
 allowed-tools: Bash(node .claude/scripts/hq/face-module.mjs:*), Bash(node .claude/scripts/core/face-pure.mjs:*), Bash(node .claude/scripts/core/face-coverage.mjs:*), Read, Glob, Grep
+targets: claude-code
 ---
 
 Scaffold: **$ARGUMENTS** — a `RING/ID`, for example `command/chat-mcp`.
