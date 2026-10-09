@@ -67,3 +67,4 @@ and lane finds are appended under their PR.
 - **(bc) the record shipped as a payload file.** `arc-registry.json` is excluded from the claude-code payload. Fixed in `install-targets/claude-code.mjs`, attack d32e714 B5.
 - **(bd) an empty scope rendered as an empty rule.** `Bash()` is `[unsupported]`. Fixed in `adapters/opencode.mjs`, attack d32e714 L8.
 - **(be) a child script's stdout read through a pipe it exits on.** A script that writes then calls process.exit truncates a pipe at 8192 bytes on macOS; the installer reads every child script's stdout from a file descriptor. Fixed in `install-targets/claude-code.mjs` (runNode), CI macos shard 3 on 88c2fb6.
+- **(bf) a new writer under a gate that landed mid-PR.** face Phase 14 (#400) merged plan-bound-audit while P03 was open; the installer writes into a consumer dir, so it took an allowlist row with its why. Check `git log origin/main` for new gates before the last push. CI run 37883922992 on b012c0d.
