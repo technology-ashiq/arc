@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 // ---- shared by auth, authz, tenancy, plans and the Phase 03 GitHub slots (ADR-1734, ADR-1747). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SHA = /^[0-9a-f]{40}$/;
@@ -116,13 +116,12 @@ async function oursAtHead(ctx, full, FILES) {
 // errors slot on Sentry (ADR-1704, ADR-1747). Finds the venture's Sentry project (slug = venture slug; the owner creates
 // it), reads its public DSN, and commits one probe route that throws a known error and reports it over Sentry's store
 // API with no SDK (the shell owns package.json, ADR-1733). verify calls the live route with a probe id derived from the
-// tag, then asks the Sentry API for an issue with that message seen since this verify began: "a thrown fixture error
+// tag and a fresh nonce, then asks the Sentry API for an issue with exactly that message: "a thrown fixture error
 // appears as a Sentry issue", answered by Sentry, never by the route's own word.
 const SENTRY = "https://sentry.io/api/0";
 const ROUTE = "app/api/arc-error-probe/route.js";
 const DSN_SHAPE = /^https:\/\/[0-9a-f]{32}@o[0-9]{1,20}\.ingest(?:\.[a-z]{2,3})?\.sentry\.io\/[0-9]{1,20}$/;
 const SLUG = /^[a-z0-9][a-z0-9_-]{0,49}$/;
-const SKEW_MS = 120000;
 
 const sentry = (ctx, method, path, allow) => call(ctx, `${SENTRY}${path}`, { authorization: `Bearer ${tokenOf(ctx, "SENTRY_AUTH_TOKEN", /^(?:sntrys_[A-Za-z0-9+/=_-]{20,400}|[0-9a-f]{64})$/)}` }, method, undefined, allow, `sentry ${path.split("?")[0]}`);
 
@@ -136,10 +135,12 @@ function routeFor(dsn) {
     "const answer = (status, body) => new Response(JSON.stringify(body), { status, headers: { \"content-type\": \"application/json\" } });",
     "",
     "export async function GET(request) {",
-    "  const probe = new URL(request.url).searchParams.get(\"probe\") || \"\";",
-    "  if (!/^arcprobe[0-9a-f]{16}$/.test(probe)) return answer(400, { error: \"no probe id\" });",
+    "  const q = new URL(request.url).searchParams;",
+    "  const probe = q.get(\"probe\") || \"\";",
+    "  const nonce = q.get(\"n\") || \"\";",
+    "  if (!/^arcprobe[0-9a-f]{16}$/.test(probe) || !/^[0-9a-f]{8}$/.test(nonce)) return answer(400, { error: \"no probe id\" });",
     "  try {",
-    "    throw new Error(\"arc-launch probe \" + probe);",
+    "    throw new Error(\"arc-launch probe \" + probe + \" \" + nonce);",
     "  } catch (e) {",
     "    const u = new URL(DSN);",
     "    const store = u.protocol + \"//\" + u.host + \"/api\" + u.pathname + \"/store/\";",
@@ -218,9 +219,14 @@ export async function scaffold(ctx) {
   return { files: [ROUTE], resources: [{ kind: "sentry-project", id: `${p.org}/${p.slug}` }, { kind: "error-probe-route", id: `${full}:${sha}` }], notes: [] };
 }
 
+// An abort that already fired never notifies again: check it first, and drop the listener when the timer wins
+// (attack b6ffd12 B3).
 const pause = (ms, signal) => new Promise((res, rej) => {
-  const t = setTimeout(res, ms);
-  if (signal) signal.addEventListener("abort", () => { clearTimeout(t); rej(Object.assign(new Error("aborted"), { code: "ABORTED" })); }, { once: true });
+  const stop = () => rej(Object.assign(new Error("aborted"), { code: "ABORTED" }));
+  if (signal && signal.aborted) return stop();
+  const onAbort = () => { clearTimeout(t); stop(); };
+  const t = setTimeout(() => { if (signal) signal.removeEventListener("abort", onAbort); res(); }, ms);
+  if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
 async function probe(ctx) {
@@ -231,24 +237,26 @@ async function probe(ctx) {
   const dsn = await dsnOf(ctx, p);
   const drift = await oursAtHead(ctx, full, { [ROUTE]: routeFor(dsn) });
   if (drift) return { ok: false, reason: drift };
-  const since = Date.now() - SKEW_MS;
+  // A fresh nonce per verify: only this verify's event can match, never a stale one under the same probe id (b6ffd12 B10).
+  const nonce = randomBytes(4).toString("hex");
+  const msg = `arc-launch probe ${id} ${nonce}`;
   let res;
   try {
-    res = await ctx.fetch(`https://${domain}/api/arc-error-probe?probe=${id}`, { method: "GET", headers: { "user-agent": "arc-launch" }, redirect: "manual" });
+    res = await ctx.fetch(`https://${domain}/api/arc-error-probe?probe=${id}&n=${nonce}`, { method: "GET", headers: { "user-agent": "arc-launch" }, redirect: "manual" });
   } catch (e) {
     if (e && e.code) throw e;
     return { ok: false, reason: `https://${domain}/api/arc-error-probe did not answer` };
   }
   if (res.status !== 500) return { ok: false, reason: `the probe route answered ${res.status}, not 500 (the thrown error)` };
   // Sentry ingests asynchronously: the issue is asked for a few times before the answer is "not seen".
-  const query = encodeURIComponent(`"arc-launch probe ${id}"`);
+  const query = encodeURIComponent(`"${msg}"`);
   for (let i = 0; i < 6; i++) {
     if (i) await pause(15000, ctx.signal);
     const r = await sentry(ctx, "GET", `/projects/${p.org}/${p.slug}/issues/?query=${query}&statsPeriod=24h`);
-    const hit = list(r.body).find((x) => typeof x.title === "string" && x.title.includes(`arc-launch probe ${id}`) && Date.parse(x.lastSeen) >= since);
-    if (hit) return { ok: true, answerer: "sentry.io", evidence: { project: `${p.org}/${p.slug}`, issue: say(hit.id, 30), probe: id } };
+    const hit = list(r.body).find((x) => typeof x.title === "string" && x.title.includes(msg));
+    if (hit) return { ok: true, answerer: "sentry.io", evidence: { project: `${p.org}/${p.slug}`, issue: say(hit.id, 30), probe: id, nonce } };
   }
-  return { ok: false, reason: `Sentry shows no issue "arc-launch probe ${id}" seen since this verify began` };
+  return { ok: false, reason: `Sentry shows no issue "${msg}" from this verify` };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

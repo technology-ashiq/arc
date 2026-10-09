@@ -119,3 +119,9 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A refund of the probe payment launch did not send left the probe green** — every other refund row fails it, L7 — *every probe read: assert the whole set it owns, not only that its own row is in it*
 - **A rehearsal gate with two vetted rows recorded the request against provider "none"** — refuses like pickProvider, L11 — *every early-return path: the same refusals the main path gives*
 - **A scripted edit turned a typed newline escape into a real newline inside the probe-id template string** — the hash input is a JSON pair, a1d4452 B2 — *every hash or key built from parts: a structured encoding, never a separator character*
+- **A runner exit code became a deny-list of one failure label, so any other label exited 0** — allow-list of ok and absent, b6ffd12 B1 — *every success test: name what passes, never what fails*
+- **restore-drill trusted a run of any file named like launch's drill** — each run's file is checked against backup's digest, B5 — *every slot that reads another slot's artifact: verify it is still that slot's bytes*
+- **An abortable sleep never noticed an abort that fired before it started** — check `signal.aborted` first, B3 — *every abortable wait: the already-aborted case*
+- **A "capped" read buffered the whole body before slicing** — a capped stream reader, B4 — *every bounded read: bound the READ, not the result*
+- **A backup drill uploaded the full dump as a 7-day artifact** — one job, no upload, B7 — *every verification artifact: does it carry the data it verifies?*
+- **Two 404s from a dead site read as a named ABSENT** — the home page must answer 200 first, B8 — *every absence claim: prove the answerer is alive*

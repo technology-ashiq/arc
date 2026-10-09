@@ -1233,6 +1233,10 @@ arm() {
   arm legal worker-absent
   [ "$(j 'o.exit + " " + o.state + " " + o.answerer')" = "0 absent sandbox.automemory.ai" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.reason')" == "ABSENT(legal renderer not ready"* ]] || { echo "$DONE"; false; }
+  arm legal dead
+  [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined) + " " + o.verify.reason')" = "false true /privacy 404, /terms 404" ] || { echo "$DONE"; false; }
+  arm legal huge
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
   arm legal worker-absent-not-allowed
   [ "$(j 'o.exit + " " + o.state')" = "1 failed" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.reason')" == "verify:ABSENT: legal renderer not ready"* ]] || { echo "$DONE"; false; }
@@ -1241,21 +1245,21 @@ arm() {
 @test "launch-contract: backup commits the drill once -- dump, checksum, restore into scratch, row-count diff -- and verify needs both jobs green (ADR-1746)" {
   arm backup thread
   [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.needs + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs')" = "backup,restore true true true true false" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.jobs.join("+")')" = "true api.github.com backup+restore" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.noUpload + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs')" = "drill true true true true false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.steps.join("+")')" = "true api.github.com dump and checksum+restore and compare row counts" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: restore-drill creates nothing and is verified by the drill's green restore job (ADR-1746)" {
   arm backup thread
   [ "$(j 'o.rScaffold + " " + o.rKinds.join(",")')" = "true restore-source" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.rVerify.ok + " " + o.rVerify.evidence.job')" = "true restore" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.rVerify.ok + " " + o.rVerify.evidence.step')" = "true restore and compare row counts" ] || { echo "$DONE"; false; }
   [ "$(j 'o.teardown.length')" = "2" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a red restore fails both slots, a red backup fails both, a missing secret and a stale drill are not ok (ADR-1709, ADR-1746)" {
   arm backup restore-red
-  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false drill run "*": backup success, restore failure"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false drill run "*": dump success, restore failure"* ]] || { echo "$DONE"; false; }
   [[ "$(j 'o.rVerify.ok + " " + o.rVerify.reason')" == "false drill run "*": restore failure"* ]] || { echo "$DONE"; false; }
   arm backup backup-red
   [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "false false" ] || { echo "$DONE"; false; }
@@ -1264,7 +1268,11 @@ arm() {
   arm backup stale
   [[ "$(j 'o.verify.reason + " | " + o.rVerify.reason')" == *"older than eight days | "*"older than eight days" ]] || { echo "$DONE"; false; }
   arm backup no-upstream
-  [ "$(j 'o.backup.code + " " + o.restore.code + " " + o.calls')" = "UPSTREAM_MISSING UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.backup.code + " " + o.restore.code + " " + o.noDigest.code + " " + o.calls')" = "UPSTREAM_MISSING UPSTREAM_MISSING UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
+  arm backup cancelled-newer
+  [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
+  arm backup foreign-drill
+  [[ "$(j 'o.rVerify.ok + " " + o.rVerify.reason')" == "false no completed backup-drill.yml run on main ran launch"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: errors finds the venture's Sentry project, commits the probe route with its DSN once, and verify sees the thrown error as an issue (ADR-1747)" {
@@ -1273,7 +1281,7 @@ arm() {
   [ "$(j 'o.kinds.join(",")')" = "sentry-project,error-probe-route" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.project')" = "true sentry.io automemory/arc-sandbox" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.issues[0]')" == "arc-launch probe arcprobe"*":1" ]] || { echo "$DONE"; false; }
-  [ "$(j 'o.verifyAgain + " " + o.issueCount')" = "true 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verifyAgain + " " + o.issueCount')" = "true 2" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: errors refuses a missing, ambiguous or keyless Sentry project before any commit, and without hosting (ADR-1747)" {

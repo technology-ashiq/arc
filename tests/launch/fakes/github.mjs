@@ -4,15 +4,17 @@
 //   planLimit       branch protection answers 403 the way GitHub Free does for a private repo
 //   pendingPolls    how many runs-list reads show a new run as in_progress before it completes
 //   auditConclusion what the dependency-scan workflow's audit job concludes on a push (success unless set)
-//   jobConclusions  { job: conclusion } for the other workflows' jobs (backup, restore); success unless set
+//   jobConclusions  { step: conclusion } for the drill job's steps (dump, restore); success unless set
 //   secrets         names of Actions secrets the repo holds (values are never modelled)
 export const LEGS = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
 export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, auditConclusion = "success", jobConclusions = {} } = {}) {
   // The workflows other than arc-ci a fixture models, each with its jobs; a run of one has id + 10000 * (index + 1).
-  const EXTRA = { "dependency-scan.yml": ["audit"], "backup-drill.yml": ["backup", "restore"] };
+  const EXTRA = { "dependency-scan.yml": ["audit"], "backup-drill.yml": ["drill"] };
+  const DRILL_STEPS = [["dump and checksum", "dump"], ["restore and compare row counts", "restore"]];
   const EXTRA_NAMES = Object.keys(EXTRA);
-  const conclude = (job) => (job === "audit" ? auditConclusion : jobConclusions[job] || "success");
+  const steps = () => DRILL_STEPS.map(([name, k]) => ({ name, status: "completed", conclusion: jobConclusions[k] || "success" }));
+  const conclude = (job) => (job === "audit" ? auditConclusion : steps().every((s) => s.conclusion === "success") ? "success" : "failure");
   const fresh = (r) => ({ private: true, description: "", files: {}, runs: [], protection: null, commits: [], ...r });
   const store = new Map(repos.map((r) => [`${r.owner || login}/${r.name}`, fresh(r)]));
   const calls = [];
@@ -221,7 +223,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       const id = Number(jm[1]);
       const k = Math.floor(id / 10000);
       const run = r.runs.find((x) => x.id === id - 10000 * k);
-      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name) })) });
+      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name), ...(name === "drill" ? { steps: steps() } : {}) })) });
       return run ? json(200, { jobs: run.jobs }) : err(404, "Not Found");
     }
     return err(404, `fake github: ${method} ${p} not modelled`);

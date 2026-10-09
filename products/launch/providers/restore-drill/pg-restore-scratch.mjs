@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 // ---- shared by auth, authz, tenancy, plans and the Phase 03 GitHub slots (ADR-1734, ADR-1746). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SHA = /^[0-9a-f]{40}$/;
@@ -112,14 +113,24 @@ async function oursAtHead(ctx, full, FILES) {
 }
 // ---- end of the shared block
 
-// restore-drill slot (ADR-1704, ADR-1709, ADR-1746). The drill is backup's workflow: its `restore` job restores the dump
+// restore-drill slot (ADR-1704, ADR-1709, ADR-1746). The drill is backup's workflow: its restore step restores the dump
 // into a scratch Postgres and fails unless every table's row count equals the source's. This slot creates nothing; its
-// receipt is that restore job's green run, asked of GitHub, never of state. The run must be under eight days old, so a
+// receipt is that step's green run of launch's own drill file (backup's digest), asked of GitHub, never of state. The run must be under eight days old, so a
 // drill whose weekly schedule stopped is not a standing receipt.
 const WORKFLOW_FILE = "backup-drill.yml";
+const STEP_DUMP = "dump and checksum";
+const STEP_RESTORE = "restore and compare row counts";
+const sha256 = (t) => createHash("sha256").update(t, "utf8").digest("hex");
 const MAX_AGE_MS = 8 * 24 * 3600 * 1000;
 
-// Upstream: backup's reported workflow names the venture repo (ADR-1746). Validated here, never trusted.
+// Upstream: backup's reported workflow names the venture repo, and its drill digest is the only file this slot trusts a
+// run of (ADR-1746, b6ffd12 B5). Validated here, never trusted.
+function digestOf(ctx) {
+  const d = String((list(ctx.upstream && ctx.upstream.backup).find((r) => r.kind === "drill-digest") || {}).id || "");
+  if (!/^[0-9a-f]{64}$/.test(d)) throw refuse("UPSTREAM_MISSING", "backup reported no drill digest");
+  return d;
+}
+
 function repoOf(ctx) {
   const up = list(ctx.upstream && ctx.upstream.backup);
   const wf = String((up.find((r) => r.kind === "github-workflow") || {}).id || "");
@@ -134,26 +145,41 @@ export function envContract() {
 
 export async function scaffold(ctx) {
   const full = repoOf(ctx);
+  digestOf(ctx);
   ctx.report({ kind: "restore-source", id: `${full}:.github/workflows/${WORKFLOW_FILE}#restore` });
   return { files: [], resources: [{ kind: "restore-source", id: `${full}:.github/workflows/${WORKFLOW_FILE}#restore` }], notes: [] };
 }
 
+// The newest drill run on main that answers for launch's file: completed, not cancelled or skipped (a newer cancelled
+// run must not mask a green one), and run at a head whose workflow file is byte-for-byte launch's (b6ffd12 B6). Then
+// the conclusion of each named step of its one job. Shared shape with restore-drill, which carries the same code.
+async function drill(ctx, full, digest) {
+  const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/${WORKFLOW_FILE}/runs?branch=main&status=completed&per_page=30`, undefined, [404]);
+  if (runs.status === 404) return { reason: `${full} has no ${WORKFLOW_FILE} workflow` };
+  if (!(runs.body && Array.isArray(runs.body.workflow_runs))) return { reason: "github answered the runs list without a workflow_runs array" };
+  const done = list(runs.body.workflow_runs)
+    .filter((r) => r.status === "completed" && !["cancelled", "skipped"].includes(r.conclusion) && typeof r.id === "number" && typeof r.created_at === "string" && SHA.test(String(r.head_sha)))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  for (const run of done.slice(0, 5)) {
+    const age = Date.now() - Date.parse(run.created_at);
+    if (!Number.isFinite(age) || age > MAX_AGE_MS) return { reason: `the newest drill run ${run.id} is older than eight days` };
+    const at = await gh(ctx, "GET", `/repos/${full}/contents/.github/workflows/${WORKFLOW_FILE}?ref=${run.head_sha}`, undefined, [404]);
+    const b = at.body;
+    if (at.status === 404 || !b || typeof b.content !== "string" || sha256(utf8(b.content)) !== digest) continue;
+    const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
+    const job = list(jobs.body && jobs.body.jobs).find((j) => j.name === "drill");
+    const steps = new Map(list(job && job.steps).map((s) => [s.name, s.conclusion]));
+    return { run: run.id, dump: steps.get(STEP_DUMP) ?? "absent", restore: steps.get(STEP_RESTORE) ?? "absent" };
+  }
+  return { reason: `no completed ${WORKFLOW_FILE} run on main ran launch's drill file` };
+}
+
 async function probe(ctx) {
   const full = repoOf(ctx);
-  const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/${WORKFLOW_FILE}/runs?branch=main&status=completed&per_page=30`, undefined, [404]);
-  if (runs.status === 404) return { ok: false, reason: `${full} has no ${WORKFLOW_FILE} workflow` };
-  if (!(runs.body && Array.isArray(runs.body.workflow_runs))) return { ok: false, reason: "github answered the runs list without a workflow_runs array" };
-  const done = list(runs.body.workflow_runs).filter((r) => r.status === "completed" && typeof r.id === "number" && typeof r.created_at === "string")
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const run = done[0];
-  if (!run) return { ok: false, reason: `no completed ${WORKFLOW_FILE} run on main yet` };
-  const age = Date.now() - Date.parse(run.created_at);
-  if (!Number.isFinite(age) || age > MAX_AGE_MS) return { ok: false, reason: `the newest drill run ${run.id} is older than eight days` };
-  const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
-  const restore = list(jobs.body && jobs.body.jobs).find((j) => j.name === "restore");
-  if (!restore || restore.conclusion !== "success")
-    return { ok: false, reason: `drill run ${run.id}: restore ${say(restore ? restore.conclusion : "absent", 20)} -- no restore with equal row counts` };
-  return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: run.id, job: "restore", rule: "every table's row count equal, at least one table" } };
+  const d = await drill(ctx, full, digestOf(ctx));
+  if (d.reason) return { ok: false, reason: d.reason };
+  if (d.restore !== "success") return { ok: false, reason: `drill run ${d.run}: restore ${say(d.restore, 20)} -- no restore with equal row counts` };
+  return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: d.run, step: STEP_RESTORE, rule: "every table's row count equal, at least one table" } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 // ---- shared by auth, authz, tenancy, plans and the Phase 03 GitHub slots (ADR-1734, ADR-1746). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SHA = /^[0-9a-f]{40}$/;
@@ -114,18 +115,23 @@ async function oursAtHead(ctx, full, FILES) {
 
 // backup slot as a pg_dump drill on the venture's GitHub Actions (ADR-1704, ADR-1709, ADR-1746). An adapter cannot run
 // a process (ADR-1715, debt D2), so the dump and the restore run where ci and orm already prove things: a workflow in
-// the venture repo. Job `backup` dumps the public schema over the session pooler (the owner's SUPABASE_DB_URL Actions
-// secret, never read by launch) and writes its sha256; job `restore` checks that sha256, restores into a scratch
-// Postgres service, and FAILS unless every table's row count equals the source's, with at least one table. verify
-// asks GitHub: the file is launch's at main's head, the secret is present by name, and the newest completed run of the
-// drill on main, under eight days old, has both jobs green -- a backup is verified only by its restore (ADR-1709).
+// the venture repo. Its one job dumps the public schema over the session pooler (the owner's SUPABASE_DB_URL Actions
+// secret, never read by launch) and writes its sha256, then restores into a scratch Postgres service and FAILS unless
+// every table's row count equals the source's, with at least one table. The dump never leaves the job (b6ffd12 B7).
+// verify asks GitHub: the file is launch's at main's head, the secret is present by name, and the newest drill run on
+// main that ran launch's file, under eight days old, has both steps green -- a backup is verified only by its restore
+// (ADR-1709).
 const WORKFLOW_FILE = "backup-drill.yml";
+const STEP_DUMP = "dump and checksum";
+const STEP_RESTORE = "restore and compare row counts";
+const sha256 = (t) => createHash("sha256").update(t, "utf8").digest("hex");
 const PG = "postgres:17";
 const COUNTS = "select table_name || ' ' || (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', table_name), false, true, '')))[1]::text from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by 1;";
 const FILES = {
   ".github/workflows/backup-drill.yml": [
     "# Written by arc launch (backup slot, ADR-1746). Dumps the database, restores it into a scratch Postgres, and fails",
-    "# unless every table's row count matches. Needs the SUPABASE_DB_URL Actions secret (session pooler URL).",
+    "# unless every table's row count matches. Needs the SUPABASE_DB_URL Actions secret (session pooler URL). The dump",
+    "# never leaves this job: it is not uploaded, so the data is gone when the runner is.",
     "name: backup-drill",
     "on:",
     "  push:",
@@ -137,30 +143,10 @@ const FILES = {
     "permissions:",
     "  contents: read",
     "jobs:",
-    "  backup:",
+    "  drill:",
     "    runs-on: ubuntu-latest",
     "    env:",
     "      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}",
-    "    steps:",
-    "      - name: dump and checksum",
-    "        run: |",
-    "          test -n \"$SUPABASE_DB_URL\" || { echo \"the SUPABASE_DB_URL secret is not set\"; exit 1; }",
-    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'pg_dump --no-owner --no-privileges --schema=public -Fc \"$U\"' > dump.pgc`,
-    "          test -s dump.pgc",
-    "          sha256sum dump.pgc > dump.sha256",
-    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.src`,
-    "          test -s counts.src",
-    "      - uses: actions/upload-artifact@v4",
-    "        with:",
-    "          name: backup",
-    "          retention-days: 7",
-    "          path: |",
-    "            dump.pgc",
-    "            dump.sha256",
-    "            counts.src",
-    "  restore:",
-    "    needs: backup",
-    "    runs-on: ubuntu-latest",
     "    services:",
     "      scratch:",
     `        image: ${PG}`,
@@ -170,10 +156,15 @@ const FILES = {
     "        options: >-",
     "          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20",
     "    steps:",
-    "      - uses: actions/download-artifact@v4",
-    "        with:",
-    "          name: backup",
-    "      - name: restore and compare row counts",
+    `      - name: ${STEP_DUMP}`,
+    "        run: |",
+    "          test -n \"$SUPABASE_DB_URL\" || { echo \"the SUPABASE_DB_URL secret is not set\"; exit 1; }",
+    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'pg_dump --no-owner --no-privileges --schema=public -Fc \"$U\"' > dump.pgc`,
+    "          test -s dump.pgc",
+    "          sha256sum dump.pgc > dump.sha256",
+    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.src`,
+    "          test -s counts.src",
+    `      - name: ${STEP_RESTORE}`,
     "        run: |",
     "          sha256sum -c dump.sha256",
     `          docker run --rm --network host -v \"$PWD:/w\" ${PG} pg_restore --no-owner --no-privileges -h localhost -U postgres -d postgres /w/dump.pgc`,
@@ -181,6 +172,9 @@ const FILES = {
     "          test -s counts.dst",
     "          diff counts.src counts.dst",
     "          echo \"restored $(wc -l < counts.dst) tables, every row count equal\"",
+    "      - name: remove the dump",
+    "        if: always()",
+    "        run: rm -f dump.pgc",
     "",
   ].join("\n"),
 };
@@ -204,23 +198,33 @@ export async function scaffold(ctx) {
   const sha = await commitFiles(ctx, full, FILES, {}, "backup: pg_dump drill restored into scratch with equal row counts (ADR-1746)");
   ctx.report({ kind: "github-workflow", id: `${full}:.github/workflows/${WORKFLOW_FILE}` });
   ctx.report({ kind: "venture-repo", id: full });
+  // restore-drill checks each run against this digest, so it never trusts a drill file launch did not write (b6ffd12 B5).
+  ctx.report({ kind: "drill-digest", id: sha256(FILES[`.github/workflows/${WORKFLOW_FILE}`]) });
   return { files: Object.keys(FILES), resources: [{ kind: "github-workflow", id: `${full}:.github/workflows/${WORKFLOW_FILE}` }], notes: [`head ${sha.slice(0, 7)}; the owner sets the SUPABASE_DB_URL Actions secret (session pooler URL)`] };
 }
 
-// The newest completed drill run on main and its jobs, or the reason there is none. Shared shape with restore-drill.
-async function drill(ctx, full) {
+// The newest drill run on main that answers for launch's file: completed, not cancelled or skipped (a newer cancelled
+// run must not mask a green one), and run at a head whose workflow file is byte-for-byte launch's (b6ffd12 B6). Then
+// the conclusion of each named step of its one job. Shared shape with restore-drill, which carries the same code.
+async function drill(ctx, full, digest) {
   const runs = await gh(ctx, "GET", `/repos/${full}/actions/workflows/${WORKFLOW_FILE}/runs?branch=main&status=completed&per_page=30`, undefined, [404]);
   if (runs.status === 404) return { reason: `${full} has no ${WORKFLOW_FILE} workflow` };
   if (!(runs.body && Array.isArray(runs.body.workflow_runs))) return { reason: "github answered the runs list without a workflow_runs array" };
-  const done = list(runs.body.workflow_runs).filter((r) => r.status === "completed" && typeof r.id === "number" && typeof r.created_at === "string")
+  const done = list(runs.body.workflow_runs)
+    .filter((r) => r.status === "completed" && !["cancelled", "skipped"].includes(r.conclusion) && typeof r.id === "number" && typeof r.created_at === "string" && SHA.test(String(r.head_sha)))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const run = done[0];
-  if (!run) return { reason: `no completed ${WORKFLOW_FILE} run on main yet` };
-  const age = Date.now() - Date.parse(run.created_at);
-  if (!Number.isFinite(age) || age > MAX_AGE_MS) return { reason: `the newest drill run ${run.id} is older than eight days` };
-  const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
-  const by = new Map(list(jobs.body && jobs.body.jobs).map((j) => [j.name, j.conclusion]));
-  return { run: run.id, backup: by.get("backup") ?? "absent", restore: by.get("restore") ?? "absent" };
+  for (const run of done.slice(0, 5)) {
+    const age = Date.now() - Date.parse(run.created_at);
+    if (!Number.isFinite(age) || age > MAX_AGE_MS) return { reason: `the newest drill run ${run.id} is older than eight days` };
+    const at = await gh(ctx, "GET", `/repos/${full}/contents/.github/workflows/${WORKFLOW_FILE}?ref=${run.head_sha}`, undefined, [404]);
+    const b = at.body;
+    if (at.status === 404 || !b || typeof b.content !== "string" || sha256(utf8(b.content)) !== digest) continue;
+    const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
+    const job = list(jobs.body && jobs.body.jobs).find((j) => j.name === "drill");
+    const steps = new Map(list(job && job.steps).map((s) => [s.name, s.conclusion]));
+    return { run: run.id, dump: steps.get(STEP_DUMP) ?? "absent", restore: steps.get(STEP_RESTORE) ?? "absent" };
+  }
+  return { reason: `no completed ${WORKFLOW_FILE} run on main ran launch's drill file` };
 }
 
 async function probe(ctx) {
@@ -229,11 +233,11 @@ async function probe(ctx) {
   if (drift) return { ok: false, reason: drift };
   const named = await gh(ctx, "GET", `/repos/${full}/actions/secrets/SUPABASE_DB_URL`, undefined, [403, 404]);
   if (named.status === 404) return { ok: false, reason: `${full} has no SUPABASE_DB_URL Actions secret; the owner sets it (gh secret set SUPABASE_DB_URL)` };
-  const d = await drill(ctx, full);
+  const d = await drill(ctx, full, sha256(FILES[`.github/workflows/${WORKFLOW_FILE}`]));
   if (d.reason) return { ok: false, reason: d.reason };
-  if (d.backup !== "success" || d.restore !== "success")
-    return { ok: false, reason: `drill run ${d.run}: backup ${say(d.backup, 20)}, restore ${say(d.restore, 20)} -- a backup is verified only by a restore with equal row counts` };
-  return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: d.run, jobs: ["backup", "restore"] } };
+  if (d.dump !== "success" || d.restore !== "success")
+    return { ok: false, reason: `drill run ${d.run}: dump ${say(d.dump, 20)}, restore ${say(d.restore, 20)} -- a backup is verified only by a restore with equal row counts` };
+  return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: d.run, steps: [STEP_DUMP, STEP_RESTORE] } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

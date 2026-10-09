@@ -393,9 +393,10 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       const receipt = emit("run.completed", { ...base, outcome }, slug, log);
       saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), slot.id, { receipt, queued: [] }));
       const fin = slotRow(loadState(P.stateDir, slug), slot.id);
-      log(`${slot.id}: ${fin.state}${fin.reason ? ` (${fin.reason})` : ""} -- attempt ${attempt}, receipt ${receipt || "UNRECEIPTED"}`);
+      log(`${slot.id}: ${fin.state}${fin.reason ? ` (${clean(fin.reason)})` : ""} -- attempt ${attempt}, receipt ${receipt || "UNRECEIPTED"}`);
       if (!receipt) return EXIT.FAILED;
-      return outcome === "fail" ? EXIT.FAILED : EXIT.OK;
+      // An allow-list: only the two settled outcomes exit 0 (attack b6ffd12 B1).
+      return outcome === "ok" || outcome === "absent" ? EXIT.OK : EXIT.FAILED;
     }, log);
   } catch (e) {
     if (e.exit === EXIT.LOCKED) { log(e.message); return EXIT.LOCKED; }

@@ -16,8 +16,9 @@ The exit criterion is "fixture". The orm slot proves its schema with a `node --t
 - The adapter commits three files:
   - `db/migrations/0001_launch_probe.sql`, the up migration.
   - `db/migrations/0001_launch_probe.down.sql`, the down migration.
-  - `db/rollback.test.js`, which holds every migration in the directory to one rule: an up has a down, and the down
-    drops every table the up creates, in reverse order. It uses only `node:` built-ins and runs on Node 18 and later.
+  - `db/rollback.test.mjs`, which holds every migration in the directory to one rule: an up has a down, and the down
+    drops every table the up creates, in reverse order. It uses only `node:` built-ins, is an `.mjs` file so no package type decides its module system (b6ffd12 B9), and runs on Node 18
+    and later.
 - verify checks that the files are launch's at main's head. It then requires arc-ci's run for that head to be green on
   all three legs, so the fixture ran outside this repo.
 - The contract suite also runs the committed test itself. It passes on the committed files and fails on a down that

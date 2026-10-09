@@ -1,0 +1,94 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:398",
+      "breaking_input": "A worker that times out (r.error.code ETIMEDOUT) or dies with no terminal state. The else branch assigns it an outcome label other than the literal \"fail\" (for example \"timeout\" or \"died\"), and it still has a receipt.",
+      "why": "The return changed from `outcome === \"ok\" ? OK : FAILED` to `outcome === \"fail\" ? FAILED : OK`. An allow-list became a deny-list on one string. Every outcome label the else branch produces other than exactly \"fail\" now exits 0. A killed or timed-out attempt reports success to the caller and to dependents. Only the new \"absent\" label was meant to be added.",
+      "fix": "Restore the allow-list: `return outcome === \"ok\" || outcome === \"absent\" ? EXIT.OK : EXIT.FAILED`. Add a test where the worker times out and the runner must exit non-zero."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:92",
+      "breaking_input": "An adapter returns {ok:false, absent:\"x\\n\\u001b[2K\\u202eforged: verified\", answerer:\"a\"} for a slot whose exit criteria contain ABSENT. A 160-unit slice can also cut a surrogate pair in half.",
+      "why": "`v.absent` goes into the stored `reason` as `ABSENT(${v.absent.slice(0,160)})` with no control or bidi stripping. The runner then prints it raw in `log(`${slot.id}: ${fin.state} (${fin.reason})...`)`. A newline or escape forges a terminal line. The slice counts UTF-16 units, so it can leave a lone surrogate. `answerer` is also stored unsanitised.",
+      "fix": "Pass `absent` and `answerer` through the lane's `say`/clean sanitiser, which strips controls and bidi marks and counts code points, before saving. Sanitise again where the runner prints `fin.reason`.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/dependency-scan/arc-scan-dependabot.mjs:160",
+      "breaking_input": "ctx.signal is already aborted (the slot timeout fired during the first GitHub call) and the poll loop reaches `await pause(20000, ctx.signal)`.",
+      "why": "`pause` only calls `signal.addEventListener(\"abort\", ...)`. It never checks `signal.aborted`. An abort that has already fired never notifies again, so the sleep runs its full 20 s. The loop then continues for up to 13 polls, so the timeout is swallowed. The same `pause` is copied into sentry.mjs (6×15 s) and drizzle-down.mjs (8×30 s).",
+      "fix": "In `pause`, reject immediately with code ABORTED when `signal && signal.aborted`. Re-check `ctx.signal.aborted` at the top of each loop iteration. Remove the abort listener when the timer fires.",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/legal-pages/arc-legal.mjs:44",
+      "breaking_input": "/privacy answers 200 and streams an endless or multi-GB body (a hostile or misconfigured origin).",
+      "why": "`(await res.text()).slice(0, CAP)` buffers the entire body before applying the cap. The cap bounds nothing. The worker hangs or exhausts memory until the slot timeout. A slow-drip body also holds the slot's lock.",
+      "fix": "Read `res.body` through a reader and stop at CAP bytes, then cancel the stream. Alternatively reject early on a content-length above CAP.",
+      "twin_of": "The /checkout probe read an unbounded body and counted the checkout.js URL anywhere in it"
+    },
+    {
+      "id": "B5",
+      "severity": "high",
+      "where": "products/launch/providers/restore-drill/pg-restore-scratch.mjs:105",
+      "breaking_input": "The owner replaces .github/workflows/backup-drill.yml with a workflow that has jobs named `backup` and `restore`, each running `true`. The next run is green.",
+      "why": "restore-drill's probe never calls `oursAtHead`. It trusts any completed run of a file named backup-drill.yml on main with a job named `restore` that concluded success. The slot is verified with no restore and no row-count comparison. backup's verify does check that the file is launch's, but restore-drill skips that check.",
+      "fix": "Call `oursAtHead` against the same FILES from backup in restore-drill's probe, and require the run's head_sha to match the head where the file is launch's. The block is copied per adapter, so also copy FILES or the expected workflow digest.",
+      "twin_of": "A verify proved \"some file at that path\" and \"some green run\", not launch's file under that run"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs:196",
+      "breaking_input": "A green weekly drill run, then a newer `workflow_dispatch` run that is cancelled or fails on a transient runner fault. Or a run executed from a commit before launch's current file, with launch's file now at head.",
+      "why": "`drill()` takes `done[0]`, the single newest completed run. A newer cancelled run masks an older green one, so verify flips to not-ok and the slot stays red. A run is not tied to the head where oursAtHead found launch's file, so a run of an earlier or different version of the workflow can satisfy verify. The same logic is copied into restore-drill.",
+      "fix": "Filter runs to `head_sha` equal to main's head (or a commit where the file is launch's). Skip `cancelled` and `skipped` conclusions when picking the newest, as the dependency-scan probe does.",
+      "twin_of": "Runs for a head were read one at a time, so a cancelled re-run masked a green run"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs:159",
+      "breaking_input": "The venture repo is public, or any collaborator with read access to a private repo. Run `gh run download` on the `backup` artifact.",
+      "why": "The workflow uploads `dump.pgc`, a full pg_dump of the public schema with real user data, as an Actions artifact retained for 7 days. Artifacts are readable by anyone who can read the repo, and on a public repo by anyone at all. The data leaves the database boundary for no verification purpose, because the restore job only needs the dump within the run.",
+      "fix": "Upload only `dump.sha256` and `counts.src`. Make the restore job re-dump or restore in the same job, or pass the dump encrypted with a key held in an Actions secret. Refuse scaffold when the repo is not private.",
+      "twin_of": "arc repo is PUBLIC -- owner PII stays off git"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "products/launch/providers/legal-pages/arc-legal.mjs:57",
+      "breaking_input": "brand.domain points at a parked or mis-routed host, or a Vercel project with no deployment. Every path, including /privacy and /terms, answers 404.",
+      "why": "Two 404s are enough to return {absent, answerer: domain}. The worker records state `absent`, and the runner exits 0 with outcome `absent`, which dependents treat as settled. A dead or wrong site and a not-yet-published page look identical. The \"observed outside the repo\" claim is only that the venture's own domain answered 404.",
+      "fix": "Require a positive identity check before naming ABSENT, for example a known 200 on `/` or a launch-owned marker. Treat DEPLOYMENT_NOT_FOUND-style bodies and a 404 on `/` as not-ok, not absent.",
+      "twin_of": "A deploy receipt accepted ERROR, which also accepts a real broken build"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/migration-rollback/drizzle-down.mjs:117",
+      "breaking_input": "The venture's package.json has no \"type\":\"module\", and arc-ci runs `node --test` on Node 18, or on Node 20 before 20.19, which lack syntax detection.",
+      "why": "`db/rollback.test.js` uses `import` statements and `import.meta.url` in a `.js` file. On CommonJS resolution it fails with a SyntaxError on the Node versions the ADR claims to support. The contract arm runs it in a temp dir with no package.json, so it passes only where the local Node auto-detects ESM, which is the same detection that hides the problem.",
+      "fix": "Commit the test as `db/rollback.test.mjs`, or use `require` and `__dirname`. Have the contract arm run it under the oldest supported Node.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "products/launch/providers/errors/sentry.mjs:221",
+      "breaking_input": "Run verify twice within two minutes against a route that still throws and answers 500 but no longer reports to Sentry (the store call is swallowed by .catch(() => null)). The first run's issue has the same deterministic title because the probe id derives from the tag.",
+      "why": "`since = Date.now() - 120000` and the issue title is identical on every run. The previous run's event, less than two minutes old, satisfies `lastSeen >= since`. A broken reporter passes on a stale event. The local clock is also compared with Sentry's clock.",
+      "fix": "Add a per-verify nonce to the probe id sent to the route (a query parameter), with route validation widened to match. Match on that nonce and use `since` equal to the verify start with no skew, or compare against the issue's event count delta.",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on"
+    }
+  ]
+}

@@ -178,9 +178,14 @@ export async function scaffold(ctx) {
   return { files: Object.keys(FILES), resources: [{ kind: "github-workflow", id: `${full}:.github/workflows/${WORKFLOW_FILE}` }, { kind: "github-file", id: `${full}:.github/dependabot.yml` }], notes: [`head ${sha.slice(0, 7)}`] };
 }
 
+// An abort that already fired never notifies again: check it first, and drop the listener when the timer wins
+// (attack b6ffd12 B3).
 const pause = (ms, signal) => new Promise((res, rej) => {
-  const t = setTimeout(res, ms);
-  if (signal) signal.addEventListener("abort", () => { clearTimeout(t); rej(Object.assign(new Error("aborted"), { code: "ABORTED" })); }, { once: true });
+  const stop = () => rej(Object.assign(new Error("aborted"), { code: "ABORTED" }));
+  if (signal && signal.aborted) return stop();
+  const onAbort = () => { clearTimeout(t); stop(); };
+  const t = setTimeout(() => { if (signal) signal.removeEventListener("abort", onAbort); res(); }, ms);
+  if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
 async function probe(ctx) {

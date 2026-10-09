@@ -6,6 +6,7 @@ import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
 import { makeCtx } from "./ctx.mjs";
+import { clean } from "./board.mjs";
 
 const a = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const profile = loadProfile(a.venture, a.venturesDir);
@@ -88,7 +89,9 @@ try {
   // repo observed the absence; an adapter can never mark any other slot absent (ADR-1745).
   const allowsAbsent = (slot.exit_criteria || []).some((c) => /\bABSENT\b/.test(String(c)));
   if (v && v.ok === false && allowsAbsent && typeof v.absent === "string" && v.absent && typeof v.answerer === "string" && v.answerer) {
-    save({ state: "absent", reason: `ABSENT(${v.absent.slice(0, 160)})`, answerer: v.answerer, queued: [], verified_at: new Date().toISOString() });
+    // Adapter text is data: controls and bidi marks replaced, cut by code point so no surrogate is split (b6ffd12 B2).
+    const cut = (t, n) => [...clean(t)].slice(0, n).join("");
+    save({ state: "absent", reason: `ABSENT(${cut(v.absent, 160)})`, answerer: cut(v.answerer, 120), queued: [], verified_at: new Date().toISOString() });
     process.exit(0);
   }
   fail(v && v.ok === true ? "verify:no answerer named (a probe names what answered it)" : `verify:${(v && v.reason) || "failed"}`);

@@ -25,7 +25,7 @@ const opts = {
   "two-projects": { projects: [{ slug: "arc-sandbox", org: "automemory" }, { slug: "arc-sandbox", org: "other-org" }] },
   "no-key": { keys: false },
   "no-ingest": { ingest: false },
-  "swallows": { serve: (src) => src.replace("throw new Error(\"arc-launch probe \" + probe);", "return answer(200, { ok: true });") },
+  "swallows": { serve: (src) => src.replace("throw new Error(\"arc-launch probe \" + probe + \" \" + nonce);", "return answer(200, { ok: true });") },
 }[scenario] || {};
 const sentry = makeSentry({ github, full: FULL, domain: DOMAIN, inner: (i, o) => github.fetch(i, o), ...opts });
 globalThis.fetch = sentry.fetch;

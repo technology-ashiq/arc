@@ -22,7 +22,7 @@ const restore = await import(pathToFileURL(join(PRODUCT, rRow.adapter)).href);
 const FULL = "technology-ashiq/arc-sandbox";
 const github = makeGithub({
   repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }], secrets: scenario === "no-db-url" ? [] : ["SUPABASE_DB_URL"] }],
-  jobConclusions: { "restore-red": { restore: "failure" }, "backup-red": { backup: "failure", restore: "skipped" } }[scenario] || {},
+  jobConclusions: { "restore-red": { restore: "failure" }, "backup-red": { dump: "failure", restore: "skipped" } }[scenario] || {},
 });
 globalThis.fetch = github.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-backup-"));
@@ -51,10 +51,10 @@ switch (scenario) {
     out.commits = commits();
     out.kinds = bState.map((r) => r.kind);
     const wf = text(".github/workflows/backup-drill.yml");
-    // The drill's shape, read as text: two jobs, restore after backup, a checksum check, and the count diff that fails it.
+    // The drill's shape, read as text: one job, a checksum check, the count diff that fails it, and no upload of the dump.
     out.workflow = {
       jobs: [...wf.matchAll(/^  ([a-z]+):$/gm)].map((m) => m[1]),
-      needs: /restore:\n    needs: backup\n/.test(wf),
+      noUpload: !wf.includes("upload-artifact"),
       checksum: wf.includes("sha256sum -c dump.sha256"),
       diff: wf.includes("diff counts.src counts.dst"),
       secretOnly: wf.includes("${{ secrets.SUPABASE_DB_URL }}") && !/postgres(ql)?:\/\/[^@\s]*:[^@\s]*@(?!localhost)/.test(wf),
@@ -75,6 +75,27 @@ switch (scenario) {
     out.verify = await backup.verify(bCtx());
     out.rVerify = await restore.verify(rCtx());
     break;
+  case "cancelled-newer": {
+    // A newer cancelled run must not mask the older green one (b6ffd12 B6).
+    await backup.scaffold(bCtx());
+    await restore.scaffold(rCtx());
+    const r = repo().runs[0];
+    repo().runs.unshift({ ...r, id: r.id + 1, conclusion: "cancelled", created_at: new Date(Date.now() + 1000).toISOString() });
+    out.verify = await backup.verify(bCtx());
+    out.rVerify = await restore.verify(rCtx());
+    break;
+  }
+  case "foreign-drill": {
+    // The owner rewrites the drill file and every later run is of theirs: restore-drill does not trust it (b6ffd12 B5).
+    await backup.scaffold(bCtx());
+    await restore.scaffold(rCtx());
+    const p = ".github/workflows/backup-drill.yml";
+    repo().files[p] = { sha: "d".repeat(40), content: Buffer.from("name: mine\n").toString("base64") };
+    repo().commits.push({ sha: "d".repeat(40), message: "owner drill", files: { [p]: "d".repeat(40) } });
+    for (const run of repo().runs) run.head_sha = "d".repeat(40);
+    out.rVerify = await restore.verify(rCtx());
+    break;
+  }
   case "stale": {
     await backup.scaffold(bCtx());
     await restore.scaffold(rCtx());
@@ -86,6 +107,7 @@ switch (scenario) {
   case "no-upstream":
     out.backup = await attempt(() => backup.scaffold(bCtx({ database: UP.database })));
     out.restore = await attempt(() => restore.scaffold(rCtx({ backup: [{ kind: "github-workflow", id: `${FULL}:.github/workflows/arc-ci.yml` }] })));
+    out.noDigest = await attempt(() => restore.scaffold(rCtx({ backup: [{ kind: "github-workflow", id: `${FULL}:.github/workflows/backup-drill.yml` }] })));
     out.calls = github.calls.length;
     break;
   default:

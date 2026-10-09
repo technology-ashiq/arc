@@ -128,7 +128,7 @@ const FILES = {
     "drop table if exists public.launch_probe;",
     "",
   ].join("\n"),
-  "db/rollback.test.js": [
+  "db/rollback.test.mjs": [
     "// Every migration rolls back (arc launch, migration-rollback slot). Run by arc-ci on every leg (node --test).",
     "import { test } from \"node:test\";",
     "import assert from \"node:assert/strict\";",
@@ -174,9 +174,14 @@ export async function scaffold(ctx) {
   return { files: Object.keys(FILES), resources: [{ kind: "rollback-fixture", id: `${full}:${sha}` }], notes: [] };
 }
 
+// An abort that already fired never notifies again: check it first, and drop the listener when the timer wins
+// (attack b6ffd12 B3).
 const pause = (ms, signal) => new Promise((res, rej) => {
-  const t = setTimeout(res, ms);
-  if (signal) signal.addEventListener("abort", () => { clearTimeout(t); rej(Object.assign(new Error("aborted"), { code: "ABORTED" })); }, { once: true });
+  const stop = () => rej(Object.assign(new Error("aborted"), { code: "ABORTED" }));
+  if (signal && signal.aborted) return stop();
+  const onAbort = () => { clearTimeout(t); stop(); };
+  const t = setTimeout(() => { if (signal) signal.removeEventListener("abort", onAbort); res(); }, ms);
+  if (signal) signal.addEventListener("abort", onAbort, { once: true });
 });
 
 async function probe(ctx) {

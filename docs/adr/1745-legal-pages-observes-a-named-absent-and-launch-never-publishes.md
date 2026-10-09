@@ -17,7 +17,9 @@ to answer a named ABSENT. Only a rehearsal gate refusal wrote state `absent`.
 
 - The adapter creates nothing. verify reads `/privacy` and `/terms` on the live site with bounded reads:
   - Both served as arc-legal pages, each with a closed `<!-- clause:ID -->` pair: verified.
-  - Both answered 404: `{ ok: false, absent: "legal renderer not ready: ...", answerer: <domain> }`.
+  - Both answered 404 while the home page answers 200: `{ ok: false, absent: "legal renderer not ready: ...",
+    answerer: <domain> }`. A dead or wrong site 404s everything and is never read as ABSENT (attack b6ffd12 B8).
+  - Reads are capped at 1 MB and the stream is cancelled after (b6ffd12 B4).
   - Anything in between (one page, a non-arc-legal page, an error, unreachable): not ok.
 - The worker records `state: absent`, with `reason: ABSENT(<text>)` and the answerer, only when two things hold: the
   slot's own `exit_criteria` contain the word ABSENT, and verify named an answerer. Otherwise the answer is a plain

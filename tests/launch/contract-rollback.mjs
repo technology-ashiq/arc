@@ -39,9 +39,9 @@ const commits = () => repo().commits.filter((c) => (c.message || "").startsWith(
 // The committed test, run by node --test over the committed migrations (with `down` swapped in when given).
 const runFixture = (down) => {
   mkdirSync(join(VENTURE, "db", "migrations"), { recursive: true });
-  for (const p of ["db/rollback.test.js", "db/migrations/0001_launch_probe.sql", "db/migrations/0001_launch_probe.down.sql"]) writeFileSync(join(VENTURE, p), text(p));
+  for (const p of ["db/rollback.test.mjs", "db/migrations/0001_launch_probe.sql", "db/migrations/0001_launch_probe.down.sql"]) writeFileSync(join(VENTURE, p), text(p));
   if (down !== undefined) writeFileSync(join(VENTURE, "db/migrations/0001_launch_probe.down.sql"), down);
-  const r = spawnSync(process.execPath, ["--test", join(VENTURE, "db", "rollback.test.js")], { encoding: "utf8", timeout: 60000 });
+  const r = spawnSync(process.execPath, ["--test", join(VENTURE, "db", "rollback.test.mjs")], { encoding: "utf8", timeout: 60000 });
   const pass = Number(((r.stdout || "").match(/^# pass (\d+)/m) || [])[1] || 0);
   return { status: r.status, pass };
 };

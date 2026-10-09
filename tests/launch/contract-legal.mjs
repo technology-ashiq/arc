@@ -21,7 +21,9 @@ const DOMAIN = "sandbox.automemory.ai";
 const LEGAL = "<html><body><!-- clause:privacy.controller -->\nWe are arc sandbox.\n<!-- /clause:privacy.controller -->\n</body></html>";
 const site = {
   published: { "/privacy": [200, LEGAL], "/terms": [200, LEGAL] },
-  absent: {},
+  absent: { "/": [200, "<h1>shell</h1>"] },
+  dead: {},
+  huge: { "/privacy": [200, "x".repeat(3 * 1024 * 1024) + LEGAL], "/terms": [200, LEGAL] },
   half: { "/privacy": [200, LEGAL] },
   foreign: { "/privacy": [200, "<html>our own policy</html>"], "/terms": [200, LEGAL] },
 }[scenario] || {};
@@ -44,6 +46,8 @@ const out = { scenario };
 switch (scenario) {
   case "published":
   case "absent":
+  case "dead":
+  case "huge":
   case "half":
   case "foreign":
     out.scaffold = (await adapter.scaffold(ctxNow())).resources.map((r) => r.id);

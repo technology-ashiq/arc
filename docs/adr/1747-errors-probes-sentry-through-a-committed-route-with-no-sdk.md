@@ -20,11 +20,12 @@ cannot add an SDK. The row carried only `sentry.io`.
   - a project with no active client key refuses `SENTRY_NO_DSN`.
 
   It then commits `app/api/arc-error-probe/route.js` with that key's public DSN.
-- The route accepts only `?probe=arcprobe<16 hex>`. It throws `Error("arc-launch probe <id>")`, catches it, posts the
-  event to the DSN's store endpoint, and answers 500.
-- verify calls the live route with the probe id derived from the tag, and requires the 500. It then asks
-  `sentry.io/api/0/projects/<org>/<slug>/issues/` for an issue with that message whose `lastSeen` is no earlier than
-  two minutes before this verify began. It asks up to six times, 15 s apart. The answer is Sentry's, not the route's.
+- The route accepts only `?probe=arcprobe<16 hex>&n=<8 hex>`. It throws `Error("arc-launch probe <id> <n>")`, catches it,
+  posts the event to the DSN's store endpoint, and answers 500.
+- verify calls the live route with the probe id derived from the tag and a fresh random nonce, and requires the 500.
+  It then asks `sentry.io/api/0/projects/<org>/<slug>/issues/` for an issue with exactly that message, up to six times,
+  15 s apart. A stale event can never match, and no clock is compared (attack b6ffd12 B10). The answer is Sentry's, not
+  the route's.
 - Row: `SENTRY_AUTH_TOKEN`, `GITHUB_TOKEN`; hosts are `sentry.io`, the venture domain and `api.github.com`.
 
 ## Consequences

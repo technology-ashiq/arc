@@ -41,9 +41,27 @@ async function page(ctx, url) {
     if (e && e.code) throw e;
     return { status: 0, arc: false };
   }
-  if (res.status !== 200) return { status: res.status, arc: false };
-  const text = (await res.text()).slice(0, CAP);
-  return { status: 200, arc: MARK.test(text) };
+  if (res.status !== 200) { if (res.body) await res.body.cancel().catch(() => {}); return { status: res.status, arc: false }; }
+  return { status: 200, arc: MARK.test(await capped(res)) };
+}
+
+// At most CAP bytes are read, then the stream is cancelled: a huge or slow-drip page cannot hold the slot (b6ffd12 B4).
+async function capped(res) {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const parts = [];
+  let n = 0;
+  while (n < CAP) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
+    n += value.byteLength;
+  }
+  await reader.cancel().catch(() => {});
+  const all = new Uint8Array(Math.min(n, CAP));
+  let at = 0;
+  for (const p of parts) { const take = p.subarray(0, Math.min(p.byteLength, all.byteLength - at)); all.set(take, at); at += take.byteLength; if (at >= all.byteLength) break; }
+  return new TextDecoder().decode(all);
 }
 
 async function probe(ctx) {
@@ -51,8 +69,9 @@ async function probe(ctx) {
   const got = [];
   for (const p of PAGES) got.push({ path: p, ...(await page(ctx, `https://${domain}${p}`)) });
   if (got.every((g) => g.status === 200 && g.arc)) return { ok: true, answerer: domain, evidence: { pages: PAGES } };
-  // Both answered 404 by the live site: the absence is observed outside the repo, and the slot allows naming it.
-  if (got.every((g) => g.status === 404))
+  // Both answered 404 by a site that is itself up (its home page answers 200): the absence is observed outside the repo,
+  // and the slot allows naming it. A dead or wrong site 404s everything and is never read as ABSENT (b6ffd12 B8).
+  if (got.every((g) => g.status === 404) && (await page(ctx, `https://${domain}/`)).status === 200)
     return { ok: false, absent: "legal renderer not ready: /privacy and /terms are not served", answerer: domain, reason: "ABSENT: legal renderer not ready" };
   return { ok: false, reason: got.map((g) => `${g.path} ${g.status === 0 ? "unreachable" : g.status}${g.status === 200 && !g.arc ? " (not an arc-legal page)" : ""}`).join(", ") };
 }
