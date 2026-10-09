@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **151** | **34** |
 
-Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 390 of 460 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 391 of 461 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -28,7 +28,7 @@ Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 390 of 
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 8 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
-| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 35 |
+| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 36 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
@@ -111,7 +111,7 @@ Narrative debt: **117 of 151** pages have no narrative yet. ADR headers: 390 of 
 | [1700–1799](adr/1700.md) | 40 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
 | [1900–1999](adr/1900.md) | 17 | 0 |
-| [2000–2099](adr/2000.md) | 17 | 0 |
+| [2000–2099](adr/2000.md) | 18 | 0 |
 
 ## Commands
 

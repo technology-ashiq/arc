@@ -381,3 +381,51 @@ _procs() {
   ' "$ARC_ROOT"
   [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# distribute P02 -- command and agent SOURCE input (ADR-2001, ADR-2017). The claude-code target is the
+# identity: each file is parsed by frontmatter-lint's one parser and rebuilt from the parse, so N/N proves
+# the parser loses nothing. N is counted from disk, never a literal.
+# ---------------------------------------------------------------------------
+
+_src_native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+
+@test "distribute P02: every command and every agent renders to itself on claude-code" {
+  local kind n
+  for kind in commands agents; do
+    n=$(find "$ARC_ROOT/.claude/$kind" -type f -name '*.md' | wc -l | tr -d ' ')
+    [ "$n" -gt 0 ] || { echo "no $kind on disk"; false; }
+    run --separate-stderr node "$(CC)" --check --all --input "$kind" --target claude-code --root "$ARC_ROOT"
+    [ "$status" -eq 0 ] || { echo "$kind status $status: $output $stderr"; false; }
+    printf '%s\n' "$output" | tr -d '\r' | grep -qx "arc-compile: $n/$n byte-identical for target \`claude-code\` (input $kind)" || { echo "$output"; false; }
+  done
+}
+
+@test "distribute P02: a CRLF copy renders the same bytes, and a malformed line fails by name" {
+  local d="$BATS_TEST_TMPDIR/src" n
+  mkdir -p "$d/.claude"
+  cp -R "$ARC_ROOT/.claude/commands" "$d/.claude/"
+  n=$(find "$d/.claude/commands" -type f -name '*.md' | wc -l | tr -d ' ')
+  awk '{ printf "%s\r\n", $0 }' "$d/.claude/commands/arc-freeze.md" > "$d/x" && mv "$d/x" "$d/.claude/commands/arc-freeze.md"
+  # Count CR bytes rather than grep for one: Git-for-Windows grep reads in text mode and never sees them.
+  [ "$(tr -cd '\r' < "$d/.claude/commands/arc-freeze.md" | wc -c | tr -d ' ')" -gt 0 ] || { echo "the CRLF copy has no CR"; false; }
+  run --separate-stderr node "$(CC)" --check --all --input commands --target claude-code --root "$(_src_native "$d")"
+  [ "$status" -eq 0 ] || { echo "status $status: $output"; false; }
+  printf '%s\n' "$output" | tr -d '\r' | grep -qx "arc-compile: $n/$n byte-identical for target \`claude-code\` (input commands)" || { echo "$output"; false; }
+  awk 'NR==2{print "  indented: continuation"} {print}' "$d/.claude/commands/arc-unfreeze.md" > "$d/y" && mv "$d/y" "$d/.claude/commands/arc-unfreeze.md"
+  run --separate-stderr node "$(CC)" --check --all --input commands --target claude-code --root "$(_src_native "$d")"
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [[ "$output" == *"[compile] .claude/commands/arc-unfreeze.md:2 — frontmatter does not parse"* ]] || { echo "$output"; false; }
+  printf '%s\n' "$output" | tr -d '\r' | grep -qx "arc-compile: $((n - 1))/$n byte-identical for target \`claude-code\` (input commands)" || { echo "$output"; false; }
+}
+
+@test "distribute P02: source input refuses a write, a non-identity target and a flag-shaped value" {
+  run --separate-stderr node "$(CC)" --write --all --input commands --target claude-code --root "$ARC_ROOT"
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"nothing to write"* ]] || { echo "write: $status $stderr"; false; }
+  run --separate-stderr node "$(CC)" --check --all --input agents --target codex --root "$ARC_ROOT"
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"has no agents input yet"* ]] || { echo "codex: $status $stderr"; false; }
+  run --separate-stderr node "$(CC)" --check --all --input --target claude-code
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"--input needs a value"* ]] || { echo "flag: $status $stderr"; false; }
+  run --separate-stderr node "$(CC)" --check --all --input skills
+  [ "$status" -eq 2 ] && [[ "$stderr" == *"unknown input"* ]] || { echo "unknown: $status $stderr"; false; }
+}

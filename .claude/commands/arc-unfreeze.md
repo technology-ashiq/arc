@@ -1,6 +1,7 @@
 ---
 description: Remove the /arc-freeze edit-boundary.
 allowed-tools: Bash
+targets: claude-code
 ---
 
 ```bash

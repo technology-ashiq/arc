@@ -1,0 +1,40 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan (walk, isForeign)",
+      "breaking_input": "On a POSIX leg after OpenCode's first run, `.opencode/node_modules/.bin/<tool>` is a symlink, which npm creates. `walk` records it as `found.set(rel, false)`. The exclusion `found.get(rel) && isForeign(rel)` then refuses to honour the `.opencode/node_modules/` foreign entry, so every `.bin` link is listed `[dirty]` and `arc-compile --check` exits 1 on the harness's own files.",
+      "why": "Fix (an) makes a name-based exclusion apply only to regular files. That is right for a foreign file entry, but it is also applied to a foreign directory entry, whose contents routinely include symlinks. The walk also descends the whole of `node_modules`, which can hold thousands of files, and prints each one as dirty. The test only plants regular files under `node_modules`, so this case is never exercised.",
+      "fix": "Treat a trailing-slash foreign entry as a prune point. Do not walk into it, and do not count its contents. Keep the regular-file-only rule for exact foreign file names. Add a fixture with a symlink under `.opencode/node_modules/.bin/`."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan (rows loop) and tests/distribute/dirty-probe.mjs",
+      "breaking_input": "In engine/harnesses.yaml the codex row has `rendered: .codex/` as a scalar, or `rendered_foreign: .opencode/package.json` as a scalar, instead of a list. `Array.isArray(r.rendered) ? r.rendered : []` silently reads it as empty. The other rows still supply directories, so `dirs.size` is non-zero and the scan passes. `.codex/` is never scanned, and a planted `.codex/x.toml` is not reported.",
+      "why": "A malformed field is read as absent, which is class (ae) and the exact twin of the 7c55982 L6 fix. `frontmatter-lint`'s `checkTable` does flag it as bad-rendered, but `arc-compile --check` does not run that lint. The dirty check, which is REQ-05's gate, takes the silent path. The probe copies the same ternary, so the suite shares the blind spot.",
+      "fix": "In dirtyScan and dirty-probe, throw CouldNotScan when `rendered` or `foreign` is present on a verified row and is not an array. Only a missing field should mean none.",
+      "twin_of": "(ae) a malformed field read as absent"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan summary line; tests/distribute-dirty.bats real-tree test",
+      "breaking_input": "A declared directory is renamed or mistyped consistently on both sides, for example `.opencod/` in harnesses.yaml, or the adapter later renders to a different path. The scan finds nothing and prints `dirty-scan: 3 rendered directories, 0 present, 0 files, 0 dirty`. The real-tree test matches `[0-9]+ present` and passes.",
+      "why": "The B2 fix reports `present` but nothing ever asserts on it, so a typo'd declaration is still scanned as nothing and counted as scanned (classes ai and j). The real tree legitimately has 0 present on CI, so a floor cannot be set there.",
+      "fix": "Add a planted-fixture assertion that `present` equals the number of declared directories the fixture created. Have the dirty-probe resolve each declared directory against a known-good fixture so a declaration that matches no real name fails.",
+      "twin_of": "(ai) an empty path segment matches nothing"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:finish",
+      "breaking_input": "`--check` with `engine/harnesses.yaml` deleted from the arc repo, or with an unreadable rendered subdirectory. The dirty scan prints COULD NOT SCAN and `finish` returns `failed + 1`, so the exit code is 1. The same failure in `sourceFiles` or on an unreadable source file exits 2.",
+      "why": "The same COULD NOT SCAN condition has two exit codes depending on which stage hits it. A caller that treats 1 as dirty and 2 as could-not-scan will misread an infrastructure failure as a hand-edited rendered file. The bats tests pin the 1.",
+      "fix": "Make a CouldNotScan from the dirty scan exit 2, and update the two pinned assertions. If it has to stay 1, state in the output that it is a scan failure and not a [dirty] finding.",
+      "twin_of": "(e) COULD NOT SCAN"
+    }
+  ]
+}

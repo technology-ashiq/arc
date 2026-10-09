@@ -2,6 +2,7 @@
 description: Lock edits to one or more directories -- a deterministic edit-boundary enforced by the PreToolUse hook (freeze-check.sh). The can't-forget version of gstack /freeze.
 argument-hint: <dir> [more-dirs...]
 allowed-tools: Bash
+targets: claude-code
 ---
 
 Lock all edits to: **$ARGUMENTS**

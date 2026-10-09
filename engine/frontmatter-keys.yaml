@@ -1,0 +1,62 @@
+# engine/frontmatter-keys.yaml -- every Claude frontmatter key and its fate per target (ADR-2017).
+#
+# The Claude dialect is the source (ADR-2001), so every key a command or agent file may carry is named
+# here, and `frontmatter-lint.mjs` FAILs a key that is not. One fate per key per verified row of
+# engine/harnesses.yaml, no more and no fewer:
+#   render:FIELD   the adapter writes the value to FIELD in that target's file
+#   drop:CELL      the target cannot hold it; legal ONLY where that row's CELL is "false" or "partial:..."
+#   consume        a compiler directive: the compiler reads it and no target file carries it
+#   unsupported    the adapter fails the file by name (`[unsupported]`); there is no prose fallback
+# The claude-code fate is always `render:` the key itself: that target is the source (identity).
+#
+# Read by frontmatter-lint.mjs (validates the table against the matrix, then the tree against the
+# table) and, from P03, by the codex/opencode/skills-only adapters. Edited by hand, reviewed as a diff.
+
+version: 1
+commands:
+  description:
+    claude-code: render:description
+    codex: render:description
+    opencode: render:description
+    skills-only: render:description
+  name:
+    claude-code: render:name
+    codex: render:name
+    opencode: render:filename
+    skills-only: render:name
+  argument-hint:
+    claude-code: render:argument-hint
+    codex: drop:argument_hint
+    opencode: drop:argument_hint
+    skills-only: drop:argument_hint
+  allowed-tools:
+    claude-code: render:allowed-tools
+    codex: drop:commands
+    opencode: render:agent.permission
+    skills-only: render:allowed-tools
+  targets:
+    claude-code: render:targets
+    codex: consume
+    opencode: consume
+    skills-only: consume
+agents:
+  name:
+    claude-code: render:name
+    codex: render:name
+    opencode: render:filename
+    skills-only: render:name
+  description:
+    claude-code: render:description
+    codex: render:description
+    opencode: render:description
+    skills-only: render:description
+  tools:
+    claude-code: render:tools
+    codex: drop:agents
+    opencode: render:permission
+    skills-only: render:allowed-tools
+  model:
+    claude-code: render:model
+    codex: drop:model_tier
+    opencode: drop:model_tier
+    skills-only: drop:model_tier
