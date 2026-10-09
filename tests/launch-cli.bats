@@ -197,7 +197,7 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
 
 # Three more vetted rows on the fixture's probe slot: two that fit, one whose region does not (ADR-1706, ADR-1748).
 add_probe_rows() {
-  local d; d=$(grep -m1 "digest:" "$FX_DIR/registry.yaml" | awk '{print $2}')
+  local d; d=$(grep -m1 "digest:" "$FX_DIR/registry.yaml" | awk '{print $2}' | tr -d '\r')
   [ -n "$d" ] || { echo "no digest in the fixture registry"; return 1; }
   local spec
   for spec in "aa-new 2026-09-01 in" "zz-old 2026-01-01 in" "far-row 2026-09-05 global"; do
@@ -252,6 +252,7 @@ add_probe_rows() {
   run node "$(L)" verify --all --public-only --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 1 ] || { echo "$output"; false; }
   [[ "$output" == *"1 raised to needs-you"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"watch-result failed=1 raised=1"* ]] || { echo "$output"; false; }
   [ "$(cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep -c '"kind":"incident.raised"')" -eq 1 ]
   # The same watch on a box without the slot's token: skipped(env), no new incident, exit 0.
   run env FAKE_NEEDS_KEY=LAUNCH_FIXTURE_ABSENT_KEY node "$(L)" verify --all --public-only --venture fx-sandbox $FX_FLAGS
@@ -264,4 +265,27 @@ add_probe_rows() {
   [[ "$output" == *"needs-you ("* ]] || { echo "$output"; false; }
   [ "$(printf '%s\n' "$output" | grep -cx '  incident.raised')" -eq 1 ] || { echo "$output"; false; }
   grep '"kind":"incident.raised"' "$ARC_SPINE_ROOT"/events/*.jsonl | grep -q 'launch verify: probe regressed for fx-sandbox'
+}
+
+@test "launch-watch: stamps the week only when every board was watched; a future stamp is no stamp (attack 143525f B5, B6)" {
+  local sd="$BATS_TEST_TMPDIR/wst" job="$ARC_ROOT/.claude/scripts/hq/jobs/launch-watch.mjs"
+  mkdir -p "$sd"
+  # A board the runner refuses (not a board at all) is not watched: exit 1, and no stamp, so tomorrow retries.
+  printf 'not json' > "$sd/zz-broken.json"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"1 not watched, retried next run"* ]] || { echo "$output"; false; }
+  [ ! -e "$sd/.watch-last" ] || { echo "stamped after a failed watch"; false; }
+  # No boards at all: every board (none) was watched, the week is stamped, and a second run waits.
+  rm "$sd/zz-broken.json"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"all watched"* ]] || { echo "$output"; false; }
+  [ -s "$sd/.watch-last" ] || { echo "no stamp written"; false; }
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [[ "$output" == *"next in 7 day(s)"* ]] || { echo "$output"; false; }
+  # A stamp in the future would skip for ever: it is read as no stamp, and the watch runs.
+  printf '2099-01-01\n' > "$sd/.watch-last"
+  run env ARC_LAUNCH_STATE_DIR="$sd" node "$job"
+  [[ "$output" == *"all watched"* ]] || { echo "$output"; false; }
 }

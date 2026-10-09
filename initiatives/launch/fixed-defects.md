@@ -125,3 +125,7 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A "capped" read buffered the whole body before slicing** — a capped stream reader, B4 — *every bounded read: bound the READ, not the result*
 - **A backup drill uploaded the full dump as a 7-day artifact** — one job, no upload, B7 — *every verification artifact: does it carry the data it verifies?*
 - **Two 404s from a dead site read as a named ABSENT** — the home page must answer 200 first, B8 — *every absence claim: prove the answerer is alive*
+- **A first run adopted a same-named Neon project launch never made** — refuse every unrecorded hit, B1 (143525f) — *every find-or-create: a found thing launch did not record is foreign, on the first run too*
+- **The watch read exit 1 as "already raised" while the drift path raised nothing** — every failed slot raises, and the run ends with a `watch-result` count line, B3 — *every exit code another program interprets: does each path that sets it do what the reader assumes?*
+- **A failed weekly run stamped the week done** — stamp only on full success, B5 — *every "last ran" stamp: written after the work succeeded, never before or regardless*
+- **A free-text reason prefix (`env:`) chose the outcome** — a typed flag only the worker sets, B9 — *every branch on adapter text: is the text adapter-controlled?*

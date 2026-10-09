@@ -29,6 +29,9 @@ export function makeArcProbe({ venture, profile, catalog, stateDir }) {
       const days = Number(k.days_without_revenue), floor = Number(k.traffic_floor_monthly);
       if (!Number.isSafeInteger(days) || !Number.isSafeInteger(floor) || typeof profile.repository !== "string")
         throw refusal("PROFILE_INCOMPLETE", "the venture profile has no kill_lines (days_without_revenue, traffic_floor_monthly) and repository");
+      // owner/name only: a value starting "--" would reach venture-register as a flag, not a repository (attack 143525f B8).
+      if (!/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(profile.repository) || profile.repository.startsWith("-"))
+        throw refusal("PROFILE_INCOMPLETE", "the venture profile's repository is not owner/name");
       const r = spawnSync(process.execPath, [VENTURE_REGISTER, "--slug", venture, "--days-without-revenue", String(days), "--traffic-floor", String(floor),
         "--repository", profile.repository, "--dry-run"], { cwd: ROOT, encoding: "utf8", timeout: 120000, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
       // A refusal is printed on stderr: both streams, so its reason reaches the slot.

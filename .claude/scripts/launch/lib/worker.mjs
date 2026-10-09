@@ -22,8 +22,8 @@ const save = (patch) => {
   saveState(a.stateDir, setSlot(s, a.slot, patch));
 };
 // In verify mode a refusal (missing key, drift) is recorded as the probe's answer; the slot's state is never touched.
-const fail = (reason) => {
-  save(a.mode === "verify" ? { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } } : { state: "failed", reason });
+const fail = (reason, flags = {}) => {
+  save(a.mode === "verify" ? { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason, ...flags } } : { state: "failed", reason });
   process.exit(1);
 };
 
@@ -47,7 +47,8 @@ const keys = mod.envContract();
 const undeclared = keys.filter((k) => !declared.has(k));
 if (undeclared.length) fail(`refused:ENV_UNDECLARED ${undeclared.join(", ")} not in the row's env_keys`);
 const missing = keys.filter((k) => !kept[k]);
-if (missing.length) fail(`env:${missing[0]}`);
+// missing_env is set here and only here, so an adapter whose reason merely starts "env:" is not a skipped slot (attack 143525f B9).
+if (missing.length) fail(`env:${missing[0]}`, { missing_env: true });
 
 const ac = new AbortController();
 const timer = setTimeout(() => ac.abort(), Math.max(1, Number(a.timeout) * 1000 - 100));

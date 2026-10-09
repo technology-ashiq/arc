@@ -24,29 +24,53 @@ const STAMP = join(STATE_DIR, ".watch-last");
 const EVERY_DAYS = 7;
 const SLUG = /^[a-z][a-z0-9-]{1,63}$/;
 
+const BOARD_MS = 8 * 60 * 1000;
+const RUN_MS = 25 * 60 * 1000;
+
 function daysBetween(a, b) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+}
+
+// One board's watch counts as done only when the runner finished and named every regression it raised: a timeout, a
+// kill or a lost raise is the watch failing (attack 143525f B3, B4).
+function watched(r) {
+  if (r.error || r.signal || r.status === null) return false;
+  if (r.status === 0) return true;
+  if (r.status !== 1) return false;
+  const last = (r.stdout || "").split("\n").map((l) => l.trim()).filter(Boolean).pop() || "";
+  const m = /^watch-result failed=(\d+) raised=(\d+)$/.exec(last);
+  return !!m && Number(m[1]) > 0 && m[1] === m[2];
 }
 
 function main() {
   const today = dayOf(formatIst(nowMs()));
   const last = existsSync(STAMP) ? readFileSync(STAMP, "utf8").trim() : "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(last) && daysBetween(last, today) < EVERY_DAYS) {
-    process.stdout.write(`launch-watch: last ran ${last}; next on or after ${EVERY_DAYS - daysBetween(last, today)} more day(s)\n`);
+  // A stamp in the future (clock skew, a hand edit) is no stamp: it would otherwise skip the watch for ever (B6).
+  const age = /^\d{4}-\d{2}-\d{2}$/.test(last) ? daysBetween(last, today) : NaN;
+  if (age >= 0 && age < EVERY_DAYS) {
+    process.stdout.write(`launch-watch: last ran ${last}; next in ${EVERY_DAYS - age} day(s)\n`);
     return 0;
   }
   const boards = existsSync(STATE_DIR) ? readdirSync(STATE_DIR).filter((f) => f.endsWith(".json") && !f.startsWith(".")).map((f) => f.slice(0, -5)).filter((s) => SLUG.test(s)) : [];
+  const until = Date.now() + RUN_MS;
   let failed = 0;
   for (const slug of boards.sort()) {
+    // Each board gets at most BOARD_MS and the run stays inside the job's 30-minute budget; a board the clock left
+    // unwatched counts as failed, so the week is not stamped done (B5).
+    const left = until - Date.now();
+    if (left < 60 * 1000) { process.stdout.write(`launch-watch: ${slug} not watched -- the run's time is spent\n`); failed++; continue; }
     const r = spawnSync(process.execPath, [ARC_LAUNCH, "verify", "--all", "--public-only", "--venture", slug, "--state-dir", STATE_DIR],
-      { encoding: "utf8", windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: 3600 * 1000, killSignal: "SIGKILL" });
-    process.stdout.write(`launch-watch: ${slug} exit ${r.status}\n${(r.stdout || "").split("\n").slice(-3).join("\n")}\n`);
-    // Exit 1 is a regression the runner already raised to needs-you; anything else non-zero is the watch failing.
-    if (r.status !== 0 && r.status !== 1) failed++;
+      { encoding: "utf8", windowsHide: true, maxBuffer: 16 * 1024 * 1024, timeout: Math.min(BOARD_MS, left), killSignal: "SIGKILL" });
+    const how = r.error ? `error ${r.error.code || "spawn"}` : r.signal ? `signal ${r.signal}` : `exit ${r.status}`;
+    process.stdout.write(`launch-watch: ${slug} ${how}\n${(r.stdout || "").split("\n").slice(-3).join("\n")}\n`);
+    if (!watched(r)) failed++;
   }
-  mkdirSync(STATE_DIR, { recursive: true });
-  writeFileSync(STAMP, `${today}\n`);
-  process.stdout.write(`launch-watch: ${boards.length} board(s) watched on ${today}${failed ? ` · ${failed} watch run(s) failed` : ""}\n`);
+  // The week is stamped only when every board was watched; a failed run retries tomorrow, not in seven days (B5).
+  if (!failed) {
+    mkdirSync(STATE_DIR, { recursive: true });
+    writeFileSync(STAMP, `${today}\n`);
+  }
+  process.stdout.write(`launch-watch: ${boards.length} board(s) on ${today}${failed ? ` · ${failed} not watched, retried next run` : " · all watched"}\n`);
   return failed ? 1 : 0;
 }
 

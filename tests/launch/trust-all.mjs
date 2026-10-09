@@ -33,7 +33,8 @@ for (const row of rows) {
   mkdirSync(dirname(at), { recursive: true });
   const reg = join(tmp, row.id, "registry.yaml");
   writeFileSync(reg, "providers: []\n");
-  writeFileSync(at, bytes.replace(/\n/g, "\r\n"));
+  // Normalise first: an autocrlf checkout already holds CRLF, and a bare \n -> \r\n would make it \r\r\n (attack 143525f B10).
+  writeFileSync(at, bytes.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n"));
   const pinned = adapterDigest(src);
   r.crlfSame = adapterDigest(at) === pinned;
   writeFileSync(at, bytes + " ");

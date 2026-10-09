@@ -45,15 +45,22 @@ const ROW = [
   "",
 ].join("\n");
 
+// A Windows checkout may hold either file with CRLF: match the anchor in either form and write in the file's own EOL,
+// so the apply neither refuses on the owner's own box nor leaves mixed line endings (attack 143525f B7).
+const eolOf = (text) => (text.includes("\r\n") ? "\r\n" : "\n");
+const inEol = (text, eol) => text.replace(/\r?\n/g, eol);
+
 let rc = 0;
 const policy = readFileSync(POLICY, "utf8");
+const pe = eolOf(policy);
 if (policy.includes("\"process:launch-watch\":")) console.log("hq.policy.yaml already holds process:launch-watch -- unchanged");
-else if (!policy.includes(ANCHOR)) { console.log("hq.policy.yaml has no process:build-in-public-draft anchor -- unchanged; add the block by hand"); rc = 2; }
-else { writeFileSync(POLICY, policy.replace(ANCHOR, BLOCK + ANCHOR)); console.log("hq.policy.yaml: process:launch-watch added (network L1, writes under .claude/state only)"); }
+else if (!policy.includes(inEol(ANCHOR, pe))) { console.log("hq.policy.yaml has no process:build-in-public-draft anchor -- unchanged; add the block by hand"); rc = 2; }
+else { writeFileSync(POLICY, policy.replace(inEol(ANCHOR, pe), inEol(BLOCK + ANCHOR, pe))); console.log("hq.policy.yaml: process:launch-watch added (network L1, writes under .claude/state only)"); }
 
 // The row waits for the subject: never add a job the policy would leave unable to run.
 const jobs = readFileSync(JOBS, "utf8");
+const je = eolOf(jobs);
 if (/^\s*- name: launch-watch\s*$/m.test(jobs)) console.log("hq.jobs.yaml already holds launch-watch -- unchanged");
 else if (rc) console.log("hq.jobs.yaml: launch-watch not added, the policy subject is missing");
-else { writeFileSync(JOBS, jobs.replace(/\n*$/, "\n") + ROW); console.log("hq.jobs.yaml: launch-watch added (daily@07:30, acts every 7 days)"); }
+else { writeFileSync(JOBS, jobs.replace(/(\r?\n)*$/, je) + inEol(ROW, je)); console.log("hq.jobs.yaml: launch-watch added (daily@07:30, acts every 7 days)"); }
 process.exit(rc);

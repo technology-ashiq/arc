@@ -46,6 +46,13 @@ switch (scenario) {
     await adapter.scaffold(ctxNow());
     out.verify = await adapter.verify(ctxNow());
     break;
+  case "foreign":
+    // A same-named project launch never recorded, on the very first run: refused, nothing recorded, no migration (B1).
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.recorded = state.length;
+    out.sql = fake.calls.filter((c) => c.endsWith("/sql")).length;
+    out.listed = fake.calls.some((c) => c.startsWith("GET ") && c.endsWith("/projects"));
+    break;
   case "bad-key":
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ NEON_API_KEY: "short" })));
     out.calls = fake.calls.length;

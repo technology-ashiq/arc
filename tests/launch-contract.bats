@@ -1319,6 +1319,9 @@ arm() {
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false launch_anon reads 1 rows"* ]] || { echo "$DONE"; false; }
   arm neon bad-key
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_TOKEN 0" ] || { echo "$DONE"; false; }
+  # A same-named project launch never recorded is refused on the FIRST run too, after the list and before any SQL (attack 143525f B1).
+  arm neon foreign
+  [ "$(j 'o.scaffold.code + " " + o.recorded + " " + o.sql + " " + o.listed')" = "FOREIGN_PROJECT 0 0 true" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: with both database rows vetted, plan ranks neon and supabase with their fit-rule ids (REQ-08)" {

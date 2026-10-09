@@ -1,0 +1,100 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/database/neon.mjs:111",
+      "breaking_input": "The Neon account already has a project named arc-launch-<slug> that the owner made, and the board's state records no neon-project (`recorded` is empty). scaffold finds one hit, so `id` is set. The guard `id && !recorded.includes(id) && recorded.length` is false because `recorded.length` is 0. The owner's project is adopted, `ctx.report` records it as launch's, and the migration runs against it.",
+      "why": "The foreign-project refusal only fires when something else is already recorded, so the first run adopts any same-named project. Teardown then deletes it, and the migration writes into the owner's database. This is a twin of 'A project and domain launch only found were recorded as launch's' and 'report the CREATE, not the check'. The `foreign` fake scenario is never run in the bats arms, so nothing covers this.",
+      "fix": "Refuse any found project that is not in `recorded`, whatever `recorded.length` is. Report only a project this call created, or one already recorded. Add a `foreign` arm to the contract bats test.",
+      "twin_of": "A project and domain launch only found were recorded as launch's, so teardown would delete the owner's -> every check-then-create: report the CREATE, not the check"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/database/neon.mjs:13",
+      "breaking_input": "The owner's Neon project (or one already holding the owner's data) has its own public.launch_probe table with other columns or rows. MIGRATION runs `create table if not exists`, `alter table ... enable row level security`, then inserts id 1.",
+      "why": "It alters and writes to a table launch did not create, because the name is one the owner can also use. Verify's `owner_rows == 1` check also fails whenever the owner's table has more rows.",
+      "fix": "Use a launch-unique table name carrying an ownership marker, or refuse if the table already exists without a marker comment.",
+      "twin_of": "A probe table of the same name as the owner's was altered and written to -> every create-if-not-exists on a name the owner can also use"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:291",
+      "breaking_input": "`verify --all --public-only` hits a slot whose adapter drifted (DIGEST_DRIFT) or that is otherwise UNVERIFIABLE. The catch branch logs it and does `failed++; continue`, which never reaches the `incident.raised` emit. The run returns exit 1.",
+      "why": "launch-watch treats exit 1 as 'a regression the runner already raised to needs-you', so a drifted or unverifiable slot gets no incident and the watch reports success. The weekly watch is silent on the case it should catch.",
+      "fix": "In public-only mode, emit `incident.raised` on the UNVERIFIABLE path too. Have launch-watch distinguish exit 1 with raised incidents from exit 1 without any."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/jobs/launch-watch.mjs:42",
+      "breaking_input": "One board's verify times out at 3600s, or the child is killed. On Windows a SIGKILLed child reports status 1, and `r.signal` and `r.error` are never read.",
+      "why": "A timeout looks like exit 1, so it is treated as an already-raised regression and `failed` stays 0. The job exits 0 and writes the stamp. The cause is inferred from `status` alone.",
+      "fix": "Check `r.error`, `r.signal` and `r.status === null` before interpreting the exit code. Count a timeout or kill as failed.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/jobs/launch-watch.mjs:47",
+      "breaking_input": "Any run in which a board's verify fails, or a board is skipped. `writeFileSync(STAMP, today)` runs unconditionally after the loop.",
+      "why": "A failed watch still marks the week done, so the retry waits seven days. Each venture's timeout is 3600s against a job budget of min 30. If the runner kills the job mid-loop no stamp is written, and the first sorted slugs starve the later ones every day.",
+      "fix": "Write the stamp only when `failed === 0`. Track per-board progress, and cap the per-venture timeout below the job budget."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/jobs/launch-watch.mjs:34",
+      "breaking_input": "A `.watch-last` holding a future date, such as `2099-01-01` from a clock skew or a hand edit. `daysBetween(last, today)` is negative, so `< 7` is true.",
+      "why": "The stamp is trusted without a bound, so the watch skips indefinitely, and the printed message claims 'next on or after N more day(s)' with a huge number.",
+      "fix": "Treat a stamp in the future as absent, i.e. require `0 <= days < 7`."
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/owner-apply-watch-policy.mjs:10",
+      "breaking_input": "hq.policy.yaml checked out with CRLF line endings on Windows. ANCHOR ends with a bare `\\n`, so `policy.includes(ANCHOR)` is false and the script exits 2 with 'add the block by hand'. Without that failure, BLOCK and ROW would be written with LF into a CRLF file.",
+      "why": "The owner's one-line apply fails on the owner's own OS, and an apply that succeeded would leave mixed line endings. No shared-file edit reads the file's own conventions first.",
+      "fix": "Detect the file's EOL and convert BLOCK and ROW to it. Match the anchor with `\\r?\\n`.",
+      "twin_of": "`.env.example` names were matched without `export ` and added with LF into a CRLF file -> every shared-file edit: read the file's own conventions first"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/arc-probe.mjs:36",
+      "breaking_input": "A profile with `repository: \"--dry-run\"`, or any value starting with `--`, passed as the argv value after `--repository`. venture-register may treat it as a flag.",
+      "why": "The user-supplied profile string goes into a child's argv with no format check. `spawnSync` also blocks the worker's event loop for up to 120s, so the slot's abort timeout cannot fire. On Windows a SIGKILL timeout reports exit 1, which is then named 'exited 1'.",
+      "fix": "Validate `repository` against `^[\\w.-]+/[\\w.-]+$`. Use an async spawn so the abort signal is honoured, and check `r.signal` and `r.error`.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/runner.mjs:299",
+      "breaking_input": "A verify adapter returns `reason: \"PAUSED(x)\"` or `\"env:K\"` for a slot that has really regressed.",
+      "why": "With `--public-only` the incident is suppressed purely on an adapter-supplied reason prefix. A broken or hostile adapter (or any reason built from a response body) silences its own regression. `PAUSED(` is accepted from free text and not from a typed field.",
+      "fix": "Have adapters return a typed `status` field (`paused` or `env`) and validate it. Do not match a prefix of free text."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/launch/trust-all.mjs:41",
+      "breaking_input": "A Windows checkout where the adapter files are already CRLF. `bytes.replace(/\\n/g, \"\\r\\n\")` turns each `\\r\\n` into `\\r\\r\\n`.",
+      "why": "The 'CRLF keeps digest' check feeds a double-CR copy to the digest. If adapterDigest only folds `\\r\\n`, `crlfSame` is false on the autocrlf leg only. The test edits checked-out text without normalising first.",
+      "fix": "Normalise with `bytes.replace(/\\r\\n/g, \"\\n\").replace(/\\n/g, \"\\r\\n\")` before writing the CRLF copy.",
+      "twin_of": "The lint self-test edited LF literals into files a Windows checkout gives it as CRLF -> every test fixture that edits checked-out text by literal match"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "tests/launch-cli.bats:200",
+      "breaking_input": "The fixture registry.yaml checked out with CRLF, or missing a trailing newline. `add_probe_rows` appends LF rows with `printf >>` after grepping the first digest with awk, so `$d` can end in `\\r`.",
+      "why": "The `digest:` value read from a CRLF file carries a CR, so the appended rows get a corrupt digest and the registry gets mixed EOLs. The test fails on the Windows leg only.",
+      "fix": "Strip CR from `$d` with `tr -d '\\r'`, and append through a helper that matches the file's EOL.",
+      "twin_of": "Two bats fixtures edited a checked-out YAML with a sed `$` anchor that misses on a CRLF line"
+    }
+  ]
+}

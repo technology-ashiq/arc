@@ -110,7 +110,9 @@ export async function scaffold(ctx) {
   const hits = await findProject(ctx, name);
   if (hits.length > 1) throw refuse("NEON_AMBIGUOUS", `${hits.length} Neon projects are named ${name}`);
   let id = hits[0] && typeof hits[0].id === "string" ? hits[0].id : "";
-  if (id && !recorded.includes(id) && recorded.length) throw refuse("FOREIGN_PROJECT", `a Neon project named ${name} exists that launch did not record`);
+  // A same-named project launch never recorded is the owner's, even on a first run: adopting it would migrate and later
+  // tear down data launch does not own (attack 143525f B1). It also keeps B2 shut: every launch_probe is in a project launch made.
+  if (id && !recorded.includes(id)) throw refuse("FOREIGN_PROJECT", `a Neon project named ${name} exists that launch did not record`);
   if (!id) {
     const region = REGION[ctx.profile && ctx.profile.region] || REGION.any;
     const made = await neon(ctx, "POST", "/projects", { project: { name, region_id: region } });
