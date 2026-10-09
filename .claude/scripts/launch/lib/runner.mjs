@@ -280,7 +280,7 @@ export async function verifySlots(opts, log = console.log) {
     if (opts.slot && !slots.some((s) => s.id === opts.slot)) throw new LaunchError("REFUSED", `unknown slot ${opts.slot}`);
     const ids = opts.slot ? [opts.slot] : slots.map((s) => s.id).filter((id) => ["verified", "applied"].includes(slotRow(state0, id).state));
     if (!ids.length) { log(`${slug}: nothing applied yet -- nothing to verify`); return EXIT.OK; }
-    let ok = 0, failed = 0, skipped = 0;
+    let ok = 0, failed = 0, skipped = 0, envSkipped = 0, paused = 0, raised = 0;
     for (const id of ids) {
       const slot = slots.find((s) => s.id === id);
       let res;
@@ -288,12 +288,29 @@ export async function verifySlots(opts, log = console.log) {
         res = underLock(P, slug, () => probeOne(P, slug, slot, rows, profile, ventureRoot, log), log);
       } catch (e) {
         if (e.exit === EXIT.LOCKED) { log(`${id}: SKIPPED -- ${e.message}`); skipped++; continue; }
-        if (e instanceof LaunchError || e.code === "DIGEST_DRIFT") { log(`${id}: UNVERIFIABLE -- ${e.message}`); failed++; continue; }
+        // Under --public-only every thrown error is a slot the watch could not see, raised and counted, never a loop
+        // that dies before the watch-result line (attack 530c056 L1, L8).
+        if (e instanceof LaunchError || e.code === "DIGEST_DRIFT" || opts.publicOnly) {
+          log(`${id}: UNVERIFIABLE -- ${e.message}`);
+          failed++;
+          // A drifted or unverifiable slot is a regression the watch must raise too, not only a failed probe (attack 143525f B3).
+          if (opts.publicOnly && emit("incident.raised", { what: `launch verify: ${id} is unverifiable for ${slug}: ${clean(e.message).slice(0, 200)}`, venture: slug, slot: id, honesty_class: profile.honesty_class }, slug, log)) raised++;
+          continue;
+        }
         throw e;
       }
-      if (res) ok++; else failed++;
+      if (res.good) { ok++; continue; }
+      // --public-only is the weekly watch (ADR-1716, ADR-1750): a slot whose token is not on this box is skipped(env) and
+      // stays out of the brief; a pause the provider reports is PAUSED(reason); any other answer is a regression, raised
+      // once as incident.raised, which the brief shows under needs-you. Only the worker sets missing_env (B9).
+      if (opts.publicOnly && res.missingEnv) { log(`${id}: skipped(${clean(res.reason)})`); envSkipped++; continue; }
+      if (opts.publicOnly && String(res.reason).startsWith("PAUSED(")) { log(`${id}: ${clean(res.reason)}`); paused++; continue; }
+      failed++;
+      if (opts.publicOnly && emit("incident.raised", { what: `launch verify: ${id} regressed for ${slug}: ${clean(res.reason).slice(0, 200)}`, venture: slug, slot: id, honesty_class: profile.honesty_class }, slug, log)) raised++;
     }
-    log(`${slug}: ${ok}/${ids.length} slot(s) verified now${failed ? ` · ${failed} failed` : ""}${skipped ? ` · ${skipped} skipped (locked)` : ""}`);
+    log(`${slug}: ${ok}/${ids.length} slot(s) verified now${failed ? ` · ${failed} failed` : ""}${skipped ? ` · ${skipped} skipped (locked)` : ""}${envSkipped ? ` · ${envSkipped} skipped(env)` : ""}${paused ? ` · ${paused} paused` : ""}${raised ? ` · ${raised} raised to needs-you` : ""}`);
+    // The watch reads this, and only as the LAST line: exit 1 alone cannot tell "every regression raised" from "a raise was lost" (B3).
+    if (opts.publicOnly) log(`watch-result failed=${failed} raised=${raised}`);
     return failed ? EXIT.FAILED : skipped ? EXIT.LOCKED : EXIT.OK;
   } catch (e) {
     if (e.exit) { log(e.message); return e.exit; }
@@ -328,7 +345,7 @@ function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
   if (!lv) saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } }));
   emit("run.completed", { slot: id, provider: prow.id, honesty_class: profile.honesty_class, attempt: r0.attempt || 0, mode: "verify", outcome: good ? "ok" : "fail" }, slug, log);
   log(`${id}: ${good ? `verified now (answered by ${clean(lv.answerer)})` : `VERIFY FAILED -- ${clean(reason)}`}`);
-  return good;
+  return { good, reason, missingEnv: !good && !!lv && lv.missing_env === true };
 }
 
 function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
@@ -380,6 +397,7 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       }
       let outcome;
       if (r.status === 0 && after.state === "verified" && !ledger) outcome = "ok";
+      else if (r.status === 0 && after.state === "absent" && !ledger) outcome = "absent";
       else {
         const timedOut = r.error && r.error.code === "ETIMEDOUT";
         // A worker that recorded no terminal state died mid-attempt; Windows reports a SIGKILL as plain exit 1, so the
@@ -392,9 +410,10 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       const receipt = emit("run.completed", { ...base, outcome }, slug, log);
       saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), slot.id, { receipt, queued: [] }));
       const fin = slotRow(loadState(P.stateDir, slug), slot.id);
-      log(`${slot.id}: ${fin.state}${fin.reason ? ` (${fin.reason})` : ""} -- attempt ${attempt}, receipt ${receipt || "UNRECEIPTED"}`);
+      log(`${slot.id}: ${fin.state}${fin.reason ? ` (${clean(fin.reason)})` : ""} -- attempt ${attempt}, receipt ${receipt || "UNRECEIPTED"}`);
       if (!receipt) return EXIT.FAILED;
-      return outcome === "ok" ? EXIT.OK : EXIT.FAILED;
+      // An allow-list: only the two settled outcomes exit 0 (attack b6ffd12 B1).
+      return outcome === "ok" || outcome === "absent" ? EXIT.OK : EXIT.FAILED;
     }, log);
   } catch (e) {
     if (e.exit === EXIT.LOCKED) { log(e.message); return EXIT.LOCKED; }

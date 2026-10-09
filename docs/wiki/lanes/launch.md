@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (42)
+## Decisions (52)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -70,6 +70,16 @@ ADRs whose `Product:` line names this lane first.
 | [`1739`](../../../docs/adr/1739-webhooks-ledger-stores-each-signed-event-once-and-books-it-simulated.md) | webhooks-ledger stores each signed event once on the venture, and books it as simulated revenue through the ledger's own parser | accepted | 2026-10-07 |
 | [`1740`](../../../docs/adr/1740-refunds-books-a-stored-refund-against-its-charge-and-nets-it-simulated.md) | refunds books a stored `refund.processed` against its charge, so the simulated P&L nets to zero | accepted | 2026-10-09 |
 | [`1741`](../../../docs/adr/1741-a-rehearsal-gate-refusal-runs-before-dependencies-and-provider.md) | a rehearsal's gate-1 and gate-3 refusal runs before dependencies and provider choice | accepted | 2026-10-09 |
+| [`1742`](../../../docs/adr/1742-security-headers-are-next-config-headers-read-live-and-graded-by-the-observatory.md) | security-headers are Next config headers, read from the live response and graded by Mozilla's Observatory | accepted | 2026-10-09 |
+| [`1743`](../../../docs/adr/1743-dependency-scan-is-its-own-npm-audit-workflow-plus-dependabot.md) | dependency-scan is its own npm-audit workflow plus Dependabot, verified by a green audit run | accepted | 2026-10-09 |
+| [`1744`](../../../docs/adr/1744-migration-rollback-is-a-paired-down-migration-held-by-a-committed-test.md) | migration-rollback is a paired down migration held by a committed node test that arc-ci runs | accepted | 2026-10-09 |
+| [`1745`](../../../docs/adr/1745-legal-pages-observes-a-named-absent-and-launch-never-publishes.md) | legal-pages observes the live pages, a named ABSENT is a recorded outcome, and launch never publishes | accepted | 2026-10-09 |
+| [`1746`](../../../docs/adr/1746-backup-and-restore-run-as-a-drill-on-the-venture-ci.md) | backup and restore-drill run as one drill workflow on the venture's CI, verified by its job conclusions | accepted | 2026-10-09 |
+| [`1747`](../../../docs/adr/1747-errors-probes-sentry-through-a-committed-route-with-no-sdk.md) | errors throws a known error from a committed route, reports it over Sentry's store API, and asks Sentry | accepted | 2026-10-09 |
+| [`1748`](../../../docs/adr/1748-an-override-is-an-approved-request-plan-cites-and-fit-rules-carry-ids.md) | fit rules carry ids, ranking is two named rules, and an override is an approved request plan cites | accepted | 2026-10-09 |
+| [`1749`](../../../docs/adr/1749-the-trust-fixtures-sweep-every-built-adapter.md) | the trust fixtures sweep every built adapter, not one fake | accepted | 2026-10-09 |
+| [`1750`](../../../docs/adr/1750-the-weekly-watch-is-verify-public-only-raising-one-incident-per-regression.md) | the weekly watch is `verify --all --public-only`, run by a daily job that acts every seven days | accepted | 2026-10-09 |
+| [`1751`](../../../docs/adr/1751-wiring-slots-query-arcs-own-organs-through-ctx-probe-arc.md) | the wiring slots ask arc's own organs through `ctx.probe.arc`, answered by the runner | accepted | 2026-10-09 |
 
 ## Source
 

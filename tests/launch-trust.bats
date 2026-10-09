@@ -116,3 +116,21 @@ provider_total() { node -e 'const fs=require("fs");const f=process.argv[1];conso
     [[ "$(slot_field probe reason)" == "refused:WRITE_REFUSED"* ]] || { echo "$p: $(slot_field probe reason)"; false; }
   done
 }
+
+@test "launch-trust: every built adapter keeps its digest across CRLF, drifts on one byte, sends nothing off its hosts, and cannot write outside the root (REQ-09, ADR-1749)" {
+  run node "$ARC_ROOT/tests/launch/trust-all.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN all"* ]] || { echo "the sweep never ran: $output"; false; }
+  DONE=$(printf '%s\n' "$output" | sed -n 's/^DONE //p')
+  [ -n "$DONE" ] || { echo "the sweep never finished: $output"; false; }
+  j() { node -e 'const o=JSON.parse(process.argv[1]);console.log(String(eval(process.argv[2])))' "$DONE" "$1"; }
+  # The sweep covers every built adapter, and that count only grows: 28 at Phase 03.
+  [ "$(j 'o.checked >= 28')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.results.filter((r) => !r.crlfSame || !r.editDiffers || r.drift !== "DIGEST_DRIFT").map((r) => r.id).join(",")')" = "" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.results.filter((r) => r.leaked !== 0).map((r) => r.id).join(",")')" = "" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.results.filter((r) => r.write !== "WRITE_REFUSED").map((r) => r.id).join(",")')" = "" ] || { echo "$DONE"; false; }
+  # At least the adapters that reach a request before any upstream check were refused at the host guard.
+  [ "$(j 'o.results.filter((r) => r.hostRefused).length >= 4')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.results.flatMap((r) => r.sensitive).every((s) => s.endsWith(":APPROVAL_PENDING")) && o.results.flatMap((r) => r.sensitiveApproved).every((s) => s.endsWith(":allowed"))')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.results.flatMap((r) => r.sensitive).length >= 2')" = "true" ] || { echo "$DONE"; false; }
+}

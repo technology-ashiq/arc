@@ -39,15 +39,23 @@ scope-cut conversation unless the tokens land. 50% tripwire at the Phase 02 exit
 
 ## Now
 
-**Current position:** Phase 01 every slot built on fakes (#322..#359, ADR-1725..1735); its real half waits on the owner
-actions below. Phase 02 built on fakes, fakes-first by the owner ruling: payment-test #360 (ADR-1736), plans #363
-(ADR-1737), checkout-portal #386 (ADR-1738), webhooks-ledger #387 (ADR-1739), and on `feat/launch-p02-gate3` refunds
-(ADR-1740: a stored `refund.processed` books against its charge, `arc pnl --simulated` nets to 0) + gate 3 (ADR-1741:
-`apply payment-live` on arc-sandbox records `approval.requested` and exits 2 before dependencies or provider).
-**Next step:** ledger-source (REQ-10 `ledger-source` registered), then Phase 03 on fakes. Phase 02 closes on the real
-test-mode purchase once the Razorpay keys and the Phase 01 tokens land.
+**Current position:** Phases 01 and 02 are built on fakes. Phase 02's refunds and gate 3 are PR #398 (ADR-1740, ADR-1741).
+Phase 03 is built on fakes: seven trust and data slots, ADR-1742..1747, attacked in two rounds. These are security
+headers, dependency scan, migration rollback, legal pages, the backup drill, the restore drill and Sentry errors.
+Phase 04 is also built on fakes, ADR-1748..1751, attacked in two rounds:
+- fit rules carry ids, plan ranks the vetted rows, and an override goes through the inbox;
+- the trust sweep covers 28 adapters;
+- neon enters the database slot through its row and its adapter only (REQ-08);
+- four wiring slots ask arc through `ctx.probe.arc`;
+- the weekly `launch-watch` job runs `verify --public-only`.
+Phases 03 and 04 ship together in one PR.
+**Next step:** merge the Phase 03+04 PR on green CI. Phase 05 (close: `verify --all` on arc-sandbox, the retro) runs
+for real once the owner tokens land, and so does each earlier phase's real close.
 
-**Owner actions (one message unblocks Phase 01's real half):** `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
+**Owner actions (one message unblocks every phase's real half):** the `launch-watch` rows: run
+`node .claude/scripts/launch/owner-apply-watch-policy.mjs` in the main clone, which writes `hq.policy.yaml` and `hq.jobs.yaml`, then commit both. ·
+`GITHUB_TOKEN` · Razorpay test keys plus `RAZORPAY_WEBHOOK_SECRET` · `SENTRY_AUTH_TOKEN` · `NEON_API_KEY` · the `SUPABASE_DB_URL` Actions secret on
+arc-sandbox · `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
 a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the
 GitHub login connected to Vercel (browser-only) · `SUPABASE_ACCESS_TOKEN` · `RESEND_API_KEY`. Stamps waiting in
 arc-inbox: kickoff `01M40ZHP72PYVBJT17R7A4WZ3W`, owner rulings `01M41MH9JG9VEN5G085T56CNHH` + `01M41MHA25TV1WXYHHGM59ND5V`.

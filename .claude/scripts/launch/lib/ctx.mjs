@@ -48,7 +48,7 @@ function freezeUpstream(upstream) {
     [s, Object.freeze((Array.isArray(rs) ? rs : []).filter(good).map((r) => Object.freeze({ kind: r.kind, id: r.id })))])));
 }
 
-export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [] }) {
+export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [], arcProbe = null }) {
   const queued = [];
   const guardedFetch = (hosts) => async (url, init = {}) => {
     let u;
@@ -87,6 +87,12 @@ export function makeCtx({ profile, board, slot, row, root, resources, upstream, 
         const q = `name=${encodeURIComponent(name)}&type=${type}`;
         const ask = async (base) => (await probeFetch(`${base}?${q}`, { headers: { accept: "application/dns-json" } })).json();
         return { google: await ask("https://dns.google/resolve"), cloudflare: await ask("https://cloudflare-dns.com/dns-query") };
+      },
+      // arc's own organs, answered by the runner (ADR-1751): only a wiring slot's adapter may ask, because only the wiring
+      // block's exit criteria are facts about arc (ledger feed, passport, face contract, teardown render).
+      async arc(question) {
+        if (!arcProbe || !slot || slot.group !== "wiring") throw refusal("ARC_PROBE_REFUSED", "only a wiring slot may ask arc's organs");
+        return arcProbe(String(question));
       },
     }),
     // revenue.simulated is queued, never emitted as written: the runner books it only through the ledger's own parser
