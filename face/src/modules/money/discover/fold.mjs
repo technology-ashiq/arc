@@ -28,8 +28,12 @@ import { fmtInt } from "../../../lib/inbox.mjs";
 /** @param {unknown} v @returns {Record<string, unknown> | null} */
 const orNull = (v) => (v === null || v === undefined ? null : asObject(v));
 
-/** One run as a figure: its day, "none yet" when the lane never ran it, "—" when not read. */
+/**
+ * One run as a figure: its day, "none yet" when the lane never ran it, "—" when not read.
+ * @param {boolean} isRead @param {Record<string, unknown> | null} run
+ */
 const runFigure = (isRead, run) => (!isRead ? "—" : run === null ? "none yet" : field(run, "day"));
+/** @param {boolean} isRead @param {Record<string, unknown> | null} run @param {string} what */
 const runSub = (isRead, run, what) => (!isRead ? "not on this read" : run === null ? `no ${what} has run` : `outcome ${field(run, "outcome") || "unstated"} · ⌗ ${field(run, "id").slice(-6)}`);
 
 /**
@@ -57,6 +61,8 @@ export function fold(payloads, ctx) {
   const open = winnerRows.filter((w) => field(w, "state") === "open").length;
   const latest = orNull(captures["latest"]);
   const captureCount = typeof captures["count"] === "number" ? captures["count"] : null;
+  const droppedRaw = st.body["droppedTotal"];
+  const skipped = typeof droppedRaw === "number" && Number.isFinite(droppedRaw) ? droppedRaw : 0;
   const room = ctx.room;
   return {
     sentence: String(room.sentence ?? ""),
@@ -76,7 +82,7 @@ export function fold(payloads, ctx) {
       listKey: "winners",
       empty: "No winner has been proposed yet.",
       // What the door skipped is said, by count: a receipt it could not read is never a quietly shorter list.
-      note: typeof st.body["droppedTotal"] === "number" && st.body["droppedTotal"] > 0 ? `${fmtInt(st.body["droppedTotal"])} discover receipt(s) the door could not read are not counted here` : "",
+      note: skipped > 0 ? `${fmtInt(skipped)} discover receipt(s) the door could not read are not counted here` : "",
       row: (w) => {
         const d = orNull(w["decision"]);
         const tokens = asArray(w["cluster_tokens"]).map(cell).filter((t) => t !== "").join(", ");
