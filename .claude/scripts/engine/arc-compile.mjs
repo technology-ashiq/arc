@@ -52,7 +52,7 @@ import * as codex from "./adapters/codex.mjs";
 import * as opencode from "./adapters/opencode.mjs";
 import * as skillsOnly from "./adapters/skills-only.mjs";
 import { SOURCE_TARGETS, goldenDir, renderSourceTree } from "./source-render.mjs";
-import { CouldNotScan, MATRIX_FILE, confineRel, parseFrontmatter, sourceFiles, verifiedRows } from "./frontmatter-lint.mjs";
+import { CouldNotScan, KEYS_FILE, MATRIX_FILE, confineRel, parseFrontmatter, sourceFiles, verifiedRows } from "./frontmatter-lint.mjs";
 
 export const ADAPTERS = Object.freeze({ "claude-code": claudeCode, codex, opencode, "skills-only": skillsOnly });
 
@@ -153,9 +153,27 @@ function dirtyScan() {
     }
   }
   if (!dirs.size) throw new CouldNotScan(`no verified row of ${MATRIX_FILE} names a rendered directory`);
-  // What the compiler writes under a rendered directory. Empty until the P03 adapters render there, so
-  // today every file found is one the compiler did not write.
-  const planned = new Set();
+  // What the compiler writes under a rendered directory: each source target's render, path to bytes. A file
+  // there counts as the compiler's only when its bytes (CR-stripped, as the render is) equal one target's
+  // render of that path, so a hand-edit of a rendered file is as dirty as a hand-placed one. Without this an
+  // install of arc into arc itself (distribute Cycle 2: an OpenCode session in an arc worktree) made every
+  // rendered file dirty and the pre-commit refused every commit.
+  const planned = new Map();
+  // A root with no frontmatter-key table cannot be rendered, so nothing under it is the compiler's and every
+  // file stays dirty: the strict direction, never a skipped scan.
+  if (existsSync(join(root, KEYS_FILE))) for (const t of Object.keys(SOURCE_TARGETS)) {
+    for (const [p, text] of renderSourceTree(root, t).files) {
+      if (!planned.has(p)) planned.set(p, new Set());
+      planned.get(p).add(text);
+    }
+  }
+  const rendered = (rel) => {
+    const want = planned.get(rel);
+    if (!want) return false;
+    let text;
+    try { text = readFileSync(join(root, rel), "utf8").replace(/\r/g, ""); } catch (e) { throw new CouldNotScan(`cannot read ${rel}: ${e.code || e.message}`); }
+    return want.has(text);
+  };
   // Case-folded both ways, as the directory match is (B8). Only a regular file can be a harness's own
   // file: a symlink under a foreign name is still dirty (attack 85d2416 L7).
   // A foreign FILE entry excuses one regular file by name. A foreign DIRECTORY entry is a prune point: the
@@ -193,7 +211,7 @@ function dirtyScan() {
   const lines = [];
   let dirty = 0;
   for (const rel of [...found.keys()].sort()) {
-    if (planned.has(rel) || (found.get(rel) && isForeign(rel))) continue;
+    if (found.get(rel) && (rendered(rel) || isForeign(rel))) continue;
     lines.push(`[dirty] ${rel} — a file under a rendered directory that arc-compile did not write`);
     dirty++;
   }

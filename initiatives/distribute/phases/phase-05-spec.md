@@ -11,7 +11,8 @@
 2. `arc-event.mjs`: the `ARC_HARNESS` / `ARC_EVIDENCE` stamp (ADR-2020); unset = byte-identical.
 3. `tests/fixtures/distribute/fake-opencode.mjs` (scripted modes via env: `ok`, `overspend`, `nocost`, `stall`; writes a marker file when invoked) and two suites: `tests/distribute-opencode-session.bats` (REQ-11) and `tests/distribute-harness-stamp.bats` (REQ-12), each with a measured shard-weight entry.
 4. A session worktree `E:/Work_Hub/01_Automemory/wt-oc-req03` on branch `feat/distribute-c2-oc-session`, `.opencode/` rendered there by `node bin/arc.mjs init --target opencode` (never committed), and **one live smoke**: the wrapper runs the rendered `arc-commit` on a one-line change, cap $0.10. The transcript is committed at `initiatives/distribute/evidence/phase-05/transcripts/smoke-arc-commit.jsonl`.
-5. Products manifest / sync golden rows for the new synced files, if `product-lint` asks; wiki regenerated if a page is owed.
+5. The REQ-05 dirty scan learns what the compiler writes (each source target render, matched by bytes): its planned set had stayed empty since P02, so an OpenCode render inside an arc checkout made the pre-commit refuse every commit (fixed-defects (bu)); pinned by a new `tests/distribute-dirty.bats` fixture.
+6. Products manifest / sync golden rows for the new synced files, if `product-lint` asks; wiki regenerated if a page is owed.
 
 ## Exit criteria (Definition of Done)
 

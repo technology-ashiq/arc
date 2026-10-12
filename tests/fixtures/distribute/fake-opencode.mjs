@@ -8,6 +8,7 @@
 //   overspend  steps at FAKE_OC_COST forever, one per 100 ms, until killed
 //   nocost     three steps whose step_finish carries no cost, exit 0
 //   stall      one step_start, then silence until killed
+//   mixed      one step priced as the string "0.02" and a text event carrying cost 9 (not spend), exit 0
 //   fail       one priced step, then exit 7
 //
 // FAKE_OC_GRANDCHILD set to a path: spawn a grandchild that writes that path after FAKE_OC_GRANDCHILD_MS (default
@@ -61,6 +62,12 @@ switch (process.env.FAKE_OC_MODE || "ok") {
   case "stall":
     emit({ type: "step_start", part: { id: "prt_s1", sessionID: session, type: "step-start" } });
     hold();
+    break;
+  case "mixed":
+    // a step priced as a numeric string, and a text event carrying a cost that is not OpenCode's accounting
+    emit({ type: "step_start", part: { id: "prt_s1", sessionID: session, type: "step-start" } });
+    emit({ type: "step_finish", part: { id: "prt_f1", sessionID: session, type: "step-finish", cost: "0.02" } });
+    emit({ type: "text", part: { type: "text", text: "done", cost: 9 } });
     break;
   case "fail":
     step(true);

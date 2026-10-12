@@ -42,31 +42,31 @@ wrap() {
 @test "distribute-opencode-session: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-opencode-session: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 10 ] || { echo "declared $declared, expected 10"; false; }
+  [ "$declared" -eq 11 ] || { echo "declared $declared, expected 11"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
 @test "distribute-opencode-session: a clean run writes the proof header, every event verbatim, and spent last" {
-  MSG='a b "q" $X `bt` 100%'
+  MSG='a b "q" $X `bt` (a&b)'
   wrap 0.10 30 ok.jsonl
   [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
   [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
   [ "$(lines | grep -cE '^opencode-session: ok spent=0\.03 session=ses_fake0001TestSession transcript=')" -eq 1 ] || { echo "$output"; false; }
   local tx="$T/repo/ok.jsonl"
-  head -1 "$tx" | grep -qE '^harness-proof: opencode 1\.17\.18 session=ses_fake0001TestSession model=openrouter/deepseek/deepseek-v4-flash-0731 cap_usd=0\.1 command=arc-commit cwd=\S+ spine=\S+/\.claude/state/hq date=' || { head -1 "$tx"; false; }
+  head -1 "$tx" | grep -qE '^harness-proof: opencode 1\.17\.18 session=ses_fake0001TestSession model=openrouter/deepseek/deepseek-v4-flash-0731 cap_usd=0\.1 command=arc-commit cwd=\S+ spine=\S+/\.claude/state/hq evidence=ok\.jsonl date=' || { head -1 "$tx"; false; }
   [ "$(tail -1 "$tx" | tr -d '\r')" = "spent=0.03" ] || { tail -2 "$tx"; false; }
   [ "$(sed -n '2,$p' "$tx" | grep -c '^{"timestamp":[0-9]*,"sessionID":"ses_fake0001TestSession","type":"')" -eq 7 ] || { cat "$tx"; false; }
   [ "$(wc -l < "$tx" | tr -d ' ')" -eq 9 ] || { echo "expected header + 7 events + spent"; cat "$tx"; false; }
 }
 
 @test "distribute-opencode-session: the child gets the exact argv, no shell, and the message byte-identical" {
-  MSG='a b "q" $X `bt` 100%'
+  MSG='a b "q" $X `bt` (a&b)'
   wrap 0.10 30 argv.jsonl
   [ -s "$T/argv.json" ] && [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
   run node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(a.slice(0,-1).join(" ")+"\n"+a[a.length-1])' "$(native "$T/argv.json")"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$(printf '%s\n' "$output" | sed -n 1p)" = "run --pure --auto --command arc-commit -m openrouter/deepseek/deepseek-v4-flash-0731 --format json --" ] || { echo "$output"; false; }
-  [ "$(printf '%s\n' "$output" | sed -n '2,$p')" = 'a b "q" $X `bt` 100%' ] || { echo "message mangled: $output"; false; }
+  [ "$(printf '%s\n' "$output" | sed -n '2,$p')" = 'a b "q" $X `bt` (a&b)' ] || { echo "message mangled: $output"; false; }
 }
 
 @test "distribute-opencode-session: the child is told its harness, model, transcript and the canonical spine" {
@@ -150,12 +150,41 @@ wrap() {
   check CYCLE-CAP cycle --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- hi
   rm -f "$T/ledger/phase-05/transcripts/old.jsonl"
   check CYCLE-CAP prior-flag --cap-usd 0.1 --prior-spent-usd 0.45 --model openrouter/x/y "${base[@]}" -- hi
+  # A transcript cut off before its spent= line is charged its whole cap; one with neither cannot be read.
+  printf 'harness-proof: opencode 1.17.18 session=none model=m cap_usd=0.45 command=c\n{"type":"x"}\n' > "$T/ledger/phase-05/transcripts/cut.jsonl"
+  check CYCLE-CAP cut-short --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- hi
+  printf '{"type":"x"}\n' > "$T/ledger/phase-05/transcripts/cut.jsonl"
+  check CYCLE-CAP unreadable-ledger --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- hi
+  rm -f "$T/ledger/phase-05/transcripts/cut.jsonl"
+  local fileledger=(--command arc-commit --cwd "$(native "$T/repo")" --transcript "$(native "$T/repo/r.jsonl")" --ledger-dir "$(native "$T/argv-none.txt")")
+  printf 'x\n' > "$T/argv-none.txt"
+  check CYCLE-CAP ledger-is-a-file --cap-usd 0.1 --model openrouter/x/y "${fileledger[@]}" -- hi
+  check USAGE blank-message --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- "   "
+  check USAGE dash-value --cap-usd 0.1 --model openrouter/x/y --command arc-commit --cwd "$(native "$T/repo")" --transcript -x --ledger-dir "$(native "$T/ledger")" -- hi
+  check MODEL dot-segment --cap-usd 0.1 --model openrouter/../x "${base[@]}" -- hi
+  local outside=(--command arc-commit --cwd "$(native "$T/repo")" --transcript "$(native "$T/outside.jsonl")" --ledger-dir "$(native "$T/ledger")")
+  check EVIDENCE outside-any-repo --cap-usd 0.1 --model openrouter/x/y "${outside[@]}" -- hi
+  [ ! -e "$T/outside.jsonl" ] || fails="$fails|outside-any-repo: a transcript was written"
+  if is_windows; then check USAGE percent-through-cmd --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- "100% sure"; fi
+  printf 'x\n' > "$T/repo/r.jsonl.stderr"
+  check TRANSCRIPT stderr-exists --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- hi
+  [ "$(cat "$T/repo/r.jsonl.stderr")" = "x" ] || fails="$fails|stderr record was overwritten"
+  rm -f "$T/repo/r.jsonl.stderr"
   printf 'x\n' > "$T/repo/r.jsonl"
   rm -f "$T/invoked"
   run --separate-stderr node "$WRAP" --cap-usd 0.1 --model openrouter/x/y "${base[@]}" -- hi
   [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q 'REFUSED TRANSCRIPT:' && [ ! -e "$T/invoked" ] || fails="$fails|existing transcript: status $status [$stderr]"
   [ "$(cat "$T/repo/r.jsonl")" = "x" ] || fails="$fails|existing transcript was overwritten"
   [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
+}
+
+@test "distribute-opencode-session: only step-finish cost is spend, and a numeric string is read as its number" {
+  export FAKE_OC_MODE=mixed
+  wrap 0.10 30 mixed.jsonl
+  [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
+  [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
+  grep -q '"type":"text"' "$T/repo/mixed.jsonl" || { echo "the priced text event never reached the transcript"; cat "$T/repo/mixed.jsonl"; false; }
+  [ "$(tail -1 "$T/repo/mixed.jsonl" | tr -d '\r')" = "spent=0.02" ] || { tail -2 "$T/repo/mixed.jsonl"; false; }
 }
 
 @test "distribute-opencode-session: OpenCode exiting non-zero is CHILD-FAILED (exit 1) with its spend kept" {

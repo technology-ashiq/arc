@@ -126,3 +126,18 @@ REJECTED: L15 the runbook names the script form -- by design (the script form wo
 
 Attack 45490ca round 2 (P04): logic 0 findings; boundary B1, B2 fixed as (bk), (bl).
 | 14 | B3-B5 (attack 45490ca, low): realpath vs git's own case and 8.3 forms on Windows, no timeout on the dispatcher's children, inherited GIT_* variables | `bin/arc.mjs` | each fails closed (hooks not wired, named) or needs a hostile environment; two rounds are spent | a Windows user sees "not its root" at their real root, a hung doctor, or a GIT_DIR-set CI | normalise both sides through `git rev-parse --show-toplevel` run in each path; add a timeout; clear GIT_* in git() |
+
+Attack f58fb31 round 1 (Cycle 2 P05): boundary B1-B9 and logic L1-L5, L10, L11, L14, L15 fixed as (bo)-(bt); the dirty-scan gap (bu) was found by the smoke, not the attack.
+
+| 15 | B10 (attack f58fb31, low): `ARC_HARNESS` set for the whole wrapped session makes every emit in it stamped or refused, not only the loop's three kinds | accepted: that is the point of ADR-2020 -- every receipt a wrapped session makes came from that harness | a wrapped session needs to emit a receipt on behalf of another harness |
+
+```
+REJECTED: L3 the timeout timer starts after the version check -- already-covered
+REJECTED: L6 a tiny cap breaches before the header is written -- already-covered
+REJECTED: L7 a stderr flood blocks the cap check -- unsupported
+REJECTED: L8 a final unterminated line is never processed -- already-covered
+REJECTED: L9 a non-string payload.harness passes the stamp -- already-covered
+REJECTED: L12 --prior-spent-usd double-counts the ledger -- unsupported
+REJECTED: L13 a symlink race on the transcript path -- already-covered
+```
+(L3: `version()` has its own 10 s spawn timeout; L6: events are buffered until the session id and the header is always the first line written, including on a kill; L7: stderr goes to a file with one synchronous write per chunk between stdout chunks, which a flood slows but cannot stop; L8: the remainder of `buf` is passed to `onLine` after close; L9: any value not equal to `ARC_HARNESS` is `HARNESS_MISMATCH`; L12: the flag is spend outside the ledger, added by design (ADR-2019); L13: `wx` is O_CREAT|O_EXCL, which fails on any existing path, a dangling link included.)
