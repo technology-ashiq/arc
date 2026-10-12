@@ -19,7 +19,27 @@
 
 ## Verification plan
 
-- Coarse (refined at phase start): transcripts under `evidence/phase-07/transcripts/`, receipt ids found in the main clone's `events/`, `_quarantine/` listing, `gh pr view --json mergeStateStatus,state` before and after merge.
+Refined 2026-10-13 at phase start, from P05's measurements (ADR-2022):
+
+- **Test command:** every run goes through `node .claude/scripts/engine/opencode-session.mjs` (the cycle ledger enforces the
+  $0.50 total); receipts are read with `grep -h <id> .claude/state/hq/events/*.jsonl` in the main clone; CI per job with
+  `node .claude/scripts/review/ci-digest.mjs`.
+- **Expected failure first:** each negative is refused: `branch-guard: refuses a push to main`, `secret-diff-scan: SECRET`,
+  and `[byte-diff]`/`[dirty]` from `arc-compile --check` on the hand-edited `.claude/commands/arc-commit.md`.
+- **Live demo scenario (session worktree `E:/Work_Hub/01_Automemory/wt-oc-req03`, branch `feat/distribute-c2-oc-session`):**
+  1. the operator stages one docs line (`initiatives/distribute/evidence/phase-07/README.md`); wrapped `arc-commit` (cap $0.05);
+  2. wrapped `arc-review main` (cap $0.10): `review.completed`, a `docs/reviews/` archive and the ledger stamp;
+     a wrapped `arc-commit` then commits the archive;
+  3. the operator pushes the branch with `-u` (no fence lets the model push) — named in the evidence as an operator step;
+  4. wrapped `arc-ship` (cap $0.10): lint, build, `gh pr create --fill`, `npm run test` reading CI, `deploy: none
+     declared`, `ship.done` with the PR URL. If OpenCode's shell timeout ends `npm run test` before CI settles, the
+     operator waits for CI with ci-digest and the ship is re-run; both transcripts are kept.
+  5. negatives: a second worktree `wt-oc-neg` with a local bare remote `negbare` and a quarantined, uncommitted
+     `xnegatives` command; nothing reaches GitHub.
+- **Real-system check:** the main clone's spine and `_quarantine/`; the session PR's `mergeStateStatus` before the merge
+  and `state: MERGED` after, merged after #412 at cycle end.
+- **Expected evidence:** `evidence/phase-07/transcripts/*.jsonl`, `evidence/phase-07/run.md` (receipt ids, kinds,
+  harness, evidence path, quarantine listing, spend per run and cycle total, refusal lines quoted).
 
 ## Non-negotiables (verbatim from PLAN)
 

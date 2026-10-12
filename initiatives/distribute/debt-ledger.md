@@ -161,3 +161,8 @@ REJECTED: L12 --tail is not validated as a number -- already-covered
 REJECTED: L15 the probe never checks a first-read red -- already-covered
 ```
 (L5/L7: the flag token itself is the duplicate key, so the second `--tail` is refused whatever its value; L9: the PR line goes through `safeLine`; L12: `--tail` must match `^[1-9][0-9]{0,2}$` and be at most 200; L15: `settles-red` returns code 1 after one sleep, and `mismatch-at-once` after none.)
+
+Attack 7c30208 round 2 (Cycle 2 P06 + ADR-2022): logic L1 and boundary B1, B3-B6 fixed as (cl)-(cp). Round cap reached (2).
+
+| 20 | B2 (attack 7c30208, medium): `charge()` runs `opencode export` synchronously inside the stdout handler, up to 60 s per subagent | accepted: the cap check runs right after the charge, and a blocked loop only delays reading events the child keeps writing to a pipe; the timeout timer is the second ceiling | a wrapped run with more than five subagent tasks |
+| 21 | B7 / B8 (attack 7c30208, low): the npm-test caller check covers hooks, CI and tests but not `.claude/scripts` and docs prose; the step-3 prose could still be read loosely by a model | accepted: script callers are listed by the PR's `git grep`, and the fence permits no command outside the step's own list | a script under `.claude/scripts` calls `npm test` |

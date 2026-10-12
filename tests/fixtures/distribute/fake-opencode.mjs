@@ -10,23 +10,36 @@
 //   stall      one step_start, then silence until killed
 //   task       one priced step, then a completed task tool naming subagent ses_fakeChild1, whose export holds two
 //              steps at FAKE_OC_CHILD_COST (default 0.04) and a nested task ses_fakeGrandchild1 with one more
+//   stalltask  no event, then silence until killed; the parent export names a running task (ses_fakeChild1)
+//   emptytask  one priced step and a task whose export holds no step-finish
 //   mixed      one step priced as the string "0.02" and a text event carrying cost 9 (not spend), exit 0
 //   fail       one priced step, then exit 7
 //
 // FAKE_OC_GRANDCHILD set to a path: spawn a grandchild that writes that path after FAKE_OC_GRANDCHILD_MS (default
 // 1500). The wrapper must kill the whole tree, so a killed run leaves that path absent.
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const argv = process.argv.slice(2);
 if (argv[0] === "--version") { process.stdout.write("1.17.18\n"); process.exit(0); }
+// `session list --format json` names the run's session by the --title the last `run` was given (read back from
+// FAKE_OC_ARGV), as 1.17.18 lists top-level sessions only.
+if (argv[0] === "session" && argv[1] === "list") {
+  let title = null;
+  try { const a = JSON.parse(readFileSync(process.env.FAKE_OC_ARGV, "utf8")); title = a[a.indexOf("--title") + 1]; } catch { /* no run yet */ }
+  process.stdout.write(`${JSON.stringify(title ? [{ id: "ses_fake0001TestSession", title }, { id: "ses_fakeOther", title: "someone else" }] : [])}\n`);
+  process.exit(0);
+}
 // `export <id>` prints "Exporting session: <id>" then the session JSON, as 1.17.18 does. FAKE_OC_EXPORT=fail fails it.
 if (argv[0] === "export") {
   if (process.env.FAKE_OC_EXPORT === "fail") { process.stderr.write("export failed\n"); process.exit(1); }
   const c = Number(process.env.FAKE_OC_CHILD_COST || 0.04);
   const fin = { type: "step-finish", reason: "stop", cost: c };
-  const parts = argv[1] === "ses_fakeChild1"
-    ? [fin, fin, { type: "tool", tool: "task", state: { status: "completed", metadata: { sessionId: "ses_fakeGrandchild1" } } }]
+  const task = (sid, status) => ({ type: "tool", tool: "task", state: { status, metadata: { sessionId: sid } } });
+  // The parent's own export: one subagent task still running when it was killed (the stalltask mode).
+  const parts = argv[1] === "ses_fake0001TestSession" ? [task("ses_fakeChild1", "running")]
+    : argv[1] === "ses_fakeChild1" ? [fin, fin, task("ses_fakeGrandchild1", "completed")]
+    : argv[1] === "ses_fakeEmpty" ? []
     : [fin];
   process.stdout.write(`Exporting session: ${argv[1]}\n${JSON.stringify({ info: { id: argv[1] }, messages: [{ parts }] })}\n`);
   process.exit(0);
@@ -80,6 +93,14 @@ switch (process.env.FAKE_OC_MODE || "ok") {
     step(true);
     emit({ type: "tool_use", part: { type: "tool", tool: "task", callID: "call_1", state: { status: "completed", input: {}, output: "<task_result>done</task_result>", metadata: { sessionId: "ses_fakeChild1" } } } });
     emit({ type: "text", part: { type: "text", text: "done" } });
+    break;
+  case "stalltask":
+    // no event at all, as the smokes that hung: the wrapper learns the session only from its title
+    hold();
+    break;
+  case "emptytask":
+    step(true);
+    emit({ type: "tool_use", part: { type: "tool", tool: "task", callID: "call_1", state: { status: "completed", input: {}, output: "x", metadata: { sessionId: "ses_fakeEmpty" } } } });
     break;
   case "mixed":
     // a step priced as a numeric string, and a text event carrying a cost that is not OpenCode's accounting

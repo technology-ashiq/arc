@@ -259,21 +259,23 @@ export function exportedSpend(text, id) {
   const i = text.indexOf("{");
   let j;
   try { j = JSON.parse(text.slice(i)); } catch { throw new Error(`the export of ${id} is not JSON`); }
-  let cost = 0, finishes = 0;
+  let cost = 0, finishes = 0, nodes = 0;
   const kids = new Set();
-  const walk = (o) => {
+  // Bounded: an export is data from another program, and a pathological one must end the read, not the stack.
+  const walk = (o, depth) => {
     if (!o || typeof o !== "object") return;
+    if (depth > 64 || ++nodes > 2_000_000) throw new Error(`the export of ${id} is too deep or too large to read`);
     if (o.type === "step-finish") {
       finishes++;
-      const c = typeof o.cost === "string" && /^[0-9]+(.[0-9]+)?(e-?[0-9]+)?$/i.test(o.cost) ? Number(o.cost) : o.cost;
+      const c = typeof o.cost === "string" && /^[0-9]+(\.[0-9]+)?(e-?[0-9]+)?$/i.test(o.cost) ? Number(o.cost) : o.cost;
       if (typeof c !== "number" || !Number.isFinite(c) || c < 0) throw new Error(`the export of ${id} has a step-finish without a numeric cost`);
       cost += c;
     }
     const k = o.type === "tool" && o.state?.metadata?.sessionId;
     if (typeof k === "string" && /^ses_[A-Za-z0-9]+$/.test(k)) kids.add(k);
-    for (const v of Object.values(o)) walk(v);
+    for (const v of Object.values(o)) walk(v, depth + 1);
   };
-  walk(j);
+  walk(j, 0);
   return { cost, finishes, kids: [...kids] };
 }
 
@@ -296,7 +298,10 @@ export async function run(o) {
   // Never --auto (measured on 1.17.18, P05 probes): headless, a permission OpenCode would ask about is refused,
   // which is the fence working; --auto approved every such ask under a primary agent and hung forever under a
   // command's subagent fence, the shape of the second live smoke.
-  const args = ["run", "--pure", "--command", o.command];
+  // A unique title names the session even when the run is killed before its first event, so a kill can still find
+  // it and charge what its subagents spent (attack 7c30208 B1).
+  const title = `arc-${basename(transcript, ".jsonl")}-${Date.now().toString(36)}`;
+  const args = ["run", "--pure", "--title", title, "--command", o.command];
   if (o.agent) args.push("--agent", o.agent);
   args.push("-m", o.model, "--format", "json", "--", o.message);
   launch(bin, args, {}); // refuses an argument a .cmd shim would mangle, before any spend
@@ -346,10 +351,34 @@ export async function run(o) {
     try {
       if (r.error || r.status !== 0) throw new Error(`opencode export ${id} failed (status ${r.status})`);
       got = exportedSpend(String(r.stdout || ""), id);
+      // A subagent that ran took at least one step; an export with none is unreadable, never a free run (7c30208 B3).
+      if (got.finishes === 0) throw new Error(`the export of ${id} holds no step-finish`);
     } catch (e) { unpriced++; out(`subagent: ${id} COST-UNREADABLE ${e.message}`); return; }
     spent += got.cost;
     out(`subagent: ${id} spent=${money(got.cost)} steps=${got.finishes}`);
     for (const k of got.kids) charge(k);
+  };
+  const oc = (args) => {
+    const l = launch(bin, args, { cwd, env: { ...process.env, PWD: cwd }, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const r = spawnSync(l.cmd, l.args, l.opts);
+    if (r.error || r.status !== 0) throw new Error(`opencode ${args[0]} failed (status ${r.status})`);
+    return String(r.stdout || "");
+  };
+  const sweep = () => {
+    try {
+      let id = session;
+      if (!id) {
+        const text = oc(["session", "list", "--format", "json", "-n", "50"]);
+        const list = JSON.parse(text.slice(text.indexOf("[")));
+        const hit = Array.isArray(list) ? list.find((x) => x && x.title === title) : null;
+        if (!hit || typeof hit.id !== "string" || !/^ses_[A-Za-z0-9]+$/.test(hit.id)) throw new Error(`no session titled ${title}`);
+        id = hit.id;
+        session = id;
+      }
+      const kids = exportedSpend(oc(["export", id]), id).kids;
+      out(`sweep: ${id} ${kids.length} subagent session(s)`);
+      for (const k of kids) charge(k);
+    } catch (e) { unpriced++; out(`sweep: COST-UNREADABLE ${e.message}`); }
   };
   let child = null, finalised = false, interrupted = null;
   const stop = (v) => { if (verdict === null) { verdict = v; if (child) killTree(child); } };
@@ -357,6 +386,9 @@ export async function run(o) {
     if (finalised) return verdict;
     finalised = true;
     if (child) killTree(child); // a leader that exited may have left its group behind (stragglers keep spending)
+    // A killed run never streams the finished task events, so its subagents' spend is read from the parent's own
+    // export, found by title when no event named the session (attack 7c30208 B1).
+    if (child && (verdict !== null || interrupted)) sweep();
     if (interrupted) { verdict = 6; out(`interrupted: ${interrupted}`); }
     else if (verdict === 3) out(`cap-breach: spent=${money(spent)} cap=${o.cap}`);
     else if (verdict === 5) out(`timeout: after ${o.timeoutS}s`);

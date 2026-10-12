@@ -1,16 +1,19 @@
 ---
 description: Lint, build, test, then deploy — in one shot.
-allowed-tools: Bash(npm run lint), Bash(npm run build), Bash(npm run test:*), Bash(vercel:*), Bash(git rev-parse @{u}), Bash(gh pr view --json url,state), Bash(gh pr create --fill), Bash(bash .claude/scripts/hq/arc-event.sh:*)
+allowed-tools: Bash(npm run lint), Bash(npm run build), Bash(npm run test:*), Bash(vercel:*), Bash(git branch --show-current), Bash(git rev-parse --abbrev-ref @{u}), Bash(gh pr view --json url,state), Bash(gh pr create --fill), Bash(bash .claude/scripts/hq/arc-event.sh:*)
 ---
 
 Ship the current branch. Run these in order and STOP at the first failure:
 
 1. `npm run lint`
 2. `npm run build`
-3. `npm run test`. If the repo has no deploy target (step 4), shipping is a PR, and `npm run test` may be what
-   reads its CI: first run `git rev-parse @{u}`. If the branch has no upstream (`git rev-parse @{u}` fails), STOP
-   and say the branch must be pushed first; never push from here. Then run `gh pr view --json url,state`, and only
-   if it finds no open PR for this branch, run `gh pr create --fill`.
+3. If the repo has no deploy target (step 4), shipping is a PR, and `npm run test` may be what reads its CI, so
+   before the test: run `git branch --show-current` and `git rev-parse --abbrev-ref @{u}`. If the branch has no
+   upstream, or its upstream is not `origin/<that branch>`, STOP and say the branch must be pushed with `-u` first;
+   never push from here. Then run `gh pr view --json url,state`, and only if it finds no open PR for this branch,
+   run `gh pr create --fill`.
+   Then `npm run test`. When it exits 3 (CI still running: each call waits at most 9 minutes), run it again, up to
+   4 times in all; any other non-zero exit is a failure.
 4. Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists): deploy with
    `vercel --prod` (the pre-deploy-guard hook will re-check tests). Otherwise do not deploy: print
    `deploy: none declared — the PR is the ship`, and use the PR's URL from `gh pr view --json url,state` as the URL below.

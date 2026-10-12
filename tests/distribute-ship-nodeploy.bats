@@ -28,7 +28,7 @@ probe() {
   local p="$ARC_ROOT/package.json"
   [ "$(_arc_json "$p" 'j.scripts.lint')" = "node .claude/scripts/core/gate-parity.mjs && node .claude/scripts/core/brain-drift.mjs" ] || { echo "lint: $(_arc_json "$p" 'j.scripts')"; false; }
   [ "$(_arc_json "$p" 'j.scripts.build')" = "node .claude/scripts/engine/arc-compile.mjs --check --all --input source --target opencode" ] || { echo "build"; false; }
-  [ "$(_arc_json "$p" 'j.scripts.test')" = "node .claude/scripts/review/ci-digest.mjs --wait" ] || { echo "test"; false; }
+  [ "$(_arc_json "$p" 'j.scripts.test')" = "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9" ] || { echo "test"; false; }
   [ "$(_arc_json "$p" 'Object.keys(j.scripts).sort().join(",")')" = "build,lint,test" ] || { echo "an extra script: $(_arc_json "$p" 'Object.keys(j.scripts)')"; false; }
 }
 
@@ -74,6 +74,12 @@ probe() {
   git init -q "$r" && git -C "$r" -c user.email=t@example.invalid -c user.name=t commit -q --allow-empty -m x
   run --separate-stderr bash -c 'cd "$1" && node "$2" --wait' _ "$r" "$(DIGEST)"
   [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--wait needs a branch that tracks its push' || fails="$fails|no upstream: $status $stderr"
+  # A branch cut from origin/main tracks origin/main: --wait refuses it rather than read a lagging run as a mismatch.
+  local bare="$BATS_TEST_TMPDIR/bare.git" w="$BATS_TEST_TMPDIR/cut"
+  git init -q --bare "$bare" && git -C "$r" push -q "$bare" HEAD:refs/heads/main
+  git clone -q "$bare" "$w" && git -C "$w" checkout -q -b feat/x origin/main
+  run --separate-stderr bash -c 'cd "$1" && node "$2" --wait' _ "$w" "$(DIGEST)"
+  [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -qF 'needs feat/x to track its own pushed ref; its upstream is `origin/main`' || fails="$fails|foreign upstream: $status $stderr"
   [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
 }
 
@@ -82,7 +88,8 @@ probe() {
   [ -s "$f" ] || { echo "no arc-ship.md"; false; }
   grep -qF 'Bash(gh pr view --json url,state), Bash(gh pr create --fill)' "$f" || { echo "the fence lacks the two exact gh pr commands"; false; }
   if grep -qE 'Bash\(gh pr (view|create):\*\)' "$f"; then echo "a wildcard gh pr fence is back"; false; fi
-  grep -qF 'If the branch has no upstream (`git rev-parse @{u}` fails), STOP' "$f" || { echo "no stop on an unpushed branch"; false; }
+  grep -qF 'Bash(git rev-parse --abbrev-ref @{u})' "$f" && grep -qF 'or its upstream is not `origin/<that branch>`, STOP' "$f" || { echo "no stop on an unpushed or foreign-tracking branch"; false; }
+  grep -qF 'When it exits 3 (CI still running: each call waits at most 9 minutes), run it again, up to' "$f" || { echo "no bounded re-run of npm run test"; false; }
   grep -qF 'Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists)' "$f" || { echo "no declared-target branch"; false; }
   grep -qF '`vercel --prod`' "$f" || { echo "the deploy line for a declared target is gone"; false; }
   grep -qF 'deploy: none declared — the PR is the ship' "$f" || { echo "no named no-deploy line"; false; }

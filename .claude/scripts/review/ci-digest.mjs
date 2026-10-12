@@ -205,6 +205,16 @@ function main(argv) {
     process.stderr.write(`ci-digest: --wait needs a branch that tracks its push (git push -u); this one has no upstream${String.fromCharCode(10)}`);
     return 2;
   }
+  // And the upstream must be this branch's own pushed ref: a branch cut from origin/main tracks origin/main, so a
+  // lagging run would read as a mismatch and end the wait at once (attack 7c30208 B6).
+  if (p.opts.wait) {
+    let name = "";
+    try { name = execFileSync("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { name = ""; }
+    if (!branch || !name.endsWith(`/${branch}`)) {
+      process.stderr.write(`ci-digest: --wait needs ${branch ?? "the branch"} to track its own pushed ref; its upstream is \`${name || "none"}\` (git push -u origin HEAD)${String.fromCharCode(10)}`);
+      return 2;
+    }
+  }
   const once = () => digest({ gh: realGh, head, branch, upstream, tail: p.opts.tail });
   let out;
   try { out = p.opts.wait ? waitFor(once, p.opts.timeoutMin, realGh) : once(); }
