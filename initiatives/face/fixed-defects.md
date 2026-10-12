@@ -1022,3 +1022,10 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A spine-aware check run outside the append lock** -- a parent mid-append read as missing (attack 4f462e9 B6). *Check: a check that reads the spine to accept an append runs under the same lock as the append.*
 - **A fold that echoes payload strings into labels** -- a non-ULID `depends_on` entry was printed into the owner's terminal and served (attack 4f462e9 B7). *Check: a ref printed from data matches its grammar or is not printed; a failure class must be CODE-shaped.*
 - **Two reads where one answer is served** -- `/api/inbox` read decisions for its count and again for its fold (attack 4f462e9 B8). *Check: a response's counts and its list come from one read.*
+- **A cache TTL counted from start, not settle** -- a plan slower than the 20 s TTL was spawned again every 20 s (attack 79233ff B1). *Check: an in-flight answer is shared until it settles; its TTL starts at settle.*
+- **A decision taken on a cached answer** -- decide reused a re-derive up to 20 s old in the long-lived door (attack 79233ff B2). *Check: the action that commits judges fresh; caches serve reads only.*
+- **A lock only one side of a race takes** -- only bound requests took the decide lock, so a plain parent's reject raced its child's approve (attack 79233ff B3). *Check: every writer whose outcome another check reads takes the same lock.*
+- **A full scan under the spine lock** -- every emitter waited on a depends_on emit's scan (attack 79233ff B4). *Check: scan outside the lock; re-check under it only the answer an append can change.*
+- **Ids from rows printed without the grammar check refs got** (attack 79233ff B5). *Check: every id placed in a label or ref passes one ULID test.*
+- **A relative path in a re-derived plan** -- resolved against whichever cwd re-derived it (attack 79233ff B6). *Check: a path a background evaluation reads is absolute.*
+- **A flag guard placed after an early-returning branch** -- `owner-key init --all` was accepted (attack 79233ff B7). *Check: validate flags right after parse, before any dispatch.*

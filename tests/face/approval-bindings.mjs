@@ -99,6 +99,8 @@ try {
   check("LINE: inbox prints OPEN only, each line ending in its state", r.status === 0 && lineOf(r.stdout, P.id).endsWith("[OPEN]") && lineOf(r.stdout, Ch.id) === "", r.stdout + r.stderr);
   const eqAll = inbox("inbox", "--all=1");
   check("LINE: --all takes no value -- --all=1 is refused, never read as OPEN-only", eqAll.status === 2 && /--all takes no value/.test(eqAll.stderr), `${eqAll.status} ${eqAll.stderr}`);
+  const okAll = inbox("owner-key", "init", "--all");
+  check("LINE: --all with any command but inbox is refused before dispatch, owner-key's included", okAll.status === 2 && /--all belongs with inbox/.test(okAll.stderr), `${okAll.status} ${okAll.stderr}`);
   r = inbox("inbox", "--all");
   check("PARENT: an undecided parent -> WAITING(<parent>) in --all", lineOf(r.stdout, Ch.id).endsWith(`[WAITING(${P.id})]`), r.stdout + r.stderr);
   let before = lines();
@@ -207,6 +209,9 @@ try {
   const ps = I.planStateFor({ only: ulid(7) });
   const other = await ps({ op: "money.ingest", input: {}, expect: "d".repeat(64) }, { event: { id: ulid(8) } });
   check("FOLD: a decide's planState re-derives only the request being decided", other && other.failure === "NOT_REDERIVED", JSON.stringify(other));
+  // round 2 B6: a relative path in a bound plan's input is refused before any plan runs.
+  const rel = await I.planStateOf({ op: "money.ingest", input: { provider: "razorpay", export: "some/dir/x.csv", venture: "lexos" }, expect: "e".repeat(64) });
+  check("FOLD: a bound plan reading a relative path is UNKNOWN(RELATIVE_PATH), never re-derived", rel && rel.failure === "RELATIVE_PATH", JSON.stringify(rel));
   const unbound = await F.foldApprovals([{ event: { id: ulid(5), kind: "approval.requested", venture: "arc", payload: { bound_to: { kind: "plan-expect", expect: "c".repeat(64), op: "a.b", input: {} } } }, day: "d" }], []);
   check("REPLAY: a bound request folded with no re-deriver (an as-of read) is UNKNOWN(NOT_REDERIVED), never OPEN", unbound[0].label === "UNKNOWN(NOT_REDERIVED)", unbound[0].label);
 }

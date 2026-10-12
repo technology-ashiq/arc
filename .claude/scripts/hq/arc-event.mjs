@@ -455,7 +455,13 @@ function main(parsed) {
   // Judged UNDER the spine lock it appends under (attack 4f462e9 B6): read unlocked, a parent mid-append was missing and
   // the request refused PARENT_UNKNOWN. A dry run never resolves the spine, so it cannot judge parents: its "validated"
   // covers the shape alone, and the real emit is where a parent is checked (B5, declared).
-  const result = sealed.kind === "approval.requested" && sealed.payload && Array.isArray(sealed.payload.depends_on)
+  // The full scan runs OUTSIDE the lock (round 2 B4: under it, every other emitter waited on it). Only a parent the
+  // unlocked read could not find is looked for again under the lock -- the one answer a mid-append can change, since
+  // the spine only grows.
+  const hasParents = sealed.kind === "approval.requested" && sealed.payload && Array.isArray(sealed.payload.depends_on);
+  const first = hasParents ? parentProblem(sealed, scanAll(root).events) : null;
+  if (first !== null && first.code !== "PARENT_UNKNOWN") throw new SpineError(first.code, first.why);
+  const result = first !== null
     ? withLock(root, () => {
       const problem = parentProblem(sealed, scanAll(root).events);
       if (problem !== null) throw new SpineError(problem.code, problem.why);
