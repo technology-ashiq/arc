@@ -475,6 +475,9 @@ export function judge(report) {
   if (report.notServed && report.notServed.panels === null) reasons.push("the NOT SERVED panel count could not be read in every opened room");
   if (report.verbsPending && report.verbsPending.panels === null) reasons.push("the verb-pending card count could not be read in every opened room");
   if (report.served && report.served.panels === null) reasons.push("the served panel count could not be read in every opened room");
+  // Phase 15 (ADR-1354): a panel that drew no availability is a field the room could not name.
+  if (report.availability && report.availability.states === null) reasons.push("the availability counts could not be read in every opened room");
+  else if (report.availability && report.availability.bad > 0) reasons.push(`${report.availability.bad} panel(s) drew no availability state of the five`);
   if (report.rehearsal && report.rehearsal.panels === null) reasons.push("the rehearsal card count could not be read in every opened room");
   // F3 (ADR-1328): every planned room the contract names opened marked planned, and none of them drew LIVE.
   if (Array.isArray(report.runner)) {
@@ -544,6 +547,33 @@ function countedPerRoom(rooms, field) {
     panels: drew.some((r) => !Number.isInteger(r[field])) ? null : drew.reduce((n, r) => n + r[field], 0),
     rooms: drew.filter((r) => Number.isInteger(r[field]) && r[field] > 0).map((r) => `${r.id}:${r[field]}`).sort(),
   };
+}
+
+/** The five availability states (face/src/lib/availability.mjs), in its order; the smoke counts each in the page. */
+export const AVAILABILITY_STATES = Object.freeze(["served", "zero", "unknown", "not-applicable", "not-instrumented"]);
+
+/**
+ * Every opened room's availability counts, summed per state, with the rooms that drew any (face v2 Phase 15). A room
+ * whose counts could not be read makes the whole answer UNREAD (null), never a quiet zero.
+ * @param {{ id: string, opened: boolean, availability?: Record<string, number> | null }[]} rooms
+ */
+export function availabilityCounted(rooms) {
+  const drew = rooms.filter((r) => r.opened);
+  if (drew.some((r) => !r.availability)) return { states: null, bad: null, rooms: [] };
+  const states = Object.fromEntries(AVAILABILITY_STATES.map((k) => [k, drew.reduce((n, r) => n + r.availability[k], 0)]));
+  const total = (r) => AVAILABILITY_STATES.reduce((n, k) => n + r.availability[k], 0);
+  return {
+    states,
+    bad: drew.reduce((n, r) => n + r.availability.bad, 0),
+    rooms: drew.filter((r) => total(r) + r.availability.bad > 0).map((r) => `${r.id}:${total(r)}`).sort(),
+  };
+}
+
+/** The availability line: each state's count, the panels that drew none, and the rooms with their own totals. */
+export function availabilityLine(report) {
+  const a = report.availability ?? { states: null, bad: null, rooms: [] };
+  if (a.states === null) return `smoke: availability mood=${report.mood ?? "unstated"} unread`;
+  return `smoke: availability mood=${report.mood ?? "unstated"} ${AVAILABILITY_STATES.map((k) => `${k}=${a.states[k]}`).join(" ")} bad=${a.bad} rooms=${a.rooms.join(",") || "none"}`;
 }
 
 /**
@@ -906,6 +936,15 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
             returnByValue: true,
           });
           room.served = Number.isInteger(fills.result?.value) ? fills.result.value : null;
+          // Phase 15 (REQ-19, ADR-1354): every served and NOT SERVED panel carries its availability. Counted per state in the
+          // page; a panel with no state, or one outside the five, is BAD -- the room drew a field it could not name.
+          const states = await page.send("Runtime.evaluate", {
+            expression: `(function () { var s = document.querySelector("section[data-room]"); if (!s) return null; var known = ${JSON.stringify(AVAILABILITY_STATES)}; var out = { bad: 0 }; known.forEach(function (k) { out[k] = 0; }); var els = s.querySelectorAll("[data-served],[data-not-served]"); for (var i = 0; i < els.length; i++) { var a = els[i].getAttribute("data-availability"); if (known.indexOf(a) >= 0) out[a] += 1; else out.bad += 1; } return JSON.stringify(out); })()`,
+            returnByValue: true,
+          });
+          let stateRead = null;
+          try { stateRead = typeof states.result?.value === "string" ? JSON.parse(states.result.value) : null; } catch { stateRead = null; }
+          room.availability = stateRead !== null && Number.isInteger(stateRead.bad) && AVAILABILITY_STATES.every((k) => Number.isInteger(stateRead[k])) ? stateRead : null;
           // ADR-1326: the verbs this face does not perform yet, counted where they are drawn.
           const verbs = await page.send("Runtime.evaluate", {
             expression: `(function () { var s = document.querySelector("section[data-room]"); return s ? s.querySelectorAll("[data-verb-pending]").length : 0; })()`,
@@ -1008,6 +1047,7 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
       })(),
       notServed: countedPerRoom(rooms, "notServed"),
       served: countedPerRoom(rooms, "served"),
+      availability: availabilityCounted(rooms),
       verbsPending: countedPerRoom(rooms, "verbsPending"),
       rehearsal: countedPerRoom(rooms, "rehearsal"),
       planned: {

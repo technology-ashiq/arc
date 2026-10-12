@@ -16,6 +16,9 @@
 //            the end -- importing anything but a relative .mjs inside face/src or a node builtin; a
 //            builtin that loads code (module, vm, child_process, worker_threads, ...); a computed
 //            import(); require; import.meta; eval and the Function constructor
+//   availability  a module's fold.mjs, ops.mjs or module.mjs spelling an availability state itself (face v2
+//            Phase 15, ADR-1354): "not-instrumented" or "not-applicable" as a string or template text, or a literal
+//            given to a key named availability. A state comes from lib/availability.mjs, never typed in a module.
 //   View     a View.tsx holding a branch: if/else/switch/for/while/try/throw, a comparison, an
 //            arithmetic, bitwise or nullish operator, optional chaining, typeof/instanceof/in/new,
 //            a regex, a type or class declaration, a nested ternary, a destructuring default, a
@@ -906,6 +909,36 @@ function specSpelledExactly(fromDir, spec) {
   return true;
 }
 
+/** The words only an availability state can mean -- a module that types one has invented a state. */
+const STATE_ONLY_WORDS = new Set(["not-instrumented", "not-applicable"]);
+
+/**
+ * A module .mjs that spells an availability state itself (face v2 Phase 15). Lexed with template text kept, so a
+ * state hidden in a template literal is read too. Fails closed: a file the lexer cannot read is a finding.
+ * @param {string} text @param {string} file
+ */
+export function scanAvailabilityLiterals(text, file) {
+  const { tokens, error } = lex(text, { jsx: false, text: true });
+  const findings = [];
+  const add = (t, detail) => findings.push({ file, line: t.line, col: t.col, kind: "availability-literal", detail });
+  if (error) {
+    findings.push({ file, line: error.line, col: error.col, kind: "fold-unscannable", detail: `lint could not read the file past here: ${error.message}` });
+    return findings;
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if ((t.k === "str" || t.k === "text") && STATE_ONLY_WORDS.has(String(t.v).trim()))
+      add(t, `"${String(t.v).trim()}" is an availability state spelled in a module -- take it from lib/availability.mjs (notServed's state option)`);
+    // A key named availability (bare or quoted) given a string or a template: a state typed in place.
+    const isKey = (t.k === "name" && t.v === "availability") || (t.k === "str" && t.v === "availability");
+    if (isKey && isP(tokens[i + 1], ":")) {
+      const v = tokens[i + 2];
+      if (v && (v.k === "str" || isP(v, "`"))) add(v, "an availability is given a literal -- a state comes from lib/availability.mjs, never typed in a module");
+    }
+  }
+  return findings;
+}
+
 /**
  * Lint a modules root: every ring folder, every module folder, every file of the four, and every
  * relative .mjs a module's .mjs files reach.
@@ -970,6 +1003,8 @@ export function lintModules(root, { srcRoot = dirname(root), base = process.cwd(
         report.findings.push(...scanView(buf.toString("utf8"), show(abs)));
       } else {
         if (f === "fold.mjs") report.folds++;
+        const buf = readFileSync(abs);
+        if (!buf.includes(0)) report.findings.push(...scanAvailabilityLiterals(buf.toString("utf8"), show(abs)));
         checkMjs(abs);
       }
     }

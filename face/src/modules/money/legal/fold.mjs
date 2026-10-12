@@ -82,6 +82,7 @@ export function fold(payloads, ctx) {
       "Hash chain",
       "/api/legal",
       "The legal lane's verification chain: how many receipts it covers and whether it is intact, from the lane's own verify run -- append-only, a correction supersedes, a closed day never changes. That run needs a fresh render and the published directory in each venture's own repo, so the door cannot compute it -- filed to the legal lane.",
+      { owner: "legal" },
     ),
     modeVerb: verbPending(
       "Change a gate's mode",

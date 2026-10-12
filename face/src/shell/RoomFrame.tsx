@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
 import {
-  actCall, actProblem, actRereads, actSettled, actStarted, dropReads, fallbackFor, foldModule, keyLeaksFor, plannedReads,
+  actCall, actProblem, actRereads, availabilityCountsOf, actSettled, actStarted, dropReads, fallbackFor, foldModule, keyLeaksFor, plannedReads,
   keepOnRereadFailure, POLL_MS, problemsFor, pulseDirty, readsToLoad, refusedPayload, renderFor, routeDeclared,
 } from '../lib/registry.mjs'
 import type { AttachedModule, Attachment, ModuleContext, ModuleProblem, ModuleViewContext, Payload } from '../lib/registry.mjs'
@@ -23,6 +23,7 @@ import { Failure } from '../ui/legacy'
 import OpsDock from './OpsDock'
 import SessionDock from './SessionDock'
 import { MONO, UI } from '../ui/kit'
+import { AvailabilityCountsContext } from '../ui/availability-context'
 
 type ViewProps = { f: Record<string, unknown>; ctx: ModuleViewContext }
 type Folded = { ok: true; f: Record<string, unknown> } | { ok: false; error: unknown }
@@ -171,6 +172,8 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
     [door, m, dropAll],
   )
 
+  // Phase 15 (ADR-1354): the header's unknown and not-instrumented counts, taken over what this fold returned.
+  const counts = useMemo(() => (folded.ok ? availabilityCountsOf(folded.f) : { unknown: 0, notInstrumented: 0 }), [folded])
   const viewCtx = useMemo((): ModuleViewContext => ({ ...ctx, picks, onPick, onAct, onReread }), [ctx, picks, onPick, onAct, onReread])
 
   if (!folded.ok) return <Failure error={folded.error} what={`the ${m.key} module's fold`} />
@@ -190,7 +193,9 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
           ))}
         </p>
       )}
-      <View f={folded.f} ctx={viewCtx} />
+      <AvailabilityCountsContext.Provider value={counts}>
+        <View f={folded.f} ctx={viewCtx} />
+      </AvailabilityCountsContext.Provider>
       {/* Phase 05 (ADR-1339): the room's ops, if its ops.mjs names any. A run that lands drops the room's reads, so the
           receipt shows in the room without a reload. */}
       {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}

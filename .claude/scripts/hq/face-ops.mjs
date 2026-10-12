@@ -157,16 +157,41 @@ function pickableExplores() {
   } catch { return []; }
 }
 /**
- * The ventures ventures.yaml registers, read as the ledger's parser reads them: revenue is recorded, and a kill review
- * raised, only for a venture with a kill line. None when the file is absent or does not parse -- the tool says why.
+ * The ventures ventures.yaml registers, read as the ledger's parser reads them, and whether that read happened (face v2
+ * Phase 15, ADR-1354): a file that was read and registers nothing is an empty list, and a file that could not be found,
+ * read or parsed is `failure` with its class -- never an empty list, which would read as "no venture is registered".
+ * @returns {{ ventures: string[], failure: string }}
  */
-function registeredVentures() {
+export function venturesRead() {
   try {
     const path = venturesPath();
-    if (path === null) return [];
-    return Object.keys(parseVentures(readFileSync(path, "utf8")).ventures).sort();
-  } catch { return []; }
+    if (path === null) return { ventures: [], failure: "NO_REPO" };
+    return { ventures: Object.keys(parseVentures(readFileSync(path, "utf8")).ventures).sort(), failure: "" };
+  } catch (e) {
+    const err = /** @type {{ code?: unknown, name?: unknown }} */ (e !== null && typeof e === "object" ? e : {});
+    return { ventures: [], failure: (typeof err.code === "string" && err.code) || (typeof err.name === "string" && err.name) || "THREW" };
+  }
 }
+
+/**
+ * The options the venture select offers: revenue is recorded, and a kill review raised, only for a venture with a kill
+ * line. When the file could not be read there are none to offer -- and validateInput refuses the op FIELD_UNKNOWN.
+ */
+function registeredVentures() {
+  return venturesRead().ventures;
+}
+
+/**
+ * The fields whose value is read from a source that can fail, per op (face v2 Phase 15, REQ-19). Listed by name in
+ * phase-15-spec.md before any code; an op not here is not gated. When the source's read failed the op refuses
+ * FIELD_UNKNOWN rather than planning on an empty list (money.criteria, money.close-month and ventures.register read no
+ * such field).
+ * @type {Readonly<Record<string, Readonly<Record<string, () => { failure: string }>>>>}
+ */
+export const FIELD_SOURCES = Object.freeze({
+  "money.ingest": Object.freeze({ venture: venturesRead }),
+  "ventures.kill-review": Object.freeze({ venture: venturesRead }),
+});
 
 /** The rooms a term can be homed in: the contract's BUILT rooms and the lane template -- a planned room opens nothing. */
 function conceptRooms() {
@@ -839,6 +864,12 @@ export function validateInput(op, input) {
   const out = {};
   for (const f of op.fields) {
     const raw = Object.hasOwn(input, f.name) ? /** @type {Record<string, unknown>} */ (input)[f.name] : undefined;
+    // Before the value is judged at all: an unknown source makes every answer, including "none", a guess.
+    const source = Object.hasOwn(FIELD_SOURCES, op.id) && Object.hasOwn(FIELD_SOURCES[op.id], f.name) ? FIELD_SOURCES[op.id][f.name] : null;
+    if (source !== null) {
+      const { failure } = source();
+      if (failure !== "") throw new OpError("FIELD_UNKNOWN", `${f.label} is read from a source that could not be read (${failure}), so it is unknown -- not empty; ${op.id} does not plan on it`);
+    }
     if (raw === undefined || raw === "") {
       if (f.required) throw new OpError("BAD_INPUT", `${f.label} is required`);
       continue;

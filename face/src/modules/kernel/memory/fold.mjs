@@ -77,6 +77,7 @@ export function fold(payloads, ctx) {
       "Recall cost",
       "/api/memory",
       "What one recall costs today, measured rather than estimated. The recall golden gate measures top-3 hits against a grep baseline, not cost, and no receipt records what a recall cost -- filed to the memory lane.",
+      { owner: "memory" },
     ),
   };
 }
