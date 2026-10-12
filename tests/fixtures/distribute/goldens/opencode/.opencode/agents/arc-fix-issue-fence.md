@@ -3,9 +3,9 @@ description: "The tool fence of /arc-fix-issue; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   bash:
-    "*": ask
+    "*": deny
     "gh issue view": allow
     "gh issue view *": allow
     "npm run lint": allow

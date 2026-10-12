@@ -3,7 +3,7 @@ description: "The tool fence of /arc-second-opinion; runs only through that comm
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   "edit": allow
   "glob": allow
   "grep": allow

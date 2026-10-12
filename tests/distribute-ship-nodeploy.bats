@@ -20,7 +20,7 @@ probe() {
 @test "distribute-ship-nodeploy: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-ship-nodeploy: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 7 ] || { echo "declared $declared, expected 7"; false; }
+  [ "$declared" -eq 8 ] || { echo "declared $declared, expected 8"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -49,6 +49,14 @@ probe() {
   # 5 minutes at one read a minute: reads 1..6, then NO-RUN on the read that finds 300 s gone.
   [ "$(count '^case no-run code=6 reads=6 sleeps=5 prviews=1 last=NO-RUN: no CI run for this commit after 300s; PR: \{"isDraft":false,"mergeable":"CONFLICTING","state":"OPEN"\}$')" -eq 1 ] || { echo "$output"; false; }
   [ "$(count '^case never-settles code=3 reads=4 sleeps=3 prviews=0 last=TIMEOUT: still pending after 180s$')" -eq 1 ] || { echo "$output"; false; }
+  # A timeout shorter than the no-run window still ends as NO-RUN, never as a plain TIMEOUT.
+  [ "$(count '^case no-run-short-timeout code=6 reads=3 sleeps=2 prviews=1 last=NO-RUN: no CI run for this commit after 120s; ')" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "distribute-ship-nodeploy: a gh failure mid-wait is retried, and three in a row end the wait" {
+  probe || false
+  [ "$(count '^case gh-blips-then-green code=0 reads=3 sleeps=2 prviews=0 last=GREEN: ')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^case gh-down code=threw reads=3 sleeps=2 prviews=0 last=gh: HTTP 502$')" -eq 1 ] || { echo "$output"; false; }
 }
 
 @test "distribute-ship-nodeploy: the CLI refuses --timeout-min without --wait, out of range, and a repeated flag" {
@@ -59,13 +67,22 @@ probe() {
   [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--timeout-min must be 1-180' || fails="$fails|range: $status $stderr"
   run --separate-stderr node "$(DIGEST)" --wait --wait
   [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--wait given twice' || fails="$fails|twice: $status $stderr"
+  run --separate-stderr node "$(DIGEST)" --timeout-min 20
+  [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--timeout-min only means something with --wait' || fails="$fails|default value without --wait: $status $stderr"
+  # A branch with no upstream: --wait refuses rather than reading a not-yet-picked-up push as a mismatch.
+  local r="$BATS_TEST_TMPDIR/noup"
+  git init -q "$r" && git -C "$r" -c user.email=t@example.invalid -c user.name=t commit -q --allow-empty -m x
+  run --separate-stderr bash -c 'cd "$1" && node "$2" --wait' _ "$r" "$(DIGEST)"
+  [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--wait needs a branch that tracks its push' || fails="$fails|no upstream: $status $stderr"
   [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
 }
 
 @test "distribute-ship-nodeploy: arc-ship deploys only to a declared target, ships to a PR otherwise, and nothing else calls npm test" {
   local f="$ARC_ROOT/.claude/commands/arc-ship.md"
   [ -s "$f" ] || { echo "no arc-ship.md"; false; }
-  grep -q '^allowed-tools: .*Bash(gh pr view:\*), Bash(gh pr create:\*)' "$f" || { echo "the fence lacks gh pr"; false; }
+  grep -qF 'Bash(gh pr view --json url,state), Bash(gh pr create --fill)' "$f" || { echo "the fence lacks the two exact gh pr commands"; false; }
+  if grep -qE 'Bash\(gh pr (view|create):\*\)' "$f"; then echo "a wildcard gh pr fence is back"; false; fi
+  grep -qF 'If the branch has no upstream (`git rev-parse @{u}` fails), STOP' "$f" || { echo "no stop on an unpushed branch"; false; }
   grep -qF 'Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists)' "$f" || { echo "no declared-target branch"; false; }
   grep -qF '`vercel --prod`' "$f" || { echo "the deploy line for a declared target is gone"; false; }
   grep -qF 'deploy: none declared — the PR is the ship' "$f" || { echo "no named no-deploy line"; false; }

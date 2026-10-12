@@ -135,7 +135,7 @@ export function digest({ gh, head, branch, upstream = null, tail = 40 }) {
 }
 
 export function parseArgs(argv) {
-  const o = { sha: null, tail: 40, wait: false, timeoutMin: 20 };
+  const o = { sha: null, tail: 40, wait: false, timeoutMin: 20, timeoutGiven: false };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -147,6 +147,7 @@ export function parseArgs(argv) {
       const v = argv[i + 1];
       if (v === undefined || !/^[1-9][0-9]{0,2}$/.test(v) || Number(v) > 180) return { error: `--timeout-min must be 1-180 (got \`${v ?? ""}\`)` };
       o.timeoutMin = Number(v);
+      o.timeoutGiven = true;
       i++;
       continue;
     }
@@ -168,7 +169,8 @@ export function parseArgs(argv) {
 }
 
 function realGh(args) {
-  return execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  // A bounded call: a hung gh must not hold a --wait past its own timeout (attack 1f1966b L1).
+  return execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 });
 }
 
 function main(argv) {
@@ -193,8 +195,14 @@ function main(argv) {
   try {
     upstream = execFileSync("git", ["rev-parse", "--verify", "--quiet", "@{u}^{commit}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
   } catch { upstream = null; }
-  if (p.opts.timeoutMin !== 20 && !p.opts.wait) {
+  if (p.opts.timeoutGiven && !p.opts.wait) {
     process.stderr.write("ci-digest: --timeout-min only means something with --wait\n");
+    return 2;
+  }
+  // --wait needs an upstream: without one, a pushed-but-not-yet-picked-up head reads as a mismatch and the
+  // wait would end on it at once (attack 1f1966b B2).
+  if (p.opts.wait && !upstream) {
+    process.stderr.write(`ci-digest: --wait needs a branch that tracks its push (git push -u); this one has no upstream${String.fromCharCode(10)}`);
     return 2;
   }
   const once = () => digest({ gh: realGh, head, branch, upstream, tail: p.opts.tail });
@@ -210,29 +218,38 @@ function main(argv) {
 
 // ADR-2021: `--wait` is how `npm run test` reads CI in arc. It re-reads while the verdict is pending (exit 3) and
 // returns the first settled one; every other code returns at once and is never retried. A HEAD with no run after
-// NO_RUN_MS is NO-RUN (exit 6): arc's CI runs on PRs and dispatch only, and a PR that conflicts gets no run at all
-// (.claude/rules/testing.md), so waiting longer would wait for nothing. Test-only env doors: ARC_CI_WAIT_POLL_MS,
-// ARC_CI_WAIT_NORUN_MS, ARC_CI_WAIT_MIN_MS (the timeout in ms, overriding --timeout-min).
+// five minutes is NO-RUN (exit 6), checked before the timeout so a short --timeout-min cannot hide it: arc's CI runs
+// on PRs and dispatch only, and a PR that conflicts gets no run at all (.claude/rules/testing.md), so waiting
+// longer would wait for nothing. A gh call that throws mid-wait is retried; three in a row end the wait (exit 2).
+// The clock and the sleep are parameters, for tests; nothing in the environment can shorten them.
+const POLL_MS = 60_000;
+const NO_RUN_MS = 5 * 60_000;
+const GH_FAILURES = 3;
 const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-const envMs = (name, fallback) => (/^[0-9]{1,9}$/.test(process.env[name] ?? "") ? Number(process.env[name]) : fallback);
 export function waitFor(once, timeoutMin, gh, now = Date.now, sleep = sleepMs) {
-  const poll = envMs("ARC_CI_WAIT_POLL_MS", 60_000);
-  const noRunMs = envMs("ARC_CI_WAIT_NORUN_MS", 5 * 60_000);
-  const limit = envMs("ARC_CI_WAIT_MIN_MS", timeoutMin * 60_000);
+  const limit = timeoutMin * 60_000;
   const start = now();
-  let reads = 0;
+  let reads = 0, failures = 0;
   for (;;) {
-    const out = once();
+    let out;
+    try { out = once(); failures = 0; }
+    catch (e) {
+      failures++;
+      if (failures >= GH_FAILURES) throw e;
+      out = { code: 3, lines: [`PENDING: gh failed (${failures} of ${GH_FAILURES}): ${safeLine(String(e.message).split("\n")[0])}`] };
+    }
     reads++;
-    if (out.code !== 3) return { ...out, lines: [...out.lines, `ci-digest: settled after ${reads} read(s)`] };
+    const settled = (o) => ({ ...o, lines: [...o.lines, `ci-digest: settled after ${reads} read(s)`] });
+    if (out.code !== 3) return settled(out);
     const elapsed = now() - start;
-    if (out.noRun && elapsed >= noRunMs) {
+    if (out.noRun && elapsed >= Math.min(NO_RUN_MS, limit)) {
       let pr = "(no PR found for this branch)";
       try { pr = gh(["pr", "view", "--json", "isDraft,mergeable,state"]).trim(); } catch { /* no PR is itself the answer */ }
-      return { code: 6, lines: [...out.lines, `NO-RUN: no CI run for this commit after ${Math.round(elapsed / 1000)}s; PR: ${safeLine(pr)}`, `ci-digest: settled after ${reads} read(s)`] };
+      return settled({ code: 6, lines: [...out.lines, `NO-RUN: no CI run for this commit after ${Math.round(elapsed / 1000)}s; PR: ${safeLine(pr)}`] });
     }
-    if (elapsed >= limit) return { code: 3, lines: [...out.lines, `TIMEOUT: still pending after ${Math.round(elapsed / 1000)}s`, `ci-digest: settled after ${reads} read(s)`] };
-    sleep(poll);
+    if (elapsed >= limit) return settled({ code: 3, lines: [...out.lines, `TIMEOUT: still pending after ${Math.round(elapsed / 1000)}s`] });
+    const left = Math.min(limit, out.noRun ? NO_RUN_MS : limit) - elapsed;
+    sleep(Math.max(1, Math.min(POLL_MS, left)));
   }
 }
 

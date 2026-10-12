@@ -146,3 +146,18 @@ Attack 5823248 round 2 (Cycle 2 P05): logic 0 findings; boundary B1-B9 and B12 f
 
 | 16 | B10 (attack 5823248, low): a `.cmd` launch passes the whole line through `cmd.exe /c`, which truncates past 8,191 characters | accepted: the real messages are one paragraph; the transcript's argv line shows the message as sent | a wrapped run's message passes 4,000 characters |
 | 17 | B11 (attack 5823248, low): the header carries absolute cwd and spine paths, home directory included, into a committed transcript | accepted: the same `C:/Users/<name>` form is already in 83 files on main and is not owner PII (row 1 rejections, B9) | the repository's PII rule names a username or home path |
+
+Attack 1f1966b round 1 (Cycle 2 P06): boundary B1-B6 and logic L1-L4, L13, L14 fixed as (ce)-(ch).
+
+| 18 | B7 (attack 1f1966b, low): the npm-test caller check uses `git grep`, so an untracked caller passes locally | accepted: CI is the gate and sees tracked files only, which is what ships | a caller is found that is generated at CI time |
+| 19 | B8 / L6 (attack 1f1966b, low): "a declared deploy target" is prose the model evaluates, so a stale local `.vercel/project.json` would deploy | accepted: `vercel --prod` still runs behind the pre-deploy guard, which re-checks tests | a consumer reports a deploy from a stale `.vercel/` |
+
+```
+REJECTED: L5 / L7 a repeated --tail with different values passes -- unsupported
+REJECTED: L8 the settled-after line reaches the caller -- non-actionable
+REJECTED: L9 the PR state is interpolated raw -- already-covered
+REJECTED: L11 main mishandles the object waitFor returns -- non-actionable
+REJECTED: L12 --tail is not validated as a number -- already-covered
+REJECTED: L15 the probe never checks a first-read red -- already-covered
+```
+(L5/L7: the flag token itself is the duplicate key, so the second `--tail` is refused whatever its value; L9: the PR line goes through `safeLine`; L12: `--tail` must match `^[1-9][0-9]{0,2}$` and be at most 200; L15: `settles-red` returns code 1 after one sleep, and `mismatch-at-once` after none.)

@@ -3,9 +3,9 @@ description: "The tool fence of /arc-phase-done; runs only through that command.
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   bash:
-    "*": ask
+    "*": deny
     "bash .claude/scripts/core/lane-resolve.sh": allow
     "bash .claude/scripts/core/lane-resolve.sh *": allow
     "bash .claude/scripts/hq/arc-event.sh": allow

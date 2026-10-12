@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/distribute/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/distribute/PROGRESS.md)
 
-## Decisions (22)
+## Decisions (23)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -50,6 +50,7 @@ ADRs whose `Product:` line names this lane first.
 | [`2019`](../../../docs/adr/2019-opencode-sessions-run-through-one-wrapper-that-caps-spend-and-writes-the-transcript.md) | OpenCode sessions run through one wrapper that caps spend and writes the transcript | accepted | 2026-10-13 |
 | [`2020`](../../../docs/adr/2020-a-foreign-harness-session-stamps-its-receipts-and-writes-to-the-canonical-spine.md) | a foreign-harness session stamps its receipts and writes to the canonical spine | accepted | 2026-10-13 |
 | [`2021`](../../../docs/adr/2021-arc-ship-in-a-repo-with-no-deploy-target-ships-to-a-pr-and-reads-ci.md) | `arc-ship` in a repo with no deploy target ships to a PR and reads CI | accepted | 2026-10-13 |
+| [`2022`](../../../docs/adr/2022-opencode-command-fences-deny-and-the-wrapper-charges-subagent-spend.md) | OpenCode command fences deny, and the wrapper charges subagent spend | accepted (amends ADR-2018's OpenCode fence rule and ADR-2019's cap) | 2026-10-13 |
 
 ## Source
 

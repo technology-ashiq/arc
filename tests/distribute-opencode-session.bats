@@ -28,7 +28,7 @@ setup() {
     export ARC_OPENCODE_BIN="$T/opencode"
   fi
   export FAKE_OC_MARKER="$(native "$T/invoked")" FAKE_OC_ARGV="$(native "$T/argv.json")" FAKE_OC_ENV="$(native "$T/env.json")"
-  unset FAKE_OC_MODE FAKE_OC_COST FAKE_OC_GRANDCHILD FAKE_OC_GRANDCHILD_MS
+  unset FAKE_OC_MODE FAKE_OC_COST FAKE_OC_GRANDCHILD FAKE_OC_GRANDCHILD_MS FAKE_OC_CHILD_COST FAKE_OC_EXPORT
 }
 
 # wrap CAP TIMEOUT TRANSCRIPT-NAME [extra flags...] -- runs the wrapper with the owner model and the ledger in $T.
@@ -42,7 +42,7 @@ wrap() {
 @test "distribute-opencode-session: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-opencode-session: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 11 ] || { echo "declared $declared, expected 11"; false; }
+  [ "$declared" -eq 13 ] || { echo "declared $declared, expected 13"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -65,7 +65,7 @@ wrap() {
   [ -s "$T/argv.json" ] && [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
   run node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(a.slice(0,-1).join(" ")+"\n"+a[a.length-1])' "$(native "$T/argv.json")"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "run --pure --auto --command arc-commit -m openrouter/deepseek/deepseek-v4-flash-0731 --format json --" ] || { echo "$output"; false; }
+  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "run --pure --command arc-commit -m openrouter/deepseek/deepseek-v4-flash-0731 --format json --" ] || { echo "$output"; false; }
   [ "$(printf '%s\n' "$output" | sed -n '2,$p')" = 'a b "q" $X `bt` (a&b)' ] || { echo "message mangled: $output"; false; }
 }
 
@@ -206,4 +206,26 @@ wrap() {
   [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
   [ "$status" -eq 1 ] && grep -qx 'child-failed: exit 7' "$T/repo/ev/transcripts/fail.jsonl" || { echo "status $status"; cat "$T/repo/ev/transcripts/fail.jsonl"; false; }
   [ "$(tail -1 "$T/repo/ev/transcripts/fail.jsonl" | tr -d '\r')" = "spent=0.01" ] || { tail -1 "$T/repo/ev/transcripts/fail.jsonl"; false; }
+}
+
+@test "distribute-opencode-session: a subagent's spend is read from its export, nested tasks included, and counts toward the cap" {
+  # ADR-2022: the JSON stream carries the parent session only, so a command run through its fence spends unseen.
+  export FAKE_OC_MODE=task FAKE_OC_COST=0.01 FAKE_OC_CHILD_COST=0.04
+  wrap 0.30 30 task.jsonl
+  [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
+  [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
+  local tx="$T/repo/ev/transcripts/task.jsonl"
+  grep -qx 'subagent: ses_fakeChild1 spent=0.08 steps=2' "$tx" && grep -qx 'subagent: ses_fakeGrandchild1 spent=0.04 steps=1' "$tx" || { cat "$tx"; false; }
+  [ "$(tail -1 "$tx" | tr -d '\r')" = "spent=0.13" ] || { tail -3 "$tx"; false; }
+  export FAKE_OC_CHILD_COST=0.2
+  wrap 0.30 30 task-breach.jsonl
+  [ "$status" -eq 3 ] && grep -qE '^cap-breach: spent=0\.61 cap=0\.3$' "$T/repo/ev/transcripts/task-breach.jsonl" || { echo "status $status"; cat "$T/repo/ev/transcripts/task-breach.jsonl"; false; }
+}
+
+@test "distribute-opencode-session: a subagent export that fails makes the run COST-UNREADABLE, never a pass" {
+  export FAKE_OC_MODE=task FAKE_OC_EXPORT=fail
+  wrap 0.30 30 task-noexport.jsonl
+  [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
+  [ "$status" -eq 4 ] || { echo "status $status: $output $stderr"; false; }
+  grep -q '^subagent: ses_fakeChild1 COST-UNREADABLE ' "$T/repo/ev/transcripts/task-noexport.jsonl" || { cat "$T/repo/ev/transcripts/task-noexport.jsonl"; false; }
 }

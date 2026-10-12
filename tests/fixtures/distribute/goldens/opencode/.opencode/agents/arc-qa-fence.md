@@ -3,12 +3,12 @@ description: "The tool fence of /arc-qa; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   "edit": allow
   "read": allow
   "task": allow
   bash:
-    "*": ask
+    "*": deny
     "bash .claude/scripts/core/review-ledger.sh": allow
     "bash .claude/scripts/core/review-ledger.sh *": allow
     "bash .claude/scripts/hq/arc-event.sh": allow

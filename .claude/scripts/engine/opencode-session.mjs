@@ -8,7 +8,7 @@
  *                        [--agent A] [--cwd DIR] [--timeout-s S] [--cycle-cap-usd N] [--prior-spent-usd N]
  *                        [--ledger-dir DIR] -- MESSAGE
  *
- * The child is always `opencode run --pure --auto --command C [--agent A] -m M --format json -- MESSAGE`, spawned
+ * The child is always `opencode run --pure --command C [--agent A] -m M --format json -- MESSAGE`, spawned
  * from an argv array. The binary is `ARC_OPENCODE_BIN`, else `opencode` on PATH.
  *
  * Exit: 0 ok · 1 OpenCode exited non-zero · 2 refused before spend (usage, model, cap, cycle cap, binary,
@@ -147,7 +147,7 @@ export function priorSpend(dir) {
  * number (a numeric string is read as its number) is `unpriced`, which makes the run COST-UNREADABLE.
  */
 export function readEvent(line) {
-  const none = { json: false, finish: false, stepLike: false, cost: null, unpriced: false, session: null };
+  const none = { json: false, finish: false, stepLike: false, cost: null, unpriced: false, session: null, child: null };
   let j;
   try { j = JSON.parse(line); } catch { return none; }
   if (j === null || typeof j !== "object" || Array.isArray(j)) return none;
@@ -162,7 +162,10 @@ export function readEvent(line) {
   // A step event this reader does not recognise (an OpenCode release renamed it) still counts, so renamed
   // accounting reads as COST-UNREADABLE and never as zero spend (attack 5823248 B3).
   const stepLike = /^step/i.test(String(j.type ?? "")) || /^step/i.test(String(part.type ?? ""));
-  return { json: true, finish, stepLike, cost, unpriced: finish && cost === null, session: typeof s === "string" && /^ses_[A-Za-z0-9]+$/.test(s) ? s : null };
+  // A finished task tool names the subagent session it ran: its spend is not in this stream (ADR-2022).
+  const st = part.type === "tool" && part.state && typeof part.state === "object" ? part.state : null;
+  const kid = st && (st.status === "completed" || st.status === "error") ? st.metadata?.sessionId : null;
+  return { json: true, finish, stepLike, cost, unpriced: finish && cost === null, session: typeof s === "string" && /^ses_[A-Za-z0-9]+$/.test(s) ? s : null, child: typeof kid === "string" && /^ses_[A-Za-z0-9]+$/.test(kid) ? kid : null };
 }
 
 // cmd.exe quoting for a .cmd/.bat binary: MSVCRT rules first, then every cmd metacharacter caret-escaped.
@@ -248,6 +251,32 @@ const MAX_LINE_BYTES = 8 * 1024 * 1024;
 // After the child exits, its pipes get this long to drain before the wrapper closes them and writes its verdict.
 const DRAIN_MS = 5000;
 
+/**
+ * What one exported session (and every task session under it) spent: the sum of its step-finish costs. Throws
+ * when the export fails, does not parse, or has a step-finish without a readable cost (ADR-2022).
+ */
+export function exportedSpend(text, id) {
+  const i = text.indexOf("{");
+  let j;
+  try { j = JSON.parse(text.slice(i)); } catch { throw new Error(`the export of ${id} is not JSON`); }
+  let cost = 0, finishes = 0;
+  const kids = new Set();
+  const walk = (o) => {
+    if (!o || typeof o !== "object") return;
+    if (o.type === "step-finish") {
+      finishes++;
+      const c = typeof o.cost === "string" && /^[0-9]+(.[0-9]+)?(e-?[0-9]+)?$/i.test(o.cost) ? Number(o.cost) : o.cost;
+      if (typeof c !== "number" || !Number.isFinite(c) || c < 0) throw new Error(`the export of ${id} has a step-finish without a numeric cost`);
+      cost += c;
+    }
+    const k = o.type === "tool" && o.state?.metadata?.sessionId;
+    if (typeof k === "string" && /^ses_[A-Za-z0-9]+$/.test(k)) kids.add(k);
+    for (const v of Object.values(o)) walk(v);
+  };
+  walk(j);
+  return { cost, finishes, kids: [...kids] };
+}
+
 export async function run(o) {
   const cwd = resolve(o.cwd ?? process.cwd());
   const transcript = resolve(o.transcript);
@@ -264,7 +293,10 @@ export async function run(o) {
   if (prior + o.cap > o.cycleCap + 1e-12)
     throw new Refusal("CYCLE-CAP", `prior spend ${money(prior)} + this cap ${o.cap} exceeds the cycle cap ${o.cycleCap}; remaining ${money(Math.max(0, o.cycleCap - prior))}`);
   const bin = resolveBin();
-  const args = ["run", "--pure", "--auto", "--command", o.command];
+  // Never --auto (measured on 1.17.18, P05 probes): headless, a permission OpenCode would ask about is refused,
+  // which is the fence working; --auto approved every such ask under a primary agent and hung forever under a
+  // command's subagent fence, the shape of the second live smoke.
+  const args = ["run", "--pure", "--command", o.command];
   if (o.agent) args.push("--agent", o.agent);
   args.push("-m", o.model, "--format", "json", "--", o.message);
   launch(bin, args, {}); // refuses an argument a .cmd shim would mangle, before any spend
@@ -303,6 +335,22 @@ export async function run(o) {
   out(header("pending"));
 
   let spent = 0, finishes = 0, unpriced = 0, stepLike = 0, events = 0, session = null, verdict = null, overflow = false;
+  const charged = new Set();
+  // A subagent session is charged once, with every nested task session under it, before the next event is read.
+  const charge = (id) => {
+    if (charged.has(id)) return;
+    charged.add(id);
+    const l = launch(bin, ["export", id], { cwd, env: { ...process.env, PWD: cwd }, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const r = spawnSync(l.cmd, l.args, l.opts);
+    let got;
+    try {
+      if (r.error || r.status !== 0) throw new Error(`opencode export ${id} failed (status ${r.status})`);
+      got = exportedSpend(String(r.stdout || ""), id);
+    } catch (e) { unpriced++; out(`subagent: ${id} COST-UNREADABLE ${e.message}`); return; }
+    spent += got.cost;
+    out(`subagent: ${id} spent=${money(got.cost)} steps=${got.finishes}`);
+    for (const k of got.kids) charge(k);
+  };
   let child = null, finalised = false, interrupted = null;
   const stop = (v) => { if (verdict === null) { verdict = v; if (child) killTree(child); } };
   const finalise = (code) => {
@@ -356,6 +404,7 @@ export async function run(o) {
       if (e.finish) finishes++;
       if (e.unpriced) unpriced++;
       if (e.cost !== null) spent += e.cost;
+      if (e.child && e.child !== session) charge(e.child);
       if (spent >= o.cap) stop(3);
       if (ioFailed) stop(1);
     };
