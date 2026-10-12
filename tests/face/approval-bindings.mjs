@@ -97,6 +97,8 @@ try {
   check("PARENT: a parent and its child are raised (vacuous-pass guard)", P.status === 0 && Ch.status === 0 && C.ULID_RE.test(P.id) && C.ULID_RE.test(Ch.id), `${P.err} ${Ch.err}`);
   let r = inbox("inbox");
   check("LINE: inbox prints OPEN only, each line ending in its state", r.status === 0 && lineOf(r.stdout, P.id).endsWith("[OPEN]") && lineOf(r.stdout, Ch.id) === "", r.stdout + r.stderr);
+  const eqAll = inbox("inbox", "--all=1");
+  check("LINE: --all takes no value -- --all=1 is refused, never read as OPEN-only", eqAll.status === 2 && /--all takes no value/.test(eqAll.stderr), `${eqAll.status} ${eqAll.stderr}`);
   r = inbox("inbox", "--all");
   check("PARENT: an undecided parent -> WAITING(<parent>) in --all", lineOf(r.stdout, Ch.id).endsWith(`[WAITING(${P.id})]`), r.stdout + r.stderr);
   let before = lines();
@@ -198,6 +200,13 @@ try {
   const w1 = await at("2026-10-01"), w1b = await at("2026-10-01"), o2 = await at("2026-10-02");
   check("REPLAY: as of the first day the child is WAITING, twice byte-identical; as of the parent's decision it is OPEN",
     w1 === `WAITING(${P})` && w1 === w1b && o2 === "OPEN", `${w1} ${o2}`);
+  // attack 4f462e9 B7: a parent entry that is not a ULID is never echoed -- it reads PARENT_MISSING with no ref text.
+  const forged = await F.foldApprovals([{ event: { id: ulid(6), kind: "approval.requested", venture: "arc", payload: { depends_on: ["X\u001b[2J\nFAKE"] } }, day: "d" }], []);
+  check("FOLD: a parent entry that is not a ULID reads UNKNOWN(PARENT_MISSING) and echoes nothing", forged[0].label === "UNKNOWN(PARENT_MISSING)" && forged[0].ref === "", JSON.stringify(forged[0].label + "|" + forged[0].ref));
+  // B2: a decide re-derives only its own request; every other bound request answers NOT_REDERIVED without a plan run.
+  const ps = I.planStateFor({ only: ulid(7) });
+  const other = await ps({ op: "money.ingest", input: {}, expect: "d".repeat(64) }, { event: { id: ulid(8) } });
+  check("FOLD: a decide's planState re-derives only the request being decided", other && other.failure === "NOT_REDERIVED", JSON.stringify(other));
   const unbound = await F.foldApprovals([{ event: { id: ulid(5), kind: "approval.requested", venture: "arc", payload: { bound_to: { kind: "plan-expect", expect: "c".repeat(64), op: "a.b", input: {} } } }, day: "d" }], []);
   check("REPLAY: a bound request folded with no re-deriver (an as-of read) is UNKNOWN(NOT_REDERIVED), never OPEN", unbound[0].label === "UNKNOWN(NOT_REDERIVED)", unbound[0].label);
 }

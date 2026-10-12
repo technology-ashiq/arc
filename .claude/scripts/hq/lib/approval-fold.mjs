@@ -25,8 +25,11 @@
 /** @typedef {"same" | "moved" | { failure: string }} PlanState */
 
 const isPlain = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+// A ref is printed into the owner's terminal and served by the door: only a ULID is ever one (attack 4f462e9 B7). A
+// parent entry that is not a ULID is a parent that cannot be found, never text to echo.
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const keyOf = (p) => (isPlain(p) && typeof p.decision_key === "string" ? p.decision_key : null);
-const parentsOf = (p) => (isPlain(p) && Array.isArray(p.depends_on) ? p.depends_on.filter((x) => typeof x === "string") : []);
+const parentsOf = (p) => (isPlain(p) && Array.isArray(p.depends_on) ? p.depends_on.map((x) => (typeof x === "string" && ULID.test(x) ? x : "")) : []);
 const boundOf = (p) => (isPlain(p) && isPlain(p.bound_to) ? p.bound_to : null);
 
 /**
@@ -66,9 +69,11 @@ export async function foldApprovals(requested, decided, opts = {}) {
     if (typeof opts.planState !== "function") return { failure: "NOT_REDERIVED" };
     try {
       const s = await opts.planState(bound, row);
-      return s === "same" || s === "moved" || (isPlain(s) && typeof s.failure === "string") ? s : { failure: "BAD_ANSWER" };
+      // A failure class is printed too: only a CODE-shaped one passes (B7's twin, on the planState side).
+      if (s === "same" || s === "moved") return s;
+      return isPlain(s) && typeof s.failure === "string" && /^[A-Z][A-Z0-9_]{0,40}$/.test(s.failure) ? s : { failure: "BAD_ANSWER" };
     } catch (e) {
-      return { failure: e && typeof e.code === "string" ? e.code : "THREW" };
+      return { failure: e && typeof e.code === "string" && /^[A-Z][A-Z0-9_]{0,40}$/.test(e.code) ? e.code : "THREW" };
     }
   };
 
@@ -97,6 +102,7 @@ export async function foldApprovals(requested, decided, opts = {}) {
     const parents = parentsOf(p);
     const missing = parents.find((q) => !byId.has(q));
     if (missing !== undefined) { out.push({ ...base, state: "UNKNOWN", label: "UNKNOWN(PARENT_MISSING)", ref: missing, failure: "PARENT_MISSING" }); continue; }
+    // (a parent entry that was not a ULID is "" here, which no request holds, so it reads PARENT_MISSING with no text)
     const rejected = parents.find((q) => verdictOf(q) === "reject");
     if (rejected !== undefined) { out.push({ ...base, state: "STALE", label: "STALE(parent-rejected)", ref: rejected }); continue; }
     const waiting = parents.find((q) => verdictOf(q) === null);

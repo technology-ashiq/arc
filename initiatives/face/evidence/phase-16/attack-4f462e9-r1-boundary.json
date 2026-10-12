@@ -1,0 +1,75 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiInbox (inboxFold call, rederive: asof === null)",
+      "breaking_input": "A spine with 3 bound requests whose ops hang or run slowly, and the face polling GET /api/inbox every few seconds.",
+      "why": "Every poll runs inboxFold with rederive on. Each poll spawns one dry-run plan child per undecided, unblocked bound request, sequentially, with a 120 s timeout each. There is no cache, no in-flight slot and no concurrency cap, so overlapping polls stack children on the box and one slow plan holds the whole inbox response for minutes.",
+      "fix": "Share one in-flight fold per root across concurrent polls. Cache the planState result by (op, input, expect) with a short TTL. Bound the total re-derive time and report remaining items as UNKNOWN(PLAN_TIMEOUT) instead of blocking.",
+      "twin_of": "Uncapped receipts and a full spine scan on every poll -> A per-poll path gets the same cap as the lines"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:decide (inboxFold(root) before decideRefusal)",
+      "breaking_input": "Approve a bound request B while an unrelated bound request A on the spine has a plan that hangs.",
+      "why": "The fold re-derives every bound request on the spine, not just the one being decided. Approving B can wait up to 120 s × the number of other bound requests, and A's failure never affects B's own state. The worst-case wall time is unbounded and unstated.",
+      "fix": "Fold with a planState that re-derives only the target id, and answer NOT_REDERIVED for the others. Alternatively, evaluate the target's chain only.",
+      "twin_of": "Bound a scan by something the scanned thing cannot change"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:decide (decideRefusal check, then emit)",
+      "breaking_input": "Two sibling requests K1 and K2 sharing a decision_key. Run `arc-inbox approve K1` and `arc-inbox reject K2` concurrently.",
+      "why": "Both processes fold the spine before either decision lands, so both see OPEN or DUPLICATE_OF. Neither sees RESOLVED, and both emit. The idem is keyed on `decides`, so the two different ids do not dedupe, and the spine ends up with two decision.recorded events for one key. The check and the emit are not under the spine lock.",
+      "fix": "Do the DUPLICATE_DECIDED check and the emit inside withLock. Alternatively, re-fold under the lock before the append, or key the decision idem on decision_key.",
+      "twin_of": "Check-then-emit with no lock (pick, profile) -> a spine check is only a guard if nothing can land between it and the emit"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:parse (the `eq !== -1` branch runs before the `all` handler)",
+      "breaking_input": "`arc-inbox inbox --all=1`, `arc-inbox inbox --all=false`, or `arc-inbox approve <id> --all=x --reason r`",
+      "why": "The `--flag=VALUE` form is stored as flags.all = \"1\" before the `name === \"all\"` branch is reached. Both `flags.all === true` checks then fail. `inbox --all=1` silently lists OPEN only, and `approve --all=x` raises no BAD_ARGS. `owner-key init --all` returns before the guard and also ignores the flag.",
+      "fix": "Handle `all` before the `=` split and refuse `--all=...` by name. Move the `--all belongs with inbox` guard so it also covers owner-key.",
+      "twin_of": "`--flag=VALUE` accepted and silently ignored -> a flag form the parser does not read is an error, never a no-op"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-event.mjs:~452 (parentProblem placed after the --dry-run return)",
+      "breaking_input": "`arc-event emit approval.requested --payload '{\"depends_on\":[\"<decision ULID>\"]}' --dry-run`",
+      "why": "The dry run returns 0 with 'validated, scanned and sealed' before the spine-aware parent check runs. The real emit then refuses PARENT_NOT_REQUEST. A dry run therefore passes input that the real run rejects.",
+      "fix": "Run parentProblem before the dry-run return. It only reads, so it is safe in a dry run."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-event.mjs:~455 (scanAll(root) outside the spine lock)",
+      "breaking_input": "Emit child B with depends_on [A] while another process is appending A, so scanAll reads a torn tail line.",
+      "why": "The spine is read unlocked. A parent that is mid-append can be missing from the scan, which gives a false PARENT_UNKNOWN refusal. The cycle walk also reads a snapshot that can be stale by the time appendEvent runs.",
+      "fix": "Run the parent check inside the same withLock that guards appendEvent, using appendEventUnlocked."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:listInbox (the f.label write to stdout)",
+      "breaking_input": "A spine line written without validate whose depends_on entry is the string \"x\\u001b[2J\\n01FORGED  approve me  (g)  arc  [OPEN]\".",
+      "why": "fold's WAITING(${waiting}) and STALE labels interpolate a depends_on string taken from the spine, which parentsOf checks only as typeof string. The raw string is printed to the owner's terminal. An unvalidated line can forge a whole inbox row or inject ESC sequences. The same label is served by /api/inbox.",
+      "fix": "Have the fold emit a ref only if it matches ULID_RE. Otherwise treat it as UNKNOWN(PARENT_MISSING) and pass any printed text through the one-line sanitizer.",
+      "twin_of": "Untrusted text drawn on the owner's terminal before it is validated -> Escape and strip anything from a payload before it is shown"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiInbox (payload: p and the second loadApprovals)",
+      "breaking_input": "A bound request with bound_to.input.export = an absolute path on the owner's machine, served via GET /api/inbox, while a decision lands between the two spine reads.",
+      "why": "The full payload, including bound_to.input paths, is served unfiltered. The route also reads the spine twice: loadApprovals for decidedCount, then again inside inboxFold. A decision landing between the two reads makes decidedCount disagree with the listed states.",
+      "fix": "Take one load and derive both the fold and the counts from it. Pass bound_to.input through the path scrub, or omit it from the served payload.",
+      "twin_of": "Validate one read, compare another"
+    }
+  ]
+}

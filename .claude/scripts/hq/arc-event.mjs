@@ -452,11 +452,16 @@ function main(parsed) {
   // ADR-1355 (face v2 Phase 16): a request's parents are judged against the spine before it lands -- each must be an
   // approval.requested already here (never a decision's ULID), and no cycle may form. validate.mjs cannot see the
   // spine, so this is the one place it can be checked; a refusal is a REJECT like any other, with nothing written.
-  if (sealed.kind === "approval.requested" && sealed.payload && Array.isArray(sealed.payload.depends_on)) {
-    const problem = parentProblem(sealed, scanAll(root).events);
-    if (problem !== null) throw new SpineError(problem.code, problem.why);
-  }
-  const result = appendEvent(root, sealed, line, { timeoutMs });
+  // Judged UNDER the spine lock it appends under (attack 4f462e9 B6): read unlocked, a parent mid-append was missing and
+  // the request refused PARENT_UNKNOWN. A dry run never resolves the spine, so it cannot judge parents: its "validated"
+  // covers the shape alone, and the real emit is where a parent is checked (B5, declared).
+  const result = sealed.kind === "approval.requested" && sealed.payload && Array.isArray(sealed.payload.depends_on)
+    ? withLock(root, () => {
+      const problem = parentProblem(sealed, scanAll(root).events);
+      if (problem !== null) throw new SpineError(problem.code, problem.why);
+      return appendEventUnlocked(root, sealed, line);
+    }, { timeoutMs })
+    : appendEvent(root, sealed, line, { timeoutMs });
   if (result.healed)
     process.stderr.write("arc-event: WARN healed a torn tail in the day file before appending\n");
   if (!result.indexed)
