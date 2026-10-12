@@ -21,7 +21,7 @@ merged once at cycle end; each phase closes from the main clone after that merge
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
 | 05 | Capped wrapper + transcript + harness/evidence stamp + one live `arc-commit` smoke receipt — 50% tripwire (REQ-11, 12) | 1d | 🔨 in progress |
-| 06 | `arc-ship` runnable in arc: package scripts, `ci-digest --wait`, no-deploy branch, goldens (REQ-13) | 0.75d | ⬜ |
+| 06 | `arc-ship` runnable in arc: package scripts, `ci-digest --wait`, no-deploy branch, goldens (REQ-13) | 0.75d | 🔨 built, CI pending |
 | 07 | The real run: commit → review → push → ship, 3 negatives, PR merged after checks, transcripts, retro + seal (REQ-03) | 1d | ⬜ |
 
 ## Done-log

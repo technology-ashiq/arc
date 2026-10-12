@@ -10,6 +10,11 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "lint": "node .claude/scripts/core/gate-parity.mjs && node .claude/scripts/core/brain-drift.mjs",
+    "build": "node .claude/scripts/engine/arc-compile.mjs --check --all --input source --target opencode",
+    "test": "node .claude/scripts/review/ci-digest.mjs --wait"
+  },
   "files": [
     "bin/",
     ".claude/",

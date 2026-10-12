@@ -1,0 +1,78 @@
+#!/usr/bin/env bats
+# distribute Cycle 2, Phase 06 -- `arc-ship` runs in a repo with no deploy target, and in arc itself (ADR-2021, REQ-13).
+#
+# arc's package.json gains lint/build/test, where `test` is `ci-digest --wait`: it reads CI for the pushed head and
+# runs nothing locally. The wait logic is driven by tests/distribute/ci-wait-probe.mjs with a scripted digest and a
+# fake clock; each arm asserts the probe RAN before reading its case lines.
+
+bats_require_minimum_version 1.5.0
+load 'test_helper'
+
+native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+count() { printf '%s\n' "$output" | tr -d '\r' | grep -cE "$1" || true; }
+DIGEST() { native "$ARC_ROOT/.claude/scripts/review/ci-digest.mjs"; }
+
+probe() {
+  run --separate-stderr node "$(native "$ARC_ROOT/tests/distribute/ci-wait-probe.mjs")"
+  [ "$status" -eq 0 ] && [ "$(count '^RAN ci-wait-probe$')" -eq 1 ] || { echo "the probe never finished: $status $output $stderr"; return 1; }
+}
+
+@test "distribute-ship-nodeploy: every test in the file is registered" {
+  local declared
+  declared=$(grep -c '^@test "distribute-ship-nodeploy: ' "$BATS_TEST_FILENAME")
+  [ "$declared" -eq 7 ] || { echo "declared $declared, expected 7"; false; }
+  [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
+}
+
+@test "distribute-ship-nodeploy: package.json carries lint, build and test, and still no lifecycle script" {
+  local p="$ARC_ROOT/package.json"
+  [ "$(_arc_json "$p" 'j.scripts.lint')" = "node .claude/scripts/core/gate-parity.mjs && node .claude/scripts/core/brain-drift.mjs" ] || { echo "lint: $(_arc_json "$p" 'j.scripts')"; false; }
+  [ "$(_arc_json "$p" 'j.scripts.build')" = "node .claude/scripts/engine/arc-compile.mjs --check --all --input source --target opencode" ] || { echo "build"; false; }
+  [ "$(_arc_json "$p" 'j.scripts.test')" = "node .claude/scripts/review/ci-digest.mjs --wait" ] || { echo "test"; false; }
+  [ "$(_arc_json "$p" 'Object.keys(j.scripts).sort().join(",")')" = "build,lint,test" ] || { echo "an extra script: $(_arc_json "$p" 'Object.keys(j.scripts)')"; false; }
+}
+
+@test "distribute-ship-nodeploy: --wait returns the first settled verdict after re-reading a pending one" {
+  probe || false
+  [ "$(count '^case settles-green code=0 reads=3 sleeps=2 prviews=0 last=GREEN: ')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^case settles-red code=1 reads=2 sleeps=1 prviews=0 last=RED: ')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^case run-appears-in-time code=0 reads=3 sleeps=2 prviews=0 last=GREEN: ')" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "distribute-ship-nodeploy: a SHA mismatch returns at once, never retried" {
+  probe || false
+  [ "$(count '^case mismatch-at-once code=4 reads=1 sleeps=0 prviews=0 last=SHA MISMATCH: ')" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "distribute-ship-nodeploy: no run for the head is NO-RUN (exit 6) with the PR state, and a run that never settles is TIMEOUT (exit 3)" {
+  probe || false
+  # 5 minutes at one read a minute: reads 1..6, then NO-RUN on the read that finds 300 s gone.
+  [ "$(count '^case no-run code=6 reads=6 sleeps=5 prviews=1 last=NO-RUN: no CI run for this commit after 300s; PR: \{"isDraft":false,"mergeable":"CONFLICTING","state":"OPEN"\}$')" -eq 1 ] || { echo "$output"; false; }
+  [ "$(count '^case never-settles code=3 reads=4 sleeps=3 prviews=0 last=TIMEOUT: still pending after 180s$')" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "distribute-ship-nodeploy: the CLI refuses --timeout-min without --wait, out of range, and a repeated flag" {
+  local fails=""
+  run --separate-stderr node "$(DIGEST)" --timeout-min 5
+  [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--timeout-min only means something with --wait' || fails="$fails|no --wait: $status $stderr"
+  run --separate-stderr node "$(DIGEST)" --wait --timeout-min 999
+  [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--timeout-min must be 1-180' || fails="$fails|range: $status $stderr"
+  run --separate-stderr node "$(DIGEST)" --wait --wait
+  [ "$status" -eq 2 ] && printf '%s\n' "$stderr" | grep -q -- '--wait given twice' || fails="$fails|twice: $status $stderr"
+  [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
+}
+
+@test "distribute-ship-nodeploy: arc-ship deploys only to a declared target, ships to a PR otherwise, and nothing else calls npm test" {
+  local f="$ARC_ROOT/.claude/commands/arc-ship.md"
+  [ -s "$f" ] || { echo "no arc-ship.md"; false; }
+  grep -q '^allowed-tools: .*Bash(gh pr view:\*), Bash(gh pr create:\*)' "$f" || { echo "the fence lacks gh pr"; false; }
+  grep -qF 'Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists)' "$f" || { echo "no declared-target branch"; false; }
+  grep -qF '`vercel --prod`' "$f" || { echo "the deploy line for a declared target is gone"; false; }
+  grep -qF 'deploy: none declared — the PR is the ship' "$f" || { echo "no named no-deploy line"; false; }
+  grep -qF 'gh pr create --fill' "$f" || { echo "no PR-create step"; false; }
+  # npm test waits on CI in arc, so a caller inside CI, a hook or a test would wait on itself. The pre-deploy guard
+  # is the one named exception: it runs only on a deploy command, and a deploy should wait for CI.
+  local callers
+  callers=$(cd "$ARC_ROOT" && git grep -lE 'npm (run )?test\b' -- .github .githooks .claude/hooks tests ':!tests/fixtures' ':!tests/kickoff-lint.bats' ':!tests/distribute-ship-nodeploy.bats' | tr -d '\r' | sort | tr '\n' ' ')
+  [ "$callers" = ".claude/hooks/PreToolUse.d/50-deploy.sh " ] || { echo "npm test callers: [$callers]"; false; }
+}

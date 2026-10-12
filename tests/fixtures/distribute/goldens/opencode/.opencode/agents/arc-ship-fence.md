@@ -8,6 +8,10 @@ permission:
     "*": ask
     "bash .claude/scripts/hq/arc-event.sh": allow
     "bash .claude/scripts/hq/arc-event.sh *": allow
+    "gh pr create": allow
+    "gh pr create *": allow
+    "gh pr view": allow
+    "gh pr view *": allow
     "npm run build": allow
     "npm run lint": allow
     "npm run test": allow
