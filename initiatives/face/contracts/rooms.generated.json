@@ -1048,7 +1048,7 @@
       "id": "discover",
       "name": "Discover",
       "ring": "money",
-      "status": "planned",
+      "status": "built",
       "sentence": "The next venture is chosen, not stumbled into.",
       "lede": "planned, drawn dotted — opens when the venture #2 slot needs filling from a scored field, not a hunch",
       "render": "generic",
@@ -1058,11 +1058,20 @@
         "kinds": [
           "idea.captured"
         ],
-        "plannedRooms": [
+        "lanes": [
           "discover"
+        ],
+        "commands": [
+          "arc-hunt"
+        ],
+        "products": [
+          "discover"
+        ],
+        "adrs": [
+          "1900"
         ]
       },
-      "itemCount": 2
+      "itemCount": 5
     },
     {
       "id": "chat-mcp",
@@ -1299,7 +1308,6 @@
           "phase.closed"
         ],
         "lanes": [
-          "discover",
           "distribute",
           "docs",
           "launch",
@@ -1307,7 +1315,6 @@
         ],
         "commands": [
           "arc-change",
-          "arc-hunt",
           "arc-kickoff (G)",
           "arc-phase-done",
           "arc-resume"
@@ -1335,7 +1342,6 @@
           "steel thread"
         ],
         "products": [
-          "discover",
           "docs",
           "launch",
           "plan"
@@ -1344,11 +1350,10 @@
           "1500",
           "1600",
           "1700",
-          "1900",
           "2000"
         ]
       },
-      "itemCount": 37
+      "itemCount": 33
     }
   ],
   "inventories": {
@@ -1362,7 +1367,7 @@
       "1600": "lane",
       "1700": "lane",
       "1800": "model-policy",
-      "1900": "lane",
+      "1900": "discover",
       "2000": "lane",
       "0000": "board",
       "0100": "develop",
@@ -1386,7 +1391,6 @@
     "plannedRooms": {
       "ops": "ops",
       "trader": "trader",
-      "discover": "discover",
       "chat-mcp": "chat-mcp"
     },
     "ci": {

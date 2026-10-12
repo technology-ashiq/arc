@@ -1,23 +1,36 @@
-// fold.mjs -- money/discover: every decision the discover room makes, where node can import it with no
-// install (face v2 Phase 03, ADR-1320, ADR-1328).
+// fold.mjs -- money/discover: every decision the discover room makes, where node can import it with no install
+// (face v2 Phase 17, REQ-21, ADR-1356; first ported as a planned room in Phase 03, ADR-1328).
 //
-// The port of v0.7's Discover, a PLANNED room. v0.7 rehearsed a hunt, a score and a shortlist against a local
-// workspace; the discover lane is not born, so its planned line comes from the planned-rooms registry, dotted,
-// and each flow is a REHEARSAL card that writes nothing. The next venture is chosen by the council and your
-// stamp once the lane exists -- nothing here convenes one.
-import { rehearsal } from "../../../lib/registry.mjs";
+// The discover lane was born (ADR-1900) and writes real receipts, so this room stopped being planned: no dotted line, no
+// REHEARSAL card. It reads ONE door route, GET /api/discover, which selects discover's receipts through discover's own
+// constants -- this fold never spells the winner gate or the process, so there is no second grammar here. What it shows:
+// the ideas captured, the last hunt and the last judge, and each winner the lane proposed with its state. A spine day the
+// door could not read makes every figure unknown, naming the day, never 0; a spine with no discover receipt says no hunt
+// has run yet. Running a hunt stays /arc-hunt: the room reads, and its ops.mjs is empty.
+import { asArray, asObject, cell, field, servedRead, servedTable } from "../../../lib/served.mjs";
 import { fmtInt } from "../../../lib/inbox.mjs";
-import { plannedFigure, plannedKinds, plannedRoom } from "../../../lib/planned-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 
 /**
- * @typedef {import("../../../lib/planned-room.mjs").PlannedRoom & {
- *   kpis: { key: string, v: string, l: string, sub: string }[],
- *   flows: { isRehearsal: true, verb: string, sentence: string }[],
- *   rules: string[],
- * }} Folded
+ * @typedef {object} Folded
+ * @property {string} sentence
+ * @property {string} lede
+ * @property {string} badge
+ * @property {{ key: string, v: string, l: string, sub: string }[]} kpis
+ * @property {import("../../../lib/served.mjs").ServedTable} winners
+ * @property {boolean} showNoHunt
+ * @property {string} noHunt
+ * @property {string[]} rules
+ * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
+
+/** @param {unknown} v @returns {Record<string, unknown> | null} */
+const orNull = (v) => (v === null || v === undefined ? null : asObject(v));
+
+/** One run as a figure: its day, "none yet" when the lane never ran it, "—" when not read. */
+const runFigure = (isRead, run) => (!isRead ? "—" : run === null ? "none yet" : field(run, "day"));
+const runSub = (isRead, run, what) => (!isRead ? "not on this read" : run === null ? `no ${what} has run` : `outcome ${field(run, "outcome") || "unstated"} · ⌗ ${field(run, "id").slice(-6)}`);
 
 /**
  * @param {Record<string, Payload>} payloads
@@ -25,35 +38,60 @@ import { plannedFigure, plannedKinds, plannedRoom } from "../../../lib/planned-r
  * @returns {Folded}
  */
 export function fold(payloads, ctx) {
-  const base = plannedRoom(payloads, ctx);
-  const flows = [
-    rehearsal(
-      "Capture a pain",
-      "idea.captured, then normalised and de-duplicated: a pain in the customer's own words, refused at capture when it repeats one already held. Rehearsed; the discover lane is not born.",
-    ),
-    rehearsal(
-      "Score it",
-      "The scoring file's four numbers, and a pain with too little distribution hard-flagged before it can reach a shortlist. Rehearsed, and no score is written.",
-    ),
-    rehearsal(
-      "Send the top two to council",
-      "The shortlist is exactly two; the council debates them and you stamp one, and the one-pager comes before a separate venture kickoff. No council is convened from here.",
-    ),
-  ];
+  /** @type {import("../../../lib/registry.mjs").Read[]} */
+  const reads = [];
+  const st = servedRead(payloads, ctx, reads, "/api/discover");
+  // The door read the spine and could not open a day: nothing here is counted, and the panel says which day. Drawn as a
+  // refusal so the table's availability is unknown (REQ-19), never a zero.
+  const unknown = st.isRead && field(st.body, "availability") === "unknown";
+  const days = asArray(st.body["unreadable"]).map(cell).filter((d) => d !== "");
+  const shown = unknown
+    ? { ...st, isRead: false, isRefused: true, refusal: { code: field(st.body, "failure") || "UNREADABLE_DAY", human: `the door could not read the spine day(s) ${days.join(", ") || "it did not name"}, so no figure here is counted` } }
+    : st;
+  const isRead = shown.isRead;
+  const captures = asObject(st.body["captures"]);
+  const runs = asObject(st.body["runs"]);
+  const hunt = orNull(runs["hunt"]);
+  const judge = orNull(runs["judge"]);
+  const winnerRows = asArray(st.body["winners"]).map(asObject);
+  const open = winnerRows.filter((w) => field(w, "state") === "open").length;
+  const latest = orNull(captures["latest"]);
+  const captureCount = typeof captures["count"] === "number" ? captures["count"] : null;
+  const room = ctx.room;
   return {
-    ...base,
+    sentence: String(room.sentence ?? ""),
+    lede: String(room.lede ?? ""),
+    badge: "discover's own receipts",
     kpis: [
-      plannedFigure(base, "stations", "Stations on the planned line", "line", "planned-rooms.json · none has run"),
-      { key: "flows", v: fmtInt(flows.length), l: "Flows rehearsed here", sub: "each says REHEARSAL · none writes" },
-      plannedFigure(base, "today", "Already in the repo", "showsToday", "what the unborn lane can point at"),
-      plannedKinds(base),
+      { key: "captured", v: isRead && captureCount !== null ? fmtInt(captureCount) : "—", l: "Ideas captured", sub: !isRead ? "not on this read" : latest === null ? "none yet" : `latest ${field(latest, "day")} · ${field(latest, "source_id") || "no source named"}` },
+      { key: "hunt", v: runFigure(isRead, hunt), l: "Last hunt", sub: runSub(isRead, hunt, "hunt") },
+      { key: "judge", v: runFigure(isRead, judge), l: "Last judge", sub: runSub(isRead, judge, "judge") },
+      { key: "open", v: isRead ? fmtInt(open) : "—", l: "Winners waiting for you", sub: isRead ? `of ${fmtInt(winnerRows.length)} proposed` : "not on this read" },
     ],
-    flows,
+    winners: servedTable(shown, {
+      panel: "Winners",
+      route: "/api/discover",
+      owner: "discover",
+      columns: ["venture", "score", "its tokens", "state", "your decision"],
+      listKey: "winners",
+      empty: "No winner has been proposed yet.",
+      row: (w) => {
+        const d = orNull(w["decision"]);
+        const tokens = asArray(w["cluster_tokens"]).map(cell).filter((t) => t !== "").join(", ");
+        return field(w, "id") === "" ? null : {
+          key: field(w, "id"),
+          cells: [field(w, "slug"), cell(w["score"]) || "unscored", tokens || "none named", field(w, "state"), d === null ? "not decided" : `${field(d, "verdict")} -- ${field(d, "reason")}`],
+        };
+      },
+    }),
+    showNoHunt: isRead && hunt === null && captureCount === 0 && winnerRows.length === 0,
+    noHunt: "No hunt has run yet. Run /arc-hunt to capture pains; this room reads what it records and never runs one itself.",
     rules: [
-      "A pain with too little distribution never reaches the shortlist: it is flagged, not argued with.",
+      "A pain with too little distribution never reaches the shortlist: flagged, not argued with.",
       "A duplicate pain is refused at capture, not merged later.",
       "The shortlist is exactly two. The council debates them; you stamp one.",
-      "A kickoff is a separate venture: its own repo and its own kill criteria, with the one-pager first.",
+      "A kickoff is a separate venture: its own repo and its own kill criteria, one-pager first.",
     ],
+    reads,
   };
 }
