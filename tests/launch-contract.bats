@@ -403,6 +403,12 @@ arm() {
   [ "$(j 'o.teardown.join(",")')" = "close-pr-if-ours,delete-branch-if-ours" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: environments moves its probe branch onto a main that gained the app, still one PR" {
+  arm environments main-moved
+  [ "$(j 'o.scaffold.ok + " " + o.branchBase + " " + o.branchCommits + " " + o.prs')" = "true true 2 1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: environments refuses a preview-check branch it did not make, opening no PR" {
   arm environments foreign-branch
   [ "$(j 'o.scaffold.code + " " + o.prs')" = "FOREIGN_BRANCH 0" ] || { echo "$DONE"; false; }
@@ -1286,6 +1292,11 @@ arm() {
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.project')" = "true sentry.io automemory/arc-sandbox" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.issues[0]')" == "arc-launch probe arcprobe"*":1" ]] || { echo "$DONE"; false; }
   [ "$(j 'o.verifyAgain + " " + o.issueCount')" = "true 2" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: errors takes a personal sntryu_ Sentry token, the kind that can read projects" {
+  arm errors user-token
+  [ "$(j 'o.scaffold.ok + " " + o.commits')" = "true 1" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: errors refuses a missing, ambiguous or keyless Sentry project before any commit, and without hosting (ADR-1747)" {

@@ -106,6 +106,16 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
         jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
       return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
     }
+    // A forced move of a non-main branch to a main commit: the branch line restarts at that commit.
+    const bm = rest.match(/^git\/refs\/heads\/(.+)$/);
+    if (bm && method === "PATCH" && bm[1] !== "main") {
+      if (!r.branches[bm[1]]) return err(422, "Reference does not exist");
+      const to = r.commits.find((c) => c.sha === body.sha);
+      if (!to) return err(422, "Object does not exist");
+      if (!body.force) return err(422, "Update is not a fast forward");
+      r.branches[bm[1]] = [to];
+      return json(200, { ref: `refs/heads/${bm[1]}`, object: { sha: to.sha } });
+    }
     r.tags = r.tags || {};
     const tm = rest.match(/^git\/ref\/tags\/(.+)$/);
     if (tm && method === "GET") return r.tags[tm[1]] ? json(200, { ref: `refs/tags/${tm[1]}`, object: { sha: r.tags[tm[1]] } }) : err(404, "Not Found");
@@ -128,7 +138,11 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     if (hm && method === "GET") {
       const key = decodeURIComponent(hm[1]);
       const c = head(key) || [...r.commits, ...Object.values(r.branches).flat()].find((x) => x.sha === key);
-      return c ? json(200, { sha: c.sha, commit: { message: c.message } }) : err(404, "No commit found");
+      if (!c) return err(404, "No commit found");
+      // A commit's parent is the one before it in whichever line holds it -- a branch line first, then main.
+      const line = [...Object.values(r.branches), r.commits].find((l) => l.indexOf(c) > 0);
+      const parents = line ? [{ sha: line[line.indexOf(c) - 1].sha }] : [];
+      return json(200, { sha: c.sha, commit: { message: c.message }, parents });
     }
     if (rest === "pulls" && method === "GET") {
       const h = url.searchParams.get("head");
