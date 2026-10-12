@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-distribute (Cycle 2, opened 2026-10-13)
 phase: 05
 appetite: 3d
-burn: 0d
+burn: 1.25d
 blocked-on: —
 depends-on: —
 
@@ -20,7 +20,7 @@ merged once at cycle end; each phase closes from the main clone after that merge
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
-| 05 | Capped wrapper + transcript + harness/evidence stamp + one live `arc-commit` smoke receipt — 50% tripwire (REQ-11, 12) | 1d | 🔨 in progress |
+| 05 | Capped wrapper + transcript + harness/evidence stamp + one live `arc-commit` smoke receipt — 50% tripwire (REQ-11, 12) | 1d | 🔨 built, tripwire YES, CI pending |
 | 06 | `arc-ship` runnable in arc: package scripts, `ci-digest --wait`, no-deploy branch, goldens (REQ-13) | 0.75d | 🔨 built, CI pending |
 | 07 | The real run: commit → review → push → ship, 3 negatives, PR merged after checks, transcripts, retro + seal (REQ-03) | 1d | ⬜ |
 
@@ -32,8 +32,15 @@ merged once at cycle end; each phase closes from the main clone after that merge
   corrected here: all 6 distribute approvals (kickoff + P00..P04 move-on) were decided `approve` on the spine
   between 2026-10-07 and 2026-10-09; `arc-inbox inbox` shows none open.
 
+- **P05 2026-10-13**: wrapper + stamp built; attack r1 (logic 15, boundary 10) and r2 (logic 0, boundary 12) fixed or
+  ledgered. Four live smokes and three probes measured two OpenCode facts the plan did not know: a subagent's `ask`
+  hangs a headless run (fences now deny) and subagent spend is not in the stream (now read by `opencode export`),
+  ADR-2022. **50% tripwire: YES** — receipt `01M4S4V92YACPXF1V08XXWR04B` (`commit.done`, `harness: opencode`) on the
+  main spine for $0.0019 (`evidence/phase-05/smoke.md`). Cycle spend $0.035 of $0.50.
+- **P06 2026-10-13**: package scripts, `ci-digest --wait`, the no-deploy `arc-ship` branch; attack r1 fixed or ledgered.
+
 ---
 ## Now
 
-**Current position: Phase 05 open** (kickoff 2026-10-13) — building the capped wrapper and the harness stamp on `feat/distribute-c2-req03`.
-**Next step:** write `tests/distribute-opencode-session.bats` red first, then `opencode-session.mjs`; then the stamp and its suite; push once, read CI per job, then the live `arc-commit` smoke (≤ $0.10, the 50% tripwire).
+**Current position: P05 and P06 built on `feat/distribute-c2-req03` (PR #412, draft); P05's tripwire answered YES.**
+**Next step:** push, read CI per job; then P07: the full loop run (commit → review → push → ship) and the three negatives.
