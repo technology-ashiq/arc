@@ -75,6 +75,8 @@ export function fold(payloads, ctx) {
       columns: ["venture", "score", "its tokens", "state", "your decision"],
       listKey: "winners",
       empty: "No winner has been proposed yet.",
+      // What the door skipped is said, by count: a receipt it could not read is never a quietly shorter list.
+      note: typeof st.body["droppedTotal"] === "number" && st.body["droppedTotal"] > 0 ? `${fmtInt(st.body["droppedTotal"])} discover receipt(s) the door could not read are not counted here` : "",
       row: (w) => {
         const d = orNull(w["decision"]);
         const tokens = asArray(w["cluster_tokens"]).map(cell).filter((t) => t !== "").join(", ");

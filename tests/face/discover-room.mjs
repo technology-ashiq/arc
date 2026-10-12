@@ -32,7 +32,7 @@ const R = await import(pathToFileURL(join(HQ, "lib", "face", "discover", "route.
 const D = await import(pathToFileURL(join(REPO, ".claude", "scripts", "discover", "lib", "spine.mjs")).href);
 check("the route and discover's constants loaded (vacuous-pass guard)", typeof R.apiDiscover === "function" && typeof R.discoverBody === "function" && typeof D.PROCESS === "string");
 const C = await R.discoverConstants();
-check("ROUTE: the constants are discover's own -- the process prefix and the winner gate it exports", C.prefix === D.PROCESS.slice(0, D.PROCESS.indexOf("@") + 1) && C.gate === D.WINNER_GATE, JSON.stringify(C));
+check("ROUTE: the constants are discover's own -- the process name and the winner gate it exports", C.name === D.PROCESS.slice(0, D.PROCESS.indexOf("@")) && C.gate === D.WINNER_GATE, JSON.stringify(C));
 let missing = null, broken = null;
 try { await R.discoverConstants(() => Promise.reject(new Error("never asked")), join(tmpdir(), "no-such-discover-spine.mjs")); } catch (e) { missing = e; }
 try { await R.discoverConstants(() => Promise.reject(Object.assign(new Error("syntax"), { code: "ERR_X" }))); } catch (e) { broken = e; }
@@ -78,9 +78,9 @@ try {
   check("ROUTE: a rejected winner reads rejected, with the deciding receipt and its reason", W2 && W2.state === "rejected" && W2.decision && W2.decision.verdict === "reject" && W2.decision.reason === "not this one", JSON.stringify(W2));
   const again = node([join(HQ, "arc-inbox.mjs"), "approve", w2.id, "--reason", "changed my mind"]);
   check("EDGES: a winner decided twice is impossible -- the second decision is refused", again.status === 2 && /ALREADY_DECIDED/.test(again.stderr), again.stderr);
-  // MUTANT: a route that selects by an empty prefix counts the face's capture too.
-  const loose = R.discoverBody((await import(pathToFileURL(join(HQ, "spine.mjs")).href)).scanAll(spine), { ...C, prefix: "" });
-  check("EDGES MUTANT: a route that does not select by discover's process counts the face capture, and is caught", loose.captures.count === 2 && b.captures.count === 1);
+  // MUTANT: a route that selects by another process name counts the face capture, never discover's.
+  const loose = R.discoverBody((await import(pathToFileURL(join(HQ, "spine.mjs")).href)).scanAll(spine), { ...C, name: "face-ask" });
+  check("EDGES MUTANT: a route that does not select by discover's process counts the face capture, and is caught", loose.captures.count === 1 && loose.captures.latest.source_id === "face-1" && b.captures.latest.source_id === "hn-1");
   // An unreadable day: a directory where a day file belongs.
   mkdirSync(join(spine, "events", "2026-01-01.jsonl"), { recursive: true });
   const u = await route();
@@ -90,7 +90,7 @@ try {
 }
 
 // ── GRAMMAR: no second spelling of discover's constants ────────────────────────────────────────────
-{
+try {
   const hits = [];
   const spelled = (t) => t.includes(D.WINNER_GATE) || t.includes(D.PROCESS.slice(0, D.PROCESS.indexOf("@") + 1));
   // lstat, never stat: a link is not followed, so the walk stays inside face/src and cannot loop; each file is read once,
@@ -115,10 +115,10 @@ try {
     if (t.includes(D.WINNER_GATE) || t.includes(D.PROCESS.slice(0, D.PROCESS.indexOf("@") + 1))) hits.push(f);
   }
   check("GRAMMAR: the winner gate and the process are spelled nowhere under face/src, in reads.mjs or in the route", hits.length === 0, hits.join(", "));
-}
+} catch (e) { check("GRAMMAR: the grammar arm ran to its end (a read that failed is a finding, never a crash)", false, e && (e.code || e.message)); }
 
 // ── ROOM ───────────────────────────────────────────────────────────────────────────────────────────
-{
+try {
   const dir = join(REPO, "face", "src", "modules", "money", "discover");
   const view = readFileSync(join(dir, "View.tsx"), "utf8");
   check("ROOM: the View wears no data-planned and draws no REHEARSAL card or planned line", !/data-planned/.test(view) && !/Rehearsal|PlannedLinePanel|PlannedBanner/.test(view));
@@ -138,7 +138,7 @@ try {
   const un = fold(pay({ route: "/api/discover", availability: "unknown", failure: "UNREADABLE_DAY", unreadable: ["2026-01-01 (EISDIR)"], captures: null, runs: null, winners: null }), c);
   check("ROOM: an unknown answer draws every figure as not read, and the winners table as unknown naming the day",
     un.kpis.every((k) => k.v === "—") && un.winners.avail.availability === "unknown" && /2026-01-01/.test(un.winners.refusal.human) && un.showNoHunt === false, JSON.stringify({ k: un.kpis.map((k) => k.v), a: un.winners.avail, r: un.winners.refusal }));
-}
+} catch (e) { check("ROOM: the room arm ran to its end (a read that failed is a finding, never a crash)", false, e && (e.code || e.message)); }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 ? 0 : 1;

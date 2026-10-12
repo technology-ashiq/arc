@@ -1034,3 +1034,10 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A full synchronous scan per request** -- every `/api/discover` poll re-read the whole spine (attack 76e154c B3). *Check: a whole-spine read is shared while in flight and for a short window after.*
 - **A test id taken from stdout unvalidated** (attack 76e154c B4). *Check: an id a fixture compares by is in its grammar, and the spawn's `.error` is read first.*
 - **A test walk that follows links and reads twice** (attack 76e154c B5). *Check: walk with lstat, read once, catch per file.*
+- **A read cache keyed on time alone** -- `/api/discover` reused a scan for 3 s, so a winner stamped a second ago still read open (attack 8164ad9 B1). *Check: a cached read is keyed on the source's own state (size + mtime per file), never on a clock alone.*
+- **Skipped entries counted for one reason only** -- torn lines, bad gates, duplicates, slugless winners and malformed decisions vanished from `/api/discover` with no count (attack 8164ad9 B2, L1, L4, L5, L8). *Check: every skip is counted under its reason and served.*
+- **A ts or day served without its grammar** (attack 8164ad9 B3, L6). *Check: a time the door serves matches IST_TS_RE, a day YYYY-MM-DD, or the entry is skipped and counted.*
+- **A rejected promise cached and replayed** (attack 8164ad9 B4). *Check: a failed shared read is evicted and named, never handed to the next caller.*
+- **A decision with a malformed `decides` silently ignored** -- its winner read open forever (attack 8164ad9 L2). *Check: a join key outside its grammar is a counted finding, never a quiet miss.*
+- **Free-text tokens served with line breaks** (attack 8164ad9 L3). *Check: served text is one line.*
+- **Constants trusted without a grammar** -- discover's process name, version and gate (attack 8164ad9 L7, L9, L10). *Check: a selector imported from another lane is held to a token grammar before it selects.*
