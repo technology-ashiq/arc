@@ -141,3 +141,8 @@ REJECTED: L12 --prior-spent-usd double-counts the ledger -- unsupported
 REJECTED: L13 a symlink race on the transcript path -- already-covered
 ```
 (L3: `version()` has its own 10 s spawn timeout; L6: events are buffered until the session id and the header is always the first line written, including on a kill; L7: stderr goes to a file with one synchronous write per chunk between stdout chunks, which a flood slows but cannot stop; L8: the remainder of `buf` is passed to `onLine` after close; L9: any value not equal to `ARC_HARNESS` is `HARNESS_MISMATCH`; L12: the flag is spend outside the ledger, added by design (ADR-2019); L13: `wx` is O_CREAT|O_EXCL, which fails on any existing path, a dangling link included.)
+
+Attack 5823248 round 2 (Cycle 2 P05): logic 0 findings; boundary B1-B9 and B12 fixed as (bv)-(cc). Round cap reached (2).
+
+| 16 | B10 (attack 5823248, low): a `.cmd` launch passes the whole line through `cmd.exe /c`, which truncates past 8,191 characters | accepted: the real messages are one paragraph; the transcript's argv line shows the message as sent | a wrapped run's message passes 4,000 characters |
+| 17 | B11 (attack 5823248, low): the header carries absolute cwd and spine paths, home directory included, into a committed transcript | accepted: the same `C:/Users/<name>` form is already in 83 files on main and is not owner PII (row 1 rejections, B9) | the repository's PII rule names a username or home path |

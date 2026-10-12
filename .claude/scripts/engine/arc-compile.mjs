@@ -162,7 +162,10 @@ function dirtyScan() {
   // A root with no frontmatter-key table cannot be rendered, so nothing under it is the compiler's and every
   // file stays dirty: the strict direction, never a skipped scan.
   if (existsSync(join(root, KEYS_FILE))) for (const t of Object.keys(SOURCE_TARGETS)) {
-    for (const [p, text] of renderSourceTree(root, t).files) {
+    let r;
+    // Any failure to render is COULD NOT SCAN by name, never a stack the pre-commit reports as a bare crash.
+    try { r = renderSourceTree(root, t); } catch (e) { throw e instanceof CouldNotScan ? e : new CouldNotScan(`cannot render ${t}: ${e.message}`); }
+    for (const [p, text] of r.files) {
       if (!planned.has(p)) planned.set(p, new Set());
       planned.get(p).add(text);
     }

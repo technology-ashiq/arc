@@ -19,7 +19,7 @@
  */
 
 import { spawn, spawnSync, execFileSync } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, statSync, writeSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -115,7 +115,10 @@ export function spentOf(text, name) {
 /** Sum the spend of every transcript under DIR (any depth, `transcripts/*.jsonl`); links are not followed. */
 export function priorSpend(dir) {
   let st;
-  try { st = statSync(dir); } catch { return 0; } // no evidence dir yet: nothing spent
+  try { st = statSync(dir); } catch (e) {
+    if (e.code === "ENOENT") return 0; // no evidence dir yet: nothing spent
+    throw new Refusal("CYCLE-CAP", `cannot stat the ledger ${dir} (${e.code || e.message}): COULD NOT SCAN`);
+  }
   if (!st.isDirectory()) throw new Refusal("CYCLE-CAP", `the ledger ${dir} is not a directory: COULD NOT SCAN`);
   let total = 0;
   const walk = (d) => {
@@ -144,7 +147,7 @@ export function priorSpend(dir) {
  * number (a numeric string is read as its number) is `unpriced`, which makes the run COST-UNREADABLE.
  */
 export function readEvent(line) {
-  const none = { finish: false, cost: null, unpriced: false, session: null };
+  const none = { json: false, finish: false, stepLike: false, cost: null, unpriced: false, session: null };
   let j;
   try { j = JSON.parse(line); } catch { return none; }
   if (j === null || typeof j !== "object" || Array.isArray(j)) return none;
@@ -156,7 +159,10 @@ export function readEvent(line) {
     if (typeof c === "number" && Number.isFinite(c) && c >= 0) cost = c;
   }
   const s = j.sessionID ?? part.sessionID ?? null;
-  return { finish, cost, unpriced: finish && cost === null, session: typeof s === "string" && /^ses_[A-Za-z0-9]+$/.test(s) ? s : null };
+  // A step event this reader does not recognise (an OpenCode release renamed it) still counts, so renamed
+  // accounting reads as COST-UNREADABLE and never as zero spend (attack 5823248 B3).
+  const stepLike = /^step/i.test(String(j.type ?? "")) || /^step/i.test(String(part.type ?? ""));
+  return { json: true, finish, stepLike, cost, unpriced: finish && cost === null, session: typeof s === "string" && /^ses_[A-Za-z0-9]+$/.test(s) ? s : null };
 }
 
 // cmd.exe quoting for a .cmd/.bat binary: MSVCRT rules first, then every cmd metacharacter caret-escaped.
@@ -217,11 +223,16 @@ function git(cwd, args) {
 /** ADR-2020: the canonical spine is the main clone's, named from git, never typed. */
 export function canonicalSpine(cwd) {
   const common = git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  // Only a plain clone keeps its git dir at <checkout>/.git; a separate git dir, a submodule or a bare repo would
+  // make dirname() name a directory that is no checkout at all (attack 5823248 B7).
+  if (basename(common) !== ".git") throw new Refusal("SPINE", `the git common dir ${common} is not <checkout>/.git, so the main checkout cannot be named`);
   return join(dirname(common), ".claude", "state", "hq");
 }
 
+// Always attempted, even after the leader exited: what it left in its group or tree may still be spending
+// (attack 5823248 B2). A tree that is already gone makes these fail, which is ignored.
 function killTree(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (!child || !child.pid) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore", windowsHide: true });
   } else {
@@ -246,6 +257,10 @@ export async function run(o) {
   if (!existsSync(dirname(transcript))) throw new Refusal("TRANSCRIPT", `${dirname(transcript)} does not exist: create the evidence directory first`);
   const ledger = resolve(o.ledgerDir ?? join(ARC_ROOT, "initiatives", "distribute", "evidence"));
   const prior = priorSpend(ledger) + o.priorSpent;
+  // The cycle cap can only count what it can see: a transcript is written where the next run's ledger walk reads it.
+  const under = relative(realpathSync(ledger), join(realpathSync(dirname(transcript)), basename(transcript)));
+  if (under.startsWith("..") || isAbsolute(under) || basename(dirname(transcript)) !== "transcripts" || !transcript.endsWith(".jsonl"))
+    throw new Refusal("TRANSCRIPT", `${transcript} is not a transcripts/*.jsonl file under the ledger ${ledger}, so the cycle cap would never count it`);
   if (prior + o.cap > o.cycleCap + 1e-12)
     throw new Refusal("CYCLE-CAP", `prior spend ${money(prior)} + this cap ${o.cap} exceeds the cycle cap ${o.cycleCap}; remaining ${money(Math.max(0, o.cycleCap - prior))}`);
   const bin = resolveBin();
@@ -254,84 +269,128 @@ export async function run(o) {
   args.push("-m", o.model, "--format", "json", "--", o.message);
   launch(bin, args, {}); // refuses an argument a .cmd shim would mangle, before any spend
   const ver = version(bin, cwd);
-  let spine;
-  try { spine = canonicalSpine(cwd); } catch { throw new Refusal("SPINE", `${cwd} is not inside a git checkout, so no canonical spine can be named`); }
-  // The receipt's evidence is the transcript's path inside the repository that holds it, so the receipt
-  // resolves on the merged tree. A transcript outside every repository could prove nothing a receipt cites.
-  let evidence = null;
+  let spine, sessionRepo, transcriptRepo, top;
   try {
-    const top = git(dirname(transcript), ["rev-parse", "--show-toplevel"]);
-    const rel = posix(relative(realpathSync(top), join(realpathSync(dirname(transcript)), basename(transcript))));
-    if (rel && !rel.startsWith("..") && !isAbsolute(rel)) evidence = rel;
-  } catch { evidence = null; }
-  if (evidence === null) throw new Refusal("EVIDENCE", `${transcript} is not inside a git repository, so no receipt could cite it`);
+    spine = canonicalSpine(cwd);
+    sessionRepo = realpathSync(git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]));
+  } catch (e) {
+    if (e instanceof Refusal) throw e;
+    throw new Refusal("SPINE", `${cwd} is not inside a git checkout, so no canonical spine can be named`);
+  }
+  // The receipt's evidence is the transcript's path inside the checkout that holds it, and that checkout must be
+  // the session's own repository, or the receipt names a file in a tree it will never be merged into.
+  try {
+    top = git(dirname(transcript), ["rev-parse", "--show-toplevel"]);
+    transcriptRepo = realpathSync(git(dirname(transcript), ["rev-parse", "--path-format=absolute", "--git-common-dir"]));
+  } catch { throw new Refusal("EVIDENCE", `${transcript} is not inside a git repository, so no receipt could cite it`); }
+  if (transcriptRepo !== sessionRepo) throw new Refusal("EVIDENCE", `${transcript} is in a different repository from the session cwd ${cwd}`);
+  const evidence = posix(relative(realpathSync(top), join(realpathSync(dirname(transcript)), basename(transcript))));
+  if (!evidence || evidence.startsWith("..") || isAbsolute(evidence)) throw new Refusal("EVIDENCE", `${transcript} is outside its checkout`);
+  // The header is space-separated, and the emitter's evidence grammar has no room for these either.
+  for (const [k, v] of [["cwd", posix(cwd)], ["spine", posix(spine)], ["evidence", evidence]])
+    if (/[\s\\]/.test(v) || Buffer.byteLength(v, "utf8") > 512) throw new Refusal("EVIDENCE", `${k} \`${v}\` holds whitespace, a backslash or is too long for the header and the receipt`);
 
-  const fd = openSync(transcript, "wx");
+  const header = (session) =>
+    `harness-proof: opencode ${ver} session=${session} model=${o.model} cap_usd=${o.cap} command=${o.command} cwd=${posix(cwd)} spine=${posix(spine)} evidence=${evidence} date=${started}`;
+  const started = new Date().toISOString();
   const errFd = openSync(errPath, "wx");
+  let fd;
+  try { fd = openSync(transcript, "wx"); } catch (e) { closeSync(errFd); throw e; }
   let ioFailed = null;
   const out = (s) => { try { writeSync(fd, `${s}\n`); } catch (e) { ioFailed ??= e; } };
-  const header = (session) =>
-    `harness-proof: opencode ${ver} session=${session} model=${o.model} cap_usd=${o.cap} command=${o.command} cwd=${posix(cwd)} spine=${posix(spine)} evidence=${evidence} date=${new Date().toISOString()}`;
+  // Line 1 exists before anything can spend: a wrapper killed outright still leaves a header whose cap_usd the
+  // next run's ledger charges in full. It is rewritten with the session id when the run ends.
+  out(header("pending"));
 
-  const env = { ...process.env, ARC_HARNESS: "opencode", ARC_MODEL: o.model, ARC_SPINE_ROOT: spine, ARC_EVIDENCE: evidence };
-  const l = launch(bin, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true });
-  const child = spawn(l.cmd, l.args, l.opts);
-  // If this process dies for any reason, OpenCode does not outlive it and keep spending.
-  const onExit = () => killTree(child);
-  process.on("exit", onExit);
-
-  let spent = 0, finishes = 0, unpriced = 0, session = null, wroteHeader = false, verdict = null, overflow = false;
-  const pending = [];
-  const flushHeader = (s) => { if (!wroteHeader) { out(header(s)); wroteHeader = true; for (const p of pending.splice(0)) out(p); } };
-  const stop = (v) => { if (verdict === null) { verdict = v; killTree(child); } };
-  let buf = "";
-  const onLine = (line) => {
-    if (line === "") return;
-    const e = readEvent(line);
-    if (e.session && !session) session = e.session;
-    if (wroteHeader) out(line); else { pending.push(line); if (session) flushHeader(session); }
-    if (e.finish) finishes++;
-    if (e.unpriced) unpriced++;
-    if (e.cost !== null) spent += e.cost;
-    if (spent >= o.cap) stop(3);
-    if (ioFailed) stop(1);
+  let spent = 0, finishes = 0, unpriced = 0, stepLike = 0, events = 0, session = null, verdict = null, overflow = false;
+  let child = null, finalised = false, interrupted = null;
+  const stop = (v) => { if (verdict === null) { verdict = v; if (child) killTree(child); } };
+  const finalise = (code) => {
+    if (finalised) return verdict;
+    finalised = true;
+    if (child) killTree(child); // a leader that exited may have left its group behind (stragglers keep spending)
+    if (interrupted) { verdict = 6; out(`interrupted: ${interrupted}`); }
+    else if (verdict === 3) out(`cap-breach: spent=${money(spent)} cap=${o.cap}`);
+    else if (verdict === 5) out(`timeout: after ${o.timeoutS}s`);
+    else if (overflow) out(`overflow: a stdout line passed ${MAX_LINE_BYTES} bytes`);
+    else if (ioFailed) { verdict = 1; out(`io-failed: ${ioFailed.code || ioFailed.message}`); }
+    else if (unpriced > 0 || (finishes === 0 && stepLike > 0) || (code === 0 && events > 0 && finishes === 0)) {
+      verdict = 4;
+      out(`COST-UNREADABLE: ${finishes} step-finish event(s), ${unpriced} without a numeric cost, ${stepLike} step-like event(s), ${events} event(s)`);
+    }
+    else if (code !== 0) { verdict = 1; out(`child-failed: exit ${code}`); }
+    else verdict = 0;
+    out(`spent=${money(spent)}`);
+    try { closeSync(fd); } catch { /* reported above */ }
+    try { closeSync(errFd); } catch { /* reported above */ }
+    try {
+      const text = readFileSync(transcript, "utf8");
+      const nl = text.indexOf("\n");
+      writeFileSync(transcript, header(session ?? "none") + (nl >= 0 ? text.slice(nl) : "\n"));
+    } catch (e) { ioFailed ??= e; if (verdict === 0) verdict = 1; }
+    return verdict;
   };
-  child.stdout.on("data", (d) => {
-    buf += d.toString("utf8");
-    let k;
-    while ((k = buf.indexOf("\n")) >= 0) { onLine(buf.slice(0, k).replace(/\r$/, "")); buf = buf.slice(k + 1); }
-    if (Buffer.byteLength(buf, "utf8") > MAX_LINE_BYTES) { overflow = true; buf = ""; stop(1); }
-  });
-  child.stderr.on("data", (d) => { try { writeSync(errFd, d); } catch (e) { ioFailed ??= e; stop(1); } });
-  const timer = setTimeout(() => stop(5), o.timeoutS * 1000);
+  // A signal does not fire `exit`, so each one kills the tree and writes the verdict itself (attack 5823248 B1).
+  const signals = ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"].filter((s) => process.platform === "win32" || s !== "SIGBREAK");
+  const onSignal = (sig) => { interrupted = sig; finalise(-1); process.exit(130); };
+  const onExit = () => { if (!finalised) { interrupted ??= "the wrapper exited"; finalise(-1); } };
+  for (const s of signals) process.on(s, onSignal);
+  process.on("exit", onExit);
+  const detach = () => { for (const s of signals) process.removeListener(s, onSignal); process.removeListener("exit", onExit); };
 
-  const code = await new Promise((res) => {
-    let drain = null, settled = false;
-    const done = (c) => { if (settled) return; settled = true; clearTimeout(drain); res(c); };
-    child.on("error", (err) => { try { writeSync(errFd, `spawn error: ${err.message}\n`); } catch { /* reported below */ } done(-1); });
-    child.on("close", (c) => done(c));
-    // A grandchild holding the pipes open keeps `close` from firing; `exit` plus a bounded drain ends the wait.
-    child.on("exit", (c) => { drain = setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); done(c); }, DRAIN_MS); });
-  });
-  clearTimeout(timer);
-  process.removeListener("exit", onExit);
-  if (buf) onLine(buf.replace(/\r$/, ""));
-  flushHeader(session ?? "none");
-  if (verdict === 3) out(`cap-breach: spent=${money(spent)} cap=${o.cap}`);
-  else if (verdict === 5) out(`timeout: after ${o.timeoutS}s`);
-  else if (overflow) out(`overflow: a stdout line passed ${MAX_LINE_BYTES} bytes`);
-  else if (ioFailed) out(`io-failed: ${ioFailed.code || ioFailed.message}`);
-  else if (unpriced > 0) { verdict = 4; out(`COST-UNREADABLE: ${unpriced} of ${finishes} step-finish event(s) carried no numeric cost`); }
-  else if (code !== 0) { verdict = 1; out(`child-failed: exit ${code}`); }
-  else verdict = 0;
-  out(`spent=${money(spent)}`);
-  try { closeSync(fd); } catch { /* reported above */ }
-  try { closeSync(errFd); } catch { /* reported above */ }
-  if (ioFailed && verdict === 0) verdict = 1;
-  return { code: verdict, spent, session, transcript };
+  let code;
+  try {
+    // PWD too: OpenCode takes its project directory from an inherited PWD over the spawn cwd, so a shell that
+    // launched the wrapper elsewhere sent the first live smoke to the wrong checkout, with no .opencode/ in it.
+    const env = { ...process.env, PWD: cwd, ARC_HARNESS: "opencode", ARC_MODEL: o.model, ARC_SPINE_ROOT: spine, ARC_EVIDENCE: evidence };
+    const l = launch(bin, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true });
+    child = spawn(l.cmd, l.args, l.opts);
+    let buf = "";
+    const onLine = (line) => {
+      if (line === "") return;
+      out(line);
+      const e = readEvent(line);
+      if (e.json) events++;
+      if (e.session && !session) session = e.session;
+      if (e.stepLike) stepLike++;
+      if (e.finish) finishes++;
+      if (e.unpriced) unpriced++;
+      if (e.cost !== null) spent += e.cost;
+      if (spent >= o.cap) stop(3);
+      if (ioFailed) stop(1);
+    };
+    // A decoder, not chunk.toString(): a multi-byte character split across two chunks stays one character.
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (d) => {
+      buf += d;
+      let k;
+      while ((k = buf.indexOf("\n")) >= 0) { onLine(buf.slice(0, k).replace(/\r$/, "")); buf = buf.slice(k + 1); }
+      if (Buffer.byteLength(buf, "utf8") > MAX_LINE_BYTES) { overflow = true; buf = ""; stop(1); }
+    });
+    child.stderr.on("data", (d) => { try { writeSync(errFd, d); } catch (e) { ioFailed ??= e; stop(1); } });
+    const timer = setTimeout(() => stop(5), o.timeoutS * 1000);
+    code = await new Promise((res) => {
+      let drain = null, settled = false;
+      const done = (c) => { if (settled) return; settled = true; clearTimeout(drain); res(c); };
+      child.on("error", (err) => { try { writeSync(errFd, `spawn error: ${err.message}\n`); } catch { /* reported below */ } done(-1); });
+      child.on("close", (c) => done(c));
+      // A grandchild holding the pipes open keeps `close` from firing; `exit` plus a bounded drain ends the wait.
+      child.on("exit", (c) => { drain = setTimeout(() => { killTree(child); child.stdout.destroy(); child.stderr.destroy(); done(c); }, DRAIN_MS); });
+    });
+    clearTimeout(timer);
+    if (buf) onLine(buf.replace(/\r$/, ""));
+  } catch (e) {
+    try { writeSync(errFd, `wrapper error: ${e && e.message}\n`); } catch { /* reported below */ }
+    ioFailed ??= e;
+    code = -1;
+  } finally {
+    detach();
+  }
+  const v = finalise(code);
+  return { code: v, spent, session, transcript };
 }
 
-const NAMES = { 0: "ok", 1: "CHILD-FAILED", 3: "CAP-BREACH", 4: "COST-UNREADABLE", 5: "TIMEOUT" };
+const NAMES = { 0: "ok", 1: "CHILD-FAILED", 3: "CAP-BREACH", 4: "COST-UNREADABLE", 5: "TIMEOUT", 6: "INTERRUPTED" };
 
 async function main(argv) {
   let o;

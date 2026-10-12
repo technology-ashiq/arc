@@ -22,7 +22,7 @@ if (process.env.FAKE_OC_ARGV) writeFileSync(process.env.FAKE_OC_ARGV, JSON.strin
 if (process.env.FAKE_OC_MARKER) writeFileSync(process.env.FAKE_OC_MARKER, "invoked\n");
 if (process.env.FAKE_OC_ENV) {
   const pick = {};
-  for (const k of ["ARC_HARNESS", "ARC_EVIDENCE", "ARC_SPINE_ROOT", "ARC_MODEL"]) pick[k] = process.env[k] ?? null;
+  for (const k of ["ARC_HARNESS", "ARC_EVIDENCE", "ARC_SPINE_ROOT", "ARC_MODEL", "PWD"]) pick[k] = process.env[k] ?? null;
   writeFileSync(process.env.FAKE_OC_ENV, JSON.stringify(pick));
 }
 if (process.env.FAKE_OC_GRANDCHILD) {
