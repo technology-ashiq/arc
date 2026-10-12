@@ -133,6 +133,10 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
   check("LINT: a module spelling not-applicable in a template FAILs", kinds("const s = `not-applicable`;").includes("availability-literal"));
   check("LINT: a literal given to an availability key FAILs", kinds(`const f = { availability: "served" };`).includes("availability-literal")
     && kinds(`const f = { "availability": "zero" };`).includes("availability-literal"));
+  // attack c0fc549 B7: the raw token, a `+` join and an assignment each hid a typed state from the first scan.
+  check("LINT: an escaped spelling, a + join and an assignment each FAIL", kinds(String.raw`const s = "not\u002dinstrumented";`).includes("availability-literal")
+    && kinds(`const s = "not-" + "applicable";`).includes("availability-literal")
+    && kinds(`x.availability = "served";`).includes("availability-literal") && kinds("x[\"availability\"] = `zero`;").includes("availability-literal"));
   check("LINT: a module taking its state from the enum passes", kinds(`import { Availability } from "../../../lib/availability.mjs"; const f = { availability: Availability.ZERO };`).length === 0);
   check("LINT: the real module tree passes", (() => { const r = pure.lintModules(join(REPO, "face", "src", "modules"), { base: REPO }); return r.modules >= 36 && r.findings.filter((f) => f.kind === "availability-literal").length === 0; })());
 }
@@ -145,13 +149,14 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
     const probe = join(HERE, "availability-probe.mjs");
     const spine = join(tmp, "spine");
     const run = (venturesFile) => spawnSync(process.execPath, [probe], {
-      cwd: REPO, encoding: "utf8",
+      cwd: REPO, encoding: "utf8", timeout: 120000, killSignal: "SIGKILL",
       env: { ...process.env, ARC_VENTURES_FILE: venturesFile, ARC_SPINE_ROOT: spine },
     });
     const missing = run(join(tmp, "no-such-ventures.yaml"));
     let out = null;
     try { out = JSON.parse(missing.stdout.trim().split(/\r?\n/).pop()); } catch { /* checked below */ }
-    check("FIELD_UNKNOWN: the probe ran and answered (vacuous-pass guard)", missing.status === 0 && out !== null, `${missing.status} ${missing.stderr}`);
+    // Bounded: a probe that never exits names itself here rather than hanging the shard (attack c0fc549 B4).
+    check("FIELD_UNKNOWN: the probe ran and answered (vacuous-pass guard)", !missing.error && missing.status === 0 && out !== null, `${missing.error ? missing.error.code : ""} ${missing.status} ${missing.stderr}`);
     if (out !== null) {
       check("FIELD_UNKNOWN: the gated ops are exactly money.ingest and ventures.kill-review", JSON.stringify(out.gated) === JSON.stringify(["money.ingest", "ventures.kill-review"]), JSON.stringify(out.gated));
       for (const id of ["money.ingest", "ventures.kill-review"]) {
@@ -166,8 +171,11 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
     let gout = null;
     try { gout = JSON.parse(good.stdout.trim().split(/\r?\n/).pop()); } catch { /* checked below */ }
     check("FIELD_UNKNOWN control: with a readable ventures.yaml neither op refuses FIELD_UNKNOWN",
-      gout !== null && ["money.ingest", "ventures.kill-review"].every((id) => gout.results[id].code !== "FIELD_UNKNOWN"), good.stdout.slice(-400));
-  } finally { rmSync(tmp, { recursive: true, force: true }); }
+      !good.error && gout !== null && ["money.ingest", "ventures.kill-review"].every((id) => gout.results[id].code !== "FIELD_UNKNOWN"), good.stdout.slice(-400));
+  } finally {
+    // A cleanup that fails is said, never thrown past the RAN line (attack c0fc549 B3).
+    try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`WARN could not remove ${tmp}: ${e && e.code}`); }
+  }
 }
 
 // ── REPLAY (ADR-1305) ──────────────────────────────────────────────────────────────────────────────

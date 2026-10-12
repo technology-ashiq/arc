@@ -925,18 +925,43 @@ export function scanAvailabilityLiterals(text, file) {
     findings.push({ file, line: error.line, col: error.col, kind: "fold-unscannable", detail: `lint could not read the file past here: ${error.message}` });
     return findings;
   }
+  const lit = (t) => t && (t.k === "str" || t.k === "text");
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if ((t.k === "str" || t.k === "text") && STATE_ONLY_WORDS.has(String(t.v).trim()))
-      add(t, `"${String(t.v).trim()}" is an availability state spelled in a module -- take it from lib/availability.mjs (notServed's state option)`);
-    // A key named availability (bare or quoted) given a string or a template: a state typed in place.
-    const isKey = (t.k === "name" && t.v === "availability") || (t.k === "str" && t.v === "availability");
-    if (isKey && isP(tokens[i + 1], ":")) {
-      const v = tokens[i + 2];
-      if (v && (v.k === "str" || isP(v, "`"))) add(v, "an availability is given a literal -- a state comes from lib/availability.mjs, never typed in a module");
+    if (lit(t)) {
+      // The lexer keeps a string's RAW text, so it is decoded before it is judged: "not-instrumented" is the same
+      // word (attack c0fc549 B7). A run of literals joined by `+` is judged as the one string it builds.
+      let word = decodeEscapes(String(t.v));
+      for (let j = i + 1; isP(tokens[j], "+") && lit(tokens[j + 1]); j += 2) word += decodeEscapes(String(tokens[j + 1].v));
+      if (STATE_ONLY_WORDS.has(word.trim()) || STATE_ONLY_WORDS.has(decodeEscapes(String(t.v)).trim()))
+        add(t, `"${word.trim()}" is an availability state spelled in a module -- take it from lib/availability.mjs (notServed's state option)`);
+    }
+    // A key or a property named availability (bare, quoted, or in brackets) given a string or a template, by `:` or by
+    // `=`: a state typed in place (B7 -- an assignment was the shape the first scan did not read).
+    const named = (t.k === "name" && t.v === "availability") || (t.k === "str" && decodeEscapes(String(t.v)) === "availability");
+    if (named) {
+      const after = isP(tokens[i + 1], "]") ? i + 2 : i + 1;
+      if (isP(tokens[after], ":") || isP(tokens[after], "=")) {
+        const v = tokens[after + 1];
+        if (v && (v.k === "str" || isP(v, "`"))) add(v, "an availability is given a literal -- a state comes from lib/availability.mjs, never typed in a module");
+      }
     }
   }
   return findings;
+}
+
+/**
+ * A JavaScript string's raw text as the string it denotes: \uXXXX, \u{X...}, \xHH and a backslash before any other
+ * character. Only what the availability arm compares; a malformed escape is kept as written.
+ * @param {string} raw
+ */
+function decodeEscapes(raw) {
+  return raw.replace(/\\(u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|\r\n|[\s\S])/g, (m, all, cp, u4, x2) => {
+    const hex = cp ?? u4 ?? x2;
+    if (hex !== undefined) { const n = parseInt(hex, 16); return n <= 0x10ffff ? String.fromCodePoint(n) : m; }
+    const c = all.charCodeAt(0);
+    return c === 10 || c === 13 || c === 0x2028 || c === 0x2029 ? "" : all;
+  });
 }
 
 /**
@@ -1004,6 +1029,8 @@ export function lintModules(root, { srcRoot = dirname(root), base = process.cwd(
       } else {
         if (f === "fold.mjs") report.folds++;
         const buf = readFileSync(abs);
+        // A NUL-carrying file is not scanned HERE because checkMjs below reports it as a "binary" finding -- never silent
+        // (attack c0fc549 B2); a symlink, directory or FIFO never reaches this line (the two guards above, B1).
         if (!buf.includes(0)) report.findings.push(...scanAvailabilityLiterals(buf.toString("utf8"), show(abs)));
         checkMjs(abs);
       }

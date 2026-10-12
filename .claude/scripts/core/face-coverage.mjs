@@ -552,13 +552,16 @@ export function moduleFindings(tree) {
  * @param {string} repo
  */
 export async function treeAvailability(repo) {
+  // A thrown message is a fold's text: one line, the checkout's path withheld, capped -- it lands in a parsed log and in
+  // public CI output (attack c0fc549 B5).
+  const said = (e) => oneLine(String(e && e.message ? e.message : e)).split(repo).join("<repo>").split(repo.split("\\").join("/")).join("<repo>").slice(0, 300);
   let reg, av, rooms;
   try {
     reg = await import(pathToFileURL(join(repo, "face", "src", "lib", "registry.mjs")).href);
     av = await import(pathToFileURL(join(repo, "face", "src", "lib", "availability.mjs")).href);
     rooms = strictJson(join(repo, "initiatives", "face", "contracts", "rooms.generated.json"));
   } catch (e) {
-    return { unreadable: `the registry, the availability enum or the served rooms could not be read (${e.code ?? e.message})` };
+    return { unreadable: `the registry, the availability enum or the served rooms could not be read (${e && e.code ? String(e.code) : said(e)})` };
   }
   const tree = treeModules(repo);
   if (tree.unreadable) return { unreadable: tree.unreadable };
@@ -574,7 +577,7 @@ export async function treeAvailability(repo) {
       const folded = fold({}, ctx);
       modules.push({ key, fields: reg.availabilityOf(folded), notServed: reg.notServedOf(folded) });
     } catch (e) {
-      modules.push({ key, error: e && e.message ? e.message : String(e) });
+      modules.push({ key, error: said(e) });
     }
   }
   return { states: [...av.STATES], modules };

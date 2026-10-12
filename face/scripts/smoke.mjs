@@ -476,8 +476,13 @@ export function judge(report) {
   if (report.verbsPending && report.verbsPending.panels === null) reasons.push("the verb-pending card count could not be read in every opened room");
   if (report.served && report.served.panels === null) reasons.push("the served panel count could not be read in every opened room");
   // Phase 15 (ADR-1354): a panel that drew no availability is a field the room could not name.
-  if (report.availability && report.availability.states === null) reasons.push("the availability counts could not be read in every opened room");
-  else if (report.availability && report.availability.bad > 0) reasons.push(`${report.availability.bad} panel(s) drew no availability state of the five`);
+  // A report that never measured it is refused too, never passed on the bats wrapper alone (attack c0fc549 B6).
+  if (!report.availability) reasons.push("no availability block: the five states were never counted");
+  else if (report.availability.states === null) reasons.push("the availability counts could not be read in every opened room");
+  else {
+    if (!isCount(report.availability.bad) || report.availability.bad > 0) reasons.push(`${report.availability.bad} panel(s) drew no availability state of the five`);
+    if (Object.values(report.availability.states).reduce((n, v) => n + v, 0) === 0) reasons.push("no panel in any opened room drew an availability state -- zero measured is not a clean count");
+  }
   if (report.rehearsal && report.rehearsal.panels === null) reasons.push("the rehearsal card count could not be read in every opened room");
   // F3 (ADR-1328): every planned room the contract names opened marked planned, and none of them drew LIVE.
   if (Array.isArray(report.runner)) {

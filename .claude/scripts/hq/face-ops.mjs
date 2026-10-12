@@ -186,11 +186,11 @@ function registeredVentures() {
  * phase-15-spec.md before any code; an op not here is not gated. When the source's read failed the op refuses
  * FIELD_UNKNOWN rather than planning on an empty list (money.criteria, money.close-month and ventures.register read no
  * such field).
- * @type {Readonly<Record<string, Readonly<Record<string, () => { failure: string }>>>>}
+ * @type {Readonly<Record<string, Readonly<Record<string, () => { failure: string, options: string[] }>>>>}
  */
 export const FIELD_SOURCES = Object.freeze({
-  "money.ingest": Object.freeze({ venture: venturesRead }),
-  "ventures.kill-review": Object.freeze({ venture: venturesRead }),
+  "money.ingest": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
+  "ventures.kill-review": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
 });
 
 /** The rooms a term can be homed in: the contract's BUILT rooms and the lane template -- a planned room opens nothing. */
@@ -866,8 +866,11 @@ export function validateInput(op, input) {
     const raw = Object.hasOwn(input, f.name) ? /** @type {Record<string, unknown>} */ (input)[f.name] : undefined;
     // Before the value is judged at all: an unknown source makes every answer, including "none", a guess.
     const source = Object.hasOwn(FIELD_SOURCES, op.id) && Object.hasOwn(FIELD_SOURCES[op.id], f.name) ? FIELD_SOURCES[op.id][f.name] : null;
-    if (source !== null) {
-      const { failure } = source();
+    // ONE read judges the source and supplies the options the value is checked against (attack c0fc549 B8): judging one
+    // read and checking against another let a file swapped between them pass a value neither read held.
+    const read = source === null ? null : source();
+    if (read !== null) {
+      const { failure } = read;
       if (failure !== "") throw new OpError("FIELD_UNKNOWN", `${f.label} is read from a source that could not be read (${failure}), so it is unknown -- not empty; ${op.id} does not plan on it`);
     }
     if (raw === undefined || raw === "") {
@@ -876,7 +879,8 @@ export function validateInput(op, input) {
     }
     if (typeof raw !== "string") throw new OpError("BAD_INPUT", `${f.label} must be text`);
     if (f.type === "select") {
-      if (!f.options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} must be one of ${f.options.join(", ")}`);
+      const options = read !== null ? read.options : f.options;
+      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} must be one of ${options.join(", ")}`);
     } else if (f.type === "int") {
       if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new OpError("BAD_INPUT", `${f.label} must be a whole number`);
       const n = Number(raw);
