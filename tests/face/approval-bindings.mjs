@@ -120,7 +120,7 @@ try {
   check("PARENT: an approved parent -> its child is OPEN", lineOf(r.stdout, Ch2.id).endsWith("[OPEN]"), r.stdout);
 
   // EMIT refusals against the real spine.
-  const decLine = readdirSync(join(spine, "events")).flatMap((f) => readFileSync(join(spine, "events", f), "utf8").split("\n")).find((l) => l.includes("\"decision.recorded\""));
+  const decLine = readdirSync(join(spine, "events")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readFileSync(join(spine, "events", f), "utf8").split("\n")).find((l) => l.includes("\"decision.recorded\""));
   const decId = decLine ? JSON.parse(decLine).id : "";
   before = lines();
   const toDecision = emit({ what: "x", depends_on: [decId] });
@@ -136,7 +136,7 @@ try {
     lineOf(r.stdout, K1.id).endsWith("[OPEN]") && lineOf(r.stdout, K2.id).endsWith(`[DUPLICATE_OF ${K1.id}]`), r.stdout);
   r = inbox("approve", K2.id, "--reason", "the duplicate decides it");
   const r2 = inbox("inbox", "--all");
-  const decK = readdirSync(join(spine, "events")).flatMap((f) => readFileSync(join(spine, "events", f), "utf8").split("\n")).filter((l) => l.includes("\"decision.recorded\"") && (l.includes(K1.id) || l.includes(K2.id)));
+  const decK = readdirSync(join(spine, "events")).filter((f) => f.endsWith(".jsonl")).flatMap((f) => readFileSync(join(spine, "events", f), "utf8").split("\n")).filter((l) => l.includes("\"decision.recorded\"") && (l.includes(K1.id) || l.includes(K2.id)));
   check("KEY: deciding either resolves both -- the sibling reads resolved-by <decision>, one decision.recorded",
     r.status === 0 && decK.length === 1 && lineOf(r2.stdout, K1.id).endsWith(`[resolved-by ${JSON.parse(decK[0]).id}]`), `${r.stderr} ${decK.length} ${r2.stdout}`);
   before = lines();
