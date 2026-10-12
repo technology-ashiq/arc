@@ -233,6 +233,7 @@
 .claude/scripts/engine/install-targets/rendered.mjs	77565a8d58c9dc56a17e1d70632f9206cc46a37d54dfecfcc2c184b738a1310e
 .claude/scripts/engine/install-targets/skills-only.mjs	05c0ce23bdeed6a6b48634d53cb24ee2f3e56791b4ebcbb0c081b960fc357729
 .claude/scripts/engine/narrative-verify.mjs	b3dd9d07ed50449bd52a18456432c56ad613b4111c9c367d559f64b6bf544060
+.claude/scripts/engine/opencode-session.mjs	ccfa20722a25c036a1035afd6539dfc4b45a876fcae9051c354018d06c179f31
 .claude/scripts/engine/process-lint.mjs	16fc9d36445ea1d0c6972b3244f9afb448ed37fa8201b56306aa12f23eeef5dc
 .claude/scripts/engine/propose.mjs	130115fe10292f582bca3fcf8d07e2f7331a0a4beb5a33de4e99d9ab82c2de26
 .claude/scripts/engine/role-seat.mjs	a850a37ccb725efbaafb7a79612615baa8bb8b1177033175e3da04356b7aeed2
@@ -273,7 +274,7 @@
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
 .claude/scripts/hq/arc-dash.mjs	0e90cd572644345abcb4991bc505add7487a40856af889f1781ea093ac1d0f67
-.claude/scripts/hq/arc-event.mjs	a1f8353efe971fa13dec4664d998ff33b7fffdce0e4e9850a12d6c26834cea05
+.claude/scripts/hq/arc-event.mjs	3f552304009e31badaf4df853d29dc7425a9b2343e609cd0419566b21ca41d08
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
 .claude/scripts/hq/arc-inbox.mjs	01f21635127f522378a2a04ceaf60e7c5c690db9d0e8a4ca4fdb1b411b588aa5

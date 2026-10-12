@@ -5,14 +5,14 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/distribute.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*distribute v1 "arc under verified harnesses"*
+*distribute Cycle 2 "arc's loop under OpenCode on a non-Anthropic model"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-distribute (Cycle 1, opened 2026-10-07) |
+| Status | LIVE |
+| Cycle | arc-distribute (Cycle 2, opened 2026-10-13) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/distribute/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/distribute/PROGRESS.md)
 
-## Decisions (19)
+## Decisions (22)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -47,6 +47,9 @@ ADRs whose `Product:` line names this lane first.
 | [`2016`](../../../docs/adr/2016-new-gates-run-as-bats-suites-inside-existing-ci-jobs.md) | new merge-time gates and the clean-machine proof run as bats suites inside the existing CI jobs | accepted | 2026-10-07 |
 | [`2017`](../../../docs/adr/2017-every-frontmatter-key-has-a-declared-fate-per-target.md) | every frontmatter key has a declared fate per target | accepted | 2026-10-09 |
 | [`2018`](../../../docs/adr/2018-one-render-module-feeds-the-goldens-and-the-installer.md) | one render module feeds the goldens and the installer | accepted | 2026-10-09 |
+| [`2019`](../../../docs/adr/2019-opencode-sessions-run-through-one-wrapper-that-caps-spend-and-writes-the-transcript.md) | OpenCode sessions run through one wrapper that caps spend and writes the transcript | accepted | 2026-10-13 |
+| [`2020`](../../../docs/adr/2020-a-foreign-harness-session-stamps-its-receipts-and-writes-to-the-canonical-spine.md) | a foreign-harness session stamps its receipts and writes to the canonical spine | accepted | 2026-10-13 |
+| [`2021`](../../../docs/adr/2021-arc-ship-in-a-repo-with-no-deploy-target-ships-to-a-pr-and-reads-ci.md) | `arc-ship` in a repo with no deploy target ships to a PR and reads CI | accepted | 2026-10-13 |
 
 ## Source
 

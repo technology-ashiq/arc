@@ -189,7 +189,7 @@ diff: the list of exactly what changed between two versions of the files.
 
 None declared.
 
-## Scripts (47)
+## Scripts (48)
 
 - [`.claude/scripts/engine/adapters/claude-code.mjs`](../../../.claude/scripts/engine/adapters/claude-code.mjs)
 - [`.claude/scripts/engine/adapters/codex.mjs`](../../../.claude/scripts/engine/adapters/codex.mjs)
@@ -230,6 +230,7 @@ None declared.
 - [`.claude/scripts/engine/install-targets/rendered.mjs`](../../../.claude/scripts/engine/install-targets/rendered.mjs)
 - [`.claude/scripts/engine/install-targets/skills-only.mjs`](../../../.claude/scripts/engine/install-targets/skills-only.mjs)
 - [`.claude/scripts/engine/narrative-verify.mjs`](../../../.claude/scripts/engine/narrative-verify.mjs)
+- [`.claude/scripts/engine/opencode-session.mjs`](../../../.claude/scripts/engine/opencode-session.mjs)
 - [`.claude/scripts/engine/process-lint.mjs`](../../../.claude/scripts/engine/process-lint.mjs)
 - [`.claude/scripts/engine/propose.mjs`](../../../.claude/scripts/engine/propose.mjs)
 - [`.claude/scripts/engine/role-seat.mjs`](../../../.claude/scripts/engine/role-seat.mjs)
