@@ -10,7 +10,8 @@ permission:
     "bash .claude/scripts/hq/arc-event.sh *": allow
     "gh pr create --fill": allow
     "gh pr view --json url,state": allow
-    "git rev-parse @{u}": allow
+    "git branch --show-current": allow
+    "git rev-parse --abbrev-ref @{u}": allow
     "npm run build": allow
     "npm run lint": allow
     "npm run test": allow

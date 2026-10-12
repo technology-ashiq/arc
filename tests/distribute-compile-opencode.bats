@@ -55,11 +55,7 @@ load 'distribute/compile-target'
   grep -qx 'agent: arc-commit-fence' "$cmd" || { cat "$cmd"; false; }
   # deny, not ask (ADR-2022): headless OpenCode waits forever on a subagent's ask.
   grep -qxF '  "*": deny' "$fence" && grep -qxF '    "*": deny' "$fence" && grep -qx 'hidden: true' "$fence" || { cat "$fence"; false; }
-  [ "$(grep -c ': ask
-  grep -qxF '    "git diff *": allow' "$fence" && grep -qxF '    "git status": allow' "$fence" || { cat "$fence"; false; }
-  [ "$(grep -cF '"git status *"' "$fence")" -eq 0 ] || { echo "Bash(git status) widened to git status anything"; false; }
-}
- "$fence")" -eq 0 ] || { echo "an ask rule survives in a command fence"; cat "$fence"; false; }
+  [ "$(grep -c ': ask$' "$fence")" -eq 0 ] || { echo "an ask rule survives in a command fence"; cat "$fence"; false; }
   grep -qxF '    "git diff *": allow' "$fence" && grep -qxF '    "git status": allow' "$fence" || { cat "$fence"; false; }
   [ "$(grep -cF '"git status *"' "$fence")" -eq 0 ] || { echo "Bash(git status) widened to git status anything"; false; }
 }

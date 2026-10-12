@@ -42,7 +42,7 @@ wrap() {
 @test "distribute-opencode-session: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-opencode-session: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 13 ] || { echo "declared $declared, expected 13"; false; }
+  [ "$declared" -eq 15 ] || { echo "declared $declared, expected 15"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -65,7 +65,8 @@ wrap() {
   [ -s "$T/argv.json" ] && [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
   run node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(a.slice(0,-1).join(" ")+"\n"+a[a.length-1])' "$(native "$T/argv.json")"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "run --pure --command arc-commit -m openrouter/deepseek/deepseek-v4-flash-0731 --format json --" ] || { echo "$output"; false; }
+  printf '%s\n' "$output" | sed -n 1p | grep -qxE 'run --pure --title arc-argv-[0-9a-z]+ --command arc-commit -m openrouter/deepseek/deepseek-v4-flash-0731 --format json --' || { echo "$output"; false; }
+  if printf '%s\n' "$output" | sed -n 1p | grep -q -- '--auto'; then echo "--auto is back: it hangs a subagent fence (ADR-2022)"; false; fi
   [ "$(printf '%s\n' "$output" | sed -n '2,$p')" = 'a b "q" $X `bt` (a&b)' ] || { echo "message mangled: $output"; false; }
 }
 
@@ -228,4 +229,23 @@ wrap() {
   [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
   [ "$status" -eq 4 ] || { echo "status $status: $output $stderr"; false; }
   grep -q '^subagent: ses_fakeChild1 COST-UNREADABLE ' "$T/repo/ev/transcripts/task-noexport.jsonl" || { cat "$T/repo/ev/transcripts/task-noexport.jsonl"; false; }
+}
+
+@test "distribute-opencode-session: a killed run finds its session by title and charges the subagents it never streamed" {
+  # The live smokes that hung streamed no event at all; their subagent spend is read from the parent's export.
+  export FAKE_OC_MODE=stalltask FAKE_OC_CHILD_COST=0.04
+  wrap 0.30 2 stalltask.jsonl
+  [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
+  [ "$status" -eq 5 ] || { echo "status $status: $output $stderr"; false; }
+  local tx="$T/repo/ev/transcripts/stalltask.jsonl"
+  grep -qx 'sweep: ses_fake0001TestSession 1 subagent session(s)' "$tx" && grep -qx 'subagent: ses_fakeChild1 spent=0.08 steps=2' "$tx" || { cat "$tx"; false; }
+  [ "$(tail -1 "$tx" | tr -d '\r')" = "spent=0.12" ] || { tail -3 "$tx"; false; }
+  head -1 "$tx" | grep -q ' session=ses_fake0001TestSession ' || { head -1 "$tx"; false; }
+}
+
+@test "distribute-opencode-session: a subagent export with no step-finish is COST-UNREADABLE, never a free run" {
+  export FAKE_OC_MODE=emptytask
+  wrap 0.30 30 emptytask.jsonl
+  [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
+  [ "$status" -eq 4 ] && grep -q '^subagent: ses_fakeEmpty COST-UNREADABLE .*holds no step-finish$' "$T/repo/ev/transcripts/emptytask.jsonl" || { echo "status $status"; cat "$T/repo/ev/transcripts/emptytask.jsonl"; false; }
 }
