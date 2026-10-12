@@ -160,6 +160,10 @@ export function readBrief(raw) {
  * @property {string} what   free text, or the profile's subject -- the door's own fallback
  * @property {string} gate
  * @property {Record<string, unknown>} payload
+ * @property {string} state   the door's fold (ADR-1355): OPEN · WAITING · STALE · DUPLICATE_OF · UNKNOWN, or UNSTATED
+ * @property {string} label   the fold's own words for it, e.g. WAITING(<ulid>) or STALE(plan-moved)
+ * @property {string} ref     the request or decision the state points at, or ""
+ * @property {string} failure an UNKNOWN binding's failure class, or ""
  */
 
 /**
@@ -168,6 +172,7 @@ export function readBrief(raw) {
  * @property {string | null} asof
  * @property {number | null} openCount
  * @property {number | null} decidedCount
+ * @property {number | null} heldCount  undecided requests the owner cannot act on yet (Phase 16)
  * @property {Approval[]} open
  */
 
@@ -185,6 +190,11 @@ export function readInbox(raw) {
       what: asText(e["what"], ""),
       gate: asToken(e["gate"], "?"),
       payload: asObject(e["payload"]),
+      // A door that names no state is UNSTATED, never OPEN: an approval this face cannot place is not one it may stamp.
+      state: asToken(e["state"], "UNSTATED"),
+      label: asText(e["label"], ""),
+      ref: asToken(e["ref"], ""),
+      failure: asToken(e["failure"], ""),
     });
   }
   return {
@@ -192,6 +202,7 @@ export function readInbox(raw) {
     asof: typeof o["asof"] === "string" ? o["asof"] : null,
     openCount: asCount(o["openCount"]),
     decidedCount: asCount(o["decidedCount"]),
+    heldCount: asCount(o["heldCount"]),
     open,
   };
 }

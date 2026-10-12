@@ -39,6 +39,8 @@ import { leadsIdem, isLeadsKind } from "./lib/validate-leads.mjs";
 import { policyIdem, isPolicyKind } from "./lib/validate-policy.mjs";
 import { contentIdem, isContentKind } from "./lib/validate-content.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
+import { parentProblem } from "./lib/validate-bindings.mjs";
+import { scanAll } from "./spine.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
   quarantine, spineRoot, withLock, writeCloseMarker,
@@ -446,6 +448,13 @@ function main(parsed) {
     process.stdout.write(`${line}\n`);
     process.stderr.write("arc-event: --dry-run -- validated, scanned and sealed; nothing was written\n");
     return 0;
+  }
+  // ADR-1355 (face v2 Phase 16): a request's parents are judged against the spine before it lands -- each must be an
+  // approval.requested already here (never a decision's ULID), and no cycle may form. validate.mjs cannot see the
+  // spine, so this is the one place it can be checked; a refusal is a REJECT like any other, with nothing written.
+  if (sealed.kind === "approval.requested" && sealed.payload && Array.isArray(sealed.payload.depends_on)) {
+    const problem = parentProblem(sealed, scanAll(root).events);
+    if (problem !== null) throw new SpineError(problem.code, problem.why);
   }
   const result = appendEvent(root, sealed, line, { timeoutMs });
   if (result.healed)

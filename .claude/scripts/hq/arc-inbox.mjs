@@ -8,7 +8,7 @@
 // opens events/*.jsonl or state.db, which is what REQ-09's grep-lint checks.
 //
 // Usage:
-//   arc-inbox inbox                       # list OPEN approvals (approval.requested, undecided)
+//   arc-inbox inbox [--all]               # OPEN approvals; --all lists every request with its state (ADR-1355)
 //   arc-inbox approve <ULID> --reason R   # record decision.recorded verdict=approve
 //   arc-inbox reject  <ULID> --reason R   # record decision.recorded verdict=reject
 //   arc-inbox owner-key init              # once, at a terminal: make + seal the owner key (ADR-1514 amendment 2)
@@ -30,6 +30,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { query } from "./spine.mjs";
 import { initOwnerKey, ownerKeyDir, ownerPubPath, pageListing, readPassphraseTty, signAccept, stdioIsTty } from "./lib/owner-key.mjs";
 import { ACCEPT_GATE } from "./lib/owner-sig.mjs";
+import { foldApprovals, decideRefusal } from "./lib/approval-fold.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_EVENT = join(HERE, "arc-event.mjs");
@@ -70,23 +71,74 @@ export async function loadApprovals(root, { asof = null } = {}) {
   const requested = cut((await query(root, { kind: "approval.requested", engine: "scan" })).events);
   const decided = cut((await query(root, { kind: "decision.recorded", engine: "scan" })).events);
   const decidedIds = new Set(decided.map((e) => e.event.payload && e.event.payload.decides));
-  return { requested, decidedIds };
+  return { requested, decidedIds, decided };
 }
 
-async function listInbox(root) {
-  const { requested, decidedIds } = await loadApprovals(root);
-  const open = requested.filter((e) => !decidedIds.has(e.event.id));
-  if (!open.length) { process.stderr.write("inbox: no open approvals\n"); return 0; }
-  for (const e of open) {
+/**
+ * Re-derive a bound request's plan, DRY-RUN, and say whether its digest moved (face v2 Phase 16, ADR-1355 (a)). The
+ * plan is the work door's REGISTERED one for `bound.op`, built from `bound.input` by the door's own validator and run by
+ * the door's own runner -- never a command the payload spells -- and only an op whose plan prints a digest
+ * (`expect: true`) can be bound. A plan that refuses, times out or prints no digest is a failure CLASS (REQ-19's
+ * unknown), never "same". Every plan here is a --dry-run: the re-derive writes nothing.
+ * @param {Record<string, unknown>} bound
+ * @returns {Promise<"same" | "moved" | { failure: string }>}
+ */
+export async function planStateOf(bound) {
+  const OPS = await import("./face-ops.mjs");
+  const DOOR = await import("./lib/face/work-door.mjs");
+  const op = OPS.OPS.find((o) => o.id === bound.op);
+  if (!op) return { failure: "UNKNOWN_OP" };
+  if (op.expect !== true) return { failure: "NOT_BOUND_OP" };
+  let values;
+  try { values = OPS.validateInput(op, bound.input); } catch (e) { return { failure: e && e.code ? String(e.code) : "BAD_INPUT" }; }
+  let res;
+  try { res = await DOOR.runTool({ repo: join(HERE, "..", "..", "..") }, op.plan(values), { timeoutMs: REDERIVE_TIMEOUT_MS }); }
+  catch (e) { return { failure: e && e.code ? String(e.code) : "TOOL_FAILED" }; }
+  if (res.timedOut) return { failure: "PLAN_TIMEOUT" };
+  if (res.exit !== 0) return { failure: "PLAN_REFUSED" };
+  let digest;
+  try { digest = OPS.expectFrom(op, res.stdout); } catch (e) { return { failure: e && e.code ? String(e.code) : "NO_EXPECT" }; }
+  return digest === bound.expect ? "same" : "moved";
+}
+const REDERIVE_TIMEOUT_MS = 120_000;
+
+/**
+ * Every request with its folded state -- the ONE fold the CLI, the decide path and the door's /api/inbox read.
+ * @param {string} root @param {{ asof?: string | null, rederive?: boolean, decidedPlans?: boolean }} [o]
+ *   rederive: re-derive bound plans. An as-of read passes false: a plan is re-derived against today's world, never the
+ *   replayed day, so a bound request then reads UNKNOWN(NOT_REDERIVED) -- never OPEN.
+ */
+export async function inboxFold(root, { asof = null, rederive = true, decidedPlans = false } = {}) {
+  const { requested, decided } = await loadApprovals(root, { asof });
+  return foldApprovals(requested, decided, { planState: rederive ? planStateOf : undefined, decidedPlans });
+}
+
+/** The inbox line's description and gate, with the profile fallbacks. @param {Record<string, unknown>} p */
+export function whatGate(p) {
+  const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
+  const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
+  return { what, gate };
+}
+
+async function listInbox(root, all = false) {
+  const folded = await inboxFold(root, { decidedPlans: all });
+  // OPEN only by default; --all lists every request, each ending in its state (ADR-1355).
+  const shown = folded.filter((f) => all || f.state === "OPEN");
+  if (!shown.length) {
+    const held = folded.filter((f) => f.state !== "OPEN" && f.state !== "DECIDED" && f.state !== "RESOLVED").length;
+    process.stderr.write(held > 0 ? `inbox: no open approvals (${held} waiting, stale, duplicate or unknown -- --all lists them)\n` : "inbox: no open approvals\n");
+    return 0;
+  }
+  for (const f of shown) {
+    const e = f.row;
     const p = e.event.payload || {};
     // `what` falls back to `subject` so a PROFILE payload does not render as a blank line the owner
     // cannot read. absorb's ab-judgement profile is closed to its validated fields (ADR-0603) and
     // deliberately has no free-text `what`; without this fallback its inbox row printed as `(?)` with
     // no description at all, which is a request the owner cannot weigh -- and an approval nobody can
     // read is a rubber stamp with extra steps.
-    const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
-    const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
-    process.stdout.write(`${e.event.id}  ${what}  (${gate})  ${e.event.venture}\n`);
+    const { what, gate } = whatGate(p);
+    process.stdout.write(`${e.event.id}  ${what}  (${gate})  ${e.event.venture}  [${f.label}]\n`);
     // A PROMOTION is the one approval whose sentence is not enough to decide on. Which pair,
     // how far, and on what evidence are all validated fields (ADR-0508's promotion profile), so
     // putting them on the screen where the decision is made costs nothing and is the difference
@@ -172,6 +224,14 @@ export async function decide(root, verdict, id, reason, signer = {}) {
   }
   if (decidedIds.has(id))
     throw new SpineError("ALREADY_DECIDED", `${id} already has a decision -- decisions are final (supersede on a new day if truly needed)`);
+  // ADR-1355: a request carrying a binding is decided only in a state that allows it -- a waiting child, a rejected
+  // parent's child, a moved plan, an unevaluable binding and a key already decided are refused, ZERO events written.
+  const p0 = approval.event.payload || {};
+  if ("bound_to" in p0 || "depends_on" in p0 || "decision_key" in p0) {
+    const f = (await inboxFold(root)).find((x) => x.id === id);
+    const no = f ? decideRefusal(f, verdict === "approve" ? "approve" : "reject") : { code: "UNKNOWN_APPROVAL", why: "the fold does not hold it" };
+    if (no !== null) throw new SpineError(no.code, `${id}: ${no.why}`);
+  }
 
   // ADR-1514 amendment 2: approving a narrative-accept request is AUTHENTICATED. It is signed, page by page, with the owner
   // key, which only a passphrase typed at a terminal unseals. A reject needs no signature, and every other gate is untouched.
@@ -228,6 +288,7 @@ function parse(argv) {
       const eq = a.indexOf("=");
       if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
       const name = a.slice(2);
+      if (name === "all") { flags.all = true; continue; }
       if (name !== "reason") throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
       const next = argv[i + 1];
       if (next === undefined) throw new SpineError("BAD_ARGS", `flag --${name} needs a value`);
@@ -257,7 +318,8 @@ async function main(argv) {
     return 0;
   }
   const root = spineRoot();
-  if (command === "inbox") return listInbox(root);
+  if (command === "inbox") return listInbox(root, flags.all === true);
+  if (flags.all === true) throw new SpineError("BAD_ARGS", "--all belongs with inbox");
   if (command === "approve" || command === "reject")
     return decide(root, command, positional[1], flags.reason);
   throw new SpineError("BAD_ARGS", `unknown command ${JSON.stringify(command)} (inbox | approve <id> --reason R | reject <id> --reason R | owner-key init)`);

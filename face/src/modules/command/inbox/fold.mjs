@@ -12,6 +12,20 @@ import {
   readInbox, readSpinePage, readStampResult, shortId, validateReason,
 } from "../../../lib/inbox.mjs";
 import { eventRowView, receiptView } from "../../../lib/spine.mjs";
+import { Availability } from "../../../lib/availability.mjs";
+
+/**
+ * The door's fold, worded for a card (face v2 Phase 16, ADR-1355). Only an OPEN request can be armed; the rest say why
+ * not. A state this face does not know -- or a door that named none -- is never armable.
+ * @type {Record<string, { badge: string, why: string }>}
+ */
+const STATE_WORDS = {
+  OPEN: { badge: "open", why: "" },
+  WAITING: { badge: "waiting", why: "It waits on another request -- it can be approved once that one is decided." },
+  STALE: { badge: "stale", why: "Approving it would approve something that no longer holds: re-plan it, or reject it." },
+  DUPLICATE_OF: { badge: "duplicate", why: "An earlier request raises the same decision; deciding either resolves both." },
+  UNKNOWN: { badge: "unknown", why: "What it is bound to could not be evaluated, so approving it would be a guess." },
+};
 
 /** The door's page cap. A log longer than a page says so rather than counting a page as the whole. */
 const LOG_LIMIT = 1000;
@@ -36,6 +50,14 @@ const refusal = (p) => (p.state === "refused" ? { code: p.code, human: p.human }
  * @property {string} armedInk
  * @property {"primary" | "ghost"} stampTone
  * @property {string} edge
+ * @property {string} state       the door's fold state (ADR-1355), drawn as a badge
+ * @property {string} badge
+ * @property {string} stateLabel  the fold's own words, e.g. WAITING(<ulid>)
+ * @property {string} availability  REQ-19: unknown when the binding could not be evaluated, else served
+ * @property {boolean} canArm      approve may be armed: only an OPEN request
+ * @property {boolean} canReject   reject may be armed: any request in a state the door named
+ * @property {boolean} isHeld
+ * @property {string} heldWhy
  *
  * @typedef {object} Folded
  * @property {string} sentence
@@ -80,7 +102,9 @@ export function fold(payloads, ctx) {
 
   // What the View armed: "<approval id>|approve" or "<approval id>|reject". An id no longer open is not armed.
   const [armedId = "", armedVerdict = ""] = String(picks.armed ?? "").split("|");
-  const armedOpen = open.some((a) => a.id === armedId) && (armedVerdict === "approve" || armedVerdict === "reject");
+  // Approve arms only an OPEN request; reject arms any request whose state the door named (a waiting or stale request's
+  // rejection is the owner's to make -- the CLI's decideRefusal draws the same line).
+  const armedOpen = open.some((a) => a.id === armedId && (armedVerdict === "approve" ? a.state === "OPEN" : armedVerdict === "reject" && Object.hasOwn(STATE_WORDS, a.state)));
   const check = validateReason(picks.reason ?? "");
 
   const actP = payloadOf(payloads, { route: "/api/decide", act: true });
@@ -144,6 +168,10 @@ export function fold(payloads, ctx) {
       cards: open.map((a) => {
         const isArmed = armedOpen && a.id === armedId;
         const approve = isArmed && armedVerdict === "approve";
+        const words = Object.hasOwn(STATE_WORDS, a.state) ? STATE_WORDS[a.state] : { badge: "unstated", why: "The door named no state this face knows, so it is not stamped from here." };
+        const canArm = a.state === "OPEN";
+        const isKnown = Object.hasOwn(STATE_WORDS, a.state);
+        const isUnevaluable = a.state === "UNKNOWN" || !isKnown;
         return {
           id: a.id,
           title: decodeDoorText(a.what),
@@ -157,6 +185,14 @@ export function fold(payloads, ctx) {
           armedInk: approve ? "var(--accent)" : "var(--text-1)",
           stampTone: /** @type {"primary" | "ghost"} */ (approve ? "primary" : "ghost"),
           edge: isArmed ? (approve ? "var(--accent)" : "var(--line-2)") : "var(--line-1)",
+          state: a.state,
+          badge: words.badge,
+          stateLabel: decodeDoorText(a.label),
+          availability: isUnevaluable ? Availability.UNKNOWN : Availability.SERVED,
+          canArm,
+          canReject: isKnown,
+          isHeld: !canArm,
+          heldWhy: words.why,
         };
       }),
     },
