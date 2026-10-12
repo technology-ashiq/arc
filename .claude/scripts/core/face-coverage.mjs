@@ -547,6 +547,29 @@ export function moduleFindings(tree) {
 // be folded at all are each a FAIL from birth: a gap that cannot be named is a gap the owner assumes is not there.
 
 /**
+ * A message with the checkout's path withheld, in any spelling a platform prints it: either separator, any case on
+ * Windows, and as a file:// URL.
+ * @param {string} text @param {string} repo
+ */
+export function withholdPath(text, repo) {
+  const fwd = (s) => s.split("\\").join("/");
+  const fold = process.platform === "win32" ? (s) => s.toLowerCase() : (s) => s;
+  const forms = [...new Set([repo, fwd(repo), fwd(repo).split("/").join("\\"), pathToFileURL(repo).href].filter((f) => f.length > 3))]
+    .sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const f of forms) {
+    const hay = fold(out), needle = fold(f);
+    let at = hay.indexOf(needle), res = "", from = 0;
+    while (at >= 0) { res += out.slice(from, at) + "<repo>"; from = at + f.length; at = hay.indexOf(needle, from); }
+    out = res + out.slice(from);
+  }
+  return out;
+}
+
+/** A fold-returned string inside a finding: one line, quoted, capped -- a panel name can carry a newline (round 2 B3). */
+const quoted = (v) => JSON.stringify(oneLine(String(v)).slice(0, 120));
+
+/**
  * Fold every module with nothing loaded and list what each names. Unreadable -- never empty -- when the registry, the
  * availability enum or the module tree cannot be read.
  * @param {string} repo
@@ -554,7 +577,13 @@ export function moduleFindings(tree) {
 export async function treeAvailability(repo) {
   // A thrown message is a fold's text: one line, the checkout's path withheld, capped -- it lands in a parsed log and in
   // public CI output (attack c0fc549 B5).
-  const said = (e) => oneLine(String(e && e.message ? e.message : e)).split(repo).join("<repo>").split(repo.split("\\").join("/")).join("<repo>").slice(0, 300);
+  // The scrub compares on one separator and, on Windows, one case, and withholds the file:// form too (round 2 B2); a
+  // throw that cannot even be stringified is named, never a second throw out of the catch (round 2 B1).
+  const said = (e) => {
+    let text;
+    try { text = String(e && e.message ? e.message : e); } catch { text = "<unprintable throw>"; }
+    return withholdPath(oneLine(text), repo).slice(0, 300);
+  };
   let reg, av, rooms;
   try {
     reg = await import(pathToFileURL(join(repo, "face", "src", "lib", "registry.mjs")).href);
@@ -601,14 +630,14 @@ export function availabilityFindings(tree) {
     if (m.error !== undefined) { findings.push(`[availability] ${m.key} could not be folded with nothing loaded (${m.error}), so its fields cannot be named`); continue; }
     for (const f of m.fields) {
       fields++;
-      if (!states.has(f.availability)) { findings.push(`[availability] ${m.key} draws a field in state ${JSON.stringify(f.availability)}, outside ${[...states].join(", ")}`); continue; }
+      if (!states.has(f.availability)) { findings.push(`[availability] ${m.key} draws a field in state ${quoted(f.availability)}, outside ${[...states].join(", ")}`); continue; }
       counts[f.availability]++;
       if (typeof f.source !== "string" || f.source.trim() === "") findings.push(`[availability] ${m.key} draws a ${f.availability} field that names no source -- every field that is not served names where it would come from (ADR-1354)`);
     }
     for (const n of m.notServed) {
       const a = n.avail;
-      if (!a || a.isAvailability !== true) { findings.push(`[availability] ${m.key}'s NOT SERVED panel "${n.panel}" carries no availability -- build it with notServed()`); continue; }
-      if (typeof a.owner_lane !== "string" || a.owner_lane.trim() === "") findings.push(`[availability] ${m.key}'s NOT SERVED panel "${n.panel}" names no owner lane -- a gap is named and owned, not filled (ADR-1354)`);
+      if (!a || a.isAvailability !== true) { findings.push(`[availability] ${m.key}'s NOT SERVED panel ${quoted(n.panel)} carries no availability -- build it with notServed()`); continue; }
+      if (typeof a.owner_lane !== "string" || a.owner_lane.trim() === "") findings.push(`[availability] ${m.key}'s NOT SERVED panel ${quoted(n.panel)} names no owner lane -- a gap is named and owned, not filled (ADR-1354)`);
     }
   }
   return { findings, counts, fields };

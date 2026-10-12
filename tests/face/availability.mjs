@@ -106,6 +106,18 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
   const ns15 = tree.modules.flatMap((m) => m.notServed || []);
   check("FOLDS: every NOT SERVED panel on the tree is not-instrumented or not-applicable and names an owner lane",
     ns15.length >= 15 && ns15.every((n) => ["not-instrumented", "not-applicable"].includes(n.avail.availability) && n.avail.owner_lane !== ""), `n=${ns15.length}`);
+  // round 2 B1/B2/B3: a finding's text is one line, with the checkout's path withheld in every spelling.
+  {
+    const BS = String.fromCharCode(92);
+    const repoW = ["C:", "x", "repo"].join(BS);
+    const msgs = ["C:/x/repo/a.mjs", [repoW, "a.mjs"].join(BS), "file:///C:/x/repo/a.mjs"];
+    check("FOLDS: a thrown message has the checkout path withheld in either separator and as a file URL",
+      msgs.every((m) => cov.withholdPath(m, repoW).startsWith("<repo>")), msgs.map((m) => cov.withholdPath(m, repoW)).join(" | "));
+    const NL = String.fromCharCode(10);
+    const forged = { states: tree.states, modules: [{ key: "x/y", fields: [], notServed: [{ panel: "P" + NL + "FAIL forged", route: "/api/x", sentence: "s", avail: { isAvailability: true, owner_lane: "" } }] }] };
+    const fs1 = cov.availabilityFindings(forged).findings;
+    check("FOLDS: a panel name carrying a newline cannot forge a finding line", fs1.length === 1 && fs1.every((f) => !f.includes(NL)), JSON.stringify(fs1));
+  }
   const first = tree.modules.find((m) => m.error === undefined && m.fields.length > 0);
   const mutant = { ...tree, modules: tree.modules.map((m) => (m === first ? { ...m, fields: m.fields.map((f, i) => (i === 0 ? { ...f, source: "" } : f)) } : m)) };
   check("FOLDS MUTANT: a field with no source FAILs the walker", cov.availabilityFindings(mutant).findings.some((f) => f.includes("names no source")));
@@ -137,6 +149,10 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
   check("LINT: an escaped spelling, a + join and an assignment each FAIL", kinds(String.raw`const s = "not\u002dinstrumented";`).includes("availability-literal")
     && kinds(`const s = "not-" + "applicable";`).includes("availability-literal")
     && kinds(`x.availability = "served";`).includes("availability-literal") && kinds("x[\"availability\"] = `zero`;").includes("availability-literal"));
+  // round 2 B4: a literal one token deeper -- a ternary, parentheses -- is the same typed state.
+  check("LINT: a literal inside a ternary or parentheses given to availability FAILs", kinds(`const f = { availability: ok ? "served" : "zero" };`).includes("availability-literal")
+    && kinds(`x.availability = ("served");`).includes("availability-literal"));
+  check("LINT: a long + chain of literals is judged in linear time", (() => { const t = Date.now(); kinds("const s = " + Array(20000).fill('"a"').join(" + ") + ";"); return Date.now() - t < 5000; })());
   check("LINT: a module taking its state from the enum passes", kinds(`import { Availability } from "../../../lib/availability.mjs"; const f = { availability: Availability.ZERO };`).length === 0);
   check("LINT: the real module tree passes", (() => { const r = pure.lintModules(join(REPO, "face", "src", "modules"), { base: REPO }); return r.modules >= 36 && r.findings.filter((f) => f.kind === "availability-literal").length === 0; })());
 }
@@ -171,7 +187,7 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
     let gout = null;
     try { gout = JSON.parse(good.stdout.trim().split(/\r?\n/).pop()); } catch { /* checked below */ }
     check("FIELD_UNKNOWN control: with a readable ventures.yaml neither op refuses FIELD_UNKNOWN",
-      !good.error && gout !== null && ["money.ingest", "ventures.kill-review"].every((id) => gout.results[id].code !== "FIELD_UNKNOWN"), good.stdout.slice(-400));
+      !good.error && gout !== null && ["money.ingest", "ventures.kill-review"].every((id) => gout.results[id].code !== "FIELD_UNKNOWN"), `${good.error ? good.error.code : ""} ${good.status} ${String(good.stdout ?? "").slice(-400)}`);
   } finally {
     // A cleanup that fails is said, never thrown past the RAN line (attack c0fc549 B3).
     try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { console.log(`WARN could not remove ${tmp}: ${e && e.code}`); }

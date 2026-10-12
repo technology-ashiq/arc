@@ -481,7 +481,10 @@ export function judge(report) {
   else if (report.availability.states === null) reasons.push("the availability counts could not be read in every opened room");
   else {
     if (!isCount(report.availability.bad) || report.availability.bad > 0) reasons.push(`${report.availability.bad} panel(s) drew no availability state of the five`);
-    if (Object.values(report.availability.states).reduce((n, v) => n + v, 0) === 0) reasons.push("no panel in any opened room drew an availability state -- zero measured is not a clean count");
+    const st = report.availability.states;
+    // Counts are judged as counts first: a string sums by concatenation and "03000" is not zero (round 2 B8).
+    if (!AVAILABILITY_STATES.every((k) => isCount(st[k]))) reasons.push("an availability state count is not a count");
+    else if (AVAILABILITY_STATES.reduce((n, k) => n + st[k], 0) === 0) reasons.push("no panel in any opened room drew an availability state -- zero measured is not a clean count");
   }
   if (report.rehearsal && report.rehearsal.panels === null) reasons.push("the rehearsal card count could not be read in every opened room");
   // F3 (ADR-1328): every planned room the contract names opened marked planned, and none of them drew LIVE.

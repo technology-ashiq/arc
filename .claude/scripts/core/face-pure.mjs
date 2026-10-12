@@ -911,6 +911,8 @@ function specSpelledExactly(fromDir, spec) {
 
 /** The words only an availability state can mean -- a module that types one has invented a state. */
 const STATE_ONLY_WORDS = new Set(["not-instrumented", "not-applicable"]);
+/** How long a `+` chain is joined before it is judged: past every state word, a string cannot be one. */
+const JOIN_CAP = 64;
 
 /**
  * A module .mjs that spells an availability state itself (face v2 Phase 15). Lexed with template text kept, so a
@@ -928,22 +930,33 @@ export function scanAvailabilityLiterals(text, file) {
   const lit = (t) => t && (t.k === "str" || t.k === "text");
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (lit(t)) {
-      // The lexer keeps a string's RAW text, so it is decoded before it is judged: "not-instrumented" is the same
-      // word (attack c0fc549 B7). A run of literals joined by `+` is judged as the one string it builds.
+    // A literal that is the tail of a `+` chain was judged with its head; starting again from it made a chain of N
+    // literals O(N^2) (round 2 B5).
+    const isTail = i >= 2 && isP(tokens[i - 1], "+") && lit(tokens[i - 2]);
+    if (lit(t) && !isTail) {
+      // The lexer keeps a string's RAW text, so it is decoded before it is judged: an escaped hyphen spells the same
+      // word (attack c0fc549 B7). A run of literals joined by `+` is judged as the one string it builds, and the join
+      // stops past any state word's length -- a longer string cannot be one.
       let word = decodeEscapes(String(t.v));
-      for (let j = i + 1; isP(tokens[j], "+") && lit(tokens[j + 1]); j += 2) word += decodeEscapes(String(tokens[j + 1].v));
+      for (let j = i + 1; word.length <= JOIN_CAP && isP(tokens[j], "+") && lit(tokens[j + 1]); j += 2) word += decodeEscapes(String(tokens[j + 1].v));
       if (STATE_ONLY_WORDS.has(word.trim()) || STATE_ONLY_WORDS.has(decodeEscapes(String(t.v)).trim()))
         add(t, `"${word.trim()}" is an availability state spelled in a module -- take it from lib/availability.mjs (notServed's state option)`);
     }
-    // A key or a property named availability (bare, quoted, or in brackets) given a string or a template, by `:` or by
-    // `=`: a state typed in place (B7 -- an assignment was the shape the first scan did not read).
+    // A key or a property named availability (bare, quoted, or in brackets) given by `:` or `=` a value expression that
+    // holds ANY string or template literal -- a ternary, parentheses or a fallback are the same typed state one token
+    // deeper (round 2 B4). The value runs to the next `,` `;` or closing bracket at its own depth.
     const named = (t.k === "name" && t.v === "availability") || (t.k === "str" && decodeEscapes(String(t.v)) === "availability");
     if (named) {
       const after = isP(tokens[i + 1], "]") ? i + 2 : i + 1;
       if (isP(tokens[after], ":") || isP(tokens[after], "=")) {
-        const v = tokens[after + 1];
-        if (v && (v.k === "str" || isP(v, "`"))) add(v, "an availability is given a literal -- a state comes from lib/availability.mjs, never typed in a module");
+        let depth = 0;
+        for (let j = after + 1; j < tokens.length; j++) {
+          const v = tokens[j];
+          if (depth === 0 && (isP(v, ",") || isP(v, ";") || isP(v, "}") || isP(v, ")") || isP(v, "]"))) break;
+          if (isP(v, "(") || isP(v, "[") || isP(v, "{") || isP(v, "${")) depth++;
+          else if (isP(v, ")") || isP(v, "]") || isP(v, "}")) depth--;
+          if (v.k === "str" || isP(v, "`")) { add(v, "an availability is given a literal -- a state comes from lib/availability.mjs, never typed in a module"); break; }
+        }
       }
     }
   }

@@ -196,7 +196,7 @@ export function NotServed({ item }: { item: { panel: string; route: string; sent
     >
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className="inline-flex items-center h-[20px] px-2 rounded-full text-[10.5px] uppercase tracking-[0.06em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>
-          {STATE_WORDS[a.availability] ?? a.availability}
+          {Object.hasOwn(STATE_WORDS, a.availability) ? STATE_WORDS[a.availability] : String(a.availability)}
         </span>
         <span className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>GET {item.route}</span>
         <span className="text-[12.5px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{item.panel}</span>
