@@ -272,7 +272,7 @@
 .claude/scripts/growth/lib/text.mjs	0646e9d36d38cf6a217b8fa449fbc78336770deae607d025cdf6b6fa89094d2b
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
-.claude/scripts/hq/arc-dash.mjs	a48c23002736d448ea3ebda476e1dcf8ba517a469c8dcff6fd73edd0f1de8baf
+.claude/scripts/hq/arc-dash.mjs	6ef2e9e8fffa25d10ceb8aca0f6b3410318a52351779fe1b0ecb232df43b2904
 .claude/scripts/hq/arc-event.mjs	c9724e8810a9274ced290c015c8a0cb3b75ce92c284416a60102f8c46c17c546
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
@@ -294,6 +294,7 @@
 .claude/scripts/hq/lib/approval-fold.mjs	7598aebf4619fb16f951ebcf7ec2b82d85895fe4cd0ff416791f12e6a5d5001a
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
+.claude/scripts/hq/lib/face/discover/route.mjs	51c36ed789e0089da981fecc62dd57a863c7f32d051301e185521ee67b859a4f
 .claude/scripts/hq/lib/face/models.mjs	dee2063e634ff21cbe6c4c30b5060d0c5269c89a7a866b383a662ed50b96b684
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
 .claude/scripts/hq/lib/face/reads.mjs	8aedfeaacc8ee48eec6ee21ffcc6b7bf4bf274b31dd289b6dfe13633994899ac
