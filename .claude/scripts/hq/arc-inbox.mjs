@@ -18,7 +18,7 @@
 
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { SpineError, ULID_RE, sha256Hex } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { isPromotionRequest } from "./lib/validate-policy.mjs";
@@ -93,6 +93,10 @@ export async function planStateOf(bound) {
   const op = OPS.OPS.find((o) => o.id === bound.op);
   if (!op) return { failure: "UNKNOWN_OP" };
   if (op.expect !== true) return { failure: "NOT_BOUND_OP" };
+  // A path the plan reads is absolute: a relative one resolves against whichever cwd re-derives it, and the verdict
+  // would then be about another file (round 2 B6).
+  for (const v of Object.values(bound.input && typeof bound.input === "object" ? bound.input : {}))
+    if (typeof v === "string" && (v.includes("/") || v.includes(String.fromCharCode(92))) && !isAbsolute(v)) return { failure: "RELATIVE_PATH" };
   let values;
   try { values = OPS.validateInput(op, bound.input); } catch (e) { return { failure: e && e.code ? String(e.code) : "BAD_INPUT" }; }
   let res;
@@ -109,7 +113,7 @@ const REDERIVE_TIMEOUT_MS = 120_000;
 const REDERIVE_BUDGET_MS = 180_000;
 /** A re-derived answer is reused this long, and one plan in flight is shared by every caller asking for it. */
 const REDERIVE_TTL_MS = 20_000;
-/** @type {Map<string, { at: number, value: Promise<"same" | "moved" | { failure: string }> }>} */
+/** @type {Map<string, { settledAt: number | null, value: Promise<"same" | "moved" | { failure: string }> }>} */
 const planCache = new Map();
 
 /**
@@ -119,18 +123,23 @@ const planCache = new Map();
  * request's slow or failing plan neither delays nor decides it.
  * @param {{ only?: string | null, budgetMs?: number }} [o]
  */
-export function planStateFor({ only = null, budgetMs = REDERIVE_BUDGET_MS } = {}) {
+export function planStateFor({ only = null, budgetMs = REDERIVE_BUDGET_MS, fresh = false } = {}) {
   const started = Date.now();
   return (/** @type {Record<string, unknown>} */ bound, /** @type {{ event: { id: string } }} */ row) => {
     if (only !== null && row.event.id !== only) return { failure: "NOT_REDERIVED" };
     if (Date.now() - started > budgetMs) return { failure: "PLAN_BUDGET" };
     const key = JSON.stringify([bound.op, bound.input, bound.expect]);
+    // A decide never takes a cached answer: it judges the plan as it stands at the moment of deciding (round 2 B2).
+    if (fresh) return planStateOf(bound);
+    // In flight is shared until it SETTLES, and the TTL counts from settling: a plan slower than the TTL was started
+    // again every TTL (round 2 B1).
     const hit = planCache.get(key);
-    if (hit && Date.now() - hit.at < REDERIVE_TTL_MS) return hit.value;
-    const value = planStateOf(bound);
-    planCache.set(key, { at: Date.now(), value });
-    for (const [k, v] of planCache) if (Date.now() - v.at >= REDERIVE_TTL_MS) planCache.delete(k);
-    return value;
+    if (hit && (hit.settledAt === null || Date.now() - hit.settledAt < REDERIVE_TTL_MS)) return hit.value;
+    const entry = { settledAt: /** @type {number | null} */ (null), value: planStateOf(bound) };
+    entry.value.finally(() => { entry.settledAt = Date.now(); });
+    planCache.set(key, entry);
+    for (const [k, v] of planCache) if (v.settledAt !== null && Date.now() - v.settledAt >= REDERIVE_TTL_MS) planCache.delete(k);
+    return entry.value;
   };
 }
 
@@ -143,9 +152,9 @@ export function planStateFor({ only = null, budgetMs = REDERIVE_BUDGET_MS } = {}
  *   only: re-derive the plan of this request alone (a decide). loaded: one read the caller already made, so its counts
  *   and the fold come from the same spine (B8).
  */
-export async function inboxFold(root, { asof = null, rederive = true, decidedPlans = false, only = null, loaded = undefined } = {}) {
+export async function inboxFold(root, { asof = null, rederive = true, decidedPlans = false, only = null, fresh = false, loaded = undefined } = {}) {
   const { requested, decided } = loaded ?? await loadApprovals(root, { asof });
-  return foldApprovals(requested, decided, { planState: rederive ? planStateFor({ only }) : undefined, decidedPlans });
+  return foldApprovals(requested, decided, { planState: rederive ? planStateFor({ only, fresh }) : undefined, decidedPlans });
 }
 
 /** The inbox line's description and gate, with the profile fallbacks. @param {Record<string, unknown>} p */
@@ -262,12 +271,15 @@ export async function decide(root, verdict, id, reason, signer = {}) {
   // ADR-1355: a request carrying a binding is decided only in a state that allows it -- a waiting child, a rejected
   // parent's child, a moved plan, an unevaluable binding and a key already decided are refused, ZERO events written.
   const p0 = approval.event.payload || {};
-  if (!("bound_to" in p0 || "depends_on" in p0 || "decision_key" in p0)) return record(verdict, id, reason, signer, approval);
+  const bound = "bound_to" in p0 || "depends_on" in p0 || "decision_key" in p0;
   // The fold and the emit happen under ONE lock every binding decide takes (attack 4f462e9 B3): two decides of two
   // requests sharing a key each folded OPEN before either landed, and both emitted -- two decisions for one key. Only
-  // the request being decided has its plan re-derived (B2). A held lock is refused by name, never waited on forever.
+  // the request being decided has its plan re-derived (B2). EVERY decide takes the lock, a plain parent's too: a parent
+  // rejected between its child's fold and its child's emit left an approved child under a rejected parent (round 2
+  // B3). A held lock is refused by name, never waited on forever.
   const held = await withExclusiveLock(root, DECIDE_LOCK, async () => {
-    const f = (await inboxFold(root, { only: id })).find((x) => x.id === id);
+    if (!bound) return record(verdict, id, reason, signer, approval);
+    const f = (await inboxFold(root, { only: id, fresh: true })).find((x) => x.id === id);
     const no = f ? decideRefusal(f, verdict === "approve" ? "approve" : "reject") : { code: "UNKNOWN_APPROVAL", why: "the fold does not hold it" };
     if (no !== null) throw new SpineError(no.code, `${id}: ${no.why}`);
     return record(verdict, id, reason, signer, approval);
@@ -350,6 +362,8 @@ function parse(argv) {
 async function main(argv) {
   const { positional, flags } = parse(argv);
   const command = positional[0] || "inbox";
+  // Judged before ANY dispatch, owner-key's included (round 2 B7).
+  if (flags.all === true && command !== "inbox") throw new SpineError("BAD_ARGS", "--all belongs with inbox");
   if (command === "owner-key") {
     if (positional[1] !== "init" || positional.length !== 2) throw new SpineError("BAD_ARGS", "usage: arc-inbox owner-key init");
     // A mode that ignores what it was given answers a question nobody asked (attack r1 B11): owner-key init takes no flag at all.
@@ -367,7 +381,6 @@ async function main(argv) {
   }
   const root = spineRoot();
   if (command === "inbox") return listInbox(root, flags.all === true);
-  if (flags.all === true) throw new SpineError("BAD_ARGS", "--all belongs with inbox");
   if (command === "approve" || command === "reject")
     return decide(root, command, positional[1], flags.reason);
   throw new SpineError("BAD_ARGS", `unknown command ${JSON.stringify(command)} (inbox | approve <id> --reason R | reject <id> --reason R | owner-key init)`);

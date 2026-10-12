@@ -112,7 +112,7 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
     const repoW = ["C:", "x", "repo"].join(BS);
     const msgs = ["C:/x/repo/a.mjs", [repoW, "a.mjs"].join(BS), "file:///C:/x/repo/a.mjs"];
     check("FOLDS: a thrown message has the checkout path withheld in either separator and as a file URL",
-      msgs.every((m) => cov.withholdPath(m, repoW).startsWith("<repo>")), msgs.map((m) => cov.withholdPath(m, repoW)).join(" | "));
+      msgs.every((m) => { const o = cov.withholdPath(m, repoW).toLowerCase(); return o.includes("<repo>") && !o.includes("x/repo") && !o.includes(["x", "repo"].join(BS)); }), msgs.map((m) => cov.withholdPath(m, repoW)).join(" | "));
     const NL = String.fromCharCode(10);
     const forged = { states: tree.states, modules: [{ key: "x/y", fields: [], notServed: [{ panel: "P" + NL + "FAIL forged", route: "/api/x", sentence: "s", avail: { isAvailability: true, owner_lane: "" } }] }] };
     const fs1 = cov.availabilityFindings(forged).findings;

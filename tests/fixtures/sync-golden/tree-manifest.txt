@@ -273,10 +273,10 @@
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	5e28a3ea0a78e67d3ce77b6a5c1e59ba7eb4f229e6e4c9368c2104f5734b107f
 .claude/scripts/hq/arc-dash.mjs	a48c23002736d448ea3ebda476e1dcf8ba517a469c8dcff6fd73edd0f1de8baf
-.claude/scripts/hq/arc-event.mjs	1f490e7c45e57764ecfdfc15a08fde1b27da5fd723f2131fc7018190312cd20a
+.claude/scripts/hq/arc-event.mjs	c9724e8810a9274ced290c015c8a0cb3b75ce92c284416a60102f8c46c17c546
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
-.claude/scripts/hq/arc-inbox.mjs	07bbea12a64cd14ec0d0f4951b4e15ca4ac4d9e5c2e458fe2e4215e10a6a537e
+.claude/scripts/hq/arc-inbox.mjs	295c187e0fd0702a902071d75f1af55187e01e717e13cf3f7f7ae60eaf2fd588
 .claude/scripts/hq/arc-jobs.mjs	d6e9c51919bb603d78a67cb399cfcbcebc5314d1dce080a253973f80ee69ae0a
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-pnl.mjs	1c79af9b70cde51f419f413335765598fb37e393cdef2fedf2cbb1b52495c237
@@ -291,7 +291,7 @@
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523
 .claude/scripts/hq/jobs/launch-watch.mjs	e63955b20d7d9fab09e45b8aabe3c7285e87d69893a5425c0c4c98c6ad7688f7
 .claude/scripts/hq/ledger-ingest.mjs	196cc1111fc71162fabaea4cb5ebacaef4d7d2e6e00eb99122112bf56ddf1661
-.claude/scripts/hq/lib/approval-fold.mjs	a26e01b173892577ba7e83dab1184abcfb5913dab32a9c092d43fbd744dc0415
+.claude/scripts/hq/lib/approval-fold.mjs	7598aebf4619fb16f951ebcf7ec2b82d85895fe4cd0ff416791f12e6a5d5001a
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/models.mjs	dee2063e634ff21cbe6c4c30b5060d0c5269c89a7a866b383a662ed50b96b684

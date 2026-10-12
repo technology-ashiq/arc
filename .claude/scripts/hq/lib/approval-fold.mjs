@@ -29,6 +29,8 @@ const isPlain = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 // parent entry that is not a ULID is a parent that cannot be found, never text to echo.
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const keyOf = (p) => (isPlain(p) && typeof p.decision_key === "string" ? p.decision_key : null);
+/** An id placed in a label or a ref: a ULID, or nothing (round 2 B5 -- every source of refs, not one). */
+const idOf = (v) => (typeof v === "string" && ULID.test(v) ? v : "");
 const parentsOf = (p) => (isPlain(p) && Array.isArray(p.depends_on) ? p.depends_on.map((x) => (typeof x === "string" && ULID.test(x) ? x : "")) : []);
 const boundOf = (p) => (isPlain(p) && isPlain(p.bound_to) ? p.bound_to : null);
 
@@ -90,15 +92,15 @@ export async function foldApprovals(requested, decided, opts = {}) {
       const bound = boundOf(p);
       if (verdict === "approved" && bound && opts.decidedPlans) {
         const s = await rederive(bound, r);
-        if (s === "moved") { out.push({ ...base, state: "DECIDED", label: "approved · stale · re-plan needed", ref: own.id }); continue; }
-        if (isPlain(s)) { out.push({ ...base, state: "DECIDED", label: `approved · plan UNKNOWN(${s.failure})`, ref: own.id, failure: s.failure }); continue; }
+        if (s === "moved") { out.push({ ...base, state: "DECIDED", label: "approved · stale · re-plan needed", ref: idOf(own.id) }); continue; }
+        if (isPlain(s)) { out.push({ ...base, state: "DECIDED", label: `approved · plan UNKNOWN(${s.failure})`, ref: idOf(own.id), failure: s.failure }); continue; }
       }
-      out.push({ ...base, state: "DECIDED", label: verdict, ref: own.id });
+      out.push({ ...base, state: "DECIDED", label: verdict, ref: idOf(own.id) });
       continue;
     }
     const key = keyOf(p);
     const sib = key !== null ? keyDecision.get(key) : undefined;
-    if (sib) { out.push({ ...base, state: "RESOLVED", label: `resolved-by ${sib.id}`, ref: sib.id }); continue; }
+    if (sib) { out.push({ ...base, state: "RESOLVED", label: `resolved-by ${idOf(sib.id)}`, ref: idOf(sib.id) }); continue; }
     const parents = parentsOf(p);
     const missing = parents.find((q) => !byId.has(q));
     if (missing !== undefined) { out.push({ ...base, state: "UNKNOWN", label: "UNKNOWN(PARENT_MISSING)", ref: missing, failure: "PARENT_MISSING" }); continue; }
@@ -109,7 +111,7 @@ export async function foldApprovals(requested, decided, opts = {}) {
     if (waiting !== undefined) { out.push({ ...base, state: "WAITING", label: `WAITING(${waiting})`, ref: waiting }); continue; }
     if (key !== null) {
       const earlier = firstOpenByKey.get(key);
-      if (earlier !== undefined) { out.push({ ...base, state: "DUPLICATE_OF", label: `DUPLICATE_OF ${earlier}`, ref: earlier }); continue; }
+      if (earlier !== undefined) { out.push({ ...base, state: "DUPLICATE_OF", label: `DUPLICATE_OF ${idOf(earlier)}`, ref: idOf(earlier) }); continue; }
       firstOpenByKey.set(key, id);
     }
     const bound = boundOf(p);
