@@ -168,7 +168,9 @@ export function fold(payloads, ctx) {
       cards: open.map((a) => {
         const isArmed = armedOpen && a.id === armedId;
         const approve = isArmed && armedVerdict === "approve";
-        const words = Object.hasOwn(STATE_WORDS, a.state) ? STATE_WORDS[a.state] : { badge: "unstated", why: "The door named no state this face knows, so it is not stamped from here." };
+        // Read through hasOwn, and typed as possibly absent: a state the face does not know is worded, never undefined.
+        const known = Object.hasOwn(STATE_WORDS, a.state) ? STATE_WORDS[a.state] : undefined;
+        const words = known ?? { badge: "unstated", why: "The door named no state this face knows, so it is not stamped from here." };
         const canArm = a.state === "OPEN";
         const isKnown = Object.hasOwn(STATE_WORDS, a.state);
         const isUnevaluable = a.state === "UNKNOWN" || !isKnown;
