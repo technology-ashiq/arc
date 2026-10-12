@@ -1029,3 +1029,8 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **Ids from rows printed without the grammar check refs got** (attack 79233ff B5). *Check: every id placed in a label or ref passes one ULID test.*
 - **A relative path in a re-derived plan** -- resolved against whichever cwd re-derived it (attack 79233ff B6). *Check: a path a background evaluation reads is absolute.*
 - **A flag guard placed after an early-returning branch** -- `owner-key init --all` was accepted (attack 79233ff B7). *Check: validate flags right after parse, before any dispatch.*
+- **Every import failure read as a missing product** -- `/api/discover` answered SOURCE_ABSENT for a discover that was there and broken (attack 76e154c B1). *Check: only a target that is not on disk is ABSENT; one that is there and will not load is INVALID with its code.*
+- **Spine free text served unscrubbed, ids served outside their grammar** -- the discover route passed slugs, reasons and ids straight to the page (attack 76e154c B2). *Check: a route's text passes the door's scrub and a cap; an id is served only in its grammar, and what is skipped is counted.*
+- **A full synchronous scan per request** -- every `/api/discover` poll re-read the whole spine (attack 76e154c B3). *Check: a whole-spine read is shared while in flight and for a short window after.*
+- **A test id taken from stdout unvalidated** (attack 76e154c B4). *Check: an id a fixture compares by is in its grammar, and the spawn's `.error` is read first.*
+- **A test walk that follows links and reads twice** (attack 76e154c B5). *Check: walk with lstat, read once, catch per file.*

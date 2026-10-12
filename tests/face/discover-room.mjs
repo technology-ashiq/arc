@@ -11,7 +11,7 @@
 //              fold returned
 //
 // VACUOUS-PASS GUARD: the first check proves the modules loaded; the last line is "RAN: <n> checks, <f> failed".
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -33,9 +33,11 @@ const D = await import(pathToFileURL(join(REPO, ".claude", "scripts", "discover"
 check("the route and discover's constants loaded (vacuous-pass guard)", typeof R.apiDiscover === "function" && typeof R.discoverBody === "function" && typeof D.PROCESS === "string");
 const C = await R.discoverConstants();
 check("ROUTE: the constants are discover's own -- the process prefix and the winner gate it exports", C.prefix === D.PROCESS.slice(0, D.PROCESS.indexOf("@") + 1) && C.gate === D.WINNER_GATE, JSON.stringify(C));
-let missing = null;
-try { await R.discoverConstants(() => Promise.reject(Object.assign(new Error("gone"), { code: "ERR_MODULE_NOT_FOUND" }))); } catch (e) { missing = e; }
+let missing = null, broken = null;
+try { await R.discoverConstants(() => Promise.reject(new Error("never asked")), join(tmpdir(), "no-such-discover-spine.mjs")); } catch (e) { missing = e; }
+try { await R.discoverConstants(() => Promise.reject(Object.assign(new Error("syntax"), { code: "ERR_X" }))); } catch (e) { broken = e; }
 check("ROUTE: a checkout without discover answers SOURCE_ABSENT by name, never a crashed door", missing !== null && missing.code === "SOURCE_ABSENT", missing && missing.message);
+check("ROUTE: a discover that is there and will not load is SOURCE_INVALID with its code, not a missing product", broken !== null && broken.code === "SOURCE_INVALID" && /ERR_X/.test(broken.message), broken && broken.message);
 
 // ── a sandbox spine, written through the one writer ──────────────────────────────────────────────────
 const tmp = mkdtempSync(join(tmpdir(), "face-discover-"));
@@ -45,7 +47,9 @@ const env = { ...process.env, ARC_SPINE_ROOT: spine };
 const node = (args) => spawnSync(process.execPath, args, { cwd: REPO, encoding: "utf8", env, timeout: 120000, killSignal: "SIGKILL" });
 const emit = (kind, payload, process_ = D.PROCESS) => {
   const r = node([join(HQ, "arc-event.mjs"), "emit", kind, "--payload", JSON.stringify(payload), "--process", process_, "--strict"]);
-  return { id: String(r.stdout || "").trim().split(/\r?\n/).pop(), status: r.status, err: String(r.stderr || "") };
+  const id = String(r.stdout || "").trim().split(/\r?\n/).pop() ?? "";
+  // A spawn that failed, or an id outside the ULID grammar, is no receipt (attack 76e154c B4).
+  return { id, status: r.error ? -1 : r.status, err: String(r.error ? r.error.code : r.stderr || ""), ok: !r.error && r.status === 0 && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(id) };
 };
 const ctx = { mode: "sim", repo: REPO, root: spine };
 const route = (q = "") => R.apiDiscover(ctx, new URL(`http://door/api/discover${q}`));
@@ -64,7 +68,7 @@ try {
   const w1 = emit("approval.requested", { what: "discover winner a", gate: D.WINNER_GATE, slug: "invoice-reminders", niche: "smb", cluster_fp: "fp1", cluster_tokens: ["invoice", "late"], score: 7.5 });
   const w2 = emit("approval.requested", { what: "discover winner b", gate: D.WINNER_GATE, slug: "receipt-scan", niche: "smb", cluster_fp: "fp2", cluster_tokens: ["receipt"], score: 5 });
   const rej = node([join(HQ, "arc-inbox.mjs"), "reject", w2.id, "--reason", "not this one"]);
-  check("ROUTE: the sandbox spine was written (vacuous-pass guard)", [cap, faceCap, hunt, judge, w1, w2].every((e) => e.status === 0) && rej.status === 0, [cap, faceCap, hunt, judge, w1, w2].map((e) => e.err).join(" | ") + rej.stderr);
+  check("ROUTE: the sandbox spine was written (vacuous-pass guard)", [cap, faceCap, hunt, judge, w1, w2].every((e) => e.ok) && !rej.error && rej.status === 0, [cap, faceCap, hunt, judge, w1, w2].map((e) => e.err).join(" | ") + rej.stderr);
   const b = await route();
   check("ROUTE: one capture is counted, with its source and day", b.availability === "served" && b.captures.count === 1 && b.captures.latest && b.captures.latest.source_id === "hn-1" && b.captures.latest.id === cap.id, JSON.stringify(b.captures));
   check("EDGES: a face idea.captured (no discover process) is not a discover capture", b.captures.count === 1 && b.captures.latest.source_id !== "face-1");
@@ -88,13 +92,21 @@ try {
 // ── GRAMMAR: no second spelling of discover's constants ────────────────────────────────────────────
 {
   const hits = [];
+  const spelled = (t) => t.includes(D.WINNER_GATE) || t.includes(D.PROCESS.slice(0, D.PROCESS.indexOf("@") + 1));
+  // lstat, never stat: a link is not followed, so the walk stays inside face/src and cannot loop; each file is read once,
+  // and a file that cannot be read is a finding, never a crash of the arm (attack 76e154c B5).
   const walk = (d) => {
     for (const n of readdirSync(d)) {
       if (n === "node_modules" || n === "dist") continue;
       const p = join(d, n);
-      const s = statSync(p);
+      const s = lstatSync(p);
+      if (s.isSymbolicLink()) continue;
       if (s.isDirectory()) walk(p);
-      else if (/\.(mjs|js|ts|tsx|json)$/.test(n) && (readFileSync(p, "utf8").includes(D.WINNER_GATE) || readFileSync(p, "utf8").includes(D.PROCESS.slice(0, D.PROCESS.indexOf("@") + 1)))) hits.push(p);
+      else if (s.isFile() && /\.(mjs|js|ts|tsx|json)$/.test(n)) {
+        let t;
+        try { t = readFileSync(p, "utf8"); } catch (e) { hits.push(`${p} (unreadable: ${e && e.code})`); continue; }
+        if (spelled(t)) hits.push(p);
+      }
     }
   };
   walk(join(REPO, "face", "src"));
