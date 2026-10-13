@@ -12,6 +12,7 @@
  *                              target. Exit 0 means this copy of arc can install.
  *   arc doctor --dir DIR       the truth of an install in DIR (placed / degraded / missing / unmanaged-conflict)
  *   arc doctor --repo [...]    main's branch protection read back (arc-doctor.mjs)
+ *   arc compile --self [--check]  render codex, opencode and skills-only into this arc checkout (ADR-2023)
  *   arc compile ARGS...        arc-compile.mjs ARGS...
  *   arc --version | help
  *
@@ -34,7 +35,7 @@ const run = (script, args, opts = {}) => spawnSync(process.execPath, [script, ..
 const git = (dir, args) => { const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); return { status: r.error ? -1 : r.status, stdout: (r.stdout || "").trim() }; };
 
 function usage(code) {
-  (code ? console.error : console.log)("usage: arc init --target <claude-code|codex|opencode|skills-only> [--dir DIR] [--dry-run] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc compile <arc-compile args>\n       arc --version");
+  (code ? console.error : console.log)("usage: arc init --target <claude-code|codex|opencode|skills-only> [--dir DIR] [--dry-run] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc compile --self [--check]\n       arc compile <arc-compile args>\n       arc --version");
   return code;
 }
 
@@ -122,6 +123,7 @@ function main(argv) {
     if (rest[0] === "--repo") return run(S("engine/arc-doctor.mjs"), rest).status ?? 1;
     return rest.length ? usage(2) : selfDoctor();
   }
+  if (verb === "compile" && rest[0] === "--self") return run(INSTALL, ["--self", ...rest.slice(1)]).status ?? 1;
   if (verb === "compile") return run(S("engine/arc-compile.mjs"), rest).status ?? 1;
   console.error(`arc: unknown command ${verb}`);
   return usage(2);

@@ -37,6 +37,7 @@
     ".claude/scripts/engine/install-targets/common.mjs",
     ".claude/scripts/engine/install-targets/opencode.mjs",
     ".claude/scripts/engine/install-targets/rendered.mjs",
+    ".claude/scripts/engine/install-targets/self-render.mjs",
     ".claude/scripts/engine/install-targets/skills-only.mjs",
     ".claude/scripts/engine/drivers/common.mjs",
     ".claude/scripts/engine/drivers/claude-code.mjs",

@@ -20,7 +20,7 @@ merged once at cycle end; each phase closes from the main clone after that merge
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
-| 08 | Self-render + debt 22-24 + tag `v0.2.0` + kill check (REQ-14) | 1d | ⬜ |
+| 08 | Self-render + kill check + debt 22-24 (REQ-14) | 1d | ⬜ |
 | 09 | `outdated` + `upgrade` + manifest v2 + `version-lint` (REQ-16, 17) | 1d | ⬜ |
 | 10 | `uninstall` + `init` default-all + registry + launch slot + radar; retro + seal (REQ-15, 18, 19) | 1d | ⬜ |
 

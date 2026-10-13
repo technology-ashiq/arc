@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **152** | **34** |
 
-Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 478 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 413 of 483 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -28,7 +28,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 8 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
-| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 48 |
+| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 49 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
@@ -51,7 +51,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 | [design](lanes/design.md) | IDLE | arc-design v2 (Cycle 16, sealed 2026-10-07) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
 | [discover](lanes/discover.md) | IDLE | arc-discover (Cycle 1, sealed 2026-10-07) |
-| [distribute](lanes/distribute.md) | IDLE | arc-distribute (Cycle 2, opened 2026-10-13) |
+| [distribute](lanes/distribute.md) | LIVE | arc-distribute (Cycle 3, opened 2026-10-14) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
 | [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 8, opened 2026-10-07) |
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
@@ -112,7 +112,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 | [1700–1799](adr/1700.md) | 52 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
 | [1900–1999](adr/1900.md) | 17 | 0 |
-| [2000–2099](adr/2000.md) | 23 | 0 |
+| [2000–2099](adr/2000.md) | 28 | 0 |
 
 ## Commands
 

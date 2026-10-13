@@ -6,10 +6,14 @@
  *   arc-install.mjs --target claude-code|codex|opencode|skills-only --dry-run [--dir DIR] [--source ARC]
  *   arc-install.mjs --target T --dir DIR [--force] [--quiet] [--source ARC]
  *   arc-install.mjs --doctor DIR
+ *   arc-install.mjs --self [--check] [--source ARC]
  *
  * `--dry-run` prints the plan and writes nothing. Without it, the plan is applied as one transaction
  * (install-targets/common.mjs). A file already at a managed path that the last install did not write
  * refuses the run, `unmanaged-conflict` by name, unless `--force`, which the record then lists.
+ *
+ * `--self` renders codex, opencode and skills-only into the arc checkout itself (ADR-2023, install-targets/self-render.mjs):
+ * the adapters' files only, never the payload or a manifest. `--self --check` writes nothing and names each stale path.
  *
  * Exit: 0 done (or doctor clean) · 1 a refusal, a conflict, a failed apply (rolled back), or a doctor
  * finding · 2 usage, or a path refused before planning.
@@ -27,6 +31,7 @@ import * as claudeCode from "./install-targets/claude-code.mjs";
 import * as codex from "./install-targets/codex.mjs";
 import * as opencode from "./install-targets/opencode.mjs";
 import * as skillsOnly from "./install-targets/skills-only.mjs";
+import { selfRender } from "./install-targets/self-render.mjs";
 
 export const TARGETS = Object.freeze({ "claude-code": claudeCode, codex, opencode, "skills-only": skillsOnly });
 
@@ -39,7 +44,7 @@ function sourceCommit(tree) {
 }
 
 export function main(argv) {
-  const opt = { target: "", dir: "", source: "", dryRun: false, force: false, quiet: false, doctor: "" };
+  const opt = { target: "", dir: "", source: "", dryRun: false, force: false, quiet: false, doctor: "", self: false, check: false };
   const given = new Map();
   const value = (flag, i) => {
     const v = argv[i + 1];
@@ -54,8 +59,25 @@ export function main(argv) {
     if (a === "--dry-run") opt.dryRun = true;
     else if (a === "--force") opt.force = true;
     else if (a === "--quiet") opt.quiet = true;
+    else if (a === "--self") opt.self = true;
+    else if (a === "--check") opt.check = true;
     else if (["--target", "--dir", "--source", "--doctor"].includes(a)) { if ((v = value(a, i++)) === null) return 2; opt[a.slice(2)] = v; }
     else { console.error(`arc-install: unknown argument ${a}`); return 2; }
+  }
+
+  if (opt.check && !opt.self) { console.error("arc-install: --check goes with --self"); return 2; }
+  if (opt.self) {
+    if (opt.target || opt.dir || opt.dryRun || opt.force || opt.doctor) { console.error("arc-install: --self takes --check and --source and nothing else"); return 2; }
+    const tree = realpathSync(resolve(opt.source || join(HERE, "..", "..", "..")));
+    try {
+      const r = selfRender(tree, { check: opt.check });
+      for (const l of r.lines) console.log(l);
+      return r.findings ? 1 : 0;
+    } catch (e) {
+      if (!(e instanceof Refused)) throw e;
+      console.log(`refused [${e.reason}] ${e.message.slice(e.reason.length + 2)}`);
+      return 1;
+    }
   }
 
   if (opt.doctor) {
