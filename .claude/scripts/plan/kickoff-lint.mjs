@@ -37,7 +37,16 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { resolveLane, renderHuman, parseLaneArgs } from "../core/lane-resolve.mjs";
 
-const cli = parseLaneArgs(process.argv.slice(2));
+// `--base <ref>` belongs to the new-cycle gates (ADR-0076), not to the lane parser: left in argv, its
+// value would land in positionals and be read as the repo root.
+const argv = process.argv.slice(2);
+let baseRef = "origin/main";
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === "--base") { baseRef = argv[i + 1] ?? ""; argv.splice(i, 2); i--; }
+  else if (argv[i].startsWith("--base=")) { baseRef = argv[i].slice(7); argv.splice(i, 1); i--; }
+}
+if (baseRef === "") { console.error("kickoff-lint: --base needs a ref"); process.exit(5); }
+const cli = parseLaneArgs(argv);
 // Anchor on the git toplevel, not the shell's cwd: run from inside a lane, a cwd
 // anchor silently drops out of lane-mode AND looks for the company ADR ledger inside
 // the lane. Which repo you are in is a property of the repo, not of where you stood.
@@ -693,6 +702,18 @@ else if (!/##\s*Now/i.test(readT("PROGRESS.md"))) fail("progress", "PROGRESS.md 
       }
     }
   }
+}
+
+// ---------- new-cycle gates (portfolio Cycle 5: ADR-0076, ADR-0077) ----------
+// Lane-mode only: root-mode is the byte-identical consumer contract (ADR-0054), and a consumer repo
+// has no lanes to freeze. Mid-cycle lanes are never judged — these are rules about opening a cycle.
+if (laneRes.mode === "lane") {
+  const { newCycle, kernelFreeze } = await import("./kickoff-gates.mjs");
+  const nc = newCycle({ root, tracker: laneRes.tracker, base: baseRef });
+  if (nc.state === "unknown") warn("new-cycle-unknown", nc.reason);
+  else if (nc.state === "new")
+    for (const r of await kernelFreeze({ root, lane: laneRes.lane, identity: nc.identity }))
+      (r.level === "fail" ? fail : warn)(r.check, r.msg);
 }
 
 report();
