@@ -448,6 +448,26 @@ arm() {
   done
 }
 
+@test "launch-contract: tls never fails on a stale cached scan -- it rescans once, and a fresh failure still fails" {
+  arm tls stale-cache
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.rescans')" = "true api.ssllabs.com 1" ] || { echo "$DONE"; false; }
+  arm tls no-hsts
+  [[ "$(j 'o.verify.ok + " " + o.rescans + " " + o.verify.reason')" == "false 1 ssllabs: "*"no HSTS"* ]] || { echo "$DONE"; false; }
+  arm tls apply
+  [ "$(j 'o.verify.ok + " " + o.rescans')" = "true 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: tls reads HSTS from the venture only when the host refused SSL Labs, never over a scanner that saw it absent" {
+  arm tls scanner-refused
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.hsts_from + " " + o.liveCalls')" = "true api.ssllabs.com + sandbox.automemory.ai venture 1" ] || { echo "$DONE"; false; }
+  for s in scanner-refused-no-live scanner-refused-zero; do
+    arm tls "$s"
+    [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false ssllabs: "*"no HSTS"* ]] || { echo "$s: $DONE"; false; }
+  done
+  arm tls no-hsts-live-has
+  [[ "$(j 'o.verify.ok + " " + o.liveCalls + " " + o.verify.reason')" == "false 0 ssllabs: "*"no HSTS"* ]] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: tls refuses while Vercel reports the domain misconfigured" {
   arm tls misconfigured
   [ "$(j 'o.scaffold.code')" = "DOMAIN_MISCONFIGURED" ] || { echo "$DONE"; false; }

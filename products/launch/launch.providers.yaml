@@ -152,6 +152,7 @@ providers:
     hosts:
       - api.vercel.com
       - api.ssllabs.com
+      - sandbox.automemory.ai
     credentials:
       scope: "domain config read"
     adapter: providers/tls/vercel-managed-tls.mjs
