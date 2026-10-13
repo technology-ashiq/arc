@@ -42,5 +42,5 @@ merged once at cycle end; each phase closes from the main clone after that merge
 ---
 ## Now
 
-**Current position: P05 and P06 built on `feat/distribute-c2-req03` (PR #412, draft); P05's tripwire answered YES.**
-**Next step:** push, read CI per job; then P07: the full loop run (commit → review → push → ship) and the three negatives.
+**Current position: P05-P07 built; the P07 run is done (`evidence/phase-07/run.md`): 5 receipts with `harness: opencode` (commit x3, review, ship), the 3 negatives refused, PR #412 and session PR #416 green. The ship deployed to a Vercel project the killed run 5b had linked (debt row 23).**
+**Next step:** read CI per job on this push; merge #412, then #416 (head SHA verified); then close P05/P06/P07 from the main clone, retro, seal.
