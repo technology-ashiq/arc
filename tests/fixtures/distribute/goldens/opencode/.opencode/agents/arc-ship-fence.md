@@ -3,12 +3,16 @@ description: "The tool fence of /arc-ship; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   bash:
-    "*": ask
+    "*": deny
     "bash .claude/scripts/hq/arc-event.sh": allow
     "bash .claude/scripts/hq/arc-event.sh *": allow
-    "npm run build": allow
+    "gh pr create --fill": allow
+    "gh pr view --json url,state": allow
+    "git branch --show-current": allow
+    "git rev-parse --abbrev-ref @{u}": allow
+    "npm run build --if-present": allow
     "npm run lint": allow
     "npm run test": allow
     "npm run test *": allow

@@ -61,3 +61,30 @@ uninstalled dependency is proof the test is not reaching it."* REQ-05's prefligh
 **asserts the candidate model was actually reached** — a receipt with a real model id and a
 non-zero token count — before any verdict is recorded, because "the run completed" and "the
 candidate was called" are different facts.
+
+## Amendment 1 (2026-10-13): the revisit trigger fired — both sides move to `generic-api`
+
+**The trigger above fired.** `ARC_LLM_*` is provisioned: `generic-api` reaches OpenRouter through
+the owner's stored `OPENROUTER_API_KEY` (ADR-1351) and has carried real `/arc-attack` runs since
+2026-09-27 (ADR-0226 Amendment 3). Option 1 is no longer hostage to an ops dependency.
+
+**Decision, owner-confirmed 2026-10-13:** the real event runs BOTH sides on `generic-api`, with an
+owner cap of **$0.50 for the whole event**:
+
+- champion `deepseek/deepseek-v4-flash-0731`, candidate `anthropic/claude-haiku-5.5`
+- `ARC_LLM_REASONING=off` on both runs, so the request settings are identical and the quality axis
+  stays comparable (a reasoning model given a diff spent its whole budget thinking, ADR-0226 Am. 3)
+- ceilings ₹1 per invocation for each pair → 15 + 15 = **₹30 hard bound (≈ $0.34)**, under the cap
+
+Why not keep `sonnet` as champion: its ceiling alone is ₹180, more than three times the cap. And a
+mixed `claude-code`/`generic-api` pair would differ on `driver version`, which `comparability()`
+reports as a quality difference. One driver on both sides keeps model id as the only variable.
+
+**What it now proves, and still does not:** a second model FAMILY through a second DRIVER, which
+the original decision explicitly could not. It still does not prove a process runs identically
+across drivers. Both sides share one driver, so that comparison is not in this event.
+
+**What it costs:** `generic-api` reports tokens and `source: measured` but no rupee figure (no
+price table is maintained, ADR-0069 b5). The proposal's cost axis therefore compares TOKENS, and
+the ₹30 is a reservation bound, never a reported spend. The provider-side guarantee is the
+OpenRouter key's own limit.

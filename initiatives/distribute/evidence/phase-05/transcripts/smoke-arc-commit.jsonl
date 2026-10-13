@@ -1,0 +1,4 @@
+harness-proof: opencode 1.17.18 session=ses_ece02bbbeffe3dVQiWylNvm0lK model=openrouter/deepseek/deepseek-v4-flash-0731 cap_usd=0.1 command=arc-commit cwd=E:/Work_Hub/01_Automemory/wt-oc-req03 spine=E:/Work_Hub/01_Automemory/arc/.claude/state/hq evidence=initiatives/distribute/evidence/phase-05/transcripts/smoke-arc-commit.jsonl date=2026-10-12T21:20:47.915Z
+{"type":"error","timestamp":1791840047917,"sessionID":"ses_ece02bbbeffe3dVQiWylNvm0lK","error":{"name":"UnknownError","data":{"message":"Unexpected server error. Check server logs for details.","ref":"err_fb3b89e5"}}}
+child-failed: exit 1
+spent=0

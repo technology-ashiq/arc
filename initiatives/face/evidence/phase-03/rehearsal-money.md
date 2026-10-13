@@ -1,7 +1,7 @@
 # REHEARSAL — money ring
 
-Phase 03, ring 4 of 5 (face v2 Cycle 16, ADR-1328). The flows v0.7 draws in the three PLANNED rooms -- `ops`,
-`trader`, `discover` -- whose lanes are not born. A manifest is never invented for an unborn lane, so each flow is
+Phase 03, ring 4 of 5 (face v2 Cycle 16, ADR-1328). The flows v0.7 draws in the PLANNED rooms -- `ops` and
+`trader` (`discover` until face v2 Phase 17, ADR-1356, when its lane's receipts replaced its three cards) -- whose lanes are not born. A manifest is never invented for an unborn lane, so each flow is
 drawn as a REHEARSAL card that writes nothing, and none of them is a work-door verb: nothing here will ever be sent
 anywhere until `/arc-kickoff --lane` births the lane and its manifest takes over, in the same change that drops the
 REHEARSAL marking (ADR-1328's revisit trigger).
@@ -12,9 +12,6 @@ per room, and F3 holds each planned room to its dotted, REHEARSAL marking with n
 
 | module | flow | what it rehearses |
 |---|---|---|
-| `discover` | Capture a pain | idea.captured, then normalised and de-duplicated: a pain in the customer's own words, refused at capture when it repeats one already held. Rehearsed; the discover lane is not born. |
-| `discover` | Score it | The scoring file's four numbers, and a pain with too little distribution hard-flagged before it can reach a shortlist. Rehearsed, and no score is written. |
-| `discover` | Send the top two to council | The shortlist is exactly two; the council debates them and you stamp one, and the one-pager comes before a separate venture kickoff. No council is convened from here. |
 | `ops` | Raise an incident | incident.raised, then an acknowledgement, then a resolution typed by a person -- an incident is open until someone closes it in words. Rehearsed: the ops lane is not born, so nothing is raised. |
 | `ops` | Drop a support file | A dropped message is classified, a template reply is drafted, and your stamp seals it for a person to send. The machine drafts; a person sends. Rehearsed, and never sent. |
 | `ops` | Write the weekly ops report | A report and a drill, on the cadence the ops lane will set once its trigger in the planned-rooms registry is met. Until then it is rehearsed, and no report is written. |

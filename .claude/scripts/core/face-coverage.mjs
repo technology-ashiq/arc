@@ -538,6 +538,111 @@ export function moduleFindings(tree) {
   return { findings, generic, folders: tree.folders.length, served: openable.length, orphans, exemptions: tree.exemptions.length, exempted: [...exempt].sort() };
 }
 
+// ---------- the availability half (face v2 Phase 15, REQ-19, ADR-1354) ----------
+//
+// Every field a room draws that is not `served` names where it would come from: its availability, its source and, for a
+// NOT SERVED panel, the lane that owns that source. The walk folds every module with nothing loaded -- every read in
+// flight, every NOT SERVED panel declared -- and lists each field registry.mjs's availabilityOf finds. A field with no
+// source, a state outside the enum, a NOT SERVED panel with no availability or no owner lane, and a fold that cannot
+// be folded at all are each a FAIL from birth: a gap that cannot be named is a gap the owner assumes is not there.
+
+/**
+ * A message with the checkout's path withheld, in any spelling a platform prints it: either separator, any case on
+ * Windows, and as a file:// URL.
+ * @param {string} text @param {string} repo
+ */
+export function withholdPath(text, repo) {
+  const fwd = (s) => s.split("\\").join("/");
+  const fold = process.platform === "win32" ? (s) => s.toLowerCase() : (s) => s;
+  const forms = [...new Set([repo, fwd(repo), fwd(repo).split("/").join("\\"), pathToFileURL(repo).href].filter((f) => f.length > 3))]
+    .sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const f of forms) {
+    const hay = fold(out), needle = fold(f);
+    let at = hay.indexOf(needle), res = "", from = 0;
+    while (at >= 0) { res += out.slice(from, at) + "<repo>"; from = at + f.length; at = hay.indexOf(needle, from); }
+    out = res + out.slice(from);
+  }
+  return out;
+}
+
+/** A fold-returned string inside a finding: one line, quoted, capped -- a panel name can carry a newline (round 2 B3). */
+const quoted = (v) => JSON.stringify(oneLine(String(v)).slice(0, 120));
+
+/**
+ * Fold every module with nothing loaded and list what each names. Unreadable -- never empty -- when the registry, the
+ * availability enum or the module tree cannot be read.
+ * @param {string} repo
+ */
+export async function treeAvailability(repo) {
+  // A thrown message is a fold's text: one line, the checkout's path withheld, capped -- it lands in a parsed log and in
+  // public CI output (attack c0fc549 B5).
+  // The scrub compares on one separator and, on Windows, one case, and withholds the file:// form too (round 2 B2); a
+  // throw that cannot even be stringified is named, never a second throw out of the catch (round 2 B1).
+  const said = (e) => {
+    let text;
+    try { text = String(e && e.message ? e.message : e); } catch { text = "<unprintable throw>"; }
+    return withholdPath(oneLine(text), repo).slice(0, 300);
+  };
+  let reg, av, rooms;
+  try {
+    reg = await import(pathToFileURL(join(repo, "face", "src", "lib", "registry.mjs")).href);
+    av = await import(pathToFileURL(join(repo, "face", "src", "lib", "availability.mjs")).href);
+    rooms = strictJson(join(repo, "initiatives", "face", "contracts", "rooms.generated.json"));
+  } catch (e) {
+    return { unreadable: `the registry, the availability enum or the served rooms could not be read (${e && e.code ? String(e.code) : said(e)})` };
+  }
+  const tree = treeModules(repo);
+  if (tree.unreadable) return { unreadable: tree.unreadable };
+  const modules = [];
+  for (const f of tree.folders) {
+    const key = `${f.ring}/${f.id}`;
+    const dir = join(repo, "face", "src", "modules", f.ring, f.id);
+    try {
+      const fold = (await import(pathToFileURL(join(dir, "fold.mjs")).href)).fold;
+      const manifest = (await import(pathToFileURL(join(dir, "module.mjs")).href)).default;
+      const room = (rooms.rooms || []).find((r) => r && r.id === f.id) ?? { id: f.id, ring: f.ring, name: f.id, sentence: "", lede: "" };
+      const ctx = { room, rooms: rooms.rooms, mode: "sim", token: null, needs: {}, needsUnplaced: 0, inventories: rooms.inventories, laneMap: undefined, picks: {}, manifest };
+      const folded = fold({}, ctx);
+      modules.push({ key, fields: reg.availabilityOf(folded), notServed: reg.notServedOf(folded) });
+    } catch (e) {
+      modules.push({ key, error: said(e) });
+    }
+  }
+  return { states: [...av.STATES], modules };
+}
+
+/**
+ * The availability half's findings, and its counts per state.
+ * @param {Awaited<ReturnType<typeof treeAvailability>> | undefined} tree
+ */
+export function availabilityFindings(tree) {
+  const findings = [];
+  const counts = {};
+  if (!tree || tree.unreadable) {
+    findings.push(`[availability] could not be read from the tree -- ${tree ? tree.unreadable : "no availability tree was gathered"}. A source that cannot be read is not a source with nothing in it`);
+    return { findings, counts, fields: 0 };
+  }
+  const states = new Set(tree.states);
+  for (const s of tree.states) counts[s] = 0;
+  let fields = 0;
+  for (const m of tree.modules) {
+    if (m.error !== undefined) { findings.push(`[availability] ${m.key} could not be folded with nothing loaded (${m.error}), so its fields cannot be named`); continue; }
+    for (const f of m.fields) {
+      fields++;
+      if (!states.has(f.availability)) { findings.push(`[availability] ${m.key} draws a field in state ${quoted(f.availability)}, outside ${[...states].join(", ")}`); continue; }
+      counts[f.availability]++;
+      if (typeof f.source !== "string" || f.source.trim() === "") findings.push(`[availability] ${m.key} draws a ${f.availability} field that names no source -- every field that is not served names where it would come from (ADR-1354)`);
+    }
+    for (const n of m.notServed) {
+      const a = n.avail;
+      if (!a || a.isAvailability !== true) { findings.push(`[availability] ${m.key}'s NOT SERVED panel ${quoted(n.panel)} carries no availability -- build it with notServed()`); continue; }
+      if (typeof a.owner_lane !== "string" || a.owner_lane.trim() === "") findings.push(`[availability] ${m.key}'s NOT SERVED panel ${quoted(n.panel)} names no owner lane -- a gap is named and owned, not filled (ADR-1354)`);
+    }
+  }
+  return { findings, counts, fields };
+}
+
 // ---------- the surface half (face v2 Phase 09, REQ-13, ADR-1349) ----------
 //
 // A SURFACE is a screen the shell draws that is not a room: today exactly one, the front door at `/`, which carries the
@@ -769,9 +874,13 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
   // face v2 Phase 05: module ops reconciled with the work door's registry (REQ-04, ADR-1339).
   ops,
   // face v2 Phase 09: surfaces App.tsx mounts reconciled with the contract's surface rows (REQ-13, ADR-1349).
-  surfaces }) {
+  surfaces,
+  // face v2 Phase 15: every field a room draws names its availability and source (REQ-19, ADR-1354). Optional only for a
+  // caller that gathers no tree of its own (the wiki); gather() always reads it, and an unreadable one FAILs.
+  availability }) {
   const findings = [];
   findings.push(...moduleFindings(modules).findings);
+  if (availability !== undefined) findings.push(...availabilityFindings(availability).findings);
   findings.push(...opFindings(ops, kinds));
   const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
@@ -1091,7 +1200,7 @@ async function gather(repo) {
   const contract = loadContract(repo);
   const { kinds: _k, lanes, commands, agents, products, rules, processes, ...rest } = await treeWorld(repo, kinds);
   // Outside treeWorld on purpose: the wiki decides about every treeWorld key (ADR-1501), and a surface has no page.
-  return { kinds, lanes, commands, agents, products, rules, processes, contract, ...rest, surfaces: treeSurfaces(repo) };
+  return { kinds, lanes, commands, agents, products, rules, processes, contract, ...rest, surfaces: treeSurfaces(repo), availability: await treeAvailability(repo) };
 }
 
 /** @param repoOrData a repo path, or a pre-gathered data object (the selftest's exit arm). */
@@ -1109,6 +1218,11 @@ async function run(repoOrData, quiet = false) {
   if (data.ops && !data.ops.unreadable) {
     const rooms = data.ops.modules.filter((m) => m.ops.length > 0).map((m) => m.id);
     process.stdout.write(oneLine(`face-coverage: op half registry=${data.ops.registry.length} named=${data.ops.modules.reduce((n, m) => n + m.ops.length, 0)} rooms=${rooms.join(",") || "none"} -- every op a room names is served, and every served op is named (REQ-04)`) + "\n");
+  }
+  // What the availability half REPORTS (face v2 Phase 15): how many fields the folds name, per state.
+  if (data.availability && !data.availability.unreadable) {
+    const ah = availabilityFindings(data.availability);
+    process.stdout.write(oneLine(`face-coverage: availability half fields=${ah.fields} ${Object.entries(ah.counts).map(([k, v]) => `${k}=${v}`).join(" ")} -- every field that is not served names its source (ADR-1354)`) + "\n");
   }
   // What the surface half REPORTS (face v2 Phase 09): the rows, what App.tsx imports, and which rows name which dir.
   if (data.surfaces && !data.surfaces.unreadable) {
@@ -1249,6 +1363,15 @@ async function selftest(repo) {
     ["a surface row naming the shell", withSurfaceRow(clean, { id: "ghost-door", dir: "face/src/shell", adr: "ADR-1349" }), "is the workroom shell"],
     ["a contract with no surfaces list", { ...clean, contract: { ...clean.contract, surfaces: undefined } }, "carries no surfaces.list"],
     ["an unreadable surface tree", { ...clean, surfaces: { unreadable: "the selftest made it unreadable" } }, "[surface] could not be read"],
+    // ---- the availability half (face v2 Phase 15, REQ-19, ADR-1354) ---------------------------
+    //
+    // Each mutant edits ONE field of the folds' own list; the clean tree passing is the control.
+    ["a field that names no source", withAvailability(clean, (m) => ({ ...m, fields: m.fields.map((f, i) => (i === 0 ? { ...f, source: "" } : f)) })), "names no source"],
+    ["a field in a state outside the enum", withAvailability(clean, (m) => ({ ...m, fields: m.fields.map((f, i) => (i === 0 ? { ...f, availability: "missing" } : f)) })), "outside served"],
+    ["a NOT SERVED panel with no owner lane", withAvailability(clean, (m) => ({ ...m, notServed: m.notServed.map((n, i) => (i === 0 ? { ...n, avail: { ...n.avail, owner_lane: "" } } : n)) }), (m) => m.notServed.length > 0), "names no owner lane"],
+    ["a NOT SERVED panel with no availability", withAvailability(clean, (m) => ({ ...m, notServed: m.notServed.map((n, i) => (i === 0 ? { panel: n.panel, route: n.route, sentence: n.sentence } : n)) }), (m) => m.notServed.length > 0), "carries no availability"],
+    ["a fold that cannot be folded", withAvailability(clean, (m) => ({ key: m.key, error: "the selftest broke it" })), "could not be folded"],
+    ["an unreadable availability tree", { ...clean, availability: { unreadable: "the selftest made it unreadable" } }, "[availability] could not be read"],
   ];
 
   let allArmsWiring = true;
@@ -1474,6 +1597,17 @@ function withOpKind(data, kind) {
 function withModuleFolder(data, ring, id) {
   const m = data.modules || {};
   return { ...data, modules: { ...m, folders: [...(m.folders || []), { ring, id }] } };
+}
+/**
+ * One module of the availability tree edited -- the first that `pick` accepts (default: the first that names a field).
+ * A tree with no such module is returned unchanged, so the arm's own FAIL says the mutant never landed.
+ */
+function withAvailability(data, edit, pick = (m) => Array.isArray(m.fields) && m.fields.length > 0) {
+  const a = data.availability || {};
+  const mods = Array.isArray(a.modules) ? a.modules : [];
+  const at = mods.findIndex((m) => m.error === undefined && pick(m));
+  if (at < 0) return data;
+  return { ...data, availability: { ...a, modules: mods.map((m, i) => (i === at ? edit(m) : m)) } };
 }
 /** App.tsx importing face/src/<dir> as gathered; `onDisk` false leaves the directory off the tree. */
 function withSurfaceImport(data, dir, onDisk = true) {

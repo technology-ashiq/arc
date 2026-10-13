@@ -39,6 +39,8 @@ import { leadsIdem, isLeadsKind } from "./lib/validate-leads.mjs";
 import { policyIdem, isPolicyKind } from "./lib/validate-policy.mjs";
 import { contentIdem, isContentKind } from "./lib/validate-content.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
+import { parentProblem } from "./lib/validate-bindings.mjs";
+import { scanAll } from "./spine.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
   quarantine, spineRoot, withLock, writeCloseMarker,
@@ -130,6 +132,27 @@ const envOr = (name, fallback) => {
   return v === undefined || v === "" ? fallback : v;
 };
 
+// ADR-2020: a session launched by a foreign-harness wrapper names its harness in ARC_HARNESS, and every
+// receipt it emits carries it without the model having to type it. A payload that already names a
+// DIFFERENT harness is refused rather than overwritten: a receipt that lies about where it came from is
+// the Cycle 1 spike's mislabel, and silently "correcting" it would hide the model's error. Unset or empty,
+// nothing is touched, so a Claude Code emit is byte-identical to before.
+const HARNESS_RE = /^[a-z][a-z0-9-]{0,31}$/;
+function stampHarness(payload) {
+  const harness = envOr("ARC_HARNESS", null);
+  if (harness === null) return payload;
+  if (!HARNESS_RE.test(harness))
+    throw new SpineError("BAD_HARNESS", `ARC_HARNESS must match ${HARNESS_RE} -- got ${JSON.stringify(harness).slice(0, 40)}`);
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload))
+    throw new SpineError("BAD_HARNESS", "ARC_HARNESS is set but the payload is not a JSON object, so there is nowhere to stamp it");
+  if (Object.prototype.hasOwnProperty.call(payload, "harness")) {
+    if (payload.harness !== harness)
+      throw new SpineError("HARNESS_MISMATCH", `payload.harness is ${JSON.stringify(payload.harness).slice(0, 40)} but this session runs under ARC_HARNESS=${harness}`);
+    return payload;
+  }
+  return { ...payload, harness };
+}
+
 // An experiment idem over a payload that is not yet known to be valid. Returns null rather than
 // throwing, so the caller falls through to validateEvent and the operator sees "missing base_sha"
 // instead of a stack trace from the hashing helper.
@@ -173,11 +196,11 @@ function synthesize(kind, flags, { deriveIdem }) {
   // `--payload-file` is the byte-faithful path: it reads bytes off disk and refuses non-UTF-8
   // outright (`BAD_UTF8`, exit 2, verified against a raw `ED A0 BC`). Anything carrying non-ASCII
   // should use it, and `initiatives/growth/RUNBOOK.md` does.
-  const payload = flags["payload-file"]
+  const payload = stampHarness(flags["payload-file"]
     ? readJsonFile(flags["payload-file"])
     : flags.payload !== undefined
       ? parseStrictJson(Buffer.from(flags.payload, "utf8"), "--payload")
-      : {};
+      : {});
 
   const actor = flags.actor ?? envOr("ARC_SPINE_ACTOR", "arc-event");
   const runId = flags["run-id"] ?? envOr("ARC_RUN_ID", "r-adhoc");
@@ -277,7 +300,7 @@ function synthesize(kind, flags, { deriveIdem }) {
     payload,
     outcome,
     cost: flags.cost !== undefined ? parseStrictJson(Buffer.from(flags.cost, "utf8"), "--cost") : null,
-    evidence: flags.evidence ?? null,
+    evidence: flags.evidence ?? envOr("ARC_EVIDENCE", null),
     supersedes: flags.supersedes ?? null,
   };
 }
@@ -447,7 +470,25 @@ function main(parsed) {
     process.stderr.write("arc-event: --dry-run -- validated, scanned and sealed; nothing was written\n");
     return 0;
   }
-  const result = appendEvent(root, sealed, line, { timeoutMs });
+  // ADR-1355 (face v2 Phase 16): a request's parents are judged against the spine before it lands -- each must be an
+  // approval.requested already here (never a decision's ULID), and no cycle may form. validate.mjs cannot see the
+  // spine, so this is the one place it can be checked; a refusal is a REJECT like any other, with nothing written.
+  // Judged UNDER the spine lock it appends under (attack 4f462e9 B6): read unlocked, a parent mid-append was missing and
+  // the request refused PARENT_UNKNOWN. A dry run never resolves the spine, so it cannot judge parents: its "validated"
+  // covers the shape alone, and the real emit is where a parent is checked (B5, declared).
+  // The full scan runs OUTSIDE the lock (round 2 B4: under it, every other emitter waited on it). Only a parent the
+  // unlocked read could not find is looked for again under the lock -- the one answer a mid-append can change, since
+  // the spine only grows.
+  const hasParents = sealed.kind === "approval.requested" && sealed.payload && Array.isArray(sealed.payload.depends_on);
+  const first = hasParents ? parentProblem(sealed, scanAll(root).events) : null;
+  if (first !== null && first.code !== "PARENT_UNKNOWN") throw new SpineError(first.code, first.why);
+  const result = first !== null
+    ? withLock(root, () => {
+      const problem = parentProblem(sealed, scanAll(root).events);
+      if (problem !== null) throw new SpineError(problem.code, problem.why);
+      return appendEventUnlocked(root, sealed, line);
+    }, { timeoutMs })
+    : appendEvent(root, sealed, line, { timeoutMs });
   if (result.healed)
     process.stderr.write("arc-event: WARN healed a torn tail in the day file before appending\n");
   if (!result.indexed)

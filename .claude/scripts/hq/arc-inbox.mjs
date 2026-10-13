@@ -8,7 +8,7 @@
 // opens events/*.jsonl or state.db, which is what REQ-09's grep-lint checks.
 //
 // Usage:
-//   arc-inbox inbox                       # list OPEN approvals (approval.requested, undecided)
+//   arc-inbox inbox [--all]               # OPEN approvals; --all lists every request with its state (ADR-1355)
 //   arc-inbox approve <ULID> --reason R   # record decision.recorded verdict=approve
 //   arc-inbox reject  <ULID> --reason R   # record decision.recorded verdict=reject
 //   arc-inbox owner-key init              # once, at a terminal: make + seal the owner key (ADR-1514 amendment 2)
@@ -18,7 +18,7 @@
 
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { SpineError, ULID_RE, sha256Hex } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { isPromotionRequest } from "./lib/validate-policy.mjs";
@@ -30,6 +30,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { query } from "./spine.mjs";
 import { initOwnerKey, ownerKeyDir, ownerPubPath, pageListing, readPassphraseTty, signAccept, stdioIsTty } from "./lib/owner-key.mjs";
 import { ACCEPT_GATE } from "./lib/owner-sig.mjs";
+import { foldApprovals, decideRefusal } from "./lib/approval-fold.mjs";
+import { withExclusiveLock } from "../core/plan-expect.mjs";
+
+/** The lock every binding decide folds and emits under, beside the spine it guards (ADR-1355). */
+const DECIDE_LOCK = "inbox-decide";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_EVENT = join(HERE, "arc-event.mjs");
@@ -70,23 +75,114 @@ export async function loadApprovals(root, { asof = null } = {}) {
   const requested = cut((await query(root, { kind: "approval.requested", engine: "scan" })).events);
   const decided = cut((await query(root, { kind: "decision.recorded", engine: "scan" })).events);
   const decidedIds = new Set(decided.map((e) => e.event.payload && e.event.payload.decides));
-  return { requested, decidedIds };
+  return { requested, decidedIds, decided };
 }
 
-async function listInbox(root) {
-  const { requested, decidedIds } = await loadApprovals(root);
-  const open = requested.filter((e) => !decidedIds.has(e.event.id));
-  if (!open.length) { process.stderr.write("inbox: no open approvals\n"); return 0; }
-  for (const e of open) {
+/**
+ * Re-derive a bound request's plan, DRY-RUN, and say whether its digest moved (face v2 Phase 16, ADR-1355 (a)). The
+ * plan is the work door's REGISTERED one for `bound.op`, built from `bound.input` by the door's own validator and run by
+ * the door's own runner -- never a command the payload spells -- and only an op whose plan prints a digest
+ * (`expect: true`) can be bound. A plan that refuses, times out or prints no digest is a failure CLASS (REQ-19's
+ * unknown), never "same". Every plan here is a --dry-run: the re-derive writes nothing.
+ * @param {Record<string, unknown>} bound
+ * @returns {Promise<"same" | "moved" | { failure: string }>}
+ */
+export async function planStateOf(bound) {
+  const OPS = await import("./face-ops.mjs");
+  const DOOR = await import("./lib/face/work-door.mjs");
+  const op = OPS.OPS.find((o) => o.id === bound.op);
+  if (!op) return { failure: "UNKNOWN_OP" };
+  if (op.expect !== true) return { failure: "NOT_BOUND_OP" };
+  // A path the plan reads is absolute: a relative one resolves against whichever cwd re-derives it, and the verdict
+  // would then be about another file (round 2 B6).
+  for (const v of Object.values(bound.input && typeof bound.input === "object" ? bound.input : {}))
+    if (typeof v === "string" && (v.includes("/") || v.includes(String.fromCharCode(92))) && !isAbsolute(v)) return { failure: "RELATIVE_PATH" };
+  let values;
+  try { values = OPS.validateInput(op, bound.input); } catch (e) { return { failure: e && e.code ? String(e.code) : "BAD_INPUT" }; }
+  let res;
+  try { res = await DOOR.runTool({ repo: join(HERE, "..", "..", "..") }, op.plan(values), { timeoutMs: REDERIVE_TIMEOUT_MS }); }
+  catch (e) { return { failure: e && e.code ? String(e.code) : "TOOL_FAILED" }; }
+  if (res.timedOut) return { failure: "PLAN_TIMEOUT" };
+  if (res.exit !== 0) return { failure: "PLAN_REFUSED" };
+  let digest;
+  try { digest = OPS.expectFrom(op, res.stdout); } catch (e) { return { failure: e && e.code ? String(e.code) : "NO_EXPECT" }; }
+  return digest === bound.expect ? "same" : "moved";
+}
+const REDERIVE_TIMEOUT_MS = 120_000;
+/** One fold re-derives for at most this long; what is left reads UNKNOWN(PLAN_BUDGET), never a blocked inbox. */
+const REDERIVE_BUDGET_MS = 180_000;
+/** A re-derived answer is reused this long, and one plan in flight is shared by every caller asking for it. */
+const REDERIVE_TTL_MS = 20_000;
+/** @type {Map<string, { settledAt: number | null, value: Promise<"same" | "moved" | { failure: string }> }>} */
+const planCache = new Map();
+
+/**
+ * The planState one fold uses (attack 4f462e9 B1/B2): answers shared by key (op, input, digest) for a short while and
+ * while in flight, so overlapping door polls spawn one plan, not one each; a total budget per fold, past which a bound
+ * request reads UNKNOWN(PLAN_BUDGET); and, for a decide, ONLY the request being decided is re-derived -- another
+ * request's slow or failing plan neither delays nor decides it.
+ * @param {{ only?: string | null, budgetMs?: number }} [o]
+ */
+export function planStateFor({ only = null, budgetMs = REDERIVE_BUDGET_MS, fresh = false } = {}) {
+  const started = Date.now();
+  return (/** @type {Record<string, unknown>} */ bound, /** @type {{ event: { id: string } }} */ row) => {
+    if (only !== null && row.event.id !== only) return { failure: "NOT_REDERIVED" };
+    if (Date.now() - started > budgetMs) return { failure: "PLAN_BUDGET" };
+    const key = JSON.stringify([bound.op, bound.input, bound.expect]);
+    // A decide never takes a cached answer: it judges the plan as it stands at the moment of deciding (round 2 B2).
+    if (fresh) return planStateOf(bound);
+    // In flight is shared until it SETTLES, and the TTL counts from settling: a plan slower than the TTL was started
+    // again every TTL (round 2 B1).
+    const hit = planCache.get(key);
+    if (hit && (hit.settledAt === null || Date.now() - hit.settledAt < REDERIVE_TTL_MS)) return hit.value;
+    const entry = { settledAt: /** @type {number | null} */ (null), value: planStateOf(bound) };
+    entry.value.finally(() => { entry.settledAt = Date.now(); });
+    planCache.set(key, entry);
+    for (const [k, v] of planCache) if (v.settledAt !== null && Date.now() - v.settledAt >= REDERIVE_TTL_MS) planCache.delete(k);
+    return entry.value;
+  };
+}
+
+/**
+ * Every request with its folded state -- the ONE fold the CLI, the decide path and the door's /api/inbox read.
+ * @param {string} root
+ * @param {{ asof?: string | null, rederive?: boolean, decidedPlans?: boolean, only?: string | null, loaded?: { requested: any[], decided: any[] } }} [o]
+ *   rederive: re-derive bound plans. An as-of read passes false: a plan is re-derived against today's world, never the
+ *   replayed day, so a bound request then reads UNKNOWN(NOT_REDERIVED) -- never OPEN.
+ *   only: re-derive the plan of this request alone (a decide). loaded: one read the caller already made, so its counts
+ *   and the fold come from the same spine (B8).
+ */
+export async function inboxFold(root, { asof = null, rederive = true, decidedPlans = false, only = null, fresh = false, loaded = undefined } = {}) {
+  const { requested, decided } = loaded ?? await loadApprovals(root, { asof });
+  return foldApprovals(requested, decided, { planState: rederive ? planStateFor({ only, fresh }) : undefined, decidedPlans });
+}
+
+/** The inbox line's description and gate, with the profile fallbacks. @param {Record<string, unknown>} p */
+export function whatGate(p) {
+  const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
+  const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
+  return { what, gate };
+}
+
+async function listInbox(root, all = false) {
+  const folded = await inboxFold(root, { decidedPlans: all });
+  // OPEN only by default; --all lists every request, each ending in its state (ADR-1355).
+  const shown = folded.filter((f) => all || f.state === "OPEN");
+  if (!shown.length) {
+    const held = folded.filter((f) => f.state !== "OPEN" && f.state !== "DECIDED" && f.state !== "RESOLVED").length;
+    process.stderr.write(held > 0 ? `inbox: no open approvals (${held} waiting, stale, duplicate or unknown -- --all lists them)\n` : "inbox: no open approvals\n");
+    return 0;
+  }
+  for (const f of shown) {
+    const e = f.row;
     const p = e.event.payload || {};
     // `what` falls back to `subject` so a PROFILE payload does not render as a blank line the owner
     // cannot read. absorb's ab-judgement profile is closed to its validated fields (ADR-0603) and
     // deliberately has no free-text `what`; without this fallback its inbox row printed as `(?)` with
     // no description at all, which is a request the owner cannot weigh -- and an approval nobody can
     // read is a rubber stamp with extra steps.
-    const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
-    const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
-    process.stdout.write(`${e.event.id}  ${what}  (${gate})  ${e.event.venture}\n`);
+    const { what, gate } = whatGate(p);
+    process.stdout.write(`${e.event.id}  ${what}  (${gate})  ${e.event.venture}  [${f.label}]\n`);
     // A PROMOTION is the one approval whose sentence is not enough to decide on. Which pair,
     // how far, and on what evidence are all validated fields (ADR-0508's promotion profile), so
     // putting them on the screen where the decision is made costs nothing and is the difference
@@ -172,6 +268,28 @@ export async function decide(root, verdict, id, reason, signer = {}) {
   }
   if (decidedIds.has(id))
     throw new SpineError("ALREADY_DECIDED", `${id} already has a decision -- decisions are final (supersede on a new day if truly needed)`);
+  // ADR-1355: a request carrying a binding is decided only in a state that allows it -- a waiting child, a rejected
+  // parent's child, a moved plan, an unevaluable binding and a key already decided are refused, ZERO events written.
+  const p0 = approval.event.payload || {};
+  const bound = "bound_to" in p0 || "depends_on" in p0 || "decision_key" in p0;
+  // The fold and the emit happen under ONE lock every binding decide takes (attack 4f462e9 B3): two decides of two
+  // requests sharing a key each folded OPEN before either landed, and both emitted -- two decisions for one key. Only
+  // the request being decided has its plan re-derived (B2). EVERY decide takes the lock, a plain parent's too: a parent
+  // rejected between its child's fold and its child's emit left an approved child under a rejected parent (round 2
+  // B3). A held lock is refused by name, never waited on forever.
+  const held = await withExclusiveLock(root, DECIDE_LOCK, async () => {
+    if (!bound) return record(verdict, id, reason, signer, approval);
+    const f = (await inboxFold(root, { only: id, fresh: true })).find((x) => x.id === id);
+    const no = f ? decideRefusal(f, verdict === "approve" ? "approve" : "reject") : { code: "UNKNOWN_APPROVAL", why: "the fold does not hold it" };
+    if (no !== null) throw new SpineError(no.code, `${id}: ${no.why}`);
+    return record(verdict, id, reason, signer, approval);
+  });
+  if (held.busy) throw new SpineError("INBOX_BUSY", `another decide holds the inbox lock on this spine -- try again`);
+  return held.value;
+}
+
+/** The decision itself: the signature a narrative-accept approve needs, then the one strict emit. */
+async function record(verdict, id, reason, signer, approval) {
 
   // ADR-1514 amendment 2: approving a narrative-accept request is AUTHENTICATED. It is signed, page by page, with the owner
   // key, which only a passphrase typed at a terminal unseals. A reject needs no signature, and every other gate is untouched.
@@ -226,8 +344,11 @@ function parse(argv) {
     const a = argv[i];
     if (a.startsWith("--")) {
       const eq = a.indexOf("=");
+      // --all takes no value: `--all=1` was stored as text and silently listed OPEN only (attack 4f462e9 B4).
+      if (eq !== -1 && a.slice(2, eq) === "all") throw new SpineError("BAD_ARGS", "--all takes no value");
       if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
       const name = a.slice(2);
+      if (name === "all") { flags.all = true; continue; }
       if (name !== "reason") throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
       const next = argv[i + 1];
       if (next === undefined) throw new SpineError("BAD_ARGS", `flag --${name} needs a value`);
@@ -241,6 +362,8 @@ function parse(argv) {
 async function main(argv) {
   const { positional, flags } = parse(argv);
   const command = positional[0] || "inbox";
+  // Judged before ANY dispatch, owner-key's included (round 2 B7).
+  if (flags.all === true && command !== "inbox") throw new SpineError("BAD_ARGS", "--all belongs with inbox");
   if (command === "owner-key") {
     if (positional[1] !== "init" || positional.length !== 2) throw new SpineError("BAD_ARGS", "usage: arc-inbox owner-key init");
     // A mode that ignores what it was given answers a question nobody asked (attack r1 B11): owner-key init takes no flag at all.
@@ -257,7 +380,7 @@ async function main(argv) {
     return 0;
   }
   const root = spineRoot();
-  if (command === "inbox") return listInbox(root);
+  if (command === "inbox") return listInbox(root, flags.all === true);
   if (command === "approve" || command === "reject")
     return decide(root, command, positional[1], flags.reason);
   throw new SpineError("BAD_ARGS", `unknown command ${JSON.stringify(command)} (inbox | approve <id> --reason R | reject <id> --reason R | owner-key init)`);

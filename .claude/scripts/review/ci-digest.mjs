@@ -2,7 +2,7 @@
 /**
  * ci-digest.mjs -- the CI law as a script (ADR-0226): read CI per JOB, for the commit you are on.
  *
- *   node .claude/scripts/review/ci-digest.mjs [--sha SHA] [--tail N]
+ *   node .claude/scripts/review/ci-digest.mjs [--sha SHA] [--tail N] [--wait [--timeout-min N]]
  *
  * CLAUDE.md: "After a push, read CI per-JOB before reporting the work done ... confirm the run's
  * head SHA is the local HEAD." That law was prose, so every building session polled CI by hand
@@ -17,8 +17,8 @@
  *   4. for every failed job, the last N lines of its failed-step log (default 40, max 200).
  *
  * Exit: 0 every job green · 1 at least one job red (reported even while others still run) ·
- * 2 usage / gh unavailable · 3 pending (no run yet, or jobs still running) · 4 SHA mismatch
- * (GitHub's newest run on this branch is for a different commit than local HEAD).
+ * 2 usage / gh unavailable · 3 pending (no run yet, or jobs still running; with --wait, TIMEOUT) · 4 SHA mismatch
+ * (GitHub's newest run on this branch is for a different commit than local HEAD) · 6 NO-RUN (--wait only).
  */
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
@@ -64,7 +64,7 @@ export function digest({ gh, head, branch, upstream = null, tail = 40 }) {
         // what CI can see on the branch is not this commit.
         if (upstream && upstream === head) {
           say(`PENDING: HEAD ${head.slice(0, 12)} is pushed, and GitHub has not created its run yet (newest run on ${branch} is for ${onBranch[0].headSha.slice(0, 12)}).`);
-          return { code: 3, lines };
+          return { code: 3, lines, noRun: true };
         }
         say(`SHA MISMATCH: the newest run on ${branch} is for ${onBranch[0].headSha.slice(0, 12)}, local HEAD is ${head.slice(0, 12)}${upstream ? `, and the branch upstream is at ${upstream.slice(0, 12)}` : ""}.`);
         say("Push HEAD, or check out the commit CI ran -- a green run on another commit says nothing about this one.");
@@ -73,7 +73,7 @@ export function digest({ gh, head, branch, upstream = null, tail = 40 }) {
     }
     say(`PENDING: no CI run exists yet for ${head.slice(0, 12)}.`);
     say("(arc's CI runs on pull requests and workflow_dispatch only -- a commit on main gets a run only when one is dispatched.)");
-    return { code: 3, lines };
+    return { code: 3, lines, noRun: true };
   }
 
   // Newest attempt per workflow: a re-run supersedes the attempt it re-ran.
@@ -135,10 +135,22 @@ export function digest({ gh, head, branch, upstream = null, tail = 40 }) {
 }
 
 export function parseArgs(argv) {
-  const o = { sha: null, tail: 40 };
+  const o = { sha: null, tail: 40, wait: false, timeoutMin: 20, timeoutGiven: false };
+  const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.includes("=") && a.startsWith("--")) return { error: `\`${a}\`: write the value as a separate argument (--flag VALUE)` };
+    if (seen.has(a)) return { error: `${a} given twice` };
+    seen.add(a);
+    if (a === "--wait") { o.wait = true; continue; }
+    if (a === "--timeout-min") {
+      const v = argv[i + 1];
+      if (v === undefined || !/^[1-9][0-9]{0,2}$/.test(v) || Number(v) > 180) return { error: `--timeout-min must be 1-180 (got \`${v ?? ""}\`)` };
+      o.timeoutMin = Number(v);
+      o.timeoutGiven = true;
+      i++;
+      continue;
+    }
     if (a !== "--sha" && a !== "--tail") return { error: `unknown argument \`${a}\`` };
     const v = argv[i + 1];
     if (v === undefined || v === "" || v.startsWith("--")) return { error: `${a} needs a value` };
@@ -157,13 +169,14 @@ export function parseArgs(argv) {
 }
 
 function realGh(args) {
-  return execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  // A bounded call: a hung gh must not hold a --wait past its own timeout (attack 1f1966b L1).
+  return execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 });
 }
 
 function main(argv) {
   const p = parseArgs(argv);
   if (p.error) {
-    process.stderr.write(`ci-digest: ${p.error}\nusage: ci-digest.mjs [--sha SHA] [--tail N]\n`);
+    process.stderr.write(`ci-digest: ${p.error}\nusage: ci-digest.mjs [--sha SHA] [--tail N] [--wait [--timeout-min N]]\n`);
     return 2;
   }
   let head, branch = null;
@@ -182,14 +195,72 @@ function main(argv) {
   try {
     upstream = execFileSync("git", ["rev-parse", "--verify", "--quiet", "@{u}^{commit}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
   } catch { upstream = null; }
+  if (p.opts.timeoutGiven && !p.opts.wait) {
+    process.stderr.write("ci-digest: --timeout-min only means something with --wait\n");
+    return 2;
+  }
+  // --wait needs an upstream: without one, a pushed-but-not-yet-picked-up head reads as a mismatch and the
+  // wait would end on it at once (attack 1f1966b B2).
+  if (p.opts.wait && !upstream) {
+    process.stderr.write(`ci-digest: --wait needs a branch that tracks its push (git push -u); this one has no upstream${String.fromCharCode(10)}`);
+    return 2;
+  }
+  // And the upstream must be this branch's own pushed ref: a branch cut from origin/main tracks origin/main, so a
+  // lagging run would read as a mismatch and end the wait at once (attack 7c30208 B6).
+  if (p.opts.wait) {
+    let name = "";
+    try { name = execFileSync("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { name = ""; }
+    if (!branch || !name.endsWith(`/${branch}`)) {
+      process.stderr.write(`ci-digest: --wait needs ${branch ?? "the branch"} to track its own pushed ref; its upstream is \`${name || "none"}\` (git push -u origin HEAD)${String.fromCharCode(10)}`);
+      return 2;
+    }
+  }
+  const once = () => digest({ gh: realGh, head, branch, upstream, tail: p.opts.tail });
   let out;
-  try { out = digest({ gh: realGh, head, branch, upstream, tail: p.opts.tail }); }
+  try { out = p.opts.wait ? waitFor(once, p.opts.timeoutMin, realGh) : once(); }
   catch (e) {
     process.stderr.write(`ci-digest: gh failed: ${String(e.message).split("\n")[0]}\n`);
     return 2;
   }
   for (const l of out.lines) process.stdout.write(`${l}\n`);
   return out.code;
+}
+
+// ADR-2021: `--wait` is how `npm run test` reads CI in arc. It re-reads while the verdict is pending (exit 3) and
+// returns the first settled one; every other code returns at once and is never retried. A HEAD with no run after
+// five minutes is NO-RUN (exit 6), checked before the timeout so a short --timeout-min cannot hide it: arc's CI runs
+// on PRs and dispatch only, and a PR that conflicts gets no run at all (.claude/rules/testing.md), so waiting
+// longer would wait for nothing. A gh call that throws mid-wait is retried; three in a row end the wait (exit 2).
+// The clock and the sleep are parameters, for tests; nothing in the environment can shorten them.
+const POLL_MS = 60_000;
+const NO_RUN_MS = 5 * 60_000;
+const GH_FAILURES = 3;
+const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+export function waitFor(once, timeoutMin, gh, now = Date.now, sleep = sleepMs) {
+  const limit = timeoutMin * 60_000;
+  const start = now();
+  let reads = 0, failures = 0;
+  for (;;) {
+    let out;
+    try { out = once(); failures = 0; }
+    catch (e) {
+      failures++;
+      if (failures >= GH_FAILURES) throw e;
+      out = { code: 3, lines: [`PENDING: gh failed (${failures} of ${GH_FAILURES}): ${safeLine(String(e.message).split("\n")[0])}`] };
+    }
+    reads++;
+    const settled = (o) => ({ ...o, lines: [...o.lines, `ci-digest: settled after ${reads} read(s)`] });
+    if (out.code !== 3) return settled(out);
+    const elapsed = now() - start;
+    if (out.noRun && elapsed >= Math.min(NO_RUN_MS, limit)) {
+      let pr = "(no PR found for this branch)";
+      try { pr = gh(["pr", "view", "--json", "isDraft,mergeable,state"]).trim(); } catch { /* no PR is itself the answer */ }
+      return settled({ code: 6, lines: [...out.lines, `NO-RUN: no CI run for this commit after ${Math.round(elapsed / 1000)}s; PR: ${safeLine(pr)}`] });
+    }
+    if (elapsed >= limit) return settled({ code: 3, lines: [...out.lines, `TIMEOUT: still pending after ${Math.round(elapsed / 1000)}s`] });
+    const left = Math.min(limit, out.noRun ? NO_RUN_MS : limit) - elapsed;
+    sleep(Math.max(1, Math.min(POLL_MS, left)));
+  }
 }
 
 function isMainModule() {

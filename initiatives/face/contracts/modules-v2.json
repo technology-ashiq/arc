@@ -10,7 +10,7 @@
     "sameId": 31,
     "renamed": 3,
     "extra": 2,
-    "servedPlanned": 3,
+    "servedPlanned": 2,
     "served": 37,
     "servedWithoutModule": 3
   },
@@ -378,7 +378,7 @@
       "id": "discover",
       "alias": null,
       "ring": "money",
-      "class": "served-planned",
+      "class": "served",
       "reads": []
     },
     {

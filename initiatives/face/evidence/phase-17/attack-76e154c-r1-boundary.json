@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:20",
+      "breaking_input": "discover/lib/spine.mjs exists but has a syntax error, throws at top level, or imports a module that is missing (ERR_MODULE_NOT_FOUND from a nested import). The door answers SOURCE_ABSENT: \"this checkout does not carry discover\".",
+      "why": "The catch maps every import failure to SOURCE_ABSENT, so a broken or unreadable file reads as a missing product. The message blames the wrong layer, and only the error code is kept, so the cause is lost.",
+      "fix": "Treat only a missing target file as SOURCE_ABSENT, checked with isFile on the resolved path. Map every other failure to SOURCE_INVALID, scrubbed, with the error code.",
+      "twin_of": "A 200 with an unreadable body blamed on the registry -> Name the layer that failed."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:55",
+      "breaking_input": "A discover receipt whose payload.reason, slug, niche, source_id, cluster_tokens or outcome carries an absolute Windows path (C:\\Users\\...), or whose envelope id or ts is not in its grammar (id \"../x\", ts \"not-a-time\"). The route serves all of them verbatim.",
+      "why": "All of these go through text() and are never scrubbed. Envelope id and ts skip idOf/tsOf. Free-text from the spine reaches the browser unredacted, and an id outside its grammar is used as a React key and as a join key (decisionOf).",
+      "fix": "Pass every free-text field through scrub(). Serve id and ts only when they match idOf/tsOf, otherwise skip the entry and count it. Cap string length and list sizes.",
+      "twin_of": "Envelope fields passed through unvalidated -> every envelope id and ts is served only in its grammar (idOf, tsOf)."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:80",
+      "breaking_input": "The room polls GET /api/discover on a spine holding months of day files. Each poll runs a synchronous scanAll(ctx.root) over the whole spine, and the body (winners, cluster_tokens) is uncapped.",
+      "why": "A full synchronous spine scan runs on every request, with no in-flight sharing, no cache, no cap and no \"dropped\" count. It blocks the door's event loop. The scan engine is not named, so a stale index could be read.",
+      "fix": "Share an in-flight scan and cache it briefly. Name the scan engine. Cap the list lengths and report what the cap dropped.",
+      "twin_of": "Uncapped receipts and a full spine scan on every poll -> A per-poll path gets the same cap as the lines."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/face/discover-room.mjs:36",
+      "breaking_input": "emit() prints nothing, or a non-id last line, while exiting 0. cap.id and the other ids become \"\" or junk.",
+      "why": "Ids are taken from the last stdout line with no ULID grammar check and without reading r.error. The id comparisons then rest on unvalidated values, and the \"sandbox spine was written\" guard checks only the exit status.",
+      "fix": "Require each id to match the ULID grammar and r.error to be undefined before the guard passes.",
+      "twin_of": "Ids from rows printed without the grammar check refs got -> every id placed in a label or ref passes one ULID test."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face/discover-room.mjs:92",
+      "breaking_input": "A symlink or junction loop under face/src, or a symlink pointing outside it. The statSync call follows links with no realpath or visited set, so the walk recurses until ELOOP or a stack overflow before the RAN line prints.",
+      "why": "The directory walk has no containment or cycle fence. It reads each file twice (readFileSync called twice per file, one-read-then-judge broken). It is not wrapped, so one unreadable file kills the GRAMMAR arm.",
+      "fix": "Use lstat and skip links, or realpath each entry and keep a visited set. Read each file once into a variable. Catch per file and report a finding.",
+      "twin_of": "Directory walks with no containment and no type check -> every file AND directory a route reads is realpath-contained and type-checked."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:17",
+      "breaking_input": "A bare hq install, or a sandbox that copies hq files by a hand-kept list, now has a dynamic import of ../../../../discover/lib/spine.mjs that nothing declares. The hq manifest still lists no dependency on discover, and discover requires hq, so the dependency is circular and invisible.",
+      "why": "A new cross-product import in a shared module is a new caller of a file that is not copied with it. Tests that copy hq by name answer SOURCE_ABSENT where they expect a served body, and sync consumers get a route that can only refuse.",
+      "fix": "Grep every sandbox copy list for hq files. Declare the optional dependency in the manifest, or have the product that owns the constants pass them in. Cover the absent case with one test through the real door.",
+      "twin_of": "A new import in a shared module, and a test sandbox that copies a hand-kept file list -> a new import is a new caller of the file it names."
+    }
+  ]
+}

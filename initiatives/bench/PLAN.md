@@ -206,7 +206,7 @@ flowchart TB
 | 0911 | Bench rides existing spine kinds only | accepted |
 | 0912 | Bench adds no policy subject and must not become a policy bypass | accepted |
 | 0913 | Reproducibility is replay-determinism with honest variance | accepted |
-| 0914 | The real-event candidate is a second model under the proven driver | accepted |
+| 0914 | The real-event candidate is a second model under the proven driver (Amendment 1, 2026-10-13: both sides on `generic-api`) | accepted |
 
 ## Non-negotiables
 

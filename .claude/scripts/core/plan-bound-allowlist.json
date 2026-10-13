@@ -162,6 +162,11 @@
       "why": "a engine-lane tool the owner or CI runs by hand; it shows no plan, so nothing binds its write to one. Not a face op. Debt carried by the engine lane, visible here"
     },
     {
+      "verb": "engine/opencode-session",
+      "class": "lane-tool",
+      "why": "the distribute lane's capped OpenCode wrapper (ADR-2019), run by hand: its only writes are the transcript and its .stderr, opened wx under the lane's evidence ledger. Not a face op. Debt carried by the distribute lane, visible here"
+    },
+    {
       "verb": "engine/arc-run",
       "class": "lane-tool",
       "why": "the engine runner (ADR-0201): its receipt is the record of a run that already happened, not a plan applied; the SESSION door starts it and binds nothing more (ADR-1326)"

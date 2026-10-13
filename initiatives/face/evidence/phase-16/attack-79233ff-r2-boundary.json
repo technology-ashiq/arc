@@ -1,0 +1,61 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:planStateFor (REDERIVE_TTL_MS check against hit.at)",
+      "breaking_input": "A bound request whose plan takes 60 s to run, with GET /api/inbox polled every 5 s.",
+      "why": "The cache entry's `at` is the time the plan was started, not the time it finished. After 20 s a new poll no longer sees the in-flight promise as a hit and spawns another child for the same (op, input, expect). A plan slower than 20 s therefore gets one child per 20 s per bound request, and each poll has its own fresh 180 s budget. The B1 fix only works for plans faster than the TTL.",
+      "fix": "Share an in-flight promise until it settles, and start the TTL from settlement. Keep one global budget or concurrency cap per root, not one per fold call."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:decide -> inboxFold(root,{only:id}) -> planStateFor -> planCache",
+      "breaking_input": "The door polls /api/inbox, which caches 'same' for plan X. The export file is then changed. Within 20 s the owner approves X through the door's in-process decide().",
+      "why": "The decide path uses the same process-wide planCache as the read path. It can therefore take a 'same' answer up to 20 s old and approve a plan that has already moved. The CLI is safe because each process starts with an empty cache, but arc-dash imports decide() and runs it in the long-lived door.",
+      "fix": "Have decide bypass the cache and any in-flight promise (for example `planStateFor({only, fresh:true})`), so the target's plan is always re-derived at decision time."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:decide (early return `if (!(\"bound_to\" in p0 || ...)) return record(...)`)",
+      "breaking_input": "Child C has depends_on [P], and P is a plain request with no binding fields. Run `approve C` while P is already approved and `reject P` runs concurrently. For same-key siblings, use a plain request in the family with no decision_key.",
+      "why": "Only a request that carries a binding takes DECIDE_LOCK. A decide of its plain parent bypasses the lock. C's fold under the lock can read P as approved, then P's reject lands before C's record(), leaving an approved child under a rejected parent. The check and the emit are still not atomic against that writer.",
+      "fix": "Take DECIDE_LOCK for every decide, or at least for any request that some other request names in depends_on. Re-fold just before the emit."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-event.mjs:~452 (withLock around scanAll)",
+      "breaking_input": "A large spine. `arc-event emit approval.requested` with depends_on while many other writers are appending.",
+      "why": "scanAll(root) is a full-spine read performed while the spine lock is held. Every other emitter blocks for the length of the scan, and one slow scan can push their timeoutMs into lock timeouts. It runs only for requests with depends_on, but each of those pays the full-scan cost under the lock.",
+      "fix": "Look up only the parents and walk their depends_on chain by id, using a bounded indexed lookup. Alternatively, scan outside the lock and re-verify only the parents under it."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/approval-fold.mjs:label construction (`resolved-by ${sib.id}`, `DUPLICATE_OF ${earlier}`, ref: own.id)",
+      "breaking_input": "A spine line written without validate whose decision.recorded or approval.requested id is `X\\u001b[2J\\n01FORGED ...`.",
+      "why": "The B7 fix grammar-checks only depends_on entries. Event ids taken from the rows (sib.id, own.id, and ids in the byId and firstOpenByKey maps) are interpolated into labels and `ref` without a ULID check. listInbox prints those labels raw to the tty, and /api/inbox serves them. The 'ref printed from data matches its grammar' rule is applied to one source of refs only.",
+      "fix": "Route every id placed in a label or ref through the same ULID test, and fall back to '' or a UNKNOWN class when it fails. Pass the printed label through the one-line sanitizer."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:planStateOf (runTool({repo: join(HERE,'..','..','..')}) with bound.input paths)",
+      "breaking_input": "bound_to.input.export is a relative path such as `settle.csv` or `../../x`, or an absolute path to an unrelated file on the owner's machine.",
+      "why": "The emitter and the re-deriver can have different cwds, so a relative path resolves differently and gives a bogus STALE or 'same' verdict. Any agent that can raise a request can also make every inbox poll run a dry-run ingest against an arbitrary local path. The exit code and digest then act as a file-existence and content oracle through the label.",
+      "fix": "Require absolute paths, or paths inside the repo, in bound_to.input. Verify this in validate-bindings or in the validateInput fence, and resolve against a fixed base."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:parse / main (`--all` guard placed after the owner-key return)",
+      "breaking_input": "`arc-inbox owner-key init --all`",
+      "why": "The `--all belongs with inbox` guard runs only after the owner-key branch has returned, so this input is silently accepted and the flag ignored. This is the same hole prior B4 named, and the fix moved only part of the check.",
+      "fix": "Validate `flags.all` immediately after parse, before any command dispatch."
+    }
+  ]
+}

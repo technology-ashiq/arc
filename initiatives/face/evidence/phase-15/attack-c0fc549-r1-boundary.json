@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-pure.mjs:1006",
+      "breaking_input": "A module folder whose ops.mjs is a directory, a FIFO, or a symlink to a file outside face/src. lintModules calls readFileSync(abs) on it.",
+      "why": "The new read runs before checkMjs(abs), which is where the type and containment checks sit. A directory throws EISDIR out of lintModules as a raw crash with no finding. A FIFO blocks the open forever. A symlink is read before the fence rules on it. The read is also uncapped and is a second read of the bytes checkMjs later reads (validate one read, use another).",
+      "fix": "Run the lstat/regular-file/realpath containment checks and the size cap first. Read once and pass the same buffer to both the scan and checkMjs. Wrap the read so a failure becomes a finding that names the path.",
+      "twin_of": "A second directory walk gets the fence the first one has / A FIFO that blocked open() / Check-then-open on a caller's path"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-pure.mjs:1007",
+      "breaking_input": "fold.mjs containing `const s = \"not-instrumented\"; /* <NUL byte> */`. V8 accepts a NUL inside a comment or string.",
+      "why": "`if (!buf.includes(0))` skips the availability scan for any file containing a NUL byte. The file is then neither scanned nor reported, so the state-literal rule goes quiet on a file it was meant to judge. The lexer's own failure path is a fold-unscannable finding; this path is silent.",
+      "fix": "Remove the NUL guard and let the lexer decide, or emit a fold-unscannable finding when a NUL is present.",
+      "twin_of": "A text scanner's comment stripper ... a parser reports when it stops scanning; it never goes quiet"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "tests/face/availability.mjs:155",
+      "breaking_input": "On the Windows leg, a probe child still holds a handle in the temp dir. rmSync(tmp, {recursive:true, force:true}) in the finally block throws EBUSY or EPERM.",
+      "why": "A throw from finally propagates out of the top-level block. The final `RAN: n checks, f failed` line is never printed and the bats wrapper reads this as a crash. Cleanup replaces the outcome, and a surviving directory is not reported.",
+      "fix": "Wrap the cleanup in try/catch. Print a WARN naming the path and the error. Always reach the RAN line.",
+      "twin_of": "A rollback crashed on a locked file and named nothing / A temp directory that would not delete was dropped silently"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/face/availability.mjs:140",
+      "breaking_input": "The probe's createWorkDoor leaves a timer or child handle open, or the control run's plan for money.ingest against the real ventures.yaml spawns a tool that stalls. Both spawnSync calls have no timeout.",
+      "why": "A child that never exits hangs the whole bats shard until the runner's job timeout, with an empty log. That is the Windows ~66 min hang class. Every awaited or blocking call in a harness must be bounded and name its own failure.",
+      "fix": "Pass `timeout` and `killSignal` to spawnSync and check `.error` and `.signal`. Have the probe set process.exitCode and drain, or end with an explicit bounded close. Fail the check by name on timeout.",
+      "twin_of": "Unbounded fetches ... Every awaited call in a harness is bounded and names its own failure"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:567",
+      "breaking_input": "A module's fold.mjs throws `new Error(\"x\\nface-coverage: FAIL none\")`. Its message goes into m.error, then into the finding text.",
+      "why": "The thrown message is unsanitised and carries newlines, control characters and absolute machine paths. It is interpolated into `[availability] ... could not be folded (${m.error})`, so a finding can forge a line or leak a path in a parsed log or public CI output. The same applies to e.message in the unreadable branch.",
+      "fix": "Pass the message through the one-line and path-scrub helper (oneLine plus redaction) before it enters a finding. Cap its length.",
+      "twin_of": "A folder name or finding carrying a newline could print a verdict line of its own / The smoke's `oneLine` and face-pure's left ESC and other controls in a printed line"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:478",
+      "breaking_input": "judge({...report, availability: undefined}), or a smoke report built by a path that never sets it.",
+      "why": "Both clauses start with `report.availability &&`. A report that omits the availability measurement is not refused and passes. Only the bats wrapper catches it. A verdict must refuse a report that omits what it must measure.",
+      "fix": "Add `if (!report.availability) reasons.push(...)`. Also refuse a measured total of 0 over opened rooms.",
+      "twin_of": "`judge` passed a report naming no mood, or carrying no expected room set"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-pure.mjs:928",
+      "breaking_input": "`const s = \"not\\u002dinstrumented\";`, `\"not-\" + \"instrumented\"`, or `x.availability = \"served\"` (assignment, not an object key).",
+      "why": "The scan compares t.v against the two state words and only checks the `availability :` object-key shape. If the lexer's str token carries the raw, undecoded text, an escaped spelling evades the rule. Concatenation and property assignment also bypass it. The scan judges one spelling of the state.",
+      "fix": "Scan both the decoded and the raw text of each token. Also flag `.availability =` and computed-key forms. Pin each as a fixture.",
+      "twin_of": "Escaped spellings evaded the lint -> scan the decoded text as well as the raw"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:164",
+      "breaking_input": "ventures.yaml readable at the validateInput call, then replaced with an empty or unreadable file before the venture select options are computed (registeredVentures()) and before the tool is spawned. Separately, a file whose parseVentures result carries no `ventures` mapping but does not throw.",
+      "why": "venturesRead() runs in the new gate, and registeredVentures() reads the file again for the options, so the file is judged from one read and used from another. The tool then reads it a third time. A parser that returns an empty mapping for a wrong-shaped file is classed as a successful read, i.e. empty-because-unreadable becomes the 'plans on 0' case this phase is meant to stop.",
+      "fix": "Read once per validate and reuse that result for both the gate and the options. Treat a missing or non-mapping `ventures` as a failure class such as SOURCE_INVALID. Re-check the digest at apply.",
+      "twin_of": "Validate one read, serve another / A wrong-shaped source read as empty -> a required list or mapping that is absent is SOURCE_INVALID"
+    }
+  ]
+}

@@ -71,6 +71,7 @@ export function fold(_payloads, ctx) {
       "Tiers and who is switched on",
       "/api/roster",
       "Each agent's tier -- cheap scan, balanced workhorse, high judgment, independent-family verifier -- and whether it is enabled. An agent's frontmatter carries its name, tools and model, but no tier and no enabled flag, and no importable parser reads it -- filed to the engine lane.",
+      { owner: "engine" },
     ),
     law: "An employee here is an agent spawned for a task, then gone. Tiers are law, not taste: a tier change is a production change, reviewed and cited, never a quiet edit (ADR-0069).",
     reads: [],

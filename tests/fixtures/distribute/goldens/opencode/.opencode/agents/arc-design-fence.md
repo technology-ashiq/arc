@@ -3,12 +3,12 @@ description: "The tool fence of /arc-design; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   "edit": allow
   "read": allow
   "task": allow
   bash:
-    "*": ask
+    "*": deny
     "bash .claude/scripts/core/review-ledger.sh": allow
     "bash .claude/scripts/core/review-ledger.sh *": allow
     "git add": allow
