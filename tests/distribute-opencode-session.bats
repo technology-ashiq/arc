@@ -83,11 +83,10 @@ wrap() {
   # Both sides through realpath: a Windows runner spells the temp dir as an 8.3 short name on one side only.
   run node -e 'const f=require("fs"),n=(p)=>f.realpathSync.native(p).toLowerCase();process.stdout.write(String(n(JSON.parse(f.readFileSync(process.argv[1],"utf8")).PWD)===n(process.argv[2])))' "$(native "$T/env.json")" "$(native "$T/wt")"
   [ "$status" -eq 0 ] && [ "$output" = "true" ] || { echo "PWD not the session cwd: $output"; cat "$T/env.json"; false; }
-  local want got
-  # Lower-cased: Windows git may spell the drive letter in either case.
-  want="$(printf '%s' "$(native "$T/repo")/.claude/state/hq" | tr 'A-Z' 'a-z')"
-  got="$(_arc_json "$T/env.json" 'j.ARC_SPINE_ROOT.split(String.fromCharCode(92)).join("/").toLowerCase()')"
-  [ "$got" = "$want" ] || { echo "spine $got, want the main checkout $want"; false; }
+  # The spine is the MAIN checkout's .claude/state/hq: its three parents realpath to the repo. No slash in the program:
+  # MSYS rewrites an argument holding one into a Windows path.
+  run node -e 'const f=require("fs"),p=require("path"),n=(x)=>f.realpathSync.native(x).toLowerCase(),s=JSON.parse(f.readFileSync(process.argv[1],"utf8")).ARC_SPINE_ROOT;process.stdout.write(String(p.join(".claude","state","hq")===p.relative(p.dirname(p.dirname(p.dirname(s))),s)&&n(p.dirname(p.dirname(p.dirname(s))))===n(process.argv[2])))' "$(native "$T/env.json")" "$(native "$T/repo")"
+  [ "$status" -eq 0 ] && [ "$output" = "true" ] || { echo "spine not the main checkout: $output"; cat "$T/env.json"; false; }
 }
 
 @test "distribute-opencode-session: a transcript inside a repo is stamped as that repo-relative evidence path" {
