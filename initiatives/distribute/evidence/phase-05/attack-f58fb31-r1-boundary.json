@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (killTree / close handler)",
+      "breaking_input": "On cap breach or timeout the wrapper kills only the child tree, but the 'close' event waits for the stdio pipes to close. A grandchild that inherited stdout (not detached from the pipe) keeps the pipe open after the parent is killed, so 'close' never fires. On POSIX, kill(-pid) covers the group, but a grandchild that calls setsid escapes and holds the pipe.",
+      "why": "The wrapper hangs after the cap/timeout verdict, the transcript never gets its final spent= line, and an escaped process keeps spending. The timer is cleared only after close, and nothing forces an exit.",
+      "fix": "After killTree, set a hard deadline (for example 5s) that destroys child.stdout/stderr and resolves, then writes the final lines. Resolve on 'exit' plus a bounded drain.",
+      "twin_of": "(be)"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:onLine / child.stdout data handler",
+      "breaking_input": "A single stdout line that never contains a newline, or a very large one (tens of MB of tool output), accumulates in buf. The cap check runs only in onLine, which fires per complete line.",
+      "why": "Costs arrive only as complete lines, so a partial line delays cap enforcement indefinitely, and unbounded buf memory can crash the wrapper. A crash from an uncaught exception skips the spent= line and leaves the child unkilled, since the wrapper dies without killTree.",
+      "fix": "Bound buf (for example 8MB) and treat overflow as a failure that kills the tree. Add process 'exit' and uncaughtException handlers that call killTree and write spent=.",
+      "twin_of": "(at)"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run, writeSync inside event handlers",
+      "breaking_input": "Disk full, or the transcript fd becomes invalid: writeSync throws inside the 'data' handler. The handler's exception is uncaught and the process dies.",
+      "why": "The child is left running and spending with no kill, and the transcript lacks spent=. A cap guarantee should hold even when the record cannot be written.",
+      "fix": "Wrap output in try/catch. On a write failure, killTree and exit with a distinct code. Register a process.on('exit') that kills the child.",
+      "twin_of": "(b)"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:launch / cmdArg",
+      "breaking_input": "A MESSAGE with a newline, or a bat/cmd shim path containing '&', '^' or '%'. cmd.exe /c treats a newline in the command line as a command terminator, and the caret escape does not neutralize it. The message 'x\\nnet user ...' runs the second line as a command. %VAR% inside quotes is expanded by cmd before caret processing.",
+      "why": "Argument injection on Windows .cmd shims. Doubling the caret escape assumes the shim re-reads %*, but for a shim that does not, the carets become literal characters in the message, so it is not byte-identical.",
+      "fix": "Refuse a MESSAGE containing CR, LF or NUL when the target is a .cmd/.bat. Better, resolve the shim to its node/exe target and spawn that directly with no cmd.exe. Reject '%' in args or pass the message through a file or an environment variable.",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (existsSync then openSync 'wx'; errFd 'w')",
+      "breaking_input": "A pre-existing transcript.stderr file, or a symlink at that path, is opened with 'w'. It is truncated, or written through to its target. The existence check covers only the transcript.",
+      "why": "The stderr file can overwrite an existing record, contradicting 'never overwritten'. A planted symlink redirects the write, and if the transcript open fails after errFd opened, the fd leaks.",
+      "fix": "Open the stderr file with 'wx' too, and check that it does not exist during the pre-spawn refusal phase. Open it before the transcript, or close it on failure.",
+      "twin_of": "(as)"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (evidence computation)",
+      "breaking_input": "The transcript's directory is inside a git repo different from --cwd, or git is absent. Evidence falls back to null silently, and the wrapper still runs with ARC_EVIDENCE deleted. Separately, the transcript inside a worktree gives a worktree-relative path while the receipts land on the main spine.",
+      "why": "A run proceeds with no stamped evidence, so REQ-03 receipts would lack the transcript pointer, and nothing is reported. It is a silent failure of the proof, 'missing read as absent'.",
+      "fix": "Print an explicit warning line in the transcript header (evidence=none). Refuse when evidence cannot be computed unless a flag allows it.",
+      "twin_of": "(ae)"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:resolveBin / version",
+      "breaking_input": "ARC_OPENCODE_BIN names a directory, or a file that is not executable. existsSync passes. A relative ARC_OPENCODE_BIN resolves against the wrapper's cwd for the version check but against --cwd for the real spawn, because spawn uses opts.cwd.",
+      "why": "Validate one read, use another: --version succeeds in the process cwd, then the spawn in --cwd fails or runs a different binary. A relative PATH entry has the same split.",
+      "fix": "resolve() the binary to an absolute path once, check isFile, and use that for both calls.",
+      "twin_of": "(f)"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:priorSpend / spentOf",
+      "breaking_input": "A committed transcript whose last spent= line is missing, because the run was killed hard. It counts as 0 spend. A transcript can also be truncated or deleted, and a symlinked directory loops the walk.",
+      "why": "The cycle cap is computed from files that a hard-killed run never finished, so unfinished spend is undercounted and the $0.50 ceiling can be exceeded. Directory symlinks can recurse without bound.",
+      "fix": "Treat a transcript with no final spent= as unreadable and refuse with CYCLE-CAP, or count its cap_usd header as spend. Do not follow symlinks in the walk (use lstat or the Dirent type).",
+      "twin_of": "(ak)"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:parseArgs",
+      "breaking_input": "--transcript -x or any value starting with '--' is refused, but a legitimate path or message beginning with '--' cannot be passed. A value of '-' is accepted as a path. A MESSAGE that is empty after '--' is accepted, because argv[i] is ''.",
+      "why": "Flag-shaped values are refused inconsistently, and an empty MESSAGE is passed to the child. The empty MESSAGE is an unintended spend with no task.",
+      "fix": "Refuse an empty or whitespace-only MESSAGE. Require --transcript to be a path that does not start with '-'.",
+      "twin_of": "(bj)"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-event.mjs:stampHarness",
+      "breaking_input": "ARC_HARNESS is set and the payload is passed via --payload-file holding a JSON array or a scalar, or the kind has an empty default payload. The error is thrown from synthesize before the usual validation.",
+      "why": "An ambient environment variable turns a previously valid emit into a refusal, for every emit in the session, including receipts unrelated to the run. An inherited ARC_HARNESS in a later shell changes the behavior of every Claude Code emit.",
+      "fix": "Scope the stamp to kinds that need it, or document the inheritance. Unset ARC_* in the wrapper's grandchildren where not needed.",
+      "twin_of": "(ae)"
+    }
+  ]
+}

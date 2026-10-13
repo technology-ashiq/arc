@@ -1,6 +1,6 @@
 {
   "_readme": "ADR-0904. A CEILING BOUNDS SPEND. IT NEVER REPORTS IT. Every figure here is a hand-authored worst case per invocation, used only by ADR-0909's K-group reservation. None of it may ever appear in a run.completed payload, a scorecard cost column or a proposal row -- those carry only what a driver actually reported, and an unreported cost is ABSENT, never zero and never this number. A driver+model pair with no entry is REFUSED, not defaulted: a default ceiling is a number nobody measured doing the work of a bound, and it errs in the unrecoverable direction.",
-  "as_of": "2026-08-17",
+  "as_of": "2026-10-13",
   "run_cap_inr": 500,
   "process_cap_inr": 200,
   "k": 3,
@@ -11,8 +11,13 @@
     "claude-code": {
       "sonnet": 12,
       "haiku": 6
+    },
+    "generic-api": {
+      "deepseek/deepseek-v4-flash-0731": 1,
+      "anthropic/claude-haiku-5.5": 1
     }
   },
+  "_generic_api_pairs_2026-10-13": "ADR-0914 Amendment 1: the real event runs both sides on generic-api (OpenRouter), owner cap 0.50 USD for the whole event. Published OpenRouter rates on 2026-10-13, per million tokens in/out: deepseek-v4-flash-0731 0.016/0.64 USD, claude-haiku-5.5 0.10/0.50 USD. One commit-msg-draft invocation is a small diff in and a commit message out; even 20k tokens in and 4k out costs under 0.005 USD (about 0.4 rupees) on either model, so 1 rupee errs high, as a ceiling must. 15 invocations per run x 1 = 15 per run, 30 for the event (about 0.34 USD), under the 0.50 USD cap and far under both caps above. Still hand-authored, not measured: generic-api reports tokens but no rupee figure.",
   "_arithmetic": "Re-checked 2026-08-17, when the first REAL pairs were added. commit-msg-draft is the only class clearing the fixture floor; it declares 6 fixtures of which 5 are posable (basic.json declares no repo_state, so the case cannot be posed and bench does not select it). 5 x K=3 = 15 invocations per run. THE REAL EVENT IS TWO RUNS, NOT ONE: a proposal is a COMPARISON, and `evaluateGates` refuses one whose cost is reported on a single side, so a real candidate cannot be judged against a mock champion (measured -- a mock scorecard carries no cost_inr at all). Champion run: 15 x 12 = 180. Candidate run: 15 x 6 = 90. Each run carries its own remainder, so the binding constraint is the PROCESS sub-cap in the champion run, and the 500 rupee run cap never binds. Worst case for the whole event is therefore 270 rupees, and both halves are bounded independently.",
   "_why_the_process_sub_cap_moved_to_200_on_2026-08-17": "It was 100, and at 100 the CHAMPION run could not complete: 15 invocations at a sonnet worst case of 12 needs 180, so groups 4 and 5 would have been refused, the completeness gate would have read `the CHAMPION's evidence is incomplete`, and the run would have produced NO PROPOSAL after spending real money on three fifths of it. This file already named this as the change to make -- see _when_a_real_pair_is_added -- and it is made here with its date rather than by loosening the reservation rule, which is the one thing that must not move. 200 admits the champion with 20 to spare and still refuses a sixth fixture group.",
   "_what_raising_the_sub_cap_DESTROYS": "Stated because a change that moves a measurement owes an account of what it loosens, not only of what it fixes. At 100 the sub-cap bound a CHEAP pair tightly: haiku at 6 reserves 18 per group, so 100 refused the sixth group and the class could never commit more than 90. At 200 it does not bind on haiku until the TWELFTH group -- verified against admitGroup, not asserted here -- so the practical bound on a cheap pair is now the fixture count rather than the sub-cap. Nothing can spend it today (5 posable fixtures = 90 reserved), but the guard that would have caught a fixture count quietly tripling is now a fixture count away instead of one group away. The right correction if that ever matters is a per-pair sub-cap, not a lower global one, because a global number cannot be tight for a 6 and a 12 at the same time.",

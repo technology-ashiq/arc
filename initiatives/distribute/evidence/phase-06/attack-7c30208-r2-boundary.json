@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (charge, called from the event handler ~404)",
+      "breaking_input": "A command run through its fence where the subagent task is still running when the wrapper kills the tree: the 900 s timeout (smoke-arc-commit-2 and -3), a cap breach from the parent, or a signal. The stream emits the task tool_use only once it is completed or errored, so the child session id is never seen.",
+      "why": "charge() fires only on a finished task event. Subagent spend before a kill or timeout is never read, and the transcript ends in spent=0 or an under-count. The two 900 s timeouts show this: the subagent ran and spent, yet the ledger says $0. The next run's CYCLE-CAP sum then reads the ledger as less than the real spend. A subagent that loops for minutes is also never stopped by the cap, because nothing is read until it completes.",
+      "fix": "At finalise, on every exit path including kill and timeout, run `opencode export <parent session>` and charge every task descendant it names. If the parent session id is unknown, or the export fails, mark the run COST-UNREADABLE instead of writing spent=0.",
+      "twin_of": "(bx) unrecognised accounting read as zero spend"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run charge()",
+      "breaking_input": "A task event whose `opencode export` takes 60 s, or a chain of nested task sessions each exporting slowly.",
+      "why": "charge() calls spawnSync and recurses synchronously inside the stdout handler. This blocks the Node event loop for up to 60 s per session, and the recursion has no total bound. The wrapper's --timeout-s timer, the cap kill and the pipe drain cannot run meanwhile, so wall time exceeds the declared deadline, and the child keeps spending unobserved. spawnSync's timeout also kills only the direct process. Behind a Windows .cmd shim the cmd.exe, node and opencode tree outlives it.",
+      "fix": "Use an async spawn with tree-kill and a shared charge deadline that counts against --timeout-s. Charge from a queue, not from inside the line handler.",
+      "twin_of": "(bw) \"the leader exited\" read as \"the tree is gone\""
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:exportedSpend",
+      "breaking_input": "An export that parses as JSON but holds no step-finish: a changed message layout, a session with no recorded parts, a payload where the steps sit under a renamed key, or an `{}` returned after a partial failure.",
+      "why": "It throws only on a step-finish whose cost is bad. With zero finishes it returns {cost:0, finishes:0}, and charge() prints `spent=0 steps=0` as a normal result without incrementing unpriced. The ADR says an export with no readable cost makes the run COST-UNREADABLE, but the code does not. A subagent that really spent reads as zero.",
+      "fix": "Throw when finishes === 0, or when the export holds no messages at all. Treat the absence of accounting as unreadable.",
+      "twin_of": "(bx) unrecognised accounting read as zero spend"
+    },
+    {
+      "id": "B4",
+      "severity": "high",
+      "where": "tests/distribute-compile-opencode.bats:~53-62",
+      "breaking_input": "Parse the changed test body. The line `[ \"$(grep -c ': ask` has no closing quote or paren. After it come a duplicated `grep -qxF ...` line, a stray `}`, and a fragment starting ` \"$fence\")\" -eq 0 ] || ...`.",
+      "why": "The edit was spliced badly. The test function is either a bash syntax error, which breaks loading of the whole bats file, or the 'no ask rule survives' assertion is swallowed into a malformed quote and never runs. Either way the guard for ADR-2022 is not a working check, and the golden fence rule can regress silently.",
+      "fix": "Rewrite the test body with the Write tool, as the single line `[ \"$(grep -c ': ask' \"$fence\")\" -eq 0 ] || { ...; false; }`. Then run the file and assert that line executed.",
+      "twin_of": "(s) a mutant whose assertion is weaker than its change"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "package.json:test + .claude/commands/arc-ship.md step 3",
+      "breaking_input": "`/arc-ship` runs `npm run test` (ci-digest --wait, default 20 min) through the harness Bash tool, with a default timeout of 120 s and a hard maximum of 10 min, while arc CI takes longer.",
+      "why": "The wait outlives the tool's own timeout. The harness kills it, the step reads as a failure, and arc-ship STOPs on every real CI run. The command text gives no background or timeout instruction. The wait default (20 min) also exceeds the tool maximum, so no per-call timeout can cover it.",
+      "fix": "arc-ship.md should say to run it in the background and re-run it on exit 3, per AGENTS.md. Alternatively, make the single-call default below the tool timeout and loop on exit 3.",
+      "twin_of": "(bh) a missing tool read as a crash"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:main (upstream) with .claude/commands/arc-ship.md step 3",
+      "breaking_input": "A branch created with `git checkout -b feat origin/main`, which sets its upstream to origin/main. It is pushed with `git push origin HEAD` and has an older run for the same branch name.",
+      "why": "`@{u}` resolves to origin/main's commit, so the arc-ship check `git rev-parse @{u}` passes. In ci-digest, `upstream === head` is false, so the lagging-run case takes the SHA MISMATCH path and exits 4, and waitFor never retries a 4. The --wait guard checks that an upstream exists, not that it is this branch's own pushed ref. This is the same race the guard was added for.",
+      "fix": "Resolve the pushed head as `refs/remotes/<remote>/<branch>` for the local branch name, or `git ls-remote origin <branch>`. Require upstream to equal that remote branch, and re-read it on each iteration.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/distribute-ship-nodeploy.bats (callers git grep)",
+      "breaking_input": "A caller of `npm test` added in `.claude/scripts/**` or `docs/`, or spelled `npm t`, `npm run-script test`, `pnpm test` or `yarn test`. Any of these also stalls inside the PreToolUse deploy hook, which now waits on CI for up to 20 min.",
+      "why": "REQ-13 lists .claude/scripts and docs in the git-grep scope, but the test greps only .github, .githooks, .claude/hooks and tests, with a regex that misses the other spellings. A script that calls `npm test` would wait on itself unseen. The allowed 50-deploy.sh hook has no bound that fits its own hook timeout.",
+      "fix": "Add .claude/scripts to the pathspec, widen the regex, and pin 50-deploy.sh's wait or timeout behaviour with an assertion.",
+      "twin_of": "(aa) \"the line is somewhere in the hooks\""
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/commands/arc-ship.md step 3",
+      "breaking_input": "A pushed branch with no open PR in a repo whose CI runs on pull_request and dispatch only.",
+      "why": "The prose puts `npm run test` before PR creation, and `first run git rev-parse` can read as ordering only the upstream check. A fresh branch has no CI run, so `npm run test` ends NO-RUN (exit 6) after 5 minutes and the flow STOPs before `gh pr create --fill` is reached. The earlier L14 finding is marked fixed in (ch) but the order was not changed, so the PR that would produce the CI run is never created.",
+      "fix": "Make the order explicit as separate numbered steps: upstream check, PR view, PR create if none, then `npm run test`.",
+      "twin_of": "(ap) one failure, two exit codes"
+    }
+  ]
+}

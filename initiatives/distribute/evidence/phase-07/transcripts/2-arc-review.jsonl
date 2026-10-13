@@ -1,0 +1,1 @@
+harness-proof: opencode 1.17.18 session=pending model=openrouter/deepseek/deepseek-v4-flash-0731 cap_usd=0.1 command=arc-review cwd=E:/Work_Hub/01_Automemory/wt-oc-req03 spine=E:/Work_Hub/01_Automemory/arc/.claude/state/hq evidence=initiatives/distribute/evidence/phase-07/transcripts/2-arc-review.jsonl date=2026-10-12T23:18:39.894Z

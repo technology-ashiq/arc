@@ -35,7 +35,7 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
 @test "distribute-dirty: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-dirty: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 12 ] || { echo "declared $declared, expected 12"; false; }
+  [ "$declared" -eq 13 ] || { echo "declared $declared, expected 13"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -178,4 +178,29 @@ check() { run --separate-stderr node "$(CC)" --check --all --input commands --ta
   ran || false
   [ "$status" -eq 2 ] || { echo "status $status: $output"; false; }
   [ "$(count '^dirty-scan: COULD NOT SCAN — codex\.rendered is not a list$')" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "distribute-dirty: the compiler's own opencode render is clean, and a hand-edit of one rendered file is dirty" {
+  # An install of arc into an arc checkout (distribute Cycle 2: the OpenCode session's worktree) must not make
+  # every rendered file dirty, or the pre-commit refuses every commit there. A file counts as rendered only
+  # when its bytes equal the render, so editing one is still caught.
+  local t inst n
+  t=$(tree) || false
+  cp "$ARC_ROOT/engine/frontmatter-keys.yaml" "$t/engine/"
+  cp -R "$ARC_ROOT/.claude/agents" "$ARC_ROOT/.claude/skills" "$t/.claude/"
+  inst="$BATS_TEST_TMPDIR/inst"
+  mkdir -p "$inst"
+  run --separate-stderr node "$(native "$ARC_ROOT/.claude/scripts/engine/arc-install.mjs")" --target opencode --dir "$(native "$inst")" --quiet
+  [ "$status" -eq 0 ] && [ -s "$inst/.opencode/commands/arc-commit.md" ] || { echo "the install placed no render: $status $output $stderr"; false; }
+  cp -R "$inst/.opencode" "$t/"
+  n=$(find "$t/.opencode" -type f | wc -l | tr -d ' ')
+  [ "$n" -gt 20 ] || { echo "only $n rendered files"; false; }
+  check "$t"
+  ran || false
+  [ "$status" -eq 0 ] && [ "$(count "^dirty-scan: [0-9]+ rendered directories, 1 present, $n files, 0 dirty$")" -eq 1 ] || { echo "status $status: $output"; false; }
+  printf 'hand edit\n' >> "$t/.opencode/commands/arc-commit.md"
+  check "$t"
+  ran || false
+  [ "$status" -eq 1 ] && [ "$(count '^\[dirty\] \.opencode/commands/arc-commit\.md ')" -eq 1 ] || { echo "status $status: $output"; false; }
+  [ "$(count "^dirty-scan: [0-9]+ rendered directories, 1 present, $n files, 1 dirty$")" -eq 1 ] || { echo "$output"; false; }
 }

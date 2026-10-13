@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:waitFor / main",
+      "breaking_input": "`npm run test` (ci-digest --wait --timeout-min 20) with a one-off gh failure on minute 7 of the wait: a network blip, a 502, or a rate-limit response on `gh run list`.",
+      "why": "`once()` calls `digest`, which calls `realGh`, and any throw from it escapes `waitFor`. `main` turns it into exit 2 ('gh failed'), which ends the whole wait. Exit 2 means usage/gh unavailable, so the ship flow reads a transient poll error as a hard failure. A 20-minute poll loop gets no retry for the one boundary most likely to flake.",
+      "fix": "In `waitFor`, catch errors from `once()` and count consecutive failures. Retry after the next sleep, and return exit 2 only after N consecutive failures or when the deadline passes.",
+      "twin_of": "(bh) a missing tool read as a crash"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:~64-72 with waitFor",
+      "breaking_input": "HEAD is pushed with `git push origin HEAD`, so no upstream is configured and `@{u}` fails, making `upstream` null. The branch already has an older run, and `gh run list` lags the push by a few seconds. Then `ci-digest --wait` runs.",
+      "why": "With `upstream` null, the newest run on the branch (for the old SHA) takes the SHA MISMATCH path and returns code 4. `waitFor` returns any code other than 3 immediately and never retries it. `upstream` and `head` are read once, before the loop. A race that should be PENDING becomes a terminal failure.",
+      "fix": "In --wait mode, treat code 4 as retryable until `noRunMs`, and re-read `upstream` on each iteration. Alternatively, compare against `git ls-remote` for the branch.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:envMs/waitFor",
+      "breaking_input": "An ambient `ARC_CI_WAIT_POLL_MS=0` or `ARC_CI_WAIT_MIN_MS=1` (the regex accepts '0') in the shell or CI environment that runs `npm test`.",
+      "why": "The 'test-only' env doors are honoured in production. A poll of 0 turns the loop into a hot `gh run list` spin that burns API rate limit. A tiny limit makes every ship return a false TIMEOUT. The CLI's own range check on `--timeout-min` is bypassed.",
+      "fix": "Clamp poll to at least 5000 ms. Honour the doors only when an explicit test marker is set, or read them in the probe and pass them as parameters instead.",
+      "twin_of": "(cd) a project directory taken from the environment"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/commands/arc-ship.md:allowed-tools and step 3",
+      "breaking_input": "`gh pr create --fill --web`, `gh pr create --base other --head fork:branch`, or `gh pr create` on an unpushed branch. All match `Bash(gh pr create:*)`, and the opencode golden's `gh pr create *`: allow.",
+      "why": "The wildcard fence allows any argument. `gh pr create` pushes the branch when it is unpushed, and `--fill` publishes commit messages to a public repo. Neither the AGENTS push rule nor the outward-publishing rule is respected. Approval of `/arc-ship` becomes a standing push and publish grant. The PR is also created before `npm run test` has run.",
+      "fix": "Fence it to the exact string `gh pr create --fill`, with no wildcard. Require the branch to be already pushed and not the default branch before creating a PR. Move the create step after confirming the owner's go.",
+      "twin_of": "(bg) a hooks path set for someone else's repo"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:main (timeoutMin !== 20 check)",
+      "breaking_input": "`ci-digest.mjs --timeout-min 20` without `--wait`.",
+      "why": "The rule 'only means something with --wait' is tested by value (`!== 20`), not by presence. The default value passes silently while any other value errors. The test file pins only `--timeout-min 5`.",
+      "fix": "Track presence in parseArgs (`o.timeoutGiven`) and reject on that.",
+      "twin_of": "(i) missing vs empty"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:waitFor",
+      "breaking_input": "`--timeout-min 1` with the 60 s poll: reads happen at t=0 and t=60, the elapsed check is at t=60 (>= limit), then it returns. With `--timeout-min 2` and a slow `gh` read of 50 s per iteration, the real wall time is far over the stated deadline.",
+      "why": "The sleep is always the full poll, never `min(poll, remaining)`. The deadline is checked only after each read, and read time is unbounded because `gh` has no timeout in `realGh`. A hung `gh` blocks forever and the deadline never fires. A caller that expected a worst-case wall time gets no bound.",
+      "fix": "Sleep `min(poll, limit - elapsed)`. Pass a `timeout` to the `execFileSync` in `realGh`, and treat expiry as a failed read (see B1).",
+      "twin_of": "(bq) a child that outlives its verdict"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/distribute-ship-nodeploy.bats (callers check)",
+      "breaking_input": "A new untracked or unstaged file, such as `tests/foo.bats` or `.githooks/pre-push` containing `npm test`. Or run the suite from a synced copy with no `.git`.",
+      "why": "`git grep` sees tracked files only, so an untracked caller passes locally and fails only in CI. The `:!tests/fixtures` and per-file exclusions hide callers in those paths. In a non-git tree the output is empty, so the assertion fails with a confusing message rather than naming the cause.",
+      "fix": "Use `git grep --untracked`, or a plain grep walk. Skip with an explicit message when `.git` is absent.",
+      "twin_of": "(j) vacuous pass"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/commands/arc-ship.md step 4",
+      "breaking_input": "A developer's box has a stale gitignored `.vercel/project.json` from an old link, in a repo with no deploy intent. Or `vercel.json` sits in a subdirectory only.",
+      "why": "The 'declared deploy target' test is prose that the model evaluates against cwd. A local-only or stale `.vercel/project.json` triggers `vercel --prod` in a repo that never declared one. A subdirectory config is missed. The decision comes from per-machine untracked state.",
+      "fix": "Decide on tracked files only (`git ls-files vercel.json`), at the repo root from `git rev-parse --show-toplevel`. Better, make it a script that prints a deploy/none verdict.",
+      "twin_of": "(r) the machine decides the answer"
+    }
+  ]
+}

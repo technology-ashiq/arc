@@ -1,0 +1,1 @@
+harness-proof: opencode 1.17.18 session=unknown model=openrouter/deepseek/deepseek-v4-flash-0731 cap_usd=0.01 command=xprobe cwd=E:/Work_Hub/01_Automemory/wt-oc-req03 spine=none evidence=none date=2026-10-12 note=unwrapped-probe-noport-killed-at-100s-charged-its-cap

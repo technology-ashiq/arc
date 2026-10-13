@@ -3,7 +3,7 @@ description: "The tool fence of /arc-canary; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   "edit": allow
   "read": allow
   "task": allow

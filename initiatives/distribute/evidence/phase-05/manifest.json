@@ -1,0 +1,108 @@
+{
+  "phase": "05",
+  "commit": "7598708a275937fb5833cca301bea1cffe094f33",
+  "short": "7598708a",
+  "generated": "2026-10-13T16:28:43Z",
+  "files": [
+    {
+      "name": "attack-5823248-r2-boundary.json",
+      "sha256": "0972e99b46edd2a7b52a3efb4dc08cfb348754f95e360bf72fd80b76a484f2b1"
+    },
+    {
+      "name": "attack-5823248-r2-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-f58fb31-r1-boundary.json",
+      "sha256": "5a8deffc970ba5f0592615770892c341120341fe32e3bb23483185522dd52f52"
+    },
+    {
+      "name": "attack-f58fb31-r1-logic.json",
+      "sha256": "806d7131204985a91158ddd257a5f83890247a60d0ef3d3f9268b67ed0bb8cd6"
+    },
+    {
+      "name": "ci-38415953364-p05-suites.txt",
+      "sha256": "5413c12a4d2f229c25320876e3a8d2fdddfb2f99b5bd83aae3316d58b37e6731"
+    },
+    {
+      "name": "smoke.md",
+      "sha256": "5988d9d87d1f941d9140205d3cfcc06183b5cf5eb628169cdce82256e89259e6"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "5413c12a4d2f229c25320876e3a8d2fdddfb2f99b5bd83aae3316d58b37e6731"
+    },
+    {
+      "name": "transcripts/probe-ask-auto.jsonl",
+      "sha256": "31b738b6febe1b5697888cd7762cb9daaa19baa9c91d8b6e6f4a56c94eaf7d25"
+    },
+    {
+      "name": "transcripts/probe-ask-auto.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/probe-ask-primary.jsonl",
+      "sha256": "391614c153346c4a7c4f0ffae061fa62970e501a9405b4980de67df67100e4dc"
+    },
+    {
+      "name": "transcripts/probe-ask-primary.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/probe-ask-server.jsonl",
+      "sha256": "a3eb428d02fdabce7727affa90fae3c28adfc859b3e275bb773ae8c6309d5a47"
+    },
+    {
+      "name": "transcripts/probe-ask-unwrapped-env.jsonl",
+      "sha256": "1f2ed87576c59e0e945f8b67ef5aa940057b27ae860509d37851055693795e68"
+    },
+    {
+      "name": "transcripts/probe-ask-unwrapped-noport.jsonl",
+      "sha256": "3c114232d700364e00ed29a165f41a60608b8b5228459a9ed92e09993b5042f1"
+    },
+    {
+      "name": "transcripts/probe-ask-unwrapped-port.jsonl",
+      "sha256": "828eaa59fdd2677a2ac20035e1c828c8ae9690c5e07f2aa74a11281bac4807ab"
+    },
+    {
+      "name": "transcripts/probe-deny.jsonl",
+      "sha256": "b2b018270fa0aeb4e4e243aec2aeccc96f46176a99681ad92dfd83b4461e3ed8"
+    },
+    {
+      "name": "transcripts/probe-deny.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit-2.jsonl",
+      "sha256": "da1127a3ef96acbdc053f61efb613f4b5ad3dd71ca257f78e8fd5283e9ae8319"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit-2.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit-3.jsonl",
+      "sha256": "d8fd19e35b1b0855f4c80db5d9989397384eea919dbb7e9be7485b3fd6250de5"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit-3.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit-4.jsonl",
+      "sha256": "58fb0d814054a5c4fc50d7386a1452f76e40e53de8c37ff869274a7a1b955950"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit-4.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit.jsonl",
+      "sha256": "4d69973d6e20d3aad369a402cda4733173f182dde4976c2df19d12cc3fae7029"
+    },
+    {
+      "name": "transcripts/smoke-arc-commit.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}
