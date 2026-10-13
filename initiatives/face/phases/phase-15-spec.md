@@ -11,19 +11,19 @@ Why it exists (owner, 2026-10-07, `/arc-change --lane face`): the Money, Venture
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **One enum:** `face/src/lib/availability.mjs` exports `Availability` = `served` · `zero` (source read, no records; renders 0 with its provenance) · `unknown` (source unreachable or failed; never 0, never blank; shows the failure class) · `not-applicable` (declared, never inferred) · `not-instrumented` (arc knows the kind or adapter does not exist). Every fold imports it; a fold that redefines a state string FAILs a lint.
-- [ ] **Every non-served field is named:** it returns `{ availability, source, owner_lane, as_of }`; `face-coverage`'s walker FAILs a fold that cannot name a `source` for one (FAIL from birth).
-- [ ] **Failure is `unknown`:** a fake adapter that throws maps to `unknown` with its failure class, never to 0 (a mutant mapping it to 0 FAILs); a declared `not-applicable` stays `not-applicable` when its adapter throws.
-- [ ] **One component:** `NotServed` becomes one five-state component; it keeps `data-not-served` for the harness and adds `data-availability="<state>"`.
-- [ ] **Counts on screen:** each room header shows its count of `unknown` and `not-instrumented` fields; zero of each shows nothing, never a silent default.
-- [ ] **`FIELD_UNKNOWN`:** a room verb whose plan reads a field at `unknown` refuses `FIELD_UNKNOWN` rather than planning on 0. The verbs this gates are listed here, by name, as the phase's first step (before any code) and nothing else is gated.
+- [x] **One enum:** `face/src/lib/availability.mjs` exports `Availability` = `served` · `zero` (source read, no records; renders 0 with its provenance) · `unknown` (source unreachable or failed; never 0, never blank; shows the failure class) · `not-applicable` (declared, never inferred) · `not-instrumented` (arc knows the kind or adapter does not exist). Every fold imports it; a fold that redefines a state string FAILs a lint.
+- [x] **Every non-served field is named:** it returns `{ availability, source, owner_lane, as_of }`; `face-coverage`'s walker FAILs a fold that cannot name a `source` for one (FAIL from birth).
+- [x] **Failure is `unknown`:** a fake adapter that throws maps to `unknown` with its failure class, never to 0 (a mutant mapping it to 0 FAILs); a declared `not-applicable` stays `not-applicable` when its adapter throws.
+- [x] **One component:** `NotServed` becomes one five-state component; it keeps `data-not-served` for the harness and adds `data-availability="<state>"`.
+- [x] **Counts on screen:** each room header shows its count of `unknown` and `not-instrumented` fields; zero of each shows nothing, never a silent default.
+- [x] **`FIELD_UNKNOWN`:** a room verb whose plan reads a field at `unknown` refuses `FIELD_UNKNOWN` rather than planning on 0. The verbs this gates are listed here, by name, as the phase's first step (before any code) and nothing else is gated.
   **Gated verbs (listed 2026-10-09, before any code):** exactly two, both in `.claude/scripts/hq/face-ops.mjs`, both reading the `venture` field from `registeredVentures()`, which today collapses an absent or unparseable `ventures.yaml` into an empty list, i.e. plans on 0:
   1. `money.ingest`: records revenue against a venture picked from that list.
   2. `ventures.kill-review`: raises a kill review against a venture picked from that list.
   `money.criteria`, `money.close-month` and `ventures.register` read no availability-bearing field and are NOT gated.
-- [ ] **Replay:** Tape as-of replay reproduces every field's state byte-identically (ADR-1305).
-- [ ] **Browser smoke:** the five states render in Money, Ventures, Legal, Growth and Leads in dark and in light, counted by `data-availability`.
-- [ ] Two fresh attackers (logic · shell) through `/arc-attack`, one round — the logic prompt carries: a fold returning numeric 0 where the source was unreachable; a fold hard-coding `served` without reading. CI green per job; the wiki regenerated; `/arc-phase-done 15` from the main clone.
+- [x] **Replay:** Tape as-of replay reproduces every field's state byte-identically (ADR-1305).
+- [x] **Browser smoke:** the five states render in Money, Ventures, Legal, Growth and Leads in dark and in light, counted by `data-availability`.
+- [x] Two fresh attackers (logic · shell) through `/arc-attack`, one round — the logic prompt carries: a fold returning numeric 0 where the source was unreachable; a fold hard-coding `served` without reading. CI green per job; the wiki regenerated; `/arc-phase-done 15` from the main clone.
 
 ## Verification plan
 
