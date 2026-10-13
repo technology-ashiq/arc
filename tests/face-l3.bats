@@ -578,6 +578,29 @@ load 'test_helper'
   done
 }
 
+@test "face v2: approval bindings -- WAITING, STALE, DUPLICATE_OF folded from the spine, and approve refuses each (Phase 16)" {
+  # REQ-20, ADR-1355: bound_to / depends_on / decision_key ride approval.requested's open payload; the inbox folds the
+  # states from the spine alone and the face draws the same fold. Real CLIs on a scratch spine, bounded children.
+  run node "$ARC_ROOT/tests/face/approval-bindings.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "EMIT: a cycle A -> B -> A is refused (PARENT_CYCLE)" \
+             "PARENT: approve on a rejected parent's child refuses PARENT_REJECTED, the spine's line count unchanged" \
+             "EMIT: a parent that is a decision's ULID is refused (PARENT_NOT_REQUEST), nothing written" \
+             "PROFILE: a decision_key with a trailing space is refused -- exact, never normalised" \
+             "BOUND: the re-derive wrote nothing -- the spine, the export and every lock are byte-identical before and after" \
+             "BOUND: approve refuses PLAN_STALE, the apply's own code, nothing written" \
+             "KEY: deciding either resolves both -- the sibling reads resolved-by <decision>, one decision.recorded" \
+             "REPLAY: as of the first day the child is WAITING, twice byte-identical; as of the parent's decision it is OPEN" \
+             "FACE: the five states are drawn as five badges from the door's fold"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
 @test "face v2: Phase 04 served panels answer every loaded branch, and the door refuses a hostile tree by name" {
   # The Phase 04 attackers' surviving mutants, each pinned by a check that fails when its decision is removed: an
   # empty table for a body with no list, a sum across substances or currencies, the overdue flag ignored, a seal drawn
