@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:715-721",
+      "breaking_input": "stderr with a line 'output failed the contract (commits.0 is missing)' that is indented with exactly one leading space",
+      "why": "failureLine filters out any line whose first character is whitespace (/^\\s/). A real contract-failure line printed by arc-run is indented, e.g. '  arc-run: output failed the contract...'. Such a line is skipped, so the reason falls back to the last non-bookkeeping line (often the router note), and the scorecard still reports the wrong reason. The continuation skip was meant for router notes, but it also discards genuinely indented failure lines.",
+      "fix": "Only skip continuation lines that are not themselves contract failures; check for 'failed the contract' before filtering out leading-whitespace lines.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:716",
+      "breaking_input": "stderr containing a line with the literal text 'arc-run: STOPPED. A tier-change PROPOSAL was recorded' where the contract-failure line appears AFTER that bookkeeping line",
+      "why": "failureLine prefers a contract-failure line using .filter(...).pop(), but the regex for bookkeeping uses /^arc-run: (receipt run\\.completed |STOPPED\\.)/. If the STOPPED line is not prefixed by 'arc-run: ' (e.g. the CLI prints 'STOPPED...' alone), it survives and becomes the reason; conversely a contract line after it wins. The logic is brittle to prefix variance and can report bookkeeping as the reason.",
+      "fix": "Make bookkeeping detection prefix-agnostic and order-independent: detect any line containing STOPPED or receipt, and pick the last line that is neither bookkeeping nor starts with whitespace.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:2282-2287",
+      "breaking_input": "Running arc-run with --trial-model and a contract failure where stderr mentions 'a trial proposes no tier change' in a user-controlled message",
+      "why": "The new STOPPED message interpolates JSON.stringify(trialModel) directly into an error line. If trialModel contains ANSI escapes or control characters, it can corrupt the stderr parsing in downstream failureLine (which only skips lines with leading whitespace and the known bookkeeping patterns). A crafted --trial-model value could inject a line without whitespace that looks like a real contract failure, causing bench to mis-report.",
+      "fix": "Sanitize or plain-text the trialModel in the message; do not raw-interpolate JSON.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/common.mjs:190-204",
+      "breaking_input": "A process whose output schema contains a string with the literal newline or the token 'OUTPUT CONTRACT (JSON Schema):'",
+      "why": "contractLines uses JSON.stringify(out) which escapes newlines and quotes, so the seed text cannot collide directly; but the header line is a fixed marker. If a schema contains a property named 'OUTPUT CONTRACT (JSON Schema):', the model may still be confused, but the real defect is that the closing instruction says 'matching this process's output contract' while the contract is now injected AFTER the input; models that saw the old prompt format may interpret the schema as part of the INPUT JSON. Not a new logic bug, but the change makes the prompt ambiguous.",
+      "fix": "Consider placing the contract before the INPUT block or wrapping it in delimiters so it is clearly meta-instruction.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:176-178",
+      "breaking_input": "A user-level setting that is legitimate for scoring, e.g. a project-specific hook under ~/.claude/settings.json that the model needs to answer correctly",
+      "why": "ARC_DRIVER_ISOLATE=1 forces --setting-sources project,local, which disables user-global settings but not project/local. ADR-0915 claims user hooks/plugins are kept out, but only CLI settings are gated; user-level hooks that are loaded from other sources (e.g. CLAUDE.md in home) are not removed by this flag, and the ADR explicitly admits ~/.claude/CLAUDE.md may still load. So the isolation is incomplete; a bench score can still depend on the owner's home file.",
+      "fix": "Either explicitly suppress user CLAUDE.md sources or document the remaining dependency and adjust scoring.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:178",
+      "breaking_input": "ARC_DRIVER_ISOLATE is set but the user runs the CLI with --strict-mcp-config; a fixture that legitimately uses an MCP server defined in project settings cannot work",
+      "why": "Adding --strict-mcp-config makes any MCP config error fatal. A bench fixture that expects a project-scoped MCP tool will fail under isolation, over-reporting failures. The ADR says MCP servers stay out, but this flag may break legitimate project MCP usage rather than just skip it.",
+      "fix": "Consider a softer MCP handling that ignores user MCP but keeps project MCP, or document that project MCP is also disabled.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/hermes.mjs:784",
+      "breaking_input": "A hermes process that declares `ok` as false but still has a meaningful `doc.output`; contractLines is only called when ok is true",
+      "why": "In hermes, contractLines is invoked with `declared.ok ? declared.doc : null`. If a process legitimately declares ok false but still has a schema for its error output, the contract is not shown, so the model guesses the shape of an error response. The other drivers always use the canonical doc; hermes conditionalizes it, which is inconsistent and can fail the contract on a valid error path.",
+      "fix": "Pass declared.doc regardless of ok, or explicitly decide that error schemas need not be shown and document it.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:2285",
+      "breaking_input": "A trial model run where the contract failure happens on retry: stderr contains 'retrying once' and then a final failure",
+      "why": "The new trialModel block runs after the retry loop, but the test in bench-core.bats only checks the output for 'retrying once'. If the retry itself succeeds on the second attempt, the trial model passes contract and the block is never reached; but if the trial fails on the first attempt and then the retry also fails, the block emits a STOPPED message and exits 1. The logic is fine for that case, but the message says 'failed the contract' without distinguishing first vs retry, and the exit code 1 might be interpreted as a driver failure elsewhere. Low impact.",
+      "fix": "Consider a distinct exit code or stderr marker for trial-model contract failure.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:716",
+      "breaking_input": "stderr with a line that starts with a tab character (common in tool output) and contains 'failed the contract'",
+      "why": "The filter /^\\s/ treats tab as leading whitespace, so a contract-failure line indented with a tab (e.g. from a wrapped CLI) is skipped. The intent was to skip router continuation notes, but it also drops legitimate failure lines that happen to be indented by the emitting tool.",
+      "fix": "After filtering non-empty and bookkeeping lines, search for 'failed the contract' in the ORIGINAL line list regardless of indentation, then fall back to the last surviving line.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/codex.mjs:54",
+      "breaking_input": "A codex process that has no `output` block but its answer is validated by a different schema (e.g. the spine-level envelope)",
+      "why": "contractLines only shows doc.output; codex, like the others, embeds the output block if present. If a process has no output, the prompt still says 'matching this process's output contract', which is now demonstrably absent. The model has to guess the whole envelope, and the codex driver may have additional envelope requirements not shown. The fix is incomplete for processes without output.",
+      "fix": "Either always show the full envelope schema or remove the closing instruction when no contract is shown.",
+      "twin_of": null
+    }
+  ]
+}

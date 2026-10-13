@@ -713,14 +713,18 @@ export function discoverClasses(root) {
  * bookkeeping -- the receipt, "STOPPED. A tier-change PROPOSAL was recorded" and an indented
  * continuation about editing the router -- so every NOT SCORED row read "Acting on it means editing
  * engine/router.yaml", and the contract failure itself never reached the scorecard. Continuation
- * lines (leading whitespace) and bookkeeping are skipped; a contract-failure line wins if present.
+ * lines (leading whitespace), bookkeeping and Node's version trailer are skipped. Then arc-run's own
+ * contract line wins, anchored at the line start so text a model got into stderr cannot pose as it
+ * (attack a59752e B5). A crash is reported by its `Error:` line, not by the trailer (B2).
  * @param {string|Buffer|null|undefined} stderr
  * @param {number} status
  */
 export function failureLine(stderr, status) {
   const lines = String(stderr || "").split(/\r?\n/)
-    .filter((l) => l.trim() && !/^\s/.test(l) && !/^arc-run: (receipt run\.completed |STOPPED\.)/.test(l));
-  return lines.filter((l) => /failed the contract/.test(l)).pop() || lines.pop() || `arc-run exited ${status}`;
+    .filter((l) => l.trim() && !/^\s/.test(l) && !/^arc-run: (receipt run\.completed |STOPPED\.)/.test(l) && !/^Node\.js v\d/.test(l));
+  return lines.filter((l) => /^arc-run: output failed the contract /.test(l)).pop()
+    || lines.filter((l) => /^[A-Za-z]*Error\b/.test(l)).pop()
+    || lines.pop() || `arc-run exited ${status}`;
 }
 
 /**

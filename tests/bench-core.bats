@@ -60,7 +60,8 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   # have been a hole, so the count moved by one rather than staying still.
   #
   # 88 -> 91 on 2026-10-14: three checks for `failureLine`, the reason a NOT SCORED attempt reports.
-  [ "$oks" -eq 91 ]
+  # 91 -> 93 the same day: the crash trailer and the forged contract line (attack a59752e B2, B5).
+  [ "$oks" -eq 93 ]
 }
 
 @test "the canonical encoder refuses NaN rather than folding it to null" {

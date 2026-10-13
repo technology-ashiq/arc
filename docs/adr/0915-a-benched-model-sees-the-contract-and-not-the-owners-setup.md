@@ -54,6 +54,12 @@ settings that are the same on any machine.
 **Harder:** every prompt grows by the size of its schema. For `commit-msg-draft` that is about 300
 characters.
 
+**What isolation does NOT cover** (attack a59752e B1, B4): project and local settings still load.
+For bench that is the materialized fixture repo, which is a fresh temp directory with no `.claude/`,
+so it adds nothing. A bench run against a repo that carries its own hooks would carry those hooks.
+`codex` and `hermes` ignore `ARC_DRIVER_ISOLATE`: only `claude-code` reads user-level settings
+this way today, so the claim is made for `claude-code` alone.
+
 **Not proven by this ADR:** that isolation removes every user-level input. `~/.claude/CLAUDE.md`
 loading under `--setting-sources` is the CLI's behaviour, and the CLI is not arc's code. The re-run's
 captures are the evidence: an answer free of `branch` with the contract in the prompt.

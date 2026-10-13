@@ -2284,6 +2284,8 @@ if (a.verdict === "schema") {
   // Bench's real event (2026-10-14) put five "escalate commit-msg-draft" approvals in the owner's
   // inbox from a trial model that had no tools and could not have committed anything.
   if (trialModel) {
+    // The retry's own reason gets its line: without it a reader saw only the FIRST attempt's (attack a59752e B3).
+    console.error(`arc-run: output failed the contract (${retry.why}); the trial stops here`);
     console.error(`arc-run: STOPPED. --trial-model ${JSON.stringify(trialModel)} failed the contract; a trial proposes no tier change, so nothing was recorded for the route.`);
     emitRun({ outcome: "fail", reason: "schema", driver, attempts: attemptsMade, fault_hint: faultHint, cost: retry.cost ?? undefined });
     process.exit(1);

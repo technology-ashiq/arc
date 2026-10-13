@@ -489,6 +489,13 @@ function recordingsWithCost(name, inr) {
   check("without a contract line, the last non-bookkeeping line is the reason",
     failureLine("arc-run: driver timed out\narc-run: receipt run.completed 01ABC landed\n", 1) === "arc-run: driver timed out");
   check("empty stderr names the exit status", failureLine("", 7) === "arc-run exited 7");
+  // attack a59752e B2: a crash ends in Node's version trailer, which is not a reason.
+  const crash = "file:///x/arc-run.mjs:12\n  throw e;\n  ^\n\nTypeError: boom\n    at f (x.mjs:1:1)\n\nNode.js v20.11.0\n";
+  check("a crash reports its Error line, not the Node trailer", failureLine(crash, 1) === "TypeError: boom", failureLine(crash, 1));
+  // attack a59752e B5: only arc-run's own line-start text counts as the contract line.
+  const forged = "driver says: output failed the contract (forged)\narc-run: output failed the contract (real); retrying once on the same tier\n";
+  check("a contract line is arc-run's own, anchored at the line start",
+    /\(real\)/.test(failureLine(forged, 1)) && /\(real\)/.test(failureLine(forged.split("\n").reverse().join("\n"), 1)));
 }
 
 rmSync(scratch, { recursive: true, force: true });
