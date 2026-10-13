@@ -12,7 +12,7 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-10-07 — PLAN-distribute added: the `distribute` lane's plan for arc under verified harnesses (the Claude files stay the source · `.codex/` / `.opencode/` / skills-only rendered from them · every blocking gate enforced at merge-time on a protected `main` · an install that names what it could not place), trigger fired by owner ruling 2026-10-07, v1.2 after one same-day owner-brought external review (9 points, 8 taken, 1 in part) and one same-day source-question round (five-tool scan → Claude-canonical, not SKILL.md); nothing moves — `.codex/` and `.agents/skills/` are resolved inside the lane's P00, not here; 2026-10-03 — PLAN-launch added: the `launch` lane's venture-factory plan (fixed slot process · pluggable vetted providers · derived recommendation · durable runner), trigger fired by owner ruling 2026-10-03, v1.1 after one same-day owner-brought external review (8/8 accepted) + the same-day "no Nilluvai — rehearsal venture" ruling; `PLAN-cycle3-venture-launch.md` is MARKED as the `launch-kit` slot's Week-3 checklist but does NOT move; 2026-09-29 — PLAN-org added: the `org` lane's company-layer plan (role cards · team manifests · ₹0 dispatcher · org review), trigger fired by owner ruling 2026-09-29, v1.1 after two same-day review rounds; the org-blueprint's §4 chart is MARKED for replacement by its generated chart at P00 exit but does NOT move now; 2026-09-25 — docs Phase 02: `docs/how-it-works.md`, `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` MOVED to `docs/archive/` and stubbed into the generated reference `docs/wiki/index.md` (ADR-1510, REQ-08); 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-10-14 — PLAN-distribute v1.4: the draft block is relabelled Cycle 3 because Cycle 2 ran narrower and sealed REQ-03 on 2026-10-13 (HISTORY C24), REQs renumbered 14-19, ADRs 2023+, debt rows 22-24 added to P00; 2026-10-13 — PLAN-distribute v1.3: Cycle 2 block added (self-render into the arc tree so any harness opens arc with no install step, REQ-03 run for real, npm lifecycle `init`/`outdated`/`upgrade`/`uninstall`, tags, local consumer registry, weekly radar, launch slot), DRAFT for owner review, Cycle 1 recorded sealed 2026-10-09; 2026-10-07 — PLAN-distribute added: the `distribute` lane's plan for arc under verified harnesses (the Claude files stay the source · `.codex/` / `.opencode/` / skills-only rendered from them · every blocking gate enforced at merge-time on a protected `main` · an install that names what it could not place), trigger fired by owner ruling 2026-10-07, v1.2 after one same-day owner-brought external review (9 points, 8 taken, 1 in part) and one same-day source-question round (five-tool scan → Claude-canonical, not SKILL.md); nothing moves — `.codex/` and `.agents/skills/` are resolved inside the lane's P00, not here; 2026-10-03 — PLAN-launch added: the `launch` lane's venture-factory plan (fixed slot process · pluggable vetted providers · derived recommendation · durable runner), trigger fired by owner ruling 2026-10-03, v1.1 after one same-day owner-brought external review (8/8 accepted) + the same-day "no Nilluvai — rehearsal venture" ruling; `PLAN-cycle3-venture-launch.md` is MARKED as the `launch-kit` slot's Week-3 checklist but does NOT move; 2026-09-29 — PLAN-org added: the `org` lane's company-layer plan (role cards · team manifests · ₹0 dispatcher · org review), trigger fired by owner ruling 2026-09-29, v1.1 after two same-day review rounds; the org-blueprint's §4 chart is MARKED for replacement by its generated chart at P00 exit but does NOT move now; 2026-09-25 — docs Phase 02: `docs/how-it-works.md`, `docs/how-arc-works-simple.md`, `docs/usermanual.md` and `docs/blueprint.md` MOVED to `docs/archive/` and stubbed into the generated reference `docs/wiki/index.md` (ADR-1510, REQ-08); 2026-09-19 — PLAN-docs added: the `docs` lane's generated-wiki plan, trigger fired by owner ruling 2026-09-18; the four overlapping how-it-works/usermanual/blueprint docs are MARKED for supersession by its REQ-08 but do NOT move until its Phase 02; 2026-09-16 — PLAN-face-v2 added: the face lane's Cycle-16 revision — the owner's v0.7 HQ becomes arc's only frontend as 36 four-file modules, PLAN-face.md NOT superseded; 2026-08-23 — PLAN-design-v2 added: the design lane's revision cycle under the Build-out Mandate + ADR-0070's fired revisit clause, PLAN-design.md NOT superseded; 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
@@ -731,6 +731,44 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     flipped in P01, or A-08 invoked in writing. **Nothing is superseded and nothing moves**:
     `.codex/` and `.agents/skills/` are tree surfaces, not strategy docs, and their fate is the
     lane's P00 exit, recorded there.
+
+31. **2026-10-13:** `plans/PLAN-distribute.md` **v1.3** — Cycle 1 recorded as **landed 2026-10-07 and
+    sealed 2026-10-09** (ADR-2000..2018; DST-L answered `engine` by ADR-2012, DST-M answered
+    `core.hooksPath .githooks/` by ADR-2013; 9/10 REQ, REQ-03 owed), and a **Cycle 2 block cut** from
+    the owner's first dogfood: arc opened in OpenCode showed no `/arc-resume`, because `arc init`
+    refuses its own source (`[inside-source]`, attack 74bcf43 B4) — a guard that is right for the
+    claude-code payload (it would overwrite what it reads) and was applied to the rendered targets,
+    which only read `.claude/`. The lane had built use-case 1 (arc into a venture) and not use-case 2
+    (arc itself under a second harness), which is the one REQ-03 names; the two were never
+    reconciled because nobody opened arc outside Claude Code. The owner's bar, restated and now the
+    design source's: *open any project in any harness, type the command, it works; no install step is
+    part of the day.* Second ask the same round: the lifecycle other tools have. Cycle 2 locks on
+    landing: **DST-N** (`arc compile --self` renders `.codex/`, `.opencode/`, `.agents/skills/`,
+    `AGENTS.md` into the arc tree as committed do-not-edit outputs with CI dirty-diff — the
+    `docs/wiki/` pattern; guard narrowed to claude-code; ADR-2014 stands, it removed the ignore lines
+    so exactly this is trackable), **DST-O** (npm's lifecycle verb for verb — `init` default every
+    target · `doctor` · `outdated` · `upgrade [--to] [--confirm]` · `uninstall` — every verb reads
+    `.arc-install.json` first and touches only what it lists; CLI version and project version are two
+    numbers; no `--all` write verb), **DST-P** (semver git tags from `v0.2.0`, `VERSION`/`CHANGELOG`
+    linted in step, manifest records tag and commit, the CHANGELOG range is the contract between two
+    versions, BREAKING refuses without `--confirm`), **DST-Q** (consumers registered in
+    `~/.arc-private/consumers.json`, never the repo — machine paths stay out of tracked files; a weekly
+    ₹0 `distribute-radar` job reads and never writes; the launch scaffold gains a `core` slot calling
+    `arc init`). REQ-11…16 added; **REQ-03 runs for real in P00 inside the arc clone under OpenCode on
+    the owner's ADR-1800 profile** — no worktree, the spine is in the main clone — and the P00 kill
+    checkpoint asks exactly that. **3 d / 4 cap**, ADR numbers 2019 onward, a second KICKOFF PROMPT at
+    the file's end. Market note recorded in the freeze log: no peer tool renders into its own repo
+    because no peer is both the tool and a project its author works in daily; spec-kit's
+    per-project committed outputs are the half adopted. **Nothing moves**: Cycle 1's prompt stays in
+    the file as the record, under a dated heading.
+32. **2026-10-14:** `plans/PLAN-distribute.md` **v1.4** — the v1.3 block is relabelled **Cycle 3**. While
+    v1.3 was in review the lane ran a narrower Cycle 2 (`initiatives/distribute/PLAN.md`, sealed
+    2026-10-13, HISTORY C24, PRs #412 · #416 · #418): **REQ-03 validated** under OpenCode on
+    `deepseek-v4-flash-0731` (5 `harness: opencode` receipts, 3 negatives refused, the session's PR
+    merged after required checks, $0.06 of $0.50), with REQ-11..13 and ADR-2019..2022 taken. So the
+    block's REQ-03 row and its P00 kill question are retired, its REQs become **REQ-14…19**, its ADRs
+    start at **2023**, the new kill question is "a fresh clone opened in OpenCode lists `/arc-resume`",
+    and P00 also closes Cycle 2's debt rows 22-24. DST-N…Q unchanged; still DRAFT for owner review.
 
 ## Provenance
 
