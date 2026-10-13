@@ -53,6 +53,8 @@ export function envContract() {
 
 // The fixture's outside world is the provider file: verify asks it, never the runner's own state.
 export async function verify(ctx) {
+  // FAKE_VERIFY_RECORDED: answer from the resources the runner hands verify, as payment-test and ledger-source do.
+  if (process.env.FAKE_VERIFY_RECORDED) return ctx.resources.length === 2 ? { ok: true, answerer: "fake-recorded", evidence: { resources: 2 } } : { ok: false, reason: `ctx holds ${ctx.resources.length} of 2` };
   if (process.env.FAKE_PRINT_UPSTREAM) console.log(`FAKE_UPSTREAM ${JSON.stringify(ctx.upstream)}`);
   const mine = read().filter((r) => r.tag === ctx.tag);
   if (mine.length === 2 && process.env.FAKE_SIMULATED) ctx.emit("revenue.simulated", JSON.parse(process.env.FAKE_SIMULATED));

@@ -819,9 +819,11 @@ arm() {
   [[ "$(j 'o.amount.ok + " " + o.amount.reason')" == "false order "*" is 50000 INR, not 100 INR" ]] || { echo "$DONE"; false; }
   [[ "$(j 'o.untagged.ok + " " + o.untagged.reason')" == "false order "*" does not carry this slot's tag" ]] || { echo "$DONE"; false; }
   [[ "$(j 'o.missing.ok + " " + o.missing.reason')" == "false razorpay has no order "* ]] || { echo "$DONE"; false; }
+  arm payment two-recorded
+  [ "$(j 'o.verify.ok + " " + (o.verify.evidence.order === o.order) + " " + (o.order !== "order_StaleEarlier01")')" = "true true true" ] || { echo "$DONE"; false; }
   arm payment verify-no-record
   [ "$(j 'o.verify.ok + " " + o.calls')" = "false 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == *"verify needs exactly one"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"verify needs at least one"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: payment-test reads an order list without items as unreadable, never as absent (attack 1cb6b9a B1)" {
@@ -1004,8 +1006,8 @@ arm() {
   [ "$(j 'o.auth.ok + " " + o.authAgain.ok + " " + o.siteUrl')" = "true true https://sandbox.automemory.ai" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.env')" == *"NEXT_PUBLIC_SUPABASE_URL="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.authVerify.ok + " " + JSON.stringify(o.authVerify.evidence)')" = 'true {"user":"launch-probe-a@sandbox.automemory.ai","login":303,"me":200,"logout":200,"after":401}' ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.auth.join(",")')" = "auth-config,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.authTeardown.join(",")')" = "delete-probe-users (launch-probe-a/b/c),restore-site-url-if-unchanged" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.auth.join(",")')" = "auth-config,vercel-env,vercel-env,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.authTeardown.join(",")')" = "delete-probe-users (launch-probe-a/b/c),restore-site-url-if-unchanged,delete-vercel-env,delete-vercel-env" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: authz -- A reads its own org and gets 403 on B's; orgs are created once" {

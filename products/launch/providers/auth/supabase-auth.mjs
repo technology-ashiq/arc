@@ -208,7 +208,7 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 // four routes a person and the probe both use. Generated venture code lives in single-quoted strings below, so the
 // adapter scanner reads it as text, never as this adapter's own capabilities.
 const ENV_NAMES = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"];
-// Supabase's default magic-link email, current and earlier wording, as its config API answers a project never edited.
+// Supabase's stock magic-link email, current and earlier wording, as its config API answers a project never edited.
 const squash = (s) => s.replace(/\s+/g, " ").trim();
 const SUPABASE_STOCK = new Set([
   '<h2>Your sign-in link</h2> <p>Follow the link below to sign in. This link expires shortly and can only be used once.</p> <p><a href="{{ .ConfirmationURL }}">Sign in</a></p>',
@@ -364,9 +364,9 @@ export async function scaffold(ctx) {
   const allow = String(conf.uri_allow_list || "").split(",").map((x) => x.trim()).filter(Boolean);
   if (!allow.includes(`${site}/**`)) allow.push(`${site}/**`);
   const tpl = typeof conf.mailer_templates_magic_link_content === "string" ? conf.mailer_templates_magic_link_content : "";
-  // Stock is an EMPTY template or Supabase's own default, byte for byte up to whitespace: any other text is the owner's,
+  // Stock is an EMPTY template or Supabase's own stock text, byte for byte up to whitespace: any other text is the owner's,
   // kept if it lands on /auth/confirm, else refused (attack 6a5c24e B2 -- "contains ConfirmationURL" could not tell
-  // Supabase's from an owner's own). A new project's API answers the default text, not empty (arc-sandbox, 2026-10-14).
+  // Supabase's from an owner's own). A new project's API answers that stock text, not empty (arc-sandbox, 2026-10-14).
   const stock = !tpl.trim() || SUPABASE_STOCK.has(squash(tpl));
   if (!stock && !tpl.includes("/auth/confirm?token_hash={{ .TokenHash }}")) throw refuse("TEMPLATE_FOREIGN", "the project's magic-link email is the owner's own and does not land on /auth/confirm; launch does not rewrite it");
   const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { ...resendSmtp(ctx, conf, domain), mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}) };

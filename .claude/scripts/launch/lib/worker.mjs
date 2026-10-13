@@ -82,7 +82,10 @@ if (a.mode === "verify") {
 try {
   const out = await mod.scaffold(ctx);
   save({ state: "applied", files: (out && out.files) || [], queued: ctx.queued });
-  const v = await mod.verify(ctx);
+  // The in-attempt verify sees what this scaffold just reported: the ctx was built before it ran, so verify on that
+  // snapshot read zero resources, failed, and the retry made a second test order (arc-sandbox payment-test, ADR-1760).
+  const now = slotRow(loadState(a.stateDir, a.venture), a.slot).resources || [];
+  const v = await mod.verify(Object.freeze({ ...ctx, resources: [...now] }));
   clearTimeout(timer);
   if (v && v.ok === true && typeof v.answerer === "string" && v.answerer) {
     save({ state: "verified", answerer: v.answerer, evidence: v.evidence ?? null, queued: ctx.queued, verified_at: new Date().toISOString() });

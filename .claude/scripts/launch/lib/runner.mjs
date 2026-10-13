@@ -126,7 +126,11 @@ export async function apply(opts, log = console.log) {
       log(`${slot.id}: skipped (${entry.reason})`);
       return EXIT.OK;
     }
-    if (row.state === "verified") {
+    // --again re-applies a VERIFIED slot whose adapter changed, as a new attempt with its own receipt (ADR-1760). Never a
+    // gated slot: a re-run must not reuse or re-ask an owner's gate decision.
+    if (opts.again && row.state !== "verified") throw new LaunchError("REFUSED", `${slot.id} is ${row.state}; --again re-applies a verified slot only (a plain apply runs this one)`);
+    if (opts.again && slot.gate && slot.gate !== "none") throw new LaunchError("REFUSED", `${slot.id} sits behind ${slot.gate}; --again never re-runs a gated slot`);
+    if (row.state === "verified" && !opts.again) {
       log(`${slot.id}: verified -- no-op (receipt ${row.receipt})`);
       return EXIT.OK;
     }
@@ -353,7 +357,7 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
     return underLock(P, slug, () => {
       let s = loadState(P.stateDir, slug, { onFallback: log }) || emptyState(profile);
       const prev = slotRow(s, slot.id);
-      if (prev.state === "verified") { log(`${slot.id}: verified -- no-op (receipt ${prev.receipt})`); return EXIT.OK; }
+      if (prev.state === "verified" && !opts.again) { log(`${slot.id}: verified -- no-op (receipt ${prev.receipt})`); return EXIT.OK; }
       // An attempt left `applying` belonged to a runner that died holding the lock: it never wrote its receipt, so
       // the attempt is closed here, as failed, before a new one starts -- every attempt ends with exactly one receipt.
       if (prev.state === "applying" && prev.attempt && !prev.receipt) {

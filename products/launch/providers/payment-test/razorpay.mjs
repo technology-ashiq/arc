@@ -93,8 +93,11 @@ export async function scaffold(ctx) {
 // Asked of Razorpay: the recorded order answers, carries this slot's tag, and is the INR 1 order launch made.
 async function probe(ctx) {
   keys(ctx);
-  const rec = ctx.resources.filter((r) => r.kind === "razorpay-test-order");
-  if (rec.length !== 1 || !/^order_[A-Za-z0-9]{6,40}$/.test(rec[0].id)) return { ok: false, reason: `state records ${rec.length} usable razorpay-test-order resources; verify needs exactly one` };
+  // The NEWEST recorded order is the one this slot stands on: an earlier runner verified on a stale snapshot, failed, and
+  // its retry made a second order (ADR-1760). Every recorded id must still be an order id; teardown lists them all.
+  const all = ctx.resources.filter((r) => r.kind === "razorpay-test-order");
+  if (!all.length || all.some((r) => !/^order_[A-Za-z0-9]{6,40}$/.test(r.id))) return { ok: false, reason: `state records ${all.length} razorpay-test-order resources, not every one an order id; verify needs at least one` };
+  const rec = [all[all.length - 1]];
   const r = await rz(ctx, "GET", `/orders/${encodeURIComponent(rec[0].id)}`, undefined, { allow: [400, 404] });
   // Only Razorpay's own "does not exist" (or a 404) means absent; any other 400 is reported as itself (attack 1cb6b9a B6).
   const desc = r.body && r.body.error && typeof r.body.error.description === "string" ? r.body.error.description : "";

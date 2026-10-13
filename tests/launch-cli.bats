@@ -73,6 +73,20 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   grep -q '"mode":"verify"' "$ARC_SPINE_ROOT"/events/*.jsonl
 }
 
+@test "launch-cli: the first attempt verifies on what its scaffold reported, and --again re-applies only a verified, ungated slot (ADR-1760)" {
+  export FAKE_VERIFY_RECORDED=1
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply --again probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] && [[ "$output" == *"--again re-applies a verified slot only"* ]] || { echo "$output"; false; }
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] && [[ "$output" == *"probe: verified -- attempt 1,"* ]] || { echo "$output"; false; }
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [[ "$output" == *"verified -- no-op"* ]] || { echo "$output"; false; }
+  run node "$(L)" apply probe --again --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] && [[ "$output" == *"probe: verified -- attempt 2,"* ]] || { echo "$output"; false; }
+  [ "$(grep -c '"slot":"probe"' "$ARC_SPINE_ROOT"/events/*.jsonl | awk -F: '{s+=$NF} END{print s}')" -eq 2 ] || { cat "$ARC_SPINE_ROOT"/events/*.jsonl; false; }
+}
+
 @test "launch-cli: verify after the provider lost a resource fails, names why, and leaves the slot state alone" {
   run node "$(L)" new --venture fx-sandbox $FX_FLAGS
   run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS

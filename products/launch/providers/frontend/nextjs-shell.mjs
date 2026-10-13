@@ -26,8 +26,10 @@ const jsx = (s) => String(s).replace(/[&<>{}"']/g, (c) => `&#${c.charCodeAt(0)};
 function files(brand) {
   return {
     // The one dependency manifest of Phase 01 (ADR-1733): later slots add files and never edit this one.
+    // Pins clear `npm audit --audit-level=high` (ADR-1759): drizzle-orm 0.45.2+ (GHSA-gpj5-g38j-94v9), and postcss forced
+    // to 8.5.23 because next 15.5.27 pins 8.4.31 exactly (GHSA-qx2v-qp2m-jg93 and three source-map reads).
     "package.json": `${JSON.stringify({ name: "venture", private: true, type: "module", scripts: { dev: "next dev", build: "next build", start: "next start", test: "node --test" },
-      dependencies: { next: "15.5.27", react: "19.1.9", "react-dom": "19.1.9", zod: "3.25.76", "drizzle-orm": "0.44.5", "@supabase/supabase-js": "2.57.4", "@supabase/ssr": "0.7.0" } }, null, 2)}\n`,
+      dependencies: { next: "15.5.27", react: "19.1.9", "react-dom": "19.1.9", zod: "3.25.76", "drizzle-orm": "0.45.4", "@supabase/supabase-js": "2.57.4", "@supabase/ssr": "0.7.0" }, overrides: { postcss: "8.5.23" } }, null, 2)}\n`,
     "app/layout.js": [
       `export const metadata = { title: ${JSON.stringify(brand)}, description: ${JSON.stringify(`${brand} -- coming soon.`)}, generator: ${JSON.stringify(MARK)} };`,
       "// Rendered per request: Next puts security-headers' CSP nonce on its scripts only on a dynamic page (ADR-1754).",
