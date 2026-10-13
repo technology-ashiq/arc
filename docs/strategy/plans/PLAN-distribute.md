@@ -29,10 +29,24 @@
 > compiler arc already has. The 58-artifact migration phase disappears; **appetite 12.5/14 → 10.5/12 d.**
 > Per-file `targets:` (rulesync's one good idea) added; spec-kit's "prose fallback" rejected by name.
 >
-> **Status: DRAFT for owner review — NOT landed.** On landing, decisions **DST-A…K lock**; **DST-L and
-> DST-M stay open by design** and are decided at kickoff. This file then becomes the frozen decision
-> record; the buildable cycle is cut from it into `initiatives/distribute/PLAN.md` at kickoff. Attack
-> findings mutate that file, never this one.
+> **v1.3 — Cycle 2: zero-step access and the lifecycle, 2026-10-13.** Four days after Cycle 1 sealed,
+> the owner opened arc in OpenCode and typed `/arc-resume`. Nothing. `arc init --target opencode --dir .`
+> refuses with `[inside-source]` (`arc-install.mjs:89`, attack 74bcf43 B4) — the lane read "arc is the
+> source" as "arc is never a consumer", and so built use-case 1 (arc *into* a venture) while REQ-03
+> names use-case 2 (**arc's own** loop under a second harness) and recorded it owed. The guard and
+> REQ-03 cannot both hold; the guard was never challenged because nobody opened arc in anything but
+> Claude Code. The owner's bar, restated: *open any project in any harness, type the command, it works;
+> no install step is part of his day.* Second ask in the same round: the lifecycle other tools have —
+> one line to install, `outdated`, `upgrade`, `uninstall`, per-project version pins. **Cycle 2 is cut
+> below** (DST-N…Q, REQ-11…16, 3 d / 4 cap, its own KICKOFF PROMPT at the end). A market check: no peer
+> tool renders into its own repo, because no peer is both the tool and a project its author works in
+> daily; spec-kit commits generated files per project, which is the half this cycle adopts.
+>
+> **Status: Cycle 1 LANDED 2026-10-07 and SEALED 2026-10-09** (ADR-2000..2018; 5/5 phases, 9/10 REQ,
+> REQ-03 owed). DST-A…M are the frozen record; ADR-2012 answered DST-L (`engine`), ADR-2013 answered
+> DST-M (`core.hooksPath .githooks/`). **The Cycle 2 block (v1.3) is DRAFT for owner review.** On its
+> landing, **DST-N…Q lock**; the buildable cycle is cut from it into `initiatives/distribute/PLAN.md`
+> at the second kickoff. Attack findings mutate that file, never this one.
 >
 > **Honesty note.** There is no external consumer of arc on any harness other than Claude Code, and
 > none is invented: `sync-to-project.sh` copies `.claude/` only, LexOS runs root-mode under Claude
@@ -532,7 +546,110 @@ is a separate reviewed diff citing ADR-0069, not part of this cycle.
 
 ---
 
-## KICKOFF PROMPT — paste into Claude Code in the arc repo (after the gates above clear)
+## Cycle 2 — zero-step access and the lifecycle (v1.3, 2026-10-13)
+
+### The finding, verified on the live tree
+
+- `node bin/arc.mjs init --target opencode --dir . --dry-run` in the arc clone: `plan: opencode — 471
+  file(s)` … `refused [inside-source] … install into a separate project`. The adapters render 29
+  commands correctly (goldens 83/83); the guard refuses to let arc be their first consumer.
+- The guard's reason (attack 74bcf43 B4) is real for the **claude-code** target, whose support payload
+  copies `.claude/` — an install over its own source overwrites files it is still reading. It is
+  **not** real for the rendered targets: `.codex/`, `.opencode/` and `.agents/skills/` are written,
+  `.claude/` is only read. The guard is correct for one target and was applied to all four.
+- ADR-2014 already removed the `.gitignore` lines for `.codex`, `.agents` and `AGENTS.md`, so rendered
+  output **is trackable** in arc; nothing else stands between the tree and committed outputs.
+- `.arc-install.json` records `source_commit`. Nothing reads it back against arc's current commit; no
+  `outdated`, `upgrade` or `uninstall` verb exists; `init` takes one `--target` at a time.
+- `ventures.yaml` carries kill lines and a `repository:` name, never a local path (machine paths are
+  banned from anything that reaches `PORTFOLIO.md`). A loop over installed consumers needs a local
+  registry that never enters the repo.
+
+### Success requirements (Cycle 2)
+
+| # | Requirement | How it is proven |
+|---|---|---|
+| **REQ-11** | Opening the arc clone in any v1 harness shows the arc commands with no install step. | `.codex/`, `.opencode/`, `.agents/skills/` and `AGENTS.md` are committed outputs of `arc compile --self`; a fresh `git clone` followed by opening OpenCode lists `/arc-resume`; CI regenerates and fails on a dirty diff (REQ-05's rule, now on arc itself). |
+| **REQ-03** (owed since Cycle 1) | arc's own loop runs under OpenCode on a non-Anthropic profile. | Runs in **P00** of this cycle, inside the arc clone, on the owner's ADR-1800 profile: `arc-commit` → `arc-review` → `arc-ship` with receipts carrying `harness: opencode`; the three negative fixtures refused. No worktree — the spine lives in the main clone. |
+| **REQ-12** | `arc init` with no `--target` renders every verified harness, and a new venture is born with all of them. | `arc init --dir X` places the union of the four targets and one manifest; the launch scaffold calls it, so `arc-sandbox` re-scaffolded shows every harness directory at birth. |
+| **REQ-13** | `arc outdated` tells the truth about a project against arc. | Prints `installed <tag>@<commit> · arc <tag>@<commit> · N commits behind` plus the CHANGELOG entries between them; on a project at arc HEAD prints `up to date`; with no manifest prints `not-installed`. |
+| **REQ-14** | `arc upgrade [--to <tag>]` moves only what arc owns, and says what it moved. | Re-renders every path in the manifest, backs up changed ones to `.arc-install-backup/<stamp>/`, leaves every unmanaged path untouched (a planted venture file beside a managed one is byte-identical after), refuses a BREAKING entry in the CHANGELOG range without `--confirm`, and `--to` pins a tag (downgrade included). |
+| **REQ-15** | `arc uninstall` removes exactly what the manifest lists and nothing else. | Every managed path gone, every unmanaged path intact, `core.hooksPath` unset only if `init` set it, the manifest removed last; a mutant manifest naming a path outside the project is refused by name. |
+| **REQ-16** | A weekly ₹0 job reports every registered consumer's drift to the inbox, and never writes to one. | `hq.jobs.yaml` row `distribute-radar` runs `arc outdated --all` over the local consumer registry and emits one `metric.observed`-class receipt; its fixture proves a consumer directory is unchanged after a run. |
+
+### Decisions (Cycle 2 — letters; real ADR numbers from the `distribute` century at kickoff)
+
+**DST-N · arc renders into its own tree; the rendered targets are committed outputs.**
+`arc compile --self` renders `.codex/`, `.opencode/`, `.agents/skills/` and `AGENTS.md` from the
+Claude files into the arc tree, writes no support payload and no `.arc-install.json`, and is the
+verb CI runs. The `inside-source` guard stays **for `init`** (the claude-code payload really would
+overwrite its source) and is narrowed to that target; the rendered targets never read what they
+write. The outputs are committed, carry the do-not-edit banner, and CI fails on a dirty diff — the
+pattern `docs/wiki/` (131 pages) already runs. A fresh clone works in every harness because the
+files are in the clone, which is the owner's bar and the spec-kit half of the market; a gitignored
+output would reproduce Ruler's documented failure (*"a clone that has not run Ruler sees no rules"*).
+**ADR-2014 stays**: it removed the ignore lines so exactly this could be tracked.
+
+**DST-O · The lifecycle is npm's, verb for verb, and every verb is manifest-driven.**
+`init` (default: every verified target) · `doctor` · `outdated` · `upgrade [--to <tag>] [--confirm]`
+· `uninstall`. Each reads `.arc-install.json` first and touches only paths it lists; a path the
+manifest does not name is never written or removed, whatever is on disk. The CLI's own version and a
+project's rendered version are **two different numbers**, as `next` the CLI and `next` the dependency
+are: `npm update -g` moves the first, `arc upgrade` moves the second, and nothing moves the second
+without the owner typing it. No `--all` write verb exists in v1 — `upgrade` is one project at a time,
+because an upgrade is a change the owner commits.
+
+**DST-P · Versions are git tags; a project pins one; the CHANGELOG is the contract between two.**
+Semver tags on arc (`v0.2.0` first, cut at this cycle's kickoff as the baseline), `VERSION` and
+`CHANGELOG.md` kept in step by a lint. `.arc-install.json` records tag **and** commit. `outdated` and
+`upgrade` print the CHANGELOG entries between the two; an entry under **BREAKING** makes `upgrade`
+refuse without `--confirm`. Install from a tag (`github:technology-ashiq/arc#v0.2.0`) and from HEAD
+both work; HEAD records `tag: null` and `outdated` says so rather than inventing one.
+
+**DST-Q · Consumers are registered locally, looped read-only, and born through launch.**
+`arc init` appends the project's path to `~/.arc-private/consumers.json` (never the repo — machine
+paths are banned from tracked files, ADR-1735's rule). `arc outdated --all` loops that file.
+`distribute-radar` is a weekly ₹0 script job in `hq.jobs.yaml` (the `launch-watch` shape) emitting
+one receipt; it reads and never writes. The launch scaffold gets a `core` slot calling `arc init`
+on the new venture, so a venture is born with every harness and a manifest, and the radar sees it the
+same week.
+
+### Phases (Cycle 2; appetites are ceilings)
+
+| Phase | Capability | Appetite | Why here |
+|---|---|---|---|
+| **P00** | **Self-render + REQ-03.** Narrow the guard to the claude-code target; `arc compile --self`; render into the arc tree; commit; CI dirty-diff on the four outputs. Then the owner opens arc in OpenCode on his ADR-1800 profile and runs the loop — **REQ-03 closes here or the cycle STOPs**. Cut tag `v0.2.0`. | 1 d | The owner's bar and the lane's owed REQ in one phase. If arc cannot run itself under OpenCode, the lifecycle verbs below would ship a product the author never used. |
+| **P01** | **`outdated` + `upgrade` + tags.** Tag/VERSION/CHANGELOG lint; manifest gains `tag`; the two verbs with their fixtures (behind / up to date / not-installed / BREAKING refusal / `--to` downgrade / unmanaged-untouched). Two-surface pass. | 1 d | The verbs people will type most; they must be right before `uninstall` and `--all` depend on the same manifest reading. |
+| **P02** | **`uninstall` + `init` default-all + launch slot + radar.** Manifest-driven removal with the outside-project mutant; `init` union of targets; the launch `core` slot; `~/.arc-private/consumers.json`; `distribute-radar` job + fixture. Retro and seal. | 1 d | Everything here is composition over P01's reads. |
+
+**Planned 3 d · cap 4 d.**
+
+### Kill checkpoint — read at the end of P00, not at the 50% mark
+
+One question: **does arc's own commit → review → ship loop run inside the arc clone under OpenCode
+on a non-Anthropic model, with receipts on the spine?** If not, STOP — record why (harness, model,
+guard, receipt field) and do not build `upgrade` for a product that has not yet upgraded itself.
+
+### No-gos (Cycle 2)
+
+- **No `npm publish`** — still ADR-2008; the git URL and tag pins are the install surface.
+- **No `upgrade --all`** — one project, one owner commit. The radar reports; it never moves.
+- **No consumer paths in the repo** — the registry is `~/.arc-private/`, period.
+- **No worktree for REQ-03** — the spine is in the main clone; a worktree proves rendering, not the loop.
+- **No new harness rows** — the four v1 targets only; Hermes/Kimi/Gemini stay `skills-only`.
+
+### Gates at the second kickoff
+
+- Owner ruling of 2026-10-13 on the spine as `decision.recorded`, cited by every Cycle 2 ADR
+- ADR numbers from the `distribute` century (**2019+**), after a sibling-worktree sweep
+- Owner's ADR-1800 profile named (gateway + model) and a spend cap for REQ-03 — **no run without both**
+- OpenCode installed on the owner's machine (ADR-0110 — arc installs nothing)
+- `v0.2.0` tag cut on `main` at P00 open
+- Launch lane consulted on the slot name and tier (its catalog is `launch-coverage`-derived)
+
+---
+
+## KICKOFF PROMPT — Cycle 1 (ran 2026-10-07, sealed 2026-10-09; kept as the record)
 
 > Read `docs/strategy/plans/PLAN-distribute.md` end to end before doing anything, then run
 > `/arc-kickoff "arc under verified harnesses: the Claude files stay the source, every other harness
@@ -590,3 +707,44 @@ is a separate reviewed diff citing ADR-0069, not part of this cycle.
 >     branches**.
 >
 > Appetite: 10.5 days planned, 12 cap.
+
+
+---
+
+## KICKOFF PROMPT — Cycle 2: paste into Claude Code in the arc repo (after the Cycle 2 gates clear)
+
+> Read `docs/strategy/plans/PLAN-distribute.md` end to end — the v1.3 freeze-log entry and the
+> **Cycle 2** section are the design source for this cycle; DST-A…M and ADR-2000..2018 are the frozen
+> record you build on — then run
+> `/arc-kickoff "distribute Cycle 2: arc renders into its own tree so any harness opens it with no
+> install step, REQ-03 runs for real, and the lifecycle is npm's — init, outdated, upgrade, uninstall,
+> tags" --lane distribute`.
+>
+> Write PLAN.md and PROGRESS.md, then **stop and wait for my approval before any code.**
+>
+> These are locked and must appear in the PLAN you write:
+>
+> 1. **DST-N / REQ-11** — `arc compile --self` renders `.codex/`, `.opencode/`, `.agents/skills/` and
+>    `AGENTS.md` into the arc tree as committed do-not-edit outputs with CI dirty-diff; the
+>    `inside-source` guard is narrowed to the claude-code target and stays there. ADR-2014 is not
+>    reopened.
+> 2. **REQ-03 runs in P00, inside the arc clone, under OpenCode, on my ADR-1800 profile** — not in a
+>    worktree. It closes there or the cycle STOPs with the reason recorded.
+> 3. **DST-O** — verbs `init` (default every verified target) · `doctor` · `outdated` ·
+>    `upgrade [--to] [--confirm]` · `uninstall`; every one reads `.arc-install.json` first and touches
+>    only paths it lists. No `--all` write verb.
+> 4. **DST-P / REQ-13–14** — semver git tags (`v0.2.0` cut at P00 open), `VERSION` and `CHANGELOG.md`
+>    linted in step, manifest records tag and commit, `outdated`/`upgrade` print the CHANGELOG range,
+>    BREAKING refuses without `--confirm`.
+> 5. **REQ-15** — `uninstall` removes exactly the manifest's paths; a mutant manifest naming a path
+>    outside the project is refused by name; unmanaged files are proven byte-identical after.
+> 6. **DST-Q / REQ-12 / REQ-16** — consumers register in `~/.arc-private/consumers.json`, never the
+>    repo; `distribute-radar` is a weekly ₹0 `hq.jobs.yaml` row that reads and never writes; the launch
+>    scaffold gains a `core` slot calling `arc init`, confirmed with the launch lane.
+> 7. Phase order is self-render + REQ-03 → outdated/upgrade/tags → uninstall + init-all + slot + radar.
+>    Do not reorder.
+> 8. **DST-K** still applies — two fresh agents per verb, logic and filesystem boundary, carrying the
+>    lane's `fixed-defects.md`.
+> 9. ADR numbers from the `distribute` century, **2019 onward**, after a sibling-worktree sweep.
+>
+> Appetite: 3 days planned, 4 cap.
