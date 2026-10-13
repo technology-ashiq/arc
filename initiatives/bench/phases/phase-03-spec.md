@@ -40,6 +40,16 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## CHANGE (2026-10-13): the real-event pair moves to `generic-api` (ADR-0914 Amendment 1)
+
+The owner named the pair and the cap. Champion `deepseek/deepseek-v4-flash-0731`, candidate
+`anthropic/claude-haiku-5.5`, both through `--driver generic-api` with `ARC_LLM_REASONING=off`.
+Whole event capped at **$0.50**. Ceilings are ₹1 per invocation, so the bound is 15 + 15 = ₹30 ≈ $0.34.
+This **replaces the ₹270 `sonnet`/`haiku` figure below**, which is kept as history. The 2026-09-15
+engine blocker is gone: #225 made bench skip an expired probe vehicle. Everything else stays as
+written: two runs, started from the MAIN CLONE, the chain read off the spine, and the verdict as
+the owner's keystroke. The cost axis compares tokens, because `generic-api` reports no rupee figure.
+
 ## CORRECTION (2026-08-17): the four blockers below are gone, and one of them came back in disguise
 
 Read this before the section under it. Everything the 2026-08-13 close listed as BLOCKED has been
