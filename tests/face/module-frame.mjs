@@ -809,6 +809,19 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     && wearsLive({ p: "once two ventures are live, support stops being one person" }).length === 0);
   const planned = registry.rooms.filter((r) => (r.planned === true || r.status === "planned") && SHIPPED_RINGS.includes(r.ring));
   check("F3: the shipped rings hold planned rooms to fold (vacuous-pass guard)", planned.length >= 3, planned.map((r) => r.id).join(","));
+  // face v2 Phase 17 (ADR-1356): discover's lane was born and its room is served, so the money ring plans exactly the two
+  // rooms whose lanes are not -- ops and trader. Pinned by id, from the served registry AND from planned-rooms.json, with a
+  // mutant that puts discover back in the planned registry.
+  /** @param {{ id: string, ring: string, planned?: boolean, status?: string }[]} rooms @param {{ room: string, ring?: string }[]} rows */
+  const moneyPlanned = (rooms, rows) => JSON.stringify([...new Set([
+    ...rooms.filter((r) => r.ring === "money" && (r.planned === true || r.status === "planned")).map((r) => r.id),
+    ...rows.filter((x) => x && x.ring === "money").map((x) => x.room),
+  ])].sort());
+  const plannedRows = JSON.parse(plannedText).rooms;
+  check("F3: the money ring plans exactly ops and trader -- discover is served (Phase 17)", moneyPlanned(registry.rooms, plannedRows) === JSON.stringify(["ops", "trader"]), moneyPlanned(registry.rooms, plannedRows));
+  check("F3: MUTANT -- discover put back in the planned registry is caught",
+    moneyPlanned(registry.rooms, [...plannedRows, { room: "discover", ring: "money" }]) !== JSON.stringify(["ops", "trader"])
+    && moneyPlanned(registry.rooms.map((r) => (r.id === "discover" ? { ...r, status: "planned" } : r)), plannedRows) !== JSON.stringify(["ops", "trader"]));
   // The badge every room wears in the rail and in a generic room's head: for a planned room it is never a liveness
   // reading, even when the door reports its homed kinds as fired -- the exact state Cycle 15's trader was in.
   const roomsLib = await import(pathToFileURL(join(LIB, "rooms.mjs")).href);

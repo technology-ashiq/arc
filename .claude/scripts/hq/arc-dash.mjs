@@ -67,6 +67,7 @@ import * as keys from "./lib/keys.mjs";
 import * as reads from "./lib/face/reads.mjs";
 import { apiReference } from "./lib/face/reference/route.mjs";
 import { apiOrg } from "./lib/face/org/route.mjs";
+import { apiDiscover } from "./lib/face/discover/route.mjs";
 // Phase 05's work door (REQ-07, ADR-1339): the op registry and the plan/apply/run verbs. Same rule -- the handlers
 // live beside the door, the route table stays here.
 import { createWorkDoor, runTool, WORK_STATUS } from "./lib/face/work-door.mjs";
@@ -1042,6 +1043,8 @@ const ROUTES = Object.freeze([
   // Phase 07 (REQ-12, ADR-1346): wiki-build's own extract and narrative, imported -- build-time facts, never the spine.
   { method: "GET", path: "/api/reference", mutates: false, spineEffect: "none", handler: (ctx, url) => apiReference(ctx, url) },
   { method: "GET", path: "/api/org", mutates: false, spineEffect: "none", handler: (ctx, url) => apiOrg(ctx, url) },
+  // face v2 Phase 17 (ADR-1356): discover's own receipts, selected through discover's own constants. Read-only.
+  { method: "GET", path: "/api/discover", mutates: false, spineEffect: "none", handler: (ctx, url) => apiDiscover(ctx, url) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
   { method: "GET", path: "/api/models", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return apiModels(ctx); } },
   // A file write outside the repo, not a spine write: the one door write that is neither a decision, an op nor a

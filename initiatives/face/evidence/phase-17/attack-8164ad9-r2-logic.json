@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:96-106",
+      "breaking_input": "A discover approval.requested event whose payload.gate is not a string, or whose cluster_tokens contains a token that is not a string but is filtered out, while another token is longer than 300 chars. The route calls `p.cluster_tokens.filter((t) => typeof t === \"string\")` then `.slice(0, MAX_TOKENS).map(text)` — text() applies clean() and slice(0, 300). But if a token is exactly 300 chars, it is served truncated without the \"dropped\" count reflecting it. More critically, an event whose payload.gate is not a string (e.g., an object) passes the `=== c.gate` gate check? No — `x.e.payload.gate === c.gate` with c.gate a string and payload.gate an object is false, so it is silently dropped, not counted in `dropped`. The route's `dropped` only counts winners over MAX_WINNERS, not winners dropped by gate mismatch, id grammar failure, or token over-length. So a winner with a malformed gate is invisible, violating \"what a cap drops is counted, never silently cut\".",
+      "why": "The comment claims caps report what they drop, but only the MAX_WINNERS cap contributes to `dropped`; winner-filtering by gate, idOf failures, and per-token truncation are not counted. A wrong-shaped gate (object) is a malformed event that is skipped without any accounting, the exact \"A malformed id dropped silently\" / \"A wrong-shaped source returned an empty inventory\" class.",
+      "fix": "Count every skipped candidate entry — non-string gate, id outside ULID, over-limit token truncations — in `dropped` and report per-reason; refuse a non-string gate as a named finding.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:55-64",
+      "breaking_input": "A discover event where the envelope `process` is the discover prefix but the entry's `id` is a 26-char string with a lowercase letter or the digit '0' or '1', which ULID excludes. `idOf` returns \"\" → `ofDiscover(e) && idOf(e.id) === \"\"` → dropped++ and the entry is counted as dropped. But the same entry ALSO fails the filter's `ok` (since isPlain(e) and typeof e.kind are true, it passes ok; the entry is dropped once). However, if the same id appears in `decision.recorded`'s payload.decides and also in an approval.requested's envelope id, the decisionOf map keys by `idOf(x.e.payload.decides)` — if that decides id is malformed (lowercase), idOf returns \"\" and `decides !== \"\"` is false, so the decision is never attached to the winner it decides, leaving the winner 'open' forever even after a real decision. The route then serves `state: \"open\"` and `decision: null` despite a decision.recorded existing — the \"A decision anyone could write\" / \"validate one read, compare another\" class: the winner's state reads one attribute (its own id) while the decision's join reads a different one (payload.decides).",
+      "why": "A malformed decides id (e.g. from a hand-typed or truncated receipt) is silently ignored by the state join, showing a winner as undecided when a decision exists — a wrong \"open\" that invites a user to decide again, and the spine refuses a second decision, so the state is permanently wrong.",
+      "fix": "Require decides to match the ULID grammar and the decision to join against a winner whose id is also valid; report a malformed decides as a named unresolvable, never a silent 'open'.",
+      "twin_of": "Two readers of one fact share one predicate."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:96-106",
+      "breaking_input": "A discover approval.requested with `cluster_tokens` as a sparse array (e.g., `[,\"invoice\",]`) — `Array.isArray(p.cluster_tokens)` is true, filter keeps \"invoice\", fine. Or an array with `null` inside — filter drops null fine. But an array with a token that is a Number (e.g., 42) — filtered out, not served, fine. The hole: a token string that is itself a 26-char ULID-looking value, or a token string containing a newline, is served into the fold, which joins tokens with \", \" into a single cell; a token containing a newline, combined with the \"one-line\" rule (every free text bound for a parsed log is one line), would break the serving table on the rendered page — the fold's `tokens.join(\", \")` produces a cell with an embedded newline, violating the room's own one-line contract and the \"ids are grammar-checked\" rule for anything that looks like an id.",
+      "why": "cluster_tokens are free text that goes straight through text() with no newline scrubbing; the fold joins them raw into a table cell. A token that is an id-like string or carries a CR/LF corrupts the cell's line-oriented rendering, and the route's \"one line\" guarantee is not upheld.",
+      "fix": "Scrub cluster_tokens through the same line rule the fold's cells use (replace control chars), and apply the ULID grammar check to any token that looks like an id.",
+      "twin_of": "Every free text bound for a parsed log is one line (JSON-escaped); the ids-are-grammar-checked twin."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:84-88",
+      "breaking_input": "Two approval.requested events with the SAME id (e.g., a replay or a torn append that duplicated a line). `decisionOf` maps `idOf(x.e.id)` to the decision, but the winners list iterates `all` (all approval.requested) and would serve BOTH entries with the same id, producing two rows with the same key in the React table — a duplicate React key, the \"A name the registry listed twice was counted twice and drawn under a duplicate React key\" class. `decisionOf.get(x.e.id)` would resolve both to the same decision, but the table still draws two identical rows.",
+      "why": "No dedup of winners by id; duplicate receipts (which the spine might hold if a torn line was re-appended) draw duplicate rows with a duplicate key, and the \"dropped\" count never reflects it.",
+      "fix": "Dedup winners by id (keep the oldest), count duplicates dropped, and pin with a mutant that duplicates a winner.",
+      "twin_of": "A name the registry listed twice was counted twice and drawn under a duplicate React key."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:53-63",
+      "breaking_input": "An event that is not plain (e.g., a JSON line that parsed to an array, a string, or null) — `isPlain` returns false, `ok` false, the filter returns false and the entry is silently skipped, never counted in `dropped`. The comment says \"an entry whose id is not one is skipped and COUNTED\", but a non-object event is skipped without any count. The spine could hold a torn line (a JSON array), and the availability would still be \"served\" with the torn line invisible.",
+      "why": "Non-object events are dropped without accounting, so a torn spine line is invisible rather than a named finding — violating the spine's own \"a JSON line that is not an object is torn\" rule and the route's promise that skipped entries are counted.",
+      "fix": "Count non-object events in `dropped` (or better, report them as torn/unreadable and flip availability to unknown, matching the sane corruption class).",
+      "twin_of": "A spine line that parses to a non-object (`null`) was kept as an event -> a JSON line that is not an object is torn, in every engine."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:78-82",
+      "breaking_input": "A `run.completed` event where `x.e.payload.step` is the string \"hunt\" but the event has NO `payload.outcome` and no `e.outcome` (e.g., a malformed writer). `run()` returns `outcome: text(r.e.payload.outcome) || text(r.e.outcome)` → both empty string → `outcome: \"\"`. The route returns `outcome: \"\"`, and the fold's `runSub` prints `outcome ${field(run, \"outcome\") || \"unstated\"}` — that's fine. But the run's `id` is via `idOf(r.e.id)` — if malformed, id is \"\", and the fold's `runSub` does `field(run, \"id\").slice(-6)` on empty string → \"\". The KPI still shows `day` and the run exists, so `any` counts it. A run whose id is malformed and whose day is unreadable (day text of empty) is still served as a run with empty fields, not counted as dropped — a malformed run is silently served rather than named.",
+      "why": "Malformed run.completed events (bad id, missing day) are served as runs with empty strings rather than skipped and counted; the \"every envelope id and ts is served only in its grammar\" rule is broken for runs (only winners check idOf).",
+      "fix": "Skip a run whose id fails the ULID grammar and count it; require day to be a real date string.",
+      "twin_of": "Envelope fields passed through unvalidated -> every envelope id and ts is served only in its grammar (`idOf`, `tsOf`)."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:26-30",
+      "breaking_input": "`discoverConstants` validates `PROCESS` with `m.PROCESS.indexOf(\"@\") < 1`, so a PROCESS like \"@\" (index 0) is rejected, but \"x@\" (index 1) passes (slice(0,2) = \"x@\") and a process \"yo@\" passes as prefix \"yo@\". Now `ofDiscover` uses `e.process.startsWith(c.prefix)` — any process whose name STARTS with \"yo@\" is treated as discover, even \"yo@evil\" from a face actor that wrote a process string \"yo@evil\". The prefix is not anchored by the version grammar, so a second actor can forge a discover process by naming its process \"yo@anything\". The comment says \"any version of discover is discover\", but \"any name ending with @\" is not discover. A face or another tool can emit `idea.captured` with process \"yo@fake\" and it will be counted as a discover capture.",
+      "why": "The prefix check `slice(0, indexOf(\"@\") + 1)` accepts any process whose name before '@' matches, with no grammar on the name segment (e.g., must be [a-z0-9-]+), so a spoofed process name is indistinguishable from discover's, counted as a discover receipt.",
+      "fix": "Validate the PROCESS name against a grammar (e.g. /^[a-z0-9-]+@/), and require the full process to match a stricter pattern (name@semver), not just a prefix on the name.",
+      "twin_of": "An id trusted as a key -> A key the client links by exists only for an id with a contained `<dir>/<id>.md` page."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:65-68",
+      "breaking_input": "A discover `approval.requested` whose `payload.slug` is empty and `payload.niche` empty, but score is a number — served as a winner row. The fold's `servedTable` row returns `field(w, \"id\") === \"\" ? null` — so if id is empty, row is null (counted? no, `dropped` doesn't count it). But if id is a valid ULID yet slug and niche are empty, the row is served with blank cells. The route has no rule requiring a winner to carry a slug; an approval.requested with no slug is a malformed winner that is still served, and the \"empty value read as an absent one\" class.",
+      "why": "No shape validation on a winner's required fields (slug, niche, score presence); a winner without a slug is served as a real venture, inviting the user to approve something un-named.",
+      "fix": "Require slug to be a non-empty string and count a winner that fails as dropped; name it.",
+      "twin_of": "A value checked for presence, not validity -> a port is decimal digits in 1..65535."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:25-32",
+      "breaking_input": "`discoverConstants` accepts `m.PROCESS` and `m.WINNER_GATE` from the file, but never checks that `WINNER_GATE` is a plausible gate shape (e.g., it could be \"\"+a newline, or a string with a control character). If WINNER_GATE is \"ev\\n\", then `x.e.payload.gate === c.gate` with c.gate containing a newline matches an event whose gate also has that newline; a forged event with a gate \"ev\\n\" would look discover-authentic. The gate is a free string with no grammar, so a second spelling (leading/trailing whitespace) can sneak past the \"exact string\" check that is supposed to prevent a second grammar — a case-folded or whitespace variant is a different string, but the route treats any string equal to the file's as the gate, so a gate with an invisible character is a second grammar.",
+      "why": "The gate is not validated to be a sane token (e.g., /^[A-Za-z0-9_-]{1,64}$/), so a gate carrying whitespace or control characters is a distinct gate a malicious actor can also use, defeating the \"no second grammar\" promise.",
+      "fix": "Require WINNER_GATE to match a strict token grammar; refuse a gate with whitespace/control.",
+      "twin_of": "A misspelt `levels:` drew a ladder with no rung."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:44",
+      "breaking_input": "`discoverBody` takes `c.prefix` as \"name@\" and checks `process.startsWith(prefix)`. A process exactly \"name@\" (with empty version) passes startsWith. The comment claims \"any version of discover is discover\" but an empty version is not a version; a tool that emits process \"name@\" with no version is counted as discover even though the spine's own writer would require \"name@x.y.z\". A face tool or a hand-edited receipt with process \"name@\" is counted as a discover capture.",
+      "why": "The prefix check with no requirement for a populated version allows an empty-version process to be attributed to discover.",
+      "fix": "Require the segment after '@' to be a non-empty version string (e.g. /^\\d+\\.\\d+\\.\\d+$/).",
+      "twin_of": "An unknown outcome read as \"not raised\" -> a guard's release condition is \"certainly did not happen\", never \"did not see it happen\"."
+    }
+  ]
+}

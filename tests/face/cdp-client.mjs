@@ -669,7 +669,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
     check("PLANNED: the planned rooms are held to the contract BY ID -- one losing its mark while another gains one fails",
       !swapped.ok && swapped.reasons.some((r) => /drew no planned mark: trader/.test(r)) && swapped.reasons.some((r) => /does not plan drew a planned mark: ventures/.test(r)), JSON.stringify(swapped.reasons));
     const ids = typeof smoke.expectedPlannedIds === "function" ? smoke.expectedPlannedIds() : [];
-    check("PLANNED: the expected planned rooms are read from the contract, sorted, by id", ["chat-mcp", "discover", "ops", "trader"].every((id) => ids.includes(id)) && JSON.stringify(ids) === JSON.stringify([...ids].sort()), JSON.stringify(ids));
+    check("PLANNED: the expected planned rooms are read from the contract, sorted, by id", ["chat-mcp", "ops", "trader"].every((id) => ids.includes(id)) && !ids.includes("discover") && JSON.stringify(ids) === JSON.stringify([...ids].sort()), JSON.stringify(ids));
     const net = new smoke.NetworkWatch();
     net.navigate(0);
     net.begin("L1", 0);

@@ -1,34 +1,34 @@
-// View.tsx -- money/discover: v0.7's Discover, drawing what fold() returned and deciding nothing (face v2
-// Phase 03, ADR-1320, ADR-1328).
+// View.tsx -- money/discover: discover's own receipts, drawing what fold() returned and deciding nothing (face v2
+// Phase 17, ADR-1356, ADR-1320).
 //
-// Declared deltas from the reference: a PLANNED room, drawn from the planned-rooms registry, dotted; the hunt,
-// score and shortlist forms are REHEARSAL cards, not forms, and v0.7's sim-candidate figures are not drawn,
-// because the face keeps no second store and the lane is not born. The room never wears a liveness pill (F3).
+// Declared deltas from the reference: v0.7 rehearsed hunt, score and shortlist as forms; the lane is born, so the room
+// draws what its receipts say instead -- the ideas captured, the last hunt and judge, and each winner with your
+// decision. Running a hunt stays /arc-hunt, so there is no form here.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
-import { SimBadge, UI } from '../../../ui/kit'
-import { HPanel, KpiStrip, PlannedBanner, PlannedFactsPanel, PlannedLinePanel, Rehearsal, RoomHead } from '../../../ui/bits'
+import { UI, YoursBadge } from '../../../ui/kit'
+import { HPanel, KpiStrip, RoomHead, ServedTable } from '../../../ui/bits'
 export { Lightbulb as Icon } from '@phosphor-icons/react'
 
 export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
   return (
-    <div data-planned="discover">
-      <RoomHead title={f.sentence} hint={f.lede} right={<SimBadge>{f.badge}</SimBadge>} />
-      <PlannedBanner text={f.banner} />
+    <>
+      <RoomHead title={f.sentence} hint={f.lede} right={<YoursBadge>{f.badge}</YoursBadge>} />
 
       <KpiStrip items={f.kpis} />
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4 items-start">
         <div className="min-w-0">
-          <HPanel title="Rehearsed here" hint="hunt · score · shortlist · none reaches the work door">
-            <div className="space-y-2.5">
-              {f.flows.map((x) => (
-                <Rehearsal key={x.verb} item={x} />
-              ))}
-            </div>
+          <HPanel title="Winners" hint="each discover-proposed venture, and what you decided">
+            {f.showNoHunt && (
+              <p className="text-[12.5px] leading-[19px] mb-3" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{f.noHunt}</p>
+            )}
+            <ServedTable item={f.winners} />
           </HPanel>
+        </div>
 
-          <HPanel title="The room's rules" hint="what holds on the day the lane is born">
+        <div className="min-w-0">
+          <HPanel title="The room's rules" hint="what the discover lane holds itself to">
             <div className="text-[12.5px] leading-[19px] space-y-1.5" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
               {f.rules.map((r) => (
                 <div key={r}>· {r}</div>
@@ -36,15 +36,7 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
             </div>
           </HPanel>
         </div>
-
-        <div className="min-w-0">
-          <PlannedLinePanel room={f} />
-          <PlannedFactsPanel room={f} />
-          <HPanel title="The kinds it will own">
-            <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{f.kindsSentence}</p>
-          </HPanel>
-        </div>
       </div>
-    </div>
+    </>
   )
 }

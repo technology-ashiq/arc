@@ -252,7 +252,7 @@ const rowsJson = (rows) => JSON.stringify({ rooms: rows });
   };
   check("F3: MUTANT -- the pill rule catches a Live pill in any case and passes prose that says live",
     smoke.livePill("● Live") && smoke.livePill("live") && smoke.livePill("L​IVE") && !smoke.livePill("once two ventures are live, support stops being one person") && !smoke.livePill("paper-live (human gate)"));
-  for (const id of ["ops", "trader", "discover"]) {
+  for (const id of ["ops", "trader"]) {
     const fold = await foldOf(id);
     const manifest = await manifestOf(id);
     const { first, full } = loaded(fold, ctxFor(id, manifest), (r) => (r.route === "/api/file/:id" ? fileBody(plannedText) : undefined));
@@ -265,6 +265,32 @@ const rowsJson = (rows) => JSON.stringify({ rooms: rows });
     const flows = reg.rehearsalOf(full);
     check(`REHEARSAL: ${id}'s flows are each one card, drawn once`, flows.length === full.flows.length && new Set(flows.map((x) => x.verb)).size === flows.length, flows.map((x) => x.verb).join(","));
   }
+}
+
+// ── discover is served (face v2 Phase 17, ADR-1356): the checks the planned loop ran for it, turned around ──────────
+{
+  const fold = await foldOf("discover");
+  const manifest = await manifestOf("discover");
+  const body = { route: "/api/discover", mode: "sim", availability: "served", failure: "", unreadable: [], captures: { count: 2, latest: { id: "01M5AAAAAAAAAAAAAAAAAAAAAA", day: "2026-10-12", source_id: "hn-123" } },
+    runs: { hunt: { id: "01M5BBBBBBBBBBBBBBBBBBBBBB", ts: "t", day: "2026-10-12", outcome: "ok" }, judge: null },
+    winners: [{ id: "01M5CCCCCCCCCCCCCCCCCCCCCC", day: "2026-10-12", slug: "invoice-reminders", score: 7.5, cluster_fp: "fp", cluster_tokens: ["invoice", "late"], state: "open", decision: null }] };
+  /** Every string a fold returned, nested anywhere (the planned block's helper, out of its scope here). */
+  const strings = (v, out = [], seen = new Set()) => {
+    if (typeof v === "string") { out.push(v); return out; }
+    if (!v || typeof v !== "object" || seen.has(v)) return out;
+    seen.add(v);
+    for (const x of Object.values(v)) strings(x, out, seen);
+    return out;
+  };
+  const { first, full } = loaded(fold, ctxFor("discover", manifest), (r) => (r.route === "/api/discover" ? ok(body) : undefined));
+  check("DISCOVER: the room reads one route, /api/discover, and nothing from the planned registry", first.reads.length === 1 && first.reads[0].route === "/api/discover", JSON.stringify(first.reads));
+  for (const [label, f] of [["with nothing loaded", first], ["with its route read", full]]) {
+    const pills = strings(f).filter((s) => smoke.livePill(s));
+    check(`DISCOVER: ${label} it is not planned, not dotted, and rehearses nothing`, f.isPlanned !== true && f.isDotted !== true && reg.rehearsalOf(f).length === 0);
+    check(`DISCOVER: ${label} it returns no LIVE pill`, pills.length === 0, pills.join(" ; "));
+  }
+  check("DISCOVER: the KPIs read the captures, the last hunt, the last judge and the open winners", JSON.stringify(full.kpis.map((k) => k.v)) === JSON.stringify(["2", "2026-10-12", "none yet", "1"]), JSON.stringify(full.kpis.map((k) => k.v)));
+  check("DISCOVER: each winner is a served row with its slug, tokens and state", full.winners.isDrawn && full.winners.rows.length === 1 && full.winners.rows[0].cells.join("|") === "invoice-reminders|7.5|invoice, late|open|not decided", JSON.stringify(full.winners.rows));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

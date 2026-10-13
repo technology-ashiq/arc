@@ -601,6 +601,26 @@ load 'test_helper'
   done
 }
 
+@test "face v2: the discover room reads discover's own receipts through GET /api/discover, never planned again (Phase 17)" {
+  # REQ-21, ADR-1356: a sandbox spine with a capture, a hunt, a judge, an open and a rejected winner; the honest edges
+  # (zero, unknown naming the day, a face capture not counted); no second grammar; the room no longer planned.
+  run node "$ARC_ROOT/tests/face/discover-room.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 20 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "ROUTE: a rejected winner reads rejected, with the deciding receipt and its reason" \
+             "EDGES: a face idea.captured (no discover process) is not a discover capture" \
+             "EDGES MUTANT: a route that does not select by discover's process counts the face capture, and is caught" \
+             "EDGES: an unreadable spine day is unknown, naming the day, never 0" \
+             "GRAMMAR: the winner gate and the process are spelled nowhere under face/src, in reads.mjs or in the route" \
+             "ROOM: the View wears no data-planned and draws no REHEARSAL card or planned line"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
 @test "face v2: Phase 04 served panels answer every loaded branch, and the door refuses a hostile tree by name" {
   # The Phase 04 attackers' surviving mutants, each pinned by a check that fails when its decision is removed: an
   # empty table for a body with no list, a sum across substances or currencies, the overdue flag ignored, a seal drawn
