@@ -1,43 +1,46 @@
-# PROGRESS.md — distribute v1 "arc under verified harnesses"
+# PROGRESS.md — distribute Cycle 2 "arc's loop under OpenCode on a non-Anthropic model"
 
-status: IDLE
-cycle: arc-distribute (Cycle 1, opened 2026-10-07)
-phase: 04 (cycle closed)
-appetite: 12d
-burn: 5d
+status: LIVE
+cycle: arc-distribute (Cycle 2, opened 2026-10-13)
+phase: 05
+appetite: 3d
+burn: 1.25d
 blocked-on: —
 depends-on: —
 
 Tracker for `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`. Evidence in `initiatives/distribute/evidence/phase-NN/`.
-ADR century 2000–2099; ADR-2000..2016 written at kickoff. The kickoff was APPROVED by the owner in chat on 2026-10-07 ("machi work start pannu … complete all phase"). The `kickoff.done` and `approval.requested` receipts are emitted from the main clone after the birth PR merges, because a worktree's spine refuses emits.
+Cycle 1 is archived at `archive/PLAN-cycle1-2026-10-13.md` + `archive/PROGRESS-cycle1-2026-10-13.md`; its 9 validated
+REQs and phases 00–04 stand. ADR century 2000–2099; Cycle 2 writes ADR-2019..2021. The owner opened and approved this
+cycle in chat on 2026-10-13 ("REQ-03 cycle", model `deepseek/deepseek-v4-flash-0731`, cap $0.50, "complete all phase …
+don't wait for me … merge ellam phases complete aana apram"). Every phase is built on `feat/distribute-c2-req03` and
+merged once at cycle end; each phase closes from the main clone after that merge.
 
 ## Phases
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Birth PR + matrix + local lies resolved + claude-code golden + live OpenCode spike | 2d | ✅ |
-| 01 | Gates to merge-time + the brain (day-4.5 kill) | 2.5d | ✅ |
-| 02 | Source hygiene: frontmatter ADR, `targets:`, lint, compile identity | 1d | ✅ |
-| 03 | Install adapters ×4 + goldens + REQ-10 + sync re-pointed + REQ-03 real run (stop rule) | 3.5d | ✅ |
-| 04 | `bin/arc.mjs` + clean-machine proof on 3 legs + retro | 1.5d | ✅ |
+| 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
+| 05 | Capped wrapper + transcript + harness/evidence stamp + one live `arc-commit` smoke receipt — 50% tripwire (REQ-11, 12) | 1d | 🔨 built, tripwire YES, CI pending |
+| 06 | `arc-ship` runnable in arc: package scripts, `ci-digest --wait`, no-deploy branch, goldens (REQ-13) | 0.75d | 🔨 built, CI pending |
+| 07 | The real run: commit → review → push → ship, 3 negatives, PR merged after checks, transcripts, retro + seal (REQ-03) | 1d | ⬜ |
 
 ## Done-log
 
-- **Kickoff 2026-10-07**: PLAN, 5 phase specs and ADR-2000..2016. Verification falsified four design-source premises:
-  `.codex/`, `.agents/skills/` and `AGENTS.md` are gitignored local files, not repo state (ADR-2014); there are 3
-  blocking hook events, not 2; `gh` is present and `main` is unprotected (404); and `arc-compile` reads processes only.
-  Two decisions were added: protection must bind admins (ADR-2015), and new gates route through bats (ADR-2016).
+- **Kickoff 2026-10-13** (receipts `kickoff.done` 01M4RWTWG6GANBZE4YQA7TKW1R, `approval.requested` 01M4RWTX3STGAQNY4KE5XXKHCR; the owner pre-approved building in chat, the stamp stays theirs): PLAN (tier S, 4 REQs), phase specs 05–07, ADR-2019..2021. Survey facts that shaped it:
+  nothing in code sets `harness` on a receipt; `arc-ship` cannot run in arc (no scripts, no deploy target);
+  `core.hooksPath` is unset; no USD cap exists for a foreign harness. Cycle 1's stale "owner items" line is
+  corrected here: all 6 distribute approvals (kickoff + P00..P04 move-on) were decided `approve` on the spine
+  between 2026-10-07 and 2026-10-09; `arc-inbox inbox` shows none open.
 
-- **Phase 00 closed 2026-10-07** (`/arc-phase-done 00`): no REQs close here (the walking skeleton every REQ reads). Birth PR #371 merged as `74aae21a`, CI 19/19 on run 37576214357 per job, head asserted (an earlier run's Windows shard 9 timed out with no log and went green on a `--failed` rerun). Receipts on the canonical spine: `kickoff.done` `01M4AJMX1N0ZYRN12H9KSJVF61`, the ruling `approval.requested` `01M4AJMXD7QKGB4G3P8DW08FJY` decided by the owner's `decision.recorded` `01M4AKYMN04722WM5QGJSDDW1R` (approve), and the spike's `note.logged` `01M4AQG22Y85433X9KC4BHJV8H` with `harness: opencode`; 0 `distribute@` records in `_quarantine/`. The spike ran 7 times: OpenCode 1.17.18 executed the hand-rendered `arc-resume` every time, but free models never reached its emit step (426 free-tier version gate, a retired Gemini model, quota exhaustion retried silently, a malformed tool-call token), so the receipt came from a minimal quarantined `arc-spike-receipt` command under `--pure` on OpenRouter DeepSeek. The receipt payload mislabels the command as `arc-resume`, which is stated in `evidence/phase-00/opencode-spike.txt`. Four OpenCode facts went into the matrix header. A-02 and A-03 hold. Attack: 2 boundary + 2 logic rounds, 15 defect classes fixed. Actual ~1d against a 2d appetite. Metrics: `amendments: 0` · `reopened: n` · `t-to-phase0: 0`.
+- **P05 2026-10-13**: wrapper + stamp built; attack r1 (logic 15, boundary 10) and r2 (logic 0, boundary 12) fixed or
+  ledgered. Four live smokes and three probes measured two OpenCode facts the plan did not know: a subagent's `ask`
+  hangs a headless run (fences now deny) and subagent spend is not in the stream (now read by `opencode export`),
+  ADR-2022. **50% tripwire: YES** — receipt `01M4S4V92YACPXF1V08XXWR04B` (`commit.done`, `harness: opencode`) on the
+  main spine for $0.0019 (`evidence/phase-05/smoke.md`). Cycle spend $0.035 of $0.50.
+- **P06 2026-10-13**: package scripts, `ci-digest --wait`, the no-deploy `arc-ship` branch; attack r1 fixed or ledgered.
 
-- **Phase 01 closed 2026-10-09** (`/arc-phase-done 01 --lane distribute`): REQ-01, REQ-06 and REQ-09 validated. Built and merged as PR #380 (`afa6239d`), CI 19/19 on the PR head and on `main` dispatch 37636468223. The newest `main` dispatch, 37828894878 on `494e0f46`, is also green. On the merged tree, from the main clone: `gate-parity: 9 fragments, 7 rules, 22 rows, 0 gaps` (equal to the census), `--mutant-selftest` caught `99-mutant`, `brain-drift: 16 headings checked, 0 drift`, and `TODO` count 0 on both `AGENTS.md` and `CLAUDE.md`. The owner said "flip now" and `main` was protected from `protection.json`. Before the flip, all 19 contexts matched the newest PR run's check-runs, and `doctor --repo` printed 5 `ok` after it. **Day-4.5 kill checkpoint: YES.** Planted PR #395 read `BLOCKED` with 18/18 `selftest` jobs failing on `99-planted`, and was closed unmerged. `product-lint` caught it before `gate-parity` ran, and the owner accepted that. A direct `git push origin HEAD:main` from a fresh clone was refused with `GH006`. Evidence: `evidence/phase-01/kill-checkpoint.md`. A-04 and A-07 hold, and no assumption FIRED. Attack: 2 rounds × 2 surfaces, 52 findings, fixed-defects (v)–(ag). From now on, `enforce_admins` makes every session's merge wait for the 19 checks. Actual 2 calendar days against a 2.5d appetite, about 1d of that waiting on the flip. Metrics: `amendments: 0` · `reopened: n`.
-- **Phase 02 closed 2026-10-09** (`/arc-phase-done 02 --lane distribute`): REQ-05 validated; REQ-04's claude-code identity half is exercised and the rendered-target half closes in P03. Built and merged as PR #399 (`905b8567`), CI 19/19 on head `9f7c58ba` (run 37865346917). The 23 new P02 tests (`distribute-frontmatter.bats` 11, `distribute-dirty.bats` 12) ran `ok` on all 5 full legs, 0 `not ok` (`evidence/phase-02/ci-37865346917-p02-suites.txt`). On the merged tree: `frontmatter-lint: 29 commands, 32 agents, 9 keys, 0 failures`, the mutant selftest caught its planted key, and `arc-compile --check --all --target claude-code` printed 29/29 commands, 32/32 agents and 3/3 processes byte-identical with `0 dirty` (`evidence/phase-02/demo-merged-905b856.txt`). The 3 red-as-expected `[dirty]` fixtures (`.codex/`, `.opencode/`, `.agents/skills/`) each exit 1 naming the planted file, in CI. ADR-2017 records the key × target fate table (`engine/frontmatter-keys.yaml`); `targets: claude-code` went on `arc-face-module`, `arc-freeze` and `arc-unfreeze`, the only source edit. The matrix grew 2 cells per row (`argument_hint`, `model_tier`) and per-row `rendered:`/`rendered_foreign:`. Attack: 2 rounds × 2 surfaces, round 2 logic clean, fixed-defects (ah)–(aq); B6 to the debt ledger. One CI red, Windows shard 7, was a text-mode `grep` that cannot see CR bytes, fixed as (aq). Actual ~0.5d against a 1d appetite. Metrics: `amendments: 0` · `reopened: n`.
-- **Phase 03 closed 2026-10-09** (`/arc-phase-done 03 --lane distribute`): REQ-02, REQ-04, REQ-07 and REQ-10 validated. **REQ-03 is OWED**: the owner was asked at P03 open and every report since for a non-Anthropic profile, a spend cap and "run now / owed", gave no answer, and the PLAN rule records it owed (it stays `active`). Built and merged as PR #402 (`53d1e9b6`), CI 19/19 on head `49f74f60` (run 37890466684). The 69 P03 tests (7 new suites plus `sync.bats`) ran `ok` on every leg, 0 `not ok`; the 2 symlink fixtures in `distribute-apply-boundary.bats` skip on Windows, where Git for Windows makes no real symlink without developer mode, and run green on ubuntu and macOS (`evidence/phase-03/ci-37890466684-p03-suites.txt`). On the merged tree: goldens 62/62 codex, 83/83 opencode and 62/62 skills-only; **stop rule: 1 unsupported command on opencode** (`arc-toolcheck`, `Artifact`), under 5; an opencode install doctored 466 placed, and deleting one file flipped exactly 1 row to `missing` (`evidence/phase-03/demo-merged-53d1e9b.txt`). ADR-2018: one render module feeds the goldens and the installer; `sync-to-project.sh` full mode is the claude-code install target, golden unchanged but for the new scripts. Attack: 2 rounds × 2 surfaces (round-1 logic re-run on deepseek after qwen failed, an empty result recorded unconfirmed), fixed-defects (ar)–(bf); debt row 13 (first sync over an unrecorded consumer backs up many files). CI found 2 more: macOS truncated a child script's piped stdout at 8192 bytes (be), and face #400's `plan-bound-audit` landed mid-PR (bf). Actual ~1d against a 3.5d appetite. Metrics: `amendments: 0` · `reopened: n`.
-- **Phase 04 closed 2026-10-09** (`/arc-phase-done 04 --lane distribute`): REQ-08 validated. Built and merged as PR #406 (`0e60ef0f`), CI 19/19 on head `55703bd9` (run 37912368776; Windows shard 1 timed out once in face-browser `bench.run-model`, a file this PR never touched, and went green on a `--failed` rerun). The 12 P04 tests (`distribute-cli.bats` 8, `distribute-install-clean.bats` 4) ran `ok` on every leg that carries them, 60 lines, 0 `not ok`, 0 skipped, so the git-URL arm ran on CI (`evidence/phase-04/ci-37912368776-p04-suites.txt`). On the merged tree: `arc doctor` printed `ready to install` with a plan for all four targets, `arc init --target codex` into a fresh git repo wrote 451 files and set `core.hooksPath=.claude/templates/githooks`, and `arc doctor --dir` read 450 placed, 7 degraded, 0 missing, 0 unmanaged-conflict (`evidence/phase-04/demo-merged-0e60ef0.txt`). `package.json` is private with `dependencies: {}` and no lifecycle script; `npm publish` is named nowhere outside the lane. **REQ-08 amended on CI evidence:** the git-URL arm was `npx --yes github:…#sha`, which npm 10 refuses on all 3 legs ("GitFetcher requires an Arborist constructor", run 37900907656); it is now `npm i -g --prefix TMP github:…#sha` → `arc doctor`, in PLAN, ADR-2016 and the runbook. Attack: 2 rounds × 2 surfaces (round-2 logic clean), fixed-defects (bg)–(bn); debt row 14. Actual ~0.5d against a 1.5d appetite. Metrics: `amendments: 1` · `reopened: n`.
-
-**Appetite burn:** 5 of 10.5 planned days used (12-day cap): 42%. Phase 04 took ~0.5d against 1.5d, Phase 03 ~1d against 3.5d, Phase 02 ~0.5d against 1d, Phase 01 2 calendar days against 2.5d (about 1d waiting on the protection flip), Phase 00 ~1d against 2d. The kill line was never reached.
-
+---
 ## Now
 
-**Current position: Cycle 1 SEALED 2026-10-09 (retro: `docs/retro-log.md`, HISTORY C23); lane IDLE.** arc is written once in the Claude Code dialect and installs into claude-code, codex, opencode and skills-only through `arc init` (`bin/arc.mjs`), from a checkout, a packed tarball or the git URL, with merge-time gates on a protected `main`. 5/5 phases closed, 9/10 REQs validated. **REQ-03 is OWED**: no rendered command has run end to end under a real non-Anthropic model.
-**Next step:** none in this lane until a new `/arc-kickoff --lane distribute`. Owner items: the REQ-03 line (profile, spend cap, run now / owed) and the move-on stamps `01M4AY2VSMJ2H89V82X5EXEBTT` (P00), `01M4EKR5DC0CDRDXDE6KCZY5VG` (P01), `01M4F789EBR52BDEKDPVWSZQNA` (P02), `01M4FQDWSQ490S7ZJB6XS8B3C9` (P03) and P04's (printed when emitted).
+**Current position: P05-P07 built; the P07 run is done (`evidence/phase-07/run.md`): 5 receipts with `harness: opencode` (commit x3, review, ship), the 3 negatives refused, PR #412 and session PR #416 green. The ship deployed to a Vercel project the killed run 5b had linked (debt row 23).**
+**Next step:** read CI per job on this push; merge #412, then #416 (head SHA verified); then close P05/P06/P07 from the main clone, retro, seal.

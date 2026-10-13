@@ -132,6 +132,27 @@ const envOr = (name, fallback) => {
   return v === undefined || v === "" ? fallback : v;
 };
 
+// ADR-2020: a session launched by a foreign-harness wrapper names its harness in ARC_HARNESS, and every
+// receipt it emits carries it without the model having to type it. A payload that already names a
+// DIFFERENT harness is refused rather than overwritten: a receipt that lies about where it came from is
+// the Cycle 1 spike's mislabel, and silently "correcting" it would hide the model's error. Unset or empty,
+// nothing is touched, so a Claude Code emit is byte-identical to before.
+const HARNESS_RE = /^[a-z][a-z0-9-]{0,31}$/;
+function stampHarness(payload) {
+  const harness = envOr("ARC_HARNESS", null);
+  if (harness === null) return payload;
+  if (!HARNESS_RE.test(harness))
+    throw new SpineError("BAD_HARNESS", `ARC_HARNESS must match ${HARNESS_RE} -- got ${JSON.stringify(harness).slice(0, 40)}`);
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload))
+    throw new SpineError("BAD_HARNESS", "ARC_HARNESS is set but the payload is not a JSON object, so there is nowhere to stamp it");
+  if (Object.prototype.hasOwnProperty.call(payload, "harness")) {
+    if (payload.harness !== harness)
+      throw new SpineError("HARNESS_MISMATCH", `payload.harness is ${JSON.stringify(payload.harness).slice(0, 40)} but this session runs under ARC_HARNESS=${harness}`);
+    return payload;
+  }
+  return { ...payload, harness };
+}
+
 // An experiment idem over a payload that is not yet known to be valid. Returns null rather than
 // throwing, so the caller falls through to validateEvent and the operator sees "missing base_sha"
 // instead of a stack trace from the hashing helper.
@@ -175,11 +196,11 @@ function synthesize(kind, flags, { deriveIdem }) {
   // `--payload-file` is the byte-faithful path: it reads bytes off disk and refuses non-UTF-8
   // outright (`BAD_UTF8`, exit 2, verified against a raw `ED A0 BC`). Anything carrying non-ASCII
   // should use it, and `initiatives/growth/RUNBOOK.md` does.
-  const payload = flags["payload-file"]
+  const payload = stampHarness(flags["payload-file"]
     ? readJsonFile(flags["payload-file"])
     : flags.payload !== undefined
       ? parseStrictJson(Buffer.from(flags.payload, "utf8"), "--payload")
-      : {};
+      : {});
 
   const actor = flags.actor ?? envOr("ARC_SPINE_ACTOR", "arc-event");
   const runId = flags["run-id"] ?? envOr("ARC_RUN_ID", "r-adhoc");
@@ -279,7 +300,7 @@ function synthesize(kind, flags, { deriveIdem }) {
     payload,
     outcome,
     cost: flags.cost !== undefined ? parseStrictJson(Buffer.from(flags.cost, "utf8"), "--cost") : null,
-    evidence: flags.evidence ?? null,
+    evidence: flags.evidence ?? envOr("ARC_EVIDENCE", null),
     supersedes: flags.supersedes ?? null,
   };
 }

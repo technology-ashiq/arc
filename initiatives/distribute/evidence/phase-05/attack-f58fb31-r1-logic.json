@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:148-152",
+      "breaking_input": "--prior-spent-usd 0.99 --cycle-cap-usd 0.5",
+      "why": "The cycle-cap check compares `prior + cap > cycleCap`, but `prior` is unvalidated here; `--prior-spent-usd` can exceed the cycle cap and yet still pass if the caller also gives a small cap, allowing a run to start when prior spend already exceeds the cycle limit. The wrapper then sums committed transcripts plus prior spend, but this malformed prior value is accepted as any non-negative number.",
+      "fix": "Validate `priorSpent` against the cycle cap before the sum, and also bound `cycleCap` itself to a sane positive value.",
+      "twin_of": ""
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:212-214",
+      "breaking_input": "a transcript with `spent=abc` or `spent=1e3`",
+      "why": "`spentOf` uses regex `/^spent=([0-9]+(?:\\.[0-9]+)?)$/` which rejects exponential and negative values, but the real issue is it silently treats a malformed line as 0. If a transcript was truncated mid-line or contains `spent=` with a negative, the prior-spend sum undercounts, enabling a cycle-cap bypass. The parses also use `Number` on a regex-validated string, which is fine.",
+      "fix": "Make prior-spend parse strict and refuse a transcript whose `spent=` line is malformed, rather than ignoring it.",
+      "twin_of": ""
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:122-126",
+      "breaking_input": "`--timeout-s 1 --model foo --command bar --transcript ok.jsonl` with a fake that exits instantly",
+      "why": "The `--timeout-s` validation requires `^[1-9][0-9]{0,4}$`, allowing 1, but the timer is set only after spawning; a malformed model that is rejected later still runs the version check first. The sequence validates timeout before binary/version, so a slow binary can delay the timeout start.",
+      "fix": "Validate all inputs that gate spawning before the version check, and start the timeout before the version call if that call can block.",
+      "twin_of": "c"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:243-245",
+      "breaking_input": "a fake that prints an event with `sessionID` but `cost` is a string like `\"0.01\"`",
+      "why": "`readEvent` only accepts numeric cost; a real OpenCode may emit `cost` as a string. The wrapper then sees zero cost, does not trip the cap, and may exit 0 with `COST-UNREADABLE` only if steps occurred but no cost. Here steps do occur and cost is a string, so it reports a capped pass while the model may have spent more than the cap.",
+      "fix": "Coerce string numeric costs to numbers, and treat non-numeric cost on a step as unreadable.",
+      "twin_of": ""
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:180-183",
+      "breaking_input": "a model name like `openrouter/x..y` (contains `..`)",
+      "why": "The model regex `[a-z0-9][a-z0-9._-]*\\/[A-Za-z0-9._/: -]+` allows `..` in the provider portion and also allows spaces in the model portion. A model containing a space can be passed to `opencode` unquoted via argv — that is fine for argv, but an attacker can embed a `--` or other flag-like text that the child interprets differently. The strictness is insufficient to prevent a model string that alters argv parsing.",
+      "fix": "Tighten the model grammar to avoid path traversal and spaces.",
+      "twin_of": "c"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:63-65",
+      "breaking_input": "`--cap-usd 0.0000001`",
+      "why": "The `usd` regex allows up to 6 decimal places, but `0.0000001` is rejected. More importantly, extremely small non-zero caps like `0.000001` pass and can trigger a cap breach on the first step before the wrapper writes the transcript header, leaving the transcript without a `harness-proof` line, and the header is written only after the first event. This can cause a breach to produce a transcript that lacks the version/session line, breaking the evidence guarantee.",
+      "fix": "Reject caps below a minimum sensible threshold, and always write the header before any event processing.",
+      "twin_of": ""
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:262-263",
+      "breaking_input": "a child process that writes a huge amount of stderr in a tight loop",
+      "why": "stderr is written synchronously to a file descriptor with `writeSync`, which can block the event loop and delay the cap breach. A malicious or misbehaving child can flood stderr, causing the wrapper to never reach the `onLine` handler and never kill the child.",
+      "fix": "Write stderr asynchronously or throttle, and still process stdout while stderr is being drained.",
+      "twin_of": ""
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:264-266",
+      "breaking_input": "a child that exits immediately after writing events",
+      "why": "The `close` event resolves the promise, but any remaining buffered stdout is only flushed in `if (buf) onLine(...)`. If the child exits without a trailing newline in the last chunk, the last event may be incomplete and ignored, losing a cost event and thus undercounting spend right at the cap boundary.",
+      "fix": "Flush partial lines on close as well.",
+      "twin_of": ""
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-event.mjs:133-154",
+      "breaking_input": "ARC_HARNESS=opencode and a payload with a `harness` getter or prototype pollution",
+      "why": "`stampHarness` uses `Object.prototype.hasOwnProperty.call` and then `payload.harness`; it does not handle a payload whose `harness` is an object or non-string, and when it matches it returns the original payload. It also does not verify `payload.harness` is a string before the comparison, so a forged payload with `harness: 123` while ARC_HARNESS=opencode causes a mismatch refusal; that is safe. But a payload with `harness: {toString(){return 'opencode'}}` would pass comparison and be stamped incorrectly.",
+      "fix": "Require `payload.harness` to be a string.",
+      "twin_of": ""
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:211-214",
+      "breaking_input": "a transcript file containing a line `spent=1.2` and a later line `spent=0.9`",
+      "why": "`spentOf` returns the last `spent=` line, which is intended. But if a transcript is truncated mid-file, the last line may be an incomplete `spen` and is ignored, treating prior spend as zero. This undercount must be surfaced as a refusal rather than a silent zero.",
+      "fix": "Treat a final unterminated `spent=` line as an error.",
+      "twin_of": "e"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:107-112",
+      "breaking_input": "`--ledger-dir` pointing to a file rather than a directory",
+      "why": "`priorSpend` calls `readdirSync` on the ledger dir; if the user passes a file, it catches and returns 0, silently ignoring an invalid ledger and possibly bypassing the cycle cap.",
+      "fix": "Validate `--ledger-dir` is a directory.",
+      "twin_of": ""
+    },
+    {
+      "id": "L12",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:87-103",
+      "breaking_input": "`--prior-spent-usd 0.4 --cap-usd 0.2 --cycle-cap-usd 0.5 --ledger-dir` pointing to a dir with a transcript that has `spent=0.05`",
+      "why": "The cycle cap check `prior + cap > cycleCap` uses `prior` which already includes prior-spent from the ledger and the flag. But the flag `--prior-spent-usd` is added twice: once in `o.priorSpent` and again via `priorSpend(ledger)`. If the caller passes a ledger and also a prior flag, the prior spend is double-counted, possibly refusing a legitimate run. More critically, the ADR says \"the remainder is computed, never typed,\" but the code lets the caller type `--prior-spent-usd`, allowing an attacker to understate the prior and start a run that exceeds the true cycle cap.",
+      "fix": "Remove `--prior-spent-usd` or make it trusted; never let the caller add known prior spend.",
+      "twin_of": ""
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:196-201",
+      "breaking_input": "a `--transcript` path that is a symlink to an existing file",
+      "why": "The wrapper checks `existsSync(transcript)` and then later opens with `openSync(transcript, \"wx\")`, which will refuse if the symlink target exists. But an attacker can create a symlink race: after the `existsSync` check, replace the transcript path with a symlink to an arbitrary file. `openSync(transcript, \"wx\")` on a symlink to a non-existent path will create the target, potentially writing into a location the caller does not control, and the wrapper writes the header and events there, possibly overwriting a sensitive file.",
+      "fix": "Use `openSync` with a random temp name and rename, or use `O_NOFOLLOW` and re-check after opening.",
+      "twin_of": ""
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:217-219",
+      "breaking_input": "a transcript directory whose permissions block reading",
+      "why": "`priorSpend` swallows read errors and returns 0, and `run` then proceeds, so a chmod-000 transcript directory is treated as zero spend, bypassing the cycle cap. A read error must be a refusal.",
+      "fix": "Propagate read errors in `priorSpend`.",
+      "twin_of": "e"
+    },
+    {
+      "id": "L15",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:230-240",
+      "breaking_input": "an event with `cost` on a text event and zero on step-finish",
+      "why": "`readEvent` sums any event carrying a numeric cost, including text or message events. A malicious or buggy OpenCode could report a `cost` on a non-step event, and the wrapper would count it toward the cap even though it is not a genuine step cost, and then possibly kill early. Conversely, if step-finish omits cost but a text event includes it, the code treats it as cost and exits 0, defeating `COST-UNREADABLE`.",
+      "fix": "Only count cost from step-finish events.",
+      "twin_of": ""
+    }
+  ]
+}

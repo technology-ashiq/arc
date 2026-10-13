@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (process.on(\"exit\", onExit))",
+      "breaking_input": "On POSIX the child is spawned detached, in its own process group. The operator presses Ctrl+C, or the wrapper gets SIGTERM or SIGHUP (a terminal closes, CI cancels the job) mid-run.",
+      "why": "Node does not emit 'exit' when a signal terminates the process, so the onExit killTree never runs. The wrapper dies without a spent= line. The detached OpenCode group keeps running and spending, because the terminal's SIGINT does not reach its separate group. The fix claimed in (bq), 'the parent's own exit kills it too', covers normal exit only.",
+      "fix": "Register SIGINT, SIGTERM, SIGHUP and SIGBREAK handlers. Each should call killTree, write `timeout:` or `interrupted:` plus `spent=` to the transcript, and set a non-zero exit code. Also handle uncaughtException the same way.",
+      "twin_of": "(bq) a child that outlives its verdict"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:killTree (early return on exitCode/signalCode) and the 'exit' drain path",
+      "breaking_input": "OpenCode forks a worker or MCP server that stays in its group and holds the stdout pipe. The leader exits 0. Or the cap is breached on a buffered line processed after the leader exited.",
+      "why": "killTree returns at once when `child.exitCode !== null`, so no kill is ever sent to the surviving group. The drain timer only destroys the pipes. The orphan keeps spending after the wrapper writes 'ok' or 'cap-breach' and returns. A leader exiting does not mean the tree is gone.",
+      "fix": "Drop the early return for the POSIX group kill. Always attempt process.kill(-pid, SIGKILL) and ignore ESRCH. On win32, run taskkill /T for the recorded pid even after the exit. Do the same on the 'exit' and drain paths.",
+      "twin_of": "(bq) a child that outlives its verdict"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:readEvent and the verdict chain (unpriced > 0 only)",
+      "breaking_input": "An OpenCode upgrade renames the step events, so neither `type:\"step_finish\"` nor `part.type:\"step-finish\"` matches. Priced steps are emitted, the child exits 0, and `finish` is never true.",
+      "why": "finishes=0, unpriced=0 and spent=0 give verdict 0 and 'ok spent=0' with no cap enforcement. Only a step-finish with a bad cost trips COST-UNREADABLE. ADR-2019 requires a run with step events and no readable cost to exit 4. Absence of recognised accounting is read as zero spend.",
+      "fix": "Count any event or part whose type starts with `step` or has a numeric `cost`. If any such event was seen but finishes===0, or total events > 0 and finishes===0 on exit 0, return 4 COST-UNREADABLE.",
+      "twin_of": "(ae) a malformed field read as absent"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:priorSpend (statSync catch)",
+      "breaking_input": "The ledger directory exists but statSync fails with EACCES, ELOOP or ENOTDIR (a chmod-000 parent, or an evidence path through a file). Alternatively `--ledger-dir` is typo'd to a nonexistent path.",
+      "why": "`catch { return 0 }` treats every stat error as 'no evidence dir yet', so prior spend is 0 and the cycle cap passes. Only ENOENT means nothing was spent. The readdir path was fixed under (bp) but this twin was left.",
+      "fix": "Return 0 only for e.code === \"ENOENT\". Throw Refusal(CYCLE-CAP, COULD NOT SCAN) for any other error. Treat a nonexistent --ledger-dir that was typed explicitly as a refusal too.",
+      "twin_of": "(e) COULD NOT SCAN"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:priorSpend walk + run (ledger default via ARC_ROOT)",
+      "breaking_input": "The wrapper is run with `--transcript .../phase-07/smoke.jsonl`, outside any directory named `transcripts`. Or it runs from a session worktree, or a synced consumer copy, where ARC_ROOT/initiatives/distribute/evidence is a different or missing tree from the one holding the earlier spend.",
+      "why": "The cycle cap sums only `*.jsonl` whose parent directory is exactly named `transcripts`. The wrapper accepts any transcript path in any repo. A transcript written elsewhere, or committed in another worktree's tree, is invisible, so the $0.50 ceiling is undercounted. The walk is case-sensitive, so a `Transcripts` directory is also missed. In a consumer the default ledger is absent and the check is vacuous.",
+      "fix": "Constrain --transcript to `<ledger>/**/transcripts/*.jsonl` (refuse otherwise), and resolve the default ledger from `git rev-parse --git-common-dir` to the main clone. Alternatively, count every `*.jsonl` that starts with `harness-proof:`.",
+      "twin_of": "(bp) a ledger read as zero"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (evidence computation vs canonicalSpine(cwd))",
+      "breaking_input": "`--cwd` is repo A and `--transcript` is a path inside repo B (or a path with a space such as `my evidence/t.jsonl`).",
+      "why": "Evidence is computed relative to the toplevel of the transcript's repo, while the spine comes from the cwd's repo. ARC_EVIDENCE then names a path that does not exist in the repo the receipts are about, so the receipt resolves on no merged tree. Nothing checks that both toplevels match, or that the value passes the emitter's assertEvidencePath. A space or `:` in the path also breaks the space-separated `evidence=` and `cwd=` header fields. Two reads of one fact are used.",
+      "fix": "Require top(transcript) === top(cwd), compared by realpath. Validate the evidence string against the emitter's grammar before spend, and refuse spaces in header-bound fields.",
+      "twin_of": "(f) validate one read, compare another"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:canonicalSpine",
+      "breaking_input": "The checkout uses `git init --separate-git-dir`, a submodule, or a bare repo with worktrees, so the common dir is e.g. `/x/.git/modules/arc` or `/srv/arc.git`.",
+      "why": "The code assumes the common dir is `<main clone>/.git`. `dirname(common)` then yields `/x/.git/modules` or `/srv`, and receipts go to `/srv/.claude/state/hq`, a spine nobody reads. ARC_SPINE_ROOT is accepted without any check that the path is a working tree. The header prints it as if it were canonical. Git older than 2.31 lacks --path-format and is misreported as 'not inside a git checkout'.",
+      "fix": "Require basename(common)===\".git\". Otherwise derive the main worktree from `git worktree list --porcelain` (first entry). Refuse with a named reason if the spine's parent is not a working tree containing `.claude`.",
+      "twin_of": "(bk) a git path read as always relative"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:child.stdout 'data' handler (buf += d.toString(\"utf8\"))",
+      "breaking_input": "A tool result with non-ASCII text (Tamil, emoji) whose UTF-8 sequence straddles a 64 KiB pipe chunk boundary.",
+      "why": "Decoding each chunk separately turns the split bytes into U+FFFD on both sides. The transcript, claimed to follow 'every stdout line verbatim', is silently altered, and JSON.parse may still succeed so nothing flags it. The recorded evidence no longer matches what OpenCode emitted.",
+      "fix": "Use a StringDecoder('utf8') per stream, or buffer as Buffers and split on 0x0A before decoding.",
+      "twin_of": "(p) escapes in data"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (openSync fd/errFd before launch/spawn; flushHeader deferred until a sessionID)",
+      "breaking_input": "(1) The second open `wx` of errPath throws EEXIST in a race, or spawn throws synchronously (EMFILE, invalid cwd), after the transcript was created. (2) The wrapper is hard-killed (taskkill /F, OOM) after spend but before an event carrying a ses_ id.",
+      "why": "The 0-byte transcript stays on disk. A rerun is refused with TRANSCRIPT exists. If it is committed, spentOf finds no spent= line and no cap_usd header, so every later run refuses COULD NOT SCAN: the cycle is bricked, and a run that did spend is undercounted or unreadable. The header, the only fallback for spend accounting, is not written before the child can spend.",
+      "fix": "Write a provisional first line (`harness-proof: ... session=pending ... cap_usd=`) synchronously right after opening. Wrap everything between open and the verdict in try/finally that always writes spent= and closes the fds. Open errFd before the transcript and unlink empty files on pre-spawn failure.",
+      "twin_of": "(b) exit after async I/O"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:launch (win32 .cmd/.bat branch)",
+      "breaking_input": "A MESSAGE of about 9,000 characters (a pasted diff) on a Windows .cmd shim.",
+      "why": "The whole command line goes through `cmd.exe /c`, which has an 8,191-character limit. A longer line is truncated or fails with an unrelated error, so the prompt is cut off silently and the run spends money on a malformed task. The caret doubling inflates every special character, so the real limit is lower.",
+      "fix": "After building `line`, refuse with USAGE when line.length > 8000. Better, deliver a long MESSAGE through a file, or resolve the shim to node and spawn it directly.",
+      "twin_of": "(br) what cmd.exe cannot carry"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:header (cwd=, spine=)",
+      "breaking_input": "Run from `C:/Users/<name>/orca/workspaces/...` and commit the transcript to the public repo.",
+      "why": "The header writes the absolute cwd and spine paths, home directory and username included, into a committed transcript. The repo is public and owner PII must stay off git. The spaced fields are also ambiguous when the path contains spaces.",
+      "fix": "Write cwd and spine relative to the repo or home, or hash them. Refuse to include a path outside the repo root.",
+      "twin_of": "(t) unconfined data paths at birth"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-compile.mjs:dirtyScan (renderSourceTree loop)",
+      "breaking_input": "A repo with `engine/frontmatter-keys.yaml` present but a malformed command or agent source, or a missing `.claude/agents`, so renderSourceTree throws a plain Error for one target.",
+      "why": "The loop catches only the unreadable-file case, so the throw escapes dirtyScan as an unnamed crash, and the check dies with a stack and a generic exit code. The scan neither finishes nor reports COULD NOT SCAN, so the pre-commit fails opaquely.",
+      "fix": "Wrap each renderSourceTree call in try/catch and rethrow as CouldNotScan(`cannot render ${t}: ...`).",
+      "twin_of": "(e) COULD NOT SCAN"
+    }
+  ]
+}

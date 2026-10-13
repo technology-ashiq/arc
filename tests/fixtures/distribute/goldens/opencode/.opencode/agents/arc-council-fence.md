@@ -3,7 +3,7 @@ description: "The tool fence of /arc-council; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   "edit": allow
   "glob": allow
   "grep": allow
@@ -12,7 +12,7 @@ permission:
   "webfetch": allow
   "websearch": allow
   bash:
-    "*": ask
+    "*": deny
     "bash .claude/scripts/hq/arc-event.sh": allow
     "bash .claude/scripts/hq/arc-event.sh *": allow
 ---

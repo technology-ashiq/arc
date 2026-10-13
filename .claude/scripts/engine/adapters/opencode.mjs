@@ -11,9 +11,10 @@
  * - `permission` is keyed by tool name, `"*"` is the catch-all, and the LAST matching rule wins.
  *
  * TOOL FENCES RENDER (ADR-2017). An agent's `tools` is a hard allowlist on Claude Code, so it renders
- * as `"*": deny` and then each listed tool `allow`. A command's `allowed-tools` pre-approves tools and
- * leaves the rest to the session's own permission flow, so it renders as `"*": ask` and then `allow`,
- * on a hidden companion subagent the command names in `agent:`. A Claude tool with no OpenCode name is
+ * as `"*": deny` and then each listed tool `allow`. A command's `allowed-tools` renders the same way,
+ * `"*": deny` then `allow`, on a hidden companion subagent the command names in `agent:` (ADR-2022). It was
+ * `"*": ask`, which matches Claude Code's pre-approval, until distribute Cycle 2 measured OpenCode 1.17.18: a
+ * headless run waits forever on a subagent's ask, and neither `--auto` nor OPENCODE_PERMISSION reaches it. A Claude tool with no OpenCode name is
  * `[unsupported]` by name, never widened to "allow everything".
  */
 
@@ -86,7 +87,7 @@ export function renderSourceFiles(unit) {
       `description: ${JSON.stringify(`The tool fence of /${unit.stem}; runs only through that command.`)}`,
       "mode: subagent",
       "hidden: true",
-      ...permission(unit.fields["allowed-tools"], "ask"),
+      ...permission(unit.fields["allowed-tools"], "deny"),
     ];
     files.push({ path: `.opencode/agents/${fence}.md`, text: markdown(agentFront, T, `\nRun the /${unit.stem} command's instructions as given. This agent exists only to carry its tool fence.\n`) });
   }

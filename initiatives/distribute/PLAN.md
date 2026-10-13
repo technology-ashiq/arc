@@ -1,80 +1,63 @@
-# PLAN.md — distribute v1: arc under verified harnesses (lane `distribute`, Cycle 1)
+# PLAN.md — distribute Cycle 2: arc's loop under OpenCode on a non-Anthropic model (lane `distribute`)
 
-Cut on 2026-10-07 from the owner-reviewed design source `docs/strategy/plans/PLAN-distribute.md` (v1.2). Attack
-findings mutate THIS file, never the design source. Decisions DST-A…K are locked and recorded as ADR-2001…2011.
-DST-L is answered in ADR-2012 and DST-M in ADR-2013. Kickoff verification forced ADR-2014…2016. The trigger is the
-owner ruling of 2026-10-07 (*"atha global aakanum … market-la iruka ella tools layum work panra maari"*, ADR-2000).
-It goes on the spine in Phase 00, and every 20xx ADR cites that receipt.
+Cycle 1 ("arc under verified harnesses") is sealed and archived at `archive/PLAN-cycle1-2026-10-13.md` and
+`archive/PROGRESS-cycle1-2026-10-13.md`. It validated 9 of 10 REQs and left **REQ-03 owed** (assumption A-05 fired:
+no non-Anthropic profile existed at P03 open). Cycle 2 exists to close it. The owner opened it on 2026-10-13 in chat:
+"REQ-03 cycle", model `deepseek/deepseek-v4-flash-0731` on OpenRouter, cap **$0.50**, and "complete all phases … don't
+wait for me … push permission iruku, merge ellam phases complete aana apram". ADR-2000..2018 stand; Cycle 2 adds
+ADR-2019..2021. Phase numbers continue from Cycle 1 (05 onward), so every evidence path Cycle 1 cites stays valid.
 
 ## Goal
 
-One sentence: **`arc init --target {harness}` renders arc's commands, agents, rules, hooks and MCP config into that
-harness's own dialect from the Claude-dialect source. It owns only the paths it wrote, refuses by name any feature the
-harness cannot hold, and `arc doctor` reads back what landed. Meanwhile every blocking gate arc relies on is enforced at
-merge-time on the repository, so a session in any of the four verified harnesses, on any model, cannot land on `main`
-anything that a Claude Code session cannot land.**
+One sentence: **an OpenCode session on `openrouter/deepseek/deepseek-v4-flash-0731`, launched through one capped
+wrapper, runs arc's own `arc-commit` → `arc-review` → `arc-ship` on a real arc change, lands ≥ 3 receipts on the
+canonical spine stamped `harness: opencode` with a committed transcript as evidence, is refused on the 3 negative
+fixtures exactly as a Claude Code session is, and its PR merges after the required checks — for under $0.50.**
 
-Out of scope: the model seat (ADR-2006). The goal is the harness seat only.
+Out of scope: the model seat (ADR-2006) — the model is an argument to the wrapper, no profile/router/driver changes.
 
 ## Current state
 
-Verified 2026-10-07 at `9864ee29` (codebase-surveyor + direct reads). The design source's premises that are now false are marked ⚠.
+Verified 2026-10-13 at `140df0b6` (codebase-surveyor + direct reads).
 
-- **Stack:** Node ESM, zero npm deps, no root `package.json`, no `bin/` · block YAML via `.claude/scripts/engine/yaml-subset.mjs` · bats on CI only (3 OS legs, `ci.yml` jobs `ci-tier` + `selftest`).
-- **Entry points:** `.claude/scripts/engine/arc-compile.mjs` (289 lines) with adapters `claude-code.mjs` and `codex.mjs`, a named `[unsupported]` at `:163`/`:183`, and `--check|--write --all --target`. It reads **only `processes/`** (`:95`). Command and agent inputs do not exist yet.
-- **Conventions:** product scripts in `.claude/scripts/{product}/` with `products/{p}/manifest.json`; data beside `engine/router.yaml`; tests central in `tests/*.bats` run by `ci.yml` `selftest`; main guards realpath both sides; `parseYamlSubset` for YAML; spine via `arc-event.mjs emit` from the main clone only.
-- **Source (the Claude dialect):** 29 commands (3 GENERATED: arc-commit, arc-review, arc-kickoff). Their frontmatter keys: `description` 29 · `allowed-tools` 26 · `argument-hint` 22 · `name` 1. 32 agents, with keys `name`/`description`/`tools` 32 each and `model` 31. 4 skills in `.claude/skills/`. `.mcp.json`.
-- **Hooks:** 7 events. ⚠ **3 blocking, not 2**: `PreToolUse` (00-destructive, 10-design-composer, 40-policy, 50-deploy) · `PreToolUse-edit` (00-freeze, 10-design-critic, 11-design-composer, 40-policy) · `PreToolUse-read` (10-design-composer). Advisory: PostToolUse, PreCompact, SessionStart, SessionEnd.
-- **Gates:** `arc.gates.yaml` has 7 rules (scan, coverage, reviews, docs, rls, spine-api, design) and **no blocking/advisory class field**.
-- ⚠ **`.codex/`, `.agents/skills/`, `AGENTS.md` are NOT in the repo.** They are untracked files in the main clone only (written 2026-07-11), ignored by `.gitignore:75-78` since `ab501994`. Local `AGENTS.md` is a case-mangled copy of `CLAUDE.md` (`.Codex/rules`, a `Name:` placeholder). See ADR-2014.
-- **`CLAUDE.md`:** 206 lines, 9 template-placeholder lines (`TO[D]O`).
-- **Git hooks:** none (no `core.hooksPath`, `.githooks/`, husky or lefthook).
-- ⚠ **Branch protection:** `gh` 2.96.0 IS present. `gh api …/branches/main/protection` → `404 Branch not protected`; rulesets `[]`; repo public.
-- **Install path:** `sync-to-project.sh` → `.claude/` + templates + playbooks. Today's output is ALREADY goldened as a path→sha256 manifest, `tests/fixtures/sync-golden/tree-manifest.txt` (450 lines, via `_arc_tree_manifest` at `tests/test_helper.bash:560`). That golden strips `\r` and excludes `.claude/arc-registry.json`.
-- **Spine:** `validate.mjs` has 0 mentions of `harness`. A payload field for it is unproven (P00 spike).
-- **Harnesses on the build machine:** `opencode` 1.17.18 and `codex-cli` 0.147.0 are both installed.
-- ⚠ **Live docs (read 2026-10-07):** OpenCode dirs are PLURAL: `.opencode/commands/`, `.opencode/agents/`, `.opencode/skills/` (it also reads `.claude/skills/` and `.agents/skills/`, and `AGENTS.md` with `CLAUDE.md` as fallback); `allowed-tools` maps to agent `permission`; no user-only command key. Codex has NO project-level slash commands (custom prompts are user-level and deprecated), so commands render as `.agents/skills/arc-{name}/SKILL.md` with `agents/openai.yaml` `allow_implicit_invocation: false` for user-only; agents are `.codex/agents/*.toml`; repo hooks live in `.codex/hooks.json` (PreToolUse can deny).
-- **Drivers:** 5 (claude-code, codex, hermes, generic-api, mock), each `.mjs` + `.sh`. This is the model seat, out of scope.
-- ⚠ **`face-coverage` FAILS on main:** `PLAN-distribute` had no room. The face lane fixes it on PR #361. distribute leaves that row out (agreed cross-session 2026-10-07).
-- **Do-not-touch:** `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` (compiled) · `docs/wiki/**` and `rooms.generated.json` (regenerated) · `engine/drivers/**`, `engine/router.yaml`, model-policy profiles (ADR-2006) · `.github/**` and `.claude/settings.json` (session write-denied; ADR-2016).
+- **Stack:** Node ESM, zero npm deps · root `package.json` (`private`, `bin: arc`, `files` allowlist, **no `scripts`**) · bats on CI only (3 OS legs).
+- **Entry points:** `bin/arc.mjs` (`init|doctor|compile`, targets claude-code|codex|opencode|skills-only) · `.claude/scripts/engine/arc-compile.mjs` + `adapters/opencode.mjs` + `install-targets/opencode.mjs` · `.claude/scripts/hq/arc-event.mjs` (emit; `--evidence PATH` exists, `ARC_MODEL` read at `:273`) · `.claude/scripts/review/ci-digest.mjs` (`--sha`, `--tail`; no wait).
+- **Conventions:** engine scripts in `.claude/scripts/engine/`; tests central in `tests/*.bats`; spine only via `arc-event`; main guards realpath both sides; test-only env doors named in `arc-event.mjs:26`.
+- **Spine:** `spine-io.mjs` `spineRoot()` honours `ARC_SPINE_ROOT`, else refuses a linked worktree (`assertNotLinkedWorktree`). `validate.mjs` has no `harness` key; the payload is free-form (the Cycle 1 spike's `payload.harness` landed on `note.logged`). Nothing in code sets `harness`.
+- **The loop's kinds:** `commit.done` (`processes/commit-msg-draft.process.yaml:62`), `review.completed` (`review-diff.process.yaml:130`), `ship.done` (`.claude/commands/arc-ship.md` step 5, hand-written).
+- **`arc-ship` cannot run in arc as written:** no `npm run lint|build|test` scripts, no `vercel.json`/`.vercel/`, and AGENTS.md forbids running suites locally (ADR-2021).
+- **Negatives today:** `engine/enforcement.yaml` has tool-time `none` for push-to-main, secret, generated-edit; commit-time is `.githooks/pre-push` (branch-guard) and `pre-commit` (secret-diff-scan, `arc-compile --check --target claude-code`); merge-time is protected `main` + `tests/distribute-merge-gates.bats` + `tests/engine-compile.bats`. **`core.hooksPath` is unset** in the main clone and this worktree. OpenCode loads no arc fragment (`harnesses.yaml:99`).
+- **Spend cap:** none for a foreign harness; `arc-run.mjs` caps INR on its own drivers only.
+- **OpenCode:** 1.17.18 on PATH. Working invocation (spike run 7, corrected by the P05 probes): `opencode run --pure --command C --agent A -m openrouter/deepseek/deepseek-v4-flash-0731 --format json -- MSG`. OpenCode writes `package.json`, `node_modules/` etc. into `.opencode/` on first run. The spike's raw transcripts are outside the repo (only a summary is committed).
+- **Do-not-touch:** `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` (compiled) · `.claude/state/hq/events/**` (append-only) · `engine/router.yaml`, drivers, profiles (ADR-2006) · `.github/**`, `.claude/settings.json` (session write-denied) · `docs/wiki/**`, `rooms.generated.json` (regenerated only).
 
 ## Success requirements
 
-Tier M caps the active rows at 10. REQ numbers keep the design source's. REQ-09's settings follow ADR-2015, and REQ-08's
-clean runner follows ADR-2016.
+Tier S caps the active rows at 5. REQ-03 keeps its Cycle 1 text, with the ship step defined by ADR-2021.
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | No blocking rule is enforced only below merge-time | `node .claude/scripts/core/gate-parity.mjs` derives the fragment set from `.claude/hooks/*.d/` on disk and the blocking events from `_dispatch.sh`, never from `engine/enforcement.yaml`, and exits 1 naming any derived blocking fragment or `arc.gates.yaml` rule with neither a merge-time row nor an `advisory` declaration, AND any row whose fragment file does not exist. It prints `N fragments, M rules` (N = 9 on 2026-10-07 is census evidence, not an asserted constant) and exits 0 on the real tree. `--mutant-selftest` plants a hook-only blocking fragment in a temp copy and must exit 1 naming it. CI bats asserts both, plus the RAN line | 01 | validated |
-| REQ-06 | `AGENTS.md` is the brain and `CLAUDE.md` cannot disagree | `AGENTS.md` is tracked; `CLAUDE.md` contains `@AGENTS.md`; `node .claude/scripts/core/brain-drift.mjs` exits 1 on a `CLAUDE.md` `##` rule heading absent from `AGENTS.md` and not inside `<!-- claude-only -->`, with a mutant arm; `grep -c 'TO[D]O'` = 0 on both files | 01 | validated |
-| REQ-09 | A gate failure cannot reach `main` from any harness by any route | `gh api repos/technology-ashiq/arc/branches/main/protection` returns 200 with `enforce_admins.enabled: true`, `allow_force_pushes.enabled: false` and required checks naming every `selftest` leg + `ci-tier`, the contexts taken from the newest `pull_request` run's check-runs (never from `main` dispatch names); `doctor --repo` prints `STALE-CONTEXT: {name}` and exits 1 when a required context has no check-run on the newest PR run; a PR carrying the planted gate failure shows `mergeStateStatus: BLOCKED`; `git push origin HEAD:main` from a clean clone is refused by the server; `doctor --repo` prints each of the 5 settings | 01 | validated |
-| REQ-02 | An install never claims a feature the harness cannot hold | `install --target skills-only --dry-run` on the real tree prints one `degraded:` line per `false` cell in `engine/harnesses.yaml` and exits 0; `tests/distribute-matrix.bats` iterates every row × cell and asserts each `false` produces its named line (count asserted, not just presence) | 03 | validated |
-| REQ-03 | arc's own loop runs under a second harness on a non-Claude model | in OpenCode on a non-Anthropic ADR-1800 profile: `arc-commit` → `arc-review` → `arc-ship` complete with ≥ 3 receipts carrying `harness: opencode` found by id in `events/`, each with `evidence` pointing at a committed transcript that carries the OpenCode version and session id, AND `events/_quarantine/` holds 0 receipts from the run (both directories listed); the 3 negative fixtures (push to main, secret in diff, generated-file hand-edit) are refused, as under Claude Code; one PR from that session merges after required checks. Preflight at P03 open, one line to the owner: profile name, spend cap (ADR-1800), "run now / owed"; no answer = REQ-03 recorded owed and P03 closes on REQ-02, 04, 07, 10 | 03 | active |
-| REQ-04 | One source; every rendered target is byte-identical on re-run | `arc-compile --check --all --target {t}` reports 100% identical for `codex`, `opencode` and `skills-only` against `tests/fixtures/distribute/goldens/{t}/`; for `claude-code` the 3 process-generated commands stay identical and every hand-written command/agent renders to itself (0 byte diff); the identity check hashes rendered bytes after `\r` removal through the same function `_arc_tree_manifest` uses, and `tests/distribute-compile-claude-code.bats` asserts an LF and a CRLF copy of one command render to one sha256 | 03 | validated |
-| REQ-05 | Rendered directories hold nothing the compiler did not write | a hand-placed file under `.codex/`, `.opencode/` or the skills bundle makes `arc-compile --check` exit 1 naming it (`[dirty]`), with a fixture per directory (3 fixtures, each asserting RAN); `.gitignore` no longer ignores any rendered directory | 02 | validated |
-| REQ-07 | `doctor` reports the truth of an install, not the intent | `install --doctor {dir}` prints `placed / degraded / missing / unmanaged-conflict` with one line per path; deleting one installed file flips exactly 1 row to `missing`; hand-placing a file at a managed path flips it to `unmanaged-conflict`; fixtures on 3 OS legs | 03 | validated |
-| REQ-10 | `apply` is transactional and refuses boundary cases by name | writes go temp → rename; an injected failure on the Nth file leaves 0 files of that run (manifest-driven rollback); a target that is a file, a symlink, a path with spaces, or a drive-letter path is handled or refused with a named reason; ≥ 6 fixtures, each asserting RAN (the installer's `plan:` line printed and the fixture dir non-empty) before the outcome; the suite asserts its registered test count; fixture paths go through the realpath guard (macOS `/var` → `/private/var`); the injected-failure fixture asserts the failure fired AND the rollback ran — green on all 3 CI legs | 03 | validated |
-| REQ-08 | The package installs and runs on a clean machine with zero runtime deps, and is NOT published | `tests/distribute-install-clean.bats` on each of the 3 OS legs: `npm pack` → `npm i -g --prefix {tmp} ./arc-*.tgz` → `arc doctor` exit 0, AND `npm i -g --prefix {tmp} github:technology-ashiq/arc#{sha}` → `arc doctor` exit 0 where {sha} is the PR head SHA (the merge ref is not fetchable; amended 2026-10-09 from `npx --yes github:…`, which npm 10 refuses on all 3 legs with "GitFetcher requires an Arborist constructor", PR #406 run 37900907656); `package.json` carries a `files` allowlist, a `bin` entry and NO `prepare`/`install` scripts, and the sync golden is asserted unchanged by its arrival; `package.json` `dependencies` is `{}`; `grep -rn "npm publish"` over scripts, workflows and docs outside this lane = 0 | 04 | validated |
+| REQ-11 | A foreign-harness run cannot spend past its cap or leave no record | `tests/distribute-opencode-session.bats` drives `opencode-session.mjs` against a fake `opencode` (`ARC_OPENCODE_BIN`) and asserts, each after a RAN line: cumulative cost ≥ cap → exit 3 + `cap-breach:` line + child killed; cost events absent with steps present → exit 4 `COST-UNREADABLE`; timeout → exit 5; missing/`anthropic/` model, missing cap, cap > 1.00, missing binary → exit 2 named, fake never invoked (its marker file absent); success → transcript line 1 matches `^harness-proof: opencode \S+ session=ses_\S+ model=\S+ cap_usd=` and every fake event line follows verbatim; the fake spawns a grandchild that writes a marker after N ms, and on cap-breach and on timeout that marker is absent (whole tree killed); the fake is also run through a `.cmd` shim named by `ARC_OPENCODE_BIN`, and a MESSAGE holding a space, a `"`, a `$X` and a backtick reaches the fake byte-identical in argv; the fake asserts the wrapper passed exactly `--pure`, `--format json` and `--`, and never `--auto` (headless, an ask is refused without it; with it, a subagent fence hangs); prior transcripts summing past the cycle cap → exit 2 `CYCLE-CAP`, fake never invoked; the last transcript line is `spent=` on every exit path; a completed task tool's subagent session is read through `opencode export` and its spend (nested tasks included) is charged to the cap, and a failed export is COST-UNREADABLE (ADR-2022) | 05 | active |
+| REQ-12 | Receipts from a wrapped session say which harness made them and where the proof is, without the model's help | `tests/distribute-harness-stamp.bats`: with `ARC_HARNESS=opencode` and `ARC_EVIDENCE=p`, an emit whose payload lacks `harness` lands with `payload.harness == "opencode"` and `evidence == "p"`; a payload with `"harness":"claude-code"` is refused `HARNESS_MISMATCH`; `ARC_HARNESS=Bad!` refused `BAD_HARNESS`; unset, the emitted line is byte-identical to the same emit before this change (fixed `ARC_SPINE_NOW`/`ARC_SPINE_RAND`); the wrapper's `ARC_SPINE_ROOT` equals `dirname(git common dir)/.claude/state/hq` for a fixture worktree | 05 | active |
+| REQ-13 | `arc-ship` runs in a repo with no deploy target and in arc itself | root `package.json` `scripts` = `lint`, `test` per ADR-2021 (no `build`: it makes npm prepare a git install; `arc-ship` runs `npm run build --if-present`) and still no `prepare`/`install`; `tests/distribute-ship-nodeploy.bats` asserts `arc-ship.md` names the no-deploy branch and `ci-digest --wait` against a fake `gh` (pending → pending → success) exits 0 after 3 reads and exits 3 `TIMEOUT` when it never settles (each asserting RAN); `--wait` against a fake `gh` returning no run exits 6 `NO-RUN` and returning a different head SHA exits 4 without waiting (each asserting RAN); `arc-ship.md` creates the PR when none is open; all four distribute goldens and the sync golden regenerated and `--check` green on CI; a `git grep` for every `npm test`, `npm run lint` and `npm run build` caller over `.github .githooks .claude/hooks .claude/scripts tests docs` is listed in the PR, and no CI job, hook or bats test invokes `npm test` | 06 | active |
+| REQ-03 | arc's own loop runs under a second harness on a non-Claude model | in OpenCode on `openrouter/deepseek/deepseek-v4-flash-0731` via `opencode-session.mjs --cap-usd 0.50`: `arc-commit` → `arc-review` → `arc-ship` complete with ≥ 3 receipts carrying `harness: opencode` found by id in `events/`, each with `evidence` pointing at a committed transcript that carries the OpenCode version and session id, AND `events/_quarantine/` holds 0 receipts from the run (both directories listed); the 3 negative fixtures (push to main, secret in diff, generated-file hand-edit) are refused, as under Claude Code; one PR from that session merges after required checks; total spend summed from the transcripts ≤ $0.50 | 07 | active |
 
 ## Appetite
 
-**12 days cap** (design source): 10.5 days planned (P00 2d · P01 2.5d · P02 1d · P03 3.5d · P04 1.5d), 1.5 days
-slack. This is a constraint, not an estimate.
+**3 days cap.** 2.75 days planned (P05 1d · P06 0.75d · P07 1d), 0.25 day slack. This is a constraint, not an estimate.
 
-**Tier:** M
-(Derived from the number: 10.5 working days ≤ 3 weeks.)
+**Tier:** S
+(Derived from the number: 3 days ≤ 3 days.)
 
-**Kill criteria:** the **day-4.5 kill checkpoint** sits at the end of Phase 01, not at the 50% mark. The owner's REQ-09 flip request goes out as one line at the START of P01, with the exact PUT body drafted at P01 open; if the flip is not done 24 h after P01's merge, the cycle pauses (recorded `BLOCKED owner — protection flip`) rather than P02 starting on an advisory-only truth column. The question is:
-*does a planted hook-only blocking rule get refused on the merge path, with no harness running, on the real repository?*
-That means `gate-parity --mutant-selftest` fails closed AND a PR carrying the planted failure shows `BLOCKED` caused by the
-`gate-parity` test naming the planted file. The checkpoint reads the LIVE protection GET and the real PR on the checkpoint
-SHA, named in the evidence; a `--protection-json` fixture, a stale PR, or a run whose head SHA is not the checkpoint HEAD
-counts as NO. If NO → STOP and record the finding, and no adapter ships. The 50% mark (day 6) falls inside P03 while the
-adapters are on schedule, so it is not used as a tripwire. **P03 stop rule:** more than 5 of the 29 commands render
-`[unsupported]` on `opencode` → STOP P03 and re-open the matrix and the frontmatter-key ADR. Each phase closes via `/arc-phase-done {n} --lane distribute` from the main clone right after its PR
-merges, before the next phase opens; a missing evidence bundle blocks the next phase. At 100% of cap → cut or
-kill, never extend silently. Cut order: REQ-03's model half (record as owed, A-05) → the `skills-only` golden's
-agent-as-role-skill rendering → `--force`. **Never cut:** REQ-01, REQ-09, REQ-10's rollback, and the P00 golden.
+**Kill criteria:** the **50% tripwire (day 1.5)** sits at the end of Phase 05: one wrapped OpenCode run of the rendered
+`arc-commit` must have landed one `commit.done` stamped `harness: opencode`, found by id on the main clone's spine, for
+≤ $0.10. If NO → STOP and record the finding; REQ-03 stays owed with the failure named, no further spend. **Spend kill:**
+the cycle's total OpenCode spend (summed from every committed transcript, smoke runs included) reaching **$0.50** stops all
+real runs; whatever REQ-03 has not shown by then is recorded owed, never claimed. **Model kill:** two consecutive real runs
+that stall or emit a malformed tool call (the spike's run-5 shape) → STOP and ask the owner for a second model; never
+switch models silently. At 100% of the day cap → cut or kill, never extend. Cut order: REQ-13's goldens for codex and
+skills-only (render only opencode + claude-code) → the PR-merge clause of REQ-03 (recorded owed). **Never cut:** REQ-11's
+cap and the transcript.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
@@ -82,57 +65,39 @@ agent-as-role-skill rendering → `--force`. **Never cut:** REQ-01, REQ-09, REQ-
 flowchart TB
   owner([Person: the owner])
   subgraph arc [System: arc repo]
-    src[Source: .claude/commands + agents + skills + hooks + .mcp.json + AGENTS.md]
-    proc[Source: processes/*.process.yaml]
-    compile[Container: arc-compile.mjs + adapters claude-code, codex, opencode, skills-only]
-    matrix[(engine/harnesses.yaml - dated rows)]
-    enf[(engine/enforcement.yaml - three-level table)]
-    install[Component: install-targets/*.mjs plan, apply, doctor]
-    cli[Container: bin/arc.mjs init, doctor, compile]
-    parity[Gate: core/gate-parity.mjs]
-    drift[Gate: core/brain-drift.mjs]
-    githooks[Commit-time: .githooks/pre-commit, pre-push - same fragments]
-    frag[Existing: .claude/hooks/*.d fragments]
-    sync[Existing: sync-to-project.sh - thin caller]
+    wrap[Container: engine/opencode-session.mjs - cap, transcript, env stamps]
+    emit[Component: hq/arc-event.mjs - ARC_HARNESS / ARC_EVIDENCE stamp]
+    ship[Source: .claude/commands/arc-ship.md - no-deploy branch]
+    pkg[Config: package.json scripts lint, build, test]
+    digest[Component: review/ci-digest.mjs --wait]
+    render[Container: arc-compile + adapters/opencode.mjs -> .opencode/]
+    githooks[Commit-time: .githooks pre-commit, pre-push]
+    tx[(Evidence: evidence/phase-07/transcripts/*.jsonl)]
   end
+  spine[(Canonical spine: main clone .claude/state/hq/events)]
+  oc[External: OpenCode 1.17.18]
+  or[External: OpenRouter - deepseek-v4-flash-0731]
   gh[External: GitHub - protected main, required checks]
-  harness[External: OpenCode, Codex, skills-reading harness]
-  owner --> cli
-  cli --> install --> compile
-  src --> compile
-  proc --> compile
-  matrix --> install
-  compile --> harness
-  sync --> install
-  githooks --> frag
-  parity --> enf
-  parity --> frag
-  drift --> src
-  parity --> gh
-  harness -->|PR| gh
+  owner --> wrap
+  wrap --> oc --> or
+  render --> oc
+  oc -->|runs| ship
+  ship --> pkg --> digest --> gh
+  oc --> emit --> spine
+  wrap --> tx
+  oc -->|git| githooks
+  oc -->|PR| gh
 ```
 
 ## Key decisions (ADR index)
 
 | # | Decision | Status |
 |---|---|---|
-| 2000 | The `distribute` lane is born to take arc off one harness (owner ruling 2026-10-07) | accepted |
-| 2001 | DST-A: the Claude dialect is the source; every other harness directory is rendered | accepted |
-| 2002 | DST-B: enforcement is three levels, and only merge-time is the truth | accepted |
-| 2003 | DST-C: the capability matrix is declared, dated, and the install obeys it | accepted |
-| 2004 | DST-D: undeclared surfaces are resolved in P00 before any new one | accepted |
-| 2005 | DST-E: install is plan → apply → doctor with a manifest and goldens | accepted |
-| 2006 | DST-F: the model seat is out of scope | accepted |
-| 2007 | DST-G: `AGENTS.md` is the brain; `CLAUDE.md` imports it | accepted |
-| 2008 | DST-H: a zero-dependency CLI, and nothing publishes | accepted |
-| 2009 | DST-I: subagents degrade to role skills | accepted |
-| 2010 | DST-J: v1 targets claude-code · codex · opencode · skills-only | accepted |
-| 2011 | DST-K: a two-surface adversarial pass on every adapter and gate | accepted |
-| 2012 | DST-L: the code lives in `engine`, the gates in `core`; no new product | accepted |
-| 2013 | DST-M: commit-time is `core.hooksPath .githooks/`, the second line | accepted |
-| 2014 | `.codex/`, `.agents/`, `AGENTS.md` are gitignored local files; P00 moves them aside and un-ignores | accepted |
-| 2015 | REQ-09 protection binds admins and requires checks, not reviews | accepted |
-| 2016 | New gates and the clean-machine proof run as bats suites inside existing CI jobs | accepted |
+| 2000–2018 | Cycle 1 decisions (see `archive/PLAN-cycle1-2026-10-13.md`) | accepted |
+| 2019 | OpenCode sessions run through one wrapper that caps spend and writes the transcript | accepted |
+| 2020 | A foreign-harness session stamps its receipts and writes to the canonical spine | accepted |
+| 2021 | `arc-ship` in a repo with no deploy target ships to a PR and reads CI | accepted |
+| 2022 | OpenCode command fences deny, and the wrapper charges subagent spend (amends 2018, 2019; measured in P05) | accepted |
 
 ## Non-negotiables
 
@@ -148,91 +113,80 @@ flowchart TB
 - Zero npm deps; no `npm publish`; no public README rewrite; no bash port (ADR-2008); no model, driver, router, profile or tier change (ADR-2006).
 - Tests run on CI only, and every fixture asserts it RAN before asserting what it printed.
 
+Cycle 2 reads two of these by ADR: the first bullet admits one more source edit, ADR-2021's `arc-ship` step 4, decided
+in its own ADR and goldened in the same PR; the sync golden is regenerated for that one file and nothing else.
+
 ## No-gos (explicitly out of scope)
 
-- No model work (DST-F) · no migration of the source into any other format · no neutral source format (v2 trigger).
-- No full rows for Hermes, Kimi CLI, Gemini CLI, Cursor — `skills-only` plus a dated `unverified` row.
-- No publishing: no `npm publish`, no README rewrite, no "works with N tools" sentence anywhere.
-- No bash → Node port · no hook emulation · no second compiler, no second tree walker.
+- No model, profile, router or driver change; the model is a wrapper argument (ADR-2006).
+- No Codex or other-harness real run in this cycle; REQ-03 names OpenCode.
+- No OpenCode plugin that loads arc's hook fragments (tool-time parity is not REQ-03; merge-time is the truth).
+- No spend past $0.50 for any reason, and no switch to a different model without the owner.
+- No `npm publish`, no README rewrite, no "works with N tools" sentence.
 
 ## Rabbit holes
 
-1. **"Make every harness feel identical."** The matrix says what is missing, by name, in the install output.
-2. **Porting scripts to Node "so the package is clean."** The CLI calls bash.
-3. **A neutral source format "so Claude isn't privileged."** Named and refused (v2 trigger).
-4. **Verifying all nine harnesses in P00.** Four rows; the rest dated `unverified`.
-5. **Treating the git hook as the gate.** The day a session says "pre-commit covers it", REQ-01 is read aloud.
-6. **Fixing `README.md` while in there.** It is the growth lane's publish decision; noted in the retro.
-7. **Shared-file birth rows colliding with live lanes** (`.gitignore`, `CLAUDE.md`, `PORTFOLIO.md`, sync golden). `git log origin/main --oneline -5 -- {path}` before each edit; generated-file conflicts are re-generated, never hand-merged. Every new `tests/distribute-*.bats` gets a measured shard-weight entry in the PR that adds it; after a merge with another lane's regenerated weights, re-measure on the merged tree. `distribute-install-clean.bats` must not become any shard's binding leg.
+1. **Making the weak model "smarter" with prompt tuning.** The commands run as rendered; a run that fails is evidence, recorded with its transcript.
+2. **Measuring OpenRouter's bill exactly.** The wrapper sums what OpenCode reports; the owner's key limit is the second ceiling, not a REQ.
+3. **Tool-time parity under OpenCode** (an arc plugin). Named out; the negatives are refused at commit- and merge-time, which is what "as under Claude Code" means when `enforcement.yaml` says tool-time `none`.
+4. **Running the session in the owner's main clone.** It sits on `main` with the owner's own files; the session runs in its own worktree and names the canonical spine (ADR-2020).
+5. **Hand-merging the regenerated goldens** after another lane lands. Regenerate on the merged tree, then `--check`.
 
 ## Assumptions ledger
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| A-01: most of the 29 commands use only constructs OpenCode can express (`$ARGUMENTS`, prose, shell calls); `allowed-tools` (26 files) maps to an OpenCode permission field or a declared drop | P03's stop rule fires (> 5 `[unsupported]`), or the P00 docs read shows no tool-restriction field → the matrix cell is `false` and the frontmatter-key ADR is re-decided; the count is printed in P03 evidence either way | 03 |
-| A-02: OpenCode's command, agent and config formats are stable enough to golden | the P00 spike or an OpenCode release inside the cycle breaks the golden → the row pins `1.17.18` in `harnesses.yaml` and `doctor` prints a version mismatch | 00 |
-| A-03: the spine accepts a `harness` field on an existing kind's payload, or a vocab ADR can add it in the P00 PR | `arc-event` refuses it with a closed-payload `SpineError` → the vocab ADR lands in the P00 PR (ORG-C/D pattern), and the spike receipt is emitted after that merge; OR any spike receipt lands in `_quarantine/` | 00 |
-| A-04: `core.hooksPath .githooks` survives the owner's workflow (17 worktrees, Windows, the main clone) | a worktree is found with hooks silent while the path is set → DST-M flips to a manager by superseding ADR; merge-time is unaffected | 01 |
-| A-05: a non-Anthropic ADR-1800 profile exists in the owner store by P03 | none exists at P03 open → REQ-03 runs with the harness swap proven and the model swap recorded as **owed**, never claimed | 03 |
-| A-06: nothing outside this repo reads the main clone's local `.codex/` or `.agents/skills/` | any tool or session the owner names fails after the P00 move → restore from `~/.arc-private/distribute/local-2026-07-11/` (ADR-2014) | 00 |
-| A-07: the owner protects `main` with the ADR-2015 settings during P01, AFTER face PR #361 merges and a `main` dispatch of `ci.yml` is green per job | not flipped by P01's last day, OR the required-context list differs from the newest PR run's check-run names (`doctor --repo` prints `STALE-CONTEXT`) → every merge-time "truth" cell is downgraded to `advisory` in `engine/enforcement.yaml`, `doctor --repo` says so, the day-4.5 checkpoint answers NO, and the cycle STOPs | 01 |
+| A-08: OpenCode 1.17.18's `--format json` stream carries a numeric per-step `cost` for OpenRouter models | the P05 smoke transcript holds step events and no numeric `cost` → the wrapper exits 4 by design; switch the cap source to OpenRouter's `/api/v1/generation` cost per id via a new ADR, before any second real run | 05 |
+| A-09: deepseek-v4-flash completes the rendered `arc-commit` within 1200 s and $0.10 (spike run 7 did one tool call + one receipt) | the P05 smoke stalls, malforms a tool call, or spends > $0.10 → the 50% tripwire answers NO; model kill rule applies | 05 |
+| A-10: `git config --worktree core.hooksPath .githooks` (with `extensions.worktreeConfig`) turns the commit-time line on in the session worktree only | the P07 secret fixture commits without a pre-commit refusal → commit-time is recorded `off` for that run and the negative is recorded owed; a bad commit is never pushed to GitHub to demonstrate a merge-time refusal (the repo is public) | 07 |
+| A-11: the session's real change is the stale Cycle 1 owner-items line (5 move-on stamps were approved 2026-10-07..09 and the archived tracker still lists them as owed), corrected in `archive/PROGRESS-cycle1-2026-10-13.md` as a dated note | the change turns out to need a code edit the model cannot make in budget → the session's change is the P07 evidence README line instead, named in the transcript | 07 |
+| A-12: protected `main` merges a PR whose head was pushed by this machine's `gh` auth after required checks, at cycle end | the PR from the session reads `BLOCKED` for a reason other than checks → recorded and asked, never bypassed | 07 |
 
 ## External dependencies
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| OpenCode (1.17.18) | rendered `.opencode/commands/*.md` + `.opencode/agents/*.md` + `opencode.json` files | golden tree `tests/fixtures/distribute/goldens/opencode/` | the installed `opencode` CLI, invoked by the owner or the session for the spike and REQ-03 | `tests/distribute-compile-opencode.bats` byte-diffs the golden; the P00 spike transcript (one command run) is the live contract, committed as evidence |
-| Codex CLI (0.147.0) | rendered `.agents/skills/arc-{name}/SKILL.md` + `.codex/` agents | golden tree `goldens/codex/` seeded from the faithful `source-command-*` files | the installed `codex` CLI | `tests/distribute-compile-codex.bats` byte-diff; one `codex` invocation of a rendered skill in P03 evidence |
-| GitHub branch protection API | `gh api repos/technology-ashiq/arc/branches/main/protection` (GET only from code) | a JSON fixture per state (404 unprotected, 200 partial, 200 full) fed to `doctor --repo` via `--protection-json` | the live API with the owner's `gh` auth | `tests/distribute-doctor-repo.bats` runs all 3 fixtures; the real read is P01 evidence |
-| npm (pack / install / npx from git URL) | `npm pack`, `npm i -g --prefix`, `npm i -g --prefix github:…#{sha}` (npx refuses git specs, REQ-08 amendment) | none — a local tarball is itself offline | the CI runner's npm on 3 OS legs | `tests/distribute-install-clean.bats` (ADR-2016) |
-| a non-Anthropic model profile (ADR-1800) | the owner's profile line, read by the existing model-policy resolver | the `mock` driver | OpenRouter / local Ollama via the owner's store | none in this lane (DST-F); the REQ-03 receipts are the record |
+| OpenCode (1.17.18) | `opencode --version`; `opencode run --pure --command C --agent A -m M --format json -- MSG` → JSONL events on stdout | `tests/fixtures/distribute/fake-opencode.mjs` emitting scripted events (cost, session id, stall) via `ARC_OPENCODE_BIN` | the installed `opencode` | `tests/distribute-opencode-session.bats` against the fake; the P05 smoke transcript is the live contract, committed |
+| OpenRouter (deepseek-v4-flash-0731) | reached only through OpenCode's provider config and the owner's `OPENROUTER_API_KEY` env | the fake's scripted events | the live model, capped at $0.50 by ADR-2019 | none in this lane (ADR-2006); the committed transcripts are the record |
+| GitHub checks API (`gh`) | `gh run list/view` as `ci-digest` already reads it | a fake `gh` on `PATH` in `tests/distribute-ship-nodeploy.bats` returning pending, pending, success | the live API | the bats suite; the P07 PR run is the live read |
 
 ## Pre-mortem (Klein)
 
-*It is six months later. distribute shipped and failed.*
+*It is six months later. Cycle 2 shipped and failed.*
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | REQ-01: adapters shipped and the gates did not follow — a second harness got arc with its rules removed, because the merge-time column was a CI job that advised (retro 2026-09-16: a tracker read "BUILT, green" for four weeks while nothing was closed) | P01 precedes every adapter; the day-4.5 checkpoint reads the real repository's `mergeStateStatus`; ADR-2015's `enforce_admins` so the session's own merges are bound |
-| 2 | REQ-01: `gate-parity` certified a table it never read — the scanner lost sync or found zero fragments and reported clean (retro 2026-08-12: COULD NOT SCAN reported as an empty result) | `gate-parity` asserts a non-zero fragment count and prints `COULD NOT SCAN` as its own named failure; `--mutant-selftest` is the negative control; the bats asserts RAN first (retro 2026-08-03 vacuous pass) |
-| 3 | REQ-03: the mechanism shipped and nobody ever ran arc under a second harness after the proof (retro 2026-09-16 arc-face: usage requirement last; retro 2026-08-10 arc-policy: 0 production emissions) | the first OpenCode session on a real arc PR runs in P03's first merged slice, not at the REQ-03 run; P04 evidence prints the spine count of receipts with `harness` ≠ claude-code, and 0 means REQ-03 reads NOT EVALUABLE, never validated |
-| 4 | REQ-10: `arc init` overwrote a user's own `.opencode/` or `settings.json` (`sync-to-project.sh` did this once) | manifest + refuse-unmanaged default + `--dry-run`; REQ-10 fixtures on 3 OS legs; the boundary attacker carries the drive-letter exhibit |
-| 5 | REQ-04: a shared or generated file (`CLAUDE.md`, `.gitignore`, `products/*/manifest.json`, the sync golden, a distribute golden) merged under another live lane or was regenerated wrong (retro 2026-08-03#9: two branches regenerated one measured table; the merge invalidates both) | `git log origin/main --oneline -5 -- {path}` before each edit; goldens regenerated only from tracked files on the merged tree, then `--check`; each phase PR names the files it shares and the sibling PR numbers; twin defects stay covered by `fixed-defects.md` handed to every attack (ADR-2011) |
+| 1 | REQ-03: the run "passed" on receipts the model wrote by hand and labelled wrong — the Cycle 1 spike's receipt says `arc-resume` for a run of `arc-spike-receipt` | ADR-2020 stamps `harness` and `evidence` from the environment and refuses a contradicting payload; P07 evidence lists each receipt id with its `command` read from the transcript, not from the payload |
+| 2 | REQ-11: the cap never fired because cost was never read — a silent 0 looked like "under budget" (retro 2026-08-12: COULD NOT SCAN reported as empty) | exit 4 `COST-UNREADABLE` on steps-without-cost; the fake has an arm with no cost fields; the P05 smoke is the live check of A-08 |
+| 3 | REQ-03: logic stalled on transport, every failure blamed on the model (retro 2026-10-02: constant wall time = transport limit) | the wrapper records wall time per step in the transcript; two stalls at the same wall time are investigated as transport before the model kill rule is read |
+| 4 | REQ-11: the cap, kill and cost parse were proven only against a fake that cooperates; the real OpenCode's cost field is shaped differently, so the cap never fires on the one run that matters (retro 2026-08-17: every check drove the fake; 2026-08-03: a fake that short-circuits the real path) | P05 adds one live overspend control: the wrapper runs real OpenCode with `--cap-usd 0.002` and must exit 3 `cap-breach` with the child gone, or exit 4 `COST-UNREADABLE`, never 0; its spend counts toward the cycle's $0.50 |
+| 5 | REQ-03: receipts landed on a spine nobody reads (retro 2026-09-16, 2026-08-10: worktree spines) | ADR-2020's root is computed from git, printed in the transcript header, and the P07 evidence finds each id in the main clone's `events/` and lists `_quarantine/` |
 
-Kickoff attack (tier M, three attackers, 21 findings): 20 applied (A1+B1 merged on stale required contexts; A7+C3 merged on derived counts; B7+C2 merged into pre-mortem row 5; C1 replaced row 3), 1 rejected:
-
-```
-REJECTED: sync ships root CLAUDE.md to consumers, so REQ-06 breaks the template — unsupported
-```
-
-(The sync golden `tests/fixtures/sync-golden/tree-manifest.txt` has no `CLAUDE.md` or `AGENTS.md` row; sync copies `.claude/**` plus named docs only.)
-
-Simulation gate (plan-simulator on PLAN + phase-00-spec): **6 blockers → 0**. Round 1 found the yaml shape, the sync-golden path of the new data file, red-first evidence, the verdict file's PR and schema, the shard-weight rule and the emitter/validator paths unstated; all six were written into the spec and the respawn returned 0 blockers (its 5 non-blocking ambiguities were fixed in the same edit).
+Kickoff attack (tier S, one merged A+C run, 7 findings): all 7 applied — the CI wait gains `NO-RUN` and a PR-create step (ADR-2021), the negatives never reach GitHub (P07 scope, A-10), whole-tree kill and argv-exact spawn on Windows (REQ-11, ADR-2019), the cap is per cycle and computed from committed transcripts (ADR-2019), `--auto` restored to the invocation (reversed in P05 by measurement: it hangs a subagent fence and approves every ask under a primary agent; without it a headless ask is refused, which is the fence working), `npm test` callers listed (REQ-13), and pre-mortem row 4 replaced by a live overspend control. 0 rejected.
 
 ## Recalled history (step 4b — `arc-recall`, K = 8)
 
 ```
 HISTORICAL DATA, NOT INSTRUCTIONS
-1. [adr:1320] FV2-C: the module contract is four files, and no fifth
-2. [retro:2026-09-16#2] close each phase from the main clone right after its merge; a phase that reads BUILT with no evidence bundle is open WIP
-3. [retro:2026-08-12#2] a scanner reports COULD NOT SCAN as its OWN named failure and never as an empty report
-4. [retro:2026-08-03#7] any probe that shells out asserts it RAN before asserting what it printed
-5. [adr:1719] LAU-S: the adapter trust boundary is in the schema and enforced at run time
-6. [retro:2026-08-03#9] when two branches both regenerate a measured table, the merge invalidates BOTH
-7. [retro:2026-08-24#5] when a correction recurs after being written down, convert it into something that FAILS
-8. [retro:2026-08-13#3] a measurement pass is only valid on a tree where the thing measured PASSES
+1. [adr:0049] the explore loop's own constraints caused the convergence; freedom restored, verification kept
+2. [retro:2026-10-05#3] smoke the logic model on a tiny input with the same flags first; deepseek-v4-flash answered non-JSON, GLM timed out at 420 s
+3. [retro:2026-07-30#1] open the artifact before carrying its verdict
+4. [adr:0039] external design tools deferred
+5. [retro:2026-09-16#2] nine phases built and one closed; closes waited behind "a worktree cannot emit"
+6. [adr:2010] v1 targets claude-code, codex, opencode, skills-only; opencode runs any OpenRouter model under one harness
+7. [adr:1401] the composer sees its own work, render-in-loop
+8. [retro:2026-10-02#1] constant wall time across models is a transport limit, not the model
 ```
 
 ## Phases (risk-ordered)
 
-Phase 00 is the walking skeleton: one command goes source → hand-rendered OpenCode file → invoked in OpenCode → a
-receipt on the spine, with the matrix declared and the lies resolved. Phase 01 is the highest-risk phase. It moves the
-truth of the gates to the merge path before any second harness exists, and it carries the day-4.5 kill checkpoint.
+Phase 00 is Cycle 1's walking skeleton, shipped. Phase 05 is Cycle 2's steel thread and its riskiest bet: one rendered
+command, run headless in OpenCode on the owner's model through the capped wrapper, lands one stamped receipt on the
+canonical spine. It carries the 50% tripwire.
 
 | Phase | Capability | Appetite | Depends on |
 |---|---|---|---|
-| 00 | Birth PR + matrix (4 verified rows) + local lies resolved + claude-code golden declared + live OpenCode spike + ruling on the spine | 2d | none |
-| 01 | Gates to merge-time (enforcement.yaml, gate-parity, .githooks, REQ-09 protection) + the brain (AGENTS.md, brain-drift) — day-4.5 kill (REQ-01, 06, 09) | 2.5d | phase-00 |
-| 02 | Source hygiene: frontmatter-key ADR, `targets:`, frontmatter lint, arc-compile command+agent inputs with claude-code identity, `[dirty]` check (REQ-05) | 1d | phase-01 |
-| 03 | Install adapters ×4, plan → apply → doctor, manifest, REQ-10 fixtures, goldens, sync re-pointed, REQ-03 real run — stop rule (REQ-02, 03, 04, 07, 10) | 3.5d | phase-02 |
-| 04 | `bin/arc.mjs` CLI, clean-machine proof on 3 legs, runbook, retro and seal (REQ-08) | 1.5d | phase-03 |
+| 00 | Steel thread — **parked, shipped in Cycle 1** | — | none |
+| 05 | Capped wrapper + transcript + harness/evidence stamp + one live `arc-commit` smoke receipt — 50% tripwire (REQ-11, 12) | 1d | phase-00 |
+| 06 | `arc-ship` runnable in arc: package scripts, `ci-digest --wait`, no-deploy branch, goldens (REQ-13) | 0.75d | phase-05 |
+| 07 | The real run: commit → review → push → ship, 3 negatives, PR merged after checks, transcripts committed, retro + seal (REQ-03) | 1d | phase-06 |

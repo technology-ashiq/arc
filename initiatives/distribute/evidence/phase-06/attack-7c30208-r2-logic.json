@@ -1,0 +1,14 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs: charge() (exportedSpend walk)",
+      "breaking_input": "A packed or adversarial `opencode export` JSON placed on the fake's stdout that makes `exportedSpend` recurse forever — e.g. deeply nested object `{\"a\":{\"a\":{\"a\":...}}}` thousands deep — or one with a huge number of sibling keys and values. The wrapper's `spawnSync` reads the export under maxBuffer 64 MiB, but `walk(j)` recurses with no depth limit and iterates every value with `Object.values(o)`, so a JSON constructed with 10^5 nested layers (few bytes each) or 10^6 keys in an object (within 64 MiB) drives unbounded recursion / billions of visited values; the wrapper blocks (synchronous) until the stack overflows or the event loop starves — never reaching the cap check or `COST-UNREADABLE`.",
+      "why": "`exportedSpend`'s `walk` visits every node (`for (const v of Object.values(o)) walk(v)`) with no depth cap or visited-set guard, and it runs in `charge()` synchronously inside the main event loop (`spawnSync` + `walk`) before the next event is read. A hostile/large export therefore stalls or crashes the wrapper, so the run is neither terminated at the cap nor reported COST-UNREADABLE — it can run past the cap forever or die with a stack overflow, defeating REQ-11 (a foreign-harness run cannot spend past its cap) exactly where subagent spend is the newly-added charge path.",
+      "fix": "Impose a depth bound (e.g. reject >64 levels) and a node budget (e.g. 50k) in `exportedSpend`, counting visited nodes incrementally and throwing `COST-UNREADABLE` on exceeding it.",
+      "twin_of": "(bo) a spend cap that trusts every event"
+    }
+  ]
+}
