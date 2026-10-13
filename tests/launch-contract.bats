@@ -1185,7 +1185,8 @@ arm() {
   [ "$(j 'o.kinds.join(",")')" = "headers-config" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.config')" == *"X-Frame-Options"* ]] || { echo "$DONE"; false; }
   [[ "$(j 'o.middleware')" == *"'nonce-{NONCE}' 'strict-dynamic'"*"frame-ancestors 'none'"* ]] || { echo "$DONE"; false; }
-  [ "$(j '/script-src[^;]*unsafe-inline/.test(o.middleware)')" = "false" ] || { echo "$DONE"; false; }
+  # The POLICY line only: the comment above it names unsafe-inline in prose. "absent" if the line went missing.
+  [ "$(j '((p) => p ? /script-src[^;]*unsafe-inline/.test(p[1]) : "absent")(o.middleware.match(/^const POLICY = (.*);$/m))')" = "false" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.evidence.nonced_scripts')" = "2" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.grade + " " + o.observatoryCalls')" = "true sandbox.automemory.ai + observatory-api.mdn.mozilla.net A 1" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.teardown[0]')" == keep* ]] || { echo "$DONE"; false; }

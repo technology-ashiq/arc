@@ -8,7 +8,8 @@
 //   observatory  { status, grade, score } the Observatory answers, or "unreachable"
 //   up           false = the domain answers 404 (nothing deployed)
 //   rendering    "dynamic" (Next nonces its scripts) or "static" (built ahead, no nonce)
-const NEXT_SERVER_STUB = "const NextResponse = { next: (init = {}) => ({ headers: new Headers(), request: init.request || {} }) };";
+// Node 18 has no global crypto; the edge runtime the middleware runs in does, so the stub supplies it.
+const NEXT_SERVER_STUB = "const NextResponse = { next: (init = {}) => ({ headers: new Headers(), request: init.request || {} }) }; const crypto = globalThis.crypto || (await import(\"node:crypto\")).webcrypto;";
 
 export function makeHeaders({ github, full, domain, inner, serve = (src) => src, hostHeaders = {}, observatory = { status: 200, grade: "A", score: 90 }, up = true, rendering = "dynamic" } = {}) {
   const calls = [];
