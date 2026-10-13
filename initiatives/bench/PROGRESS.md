@@ -146,6 +146,17 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
+**2026-10-14: the real event ran twice and measured the harness, not the model. Both faults are
+fixed on `feat/bench-p03-real-event-close` (ADR-0915), and the re-run follows their merge.** On
+`generic-api`, DeepSeek had no tools and could not commit (16.7%). On `claude-code`, sonnet added a
+`branch` key: no driver had ever shown the output contract, and the CLI loaded the owner's hooks.
+The run also filed 7 spurious `engine-escalation` approvals, now stopped for trial runs. The owner
+should reject them: `01M4VPTYGSZ43S07EDDP47EKSX 01M4VPW5HFQF8FNZ4EHKTZYK6C 01M4VPX2N1MGJYEF575YMSV2A2
+01M4VPXC57BQ36NQW2QX9A5P8V 01M4VPYRJZCFHR7Z5FA6953X4S 01M4VQBYP194HV1BMZBV4ACR6V
+01M4VQM1XDPARR9GDQVZVD5ABZ`. NEXT: merge the fixes, run sonnet then haiku `--propose` from the main
+clone, read the chain off the spine, then the owner's verdict. Appetite stays 7.25 of 8d; this is
+Phase 03's own remaining scope.
+
 **2026-10-13: the real event is UNBLOCKED and re-scoped. It waits only on this change merging.**
 The engine blocker below closed with #225 (bench skips an expired probe vehicle). The owner moved
 the pair to OpenRouter (ADR-0914 Amendment 1). Champion `deepseek/deepseek-v4-flash-0731`, candidate

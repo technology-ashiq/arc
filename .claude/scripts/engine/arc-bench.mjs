@@ -937,7 +937,8 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
       // truncated a large but valid answer and the driver was blamed for it. Same reasoning here.
       maxBuffer: 64 * 1024 * 1024,
       killSignal: "SIGKILL",
-      env: { ...process.env, ARC_MOCK_FIXTURE: fixture.id },
+      // ARC_DRIVER_ISOLATE: a score measures the model, never the owner's hooks and plugins (ADR-0915).
+      env: { ...process.env, ARC_MOCK_FIXTURE: fixture.id, ARC_DRIVER_ISOLATE: "1" },
     });
 
     const elapsedMs = Date.now() - started;
