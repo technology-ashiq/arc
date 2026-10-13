@@ -46,9 +46,9 @@ const deployed = {
 }[scenario];
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const vercel = makeVercel({ github });
-const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz" });
+const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz", freeTierMail: scenario.startsWith("free-tier") || scenario.startsWith("stock-template") });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: (i, o) => supabase.fetch(i, o).catch(() => vercel.fetch(i, o)) });
-const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail", serverEnv, ...(deployed ? { deployed } : {}) });
+const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail", serverEnv, linkShape: scenario === "nested-link" ? "nested" : "flat", ...(deployed ? { deployed } : {}) });
 const rz = makeRazorpay({ keyId: RZ_ID, keySecret: RZ_SECRET, alsoAccept: [[OTHER_ID, OTHER_SECRET]] });
 // Route by host: Supabase hosts to its fake (through the venture fake for auth admin), Razorpay to its fake, the rest down the chain.
 globalThis.fetch = async (input, init) => {
@@ -60,8 +60,10 @@ globalThis.fetch = async (input, init) => {
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-login-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
-const state = { hosting: [], release: [], frontend: [], database: [], auth: [], authz: [], tenancy: [], plans: [], [CO]: [], "payment-test": [], repo: [{ kind: "github-repo", id: FULL }], "email-transactional": [] };
-const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", RAZORPAY_KEY_ID: RZ_ID, RAZORPAY_KEY_SECRET: RZ_SECRET };
+// email-transactional made the venture's Resend domain: auth sends its login email through it (ADR-1756).
+const state = { hosting: [], release: [], frontend: [], database: [], auth: [], authz: [], tenancy: [], plans: [], [CO]: [], "payment-test": [], repo: [{ kind: "github-repo", id: FULL }], "email-transactional": scenario === "free-tier-no-resend" ? [] : [{ kind: "resend-domain", id: "dom_fixture" }] };
+const RESEND_KEY = "re_fixtureResendKey0123456789"; // gitleaks:allow -- fixture, never a real key
+const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", RESEND_API_KEY: RESEND_KEY, RAZORPAY_KEY_ID: RZ_ID, RAZORPAY_KEY_SECRET: RZ_SECRET };
 const UP = { hosting: ["repo"], release: ["hosting"], frontend: ["repo", "release"], database: [], auth: ["database", "email-transactional", "frontend"], authz: ["auth"], tenancy: ["authz"], plans: ["authz"], [CO]: ["plans", "payment-test"] };
 const ctxFor = (slot, approvals = [], { env = ENV, domain = DOMAIN } = {}) => makeCtx({
   profile: { slug: "arc-sandbox", region: "in", brand: { name: "arc sandbox", domain } }, board: {}, slot: { id: slot }, row: A[slot].row,
@@ -89,7 +91,8 @@ const browser = async (who) => {
   const email = `launch-probe-${who}@${DOMAIN}`;
   const adm = (path, body) => fetch(`https://${p.id}.supabase.co/auth/v1/admin${path}`, { method: "POST", headers: Object.fromEntries([["apikey", key], ["authorization", `Bearer ${key}`], ["content-type", "application/json"]]), body: JSON.stringify(body) });
   await adm("/users", { email, email_confirm: true });
-  const hash = (await (await adm("/generate_link", { type: "magiclink", email })).json()).properties.hashed_token;
+  const lb = await (await adm("/generate_link", { type: "magiclink", email })).json();
+  const hash = (lb.properties || lb).hashed_token;
   const r = await fetch(`https://${DOMAIN}/auth/confirm?token_hash=${encodeURIComponent(hash)}&type=magiclink`, { redirect: "manual" });
   return String(r.headers.get("set-cookie") || "").split(";")[0];
 };
@@ -170,6 +173,53 @@ switch (scenario) {
     out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
     out.env = text(".env.example");
     break;
+  case "stock-template":
+  case "stock-template-edited": {
+    // A new project's config answers Supabase's default email, not empty: that is stock and auth writes its own. One
+    // word changed and it is the owner's (the mutant).
+    // Exactly as the config API answered arc-sandbox: two newlines after the heading, one between the paragraphs.
+    const real = ["<h2>Your sign-in link</h2>", "", "<p>Follow the link below to sign in. This link expires shortly and can only be used once.</p>", "<p><a href=\"{{ .ConfirmationURL }}\">Sign in</a></p>"].join("\n");
+    supabase.store[0].auth = { site_url: "http://localhost:3000", mailer_templates_magic_link_content: scenario === "stock-template" ? real : real.replace("Sign in<", "Enter<") };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.landsOnConfirm = String(supabase.store[0].auth.mailer_templates_magic_link_content).includes("/auth/confirm?token_hash=");
+    break;
+  }
+  case "public-env":
+  case "public-env-owner": {
+    // auth places the two public values once, before its commit (so that commit builds with them), keeps a value the
+    // owner already set, and asks for a rebuild only when it placed something and pushed nothing.
+    const proj = () => [...vercel.store.values()][0];
+    if (scenario === "public-env-owner") proj().envs = [{ key: "NEXT_PUBLIC_SUPABASE_URL", target: ["production"], value: "https://mine.example.com" }];
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.again = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    const envs = proj().envs || [];
+    out.env = envs.map((e) => e.key + "=" + (e.key.endsWith("URL") ? e.value : e.value === `anon-key-${supabase.store[0].id}`)).join(" ");
+    out.rebuilds = proj().rebuilds || 0;
+    out.reported = state.auth.filter((r) => r.kind === "vercel-env").length;
+    // The rebuild path: values deleted after the commit landed, so a re-run places them and pushes nothing.
+    proj().envs = [];
+    out.third = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.rebuildsAfter = proj().rebuilds || 0;
+    break;
+  }
+  case "nested-link":
+    // An older GoTrue nests the minted token in `properties`: the probe still logs in.
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    out.authVerify = await A.auth.mod.verify(ctxFor("auth"));
+    break;
+  case "free-tier":
+  case "free-tier-no-resend":
+  case "free-tier-owner-smtp": {
+    // The free tier refuses the template on Supabase's own mailer: auth points the project at the Resend domain first,
+    // keeps an SMTP host the owner set, and refuses when there is no Resend domain to send through.
+    if (scenario === "free-tier-owner-smtp") supabase.store[0].auth = { site_url: "http://localhost:3000", smtp_host: "smtp.example.net", smtp_user: "me" };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    const a = supabase.store[0].auth || {};
+    out.smtp = [a.smtp_host, a.smtp_port, a.smtp_user, a.smtp_admin_email, a.smtp_pass === RESEND_KEY].join(" ");
+    out.landsOnConfirm = String(a.mailer_templates_magic_link_content || "").includes("/auth/confirm?token_hash=");
+    out.keyLeaked = JSON.stringify(out.auth).includes(RESEND_KEY) || JSON.stringify(state.auth).includes(RESEND_KEY);
+    break;
+  }
   case "owner-template-elsewhere":
     supabase.store[0].auth = { site_url: "http://localhost:3000", mailer_templates_magic_link_content: "<p>{{ .Token }}</p>" };
     out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));

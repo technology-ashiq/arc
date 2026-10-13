@@ -1064,6 +1064,42 @@ arm() {
   [ "$(j 'o.authz.ok')" = "true" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: Supabase's own default magic-link email is stock and replaced; one word changed is the owner's" {
+  arm login stock-template
+  [ "$(j 'o.auth.ok + " " + o.landsOnConfirm')" = "true true" ] || { echo "$DONE"; false; }
+  arm login stock-template-edited
+  [ "$(j 'o.auth.code + " " + o.landsOnConfirm')" = "TEMPLATE_FOREIGN false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: auth places the public Supabase URL and anon key on Vercel, keeps the owner's, rebuilds when nothing was pushed (ADR-1757)" {
+  arm login public-env
+  [ "$(j 'o.auth.ok + " " + o.again.ok + " " + o.third.ok')" = "true true true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.env')" == "NEXT_PUBLIC_SUPABASE_URL=https://"*".supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=true" ]] || { echo "$DONE"; false; }
+  # The first apply pushed the routes (that build carries the values): no rebuild. The third placed and pushed nothing.
+  [ "$(j 'o.rebuilds + " " + o.rebuildsAfter + " " + o.reported')" = "0 1 2" ] || { echo "$DONE"; false; }
+  arm login public-env-owner
+  [[ "$(j 'o.env')" == "NEXT_PUBLIC_SUPABASE_URL=https://mine.example.com NEXT_PUBLIC_SUPABASE_ANON_KEY=true"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: the auth probe reads a minted token at the top level and in properties" {
+  arm login thread
+  [ "$(j 'o.authVerify.ok')" = "true" ] || { echo "$DONE"; false; }
+  arm login nested-link
+  [ "$(j 'o.authVerify.ok')" = "true" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: on the free tier auth sends the login email through the venture's Resend domain (ADR-1756)" {
+  arm login free-tier
+  [ "$(j 'o.auth.ok + " " + o.landsOnConfirm + " " + o.keyLeaked')" = "true true false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.smtp')" = "smtp.resend.com 465 resend login@sandbox.automemory.ai true" ] || { echo "$DONE"; false; }
+  # The owner's own SMTP host is kept, and the template still lands.
+  arm login free-tier-owner-smtp
+  [ "$(j 'o.auth.ok + " " + o.landsOnConfirm + " " + o.smtp')" = "true true smtp.example.net  me  false" ] || { echo "$DONE"; false; }
+  # No Resend domain upstream: refused before anything is written.
+  arm login free-tier-no-resend
+  [ "$(j 'o.auth.code + " " + o.landsOnConfirm')" = "UPSTREAM_MISSING false" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: an owner template built on ConfirmationURL is the owner's, and refuses" {
   arm login owner-template-confirmation-url
   [ "$(j 'o.auth.code')" = "TEMPLATE_FOREIGN" ] || { echo "$DONE"; false; }
@@ -1308,6 +1344,16 @@ arm() {
   [ "$(j 'o.rScaffold + " " + o.rKinds.join(",")')" = "true restore-source" ] || { echo "$DONE"; false; }
   [ "$(j 'o.rVerify.ok + " " + o.rVerify.evidence.step')" = "true restore and compare row counts" ] || { echo "$DONE"; false; }
   [ "$(j 'o.teardown.length')" = "2" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a green drill job whose steps GitHub has not concluded yet counts; a red one never does" {
+  arm backup step-lag
+  [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
+  arm backup step-lag-red
+  [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "false false" ] || { echo "$DONE"; false; }
+  # restore-drill trusts the newest drill digest backup reported, never an earlier file.
+  arm backup digest-moved
+  [ "$(j 'o.rVerify.ok')" = "true" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a red restore fails both slots, a red backup fails both, a missing secret and a stale drill are not ok (ADR-1709, ADR-1746)" {

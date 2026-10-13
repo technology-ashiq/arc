@@ -357,13 +357,16 @@ providers:
     env_keys:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
+      - RESEND_API_KEY
+      - VERCEL_TOKEN
     hosts:
       - api.supabase.com
       - supabase.co
       - sandbox.automemory.ai
       - api.github.com
+      - api.vercel.com
     credentials:
-      scope: "auth config on one project; commits the auth routes; probes with minted probe users (ADR-1734)"
+      scope: "auth config on one project; commits the auth routes; probes with minted probe users ; on Supabase's own mailer, points auth SMTP at the venture's Resend domain with the Resend key; places the project URL and anon key on the Vercel project (ADR-1734, ADR-1756, ADR-1757)"
     adapter: providers/auth/supabase-auth.mjs
     digest: null
     approved_by: ashiq

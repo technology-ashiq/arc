@@ -5,10 +5,11 @@
 //   pendingPolls    how many runs-list reads show a new run as in_progress before it completes
 //   auditConclusion what the dependency-scan workflow's audit job concludes on a push (success unless set)
 //   jobConclusions  { step: conclusion } for the drill job's steps (dump, restore); success unless set
+//   stepLag         the drill job answers its own conclusion while its steps still read in_progress/null, as GitHub can
 //   secrets         names of Actions secrets the repo holds (values are never modelled)
 export const LEGS = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
-export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, auditConclusion = "success", jobConclusions = {} } = {}) {
+export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, stepLag = false, auditConclusion = "success", jobConclusions = {} } = {}) {
   // The workflows other than arc-ci a fixture models, each with its jobs; a run of one has id + 10000 * (index + 1).
   const EXTRA = { "dependency-scan.yml": ["audit"], "backup-drill.yml": ["drill"] };
   const DRILL_STEPS = [["dump and checksum", "dump"], ["restore and compare row counts", "restore"]];
@@ -237,7 +238,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       const id = Number(jm[1]);
       const k = Math.floor(id / 10000);
       const run = r.runs.find((x) => x.id === id - 10000 * k);
-      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name), ...(name === "drill" ? { steps: steps() } : {}) })) });
+      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name), ...(name === "drill" ? { steps: stepLag ? steps().map((s) => ({ ...s, status: "in_progress", conclusion: null })) : steps() } : {}) })) });
       return run ? json(200, { jobs: run.jobs }) : err(404, "Not Found");
     }
     return err(404, `fake github: ${method} ${p} not modelled`);

@@ -126,7 +126,8 @@ const MAX_AGE_MS = 8 * 24 * 3600 * 1000;
 // Upstream: backup's reported workflow names the venture repo, and its drill digest is the only file this slot trusts a
 // run of (ADR-1746, b6ffd12 B5). Validated here, never trusted.
 function digestOf(ctx) {
-  const d = String((list(ctx.upstream && ctx.upstream.backup).find((r) => r.kind === "drill-digest") || {}).id || "");
+  // The NEWEST digest: backup reports one per drill file it has written, oldest first, and only the last is on main.
+  const d = String((list(ctx.upstream && ctx.upstream.backup).filter((r) => r.kind === "drill-digest").pop() || {}).id || "");
   if (!/^[0-9a-f]{64}$/.test(d)) throw refuse("UPSTREAM_MISSING", "backup reported no drill digest");
   return d;
 }
@@ -168,7 +169,10 @@ async function drill(ctx, full, digest) {
     if (at.status === 404 || !b || typeof b.content !== "string" || sha256(utf8(b.content)) !== digest) continue;
     const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
     const job = list(jobs.body && jobs.body.jobs).find((j) => j.name === "drill");
-    const steps = new Map(list(job && job.steps).map((s) => [s.name, s.conclusion]));
+    // GitHub can answer a completed job with its steps still unconcluded. No drill step continues on error, so a job that
+    // concluded success ran every named step green; any other job conclusion leaves an unconcluded step unproven.
+    const won = job && job.status === "completed" && job.conclusion === "success";
+    const steps = new Map(list(job && job.steps).map((s) => [s.name, s.conclusion ?? (won ? "success" : null)]));
     return { run: run.id, dump: steps.get(STEP_DUMP) ?? "absent", restore: steps.get(STEP_RESTORE) ?? "absent" };
   }
   return { reason: `no completed ${WORKFLOW_FILE} run on main ran launch's drill file` };

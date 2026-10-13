@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (56)
+## Decisions (59)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -84,6 +84,9 @@ ADRs whose `Product:` line names this lane first.
 | [`1753`](../../../docs/adr/1753-frontend-asks-pagespeed-with-the-owners-key.md) | `frontend` asks PageSpeed with the owner's key and pins a Next.js Vercel will deploy; `tls` never fails on a cached scan | accepted | 2026-10-13 |
 | [`1754`](../../../docs/adr/1754-security-headers-sets-csp-with-a-per-request-nonce.md) | `security-headers` sets the CSP with a per-request nonce, and the shell renders per request | accepted | 2026-10-13 |
 | [`1755`](../../../docs/adr/1755-release-receipt-is-ready-only-and-the-next-preset-follows-the-app.md) | `release`'s receipt is READY only; the Next.js preset arrives with the app | accepted | 2026-10-13 |
+| [`1756`](../../../docs/adr/1756-auth-sends-the-login-email-through-the-ventures-resend-domain.md) | `auth` sends the login email through the venture's Resend domain | accepted | 2026-10-14 |
+| [`1757`](../../../docs/adr/1757-auth-places-the-public-supabase-values-on-the-venture-host.md) | `auth` places the public Supabase values on the venture's host | accepted | 2026-10-14 |
+| [`1758`](../../../docs/adr/1758-the-backup-drill-restores-into-a-supabase-shaped-scratch.md) | the backup drill restores into a Supabase-shaped scratch | accepted | 2026-10-14 |
 
 ## Source
 

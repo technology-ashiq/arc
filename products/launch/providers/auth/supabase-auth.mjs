@@ -147,7 +147,10 @@ async function mint(ctx, ref, key, who) {
   const email = probeEmail(ctx, who);
   await admin(ctx, ref, key, "POST", "/users", { email, email_confirm: true }, [422]);
   const link = await admin(ctx, ref, key, "POST", "/generate_link", { type: "magiclink", email });
-  const hash = link.body && link.body.properties && typeof link.body.properties.hashed_token === "string" ? link.body.properties.hashed_token : "";
+  // GoTrue answers the token at the top level today, inside `properties` on older builds: either, never both read loosely.
+  const b = link.body && typeof link.body === "object" ? link.body : {};
+  const from = b.properties && typeof b.properties === "object" ? b.properties : b;
+  const hash = typeof from.hashed_token === "string" ? from.hashed_token : "";
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(hash)) throw new Error("supabase minted no usable magic-link token");
   return { email, hash };
 }
@@ -205,6 +208,12 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 // four routes a person and the probe both use. Generated venture code lives in single-quoted strings below, so the
 // adapter scanner reads it as text, never as this adapter's own capabilities.
 const ENV_NAMES = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"];
+// Supabase's default magic-link email, current and earlier wording, as its config API answers a project never edited.
+const squash = (s) => s.replace(/\s+/g, " ").trim();
+const SUPABASE_STOCK = new Set([
+  '<h2>Your sign-in link</h2> <p>Follow the link below to sign in. This link expires shortly and can only be used once.</p> <p><a href="{{ .ConfirmationURL }}">Sign in</a></p>',
+  '<h2>Magic Link</h2> <p>Follow this link to login:</p> <p><a href="{{ .ConfirmationURL }}">Log In</a></p>',
+].map(squash));
 const TEMPLATE = '<h2>Log in</h2><p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink">Log in to {{ .SiteURL }}</a></p>';
 const FILES = {
   "lib/supabase/server.js": [
@@ -296,7 +305,50 @@ function upstreamOf(ctx) {
 }
 
 export function envContract() {
-  return ["SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN"];
+  return ["SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN", "RESEND_API_KEY", "VERCEL_TOKEN"];
+}
+
+// The two public values the routes read, placed on the venture's Vercel project when absent (ADR-1757): the project URL
+// and the anon key are shipped to every browser, so they are not the owner's secrets to copy by hand. A value already
+// set is the owner's and kept. NEXT_PUBLIC_ values are baked at build time, so a placement asks for a production build.
+const VERCEL = "https://api.vercel.com";
+const vc = (ctx, method, path, body, allow) => call(ctx, `${VERCEL}${path}`, { authorization: `Bearer ${tokenOf(ctx, "VERCEL_TOKEN", /^[A-Za-z0-9_-]{20,}$/)}` }, method, body, allow, `vercel ${path.split("?")[0]}`);
+async function publicEnv(ctx, full, ref) {
+  const [org, name] = full.split("/");
+  const p = await vc(ctx, "GET", `/v9/projects/${encodeURIComponent(name)}`, undefined, [404]);
+  if (p.status === 404) throw refuse("UPSTREAM_MISSING", `no vercel project named ${name}; hosting creates it`);
+  const link = p.body && p.body.link && typeof p.body.link === "object" ? p.body.link : null;
+  if (!link || link.type !== "github" || `${link.org}/${link.repo}`.toLowerCase() !== full.toLowerCase())
+    throw refuse("FOREIGN_PROJECT", `vercel project ${name} is not linked to ${full}; auth does not set its env`);
+  const pid = String(p.body.id);
+  const env = await vc(ctx, "GET", `/v10/projects/${encodeURIComponent(pid)}/env`);
+  const have = new Set(list(env.body && env.body.envs).filter((e) => (Array.isArray(e.target) ? e.target : [e.target]).includes("production")).map((e) => e.key));
+  const keys = list((await sb(ctx, "GET", `/projects/${ref}/api-keys`)).body);
+  const anon = (keys.find((x) => x.name === "anon" && typeof x.api_key === "string") || {}).api_key;
+  if (!anon) throw refuse("NO_ANON_KEY", "supabase returned no anon key for the project");
+  const want = { NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co`, NEXT_PUBLIC_SUPABASE_ANON_KEY: anon };
+  let placed = 0;
+  for (const [key, value] of Object.entries(want)) {
+    if (have.has(key)) continue;
+    await vc(ctx, "POST", `/v10/projects/${encodeURIComponent(pid)}/env`, { key, value, type: "plain", target: ["production", "preview"] });
+    ctx.report({ kind: "vercel-env", id: `${pid}:${key}` });
+    placed++;
+  }
+  return { pid, org, name, placed };
+}
+
+// Supabase's free tier refuses a template change while the project sends through Supabase's own mailer, so the login
+// email goes through the venture's Resend domain (email-transactional). An SMTP host the owner set is theirs and kept
+// (ADR-1756). The key rides only in the PATCH body; the config API never answers it back.
+function resendSmtp(ctx, conf, domain) {
+  const host = typeof conf.smtp_host === "string" ? conf.smtp_host.trim() : "";
+  if (host) return {};
+  const sent = list(ctx.upstream && ctx.upstream["email-transactional"]).some((r) => r.kind === "resend-domain" || r.kind === "resend-domain-found");
+  if (!sent) throw refuse("UPSTREAM_MISSING", "the project sends with Supabase's own mailer and email-transactional reported no Resend domain to send through");
+  const key = String(ctx.env.RESEND_API_KEY || "").trim();
+  if (!/^re_[A-Za-z0-9_]{20,}$/.test(key)) throw refuse("BAD_TOKEN", "RESEND_API_KEY is not a Resend key shape; its value is not printed");
+  const name = ctx.profile && ctx.profile.brand && typeof ctx.profile.brand.name === "string" ? say(ctx.profile.brand.name, 60) : domain;
+  return { smtp_host: "smtp.resend.com", smtp_port: "465", smtp_user: "resend", smtp_pass: key, smtp_admin_email: `login@${domain}`, smtp_sender_name: name };
 }
 
 export async function scaffold(ctx) {
@@ -312,17 +364,20 @@ export async function scaffold(ctx) {
   const allow = String(conf.uri_allow_list || "").split(",").map((x) => x.trim()).filter(Boolean);
   if (!allow.includes(`${site}/**`)) allow.push(`${site}/**`);
   const tpl = typeof conf.mailer_templates_magic_link_content === "string" ? conf.mailer_templates_magic_link_content : "";
-  // Only an EMPTY template is stock: any text there is the owner's, kept if it lands on /auth/confirm, else refused
-  // (attack 6a5c24e B2 -- "contains ConfirmationURL" could not tell Supabase's from an owner's own).
-  const stock = !tpl.trim();
+  // Stock is an EMPTY template or Supabase's own default, byte for byte up to whitespace: any other text is the owner's,
+  // kept if it lands on /auth/confirm, else refused (attack 6a5c24e B2 -- "contains ConfirmationURL" could not tell
+  // Supabase's from an owner's own). A new project's API answers the default text, not empty (arc-sandbox, 2026-10-14).
+  const stock = !tpl.trim() || SUPABASE_STOCK.has(squash(tpl));
   if (!stock && !tpl.includes("/auth/confirm?token_hash={{ .TokenHash }}")) throw refuse("TEMPLATE_FOREIGN", "the project's magic-link email is the owner's own and does not land on /auth/confirm; launch does not rewrite it");
-  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}) };
+  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { ...resendSmtp(ctx, conf, domain), mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}) };
   await sb(ctx, "PATCH", `/projects/${ref}/config/auth`, patch);
   // What it was, so the exit plan can put it back.
   // Recorded once, from the first apply: a re-run sees launch's own site URL and must not record it as "what it was"
   // (attack 6a5c24e B3) -- the earlier record is the one the exit plan restores.
   if (!ctx.resources.some((r) => r.kind === "auth-config")) ctx.report({ kind: "auth-config", id: `${ref}:site_url=${site}:was=${say(now || "(none)", 80)}` });
   // .env.example is shared (ADR-1729): this slot adds its names, never a value, and never removes a line.
+  const env = await publicEnv(ctx, full, ref);
+  const before = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
   const sha = await commitFiles(ctx, full, FILES, {
     // `export NAME=` names the same variable; added lines keep the file's own line ending (twin of attack b1844e0 B4).
     ".env.example": (text) => {
@@ -333,6 +388,9 @@ export async function scaffold(ctx) {
       return add.length ? `${text}${text && !text.endsWith("\n") ? eol : ""}${add.join(eol)}${eol}` : text;
     },
   }, "auth: magic-link login, session cookie, logout (ADR-1734)");
+  // A new commit builds with the placed values; with none, the live build predates them and is rebuilt from main.
+  const pushed = before.body && before.body.object && String(before.body.object.sha) !== sha;
+  if (env.placed && !pushed) await vc(ctx, "POST", "/v13/deployments", { name: env.name, project: env.pid, target: "production", gitSource: { type: "github", org: env.org, repo: env.name, ref: "main" } });
   ctx.report({ kind: "auth-routes", id: `${full}:${sha}` });
   ctx.report({ kind: "venture-repo", id: full });
   ctx.report({ kind: "supabase-ref", id: ref });
@@ -378,5 +436,6 @@ export async function teardown(ctx) {
   // The site URL goes back to what the first apply found, if it still points at launch's (re-checked at run time).
   const cfg = ctx.resources.find((r) => r.kind === "auth-config");
   if (cfg) steps.push({ action: "restore-site-url-if-unchanged", resource: cfg.id });
+  for (const r of ctx.resources.filter((x) => x.kind === "vercel-env")) steps.push({ action: "delete-vercel-env", resource: r.id });
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
 }

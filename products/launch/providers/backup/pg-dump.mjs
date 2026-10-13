@@ -127,6 +127,15 @@ const STEP_RESTORE = "restore and compare row counts";
 const sha256 = (t) => createHash("sha256").update(t, "utf8").digest("hex");
 const PG = "postgres:17";
 const COUNTS = "select table_name || ' ' || (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from public.%I', table_name), false, true, '')))[1]::text from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by 1;";
+// A plain Postgres is not a Supabase one: the public schema's tables call extensions.gen_random_bytes and auth.uid(),
+// reference auth.users, and name the anon/authenticated roles in their policies. The scratch gets that shape first, and
+// the source's user ids (ids only) so the foreign keys to auth.users hold (ADR-1758). No dollar sign anywhere: the
+// statement rides inside a double-quoted shell argument.
+const SCRATCH = "drop schema public cascade; create schema extensions; create extension pgcrypto schema extensions; create schema auth; create table auth.users (id uuid primary key); create function auth.uid() returns uuid language sql stable as 'select null::uuid'; create function auth.role() returns text language sql stable as 'select null::text'; create function auth.jwt() returns jsonb language sql stable as 'select null::jsonb'; create role anon nologin; create role authenticated nologin; create role service_role nologin;";
+// A pooler role launch provisioned reads the ids through launch_ops.user_ids() (security definer: Supabase does not let
+// postgres grant the auth schema); the owner's own postgres URL reads auth.users directly.
+const USERS = "select u from launch_ops.user_ids() u order by 1;";
+const USERS_DIRECT = "select id from auth.users order by 1;";
 const FILES = {
   ".github/workflows/backup-drill.yml": [
     "# Written by arc launch (backup slot, ADR-1746). Dumps the database, restores it into a scratch Postgres, and fails",
@@ -164,9 +173,13 @@ const FILES = {
     "          sha256sum dump.pgc > dump.sha256",
     `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.src`,
     "          test -s counts.src",
+    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS}\" > users.src 2>/dev/null || \\`,
+    `            docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS_DIRECT}\" > users.src`,
     `      - name: ${STEP_RESTORE}`,
     "        run: |",
     "          sha256sum -c dump.sha256",
+    `          docker run --rm --network host ${PG} sh -c 'psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c \"$0\"' \"${SCRATCH}\"`,
+    `          docker run --rm -i --network host ${PG} psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c \"copy auth.users (id) from stdin\" < users.src`,
     `          docker run --rm --network host -v \"$PWD:/w\" ${PG} pg_restore --no-owner --no-privileges -h localhost -U postgres -d postgres /w/dump.pgc`,
     `          docker run --rm --network host ${PG} sh -c 'psql -h localhost -U postgres -d postgres -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.dst`,
     "          test -s counts.dst",
@@ -174,7 +187,7 @@ const FILES = {
     "          echo \"restored $(wc -l < counts.dst) tables, every row count equal\"",
     "      - name: remove the dump",
     "        if: always()",
-    "        run: rm -f dump.pgc",
+    "        run: rm -f dump.pgc users.src",
     "",
   ].join("\n"),
 };
@@ -221,7 +234,10 @@ async function drill(ctx, full, digest) {
     if (at.status === 404 || !b || typeof b.content !== "string" || sha256(utf8(b.content)) !== digest) continue;
     const jobs = await gh(ctx, "GET", `/repos/${full}/actions/runs/${run.id}/jobs`);
     const job = list(jobs.body && jobs.body.jobs).find((j) => j.name === "drill");
-    const steps = new Map(list(job && job.steps).map((s) => [s.name, s.conclusion]));
+    // GitHub can answer a completed job with its steps still unconcluded. No drill step continues on error, so a job that
+    // concluded success ran every named step green; any other job conclusion leaves an unconcluded step unproven.
+    const won = job && job.status === "completed" && job.conclusion === "success";
+    const steps = new Map(list(job && job.steps).map((s) => [s.name, s.conclusion ?? (won ? "success" : null)]));
     return { run: run.id, dump: steps.get(STEP_DUMP) ?? "absent", restore: steps.get(STEP_RESTORE) ?? "absent" };
   }
   return { reason: `no completed ${WORKFLOW_FILE} run on main ran launch's drill file` };

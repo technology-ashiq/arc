@@ -52,6 +52,21 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       if (url.searchParams.has("decrypt")) decryptAsked = true;
       return json(200, { envs: (proj.envs || []).map((e, i) => ({ id: `env_${i}`, key: e.key, target: e.target, type: "encrypted", value: e.value })) });
     }
+    // auth places the two public Supabase values (ADR-1757); a production rebuild from main is only counted.
+    if (m && method === "POST") {
+      const proj = byIdOrName(m[1]);
+      if (!proj) return err(404, "not_found", "Project not found");
+      proj.envs = proj.envs || [];
+      if (proj.envs.some((e) => e.key === body.key)) return err(400, "ENV_ALREADY_EXISTS", "A variable with the name already exists");
+      proj.envs.push({ key: body.key, target: body.target, value: body.value });
+      return json(201, { created: { key: body.key, target: body.target } });
+    }
+    if (method === "POST" && p === "/v13/deployments") {
+      const proj = byIdOrName(body.project);
+      if (!proj) return err(404, "not_found", "Project not found");
+      proj.rebuilds = (proj.rebuilds || 0) + 1;
+      return json(200, { id: id("dpl"), readyState: "QUEUED" });
+    }
     m = p.match(/^\/v9\/projects\/([^/]+)\/domains\/([^/]+)$/);
     if (m && method === "GET") {
       const proj = byIdOrName(m[1]);
