@@ -41,11 +41,15 @@ import { resolveLane, renderHuman, parseLaneArgs } from "../core/lane-resolve.mj
 // value would land in positionals and be read as the repo root.
 const argv = process.argv.slice(2);
 let baseRef = "origin/main";
+let baseSeen = 0;
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i] === "--base") { baseRef = argv[i + 1] ?? ""; argv.splice(i, 2); i--; }
-  else if (argv[i].startsWith("--base=")) { baseRef = argv[i].slice(7); argv.splice(i, 1); i--; }
+  if (argv[i] === "--base") { baseRef = argv[i + 1] ?? ""; argv.splice(i, 2); i--; baseSeen++; }
+  else if (argv[i].startsWith("--base=")) { baseRef = argv[i].slice(7); argv.splice(i, 1); i--; baseSeen++; }
 }
-if (baseRef === "") { console.error("kickoff-lint: --base needs a ref"); process.exit(5); }
+// A missing value never consumes the next flag (`--base --lane x` would silently drop the lane), and a
+// value with a leading dash is an option to git, not a ref.
+if (baseRef === "" || baseRef.startsWith("-")) { console.error(`kickoff-lint: --base needs a ref name, got ${JSON.stringify(baseRef)}`); process.exit(5); }
+if (baseSeen > 1) { console.error("kickoff-lint: --base given twice — refusing to pick one"); process.exit(5); }
 const cli = parseLaneArgs(argv);
 // Anchor on the git toplevel, not the shell's cwd: run from inside a lane, a cwd
 // anchor silently drops out of lane-mode AND looks for the company ADR ledger inside
@@ -708,11 +712,14 @@ else if (!/##\s*Now/i.test(readT("PROGRESS.md"))) fail("progress", "PROGRESS.md 
 // Lane-mode only: root-mode is the byte-identical consumer contract (ADR-0054), and a consumer repo
 // has no lanes to freeze. Mid-cycle lanes are never judged — these are rules about opening a cycle.
 if (laneRes.mode === "lane") {
-  const { newCycle, kernelFreeze } = await import("./kickoff-gates.mjs");
+  const { newCycle, kernelFreeze, debtBudget } = await import("./kickoff-gates.mjs");
   const nc = newCycle({ root, tracker: laneRes.tracker, base: baseRef });
   if (nc.state === "unknown") warn("new-cycle-unknown", nc.reason);
   else if (nc.state === "new")
     for (const r of await kernelFreeze({ root, lane: laneRes.lane, identity: nc.identity }))
+      (r.level === "fail" ? fail : warn)(r.check, r.msg);
+  if (nc.state === "new")
+    for (const r of debtBudget({ root, tracker: laneRes.tracker, lane: laneRes.lane, planRows: tableRows(section(sections(readT("PLAN.md")), "phases")) }))
       (r.level === "fail" ? fail : warn)(r.check, r.msg);
 }
 

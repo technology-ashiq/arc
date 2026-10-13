@@ -315,8 +315,69 @@ _ran() { [ "$(printf '%s\n' "$output" | head -n1)" = "Selected lane: $1 (via arg
   [[ "$output" == *"[kernel-freeze] lane memory"* ]]
 }
 
+@test "freeze: round-1 B1 -- a --base with no value refuses and never swallows the next flag" {
+  _repo memory
+  run node "$LINT" "$SANDBOX" --base --lane memory
+  [ "$status" -eq 5 ]
+  [[ "$output" == *'--base needs a ref name, got "--lane"'* ]]
+  [[ "$output" != *"Selected lane:"* ]]
+}
+
+@test "freeze: round-1 B2 -- a --base starting with a dash is refused, never handed to git" {
+  _repo memory
+  run node "$LINT" "$SANDBOX" --lane memory "--base=--output=$BATS_TEST_TMPDIR/pwn"
+  [ "$status" -eq 5 ]
+  [[ "$output" == *"--base needs a ref name"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/pwn" ]
+}
+
+@test "freeze: round-1 L3 -- string markers (\"false\") on revenue.received do not lift; a clean receipt does" {
+  _repo memory
+  _ruling "$RULING_ID" "$STD_WHAT"
+  _set_cycle memory "arc-memory (Cycle 2)"
+  _ev '{"id":"01M4VQ0000000000000000000G","kind":"revenue.received","ts":"2026-10-14T05:00:00+05:30","supersedes":null,"payload":{"amount":100,"currency":"INR","test":"false"}}'
+  _ev '{"id":"01M4VQ0000000000000000000H","kind":"revenue.received","ts":"2026-10-14T05:00:00+05:30","supersedes":null,"payload":{"amount":100,"currency":"INR","livemode":"true"}}'
+  _lint memory
+  _ran memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"(now 0)"* ]]
+  _ev '{"id":"01M4VQ0000000000000000000J","kind":"revenue.received","ts":"2026-10-14T06:00:00+05:30","supersedes":null,"payload":{"amount":100,"currency":"INR","livemode":true}}'
+  _lint memory
+  [ "$status" -eq 0 ]
+}
+
+@test "freeze: round-1 L4 -- a supersedes line written BEFORE the ruling does not lift it" {
+  _repo memory
+  _ruling 01M4VQ0000000000000000000K 'unrelated ruling' "$RULING_ID"
+  _ruling "$RULING_ID" "$STD_WHAT"
+  _set_cycle memory "arc-memory (Cycle 2)"
+  _lint memory
+  _ran memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[kernel-freeze] lane memory is frozen by owner ruling $RULING_ID"* ]]
+}
+
+@test "freeze: round-1 B5 -- a separate-git-dir checkout still finds the main worktree's spine" {
+  _arc_lane_sandbox
+  rm -rf "$SANDBOX/.git"
+  git -C "$SANDBOX" init -q --separate-git-dir "$BATS_TEST_TMPDIR/gitdir"
+  git -C "$SANDBOX" config user.name arc-test
+  git -C "$SANDBOX" config user.email test@arc.local
+  cp -r "$FIXTURE/docs" "$SANDBOX/docs"
+  _lane memory LIVE "arc-memory (Cycle 1)"
+  git -C "$SANDBOX" add -A && git -C "$SANDBOX" commit -qm base && git -C "$SANDBOX" branch -q base
+  unset ARC_SPINE_ROOT
+  SPINE="$SANDBOX/.claude/state/hq"; mkdir -p "$SPINE/events"
+  _ruling "$RULING_ID" "$STD_WHAT"
+  _set_cycle memory "arc-memory (Cycle 2)"
+  _lint memory
+  _ran memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[kernel-freeze] lane memory is frozen by owner ruling $RULING_ID"* ]]
+}
+
 @test "freeze: this suite registers every case it declares (bats drops non-ASCII titles silently)" {
   n=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$n" -eq 21 ]
-  [ "$BATS_TEST_NUMBER" -eq 21 ]
+  [ "$n" -eq 26 ]
+  [ "$BATS_TEST_NUMBER" -eq 26 ]
 }

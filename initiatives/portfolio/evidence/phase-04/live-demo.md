@@ -18,3 +18,23 @@ Real ruling: `01M4VP8AMYJPMT1MZNQRB0FYY6` (approval.requested, gate owner-ruling
 
 Assumption A3 (the real ruling text parses under the three item shapes): **held** -- the real
 `what` parsed; `engine (metered runs only)` and `distribute Cycle 3` both read as their shapes.
+
+## Attack round 1 (arc-attack @ 2df81d4) -- logic deepseek-v4-flash, boundary claude-code
+
+Logic 10 (2 high, 4 medium, 4 low), boundary 7 (2 high, 3 medium, 2 low). Fixed: B1, B2, B3, B4, B5,
+B6, L3, L4 (L7 is B1), each pinned in `tests/portfolio-kernel-freeze.bats` (round-1 cases) and added to
+`fixed-defects.md` (h)-(m). Rejected (ADR-0067):
+
+```
+REJECTED: L1 same Cycle N with amended prose reads as the same cycle -- already-covered
+REJECTED: L5 "(Cycle 2 extra)" folds to the same identity -- already-covered
+REJECTED: L2 "launch, and growth" yields an empty item -- unsupported
+REJECTED: L6 nested parentheses in a note fail closed -- non-actionable
+REJECTED: L8 unreadable PROGRESS treated as not-live -- non-actionable
+REJECTED: L9 a revenue receipt with no markers counts as real -- already-covered
+REJECTED: L10 torn spine lines are skipped -- out-of-appetite
+REJECTED: B7 ARC_SPINE_ROOT resolved against cwd -- duplicate
+```
+(L1/L5: ADR-0076 defines identity as the `Cycle N` token on purpose, kickoff attack finding 2. L2: `,? and `
+is replaced before splitting, pinned by the grammar-variants case. L6: failing closed is the ruling
+grammar's safe direction. L9: ADR-0077 counts real money as the default. B7 mirrors `spine-io.mjs`.)

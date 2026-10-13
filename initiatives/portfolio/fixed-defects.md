@@ -1,15 +1,25 @@
-# Fixed defects -- portfolio lane (carried into every /arc-attack prompt)
+# fixed-defects.md -- the portfolio lane's running defect list (lock 5, ADR-0226)
 
-Each row is a defect class already found and fixed somewhere in this lane. An attacker checks every
-OTHER file in the diff for the same class: a fix is not applied until it has been attacked somewhere
-it was never made.
+Every `/arc-attack` on a portfolio PR carries this file. Check **each class below in every file of the
+diff**, not only where it was first fixed: a fix is not applied until it has been attacked somewhere it
+was never made.
 
-| # | Class | First found | Check everywhere for |
-|---|---|---|---|
-| 1 | Markdown-contract parsing: case-sensitive key match, first-vs-last of a repeated key, `$` under `/m`, bold/heading variants slipping an exact regex | Cycle 4 risk 3, council v2/v3 | every header/table/ruling parser in the diff |
-| 2 | Unquoted or word-split flag values (`--lane $X`) letting a value smuggle a flag | Cycle 4 Phase 00 | every argv parser (`--base`, `--lane`) |
-| 3 | A gate reading its own output as input (a job's receipt resetting the clock it measures) | Cycle 5 kickoff attack, finding 1 | anything that both emits and reads the spine |
-| 4 | Reading cwd's repo/spine instead of the linted repo's; a worktree reading its own empty `.claude/state` | Cycle 5 kickoff attack, finding 3 risk | every spine or repo-root resolution |
-| 5 | A string-diff "is this new?" test that a typo or date amendment flips | Cycle 5 kickoff attack, finding 2 | every comparison of a header value against a base |
-| 6 | A count that a rehearsal/fixture/simulated record satisfies | Cycle 5 kickoff attack, finding 4 | every threshold over spine receipts |
-| 7 | Absence-only assertions (a crash satisfies them); non-ASCII `@test` titles silently dropped | retro 2026-07-30, testing.md | every new bats file |
+## Imported classes (seeded at Cycle 5 kickoff, 2026-10-14)
+
+- **(a) markdown-contract parsing.** Case-sensitive key match, first-vs-last of a repeated key, `$` under `/m`, bold or heading-level variants slipping an exact regex (Cycle 4 risk 3, council v2/v3).
+- **(b) flag values.** A flag with a missing or empty value is refused by name and never consumes the next flag; two copies of one flag with different values is an error, not last-wins (Cycle 4 Phase 00, lanes.md).
+- **(c) a gate reading its own output.** A job whose own receipt resets the clock it measures (kickoff attack finding 1).
+- **(d) the wrong repo or spine.** Resolving from cwd instead of the linted root; a linked worktree reading its own empty `.claude/state` (kickoff attack).
+- **(e) string-diff "is this new?".** A typo or date amendment flipping a header comparison (kickoff attack finding 2).
+- **(f) counts a rehearsal satisfies.** A threshold over receipts met by a simulated, fixture or rehearsal record (kickoff attack finding 4).
+- **(g) vacuous tests.** Absence-only assertions a crash satisfies; non-ASCII `@test` titles bats drops silently (testing.md).
+
+## Lane finds
+
+- **(h) a value handed to git as an argument.** A ref or path with a leading dash is an option to git (`--output=<path>` writes a file): validate against a ref grammar before any `git` call (Phase 04 r1 B2).
+- **(i) one null for two failures.** "Absent at base" and "could not read base" must be different states; folding both into null made a git hiccup refuse a mid-cycle lane (Phase 04 r1 B4).
+- **(j) the main worktree is not dirname(git common dir).** Separate-git-dir checkouts and submodules break that; read `git worktree list --porcelain`'s first entry (Phase 04 r1 B5).
+- **(k) a marker that is only checked for one literal.** `test: "false"` is not proof of real money; a marker counts unless it is literally `false` (Phase 04 r1 L3).
+- **(l) order on an append-only log.** A supersedes/decision line only acts on a record that existed before it (Phase 04 r1 L4).
+- **(m) tracker paths in two forms.** A path used both on disk and as a git tree path must be repo-relative POSIX (Phase 04 r1 B3).
+- **(n) rows without a header.** Markdown ledgers append rows under later prose without repeating the header; code-fenced pipe lines are not rows (Phase 05 demo).
