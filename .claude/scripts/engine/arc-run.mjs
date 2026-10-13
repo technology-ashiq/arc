@@ -76,6 +76,7 @@ import { boundaryRefusal } from "./data-boundary.mjs";
 import { bashEnv, spawnBounded } from "../core/spawn-bounded.mjs";
 import { isExpired, PROFILE_DRIVER, profileRef, routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
 import { classifyAttempt, classForReason, familyOf, nextHop, termsCheck } from "./failure-class.mjs";
+import { isSpend, spendBasis, sumSpend } from "./drivers/common.mjs";
 // The owner store (ADR-1350), read-only: a router `profile:` names one of its records (ADR-1801).
 import { endpointOf, findModel, loadRegistry } from "../hq/lib/face/models.mjs";
 
@@ -1265,6 +1266,7 @@ function emitRun(payload) {
   // class and the hops are added beside it. A run that never reached a driver has no attempt to read
   // a class from, so its refusal reason supplies one -- an absent class on a failed receipt would read
   // as "not recorded".
+  const money = runSpend();
   const lastHop = HOPS[HOPS.length - 1];
   const failureClass = payload.outcome === "ok"
     ? undefined
@@ -1283,6 +1285,11 @@ function emitRun(payload) {
     duration_ms: Math.max(0, Date.now() - runStartedAt),
     model_source: seatSource,
     ...roleFields(),
+    // What the run spent, or why nothing says (ADR-0230). Never a 0 for an absence.
+    spend: money.groups.length === 1 ? money.groups[0].spend : null,
+    ...(money.groups.length === 1 ? { spend_basis: money.groups[0].basis } : {}),
+    ...(money.groups.length > 1 ? { spend_by_currency: money.groups.map((g) => g.spend) } : {}),
+    ...(money.absence ? { spend_absence: money.absence } : {}),
   }, extra);
   if (!r.ok) {
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
@@ -1308,6 +1315,61 @@ function emitRun(payload) {
   // took the latest one written since its snapshot, and a concurrent face ask or a second bench run was credited to
   // the attempt, spend and all (face v2 Phase 05 round-2 logic attack). stderr, because stdout is the answer.
   if (r.id) console.error(`arc-run: receipt run.completed ${r.id}`);
+  emitSpend(money.groups, r.id);
+}
+
+/**
+ * The run's spend, per currency, from its hops (ADR-0230): one exact sum and ONE rounding per currency, through
+ * `sumSpend` -- the same function the cap reads, so the receipt, the money row and the cap cannot disagree. With no
+ * figure at all, the absence is named: `no-attempt` (no driver ran), `not-reported` (a driver that reads a figure
+ * looked and got none), or `driver-unmetered` (no driver that ran reads one).
+ */
+function runSpend() {
+  const withSpend = HOPS.filter((h) => isSpend(h.spend));
+  const currencies = [...new Set(withSpend.map((h) => h.spend.currency))].sort();
+  const groups = currencies.map((cur) => {
+    const hops = withSpend.filter((h) => h.spend.currency === cur);
+    const drivers = [...new Set(hops.map((h) => h.driver))];
+    return { spend: sumSpend(hops.map((h) => h.spend)), drivers, basis: [...new Set(drivers.map(spendBasis))].sort().join("+") };
+  }).filter((g) => g.spend);
+  if (groups.length) return { groups, absence: null };
+  if (!HOPS.length) return { groups, absence: "no-attempt" };
+  return { groups, absence: HOPS.some((h) => Object.prototype.hasOwnProperty.call(h, "spend")) ? "not-reported" : "driver-unmetered" };
+}
+
+/**
+ * ONE `cost.incurred` per metered run per currency (ADR-0230, ADR-1001's kind), AFTER its run.completed so every
+ * money row has the receipt it names in `run_ref`. The idem is derived from (run_ref, currency): a re-emit for the
+ * same run collides, and two runs with identical figures do not, because their run.completed ids differ.
+ * No run.completed id, no money row: a row pointing at nothing is a cost nobody can trace.
+ */
+function emitSpend(groups, runRef) {
+  if (!groups.length) return;
+  if (!runRef) {
+    console.error("arc-run: could not emit cost.incurred: the run.completed it would name was not sealed — the spend is on no ledger");
+    return;
+  }
+  for (const g of groups) {
+    const label = `engine ${processName} ${g.drivers.join("+")} ${g.basis}`.replace(/[^ -~]/g, "").slice(0, 64);
+    const m = emitEvent("cost.incurred", {
+      amount: g.spend.amount,
+      currency: g.spend.currency,
+      provider_amount: g.spend.provider_amount,
+      source: "measured",
+      basis: g.basis,
+      venture: "arc",
+      process: processName,
+      driver: g.drivers.join("+"),
+      ...(effectiveModel ? { model: effectiveModel } : {}),
+      label,
+      run_ref: runRef,
+    }, ["--process", `${doc.name}@${doc.version}`, "--venture", "arc", "--idem", sha256Hex(`cost.incurred|${runRef}|${g.spend.currency}`)]);
+    if (!m.ok) {
+      console.error(`arc-run: could not emit cost.incurred: ${m.error}`);
+      continue;
+    }
+    verifyLanded(m.id);
+  }
 }
 
 /**
@@ -1925,8 +1987,15 @@ async function attempt(name, capMs) {
       ...Object.fromEntries(["tokens_in", "tokens_out"].filter((k) => Number.isInteger(r.cost[k]) && r.cost[k] >= 0).map((k) => [k, r.cost[k]])),
     }
     : null;
+  // THE SPEND, read off the sidecar and never re-parsed (ADR-0229): `spendOf` in the driver already made it money, so
+  // this only checks the shape. A key holding anything but that shape is the driver saying it looked and has no
+  // figure we can trust -- `null`, never 0. No key at all is a driver that never reads one.
+  const hopSpend = r.cost && typeof r.cost === "object" && Object.prototype.hasOwnProperty.call(r.cost, "spend")
+    ? (isSpend(r.cost.spend) ? r.cost.spend : null)
+    : undefined;
+  if (hopSpend === null && r.cost.spend !== null) console.error(`arc-run: WARN the ${name} driver's spend is not money arc-run can read — recorded as not-reported`);
   // `class: null` is an attempt that succeeded. It is not a seventh class.
-  HOPS.push({ driver: name, tier: tier ?? null, model: effectiveModel ?? null, class: c.cls, ms: Math.max(0, Date.now() - t0), ...(hopCost && Object.keys(hopCost).length ? { cost: hopCost } : {}) });
+  HOPS.push({ driver: name, tier: tier ?? null, model: effectiveModel ?? null, class: c.cls, ms: Math.max(0, Date.now() - t0), ...(hopCost && Object.keys(hopCost).length ? { cost: hopCost } : {}), ...(hopSpend !== undefined ? { spend: hopSpend } : {}) });
   return { ...v, failureClass: c.cls };
 }
 

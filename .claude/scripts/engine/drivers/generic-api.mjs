@@ -174,6 +174,9 @@ await runDriver("generic-api", async ({ processName, input }) => {
     // Streamed to get past undici's 300 s headers cap (see fromSse); usage rides the last chunk.
     stream: true,
     stream_options: { include_usage: true },
+    // OpenRouter's usage accounting: the provider's own spend in `usage.cost` (USD credits), asked for explicitly
+    // (ADR-0229). An endpoint that ignores the field returns none, and the spend is then `not-reported`, never 0.
+    usage: { include: true },
   };
   if (REASONING_OFF) process.stderr.write("generic-api: reasoning off (ARC_LLM_REASONING=off)\n");
 
@@ -245,8 +248,10 @@ await runDriver("generic-api", async ({ processName, input }) => {
     cost: {
       tokensIn: Number.isFinite(u.prompt_tokens) ? u.prompt_tokens : undefined,
       tokensOut: Number.isFinite(u.completion_tokens) ? u.completion_tokens : undefined,
-      // No inr figure: this endpoint does not return one, and deriving it from a price table
-      // nobody maintains would be an estimate wearing a measurement's clothes (ADR-0069 b5).
+      // The PROVIDER's figure or nothing: `usage.cost` when the endpoint reports it, turned into money by `spendOf`
+      // alone. Deriving it from tokens and a price table nobody maintains would be an estimate wearing a
+      // measurement's clothes (ADR-0069 b5).
+      spend: { value: u.cost, currency: "USD" },
       source: "measured",
     },
     model: pinnedModel() ?? "unpinned",
