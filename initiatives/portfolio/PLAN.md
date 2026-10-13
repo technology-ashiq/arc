@@ -1,160 +1,155 @@
-# PLAN.md — Cycle 4 · arc-portfolio "The Conductor"
+# PLAN.md — portfolio Cycle 5: the board that notices (lane `portfolio`)
 
-> Filled by `/arc-kickoff` 2026-07-30. Design source: `docs/strategy/plans/PLAN-portfolio.md`
-> (FROZEN, review-freeze v6 — six adjudicated rounds; PORT-A…J → ADR-0050..0059; rejected
-> ideas live in the pack's §14 and are not re-litigated here). Predecessor CLOSED:
-> `docs/archive/PLAN-2026-07-30.md` (Cycle 3 · arc-design, 4/4 phases closed).
-> Attack-panel findings mutate THIS file, never the pack.
+Cycle 4 ("The Conductor") is closed and archived at `archive/PLAN-cycle4-2026-08-02.md` and
+`archive/PROGRESS-cycle4-2026-08-02.md`. ADR-0050..0062 are its frozen record and stand untouched;
+ADR-0051 — *the board is a view, never hand-kept* — is the law this cycle serves. The owner opened
+Cycle 5 on 2026-10-14 in chat with five locks (below, carried verbatim into REQs and Non-negotiables)
+and then: "work start pannu, next ella phase pannu … push permission iruku, code merge … ella phases
+complete aana apram final ah merge … local tests panna venam ellame CI la". Phase numbers continue
+from Cycle 4 (04 onward), so every evidence path Cycle 4 cites stays valid. Portfolio is exempt from the
+kernel freeze by name in the ruling itself.
 
 ## Goal
 
-For Ashiq, arc gains **The Conductor** — multi-lane workspaces (`initiatives/{lane}/` per
-product) plus a root `PORTFOLIO.md` board and a uniform `--lane` resolver on the seven
-tracker surfaces, so multiple arc products plan and build in parallel while arc stays one
-company (one machine, one main, one CI, one spine, one owner) and consumer repos keep
-today's root layout byte-identical, forever.
+One sentence: **the board notices without a human looking — a daily job derives `stale` for every LIVE
+lane no receipt has named in 14 days and raises it as a needs-you line, `kickoff-lint` refuses a new
+cycle on a kernel lane while the owner's freeze ruling stands (printing its ULID), and refuses a new
+cycle for a lane with more than 20 open debt rows unless the plan budgets a named debt phase.**
+
+Out of scope: any change to PORTFOLIO.md's columns or row grammar; a health score, owner column or ETA.
 
 ## Current state
 
-<!-- brownfield survey, verified 2026-07-30 (codebase-surveyor) -->
-- **Stack:** arc build system v4 · zero-dep Node ≥18 (`.mjs` scripts) · bash-3.2/POSIX · bats tests · 3-OS CI matrix (ubuntu / windows-git-bash / macos).
-- **Runs via:** `/arc-kickoff`, `/arc-phase-done`, `/arc-retro`, `/arc-change` (`.claude/commands/*`); bats suite at `tests/`; CI on pull_request via `ci.yml`.
-- **Entry points:** `.claude/scripts/plan/kickoff-lint.mjs` (deterministic gate; reads PLAN/PROGRESS/phases hardcoded at root) · `.claude/scripts/plan/arc-evidence.sh` (phase close; writes `docs/evidence/`, `--out` seam exists) · `.claude/commands/arc-*.md` (command markdown; 9 of them reference tracker paths).
-- **Core modules:** `products/*/manifest.json` (ownership registry, 8 products) · `arc-products.mjs` (resolver) · event spine `arc-event.sh`/`arc-event.mjs` (hook/strict dual mode, ADR-0031) · `lib/spine-io.mjs` (wx-create lockfile, stale-break, token check; no spool yet — `_quarantine/` only).
-- **Also path-coupled:** `statusline.sh`, `SessionStart.d/00-context.sh`, `SessionEnd.d/00-session-log.sh` (all read `PROGRESS.md ## Now`).
-- **Conventions:** root PLAN/PROGRESS/phases as the sole tracker, manifest-driven products, conventional commits, feat/* branches + PR, spine receipts + review-ledger, offline-first, WARN-first trial lints, CI byte-identity gate on `tests/fixtures/sync-golden/tree-manifest.txt`.
-- **Hot / high-blast-radius:** `kickoff-lint.mjs` + `arc-evidence.sh` (hardcoded paths → lane-aware) · SessionStart/statusline hooks (must apply the degraded rule) · spine lock path (spool lands beside it).
-- **Do-not-touch:** `docs/evidence/**` + `docs/archive/**` (frozen history) · runtime output dirs (`docs/design/**`, `docs/council/**`) · `sync-to-project.{sh,ps1}` + `tests/fixtures/sync-golden/tree-manifest.txt` (byte-identity gate; regen only as a named, reviewed step) · `products/*/manifest.json` payload lists (additions only, with golden regen) · CONTENT edits to already-listed payload files this cycle rewrites (`kickoff-lint.mjs`, `arc-evidence.sh`, phase 0) — diff the sync-golden delta FIRST, confirm only intended paths moved, regen as a named step in the same commit · `.claude/state/**`.
+Verified 2026-10-14 at `4741c770` (codebase-surveyor + direct reads).
+
+- **Stack:** Node ESM, zero npm deps · bash-3.2 · bats on CI only (3 OS legs).
+- **Entry points:** `node .claude/scripts/plan/kickoff-lint.mjs [--lane L]` · `bash .claude/scripts/core/board-lint.sh` · `node .claude/scripts/hq/arc-jobs.mjs` (job runner) · `node .claude/scripts/hq/arc-brief.mjs`.
+- **Conventions:** lints WARN-first, WARN lines `WARN [class] loc — summary` (pinned by `tests/test_helper.bash:598-609`); job rows are closed-key block YAML governed by a `process:NAME` policy subject (deny by default); spine read only via `spine.mjs`; new kinds need an ADR.
+- **Gates:** `.claude/scripts/plan/kickoff-lint.mjs` (712 lines; `fail()`/`warn()` at :66-67, TRIAL groups demoted by `gate()` :180; lane via `resolveLane` :54; **reads no spine; has no "new cycle" notion**) · `.claude/scripts/core/board-lint.sh` (781 lines; **exit 0 on every path**, 9 WARN classes pinned by `tests/test_helper.bash:598-609` + `tests/warn-shape.bats:72-76`; no FAIL class).
+- **Jobs:** `hq.jobs.yaml:62-70` `launch-watch` row (script, `daily@07:30`, `catchup: skip`, `policy_kind: process:launch-watch`) · `hq.policy.yaml:196-205` its subject · `processes/launch-watch.process.yaml` `job_stub: true` · runner `.claude/scripts/hq/arc-jobs.mjs` · both yaml files are **owner-applied** (ADR-1750's `owner-apply-watch-policy.mjs`).
+- **Brief:** `arc-brief.mjs:63` lists `approval.requested`, `incident.raised`, … under needs-you; a job's own child emits `incident.raised` (launch-watch → `arc-launch verify`).
+- **Spine:** sanctioned reader `.claude/scripts/hq/spine.mjs` (`query()` :146, filters kind/since/venture — no lane filter); `spine-reader-lint.sh` scans hq/evolve/memory only. Receipts have **no top-level lane**; `payload.lane` names a lane on 107 of 1,881 receipts. Zero lane receipts ever: bench, growth, leads, portfolio. LIVE today: bench, face, growth, launch, leads → bench, growth, leads would derive stale.
+- **Ruling:** `01M4VP8AMYJPMT1MZNQRB0FYY6` (`approval.requested`, `gate: owner-ruling`, 2026-10-14, kernel freeze, exemptions in prose `what`), approved by `decision.recorded` `01M4VPVKGNX9DMNWFEEZ57ZGJX`. `supersedes` is set on 0 receipts and read by no gate.
+- **Debt ledgers:** 12 of 21 lanes; six header grammars; **no open/closed column**. Approx data rows: face 112, design 45, launch 38, distribute 24.
+- **Board render:** PORTFOLIO.md is hand-kept, rows rewritten by `lane-status.mjs`; read by `arc-dash.mjs`, `face/src/modules/command/board/fold.mjs`, `wip-line.sh`, others.
+- **Do-not-touch:** `hq.jobs.yaml`, `hq.policy.yaml` (owner apply only) · `.github/**`, `.claude/settings.json` (write-denied) · `.claude/state/hq/events/**` (append-only) · `.claude/commands/arc-kickoff.md` (generated) · `docs/wiki/**`, `rooms.generated.json`, sync golden (regenerated only).
 
 ## Success requirements
 
+Tier S caps active rows at 5. Cycle 4's REQ-01..05 keep their numbers in the archive; Cycle 5 starts at
+REQ-06. The owner's lock letters are kept beside each.
+
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | **Dual-mode machinery.** The 7 surfaces (`kickoff`, `resume`, `change`, `phase-done`, `retro`, kickoff-lint, arc-evidence) resolve lane-mode per ADR-0054 while root-mode stays byte-identical (consumer contract). | Root-mode goldens pinned BEFORE refactor and green after; bare-root consumer-sim fixture green; fixture-lane suite green; lane-name adversarial fixtures (`../`, absolute path, empty, uppercase, leading-digit) rejected + pinned; `--lane` accepted + echoed on all 7 surfaces (fixtured); bare tokens NEVER parsed as a lane (fixtured: `/arc-change design ...` treats "design" as text); free text containing the literal substring `--lane` (e.g. `/arc-kickoff Add --lane flag docs`) is fixtured on the goal/description surfaces and stays description text, never mis-consumed as the flag; unknown-lane hard-STOP fixture per non-kickoff surface (typo'd name → STOP + known-lane list, 0 folders created); kickoff-only creation fixture (birth + WIP info line); canonical output order asserted (`Selected lane:` first); ambiguity → ask, never guess (fixtured); full bats green on 3 OS. | 0 | validated |
-| REQ-02 | **Self-hosted migration with rehearsed rollback.** This cycle's tracker moves into `initiatives/portfolio/`; design lane = folder + HISTORY-INDEX.md links ~~only~~ **+ a machine-header-only `PROGRESS.md`** (ADR-0058 **as amended 2026-08-01 by ADR-0062** — "links only" collided with ADR-0051's derive-from-header rule, since the board's `design IDLE` must derive from something; the phase shipped the header and this criterion is amended to match, not waived); `PORTFOLIO.md` v1 born **with no `develop` row** (ADR-0061 — the board indexes born lanes only). | Scripted move: dry-run output shown → single commit; rollback REHEARSED first in a DISPOSABLE scratch worktree (`git revert` executed there; root-mode + kickoff-lint + resume proven green post-revert; 0 emitters run there; worktree removed); lane PROGRESS.md carries the machine header block from birth (ADR-0051); `/arc-resume` no-arg follows canonical order (lane echo → board → 5-block report); `/arc-phase-done 1` itself executes in lane-mode; pointer stubs at old root paths; board v1 has both tables + `Updated:` line. | 1 | validated |
-| REQ-03 | **Board + WIP visibility.** Strict-grammar board lint over BOTH tables and a kickoff-preflight WIP info line (counted = LIVE+BLOCKED) that never stops the owner (ADR-0052). | Fixtures: preflight prints the correct counted number (BLOCKED included) and PROCEEDS at any count — one fixture asserts kickoff is NOT blocked at 2+; board values cross-checked against each lane's PROGRESS machine header (hand-edited divergence WARNs, fixtured); board drift, bad status, malformed dependency line, venture-in-initiatives-table, stale `Updated:` each WARN; every WARN prints Expected / Found / Example (asserted in fixtures). | 2 | validated |
-| REQ-04 | **Parallel-safety floor.** **PARTIALLY REVERTED 2026-08-01 — stays `active`:** the ownership lint (D) and the zero-interleaving proof (E) shipped; the spool half was reverted in #89 after an adversarial pass found three data-loss defects in it (see `evidence/phase-02/adversarial-report.md`). Mode-B certification is withdrawn with it (ADR-0056: certification is a fixture result, and these fixtures no longer exist). Ownership-boundary lint (WARN-first, manifest-derived, ADR-0057) + spine emitter concurrency contract: strict = bounded lock retry → exit 2; hook = never blocks, lock timeout routes the event to a per-event `_pending/` spool, surfaced in status/brief, drained under the next lock. | Fixtures: seeded cross-lane edit WARNs with Expected/Found/Example; concurrent emits on 3 OS → main JSONL has 0 interleaved/partial lines, every event lands in main file OR spool, none lost; spool-drain fixture (drained events pass canonical serialization + idem index); spool-visibility fixture (pending count appears in status/brief output). | 2 | active |
-| REQ-05 | **Docs truth.** The One Rule rewritten to per-lane law + truth hierarchy + vocabulary; ritual docs updated; ADR template gains a one-line `Product:` field. | Docs-drift ship-gate passes with 0 findings (`/arc-docs`); rewritten One Rule quotes `PORTFOLIO.md` as the index view, not the truth (ADR-0051); `docs/HISTORY.md` entry logged with lane tag; retro run. | 3 | validated |
+| REQ-06 | **(lock 2, the freeze)** A kickoff on a kernel lane is refused while the owner's freeze ruling stands, naming the ruling | `tests/portfolio-kernel-freeze.bats` (each case asserts a RAN marker first): against a fixture spine holding a `kernel freeze:` owner-ruling, a new-cycle plan (ADR-0076) for a non-exempt lane → `kickoff-lint` exit 1 with `FAIL [kernel-freeze]` printing the ruling's ULID; exempt lanes come from the ruling's `what` (the same fixture with `portfolio` dropped from the list refuses `portfolio`, proving nothing is hardcoded); `distribute Cycle 3` exempts Cycle 3 and refuses Cycle 4; `engine (metered runs only)` exempts and prints the note; a `decision.recorded` reject lifts it; a second owner-ruling whose `supersedes` names the ruling lifts it; `revenue.received` ×1 lifts it; an unparseable exempt clause FAILs closed naming the ULID; a lane mid-cycle (unchanged `cycle:` vs base) is never refused; no spine → `WARN [kernel-freeze-unread]`; run from a linked worktree it reads the main clone's spine | 04 | active |
+| REQ-07 | **(lock 3, the debt budget)** A lane drowning in debt must budget for it before a new cycle | `tests/portfolio-debt-budget.bats` (RAN first): a ledger with 21 open rows and a new-cycle plan with no `Debt:` phase → `FAIL [debt-budget]` printing the open count and needed days; a `Debt:` phase at 19% → FAIL; at 20% naming `debt #3` (open) → pass; naming a closed or missing row → FAIL; exactly 20 open → no gate; rows led by `fixed`/`closed`/`paid`/`resolved`/`done` or struck-through first cell are closed, "mitigated, not closed" stays open; ids by `#` column and by `D`-prefixed ordinal (`D7`) both resolve; one fixture per real ledger grammar (all six); an unchanged cycle is never judged | 05 | active |
+| REQ-08 | **(lock 1, lane.stale)** A silent LIVE lane is noticed by a job, not by luck | `tests/portfolio-lane-stale.bats` (RAN first): fixture spines reproducing **growth's 7-week** and **leads' 9-week** silences derive `stale: true`; a LIVE lane with a `payload.lane` receipt 13 days old is not stale, 15 days old is; IDLE/BLOCKED lanes are never stale; the job writes `.claude/state/portfolio/lane-stale.json` and emits one `incident.raised` `class: lane-stale` per silent lane, and a second run on the same spine emits none AND still derives the lane stale (the job's own incident does not reset the clock); a lane whose only lane-naming receipts are `lane-stale` incidents stays stale; `arc-brief` on that spine prints the lane under needs-you; `board-lint.sh --strict` exits 1 with `FAIL [board-stale-hand-written]` on a fixture board where a table header cell equals `stale` or a data cell matches `^\s*stale\s*[:=]`; a fixture board whose next or blocked-on prose contains the word stale exits 0; without `--strict` the exit stays 0 on every path (existing callers and `warn-shape.bats` unchanged); all on fixture boards, never the live one; `arc-dash` renders `stale` beside the lane from the state file; `jobs-lint` green on `owner-apply-lane-stale.mjs`'s output in a fixture repo, and a second apply changes nothing | 06 | active |
+| REQ-09 | **(lock 4 + lock 5)** The board's grammar is unchanged, and every gate was attacked before it shipped | PORTFOLIO.md's two table header lines byte-identical to `4741c770`; the WARN registry still pins its nine classes and the new FAIL class is registered separately; `engine/enforcement.yaml` names each new gate's tool-time / commit-time / merge-time line or why it has none, and `gate-parity.mjs` is green; one two-surface `/arc-attack` (logic + boundary) ran per gate PR with findings fixed or recorded in `initiatives/portfolio/debt-ledger.md`; ADR-0076..0079 in the company range after a sweep of every worktree and remote branch, re-swept at the final merge; `enforcement.yaml` names the debt-budget merge-time line only if the CI-checkout case (Phase 05) is green on all 3 legs; wiki regenerated and `--check` green; retro + HISTORY entry | 07 | active |
 
 ## Appetite
 
-- **Appetite: 3 days** (owner-stated at kickoff; pack recommendation confirmed).
-- **Tier:** S
-- **Kill criteria (50% tripwire):** 1.5 days burnt with Phase 0 not closed → STOP. Bank
-  the pinned goldens + adversarial fixtures (they harden today's single-lane arc
-  regardless), revert layout work on the branch, retry decision at retro. No
-  half-migrated state may survive a kill — root-mode must be fully working at every
-  commit.
-- **Scope-cut ladder (pre-decided, aligned with A1):** resolver generalization is the
-  sink → ship root-mode goldens + minimal EXPLICIT `--lane` routing only (no
-  auto-resolution) and postpone migration — never a half-generalized resolver. Phase 2
-  burn reaches 1.0 day (0.25d past its 0.75d allocation — the same absolute margin as
-  Phase 0's 1.5d/1.25d tripwire) → ship the Mode-A core value (P0–P1), defer REQ-04 +
-  Mode-B certification to a follow-up slice; board carries `Mode B: not certified` and
-  concurrent emitters stay forbidden (ADR-0056).
-- **Standing tie rule:** venture outweighs OS. If LexOS or design needs the owner
-  mid-cycle, this cycle parks — parking cleanly is literally the feature.
+**2 days planned, 3 days cap** (owner-stated at kickoff). This is a constraint, not an estimate.
+Phases: 04 0.6d · 05 0.4d · 06 0.7d · 07 0.2d = 1.9d; 0.1d slack inside the plan and 1.0d more under the cap, never pre-allocated.
+
+**Tier:** S
+(Derived from the number: 3 days ≤ 3 days.)
+
+**Kill criteria:** the **50% tripwire (day 1.5 of the cap)**: Phase 04 and Phase 05 merged to the cycle
+branch with CI green per-JOB. If not → STOP and cut REQ-08's render half (state file + needs-you only,
+no `arc-dash`/face render), recorded owed. At 100% of the 3-day cap → cut or kill, never extend. Cut
+order: the face board render → `arc-dash` render → REQ-07's six-grammar fixtures beyond three. **Never
+cut:** the freeze FAIL with its ULID, the job writing nothing tracked, the board-lint FAIL class.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-    owner["Person: Ashiq (owner)"]
-    subgraph arc["System: arc monorepo"]
-        subgraph company["Company layer (single, ADR-0053)"]
-            board["PORTFOLIO.md — two-table board (VIEW, ADR-0051)"]
-            spine["Event spine + inbox (.claude/state/hq)"]
-            spool["events/_pending/ spool (REQ-04)"]
-            ledger["ADR ledger · HISTORY · retro-log · trial-ledger"]
-            ci["tests/ bats + 3-OS CI + goldens"]
-        end
-        subgraph lanes["Container: initiatives/ lanes (ADR-0050)"]
-            lp["portfolio/ — PLAN · PROGRESS(header) · phases · evidence"]
-            ld["design/ — HISTORY-INDEX.md links (ADR-0058)"]
-        end
-        subgraph machine["Container: shared execution machine"]
-            cmds["commands arc-kickoff/resume/change/phase-done/retro"]
-            resolver["lane resolver — explicit --lane, auto, ask (ADR-0054)"]
-            lint["kickoff-lint + board lint + ownership lint"]
-            evid["arc-evidence.sh --out seam"]
-        end
-        registry["products/x/manifest.json — body registry (unchanged)"]
+    owner(["Person: Ashiq (owner)"])
+    subgraph arc ["System: arc repo"]
+        kl["Container: plan/kickoff-lint.mjs — kernel-freeze + debt-budget gates"]
+        nc["Component: new-cycle detector — cycle: header vs base ref (ADR-0076)"]
+        job["Container: hq/jobs/lane-stale.mjs — daily, derives stale"]
+        runner["Container: hq/arc-jobs.mjs — runner, governed by hq.policy.yaml"]
+        state[("Instance state: .claude/state/portfolio/lane-stale.json")]
+        bl["Container: core/board-lint.sh — FAIL on hand-written stale"]
+        board["View: PORTFOLIO.md (ADR-0051, columns unchanged)"]
+        brief["Container: hq/arc-brief.mjs — needs-you"]
+        dash["Container: hq/arc-dash.mjs + face board fold — render"]
+        ledger["Data: initiatives/LANE/debt-ledger.md"]
+        apply["Script: owner-apply-lane-stale.mjs — writes hq.jobs + hq.policy rows"]
     end
-    frozen["Frozen history: docs/archive + docs/evidence (ADR-0055)"]
-    consumer["Consumer repos (LexOS, ventures) — root-mode forever"]
-    owner --> cmds
-    cmds --> resolver
-    resolver -->|"initiatives/ present"| lanes
-    resolver -->|"absent: root-mode byte-identical"| consumer
-    cmds --> spine
-    spine -->|"lock timeout (hook mode)"| spool
-    lp -->|"machine header derives"| board
-    lint --> board
-    lint --> registry
-    ld -.->|links only| frozen
+    spine[("Canonical spine: main clone .claude/state/hq/events")]
+    git[("Base ref: origin/main")]
+    owner --> apply --> runner
+    owner -->|"/arc-kickoff"| kl
+    kl --> nc --> git
+    kl -->|"owner-ruling, decision, supersedes, revenue"| spine
+    kl --> ledger
+    runner --> job
+    job -->|"payload.lane receipts"| spine
+    job --> state
+    job -->|"incident.raised lane-stale"| spine
+    spine --> brief
+    state --> dash
+    board --> dash
+    bl --> board
 ```
 
 ## Key decisions (ADR index)
 
 | # | Decision | Status |
 |---|---|---|
-| 0050 | PORT-A: lanes live at `initiatives/{lane}/` (owner-locked) | accepted |
-| 0051 | PORT-B: one live plan per lane; PORTFOLIO.md is a view, never the truth | accepted |
-| 0052 | PORT-C: WIP visible, never gated (owner-locked, round 4) | accepted |
-| 0053 | PORT-D: shared company organs stay single | accepted |
-| 0054 | PORT-E: uniform explicit `--lane`; dual-mode resolution; kickoff-only creation (owner-locked, round 6) | accepted |
-| 0055 | PORT-F: evidence lane-scoped forward; frozen past | accepted |
-| 0056 | PORT-G: two execution modes; Mode B certified only by REQ-04 | accepted |
-| 0057 | PORT-H: ownership boundary WARN-first, manifest-derived | accepted |
-| 0058 | PORT-I: history — link, never copy | accepted |
-| 0059 | PORT-J: ventures appear only as passport rows | accepted |
-| 0060 | root-mode evidence refuses to overwrite; manifest covers the whole bundle | accepted |
-| 0061 | the board indexes born lanes only; QUEUED is a born lane's state, not a promise | accepted |
-| 0062 | PORT-I amendment: a lane on the board carries a machine header (amends 0058) | accepted |
+| 0050–0062 | Cycle 4 decisions (see `archive/PLAN-cycle4-2026-08-02.md`) — frozen record | accepted |
+| 0076 | A new cycle is a changed `cycle:` header against the base ref | accepted |
+| 0077 | The kernel freeze is folded from the owner ruling on the spine, never hardcoded | accepted |
+| 0078 | A lane with more than 20 open debt rows opens its next cycle with a named debt phase | accepted |
+| 0079 | `stale` is derived by a daily job and never written in PORTFOLIO.md | accepted |
+
+ADR numbers: company range (0001–0099). Swept 2026-10-14 across all 8 worktrees and 320 remote refs —
+highest company ADR anywhere was 0075.
 
 ## Non-negotiables
 
-- Philosophy untouched: Golden Loop, gates, receipts, change discipline — a lane is a namespace for tracker state, nothing more (ADR-0050, ADR-0053).
-- No history rewrite and no history duplication: frozen paths stay frozen as sole canonical copies; lanes link, never copy (ADR-0055, ADR-0058).
-- Root-mode green at every commit — byte-identical when no `initiatives/` dir exists; the bare-root fixture is a permanent consumer contract (ADR-0054).
-- feat/* branch + PR, never main.
-- All new lints WARN-first, and every WARN prints Expected / Found / Example (ADR-0057).
-- Spine receipts for kickoff / phase-done / retro as usual; no silently lost receipts — degrade visibly, never lose, never block (ADR-0056, REQ-04).
-- Never guess a lane: explicit `--lane` beats auto-resolve beats ask; destructive commands confirm the selected lane (ADR-0054).
+- ADR-0051: no value on the board is typed by hand; `stale` is derived by the job and never written into PORTFOLIO.md (ADR-0079).
+- Lock 4: PORTFOLIO.md's columns and row grammar do not change; no health score, no owner column, no ETA.
+- The freeze's exempt lanes are read from the ruling's payload, never hardcoded; an unreadable ruling refuses, never exempts (ADR-0077).
+- `hq.jobs.yaml` and `hq.policy.yaml` are written only by the owner-apply script the owner runs (ADR-1750); the job never runs ungoverned.
+- The spine is read only through `.claude/scripts/hq/spine.mjs`; zero new event kinds.
+- Lock 5: two-surface `/arc-attack` (logic + boundary, ADR-0226) per gate PR, carrying `initiatives/portfolio/fixed-defects.md`; the author is never the attacker; one round per PR.
+- Tests run on CI only; every fixture asserts it RAN before asserting what it printed.
+- feat/* branch; push freely; merge once, after every phase is complete (owner, 2026-10-14).
 
 ## No-gos (explicitly out of scope)
 
-- HTML/dashboard board (BRIEF-dashboard's pull-trigger owns it) · companion
-  portfolio.yaml/json (a second file is a second truth) · new `/arc-status` command
-  (capability ships via `/arc-resume`; alias is a post-v1 candidate) · scheduler or
-  automation of lane switching · `products/` → `modules/` rename · consumer-repo
-  lane-mode · moving runtime output paths · worktree helper tooling (Mode B uses plain
-  git) · touching venture repos (ADR-0059).
+- A `stale` column, health score, owner column, ETA or priority number on the board · the job writing
+  any tracked file · a new spine event kind · rewriting other lanes' debt ledgers (no status column
+  added) · hardcoding the exempt list or the ruling ULID · editing `.github/**` or
+  `.claude/settings.json` · a board renderer that regenerates PORTFOLIO.md · enforcing the freeze on
+  `/arc-change`, `/arc-develop` or any surface other than a new cycle's kickoff-lint.
 
 ## Rabbit holes
 
-- Generalizing the board into a schema · auto-deriving the board from the spine (later,
-  dashboard-time) · per-lane ADR numbering (ADR-0053 forbids) · cross-lane dependency
-  GRAPHS (the `blocked-on:` / `depends-on:` line convention is enough at N=2) · lane
-  lifecycle state machines beyond the four statuses · a general spine queueing/daemon
-  system (the spool is a timeout fallback, not an event bus — ADR-0027's no-bus stance
-  holds).
+- Generalising the ruling grammar into a policy language — read exactly the three item shapes, fail closed on anything else.
+- Making `stale` smarter (git commits, PR activity) — the rule is receipts named by `payload.lane`; the revisit trigger owns that question.
+- Face payload plumbing for the board render — if it costs more than 0.15d, ship the `arc-dash` render and record the face render owed.
+- Back-filling receipts so bench/growth/leads look alive — the job's job is to say they are silent.
 
 ## Assumptions ledger
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| A1: kickoff-lint + command paths are parameterizable without rewrite | more than 0.5d inside the resolver/lint refactor → FIRED: ship root goldens + minimal EXPLICIT `--lane` routing only, postpone auto-resolution AND migration (scope-cut ladder) | 0 |
-| A2: no manifest / sync-to-project entry ships root `PLAN.md`/`PROGRESS.md`/`phases/` to consumers | Phase-0 grep of manifests + sync scripts says otherwise → FIRED: add exclusions + consumer note BEFORE the Phase-1 move | 0 |
-| A3: advisory lock + spool covers single-machine AND Mode-B (two worktrees, shared spine) concurrency | any interleaved/corrupt line in main JSONL, **or any receipt refused under contention that a serial run would have accepted**, in fixtures or dogfood → FIRED: strict lockfile for hook mode too; spool becomes the ONLY timeout path, same phase. **TRIGGER WIDENED 2026-08-01, section E.** As written it watched only for CORRUPTION, and the first real concurrency run lost a receipt without corrupting anything: on windows-git-bash an `O_EXCL` create against a lock still in its delete-pending window fails `EPERM`, `withLock` treated any non-`EEXIST` code as fatal, and 1 strict emit in 200 exited 2 (fixed in the same branch). A trigger that can only see a torn line cannot see a refused one, and both are the same loss — this is risk 5's failure mode arriving in the shape the ledger was not watching. Not marked FIRED: the lock held, nothing interleaved, and the prescribed remedy (strict lockfile for hook mode) addresses a different fault than the one found. | 2 |
-| A4: advisory-only WIP (visible count, no gate) is enough at solo scale | retro finds rework/stall rising while counted lanes exceed 2, or two consecutive weeks with both counted lanes owner-blocked → consider promoting the info line to a WARN at retro (ADR-0052) | 2 |
-| A5: Windows (E:\ paths, `git mv` casing) behaves under the design-cycle's cross-OS lessons | any Windows-only CI failure in Phase 0 → apply the no-path-string-compare fixture pattern before proceeding — **FIRED 2026-07-31**. The row was wrong in two ways worth keeping: the failure was **not** Windows-only (macOS broke too — locale collation let `[a-z]` match `D`, so bash accepted `Design` as a lane name while the .mjs twin refused it), and the prescribed remedy **did not apply** — the mechanism was locale-dependent text handling, not path-string compare, so acting on this row as written would have sent the fix to the wrong place. Closed in #71: `LC_ALL=C` + explicit character lists, ASCII-only `@test` names, executed-vs-declared CI reconciliation. ~~Still unvalidated: `git mv` casing, A5's original subject, which is load-bearing for the Phase 1 move (REQ-02).~~ **CASING HALF CLOSED 2026-07-31 (Phase 01, PR #79).** The mover refuses a target lane that folds onto an existing directory of different case, decided from the directory listing and from git's index, never from a path string; the fixture EXECUTED on ubuntu, macOS and windows-git-bash — two case-folding filesystems and one case-sensitive — with `declared == executed` on every leg (arc-ci 30648403346). Refusal is the only outcome identical on three legs, since succeeding would depend on the filesystem underneath. **A5 now carries nothing forward.** | 0 (locale) · 1 (casing) |
+| A1: every kickoff changes the lane's PROGRESS `cycle:` header value | a fixture or real kickoff whose `cycle:` matches the base → FIRED: add the `--new-cycle` flag the kickoff process passes | 04 |
+| A2: CI's checkout can resolve `origin/main` so the new-cycle gates judge PRs | `[new-cycle-unknown]` WARN appears on any CI leg → FIRED: pass `--base` from the PR base SHA in the bats wrapper | 04 |
+| A7: a mid-cycle edit of the `cycle:` header (typo, date amendment, close to IDLE) never changes the extracted cycle identity | a fixture whose `cycle:` text changes but whose `Cycle N` token is the same is judged new-cycle → FIRED: tighten the identity extraction, pinned | 04 |
+| A3: the freeze ruling's `what` parses under the three item shapes | the real `01M4VP8AMYJPMT1MZNQRB0FYY6` text fails the grammar in the live demo → FIRED: widen by exactly the failing shape, pinned | 04 |
+| A4: leading closure words separate open from closed rows on all six ledger grammars | the live count for face/design/launch/distribute disagrees with a hand count of 10 sampled rows → FIRED: narrow the word list, record per-ledger | 05 |
+| A5: a job's child may emit `incident.raised` with a new `class` value and `arc-brief` lists it | `arc-jobs audit` reports `lane-stale` as an UNKNOWN incident class → FIRED: declare the class where the runner's pack is declared | 06 |
+| A6: board-lint's callers tolerate a non-zero exit | any caller (`wip-line`, hooks, bats) breaks on exit 1 → FIRED: n/a, `--strict` is the design (exit 1 only under it; CI passes it) | 06 |
 
 ## External dependencies
 
-None — pure repo + tooling, offline by nature, zero new packages. The
-interface / fake / real / contract-test table is intentionally empty; recorded here so
-the gate sees the section considered rather than skipped (pack §13).
+None — pure repo + tooling, offline by nature, zero new packages. The interface / fake / real /
+contract-test table is intentionally empty; the spine is an internal organ read through its own module.
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
@@ -163,22 +158,35 @@ the gate sees the section considered rather than skipped (pack §13).
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | Silent behavior change in the path refactor breaks a consumer surface nobody watches | Root-mode goldens pinned BEFORE any edit; dual-mode suite + bare-root fixture are the regression net (REQ-01) |
-| 2 | Mid-cycle self-move strands the live tracker (the cycle migrates its own state while running) | Dry-run shown → single commit → rollback REHEARSED in a disposable scratch worktree before the real move (REQ-02); root-mode fallback green throughout |
-| 3 | The same markdown-contract parsing bugs the council found keep recurring, and this cycle ships two NEW strict-grammar parsers into that exact bug class — board lint reading BOTH tables (REQ-03) and the PROGRESS machine-header block (REQ-01/REQ-03: `status:`/`cycle:`/etc.) — case-sensitive field match, first-vs-last match on a repeated section, `$` under `/m`, or a bold/heading-level cosmetic variant slipping past an exact-match regex | Board lint + kickoff-lint refactor (REQ-01, REQ-03) run the council-v2/v3 markdown-contract checklist BEFORE close: normalize case, take last-of-repeated fields, anchor line regexes, tolerant detection + strict value grammar (retro-log 2026-07-16 arc-council-v2/v3) |
-| 4 | Wrong-lane command execution mutates the wrong product's tracker | Kickoff-only creation + unknown-lane hard STOP + `Selected lane:` first-line echo + destructive-command confirm + never-guess (ADR-0054, REQ-01) |
-| 5 | Receipt loss/corruption under concurrent emitters (the C2 lesson: 100 receipts lost silently) | Spool contract (REQ-04): main JSONL zero-interleaving fixtured on 3 OS; timeout events spool visibly; drain under lock; Mode B forbidden until green (ADR-0056) |
+| 1 | The REQ-06 freeze refuses a live, mid-cycle lane (launch, face) and turns every PR red | The new-cycle detector (ADR-0076) gates both checks; fixture: an unchanged `cycle:` is never refused (REQ-06, REQ-07) |
+| 2 | A hand-written strict-grammar parser — the ADR-0077 ruling `what`, the ADR-0078 six ledger grammars — ships with the bug class Cycle 4's retro named (case, first-vs-last, `$` under `/m`, bold variants) | Fail-closed on parse; two-surface attack per gate before push; the fixed-defects list carries Cycle 4's markdown-contract checklist |
+| 3 | The Phase 04 gate reads the worktree's empty spine instead of the main clone's and passes silently | The spine root is `dirname(git common dir)/.claude/state/hq`; fixture runs from a linked worktree; "no spine" is a WARN that names itself, never silence |
+| 4 | The REQ-08 stale job (ADR-0079) dirties the owner's main clone or runs ungoverned | It writes only `.claude/state/portfolio/**`; no schedule row exists until the owner apply; `jobs-lint` green on the apply output |
+| 5 | A REQ-07/REQ-08 test asserts the snapshot (today's LIVE lanes, today's ledger counts) and goes red when another lane moves | Fixture spines and fixture ledgers only; absence assertions name the line, never the group (retro 2026-08-13) |
 
 ## Phases (risk-ordered)
 
 | Phase | Capability | Appetite | Depends on |
 |---|---|---|---|
-| 00 | Dual-mode machinery (steel thread): root goldens pinned, resolver on 7 surfaces, creation/STOP/echo/adversarial fixtures | 1.25 days | none |
-| 01 | Self-host + link history + board v1: tracker moves to `initiatives/portfolio/`, rehearsed rollback, design HISTORY-INDEX, SessionStart degraded rule | 0.75 days | phase-00 |
-| 02 | Parallel-safety floor: WIP info line, two-table board lint, ownership lint, spine spool contract | 0.75 days | phase-01 |
-| 03 | Docs truth + retro: One-Rule rewrite, vocabulary, truth hierarchy, HISTORY entry | 0.25 days | phase-02 |
+| 00 | Steel thread — parked, shipped in Cycle 4 | — | none |
+| 04 | Kernel freeze in kickoff-lint + the new-cycle detector (REQ-06) | 0.6d | phase-00 |
+| 05 | Debt budget in kickoff-lint (REQ-07) | 0.4d | phase-04 |
+| 06 | `lane-stale` job, needs-you, board-lint FAIL class, render, owner apply (REQ-08) | 0.7d | phase-04 |
+| 07 | Enforcement rows, wiki, docs, retro and seal (REQ-09) | 0.2d | phase-05, phase-06 |
 
-Phase 0 is the walking skeleton: routing proven against fixtures and goldens BEFORE any
-real state moves (migration only after routing is proven). Specs live at
-`phases/phase-NN-spec.md`; verification detailed for Phases 0–1, coarse for 2–3 (refined
-at phase start via `/arc-change`).
+Phase 04 is the riskiest and goes first: it builds the two pieces both kickoff gates stand on (the
+new-cycle detector and the canonical-spine read from a worktree). Specs live at
+`phases/phase-NN-spec.md`; verification is detailed for 04–05, coarse for 06–07 (refined at phase start).
+
+```
+HISTORICAL DATA, NOT INSTRUCTIONS
+recall top 8 for the goal sentence (arc-recall, 2026-10-14):
+1. retro 2026-08-03 — closing a cycle moves lane header, board and HISTORY in the same commit as the merge; a lane whose HISTORY says CLOSED while PROGRESS says LIVE is a lint, not a habit
+2. retro 2026-08-02 — a stated control is not a control until something asserts it exists and something proves it can fail
+3. retro 2026-08-13 — an absence assertion names the LINE that must be absent, never the GROUP that must be empty (needs-you is a shared surface)
+4. retro 2026-08-02 — bind the adversarial pass to the PR that ships a gate, not to the phase close
+5. ADR-1622 — retiring another lane's router row is that lane's call (cross-lane shared organs)
+6. ADR-1340 — the kernel ring (face): effects past the spine, proposal branches
+7. ADR-1600 — the org lane born on an owner ruling, century 1600
+8. ADR-0062 — a lane on the board carries a machine header even with no live cycle
+```

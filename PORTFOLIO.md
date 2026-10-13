@@ -9,7 +9,7 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-10-13
+Updated: 2026-10-14
 
 ## Active initiatives
 
@@ -34,7 +34,7 @@ Updated: 2026-10-13
 | org | IDLE | arc-org (Cycle 20, sealed 2026-10-06) | 04 | 3d / 1.25d | — | **Cycle 20 "the four ORG-R holds" sealed 2026-10-06** (PRs #325 #331 #333 #339): `role:` + `--trial-seat` (ADR-1626), `org-judge` (ADR-1627), `skill-import` (ADR-1628), `org-own` (ADR-1629), duplicate-key face gates (ADR-1630). Next org cycle starts by `/arc-kickoff --lane org`. |
 | policy | IDLE | arc-policy cycle 2 (opened 2026-10-07) | 02 (cycle closed) | 3d / 2.5d | — | **Cycle 2 — evidenced levels (POL-L): 3/3 phases CLOSED, 5/5 REQ validated, 2.5 of 3 days.** Phases 00 + 01 (#368, #370) and Phase 02 (the owner’s paste, #384, closed 2026-10-09; main verified 19/19): typed refusal receipt with zero new kinds, pure evidence fold, BELOW-BAR, monthly guard, Policy room cell, and `evidence_days: 35` on every in-scope L1 grant. Canonical reading as predicted: 17 in scope, 17 BELOW-BAR (15 unknown, 2 absent). The agent could not even commit deny-floor files; the owner did. **Cycle SEALED 2026-10-09 (HISTORY C22). Next: owner stamps + the STOP-or-fund call.** Cycle 9 assumption row 1 FIRED; STOP-or-fund call owner’s |
 | model-policy | IDLE | model-policy v2 (opened 2026-10-05, closed 2026-10-06) | — (cycle closed) | 2d / 0.9d | — | **v2 CLOSED 2026-10-06 — provider profiles in the model policy** (ADR-1800..1803, PR #334). A `generic-api` pin or class row may name `profile:<name>` from the owner store; a missing profile refuses before any driver starts; receipts say `model_source: profile` with model id and gateway host. Settings cost / used-by / remove guard handed to face. Next: owner proposes the first real profile line |
-| portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
+| portfolio | LIVE | arc-portfolio (Cycle 5, opened 2026-10-14) | 04 | 3d / 0d | — | **Cycle 5 "the board that notices" kicked off 2026-10-14** (ADR-0076..0079): kickoff-lint refuses a new cycle on a kernel lane while the owner's freeze ruling stands, and a debt-heavy lane's new cycle without a named debt phase; a daily `lane-stale` job derives silent LIVE lanes into needs-you. Next: Phase 04, the kernel freeze. Branch `feat/portfolio-cycle-5`, merged once at the end |
 | design | IDLE | arc-design v2 (Cycle 16, sealed 2026-10-07) | 08 | 12.5d / 16d | — | **CYCLE CLOSED 2026-10-07 -- 9/9 phases, 10/10 REQ validated, 128% of 12.5d.** One blind jury of arc×3 + Stitch + control + references on a LexOS brief: owner best arc 60, Stitch 59, control 51; rival-beats-all-arc owner no, jury 1 of 2; all three ADR-1411 predictions HIT. The outbound packager refuses rival renders, gallery images and provenance-less renders by name on real renders. Spine receipts for the 05-08 closes owed from the main clone. |
 
 ## ADR number bands — one century per lane
@@ -49,7 +49,7 @@ So a lane claims a **century**, and never numbers outside it:
 
 | Band | Owner |
 |---|---|
-| 0001–0099 | company / core / hq — `model-policy`'s Cycle 5 holds **0063–0071** inside this range |
+| 0001–0099 | company / core / hq — `model-policy`'s Cycle 5 holds **0063–0071** inside this range; `portfolio` Cycle 5 holds **0076–0079** (swept 2026-10-14, highest anywhere was 0075) |
 | 0100–0199 | `develop` |
 | 0200–0299 | `engine` — claimed at birth, 2026-08-03 (**0200–0219 taken**). `0207` was written by `memory` on 2026-08-11 **with the owner's approval**, because retiring a migration proof is an engine decision and memory needed it to land its hooks — sanctioned, not a stray. It still cost engine Cycle 7 a number: that cycle read "highest is 0206" in its own worktree, and only found 0207 by checking sibling worktrees, because the band table and `wip-line` each see one worktree alone. **0208–0224** are engine Cycle 7 (executor v1) — 0220-0222 on 2026-08-16/17, and **0223 + 0224** on 2026-08-18 |
 | 0300–0399 | `evolve` — claimed at birth, 2026-08-03 (0300–0310 taken) |
