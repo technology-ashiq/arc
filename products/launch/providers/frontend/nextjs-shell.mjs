@@ -28,6 +28,8 @@ function files(brand) {
       dependencies: { next: "15.5.27", react: "19.1.9", "react-dom": "19.1.9", zod: "3.25.76", "drizzle-orm": "0.44.5", "@supabase/supabase-js": "2.57.4", "@supabase/ssr": "0.7.0" } }, null, 2)}\n`,
     "app/layout.js": [
       `export const metadata = { title: ${JSON.stringify(brand)}, description: ${JSON.stringify(`${brand} -- coming soon.`)}, generator: ${JSON.stringify(MARK)} };`,
+      "// Rendered per request: Next puts security-headers' CSP nonce on its scripts only on a dynamic page (ADR-1754).",
+      "export const dynamic = \"force-dynamic\";",
       "",
       `${EXPORT_D} function RootLayout({ children }) {`,
       "  return (",

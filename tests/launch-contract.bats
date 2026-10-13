@@ -1168,11 +1168,14 @@ arm() {
   [ "$(j 'o.scaffold.code')" = "UPSTREAM_MISSING" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: security-headers commits next.config.mjs once, and verify reads six headers live with an Observatory A (ADR-1742)" {
+@test "launch-contract: security-headers commits next.config.mjs and a nonce middleware once, and verify reads the headers live with an Observatory A (ADR-1742)" {
   arm headers thread
   [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
   [ "$(j 'o.kinds.join(",")')" = "headers-config" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.config')" == *"Content-Security-Policy"*"frame-ancestors 'none'"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.config')" == *"X-Frame-Options"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.middleware')" == *"'nonce-{NONCE}' 'strict-dynamic'"*"frame-ancestors 'none'"* ]] || { echo "$DONE"; false; }
+  [ "$(j '/script-src[^;]*unsafe-inline/.test(o.middleware)')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.nonced_scripts')" = "2" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.grade + " " + o.observatoryCalls')" = "true sandbox.automemory.ai + observatory-api.mdn.mozilla.net A 1" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.teardown[0]')" == keep* ]] || { echo "$DONE"; false; }
 }
@@ -1183,6 +1186,12 @@ arm() {
   [[ "$(j 'o.verify.reason')" == "the live response lacks content-security-policy"* ]] || { echo "$DONE"; false; }
   arm headers grade-b
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false observatory grades sandbox.automemory.ai B"* ]] || { echo "$DONE"; false; }
+  # ADR-1754: an unsafe-inline script-src fails before the grade is asked, and a statically built page whose scripts
+  # carry no nonce fails even with every header right.
+  arm headers unsafe-inline
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false the live response lacks content-security-policy script-src with a nonce and no 'unsafe-inline'" ]] || { echo "$DONE"; false; }
+  arm headers static
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false 2 of 2 script tags lack this response's CSP nonce (is the page statically rendered?)" ] || { echo "$DONE"; false; }
   arm headers rate-limited
   [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false UNSCANNED(observatory rate-limited)" ] || { echo "$DONE"; false; }
   arm headers unreachable
