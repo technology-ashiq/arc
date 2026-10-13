@@ -12,6 +12,7 @@
 //   - where the door says what parsed the table and from which files, the panel says so too.
 import { payloadOf, readProblem } from "./registry.mjs";
 import { visibleText } from "./lane-room.mjs";
+import { availabilityField, stateOfTable } from "./availability.mjs";
 
 /**
  * @typedef {import("./registry.mjs").Payload} Payload
@@ -42,6 +43,7 @@ import { visibleText } from "./lane-room.mjs";
  * @property {string} empty
  * @property {string} note
  * @property {string} source
+ * @property {import("./availability.mjs").AvailabilityField} avail  served, zero or unknown, from what the read did (Phase 15)
  */
 
 const NO_REFUSAL = Object.freeze({ code: "", human: "" });
@@ -132,6 +134,17 @@ export function servedRead(payloads, ctx, reads, route, query) {
 }
 
 /**
+ * A table panel with its availability (face v2 Phase 15, ADR-1354): every served table goes through the one mapping
+ * `stateOfTable`, so no fold turns a refusal or a read in flight into 0. Its source is the route it read.
+ * @param {Omit<ServedTable, "avail">} t @param {string} owner
+ * @returns {ServedTable}
+ */
+function withAvail(t, owner) {
+  const st = stateOfTable(t);
+  return { ...t, avail: Object.freeze(availabilityField({ ...st, source: `GET ${t.route}`, owner_lane: owner, as_of: "" })) };
+}
+
+/**
  * A table panel over one served list.
  *
  * `listKey` names where the rows live in the body; a body with no list there is BAD_BODY. `row` turns one
@@ -140,10 +153,18 @@ export function servedRead(payloads, ctx, reads, route, query) {
  *
  * @param {ServedState} st
  * @param {{ panel: string, route: string, columns: string[], listKey: string, empty: string,
- *   row: (entry: Record<string, unknown>, i: number) => ServedRow | null, note?: string }} spec
+ *   row: (entry: Record<string, unknown>, i: number) => ServedRow | null, note?: string, owner?: string }} spec
  * @returns {ServedTable}
  */
 export function servedTable(st, spec) {
+  return withAvail(tableOf(st, spec), spec.owner ?? "");
+}
+
+/**
+ * @param {ServedState} st @param {Parameters<typeof servedTable>[1]} spec
+ * @returns {Omit<ServedTable, "avail">}
+ */
+function tableOf(st, spec) {
   const base = {
     isServed: /** @type {true} */ (true),
     panel: spec.panel,

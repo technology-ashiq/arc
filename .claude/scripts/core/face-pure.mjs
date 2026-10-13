@@ -16,6 +16,9 @@
 //            the end -- importing anything but a relative .mjs inside face/src or a node builtin; a
 //            builtin that loads code (module, vm, child_process, worker_threads, ...); a computed
 //            import(); require; import.meta; eval and the Function constructor
+//   availability  a module's fold.mjs, ops.mjs or module.mjs spelling an availability state itself (face v2
+//            Phase 15, ADR-1354): "not-instrumented" or "not-applicable" as a string or template text, or a literal
+//            given to a key named availability. A state comes from lib/availability.mjs, never typed in a module.
 //   View     a View.tsx holding a branch: if/else/switch/for/while/try/throw, a comparison, an
 //            arithmetic, bitwise or nullish operator, optional chaining, typeof/instanceof/in/new,
 //            a regex, a type or class declaration, a nested ternary, a destructuring default, a
@@ -906,6 +909,74 @@ function specSpelledExactly(fromDir, spec) {
   return true;
 }
 
+/** The words only an availability state can mean -- a module that types one has invented a state. */
+const STATE_ONLY_WORDS = new Set(["not-instrumented", "not-applicable"]);
+/** How long a `+` chain is joined before it is judged: past every state word, a string cannot be one. */
+const JOIN_CAP = 64;
+
+/**
+ * A module .mjs that spells an availability state itself (face v2 Phase 15). Lexed with template text kept, so a
+ * state hidden in a template literal is read too. Fails closed: a file the lexer cannot read is a finding.
+ * @param {string} text @param {string} file
+ */
+export function scanAvailabilityLiterals(text, file) {
+  const { tokens, error } = lex(text, { jsx: false, text: true });
+  const findings = [];
+  const add = (t, detail) => findings.push({ file, line: t.line, col: t.col, kind: "availability-literal", detail });
+  if (error) {
+    findings.push({ file, line: error.line, col: error.col, kind: "fold-unscannable", detail: `lint could not read the file past here: ${error.message}` });
+    return findings;
+  }
+  const lit = (t) => t && (t.k === "str" || t.k === "text");
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    // A literal that is the tail of a `+` chain was judged with its head; starting again from it made a chain of N
+    // literals O(N^2) (round 2 B5).
+    const isTail = i >= 2 && isP(tokens[i - 1], "+") && lit(tokens[i - 2]);
+    if (lit(t) && !isTail) {
+      // The lexer keeps a string's RAW text, so it is decoded before it is judged: an escaped hyphen spells the same
+      // word (attack c0fc549 B7). A run of literals joined by `+` is judged as the one string it builds, and the join
+      // stops past any state word's length -- a longer string cannot be one.
+      let word = decodeEscapes(String(t.v));
+      for (let j = i + 1; word.length <= JOIN_CAP && isP(tokens[j], "+") && lit(tokens[j + 1]); j += 2) word += decodeEscapes(String(tokens[j + 1].v));
+      if (STATE_ONLY_WORDS.has(word.trim()) || STATE_ONLY_WORDS.has(decodeEscapes(String(t.v)).trim()))
+        add(t, `"${word.trim()}" is an availability state spelled in a module -- take it from lib/availability.mjs (notServed's state option)`);
+    }
+    // A key or a property named availability (bare, quoted, or in brackets) given by `:` or `=` a value expression that
+    // holds ANY string or template literal -- a ternary, parentheses or a fallback are the same typed state one token
+    // deeper (round 2 B4). The value runs to the next `,` `;` or closing bracket at its own depth.
+    const named = (t.k === "name" && t.v === "availability") || (t.k === "str" && decodeEscapes(String(t.v)) === "availability");
+    if (named) {
+      const after = isP(tokens[i + 1], "]") ? i + 2 : i + 1;
+      if (isP(tokens[after], ":") || isP(tokens[after], "=")) {
+        let depth = 0;
+        for (let j = after + 1; j < tokens.length; j++) {
+          const v = tokens[j];
+          if (depth === 0 && (isP(v, ",") || isP(v, ";") || isP(v, "}") || isP(v, ")") || isP(v, "]"))) break;
+          if (isP(v, "(") || isP(v, "[") || isP(v, "{") || isP(v, "${")) depth++;
+          else if (isP(v, ")") || isP(v, "]") || isP(v, "}")) depth--;
+          if (v.k === "str" || isP(v, "`")) { add(v, "an availability is given a literal -- a state comes from lib/availability.mjs, never typed in a module"); break; }
+        }
+      }
+    }
+  }
+  return findings;
+}
+
+/**
+ * A JavaScript string's raw text as the string it denotes: \uXXXX, \u{X...}, \xHH and a backslash before any other
+ * character. Only what the availability arm compares; a malformed escape is kept as written.
+ * @param {string} raw
+ */
+function decodeEscapes(raw) {
+  return raw.replace(/\\(u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|\r\n|[\s\S])/g, (m, all, cp, u4, x2) => {
+    const hex = cp ?? u4 ?? x2;
+    if (hex !== undefined) { const n = parseInt(hex, 16); return n <= 0x10ffff ? String.fromCodePoint(n) : m; }
+    const c = all.charCodeAt(0);
+    return c === 10 || c === 13 || c === 0x2028 || c === 0x2029 ? "" : all;
+  });
+}
+
 /**
  * Lint a modules root: every ring folder, every module folder, every file of the four, and every
  * relative .mjs a module's .mjs files reach.
@@ -970,6 +1041,10 @@ export function lintModules(root, { srcRoot = dirname(root), base = process.cwd(
         report.findings.push(...scanView(buf.toString("utf8"), show(abs)));
       } else {
         if (f === "fold.mjs") report.folds++;
+        const buf = readFileSync(abs);
+        // A NUL-carrying file is not scanned HERE because checkMjs below reports it as a "binary" finding -- never silent
+        // (attack c0fc549 B2); a symlink, directory or FIFO never reaches this line (the two guards above, B1).
+        if (!buf.includes(0)) report.findings.push(...scanAvailabilityLiterals(buf.toString("utf8"), show(abs)));
         checkMjs(abs);
       }
     }

@@ -15,6 +15,7 @@ import { withholdKeys } from "./keys.mjs";
 import { ASOF_ROUTES, DOOR_ROUTES, DoorError, unescapeDoorText } from "./door.mjs";
 import { refusalOf, stamp } from "./inbox.mjs";
 import { ASK_GRANTS, askable, askThrough, readOnly } from "./ask.mjs";
+import { Availability, availabilityCounts, availabilityField } from "./availability.mjs";
 
 /** A module is these four files, and no fifth (ADR-1320). */
 export const MODULE_FILES = Object.freeze(["module.mjs", "fold.mjs", "ops.mjs", "View.tsx"]);
@@ -54,7 +55,7 @@ const KEY = /^\.\/modules\/([^/\\?#]+)\/([^/\\?#]+)\/(module\.mjs|fold\.mjs|ops\
  * @typedef {{ state: "loading" } | { state: "pending" } | { state: "ok", data: any, rereadFailed?: { code: string, human: string } } | { state: "refused", code: string, human: string }} Payload
  * @typedef {Read & { key: string, path: string }} PlannedRead
  * @typedef {{ n: number, body: Record<string, unknown>, result: Payload }} ActRecord
- * @typedef {{ isNotServed: true, panel: string, route: string, sentence: string }} NotServed
+ * @typedef {{ isNotServed: true, panel: string, route: string, sentence: string, avail: import("./availability.mjs").AvailabilityField }} NotServed
  *
  * @typedef {object} AttachedModule
  * @property {string} key   "ring/id"
@@ -774,11 +775,20 @@ export function refusedPayload(err) {
 /**
  * A panel the door cannot fill yet, named with the route it needs (ADR-1324). The View draws the kit's
  * NotServed for it; the phase's NOT SERVED list is derived from these, never typed.
+ *
+ * Since face v2 Phase 15 (ADR-1354) it also carries its availability: `not-instrumented` (the adapter does not
+ * exist yet -- the default) or `not-applicable` (declared by the fold, never inferred), the route it would read as
+ * its source, and the lane that owns that source. A NOT SERVED panel is never `served`, `zero` or `unknown`:
+ * those are states of a read, and this panel makes none.
  * @param {string} panel @param {string} route @param {string} sentence  what the panel would show
+ * @param {{ owner?: string, state?: "not-instrumented" | "not-applicable" }} [opts]  owner: the lane that owns the source
  * @returns {NotServed}
  */
-export function notServed(panel, route, sentence) {
-  return Object.freeze({ isNotServed: true, panel: String(panel), route: String(route), sentence: String(sentence) });
+export function notServed(panel, route, sentence, opts = {}) {
+  const state = opts.state ?? Availability.NOT_INSTRUMENTED;
+  if (state !== Availability.NOT_INSTRUMENTED && state !== Availability.NOT_APPLICABLE) throw new TypeError(`notServed: "${String(state)}" is a state of a read; a panel that makes no read is not-instrumented or not-applicable`);
+  const avail = Object.freeze(availabilityField({ availability: state, source: `GET ${String(route)}`, owner_lane: opts.owner ?? "", as_of: "" }));
+  return Object.freeze({ isNotServed: true, panel: String(panel), route: String(route), sentence: String(sentence), avail });
 }
 
 /**
@@ -859,6 +869,25 @@ export function rehearsalOf(folded) {
  */
 export function notServedOf(folded) {
   return /** @type {NotServed[]} */ (/** @type {unknown} */ (markedIn(folded, "isNotServed", ["route", "panel", "sentence"])));
+}
+
+/**
+ * Every field a fold's output names an availability for (face v2 Phase 15, ADR-1354), nested anywhere, in document
+ * order: each NOT SERVED panel's and each served table's `avail`. The header's counts and the coverage walker read
+ * this list, so neither can count a field the room does not draw.
+ * @param {unknown} folded
+ * @returns {import("./availability.mjs").AvailabilityField[]}
+ */
+export function availabilityOf(folded) {
+  return /** @type {import("./availability.mjs").AvailabilityField[]} */ (/** @type {unknown} */ (markedIn(folded, "isAvailability", ["availability", "source", "owner_lane", "as_of", "failure"])));
+}
+
+/**
+ * The room header's two counts over one fold's output: its `unknown` and its `not-instrumented` fields.
+ * @param {unknown} folded
+ */
+export function availabilityCountsOf(folded) {
+  return availabilityCounts(availabilityOf(folded));
 }
 
 /**

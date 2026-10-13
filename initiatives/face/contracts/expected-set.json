@@ -308,10 +308,11 @@
         "id": "discover",
         "name": "Discover",
         "ring": "money",
-        "status": "planned",
+        "status": "built",
         "sources": [
           "PLAN-discover (DIS-A..D)",
-          "idea.captured"
+          "idea.captured",
+          "GET /api/discover"
         ]
       },
       {
@@ -744,7 +745,7 @@
       "docs": "lane",
       "org": "lane",
       "launch": "lane",
-      "discover": "lane",
+      "discover": "discover",
       "distribute": "lane"
     }
   },
@@ -779,7 +780,7 @@
       "arc-face-module": "design-studio",
       "arc-absorb": "absorb",
       "arc-attack": "review-ship",
-      "arc-hunt": "lane"
+      "arc-hunt": "discover"
     }
   },
   "agents": {
@@ -1374,7 +1375,7 @@
       "memory": "memory",
       "docs": "lane",
       "launch": "lane",
-      "discover": "lane"
+      "discover": "discover"
     }
   },
   "adrs": {
@@ -1388,7 +1389,7 @@
       "1600": "lane",
       "1700": "lane",
       "1800": "model-policy",
-      "1900": "lane",
+      "1900": "discover",
       "2000": "lane",
       "0000": "board",
       "0100": "develop",
@@ -1464,7 +1465,6 @@
     "map": {
       "ops": "ops",
       "trader": "trader",
-      "discover": "discover",
       "chat-mcp": "chat-mcp"
     }
   },

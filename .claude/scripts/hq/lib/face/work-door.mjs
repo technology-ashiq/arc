@@ -70,6 +70,8 @@ export const WORK_STATUS = Object.freeze({
   SIM_SPEND: 403, SIM_EFFECT: 403,
   NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, NO_EXPECT: 502, TOOL_MISSING: 503,
   PLAN_HIDDEN: 422,
+  // Phase 15 (ADR-1354): a field read from a source that failed is unknown, and the op does not plan on it.
+  FIELD_UNKNOWN: 409,
 });
 
 /**

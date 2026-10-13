@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (84)
+## Scripts (87)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -231,8 +231,10 @@ None declared.
 - [`.claude/scripts/hq/jobs/brief-materialize.mjs`](../../../.claude/scripts/hq/jobs/brief-materialize.mjs)
 - [`.claude/scripts/hq/jobs/day-close-roll.mjs`](../../../.claude/scripts/hq/jobs/day-close-roll.mjs)
 - [`.claude/scripts/hq/ledger-ingest.mjs`](../../../.claude/scripts/hq/ledger-ingest.mjs)
+- [`.claude/scripts/hq/lib/approval-fold.mjs`](../../../.claude/scripts/hq/lib/approval-fold.mjs)
 - [`.claude/scripts/hq/lib/canonical.mjs`](../../../.claude/scripts/hq/lib/canonical.mjs)
 - [`.claude/scripts/hq/lib/face/ask-offline.mjs`](../../../.claude/scripts/hq/lib/face/ask-offline.mjs)
+- [`.claude/scripts/hq/lib/face/discover/route.mjs`](../../../.claude/scripts/hq/lib/face/discover/route.mjs)
 - [`.claude/scripts/hq/lib/face/models.mjs`](../../../.claude/scripts/hq/lib/face/models.mjs)
 - [`.claude/scripts/hq/lib/face/org/route.mjs`](../../../.claude/scripts/hq/lib/face/org/route.mjs)
 - [`.claude/scripts/hq/lib/face/reads.mjs`](../../../.claude/scripts/hq/lib/face/reads.mjs)
@@ -281,6 +283,7 @@ None declared.
 - [`.claude/scripts/hq/lib/redact.mjs`](../../../.claude/scripts/hq/lib/redact.mjs)
 - [`.claude/scripts/hq/lib/spine-io.mjs`](../../../.claude/scripts/hq/lib/spine-io.mjs)
 - [`.claude/scripts/hq/lib/validate-absorb.mjs`](../../../.claude/scripts/hq/lib/validate-absorb.mjs)
+- [`.claude/scripts/hq/lib/validate-bindings.mjs`](../../../.claude/scripts/hq/lib/validate-bindings.mjs)
 - [`.claude/scripts/hq/lib/validate-content.mjs`](../../../.claude/scripts/hq/lib/validate-content.mjs)
 - [`.claude/scripts/hq/lib/validate-experiment.mjs`](../../../.claude/scripts/hq/lib/validate-experiment.mjs)
 - [`.claude/scripts/hq/lib/validate-leads.mjs`](../../../.claude/scripts/hq/lib/validate-leads.mjs)

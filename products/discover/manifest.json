@@ -27,29 +27,17 @@
   ],
   "docs": [],
   "face": {
-    "room": "lane",
-    "ring": "factory",
+    "room": "discover",
+    "ring": "money",
     "kinds": [
-      "kickoff.done",
-      "phase.closed"
+      "idea.captured"
     ],
-    "sanctioned": [],
-    "stations": [
-      "PLAN table",
-      "header",
-      "kickoff trail",
-      "phase 0",
-      "phase-done"
+    "sanctioned": [
+      "PLAN-discover (DIS-A..D)",
+      "idea.captured",
+      "GET /api/discover"
     ],
-    "concepts": [
-      "50% tripwire",
-      "REQ",
-      "appetite / burn",
-      "assumptions ledger",
-      "evidence bundle",
-      "machine header",
-      "pre-mortem",
-      "steel thread"
-    ]
+    "stations": [],
+    "concepts": []
   }
 }

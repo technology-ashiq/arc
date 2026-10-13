@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:101",
+      "breaking_input": "Call apiDiscover(ctx) on an empty spine, emit a capture, a hunt and a winner, then call apiDiscover again within 3 s with the same ctx.root. tests/face/discover-room.mjs does exactly this: route() on the empty spine, about seven spawned emits, then route() for `b`, then a mkdir of an unreadable day, then route() for `u`.",
+      "why": "sharedScan caches the settled scan for SCAN_TTL_MS, keyed only by root. The second call returns the first, empty scan. The test's counts, winners and unknown-day checks then read stale data, so they fail or pass by timing (spawn time against 3 s). In the product, after the owner stamps a winner the next poll within 3 s still shows it as `open`, which is a read older than the write. The cache key does not include anything that changes when the spine changes.",
+      "fix": "Key the cache on a fingerprint of the spine (the events directory listing plus each day file's mtime and size), or on a spine-write counter, and not on time alone. Give the test a way to bypass or reset the cache, for example an exported `resetScans()` or an injected scan function.",
+      "twin_of": "A cache TTL counted from start, not settle -> an in-flight answer is shared until it settles; its TTL starts at settle. (A decision taken on a cached answer -> caches serve reads only.)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:63",
+      "breaking_input": "A spine line that parses to an object with kind \"idea.captured\" and process \"discover@1\", but with `payload: null` or `payload: [1]`, or a `kind` that is not a string.",
+      "why": "The first filter returns `ok` false and drops the entry without counting it. Only a discover event with a bad id is added to `dropped`. A malformed discover receipt therefore vanishes and the capture count is silently low while availability reads `served`. The defect-pattern line says a malformed id dropped silently should be a named finding.",
+      "fix": "Count every dropped event, or at least every event whose process is discover, in `dropped`. Surface it as a named count in the body.",
+      "twin_of": "A malformed id dropped silently -> malformed input is a named finding, never an omission."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:72",
+      "breaking_input": "A discover run.completed receipt whose envelope `ts` is a 300-character free-text string, or a value that is not a real instant. The same applies to the `day` taken from the read wrapper.",
+      "why": "`ts` goes through `text()` (scrub plus a length cap) and not through a ts grammar check. The earlier fix list says a ts the door serves goes through tsOf, and B2 of the previous round asked for that. The route still serves any string in the ts field.",
+      "fix": "Validate ts against the same instant grammar used elsewhere (tsOf), and `day` against a real-day check. Serve an empty string and count the entry when the value does not match.",
+      "twin_of": "Envelope fields passed through unvalidated -> every envelope id and ts is served only in its grammar (idOf, tsOf)."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/discover/route.mjs:99",
+      "breaking_input": "scanAll throws, for example EMFILE or EPERM during a transient Windows lock on a day file.",
+      "why": "The rejected promise is cached with a settledAt time, so every poll for the next 3 s gets the same rejection and a one-off failure is replayed. The raw error also reaches the door's error handler, and nothing here names it or checks that it has been scrubbed.",
+      "fix": "Evict the Map entry when the scan rejects. Catch the rejection in apiDiscover and raise a named ReadError with the errno code.",
+      "twin_of": "A failed re-read replacing a good answer -> a re-read that fails keeps the last good answer and says so."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face/discover-room.mjs:112",
+      "breaking_input": "Make `reads.mjs`, the route file or View.tsx unreadable (EACCES or EBUSY from antivirus on Windows) while the suite runs.",
+      "why": "The B5 fix wrapped only the walk's readFileSync. The trailing GRAMMAR loop over reads.mjs and route.mjs, and the ROOM View read, still use bare readFileSync. One unreadable file throws out of the top-level await and the `RAN:` line is never printed, so the bats wrapper reports a crash and not a finding.",
+      "fix": "Wrap each remaining read in try/catch and record a FAIL naming the path and the errno. Always reach the RAN line.",
+      "twin_of": "A test walk that follows links and reads twice -> walk with lstat, read once, catch per file."
+    }
+  ]
+}

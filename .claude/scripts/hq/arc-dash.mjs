@@ -52,7 +52,7 @@ import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { query, applyFilters, readAll, spineHealth, spineRoot } from "./spine.mjs";
-import { decide, loadApprovals, cutToDay } from "./arc-inbox.mjs";
+import { decide, loadApprovals, cutToDay, inboxFold, whatGate } from "./arc-inbox.mjs";
 import { render as renderBrief } from "./arc-brief.mjs";
 import { derivePnl, deriveDaily } from "./lib/ledger/pnl.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
@@ -67,6 +67,7 @@ import * as keys from "./lib/keys.mjs";
 import * as reads from "./lib/face/reads.mjs";
 import { apiReference } from "./lib/face/reference/route.mjs";
 import { apiOrg } from "./lib/face/org/route.mjs";
+import { apiDiscover } from "./lib/face/discover/route.mjs";
 // Phase 05's work door (REQ-07, ADR-1339): the op registry and the plan/apply/run verbs. Same rule -- the handlers
 // live beside the door, the route table stays here.
 import { createWorkDoor, runTool, WORK_STATUS } from "./lib/face/work-door.mjs";
@@ -388,18 +389,30 @@ async function apiBrief(ctx, url) {
 async function apiInbox(ctx, url) {
   onlyKeys(url, ["asof"]);
   const asof = parseAsof(url);
-  const { requested, decidedIds } = await loadApprovals(ctx.root, { asof });
-  const open = requested.filter((e) => !decidedIds.has(e.event.id));
+  // ADR-1355 (face v2 Phase 16): the SAME fold the CLI lists and decides by -- the face never folds a second time. Every
+  // undecided request is served with its state; openCount counts only the OPEN ones, the ones the owner can act on, and
+  // heldCount the rest (waiting, stale, duplicate, unknown). An as-of read never re-derives a plan: today's world is not
+  // the replayed day's, so a bound request then reads UNKNOWN(NOT_REDERIVED), never OPEN.
+  // ONE read: the counts and the fold come from the same spine (attack 4f462e9 B8). Plans re-derived here share one
+  // answer per plan for a short while and stop at a budget (B1), so overlapping polls never stack children.
+  const loaded = await loadApprovals(ctx.root, { asof });
+  const { decidedIds } = loaded;
+  const folded = await inboxFold(ctx.root, { asof, rederive: asof === null, loaded });
+  const pending = folded.filter((f) => f.state !== "DECIDED" && f.state !== "RESOLVED");
   return {
     mode: ctx.mode, asof,
-    openCount: open.length, decidedCount: decidedIds.size,
-    open: open.map((e) => {
+    openCount: pending.filter((f) => f.state === "OPEN").length, heldCount: pending.filter((f) => f.state !== "OPEN").length,
+    decidedCount: decidedIds.size,
+    open: pending.map((f) => {
+      const e = f.row;
       const p = e.event.payload || {};
       // Same what/gate fallbacks as the CLI's own listing (a PROFILE payload has no free
       // text `what`; an approval nobody can read is a rubber stamp with extra steps).
-      const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
-      const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
-      return { id: e.event.id, day: e.day, ts: e.event.ts, venture: e.event.venture, what, gate, payload: p };
+      const { what, gate } = whatGate(p);
+      // bound_to.input names a plan's inputs -- an export path among them -- so it is served scrubbed, like every other
+      // path this door hands the page (B8).
+      const served = p.bound_to && typeof p.bound_to === "object" ? { ...p, bound_to: reads.scrubDeep(p.bound_to, ctx.repo) } : p;
+      return { id: e.event.id, day: e.day, ts: e.event.ts, venture: e.event.venture, what, gate, payload: served, state: f.state, label: f.label, ref: f.ref, failure: f.failure };
     }),
   };
 }
@@ -1030,6 +1043,8 @@ const ROUTES = Object.freeze([
   // Phase 07 (REQ-12, ADR-1346): wiki-build's own extract and narrative, imported -- build-time facts, never the spine.
   { method: "GET", path: "/api/reference", mutates: false, spineEffect: "none", handler: (ctx, url) => apiReference(ctx, url) },
   { method: "GET", path: "/api/org", mutates: false, spineEffect: "none", handler: (ctx, url) => apiOrg(ctx, url) },
+  // face v2 Phase 17 (ADR-1356): discover's own receipts, selected through discover's own constants. Read-only.
+  { method: "GET", path: "/api/discover", mutates: false, spineEffect: "none", handler: (ctx, url) => apiDiscover(ctx, url) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
   { method: "GET", path: "/api/models", mutates: false, spineEffect: "none", handler: (ctx, url) => { onlyKeys(url, []); return apiModels(ctx); } },
   // A file write outside the repo, not a spine write: the one door write that is neither a decision, an op nor a
