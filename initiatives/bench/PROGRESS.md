@@ -146,6 +146,14 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
+**2026-10-13: the real event is UNBLOCKED and re-scoped. It waits only on this change merging.**
+The engine blocker below closed with #225 (bench skips an expired probe vehicle). The owner moved
+the pair to OpenRouter (ADR-0914 Amendment 1). Champion `deepseek/deepseek-v4-flash-0731`, candidate
+`anthropic/claude-haiku-5.5`, both on `generic-api` with reasoning off, $0.50 cap, ₹30 ceiling bound.
+NEXT after merge: from the main clone, run the champion, then the candidate with `--propose
+--champion`, read the chain off the spine, then the owner's `arc-inbox` verdict. Appetite unchanged
+at 7.25 of 8d; this is Phase 03's own remaining scope, not new scope.
+
 **2026-09-15: Phase 03's real event is BLOCKED again, this time from outside the lane.** Engine's
 hermes row expired on 2026-08-31. Since then `driverTakesModel` has borrowed its class as the probe
 vehicle, and every run naming a model on a model-capable driver throws `OperatorError` before
