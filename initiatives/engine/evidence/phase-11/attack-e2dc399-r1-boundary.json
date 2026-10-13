@@ -1,0 +1,37 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:177",
+      "breaking_input": "ARC_LLM_ENDPOINT points at a strict OpenAI-compatible server, or any gateway that validates the request body. The request now always carries `usage: { include: true }`, which only OpenRouter documents.",
+      "why": "The OpenRouter-only field is sent to whatever endpoint the env var names. A server that rejects unknown parameters answers 400 \"unrecognized request argument\", and every generic-api run on that endpoint fails. Separately, the driver hardcodes `currency: \"USD\"` for `u.cost`. Any other endpoint that returns a `usage.cost` in different units, or credits rather than dollars, is booked as USD, measured, provider-reported money.",
+      "fix": "Send `usage.include` and read `usage.cost` only when the endpoint host is a known OpenRouter host, or when an explicit opt-in env var is set. Otherwise leave `spend` unset so the receipt reads driver-unmetered or not-reported."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/spend-trace.mjs:51",
+      "breaking_input": "Run `node spend-trace.mjs` from a worktree, or from any cwd whose spine is not the one arc-run wrote. arc-run wrote to the main clone's spine or to an ARC_SPINE_ROOT. The cwd spine is empty or a different one.",
+      "why": "`root` defaults to cwd, and `query(root, {})` may not honour ARC_SPINE_ROOT. The trace then sees zero events and prints \"every spent run has its cost.incurred\" with exit 0. That is a vacuous pass that reads as an assurance. This is the same failure the project records for worktrees, whose state is invisible from other worktrees.",
+      "fix": "Resolve the spine root the way arc-event.sh does (ARC_SPINE_ROOT first, then the main clone). Print the count of run.completed events scanned, and exit non-zero or warn when that count is 0."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/spend-trace.mjs:50",
+      "breaking_input": "`node spend-trace.mjs --root --json`, or `--root` followed by any other flag",
+      "why": "`argv[at + 1]` is taken as the path without checking that it is a value. The root becomes the literal \"--json\", the spine is read from a nonexistent directory, and `--json` still toggles output. The result is an empty trace and exit 0 (see B2) instead of a usage error. This is the same class of bug as the unquoted-flag problem recorded in the lanes rules.",
+      "fix": "Refuse a `--root` value that starts with `--` or is missing (exit 2). Require the directory to exist."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/engine-spend.mjs:288",
+      "breaking_input": "Running the suite from a PowerShell PATH where `bash` resolves to WSL, with a Windows path passed to `spawnSync(\"bash\", [...])`",
+      "why": "The re-emit check passes a Windows path to a bare `bash`. Under WSL it fails with a status other than 0 and a message that does not contain DUP_IDEM, so the check goes red for an environmental reason. The `status !== 0` half of the condition is true for any failure, so the check can only be trusted through the regex half.",
+      "fix": "Resolve Git Bash explicitly, as the other suites do, and assert that the child reached arc-event.sh before judging the refusal."
+    }
+  ]
+}

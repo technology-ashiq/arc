@@ -1294,6 +1294,7 @@ function emitRun(payload) {
   if (!r.ok) {
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
     console.error("         The run is NOT recorded. Under --strict the emitter rejects rather than quarantining.");
+    emitSpend(money.groups, "");
     return;
   }
   // Exit 0 from a fire-and-forget writer is not evidence that anything was written

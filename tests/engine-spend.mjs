@@ -4,6 +4,7 @@
 // Sections, each runnable alone (`node tests/engine-spend.mjs <section>`):
 //   unit   the pure money functions: spendOf's corpus (decimal strings, never `x * 100`), sumSpend's one rounding,
 //          isSpend's shape check, spendBasis, and unbookedRuns.
+//   cc     claude-code session spend through a fake CLI on the json and stream paths (pinned by real captures).
 //   run    the REAL arc-run in a copied tree: `mock` and `generic-api` against a local server whose answer carries (or
 //          omits) `usage.cost`; the spine is read back from `events/`, and every money row is traced to its receipt.
 //
@@ -90,12 +91,42 @@ if (want("unit")) {
     && T.unbookedRuns([run("A", s1), money("A", "INR")]).length === 1);
   check("U: unbookedRuns owes each currency of a mixed run its own row",
     T.unbookedRuns([run("C", null, { spend_by_currency: [s1, C.spendOf(1, "INR")] }), money("C", "USD")]).length === 1);
+
+  // SessionSpend against VERBATIM captures of the real CLI (2.1.296), not only hand-written fakes (A-11).
+  const SS = (await import(pathToFileURL(join(REPO, ".claude/scripts/engine/drivers/session-spend.mjs")).href)).SessionSpend;
+  const realJson = JSON.parse(readFileSync(join(REPO, "tests/fixtures/engine/real-claude-envelope.json"), "utf8"));
+  const realStream = JSON.parse(readFileSync(join(REPO, "tests/fixtures/engine/real-claude-stream-result.json"), "utf8"));
+  check("U: the real CLI json envelope carries total_cost_usd and SessionSpend reads it into 2 cents (A-11)",
+    typeof realJson.total_cost_usd === "number" && same(C.spendOf(SS.read(realJson).value, SS.read(realJson).currency), usd(2, "0.0175131")), JSON.stringify(SS.read(realJson)));
+  check("U: the real CLI stream result event carries total_cost_usd and SessionSpend reads it into 2 cents (A-11)",
+    realStream.type === "result" && typeof realStream.total_cost_usd === "number" && same(C.spendOf(SS.read(realStream).value, "USD"), usd(2, "0.01478745")), JSON.stringify(SS.read(realStream)));
+  check("U: SessionSpend reads nothing from a non-envelope, and never defaults a figure",
+    SS.read(null).value === undefined && SS.read([{ total_cost_usd: 1 }]).value === undefined && SS.read("x").value === undefined && SS.read({}).value === undefined);
+
+  // The float MUTANT: `Math.ceil(x * 100)` swapped into a copy of common.mjs must turn the 0.07 check red.
+  const src = readFileSync(join(REPO, ".claude/scripts/engine/drivers/common.mjs"), "utf8");
+  const ORIGINAL = "  return moneyOf(plainDecimal(intPart, fracPart), currency);\n}";
+  const mutated = src.replace(ORIGINAL, "  return { amount: Math.ceil(value * 100), currency, provider_amount: String(value) };\n}");
+  const mdir = mkdtempSync(join(tmpdir(), "engine-spend-mutant-"));
+  writeFileSync(join(mdir, "common.mjs"), mutated);
+  const M = await import(pathToFileURL(join(mdir, "common.mjs")).href);
+  check("U: mutant RAN: the float version was swapped in and is a different module", mutated !== src && src.split(ORIGINAL).length === 2 && typeof M.spendOf === "function" && M.spendOf !== C.spendOf);
+  check("U: mutant float-ceil turns the 0.07 and 0.29 corpus checks red (8 and 30 cents, not 7 and 29)",
+    M.spendOf(0.07, "USD")?.amount === 8 && M.spendOf(0.29, "USD")?.amount === 30 && !same(M.spendOf(0.07, "USD"), usd(7, "0.07")));
+  try { rmSync(mdir, { recursive: true, force: true }); } catch { /* a held handle on Windows */ }
+
+  // ONE module owns the provider figures: grep the engine and hq trees for anyone else reading them.
+  const owners = { total_cost_usd: [".claude/scripts/engine/drivers/session-spend.mjs", ".claude/scripts/engine/drivers/claude-code.mjs"], "u.cost": [".claude/scripts/engine/drivers/generic-api.mjs"] };
+  const walk = (d) => readdirSync(join(REPO, d), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(`${d}/${e.name}`) : (/\.m?js$/.test(e.name) ? [`${d}/${e.name}`] : []));
+  const files = [...walk(".claude/scripts/engine"), ...walk(".claude/scripts/hq")];
+  const strays = files.flatMap((p) => Object.entries(owners).filter(([tok, ok]) => !ok.includes(p) && readFileSync(join(REPO, p), "utf8").includes(tok)).map(([tok]) => `${p}: ${tok}`));
+  check(`U: no second reader of a provider figure: total_cost_usd and usage.cost appear only at their read sites (${files.length} files scanned)`, files.length > 50 && strays.length === 0, strays.join("; "));
 }
 
 // =====================================================================================================================
 // run -- the real arc-run in a copied tree
 // =====================================================================================================================
-const needTree = want("run");
+const needTree = want("run") || want("cc");
 const tmp = mkdtempSync(join(tmpdir(), "engine-spend-"));
 const root = join(tmp, "root");
 const rec = join(tmp, "rec");
@@ -150,7 +181,7 @@ const writeRouter = (chain) => {
 
 // The endpoint. `cost` is the figure its usage carries (undefined = the field is omitted); `sse` streams the answer
 // with the usage on the last chunk, the shape OpenRouter sends.
-const server = { hits: 0, cost: undefined, sse: false, lastBody: null };
+const server = { hits: 0, cost: undefined, sse: false, lastBody: null, answer: "valid" };
 let srv = null;
 const startServer = () => new Promise((ok) => {
   srv = createServer((req, res) => {
@@ -160,7 +191,7 @@ const startServer = () => new Promise((ok) => {
       server.hits++;
       try { server.lastBody = JSON.parse(b); } catch { server.lastBody = null; }
       const usage = { prompt_tokens: 3, completion_tokens: 4, ...(server.cost !== undefined ? { cost: server.cost } : {}) };
-      const content = JSON.stringify(VALID);
+      const content = server.answer === "notjson" ? "this is not json at all" : JSON.stringify(VALID);
       if (server.sse) {
         res.writeHead(200, { "content-type": "text/event-stream" });
         res.write(`data: ${JSON.stringify({ model: "openai/test-model", choices: [{ delta: { content } }] })}\n\n`);
@@ -193,9 +224,11 @@ const arcRun = (o) => new Promise((ok) => {
   const before = server.hits;
   const args = [join(root, ".claude/scripts/engine/arc-run.mjs"), "--process", "commit-msg-draft", "--driver", o.driver ?? "auto", "--root", root];
   const child = spawn(process.execPath, args, {
-    env: { ...process.env, ARC_SPINE_ROOT: spine, ARC_MOCK_DIR: rec, ARC_MOCK_FIXTURE: o.fixture ?? "valid", ARC_DRIVER_FAKE: "", ARC_RUN_STREAM: "",
+    env: { ...process.env, ARC_SPINE_ROOT: spine, ARC_MOCK_DIR: rec, ARC_MOCK_FIXTURE: o.fixture ?? "valid", ARC_DRIVER_FAKE: "", ARC_RUN_STREAM: o.stream ? "1" : "",
+      // The local server speaks OpenRouter's usage accounting, so the suite declares it does (ADR-0229, attack B1).
+      ARC_LLM_SPEND: o.spendOptIn === false ? "" : "openrouter",
       ARC_LLM_ENDPOINT: `http://127.0.0.1:${o.port}/v1/chat/completions`, ARC_LLM_API_KEY: "test-key-not-a-secret", ARC_LLM_MODEL: "openai/test-model",
-      ARC_LLM_TIMEOUT_MS: "20000", ARC_LLM_KEY_NAME: "", ARC_VENTURE: "" },
+      ARC_LLM_TIMEOUT_MS: "20000", ARC_LLM_KEY_NAME: "", ARC_VENTURE: "", ...(o.env || {}) },
     windowsHide: true,
   });
   let out = "", err = "";
@@ -244,15 +277,22 @@ try {
       r1.money.length === 1 && same(withRow, without), JSON.stringify(withRow));
 
     // The Money room's own fold shows it.
-    const prevSpine = process.env.ARC_SPINE_ROOT;
-    process.env.ARC_SPINE_ROOT = r1.spine;
+    // The SPINE root, the way arc-pnl passes it (spineRoot()), never the repo root.
     let costs = null, cerr = "";
-    try { const CO = await import(pathToFileURL(join(REPO, ".claude/scripts/hq/lib/ledger/costs.mjs")).href); costs = await CO.deriveCosts(root, {}); } catch (e) { cerr = e.message; }
-    if (prevSpine === undefined) delete process.env.ARC_SPINE_ROOT; else process.env.ARC_SPINE_ROOT = prevSpine;
+    try { const CO = await import(pathToFileURL(join(REPO, ".claude/scripts/hq/lib/ledger/costs.mjs")).href); costs = await CO.deriveCosts(r1.spine, {}); } catch (e) { cerr = e.message; }
     const totals = costs?.overhead?.measured?.totals ?? [];
     check("R: costs.mjs (the Money room fold) shows a USD measured overhead line of 1 cent", totals.length === 1 && totals[0].currency === "USD" && totals[0].amount === 1, cerr || JSON.stringify(costs?.overhead?.measured));
 
     check("R: spend-trace over that spine books every spent run", T.unbookedRuns(r1.ev).length === 0);
+    const traceCli = (args, env = {}) => spawnSync(process.execPath, [join(REPO, ".claude/scripts/engine/spend-trace.mjs"), ...args], { encoding: "utf8", env: { ...process.env, ...env }, windowsHide: true });
+    const tr = traceCli(["--spine", r1.spine]);
+    check("R: the spend-trace CLI reads the named spine, says how many runs it scanned, and exits 0", tr.status === 0 && /1 run.completed scanned/.test(tr.stdout), `status=${tr.status} ${tr.stdout}${tr.stderr}`);
+    const trFlag = traceCli(["--spine", "--json"]);
+    const emptySpine = join(tmp, "spine-empty");
+    mkdirSync(join(emptySpine, "events"), { recursive: true });
+    const trEmpty = traceCli(["--spine", emptySpine]);
+    check("R: spend-trace refuses a flag where the path belongs (exit 2) and a spine with no runs is exit 3, never a pass (attack B2, B3)",
+      trFlag.status === 2 && /needs a path/.test(trFlag.stderr) && trEmpty.status === 3 && /nothing was traced/.test(trEmpty.stderr), `flag=${trFlag.status} empty=${trEmpty.status} ${trEmpty.stderr}`);
     check("R: ... and names the run once its money row is removed (the reverse trace can fail)",
       same(T.unbookedRuns(r1.ev.filter((e) => e.kind !== "cost.incurred")), [{ id: r1.run?.id, currency: "USD", amount: 1 }]));
 
@@ -261,6 +301,21 @@ try {
     const r2 = await arcRun({ port, driver: "generic-api" });
     check("R: a provider that gives no figure leaves spend null, spend_absence not-reported, and ZERO money rows (control above: 1)",
       r2.code === 0 && r2.runs === 1 && r2.receipt?.spend === null && r2.receipt?.spend_absence === "not-reported" && r2.money.length === 0, `${JSON.stringify(r2.receipt?.spend)} ${r2.receipt?.spend_absence} money=${r2.money.length} ${tail(r2)}`);
+
+    // R2b -- an endpoint nobody declared speaks OpenRouter's accounting is never asked, and its figure never read (B1).
+    server.cost = 0.000183;
+    const r2b = await arcRun({ port, driver: "generic-api", spendOptIn: false });
+    check("R: a non-OpenRouter endpoint is not sent usage.include and its usage.cost is not booked: driver-unmetered, zero money rows",
+      r2b.code === 0 && r2b.hits === 1 && server.lastBody && !("usage" in server.lastBody) && r2b.receipt?.spend_absence === "driver-unmetered" && r2b.money.length === 0,
+      `${JSON.stringify(server.lastBody?.usage)} ${r2b.receipt?.spend_absence} money=${r2b.money.length} ${tail(r2b)}`);
+
+    // R2c -- a model that answered something other than JSON was still paid for.
+    server.cost = 0.002; server.answer = "notjson";
+    const r2c = await arcRun({ port, driver: "generic-api" });
+    server.answer = "valid";
+    check("R: a model-invalid answer still books its spend: the failed run carries spend and writes its one money row",
+      r2c.code !== 0 && r2c.runs === 1 && same(r2c.receipt?.spend, usd(1, "0.002")) && r2c.money.length === 1 && r2c.money[0].payload.run_ref === r2c.run?.id,
+      `code=${r2c.code} ${JSON.stringify(r2c.receipt?.spend)} money=${r2c.money.length} ${tail(r2c)}`);
 
     // R3 -- a driver that never reads a figure is driver-unmetered.
     const r3 = await arcRun({ port, driver: "mock", fixture: "valid" });
@@ -298,7 +353,8 @@ try {
     const first = b.money[0];
     writeFileSync(again, JSON.stringify(first.payload));
     const { sha256Hex } = await import(pathToFileURL(join(REPO, ".claude/scripts/hq/lib/canonical.mjs")).href);
-    const re = spawnSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "cost.incurred", "--payload-file", again, "--strict",
+    // node and the emitter's own .mjs, never a bare `bash` that may resolve to WSL and fail for an unrelated reason (B4).
+    const re = spawnSync(process.execPath, [join(root, ".claude/scripts/hq/arc-event.mjs"), "emit", "cost.incurred", "--payload-file", again, "--strict",
       "--venture", "arc", "--idem", sha256Hex(`cost.incurred|${first.payload.run_ref}|USD`)],
     { encoding: "utf8", env: { ...process.env, ARC_SPINE_ROOT: shared }, windowsHide: true });
     const afterRe = readSpine(shared).ev.filter((e) => e.kind === "cost.incurred").length;
@@ -314,6 +370,50 @@ try {
       && same(cur7, ["INR", "USD"]) && r7.money.every((m) => m.payload.run_ref === r7.run?.id) && r7.quarantined === 0,
       `${JSON.stringify(r7.receipt?.spend_by_currency)} ${JSON.stringify(cur7)} ${tail(r7)}`);
     check("R: the INR row is the recorded 50 paise and spend-trace books both", r7.money.find((m) => m.payload.currency === "INR")?.payload?.amount === 50 && T.unbookedRuns(r7.ev).length === 0);
+  }
+
+  // ===================================================================================================================
+  // cc -- claude-code reads its session spend at session end, through the fake CLI, on both output paths
+  // ===================================================================================================================
+  if (want("cc")) {
+    const fake = join(REPO, "tests/fixtures/engine/fake-claude-spend.mjs");
+    const answer = join(tmp, "cc-answer.json");
+    writeFileSync(answer, JSON.stringify(VALID));
+    const mark = join(tmp, "cc-mark.txt");
+    const cc = (cost, extra = {}, o = {}) => arcRun({ port, driver: "claude-code", stream: o.stream,
+      env: { ARC_CLAUDE_CLI: fake, FAKE_SPEND_COST: String(cost), FAKE_SPEND_OUTPUT: answer, FAKE_SPEND_MARK: mark, ...extra } });
+
+    const j = await cc(0.0731);
+    const ranOnce = existsSync(mark) && readFileSync(mark, "utf8").trim().split("\n").length === 1;
+    check("fixture: the fake claude CLI RAN once and the run's receipt landed (vacuous-pass guard)", ranOnce && j.code === 0 && j.runs === 1 && j.quarantined === 0, `code=${j.code} ${tail(j)}`);
+    check("C: json path -- total_cost_usd 0.0731 is 8 cents on run.completed, basis harness-reported",
+      same(j.receipt?.spend, usd(8, "0.0731")) && j.receipt?.spend_basis === "harness-reported", JSON.stringify(j.receipt?.spend));
+    check("C: ... one money row, harness-reported, its label saying so",
+      j.money.length === 1 && j.money[0].payload.basis === "harness-reported" && /harness-reported/.test(j.money[0].payload.label) && j.money[0].payload.run_ref === j.run?.id, JSON.stringify(j.money[0]?.payload));
+
+    const st = await cc(0.0148, {}, { stream: true });
+    check("C: stream path -- the result event's total_cost_usd 0.0148 is 2 cents and one money row",
+      st.code === 0 && same(st.receipt?.spend, usd(2, "0.0148")) && st.money.length === 1, `code=${st.code} ${JSON.stringify(st.receipt?.spend)} ${tail(st)}`);
+
+    const ab = await cc("absent");
+    check("C: a session envelope with no total_cost_usd is not-reported and books nothing (never 0)",
+      ab.code === 0 && ab.receipt?.spend === null && ab.receipt?.spend_absence === "not-reported" && ab.money.length === 0, `${ab.receipt?.spend_absence} ${tail(ab)}`);
+    const sg = await cc("string");
+    check("C: a string total_cost_usd is refused aloud, not-reported, nothing booked",
+      sg.code === 0 && sg.receipt?.spend_absence === "not-reported" && sg.money.length === 0 && /refusing a provider spend/.test(sg.err), `${sg.receipt?.spend_absence} ${tail(sg)}`);
+    const ng = await cc("negative");
+    check("C: a negative total_cost_usd is refused, not-reported, nothing booked",
+      ng.code === 0 && ng.receipt?.spend_absence === "not-reported" && ng.money.length === 0, `${ng.receipt?.spend_absence} ${tail(ng)}`);
+
+    const nj = await cc(0.01, { FAKE_SPEND_ANSWER: "notjson" });
+    check("C: an answer that is not JSON still books the session's spend on the failed run",
+      nj.code !== 0 && nj.runs === 1 && same(nj.receipt?.spend, usd(1, "0.01")) && nj.money.length === 1, `code=${nj.code} ${JSON.stringify(nj.receipt?.spend)} ${tail(nj)}`);
+    const fj = await cc(0.02, { FAKE_SPEND_FAIL: "1" });
+    check("C: a CLI that fails after its session (json, exit 1) still books what the session spent",
+      fj.code !== 0 && same(fj.receipt?.spend, usd(2, "0.02")) && fj.money.length === 1, `code=${fj.code} ${JSON.stringify(fj.receipt?.spend)} ${tail(fj)}`);
+    const fs2 = await cc(0.03, { FAKE_SPEND_FAIL: "1" }, { stream: true });
+    check("C: ... and on the stream path, an is_error result still books its spend",
+      fs2.code !== 0 && same(fs2.receipt?.spend, usd(3, "0.03")) && fs2.money.length === 1, `code=${fs2.code} ${JSON.stringify(fs2.receipt?.spend)} ${tail(fs2)}`);
   }
 } finally {
   if (srv) srv.close();

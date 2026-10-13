@@ -2,16 +2,17 @@
 /**
  * spend-trace.mjs -- the reverse trace of engine spend (ADR-0230).
  *
- *   node .claude/scripts/engine/spend-trace.mjs [--root PATH] [--json]
+ *   node .claude/scripts/engine/spend-trace.mjs [--spine PATH] [--json]
  *
  * arc-run writes run.completed first and its cost.incurred second, so a run killed between the two leaves a receipt
  * with a spend and no money row: the Money room then under-reports, and nothing says so. This names that gap as a
  * count. `unbookedRuns` lists every run.completed whose `spend` is a figure and that no cost.incurred names by
- * `run_ref` in that currency. Exit 0 when every spent run is booked, 1 when one is not, 2 when the spine is unreadable.
+ * `run_ref` in that currency. Exit 0 when every spent run is booked, 1 when one is not, 2 on a usage error or an
+ * unreadable spine, 3 when the spine holds no run.completed at all (a trace that looked at nothing is not a pass).
  * Read-only; reads the spine only through `query` (spine-reader-lint).
  */
 import { resolve } from "node:path";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isSpend } from "./drivers/common.mjs";
 
@@ -40,17 +41,31 @@ export function unbookedRuns(events) {
 }
 
 async function main(argv) {
-  const at = argv.indexOf("--root");
-  const root = resolve(at >= 0 && argv[at + 1] ? argv[at + 1] : process.cwd());
-  const { query } = await import("../hq/spine.mjs");
+  for (const a of argv) {
+    if (!["--spine", "--json"].includes(a) && a.startsWith("--")) { console.error(`spend-trace: unknown flag ${a}`); return 2; }
+  }
+  const at = argv.indexOf("--spine");
+  const named = at >= 0 ? argv[at + 1] : undefined;
+  // A flag where the path belongs is a usage error, never a path: `--spine --json` read a spine named "--json", found
+  // nothing, and said every run was booked (attack e2dc399 B3).
+  if (at >= 0 && (named === undefined || named.startsWith("--"))) { console.error("spend-trace: --spine needs a path"); return 2; }
+  if (named !== undefined && !existsSync(named)) { console.error(`spend-trace: no spine at ${named}`); return 2; }
+  const { query, spineRoot } = await import("../hq/spine.mjs");
+  // The SPINE root, resolved the way the emitter resolves it (ARC_SPINE_ROOT, else the repo's own, refusing a linked
+  // worktree whose state dir is an empty copy) -- never the cwd, which made a worktree trace read nothing (B2).
+  const root = named !== undefined ? resolve(named) : spineRoot();
   const res = await query(root, {});
   if (res.unreadable.length) {
     console.error(`spend-trace: ${res.unreadable.length} spine day file(s) unreadable — the trace would be partial, refusing`);
     return 2;
   }
-  const missing = unbookedRuns(res.events.map((r) => r.event));
-  if (argv.includes("--json")) console.log(JSON.stringify({ unbooked: missing }));
-  else if (!missing.length) console.log("spend-trace: every spent run has its cost.incurred");
+  const events = res.events.map((r) => r.event);
+  const scanned = events.filter((e) => e && e.kind === "run.completed").length;
+  // Nothing scanned is not "everything booked": it is a trace that never looked (B2).
+  if (!scanned) { console.error(`spend-trace: no run.completed on the spine at ${root} — nothing was traced`); return 3; }
+  const missing = unbookedRuns(events);
+  if (argv.includes("--json")) console.log(JSON.stringify({ spine: root, scanned, unbooked: missing }));
+  else if (!missing.length) console.log(`spend-trace: ${scanned} run.completed scanned at ${root}; every spent run has its cost.incurred`);
   else for (const m of missing) console.log(`spend-trace: UNBOOKED run.completed ${m.id} spent ${m.amount} ${m.currency} minor units with no cost.incurred`);
   return missing.length ? 1 : 0;
 }

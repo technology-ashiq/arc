@@ -18,6 +18,14 @@ import { statSync } from "node:fs";
 
 import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
+import { SessionSpend } from "./session-spend.mjs";
+
+// A session that ended -- even in an error -- may still have spent. Its figure rides the failure (`arcCost`), because
+// only a measured figure may say so and dropping it would make a failed attempt read as free (ADR-0229).
+const withSpend = (err, envelope) => {
+  if (envelope && typeof envelope === "object" && envelope.total_cost_usd !== undefined) err.arcCost = { spend: SessionSpend.read(envelope), source: "measured" };
+  return err;
+};
 
 /**
  * PROGRESS MODE (face Phase 06 slice 03c). arc-run sets ARC_DRIVER_PROGRESS=1 when it streams a session for the face's
@@ -89,9 +97,9 @@ function runStreaming(args, prompt) {
       if (overflow) return rejectP(new Error(`claude CLI failed: ${overflow}`));
       // A non-zero exit, a signal, or a result the CLI marks as an error is a failed run -- as execFileSync made it on
       // the json path -- never an answer to parse (B2).
-      if (exited && (exited.code !== 0 || exited.signal)) return rejectP(new Error(`claude CLI failed: exit ${exited.code ?? "none"}${exited.signal ? ` (${exited.signal})` : ""}${tail}`));
+      if (exited && (exited.code !== 0 || exited.signal)) return rejectP(withSpend(new Error(`claude CLI failed: exit ${exited.code ?? "none"}${exited.signal ? ` (${exited.signal})` : ""}${tail}`), result));
       if (!result) return rejectP(new Error(`claude CLI failed: no result event${tail}`));
-      if (result.is_error === true) return rejectP(new Error(`claude CLI failed: the result is an error (${String(result.subtype ?? "error").slice(0, 60)})`));
+      if (result.is_error === true) return rejectP(withSpend(new Error(`claude CLI failed: the result is an error (${String(result.subtype ?? "error").slice(0, 60)})`), result));
       resolveP(result);
     };
     function onLine(line) {
@@ -185,22 +193,30 @@ await runDriver("claude-code", async ({ processName, input }) => {
       const err = new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
       // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
       if (cliMissing(e)) err.arcFailureClass = "provider-unavailable";
-      throw err;
+      // A CLI that exits non-zero after a session still printed its envelope, and that envelope says what it spent.
+      let failed = null;
+      try { failed = JSON.parse(String(e.stdout ?? "")); } catch { failed = null; }
+      throw withSpend(err, failed);
     }
     envelope = parseModelJson(raw, "the claude CLI envelope");
   }
 
-  const text = typeof envelope.result === "string" ? envelope.result : raw;
-  const output = parseModelJson(text, "the claude CLI result");
-
   const u = envelope.usage || {};
+  // Read at SESSION END, before the answer is judged: an answer that is not JSON was still paid for.
+  const cost = {
+    tokensIn: Number.isFinite(u.input_tokens) ? u.input_tokens : undefined,
+    tokensOut: Number.isFinite(u.output_tokens) ? u.output_tokens : undefined,
+    spend: SessionSpend.read(envelope),
+    source: "measured",
+  };
+  const text = typeof envelope.result === "string" ? envelope.result : raw;
+  let output;
+  try { output = parseModelJson(text, "the claude CLI result"); }
+  catch (err) { err.arcCost = cost; throw err; }
+
   return {
     output,
-    cost: {
-      tokensIn: Number.isFinite(u.input_tokens) ? u.input_tokens : undefined,
-      tokensOut: Number.isFinite(u.output_tokens) ? u.output_tokens : undefined,
-      source: "measured",
-    },
+    cost,
     model: pinnedModel() ?? "unpinned",
   };
 }, {
@@ -208,7 +224,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.3.0",
+  version: () => "claude-code@1.4.0",
 });
 
 settle();

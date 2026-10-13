@@ -32,3 +32,13 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A spend predicate fixed in one reader and not its twin** -- round 1 validated `inr` in the hop record and left the run total on `isFinite` (Cycle 8 attack a4e3f33 B1). *One named predicate (`okInr`), every reader of the field calls it.*
 - **A local fault declared as a provider one** -- a deleted cwd fails a spawn with ENOENT like a missing CLI, and hopping sends the work to a gateway (B2). *Declare unavailable only when the local preconditions are proven fine.*
 - **A term that binds every attempt but the first** -- `max_wall_ms` capped hops and retries and left the first attempt unbounded (B7). *A term written "per chain" is enforced on attempt one too.*
+
+## Cycle 9 — metered runs (attack e2dc399, round 1, and the build itself)
+
+- **A provider-specific request field sent to any endpoint** -- generic-api asked every endpoint for OpenRouter's `usage.include` and booked any `usage.cost` as USD (B1, high). *A field one provider defines is sent, and its answer read as money, only where that provider is known to answer; elsewhere the figure is absent, never assumed.*
+- **A trace that reads the cwd and passes on nothing** -- spend-trace read the cwd spine, found no events and said every run was booked (B2). *A reader resolves the spine the way the writer does, says how much it scanned, and treats zero scanned as a failure, never a pass.*
+- **A flag taken as a path** -- `--spine --json` read a spine named "--json" (B3). *A flag's value that starts with `--` or is missing is a usage error.*
+- **A probe that calls a bare `bash`** -- a WSL bash fails for a reason the check cannot tell apart from the refusal it tests (B4). *Call node and the `.mjs` directly, and assert on the specific refusal, not on any non-zero status.*
+- **Spend dropped when the answer is judged bad** -- both drivers parsed the answer before reading the session's spend, so a non-JSON answer (and a CLI that failed after its session) left a paid attempt reading as free (found while building Phase 12). *Read what an attempt spent before judging what it answered, and carry it on the failure path too.*
+- **A float multiplied into money** -- `Math.ceil(0.07 * 100)` is 8 (ADR-0229). *Money comes from `spendOf`/`sumSpend` only; a mutant with the float version must stay red.*
+- **The repo root passed where the spine root belongs** -- `query(root)` and `deriveCosts(root)` take the SPINE root (`spineRoot()`), and a repo root reads an empty spine. *Every spine reader gets `spineRoot()` or an explicit spine path, never a repo path.*
