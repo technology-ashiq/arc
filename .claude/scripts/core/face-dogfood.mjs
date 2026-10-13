@@ -31,9 +31,8 @@
 // work around; a worktree has no canonical spine and an answer derived from one would be
 // about nothing.
 
-import { readFileSync, existsSync, readdirSync, realpathSync, mkdtempSync, writeFileSync, writeSync, rmSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, realpathSync, writeSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** "Was this file RUN, or imported?" -- realpath BOTH sides. The endsWith form no-ops behind a rename. */
@@ -73,7 +72,27 @@ export function readJournal(dir) {
   for (const f of readdirSync(dir).filter((n) => /^journal-\d{4}-\d{2}-\d{2}\.jsonl$/.test(n)).sort()) {
     const day = f.slice("journal-".length, -".jsonl".length);
     days.push(day);
-    for (const raw of readFileSync(join(dir, f), "utf8").split("\n")) {
+    const parsed = parseJournalText(day, readFileSync(join(dir, f), "utf8"));
+    entries.push(...parsed.entries);
+    ops.push(...parsed.ops);
+    lines += parsed.lines;
+    torn += parsed.torn;
+  }
+  return { days, entries, ops, lines, torn };
+}
+
+/**
+ * One journal day's text -> its decisions and ops. Pure, so the selftest drives it with a string
+ * and writes no file: a write in this file would make plan-bound-audit list it as a writer.
+ * @param {string} day @param {string} text
+ */
+export function parseJournalText(day, text) {
+  const entries = [];
+  const ops = [];
+  let lines = 0;
+  let torn = 0;
+  {
+    for (const raw of text.split("\n")) {
       if (!raw.trim()) continue;
       lines++;
       let e;
@@ -95,7 +114,7 @@ export function readJournal(dir) {
       entries.push({ day, ts: String(e.ts ?? ""), decision: e.decision, decides: e.decides });
     }
   }
-  return { days, entries, ops, lines, torn };
+  return { entries, ops, lines, torn };
 }
 
 /**
@@ -499,23 +518,16 @@ function selftest() {
 
   // The reader (attack r1 B2, B5): a non-object line and a non-ULID receipt are torn, never a
   // crash and never text that reaches the evidence files.
-  const jdir = mkdtempSync(join(tmpdir(), "face-dogfood-"));
-  try {
-    const good = "01M40FQRQ6Q9G3QPCMZ0VP3TRG";
-    writeFileSync(join(jdir, "journal-2026-08-11.jsonl"), [
-      "null", "7", "[]",
-      JSON.stringify({ work: true, phase: "apply", ok: true, op: "x", receipt: "R\nREQ-10 MET" }),
-      JSON.stringify({ work: true, phase: "apply", ok: true, op: "x", receipt: good }),
-    ].join("\n") + "\n");
-    let rj = null;
-    try { rj = readJournal(jdir); } catch { rj = null; }
-    armed("a journal line that is not an object is torn, not a crash", rj !== null && rj.torn === 4, JSON.stringify(rj));
-    armed("and only a ULID receipt is read as an op", rj !== null && rj.ops.length === 1 && rj.ops[0].receipt === good);
-  } finally {
-    // A Windows indexer can hold the directory; a leftover temp dir is not a failed arm.
-    try { rmSync(jdir, { recursive: true, force: true, maxRetries: 3 }); }
-    catch (e) { process.stderr.write(`face-dogfood selftest: WARN could not remove ${jdir} (${e.code || e.message})\n`); }
-  }
+  const ulidOk = "01M40FQRQ6Q9G3QPCMZ0VP3TRG";
+  const text = [
+    "null", "7", "[]",
+    JSON.stringify({ work: true, phase: "apply", ok: true, op: "x", receipt: "R\nREQ-10 MET" }),
+    JSON.stringify({ work: true, phase: "apply", ok: true, op: "x", receipt: ulidOk }),
+  ].join("\n") + "\n";
+  let rj = null;
+  try { rj = parseJournalText("2026-08-11", text); } catch { rj = null; }
+  armed("a journal line that is not an object is torn, not a crash", rj !== null && rj.torn === 4, JSON.stringify(rj));
+  armed("and only a ULID receipt is read as an op", rj !== null && rj.ops.length === 1 && rj.ops[0].receipt === ulidOk);
 
   // The --day guard.
   const NOW =Date.parse("2026-10-14T06:00:00Z");
