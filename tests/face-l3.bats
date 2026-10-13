@@ -268,12 +268,24 @@ load 'test_helper'
              "one named day does not pass a two-day floor" \
              "a day named twice is still one day" \
              "an op outside the window does not count for a named day" \
-             "--day refuses a future day"; do
+             "a decision id quoted as an op receipt does not count" \
+             "an op receipt from another day does not count" \
+             "one receipt journalled twice is one op" \
+             "a journal line that is not an object is torn, not a crash" \
+             "and only a ULID receipt is read as an op" \
+             "--day refuses a non-date" \
+             "--day refuses an impossible date" \
+             "--day refuses a future day" \
+             "--day refuses a repeat" \
+             "--day accepts today in IST"; do
     [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
-  # Floor the arm count: a selftest that silently stopped registering arms also exits 0.
-  local arms; arms=$(printf '%s\n' "$output" | grep -c "PASS$")
-  [ "$arms" -ge 29 ] || { echo "only $arms arms ran: $output"; false; }
+  # The PASS count must equal the RAN count the selftest derives from its own registered arms,
+  # and that count has a floor, so a dropped arm is visible either way.
+  local arms ran; arms=$(printf '%s\n' "$output" | grep -c "PASS$")
+  ran=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) arms$/\1/p')
+  [ -n "$ran" ] && [ "$arms" -eq "$ran" ] || { echo "PASS=$arms RAN=$ran: $output"; false; }
+  [ "$ran" -ge 34 ] || { echo "only $ran arms registered: $output"; false; }
 }
 
 @test "face-dogfood --day refuses a day it cannot honour, before reading anything" {
@@ -286,6 +298,14 @@ load 'test_helper'
   done
   run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day 2026-10-01 --day 2026-10-01 --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
   [ "$status" -eq 2 ] && [[ "$output" == *"named twice"* ]] || { echo "$output"; false; }
+  # A forgotten --day, a second positional and the equals form are refused, never read as a repo.
+  for args in "--days 1 2026-10-13" "repo-a repo-b" "--day=2026-10-13"; do
+    # shellcheck disable=SC2086
+    run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" $args --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+    [ "$status" -eq 2 ] || { echo "$args: expected exit 2, got $status: $output"; false; }
+    [[ "$output" != *"about this READ"* ]] || { echo "$args reached the read: $output"; false; }
+    [[ "$output" == *"face-dogfood:"* ]] || { echo "$args: no named refusal: $output"; false; }
+  done
   # Control: a usable day gets past the guard to the input check, which fails on the read.
   run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day 2026-10-01 --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
   [ "$status" -eq 2 ] && [[ "$output" == *"about this READ"* ]] || { echo "$output"; false; }

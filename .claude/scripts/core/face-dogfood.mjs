@@ -31,8 +31,9 @@
 // work around; a worktree has no canonical spine and an answer derived from one would be
 // about nothing.
 
-import { readFileSync, existsSync, readdirSync, realpathSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, realpathSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** "Was this file RUN, or imported?" -- realpath BOTH sides. The endsWith form no-ops behind a rename. */
@@ -47,6 +48,7 @@ function isMainModule() {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = join(HERE, "..", "..", "..");
 const REQUIRED_DAYS = 5;
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 // ---------- readers (pure enough to test: they take a directory, not a repo) ----------
 
@@ -78,10 +80,13 @@ export function readJournal(dir) {
       // A torn line is COUNTED, not skipped in silence. A journal that lost half its lines
       // and a journal that recorded nothing look identical unless someone says so.
       try { e = JSON.parse(raw); } catch { torn++; continue; }
+      // `null`, a number or an array parses fine and is not a line the door writes.
+      if (e === null || typeof e !== "object" || Array.isArray(e)) { torn++; continue; }
       // A work-door APPLY that landed: the op clause's evidence. A plan, a refusal or a failed
-      // apply wrote nothing, so it is not an op that ran.
-      if (e && e.work === true && e.phase === "apply" && e.ok === true) {
-        if (typeof e.receipt === "string" && e.receipt) ops.push({ day, op: String(e.op ?? ""), receipt: e.receipt });
+      // apply wrote nothing, so it is not an op that ran. The receipt must be a ULID: it is
+      // printed into evidence files, and free text there could forge a verdict line.
+      if (e.work === true && e.phase === "apply" && e.ok === true) {
+        if (typeof e.receipt === "string" && ULID.test(e.receipt)) ops.push({ day, op: String(e.op ?? ""), receipt: e.receipt });
         else torn++;
         continue;
       }
@@ -108,24 +113,25 @@ export function readJournal(dir) {
  * evidence nobody can use.
  *
  * @param {string} root  the spine root
- * @returns {Promise<{ days: string[], receipts: { day: string, id: string, decides: string }[], ids: Set<string>, torn: number }>}
+ * @returns {Promise<{ days: string[], receipts: { day: string, id: string, decides: string }[], ids: Map<string, { kind: string, day: string }>, torn: number }>}
  */
 export async function readSpineDecisions(root) {
-  if (!existsSync(join(root, "events"))) return { days: [], receipts: [], ids: new Set(), torn: 0 };
+  if (!existsSync(join(root, "events"))) return { days: [], receipts: [], ids: new Map(), torn: 0 };
   const { readAll } = await import(pathToFileURL(join(REPO_DEFAULT, ".claude", "scripts", "hq", "spine.mjs")).href);
   const { events, torn } = await readAll(root);
   const receipts = [];
   const days = new Set();
   // Every id, so an op's journalled receipt is checked against the spine -- the same "the face
   // claims, the spine proves" rule the decisions follow.
-  const ids = new Set();
+  /** @type {Map<string, { kind: string, day: string }>} */
+  const ids = new Map();
   // The envelope is { event, day, seq, line } -- the EVENT is one level in. Reading `e.kind`
   // off the envelope is not a crash, it is `undefined`, so every kind test quietly answers no
   // and the report comes back well-formed and wrong. That exact mistake shipped in the door's
   // /api/rooms handler and was caught only by a count that could not have been true.
   for (const { event, day } of events) {
     days.add(day);
-    if (event?.id) ids.add(String(event.id));
+    if (event?.id) ids.set(String(event.id), { kind: String(event.kind ?? ""), day });
     if (event?.kind !== "decision.recorded") continue;
     receipts.push({ day, id: String(event.id ?? ""), decides: String(event.payload?.decides ?? "") });
   }
@@ -197,10 +203,17 @@ export function dogfoodVerdict(journal, spine, opts = {}) {
   const opsUnproven = [];
   if (window) {
     for (const d of window) opsByDay[d] = 0;
+    // IDENTITY, not membership: the receipt must be an event on the SAME day that is not a
+    // decision, and each receipt proves one op once. Any id the spine holds would otherwise
+    // let a day with only a decision quote that decision's id as its op.
+    const used = new Set();
     for (const o of journal.ops ?? []) {
       if (!inWindow(o.day)) continue;
-      if (spine.ids instanceof Set && spine.ids.has(o.receipt)) opsByDay[o.day]++;
-      else opsUnproven.push(o);
+      const ev = spine.ids instanceof Map ? spine.ids.get(o.receipt) : undefined;
+      if (ev && ev.day === o.day && ev.kind !== "decision.recorded" && !used.has(o.receipt)) {
+        used.add(o.receipt);
+        opsByDay[o.day]++;
+      } else opsUnproven.push(o);
     }
   }
 
@@ -389,7 +402,11 @@ function selftest() {
   // An op journal entry and a spine that holds every id it is asked about.
   const op = (d, r) => ({ day: d, op: "today.capture-idea", receipt: r });
   const withOps = (entries, ops) => ({ ...mkJournal(entries), ops });
-  const spineIds = (receipts, extra) => ({ ...mkSpine(receipts), ids: new Set([...receipts.map((r) => r.id), ...extra]) });
+  // `extra` are the ops whose receipts the spine holds, each on its own op's day.
+  const spineIds = (receipts, extra) => ({ ...mkSpine(receipts), ids: new Map([
+    ...receipts.map((r) => [r.id, { kind: "decision.recorded", day: r.day }]),
+    ...extra.map((o) => [o.receipt, { kind: "note.logged", day: o.day }]),
+  ]) });
   const w2 = [day(1), day(2)];
   const twoOps = [op(day(1), "R1"), op(day(2), "R2")];
 
@@ -398,23 +415,23 @@ function selftest() {
   const hist = [...cleanSpine.slice(0, 3), { day: day(0), id: id(97), decides: "A97" }];
   const histJ = clean.slice(0, 3);
   armed("all history still fails on an old outside decision",
-    dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, ["R1", "R2"]), { requiredDays: 2 }).met === false);
-  const wGood = dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, ["R1", "R2"]), { requiredDays: 2, window: w2 });
+    dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, twoOps), { requiredDays: 2 }).met === false);
+  const wGood = dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, twoOps), { requiredDays: 2, window: w2 });
   armed("two named clean days with an op each are MET", wGood.met === true, JSON.stringify(wGood.reasons));
   armed("and the outside count across ALL history is still reported", wGood.outsideAllHistory === 1);
 
   // An outside decision INSIDE a named day still fails it.
   armed("an outside decision on a named day fails the window",
-    dogfoodVerdict(withOps(histJ, twoOps), spineIds([...hist, { day: day(2), id: id(96), decides: "A96" }], ["R1", "R2"]), { requiredDays: 2, window: w2 }).met === false);
+    dogfoodVerdict(withOps(histJ, twoOps), spineIds([...hist, { day: day(2), id: id(96), decides: "A96" }], twoOps), { requiredDays: 2, window: w2 }).met === false);
 
   // A named day with no op fails, and says which day.
-  const noOpV = dogfoodVerdict(withOps(histJ, [op(day(1), "R1")]), spineIds(hist, ["R1"]), { requiredDays: 2, window: w2 });
+  const noOpV = dogfoodVerdict(withOps(histJ, [op(day(1), "R1")]), spineIds(hist, [op(day(1), "R1")]), { requiredDays: 2, window: w2 });
   armed("a named day with no face op fails the window",
     noOpV.met === false && noOpV.reasons.some((r) => r.includes("no face op") && r.includes(day(2))));
 
   // An op whose receipt is NOT on the spine is not an op that ran -- the journal's word alone
   // is never enough, exactly as for decisions.
-  const ghost = dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(2), "GHOST")]), spineIds(hist, ["R1"]), { requiredDays: 2, window: w2 });
+  const ghost = dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(2), "GHOST")]), spineIds(hist, [op(day(1), "R1")]), { requiredDays: 2, window: w2 });
   armed("an op whose receipt the spine lacks does not count",
     ghost.met === false && ghost.opsByDay[day(2)] === 0 && ghost.reasons.some((r) => /does not hold/.test(r)));
   // A spine with no id set (an old caller) proves no op at all, rather than every op.
@@ -423,24 +440,51 @@ function selftest() {
 
   // A named day that decided nothing is a reason, even if the other days reach the count.
   const w3 = [day(1), day(2), day(4)];
-  const emptyDayV = dogfoodVerdict(withOps(histJ, [...twoOps, op(day(4), "R4")]), spineIds(hist, ["R1", "R2", "R4"]), { requiredDays: 2, window: w3 });
+  const emptyDayV = dogfoodVerdict(withOps(histJ, [...twoOps, op(day(4), "R4")]), spineIds(hist, [...twoOps, op(day(4), "R4")]), { requiredDays: 2, window: w3 });
   armed("a named day with no face decision fails the window",
     emptyDayV.met === false && emptyDayV.reasons.some((r) => r.includes("no decision") && r.includes(day(4))));
 
   // Naming one day cannot pass a two-day floor.
   armed("one named day does not pass a two-day floor",
-    dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, ["R1", "R2"]), { requiredDays: 2, window: [day(1)] }).met === false);
+    dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, twoOps), { requiredDays: 2, window: [day(1)] }).met === false);
 
   // Naming a day twice is one day, not two.
   armed("a day named twice is still one day",
-    dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, ["R1", "R2"]), { requiredDays: 2, window: [day(1), day(1)] }).met === false);
+    dogfoodVerdict(withOps(histJ, twoOps), spineIds(hist, twoOps), { requiredDays: 2, window: [day(1), day(1)] }).met === false);
 
   // An op on a day OUTSIDE the window does not lend itself to a named day.
   armed("an op outside the window does not count for a named day",
-    dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(0), "R0")]), spineIds(hist, ["R1", "R0"]), { requiredDays: 2, window: w2 }).met === false);
+    dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(0), "R0")]), spineIds(hist, [op(day(1), "R1"), op(day(0), "R0")]), { requiredDays: 2, window: w2 }).met === false);
+
+  // IDENTITY, not membership (attack r1 B1). A day's own DECISION id quoted as its op, a real
+  // op receipt from ANOTHER day, and one receipt journalled twice each prove nothing.
+  const asDecision = dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(2), id(2))]), spineIds(hist, [op(day(1), "R1")]), { requiredDays: 2, window: w2 });
+  armed("a decision id quoted as an op receipt does not count",
+    asDecision.met === false && asDecision.opsByDay[day(2)] === 0);
+  armed("an op receipt from another day does not count",
+    dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(2), "R0")]), spineIds(hist, [op(day(1), "R1"), op(day(0), "R0")]), { requiredDays: 2, window: w2 }).met === false);
+  const reused = dogfoodVerdict(withOps(histJ, [op(day(1), "R1"), op(day(1), "R1")]), spineIds(hist, [op(day(1), "R1")]), { requiredDays: 1, window: [day(1)] });
+  armed("one receipt journalled twice is one op",
+    reused.opsByDay[day(1)] === 1 && reused.met === false);
+
+  // The reader (attack r1 B2, B5): a non-object line and a non-ULID receipt are torn, never a
+  // crash and never text that reaches the evidence files.
+  const jdir = mkdtempSync(join(tmpdir(), "face-dogfood-"));
+  try {
+    const good = "01M40FQRQ6Q9G3QPCMZ0VP3TRG";
+    writeFileSync(join(jdir, "journal-2026-08-11.jsonl"), [
+      "null", "7", "[]",
+      JSON.stringify({ work: true, phase: "apply", ok: true, op: "x", receipt: "R\nREQ-10 MET" }),
+      JSON.stringify({ work: true, phase: "apply", ok: true, op: "x", receipt: good }),
+    ].join("\n") + "\n");
+    let rj = null;
+    try { rj = readJournal(jdir); } catch { rj = null; }
+    armed("a journal line that is not an object is torn, not a crash", rj !== null && rj.torn === 4, JSON.stringify(rj));
+    armed("and only a ULID receipt is read as an op", rj !== null && rj.ops.length === 1 && rj.ops[0].receipt === good);
+  } finally { rmSync(jdir, { recursive: true, force: true }); }
 
   // The --day guard.
-  const NOW = Date.parse("2026-10-14T06:00:00Z");
+  const NOW =Date.parse("2026-10-14T06:00:00Z");
   armed("--day refuses a non-date", dayRefusal("2026-1-4", [], NOW) !== null && dayRefusal(undefined, [], NOW) !== null);
   armed("--day refuses an impossible date", dayRefusal("2026-02-30", [], NOW) !== null);
   armed("--day refuses a future day", /future/.test(dayRefusal("2026-10-15", [], NOW) ?? ""));
@@ -448,6 +492,8 @@ function selftest() {
   armed("--day accepts today in IST", dayRefusal("2026-10-14", [], Date.parse("2026-10-13T20:00:00Z")) === null);
 
   for (const l of lines) process.stdout.write(l + "\n");
+  // Derived from the arms that registered, so a suite can compare its PASS count to it.
+  process.stdout.write(`RAN: ${lines.length} arms\n`);
   process.stdout.write(`face-dogfood selftest: ${ok ? "PASS -- the requirement can be failed, by every route it can be failed by" : "FAIL"}\n`);
   return ok ? 0 : 1;
 }
@@ -528,7 +574,14 @@ if (isMainModule()) {
   // values let `--days 02` (parsed as 2, compared as "2") leak "02" in as the repo root.
   const consumed = new Set();
   argv.forEach((a, i) => { if (["--journal", "--spine", "--days", "--day"].includes(a)) consumed.add(i + 1); });
-  const repo = argv.find((a, i) => !a.startsWith("-") && !consumed.has(i)) || REPO_DEFAULT;
+  // At most one, and never a day: `--days 1 2026-10-13` is a forgotten `--day`, and reading it
+  // as a repo would judge all history while the caller believed one day was named.
+  const positionals = argv.filter((a, i) => !a.startsWith("-") && !consumed.has(i));
+  if (positionals.length > 1 || positionals.some((a) => /^\d{4}-\d{2}-\d{2}$/.test(a))) {
+    process.stderr.write(`face-dogfood: unexpected argument(s) ${positionals.join(", ")} -- one repo root at most, and a day is named with --day YYYY-MM-DD.\n`);
+    process.exit(2);
+  }
+  const repo = positionals[0] || REPO_DEFAULT;
   // `run` reads the spine through the canonical reader, which is async (it may open the sqlite
   // index). A bare try/catch around an async call catches nothing: the promise rejects after
   // the try block has already returned, so a read failure would have gone out as an unhandled

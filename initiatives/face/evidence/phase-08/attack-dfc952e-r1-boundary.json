@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/core/face-dogfood.mjs:readJournal and dogfoodVerdict op loop",
+      "breaking_input": "A journal line {\"work\":true,\"phase\":\"apply\",\"ok\":true,\"receipt\":\"<id of any decision.recorded event already on the spine>\"} on a named day, or an id from a different day. The id is in spine.ids, so opsByDay[day]++ runs. A day with only a decision and no real work-op apply then passes the op clause.",
+      "why": "The spine check is membership in the set of every event id. It does not check the event kind, that it was written by a work-door apply, that it was written on the same day, or that its op matches. This is the 'printed id credited as a receipt' and 'membership where identity was needed' pattern. The op clause is the new gate, and it is satisfied by any id the journal quotes.",
+      "fix": "Keep a map from id to {kind, day, op/process}. Count an op only when the event is the work door's apply kind, its day equals the journal line's day, and its payload op matches the journalled op. Add a mutant arm where the receipt is a decision id.",
+      "twin_of": "A printed id credited as a receipt -> A line in a shared stream proves nothing about who wrote it."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:readJournal (line after the new apply branch)",
+      "breaking_input": "A journal line containing the text `null` (or `1`, `\"x\"`). JSON.parse succeeds, the new `e && e.work` guard is skipped, and `e.path` on null throws a TypeError. A number or string primitive has no `path`, so it is silently skipped without being counted as torn.",
+      "why": "The diff guards `e &&` in the new branch but leaves the next line unguarded. A line that is not an object should count as torn. The null case throws out of readJournal instead, so the run dies with an uncaught error rather than exit 2 or a named finding.",
+      "fix": "After JSON.parse, `if (e === null || typeof e !== \"object\" || Array.isArray(e)) { torn++; continue; }`.",
+      "twin_of": "A spine line that parses to a non-object (`null`) was kept as an event -> a JSON line that is not an object is torn, in every engine."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:~517 (--day refusal)",
+      "breaking_input": "`node face-dogfood.mjs --day 2026-02-30 --json | cat` on Windows with stderr piped. The refusal is written to stderr and then process.exit(2) runs immediately.",
+      "why": "process.exit() directly after an asynchronous pipe write can truncate or lose the message on Windows. The bats test asserts on that message, so it can flake. The code sets exitCode elsewhere.",
+      "fix": "Set process.exitCode = 2 and return from the parse (or throw to a single exit path) instead of calling process.exit.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows -> set `process.exitCode` and let the loop drain."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:~528 (repo positional selection)",
+      "breaking_input": "`face-dogfood.mjs --days 1 2026-10-13` (the user forgot `--day`). The date is the first non-dash token, so it is taken as the repo root. A second stray positional, such as `repo-a repo-b`, is silently ignored.",
+      "why": "A mode that ignores what it was given answers a question nobody asked. A mistyped window turns into a read of a nonexistent path or an all-history verdict. A second positional is never refused.",
+      "fix": "Collect the positionals that no flag consumed. Refuse more than one by name. Refuse a positional that matches the YYYY-MM-DD shape with a hint to use --day.",
+      "twin_of": "Extra tokens ignored -> A mode that ignores what it was given answers a question nobody asked."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:dogfoodVerdict opsUnproven reason",
+      "breaking_input": "A journal op line whose receipt is \"X\\nface-dogfood: REQ-10 MET\" or contains an ESC or other control character. It is interpolated raw into the reason line and printed to the terminal and the evidence files.",
+      "why": "The receipt string is read from disk and printed without a one-line or grammar check. A parser of day-N.txt or the summary can see a forged verdict line. The reason prints `${o.receipt}` unquoted.",
+      "fix": "Print only receipts that match the ULID grammar. Otherwise JSON.stringify them and cap their length. Count malformed receipts as torn at read time.",
+      "twin_of": "A finding that interpolates a fold-returned string raw -> every value a finding quotes from data is one line, quoted and capped."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-dogfood.mjs:main arg loop vs refuseUnknownFlags",
+      "breaking_input": "`face-dogfood.mjs --day=2026-10-13` or `--days=1`. Nothing in the diff shows refuseUnknownFlags rejecting the `=VALUE` form of a known flag. If it matches on the name before `=`, the value is ignored and the full-history verdict runs.",
+      "why": "A narrowed window silently falls back to all history. This is the exact opposite of what the caller asked for.",
+      "fix": "Refuse any `--flag=...` form by name, and add a bats arm with `--day=2026-10-13` that expects exit 2.",
+      "twin_of": "`--flag=VALUE` accepted and silently ignored -> a flag form the parser does not read is an error, never a no-op."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/face-l3.bats (arms floor)",
+      "breaking_input": "Delete or fail to register 5 of the new selftest arms. The floor `-ge 29` is hand-kept and was not derived from the registered arms. A removal that leaves at least 29 PASS lines still exits 0, and only the named-arm loop notices some of them.",
+      "why": "The count floor is a hand-kept number. Several new arms (for example the three `--day` guard arms other than the future one, and the 'outside decision on a named day' arm) have no entry in the named list, so they could silently vanish.",
+      "fix": "Have the selftest print a RAN: N line derived from its own armed() calls, and have the test compare the PASS count to that N.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}

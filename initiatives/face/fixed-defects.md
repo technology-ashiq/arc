@@ -1041,3 +1041,8 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A decision with a malformed `decides` silently ignored** -- its winner read open forever (attack 8164ad9 L2). *Check: a join key outside its grammar is a counted finding, never a quiet miss.*
 - **Free-text tokens served with line breaks** (attack 8164ad9 L3). *Check: served text is one line.*
 - **Constants trusted without a grammar** -- discover's process name, version and gate (attack 8164ad9 L7, L9, L10). *Check: a selector imported from another lane is held to a token grammar before it selects.*
+- **A journalled receipt proved by membership in "every id the spine holds"** -- a day's own decision id passed as its op (attack dfc952e B1). *Check: a receipt is matched by identity: same day, the right kind, each receipt counted once.*
+- **`JSON.parse` accepted `null`, a number or an array, and the next property read threw** (attack dfc952e B2). *Check: a parsed line that is not a plain object is torn, never dereferenced.*
+- **A stray positional silently read as the repo root** -- a forgotten `--day` judged all history (attack dfc952e B4). *Check: at most one positional, and one shaped like another flag's value is refused by name.*
+- **Free text from a local file printed into an evidence line** (attack dfc952e B5). *Check: an id printed into a verdict matches its grammar at read time.*
+- **A hand-kept arm floor** (attack dfc952e B7). *Check: a suite compares its PASS count to the RAN count the selftest derives from its own arms.*
