@@ -2,8 +2,10 @@
 // through the Git Data API; release has already lifted the production hold, so that push is a production build. verify
 // is the first proof the venture serves: the live domain answers 200 with this shell, and PageSpeed Insights scores all
 // four Lighthouse categories at 90 or better, asked with the owner's PageSpeed key (ADR-1753). A PageSpeed quota or error
-// answer is UNSCANNED(reason).
+// answer is UNSCANNED(reason). Before the commit it sets the Vercel project's framework to Next.js: hosting created it with
+// none, so the pre-app commits built READY as static sites (ADR-1755).
 const GITHUB = "https://api.github.com";
+const VERCEL = "https://api.vercel.com";
 const PAGESPEED = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 const MARK = "arc-launch";
 const CATS = { performance: "PERFORMANCE", accessibility: "ACCESSIBILITY", "best-practices": "BEST_PRACTICES", seo: "SEO" };
@@ -79,6 +81,37 @@ async function gh(ctx, method, path, body, allow) {
   throw new Error(`github ${method} ${path.split("?")[0]} -> ${res.status}${msg}`);
 }
 
+// The Vercel project hosting created, found by the repo's name and held to its GitHub link.
+async function vc(ctx, method, path, body, allow) {
+  const t = String(ctx.env.VERCEL_TOKEN || "").trim();
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(t)) throw refuse("BAD_TOKEN", "VERCEL_TOKEN is not a token shape; its value is not printed");
+  let res;
+  try {
+    res = await ctx.fetch(`${VERCEL}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${t}`, "content-type": "application/json", "user-agent": "arc-launch" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    if (e && e.code) throw e;
+    throw new Error(`vercel ${method} ${path.split("?")[0]} -> transport error (${say(e && e.name, 30) || "unknown"})`);
+  }
+  let json = null;
+  try { json = await res.json(); } catch { json = null; }
+  if (res.ok || (allow || []).includes(res.status)) return { status: res.status, body: json };
+  const msg = json && json.error && typeof json.error.message === "string" ? `: ${say(json.error.message)}` : "";
+  throw new Error(`vercel ${method} ${path.split("?")[0]} -> ${res.status}${msg}`);
+}
+async function nextPreset(ctx, full) {
+  const name = full.split("/")[1];
+  const p = await vc(ctx, "GET", `/v9/projects/${encodeURIComponent(name)}`, undefined, [404]);
+  if (p.status === 404) throw refuse("UPSTREAM_MISSING", `no vercel project named ${name}; hosting creates it`);
+  const link = p.body && p.body.link && typeof p.body.link === "object" ? p.body.link : null;
+  if (!link || link.type !== "github" || `${link.org}/${link.repo}`.toLowerCase() !== full.toLowerCase())
+    throw refuse("FOREIGN_PROJECT", `vercel project ${name} is not linked to ${full}; frontend does not change it`);
+  if (p.body.framework !== "nextjs") await vc(ctx, "PATCH", `/v9/projects/${encodeURIComponent(String(p.body.id))}`, { framework: "nextjs" });
+}
+
 function repo(ctx) {
   const all = list(ctx.upstream && ctx.upstream.repo).filter((r) => r.kind === "github-repo");
   if (all.length !== 1) throw refuse("UPSTREAM_MISSING", `repo reported ${all.length} github-repo resources; frontend needs exactly one`);
@@ -98,7 +131,7 @@ const decode = (b) => (b && b.type === "file" && b.encoding === "base64" && type
 const utf8 = (bin) => new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 
 export function envContract() {
-  return ["GITHUB_TOKEN", "PAGESPEED_API_KEY"];
+  return ["GITHUB_TOKEN", "VERCEL_TOKEN", "PAGESPEED_API_KEY"];
 }
 
 export async function scaffold(ctx) {
@@ -142,6 +175,8 @@ export async function scaffold(ctx) {
     return { files: Object.keys(want), resources: [{ kind: "frontend-shell", id: `${full}:${mine}` }], notes: [] };
   }
 
+  // The preset first: the push below starts the production build, and Vercel builds it with the preset it holds then.
+  await nextPreset(ctx, full);
   const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
   const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
   if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}@${head.slice(0, 7)}`);

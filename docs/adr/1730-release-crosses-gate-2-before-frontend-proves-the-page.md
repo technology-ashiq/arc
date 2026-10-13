@@ -24,7 +24,7 @@ pending until something outside its own DAG ran.
 Option 2. `frontend.depends_on` = `repo`, `release`. `release` asks for `deploy-prod-first` (its sensitive action),
 then lifts the hold by committing `vercel.json` as `{}` with the trailer `Arc-Launch-Tag: <slug>@release@arc-ship-release`
 (the exact line `hosting` reads, ADR-1727), and tags that commit `launch-release-1`. Its verify is the deploy receipt:
-Vercel holds a production deployment of the tagged commit that was BUILT, not skipped (READY, or ERROR while `main` has
+Vercel holds a production deployment of the tagged commit that was BUILT, not skipped (READY only since ADR-1755; this read "or ERROR while `main` has
 no app yet). `frontend` commits the Next shell through the Git Data API in one commit (ADR-1726); its verify fetches
 `https://<brand.domain>/` (HTTP 200 from the venture itself) and asks PageSpeed Insights for the four categories.
 A PageSpeed quota or error answer is `UNSCANNED(reason)`. The `nextjs-shell` row gains `api.github.com`,

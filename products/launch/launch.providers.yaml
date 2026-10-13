@@ -220,13 +220,15 @@ providers:
     payment_model: any
     env_keys:
       - GITHUB_TOKEN
+      - VERCEL_TOKEN
       - PAGESPEED_API_KEY
     hosts:
       - sandbox.automemory.ai
       - api.github.com
+      - api.vercel.com
       - www.googleapis.com
     credentials:
-      scope: "commits the shell to the venture repo; probes the live site and PageSpeed with a PageSpeed-only API key (ADR-1726, ADR-1730, ADR-1753)"
+      scope: "commits the shell to the venture repo; sets its Vercel project's framework to Next.js; probes the live site and PageSpeed with a PageSpeed-only API key (ADR-1726, ADR-1730, ADR-1753, ADR-1755)"
     adapter: providers/frontend/nextjs-shell.mjs
     digest: null
     approved_by: ashiq

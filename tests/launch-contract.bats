@@ -610,9 +610,11 @@ arm() {
   [[ "$(j 'o.before.ok + " " + o.before.reason')" == "false https://sandbox.automemory.ai/ answered 404, not 200" ]] || { echo "$DONE"; false; }
   [ "$(j 'o.release.ok + " " + o.releaseAgain.ok')" = "true true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.hold.trim() + " " + o.tags.join(",")')" = "{} launch-release-1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.evidence.state')" = "true ERROR" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.evidence.state')" = "true READY" ] || { echo "$DONE"; false; }
   [ "$(j 'o.hostingAgain.ok + " " + o.holdAfterHosting.trim()')" = "true {}" ] || { echo "$DONE"; false; }
   [ "$(j 'o.frontend.ok + " " + o.frontendAgain.ok + " " + o.shellCommits')" = "true true 1" ] || { echo "$DONE"; false; }
+  # ADR-1755: no preset until the app, and the Next preset lands before the shell's push.
+  [ "$(j 'o.preset.created + " " + o.preset.now + " " + o.preset.beforeShell')" = "null nextjs true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.answerer')" = "true sandbox.automemory.ai + www.googleapis.com" ] || { echo "$DONE"; false; }
   [ "$(j 'Object.values(o.frontendVerify.evidence.scores).every(v => v >= 90)')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.kinds.release.join(",") + " " + o.kinds.frontend.join(",")')" = "release-commit,github-tag frontend-shell" ] || { echo "$DONE"; false; }
@@ -645,9 +647,18 @@ arm() {
   [ "$(j 'o.release.code')" = "FOREIGN_FILE" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: a failed production build of a commit that holds an app is not a release receipt" {
+@test "launch-contract: a failed production build is never a release receipt, with or without an app (ADR-1755)" {
   arm release broken-app
-  [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build of "*" failed (ERROR) and the commit holds an app" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build "*" failed (ERROR)" ]] || { echo "$DONE"; false; }
+  # The arc-sandbox mutant: a Next preset on a repo with no app yet builds ERROR, and ERROR fails.
+  arm release next-preset-empty
+  [ "$(j 'o.release.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.releaseVerify.ok + " " + o.releaseVerify.reason')" == "false production build "*" failed (ERROR)" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: frontend never sets the preset of a vercel project linked to another repo" {
+  arm release foreign-project
+  [ "$(j 'o.frontend.code + " " + o.preset + " " + o.shellCommits')" = "FOREIGN_PROJECT null 0" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a typed hosting trailer over the owner's config does not let release lift it" {

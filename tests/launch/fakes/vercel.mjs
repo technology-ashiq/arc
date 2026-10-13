@@ -29,12 +29,20 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       if (store.has(body.name)) return err(409, "conflict", "Project already exists");
       const [org, repo] = body.gitRepository.repo.split("/");
       if (!github.store.has(body.gitRepository.repo)) return err(400, "bad_request", "Repository not found or the GitHub App has no access");
-      const proj = { id: id("prj"), name: body.name, framework: body.framework, link: { type: "github", org, repo }, domains: [], linkedAt: github.store.get(body.gitRepository.repo).commits.length };
+      const proj = { id: id("prj"), name: body.name, framework: body.framework, createdFramework: body.framework, link: { type: "github", org, repo }, domains: [], linkedAt: github.store.get(body.gitRepository.repo).commits.length };
       store.set(body.name, proj);
       return json(200, proj);
     }
     let m = p.match(/^\/v9\/projects\/([^/]+)$/);
     if (m && method === "GET") { const proj = byIdOrName(m[1]); return proj ? json(200, proj) : err(404, "not_found", "Project not found"); }
+    // The preset a later commit builds with: `presetFrom` is the commit count when it changed, so a test can see
+    // whether the preset landed before or after a push.
+    if (m && method === "PATCH") {
+      const proj = byIdOrName(m[1]);
+      if (!proj) return err(404, "not_found", "Project not found");
+      if ("framework" in body) { proj.framework = body.framework; proj.presetFrom = github.store.get(`${proj.link.org}/${proj.link.repo}`).commits.length; }
+      return json(200, proj);
+    }
     // The env list carries a value per key, as Vercel's does (encrypted unless decrypt=true); a test asserts the
     // adapter never asks for decryption and never echoes one.
     m = p.match(/^\/v10\/projects\/([^/]+)\/env$/);
@@ -66,10 +74,12 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const r = github.store.get(`${proj.link.org}/${proj.link.repo}`);
       const after = r ? r.commits.slice(proj.linkedAt) : [];
       const sha = url.searchParams.get("sha");
-      // Production state per commit, as Vercel answers it: held by vercel.json (ADR-1727) -> skipped (CANCELED); built
-      // with an app on main -> READY; built with no app yet -> ERROR. The hold and app flags are what the GitHub fake records.
+      // Production state per commit, as Vercel answers it: held by vercel.json (ADR-1727) -> skipped (CANCELED). Built
+      // under the Next preset: an app on main -> READY, no app yet -> ERROR (NEXT_NO_VERSION). Built with no preset: a
+      // static site, READY. The preset a commit builds with is the one the project held when it landed (`presetFrom`).
       const all = r ? r.commits : [];
-      const stateOf = (c) => { const upto = all.slice(0, all.indexOf(c) + 1); const h = upto.filter((x) => typeof x.hold === "boolean").pop(); return h && h.hold === false ? (upto.some((x) => x.app) ? "READY" : "ERROR") : "CANCELED"; };
+      const presetAt = (i) => (proj.presetFrom === undefined || i >= proj.presetFrom ? proj.framework : proj.createdFramework);
+      const stateOf = (c) => { const i = all.indexOf(c); const upto = all.slice(0, i + 1); const h = upto.filter((x) => typeof x.hold === "boolean").pop(); if (!(h && h.hold === false)) return "CANCELED"; return presetAt(i) === "nextjs" ? (upto.some((x) => x.app) ? "READY" : "ERROR") : "READY"; };
       const target = url.searchParams.get("target");
       const prod = (target && target !== "production" ? [] : after).filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: stateOf(c), target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
       // Every branch commit is a preview, READY unless previewState says otherwise, at a vercel.app URL.

@@ -49,6 +49,7 @@ Phase 04 is also built on fakes, ADR-1748..1751, attacked in two rounds:
 - four wiring slots ask arc through `ctx.probe.arc`;
 - the weekly `launch-watch` job runs `verify --public-only`.
 Phases 03 and 04 ship together in one PR.
+**Real runs (PR #410, 2026-10-13):** Phase 01 on arc-sandbox, 13 slots verified. Bug routed via /arc-change: release took a Vercel ERROR build as its receipt; fixed READY-only, with hosting creating the project with no preset and frontend setting Next.js before its push (ADR-1755). Frontend waits on the owner's PageSpeed key (ADR-1753), then security-headers (ADR-1754) and the rest of the chain.
 **Next step:** merge the Phase 03+04 PR on green CI. Phase 05 (close: `verify --all` on arc-sandbox, the retro) runs
 for real once the owner tokens land, and so does each earlier phase's real close.
 
