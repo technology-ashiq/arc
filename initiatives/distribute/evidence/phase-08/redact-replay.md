@@ -34,8 +34,8 @@ separator, `"arc-event` as a password of 6+ characters, and `@` closed it. A URL
 
 `.claude/scripts/hq/lib/redact.mjs:85`: `"` is excluded from both the user and the password classes. A credential
 inside a JSON string never contains a raw quote, since canonical JSON escapes it. After the fix, all four URL cases are
-clean, the intact DSN still hits, and a DSN split at its colon across two payload fields (`postgres://arc_app` +
-`:s3cr3tpassword@db…`) still hits through the scanner's adjacency joins. Both controls are pinned in
+clean, the intact DSN still hits, and a DSN split at its colon across two payload fields (scheme and user in one field;
+colon, password and host in the next) still hits through the scanner's adjacency joins. Both controls are pinned in
 `tests/distribute-redact-replay.bats`, and the existing hostile fixture `tests/fixtures/spine/hostile/46-secret-dsn.json`
 is unchanged.
 
