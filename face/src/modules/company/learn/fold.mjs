@@ -80,11 +80,13 @@ export function fold(payloads, ctx) {
       "Juror calibration",
       "/api/learn",
       "Each council juror's hit rate, Brier-scored against how the verdict turned out, and the weight that earns it -- no figure at all below the scoring floor. No receipt or file records a verdict per juror: the council's calibration is per confidence bucket, drawn in the council chamber -- filed to the evolve lane.",
+      { owner: "evolve" },
     ),
     sleeping: notServed(
       "The sleeping queue",
       "/api/learn",
       "Every capability asleep until something pulls it, and the alarm that would wake it -- earn before build (A8), an alarm rather than a deadline. The queue is prose in docs/strategy/plans/README.md, and no parser reads it -- filed to the plan lane.",
+      { owner: "plan" },
     ),
     evolve: { canOpen: evolve.canOpen, room: evolve.room, line: "The retro, generalised: measure, a weekly scoreboard, bounded experiments, and a winner promoted only by a reviewed diff and your stamp." },
     loop: [

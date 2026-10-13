@@ -36,6 +36,7 @@ room by room, against this list.
 | `executor` | Runs | `/api/roster` |
 | `factory` | Gate modes and the profile | `/api/gates` |
 | `review-ship` | Gate modes and the profile | `/api/gates` |
+| `discover` | Winners | `/api/discover` |
 | `growth` | The pipeline | `/api/growth` |
 | `leads` | The funnel by lead | `/api/leads` |
 | `leads` | The caps | `/api/leads` |

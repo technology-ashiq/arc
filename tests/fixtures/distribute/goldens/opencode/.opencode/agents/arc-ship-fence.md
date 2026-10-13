@@ -12,7 +12,7 @@ permission:
     "gh pr view --json url,state": allow
     "git branch --show-current": allow
     "git rev-parse --abbrev-ref @{u}": allow
-    "npm run build": allow
+    "npm run build --if-present": allow
     "npm run lint": allow
     "npm run test": allow
     "npm run test *": allow

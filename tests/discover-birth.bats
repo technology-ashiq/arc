@@ -27,25 +27,25 @@ room_state() {
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
-@test "discover-birth: the money/discover planned room stays until the face lane converts its module (ADR-1914)" {
+@test "discover-birth: money/discover is served, not planned -- the face lane converted its module (ADR-1914, ADR-1356)" {
   run --separate-stderr room_state "$(PR)"
   [ "$status" -eq 0 ] && [ -z "$stderr" ] || { echo "room check did not run: $status $stderr"; false; }
-  [ "$output" = "planned" ] || { echo "the discover planned room was removed; face/src/modules/money/discover reads its line from it"; false; }
+  [ "$output" = "solid" ] || { echo "the discover room is back in the planned registry; face v2 Phase 17 serves it from GET /api/discover"; false; }
 }
 
-@test "discover-birth: the planned-room check goes red on a copy with the discover room removed" {
+@test "discover-birth: the served-room check goes red on a copy that re-adds the planned row" {
   local copy="$BATS_TEST_TMPDIR/planned-rooms.json"
   node -e '
     const fs = require("fs");
     const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const list = Array.isArray(r) ? r : r.rooms;
-    const kept = list.filter((x) => x.room !== "discover");
-    if (Array.isArray(r)) fs.writeFileSync(process.argv[2], JSON.stringify(kept)); else fs.writeFileSync(process.argv[2], JSON.stringify({ ...r, rooms: kept }));
+    const back = [...list, { room: "discover", ring: "money", source: "docs/strategy/plans/PLAN-discover.md (DIS-A..D)", line: ["hunt"] }];
+    if (Array.isArray(r)) fs.writeFileSync(process.argv[2], JSON.stringify(back)); else fs.writeFileSync(process.argv[2], JSON.stringify({ ...r, rooms: back }));
   ' "$(PR)" "$copy"
   [ -s "$copy" ] || { echo "mutant copy was not written"; false; }
   run --separate-stderr room_state "$copy"
   [ "$status" -eq 0 ] || { echo "room check did not run on the mutant: $stderr"; false; }
-  [ "$output" = "solid" ] || { echo "the check did not see the room removed: $output"; false; }
+  [ "$output" = "planned" ] || { echo "the check did not see the planned row re-added: $output"; false; }
 }
 
 @test "discover-birth: the room check refuses an unreadable shape instead of calling it solid" {
@@ -55,10 +55,10 @@ room_state() {
   [ "$output" != "solid" ]
 }
 
-@test "discover-birth: the manifest maps to a generic room the face serves" {
+@test "discover-birth: the manifest maps to the discover room the face serves" {
   run --separate-stderr node -e '
     const m = require(process.argv[1]);
-    const ok = m.name === "discover" && m.face && m.face.room === "lane";
+    const ok = m.name === "discover" && m.face && m.face.room === "discover" && m.face.ring === "money";
     process.stdout.write(ok ? "mapped" : "unmapped " + JSON.stringify(m.face));
   ' "$ARC_ROOT/products/discover/manifest.json"
   [ "$status" -eq 0 ] && [ -z "$stderr" ] || { echo "manifest read failed: $stderr"; false; }

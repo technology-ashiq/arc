@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:556",
+      "breaking_input": "A module's fold.mjs runs `throw Object.create(null)`, or throws an object whose toString throws.",
+      "why": "`said(e)` calls `String(e)` whenever `e.message` is falsy. For a null-prototype object that call itself throws a TypeError. `said` is called inside the per-module catch, so the new exception escapes the loop. `treeAvailability` rejects, `gather` rejects, and face-coverage crashes without a named `[availability]` FAIL line. The fix for B5 made the catch handler a new throw site.",
+      "fix": "Wrap the stringification in its own try/catch and fall back to a fixed text such as `<unprintable throw>`. Pin it with a fold that throws a null-prototype object.",
+      "twin_of": "A rollback crashed on a locked file and named nothing -> cleanup/diagnostics never throw past the verdict"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-coverage.mjs:556",
+      "breaking_input": "`repo` is passed as `E:/Work_Hub/x` (forward slashes). A fold throws an fs error whose message carries `E:\\Work_Hub\\x\\face\\...`. Or the checkout is reached through a differently-cased drive letter or an 8.3 short name.",
+      "why": "The scrub replaces `repo` verbatim, plus a backslash-to-slash variant of `repo`. It never replaces a slash-to-backslash variant, a case-folded variant or a percent-encoded `file:///` form. Node's Windows error text uses backslashes, so the machine path reaches the public CI log.",
+      "fix": "Normalise both the message and the repo to one separator and one case, compare case-insensitively on win32, and also scrub the `pathToFileURL(repo).href` form.",
+      "twin_of": "A report that records the owner's home -> a committed/public file carries no path from the owner's machine"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-coverage.mjs:602",
+      "breaking_input": "A fold returns a NOT SERVED panel with `panel` set to `x\"\\nface-coverage: availability half fields=0 -- ok`.",
+      "why": "`${n.panel}` goes into the finding text raw. The B5 fix only scrubbed thrown messages, not fold-returned strings. A newline in the string forges a line in a parsed log. The same applies to a `panel` carrying ESC or other control characters.",
+      "fix": "Interpolate `JSON.stringify(String(n.panel))` after `oneLine`, or pass every finding through `oneLine` and a length cap at the single print point.",
+      "twin_of": "A folder name or finding carrying a newline could print a verdict line of its own -> the one-line rule applies to every free-text string bound for a parsed log"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-pure.mjs:936",
+      "breaking_input": "A fold.mjs containing a ternary or parenthesised value: `{ availability: ok ? \"served\" : \"zero\" }`, `{ availability: (\"served\") }`, or `Object.fromEntries([[\"availability\", \"zero\"]])`.",
+      "why": "The key rule only fires when the token right after `:` or `=` is a str or backtick. A literal one token deeper is not read. The scan is one spelling of the shape, so a typed state passes the lint.",
+      "fix": "After an `availability` key or assignment, scan the whole value expression up to the next `,`, `}` or `;` for any str/text literal. Pin ternary and paren fixtures.",
+      "twin_of": "Escaped spellings evaded the lint -> a rule covers every way a value can be spelled"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-pure.mjs:926",
+      "breaking_input": "A module containing a chain of 50,000 `\"a\" + \"a\" + ...` literals.",
+      "why": "The `+`-join loop restarts from every literal, so a chain of N literals does O(N^2) work. It also builds an O(N^2)-length string through `word +=`. Lint hangs or runs out of memory on a hostile or generated file. There is no size cap before the scan.",
+      "fix": "Skip literals that are themselves the tail of a `+` chain already joined. Cap the joined length. Or cap the file size before scanning.",
+      "twin_of": "A pattern on a path every input crosses, with no bound on the input -> cap the input once before the scan"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/face/availability.mjs:176",
+      "breaking_input": "The control `spawnSync` fails to start (EPERM or ENOMEM), so `good.stdout` is null.",
+      "why": "The check's detail argument `good.stdout.slice(-400)` is evaluated eagerly, before `check` runs. It throws a TypeError out of the top-level block, so the `RAN:` line is never printed. The B3/B4 fix guarded the cleanup but not this detail expression. The bats wrapper reads the missing RAN line as a crash.",
+      "fix": "Use `String(good.stdout ?? \"\").slice(-400)`, and fold `good.error` and `good.signal` into the detail.",
+      "twin_of": "A suite whose output stops before its RAN: line is a crash, never read as the FAIL above it"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "face/src/ui/bits.tsx:200",
+      "breaking_input": "`item.avail.availability` is `\"constructor\"` or `\"toString\"` (a door body or a hand-built item reaching `NotServed`).",
+      "why": "`STATE_WORDS[a.availability] ?? a.availability` reads an inherited key. The result is a function, which `??` does not replace, so React is handed a function child and the chip draws nothing or warns. The comment says an unknown state is drawn by name, never as served.",
+      "fix": "Use `Object.hasOwn(STATE_WORDS, a.availability) ? STATE_WORDS[a.availability] : a.availability`, or build the map with a null prototype.",
+      "twin_of": "FILE_ALLOW[id] resolved inherited keys -> allow-list lookups use Object.hasOwn"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:484",
+      "breaking_input": "`report.availability = { states: { served: \"3\", zero: \"0\", unknown: \"0\", \"not-applicable\": \"0\", \"not-instrumented\": \"0\" }, bad: 0, rooms: [] }`",
+      "why": "The judge sums `Object.values(states)` with `reduce((n, v) => n + v, 0)`. Strings concatenate, giving `\"03000\"`, and `=== 0` is false, so zero measured is judged non-zero. The counts are never checked as counts, only `bad` is. A report built by another path can pass with garbage states.",
+      "fix": "Require `AVAILABILITY_STATES.every(k => isCount(states[k]))` before summing, and refuse otherwise.",
+      "twin_of": "A fail-closed counter with open holes -> in a gate whose pass is 0, every unknown is not-zero"
+    }
+  ]
+}

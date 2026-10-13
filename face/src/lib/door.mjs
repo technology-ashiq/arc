@@ -233,6 +233,7 @@ export const DOOR_ROUTES = Object.freeze({
   "/api/reference": read(),
   // org Cycle 19 (ADR-1625): the org's own chart model, teams and scorecards, for the org room's roles section.
   "/api/org": read(),
+  "/api/discover": read(),
   "/api/decide": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: true }),
   "/api/ask": Object.freeze({ method: "POST", param: false, query: Object.freeze([]), rereads: false }),
   // Phase 10 (REQ-14, ADR-1350): the owner's models. GET shows each key as set-or-not and its last four characters only;

@@ -141,6 +141,7 @@ export function fold(payloads, ctx) {
       "Too expensive to revisit",
       "/api/adrs",
       "The one-way and expensive decisions, the ones a new plan has to live with rather than reopen, each with the ADR that made it. Reversibility is parsed only by kickoff-lint, which runs at import and cannot be imported, so no parser exists for the door to use -- filed to the plan lane.",
+      { owner: "plan" },
     ),
     adoptVerb: verbPending(
       "Adopt a plan",

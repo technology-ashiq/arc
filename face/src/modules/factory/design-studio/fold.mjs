@@ -40,6 +40,7 @@ export function fold(payloads, ctx) {
       "The studio floor",
       "/api/design",
       "Each submitted surface with its three explore variants and their theses, the read-only critique's findings by class, and the blind jury's ranking against a reference item. The design lane counts these in bash scripts and its lint cannot be imported, so no parser exists for the door to use -- filed to the design lane.",
+      { owner: "design" },
     ),
     critiqueVerb: verbPending(
       "Run a critique, or convene the jury",

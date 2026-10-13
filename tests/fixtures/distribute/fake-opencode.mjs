@@ -36,8 +36,9 @@ if (argv[0] === "export") {
   const c = Number(process.env.FAKE_OC_CHILD_COST || 0.04);
   const fin = { type: "step-finish", reason: "stop", cost: c };
   const task = (sid, status) => ({ type: "tool", tool: "task", state: { status, metadata: { sessionId: sid } } });
-  // The parent's own export: one subagent task still running when it was killed (the stalltask mode).
-  const parts = argv[1] === "ses_fake0001TestSession" ? [task("ses_fakeChild1", "running")]
+  // The parent's own export: in the stalltask mode, one subagent task still running when it was killed; in every
+  // other mode the parent ran no subagent, so a killed stall is charged nothing beyond its stream.
+  const parts = argv[1] === "ses_fake0001TestSession" ? (process.env.FAKE_OC_MODE === "stalltask" ? [task("ses_fakeChild1", "running")] : [])
     : argv[1] === "ses_fakeChild1" ? [fin, fin, task("ses_fakeGrandchild1", "completed")]
     : argv[1] === "ses_fakeEmpty" ? []
     : [fin];

@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # distribute Cycle 2, Phase 06 -- `arc-ship` runs in a repo with no deploy target, and in arc itself (ADR-2021, REQ-13).
 #
-# arc's package.json gains lint/build/test, where `test` is `ci-digest --wait`: it reads CI for the pushed head and
+# arc's package.json gains lint and test (no build: see the package.json test), where `test` is `ci-digest --wait`: it reads CI for the pushed head and
 # runs nothing locally. The wait logic is driven by tests/distribute/ci-wait-probe.mjs with a scripted digest and a
 # fake clock; each arm asserts the probe RAN before reading its case lines.
 
@@ -24,12 +24,13 @@ probe() {
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
-@test "distribute-ship-nodeploy: package.json carries lint, build and test, and still no lifecycle script" {
+@test "distribute-ship-nodeploy: package.json carries lint and test, and no script that makes npm prepare a git install" {
   local p="$ARC_ROOT/package.json"
-  [ "$(_arc_json "$p" 'j.scripts.lint')" = "node .claude/scripts/core/gate-parity.mjs && node .claude/scripts/core/brain-drift.mjs" ] || { echo "lint: $(_arc_json "$p" 'j.scripts')"; false; }
-  [ "$(_arc_json "$p" 'j.scripts.build')" = "node .claude/scripts/engine/arc-compile.mjs --check --all --input source --target opencode" ] || { echo "build"; false; }
+  [ "$(_arc_json "$p" 'j.scripts.lint')" = "node .claude/scripts/core/gate-parity.mjs && node .claude/scripts/core/brain-drift.mjs && node .claude/scripts/engine/arc-compile.mjs --check --all --input source --target opencode" ] || { echo "lint: $(_arc_json "$p" 'j.scripts')"; false; }
   [ "$(_arc_json "$p" 'j.scripts.test')" = "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9" ] || { echo "test"; false; }
-  [ "$(_arc_json "$p" 'Object.keys(j.scripts).sort().join(",")')" = "build,lint,test" ] || { echo "an extra script: $(_arc_json "$p" 'Object.keys(j.scripts)')"; false; }
+  # No `build`: npm runs a full install inside a git dependency that declares build, install, prepare or prepack, and
+  # that broke `npm install -g <git URL>` (distribute-install-clean). arc-ship runs `npm run build --if-present`.
+  [ "$(_arc_json "$p" 'Object.keys(j.scripts).sort().join(",")')" = "lint,test" ] || { echo "an extra script: $(_arc_json "$p" 'Object.keys(j.scripts)')"; false; }
 }
 
 @test "distribute-ship-nodeploy: --wait returns the first settled verdict after re-reading a pending one" {
@@ -90,6 +91,7 @@ probe() {
   if grep -qE 'Bash\(gh pr (view|create):\*\)' "$f"; then echo "a wildcard gh pr fence is back"; false; fi
   grep -qF 'Bash(git rev-parse --abbrev-ref @{u})' "$f" && grep -qF 'or its upstream is not `origin/<that branch>`, STOP' "$f" || { echo "no stop on an unpushed or foreign-tracking branch"; false; }
   grep -qF 'When it exits 3 (CI still running: each call waits at most 9 minutes), run it again, up to' "$f" || { echo "no bounded re-run of npm run test"; false; }
+  grep -qF '2. `npm run build --if-present`' "$f" && grep -qF 'Bash(npm run build --if-present)' "$f" || { echo "build is not optional"; false; }
   grep -qF 'Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists)' "$f" || { echo "no declared-target branch"; false; }
   grep -qF '`vercel --prod`' "$f" || { echo "the deploy line for a declared target is gone"; false; }
   grep -qF 'deploy: none declared — the PR is the ship' "$f" || { echo "no named no-deploy line"; false; }
@@ -97,6 +99,6 @@ probe() {
   # npm test waits on CI in arc, so a caller inside CI, a hook or a test would wait on itself. The pre-deploy guard
   # is the one named exception: it runs only on a deploy command, and a deploy should wait for CI.
   local callers
-  callers=$(cd "$ARC_ROOT" && git grep -lE 'npm (run )?test\b' -- .github .githooks .claude/hooks tests ':!tests/fixtures' ':!tests/kickoff-lint.bats' ':!tests/distribute-ship-nodeploy.bats' | tr -d '\r' | sort | tr '\n' ' ')
+  callers=$(cd "$ARC_ROOT" && git grep -lE 'npm (run )?test([^A-Za-z0-9_]|$)' -- .github .githooks .claude/hooks tests ':!tests/fixtures' ':!tests/kickoff-lint.bats' ':!tests/distribute-ship-nodeploy.bats' | tr -d '\r' | sort | tr '\n' ' ')
   [ "$callers" = ".claude/hooks/PreToolUse.d/50-deploy.sh " ] || { echo "npm test callers: [$callers]"; false; }
 }

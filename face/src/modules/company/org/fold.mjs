@@ -285,6 +285,7 @@ export function fold(payloads, ctx) {
       "Receipts per lane today",
       "/api/lanes",
       "Which lanes fired a receipt today, counted per lane -- so a lane whose header says IDLE and that emitted today reads awake, and one whose header says LIVE and fired nothing reads quiet. A receipt carries no lane: the spine's envelope has no lane field and only three develop kinds name one in their payload, so no count per lane can be derived -- filed to the spine lane.",
+      { owner: "spine" },
     ),
     // "Set a lane's status" is LIVE since face v2 Phase 05 (ADR-1343): the work door's org.lane-status op, drawn under
     // this room by the host. Its card is retired; birthing a lane stays /arc-kickoff's.

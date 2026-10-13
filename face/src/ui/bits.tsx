@@ -12,15 +12,32 @@
 //   - The spine-bound bits (EventRow, ReceiptDrawer) arrive with Phase 03 at the bottom of this file,
 //     taking what a fold decided instead of reading v0.7's simulated spine. ApprovalCard's one-click
 //     approve is not ported: a stamp needs a typed reason, and it lives in the inbox module alone.
+import { useContext } from 'react'
 import type { ReactNode } from 'react'
 import { Tray } from '@phosphor-icons/react'
 import type { Icon } from '@phosphor-icons/react'
 import { EASE, FONT, MONO, Meter, SimBadge, UI, toneColor } from './kit'
 import type { Tone } from './kit'
 import type { LaneRoom } from '../lib/lane-room.mjs'
+import { AvailabilityCountsContext } from './availability-context'
+
+/**
+ * One of the header's two availability counts (face v2 Phase 15): how many of this room's fields are `unknown` or
+ * `not-instrumented`. A count of zero draws nothing -- never a silent "0" standing in for a count not taken.
+ */
+function AvailabilityCount({ n, state, label }: { n: number; state: string; label: string }) {
+  if (n <= 0) return null
+  return (
+    <span data-availability-count={state} className="inline-flex items-center h-[22px] px-2.5 rounded-full text-[11px] tnum" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px dashed var(--line-2)' }}>
+      {n} {label}
+    </span>
+  )
+}
 
 /** A room's head: the sentence leads, the lede explains, the right slot labels. */
 export function RoomHead({ title, hint, right, eyebrow }: { title: ReactNode; hint?: ReactNode; right?: ReactNode; eyebrow?: ReactNode }) {
+  const counts = useContext(AvailabilityCountsContext)
+  const hasCounts = counts.unknown > 0 || counts.notInstrumented > 0
   return (
     <header className="mb-6 pb-5 flex items-end justify-between gap-6 flex-wrap" style={{ borderBottom: '1px solid var(--line-1)' }}>
       <div className="min-w-0">
@@ -38,7 +55,13 @@ export function RoomHead({ title, hint, right, eyebrow }: { title: ReactNode; hi
           </p>
         ) : null}
       </div>
-      {right ? <div className="shrink-0 flex items-center gap-2 flex-wrap pb-0.5">{right}</div> : null}
+      {right || hasCounts ? (
+        <div className="shrink-0 flex items-center gap-2 flex-wrap pb-0.5">
+          <AvailabilityCount n={counts.unknown} state="unknown" label="unknown" />
+          <AvailabilityCount n={counts.notInstrumented} state="not-instrumented" label="not instrumented" />
+          {right}
+        </div>
+      ) : null}
     </header>
   )
 }
@@ -149,23 +172,35 @@ export function Empty({ icon: IconComponent = Tray, title, hint, action }: { ico
 // sentence, an ink token, a boolean -- and draws it; none reads the door or judges a value.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type AvailabilityView = { availability: string; source: string; owner_lane: string; as_of: string; failure: string }
+
+/** The words each state wears on a chip. A state this kit does not know is drawn by name, never as served. */
+const STATE_WORDS: Record<string, string> = {
+  served: 'served', zero: 'zero', unknown: 'unknown', 'not-applicable': 'not applicable', 'not-instrumented': 'not instrumented',
+}
+
 /**
- * A panel the door cannot fill yet (ADR-1324): the route it needs and what it would show. Marked
- * `data-not-served` so the browser harness counts what the owner sees, not only what a fold returned.
+ * A panel the door cannot fill (ADR-1324), in one of its two states since face v2 Phase 15 (ADR-1354):
+ * `not-instrumented` (the adapter does not exist yet) or `not-applicable` (declared). It names the route it would
+ * read and the lane that owns that source. Marked `data-not-served` so the browser harness counts what the owner
+ * sees, and `data-availability` with its state.
  */
-export function NotServed({ item }: { item: { panel: string; route: string; sentence: string } }) {
+export function NotServed({ item }: { item: { panel: string; route: string; sentence: string; avail: AvailabilityView } }) {
+  const a = item.avail
   return (
     <div
       data-not-served={item.route}
+      data-availability={a.availability}
       className="px-4 py-3.5 min-w-0"
       style={{ background: 'var(--well)', border: '1px dashed var(--line-2)', borderRadius: 'var(--r-md)' }}
     >
       <div className="flex items-center gap-2 flex-wrap mb-1">
         <span className="inline-flex items-center h-[20px] px-2 rounded-full text-[10.5px] uppercase tracking-[0.06em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>
-          not served
+          {Object.hasOwn(STATE_WORDS, a.availability) ? STATE_WORDS[a.availability] : String(a.availability)}
         </span>
         <span className="text-[11.5px] truncate" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>GET {item.route}</span>
         <span className="text-[12.5px]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{item.panel}</span>
+        {a.owner_lane ? <span className="text-[11px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>owner: {a.owner_lane}</span> : null}
       </div>
       <p className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
         {item.sentence}
@@ -177,6 +212,7 @@ export function NotServed({ item }: { item: { panel: string; route: string; sent
 export type ServedTableView = {
   panel: string; route: string; isReading: boolean; isRefused: boolean; refusal: { code: string; human: string }
   isDrawn: boolean; showEmpty: boolean; columns: string[]; rows: { key: string; cells: string[] }[]; empty: string; note: string; source: string
+  avail: AvailabilityView
 }
 
 /**
@@ -185,7 +221,7 @@ export type ServedTableView = {
  */
 export function ServedTable({ item }: { item: ServedTableView }) {
   return (
-    <div data-served={item.route} className="min-w-0">
+    <div data-served={item.route} data-availability={item.avail.availability} data-availability-failure={item.avail.failure || undefined} className="min-w-0">
       {item.isReading ? <Reading what={item.panel.toLowerCase()} /> : null}
       {item.isRefused ? <DoorRefusal code={item.refusal.code} human={item.refusal.human} /> : null}
       {item.showEmpty ? <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{item.empty}</p> : null}

@@ -13,7 +13,7 @@
 | Requires | [core](core.md), [council](council.md), [growth](growth.md), [hq](hq.md), [launch](launch.md) |
 | Required by | — |
 | Lane | [discover](../lanes/discover.md) |
-| Face room | lane (ring factory) |
+| Face room | discover (ring money) |
 
 ## Commands (1)
 

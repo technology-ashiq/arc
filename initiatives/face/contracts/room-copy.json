@@ -144,9 +144,8 @@
     },
     "discover": {
       "sentence": "The next venture is chosen, not stumbled into.",
-      "lede": "planned, drawn dotted — opens when the venture #2 slot needs filling from a scored field, not a hunch",
-      "render": "generic",
-      "planned": true
+      "lede": "the discover lane's own receipts -- every pain it captured, the last hunt and judge, and each winner waiting for your stamp",
+      "render": "generic"
     },
     "ventures": {
       "sentence": "The factory is not the product.",

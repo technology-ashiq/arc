@@ -53,6 +53,9 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                   <span className="flex items-center gap-2 shrink-0">
                     <span className="text-[11px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{c.age}</span>
                     <Chip tone="amber">{c.gate}</Chip>
+                    <span data-approval-state={c.state} data-availability={c.availability} title={c.stateLabel} className="inline-flex items-center h-[20px] px-2 rounded-full text-[10.5px] uppercase tracking-[0.06em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg-4)', border: '1px solid var(--line-1)' }}>
+                      {c.badge}
+                    </span>
                   </span>
                 </div>
                 <dl className="mb-4 space-y-[5px]">
@@ -106,13 +109,22 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
                     </div>
                   </div>
                 ) : (
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap items-center">
+                    {c.isHeld && (
+                      <p className="text-[12px] leading-[18px] w-full" style={{ fontFamily: UI, color: 'var(--text-2)' }}>
+                        <span style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{c.stateLabel}</span> -- {c.heldWhy}
+                      </p>
+                    )}
+                    {c.canArm && (
                     <Btn small tone="primary" onClick={() => { ctx.onPick('reason', ''); ctx.onPick('armed', `${c.id}|approve`) }}>
                       Arm · approve
                     </Btn>
+                    )}
+                    {c.canReject && (
                     <Btn small onClick={() => { ctx.onPick('reason', ''); ctx.onPick('armed', `${c.id}|reject`) }}>
                       Arm · reject
                     </Btn>
+                    )}
                   </div>
                 )}
               </div>

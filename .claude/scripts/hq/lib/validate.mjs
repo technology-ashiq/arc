@@ -12,6 +12,7 @@ import { CONTENT_KINDS, assertContent, isContentKind } from "./validate-content.
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearMiss, isAdoptionProposal, assertAdoptionProposal } from "./validate-absorb.mjs";
 import { isPolicyRefusal, assertPolicyRefusal, isNearMissPolicyRefusal, assertNotNearMissPolicyRefusal } from "./validate-policy-refusal.mjs";
+import { isBindingRequest, assertBindings } from "./validate-bindings.mjs";
 import {
   isLedgerRevenueKind, assertLedgerRevenue,
   isCriteriaChange, assertCriteriaChange, isNearMissCriteriaChange, assertNotNearMissCriteria,
@@ -427,6 +428,9 @@ export function validateEvent(event) {
   // ADR-0509 (POL-L): a policy refusal rides note.logged as a profile, so the closed vocabulary gains ZERO kinds.
   if (isPolicyRefusal(event)) assertPolicyRefusal(event);
   if (isNearMissPolicyRefusal(event)) assertNotNearMissPolicyRefusal(event);
+  // ADR-1355 (face v2 Phase 16): bound_to, depends_on and decision_key ride approval.requested's open payload as a
+  // profile, held to their closed shapes the moment one appears -- zero new kinds, decision.recorded untouched.
+  if (isBindingRequest(event)) assertBindings(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);
