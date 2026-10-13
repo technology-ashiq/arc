@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:715-721",
+      "breaking_input": "stderr contains an arc-run contract line indented with one leading space, e.g. ' arc-run: output failed the contract (commits.0 is missing)' before the router note.",
+      "why": "failureLine filters out every line starting with whitespace before checking for the contract pattern, so a genuinely indented contract failure line is discarded and the router note becomes the reported reason — the exact defect the fix claims to solve, under slightly different indentation.",
+      "fix": "Check for the contract pattern before applying the leading-whitespace filter, or match /^\\s*arc-run: output failed the contract/ at the correct stage.",
+      "twin_of": "Last line of stderr taken as the reason"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:718-719",
+      "breaking_input": "stderr has a non-contract failure line then a STOPPED bookkeeping line: 'arc-run: driver failed\\narc-run: STOPPED. A tier-change PROPOSAL was recorded as 01XYZ; nothing was escalated.'",
+      "why": "The regex /^arc-run: (receipt run\\.completed |STOPPED\\.)/ removes all STOPPED lines regardless of content. In non-schema stops (budget ceiling, policy refusal, driver refusal) the STOPPED line IS the reason, and dropping it forces a fallback to an earlier unrelated line or 'arc-run exited N'. The prior B3 noted only budget/policy STOPPED lines; here arc-run itself emits STOPPED after a schema failure too, so a budget reason gets reported as a schema contract failure.",
+      "fix": "Only exclude STOPPED lines that mention 'tier-change PROPOSAL' or the router-editing continuation; keep any other STOPPED line as a candidate reason.",
+      "twin_of": "Last line of stderr taken as the reason"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:716",
+      "breaking_input": "stderr contains a line matching '^Error\\b' that is actually a model/driver-supplied message, e.g. 'Error: I could not finish (the contract is fine)' while the real contract failure is an indented line later.",
+      "why": "The fallback picks the last /^[A-Za-z]*Error\\b/ line, which any child process can emit. A model or driver that prints 'Error: ...' (common) before the real failure will have that line taken as the reason, outperforming the line-start-anchored contract pattern only because the contract line was filtered by leading whitespace or bookkeeping. This is the unanchored-text-match twin on the Error fallback.",
+      "fix": "Anchor the Error fallback to arc-run's own prefix ('arc-run: ...Error' or a Node stack's first line), not any line starting with 'Error'.",
+      "twin_of": "Unanchored text match on mixed stderr"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:721",
+      "breaking_input": "stderr is exactly the string '     ' (five spaces) or lines of only whitespace plus an empty final line.",
+      "why": "String(stderr||\"\").split() yields one element; filter keeps only lines where l.trim() is truthy, so all-whitespace stderr is empty and failureLine returns lines.pop() on an empty array, which is undefined; the fallback 'arc-run exited N' is correct, but a child that prints only spaces (e.g., a driver that swallows errors) produces an undefined intermediate that propagates if later code assumes a string. Low impact but a logic hole in the guard.",
+      "fix": "Initialize lines as an empty array path and always return a string; add a length guard before .pop().",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-run.mjs:2282-2286",
+      "breaking_input": "--trial-model with a value containing a newline or ANSI escape, e.g. 'haiku\\narc-run: output failed the contract (forged)' (from a config file or env).",
+      "why": "JSON.stringify(trialModel) escapes newlines and quotes, so injection of a literal newline is blocked; but control characters like \\u001b[31m survive JSON.stringify. A crafted trialModel including an ESC sequence can make the printed line start with an escape that /^\\s/ does not skip (escape is not whitespace), so downstream failureLine may treat a portion of the STOPPED message as a contract-failure line if the escape is followed by 'arc-run: output failed the contract'. This re-opens the B5 spoof through the new message.",
+      "fix": "Sanitize or hex-escape control characters in the interpolated trialModel before printing, or use JSON.stringify and then strip non-printable characters.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/common.mjs:197-200",
+      "breaking_input": "A process whose output schema contains a default or example value with the literal string 'OUTPUT CONTRACT (JSON Schema):' as a property name, or a schema with a nested object whose description field includes that text.",
+      "why": "JSON.stringify escapes quotes, so a property named that exact marker is safe from breaking the header line, but the prompt now contains two identical markers, and the closing instruction says 'matching this process's output contract' with no delimiter after the schema. A model may treat the schema JSON as part of INPUT JSON, because the old prompts never included a schema and the model's trained format has the input block alone. The test only asserts the header exists, not that the model sees the schema as a separate instruction. The ambiguity is real and unaddressed by any delimiter or ordering.",
+      "fix": "Wrap the contract in explicit delimiters like ```output-schema ...``` or place it before the INPUT block, and add a test that asserts the schema JSON does not appear inside the INPUT markers.",
+      "twin_of": "Asking for a contract that was never shown"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/hermes.mjs:784",
+      "breaking_input": "A hermes process whose declared.ok is false but whose declared.doc carries an output schema for the error response (a valid error path).",
+      "why": "contractLines is called only when declared.ok is true; on the error path the contract is withheld even though the prompt still says 'matching this process's output contract'. The model guesses the error shape and almost certainly fails additionalProperties:false, over-reporting a real failure as a model fault. The other three drivers always pass the canonical doc, making hermes inconsistent. This is a twin of the original fault (asking for a contract never shown) on the error path.",
+      "fix": "Pass declared.doc regardless of ok, or decide that error schemas are not to be shown and remove the closing instruction on that path.",
+      "twin_of": "Asking for a contract that was never shown"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:176-178",
+      "breaking_input": "A bench run performed from a checkout whose projectSettings.json defines a SessionStart hook that prints a Branch line, or a fixture repo that carries its own .claude/settings.json.",
+      "why": "--setting-sources project,local still loads project settings and any local settings file, and ADR-0915 explicitly permits project hooks to run. The real event suspected the owner's user hook, but a checkout with a project hook re-injects the same Branch context, so isolation is not guaranteed and the same fault can recur on the main clone. The B1 finding for scope was 'project hooks carry user input'; this is the same hole, unchanged by the fix, and the ADR claims isolation that project-level hooks contradict.",
+      "fix": "For bench runs, run from a neutral cwd with no .claude directory, or add a settings override that disables hooks entirely, and add a test with a project-level hook.",
+      "twin_of": "A benched CLI loading the operator's own setup"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:178",
+      "breaking_input": "ARC_DRIVER_ISOLATE=1 with a project that legitimately uses an MCP server defined in project settings; the CLI --strict-mcp-config makes the MCP config error fatal.",
+      "why": "--strict-mcp-config turns any MCP configuration problem into a fatal error. A fixture that expects a project-scoped MCP tool will fail hard under isolation, over-reporting failures. The ADR says MCP servers stay out, but this flag can break legitimate project MCP rather than just skip user MCP, changing the measured behavior of the model.",
+      "fix": "Use a softer MCP handling that ignores user MCP but keeps project MCP, or document that project MCP is disabled and add a test for a project-MCP fixture.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:2285",
+      "breaking_input": "A trial-model run that fails on the first attempt and then the retry also fails, with a reason that itself contains the substring 'PROPOSAL was recorded' (e.g. a process that embeds that text in its error).",
+      "why": "The new STOPPED line ends with 'a trial proposes no tier change, so nothing was recorded for the route', and the test asserts the output does NOT contain 'PROPOSAL was recorded'. If the trialModel value or the retry's why text includes 'PROPOSAL was recorded' (user-controlled), the assertion could fail the test, but more importantly the logic does not mask the underlying reason; downstream readers who grep for 'PROPOSAL' may still see the retry line. This is cosmetic but shows the STOPPED line does not sanitize the embedded reason.",
+      "fix": "Sanitize the interpolated retry.why in the STOPPED message, and ensure no user text can collide with the bookkeeping marker.",
+      "twin_of": null
+    }
+  ]
+}

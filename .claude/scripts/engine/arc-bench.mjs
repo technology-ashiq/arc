@@ -721,8 +721,12 @@ export function discoverClasses(root) {
  */
 export function failureLine(stderr, status) {
   const lines = String(stderr || "").split(/\r?\n/)
-    .filter((l) => l.trim() && !/^\s/.test(l) && !/^arc-run: (receipt run\.completed |STOPPED\.)/.test(l) && !/^Node\.js v\d/.test(l));
+    .filter((l) => l.trim() && !/^\s/.test(l) && !/^Node\.js v\d/.test(l)
+      // Only the two schema-stop trailers are bookkeeping; any other STOPPED line is a reason (attack ca7ba9a B1).
+      && !/^arc-run: (receipt run\.completed |STOPPED\. A tier-change PROPOSAL |STOPPED\. --trial-model )/.test(l));
+  // arc-run's own lines outrank any child's `Error:` line (attack ca7ba9a B3).
   return lines.filter((l) => /^arc-run: output failed the contract /.test(l)).pop()
+    || lines.filter((l) => /^arc-run: /.test(l)).pop()
     || lines.filter((l) => /^[A-Za-z]*Error\b/.test(l)).pop()
     || lines.pop() || `arc-run exited ${status}`;
 }
@@ -941,7 +945,8 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
       // truncated a large but valid answer and the driver was blamed for it. Same reasoning here.
       maxBuffer: 64 * 1024 * 1024,
       killSignal: "SIGKILL",
-      // ARC_DRIVER_ISOLATE: a score measures the model, never the owner's hooks and plugins (ADR-0915).
+      // ARC_DRIVER_ISOLATE: on claude-code a score no longer reads the owner's user hooks, plugins and MCP
+      // servers (ADR-0915). codex and hermes ignore it; the ADR names that limit.
       env: { ...process.env, ARC_MOCK_FIXTURE: fixture.id, ARC_DRIVER_ISOLATE: "1" },
     });
 

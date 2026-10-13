@@ -61,7 +61,8 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   #
   # 88 -> 91 on 2026-10-14: three checks for `failureLine`, the reason a NOT SCORED attempt reports.
   # 91 -> 93 the same day: the crash trailer and the forged contract line (attack a59752e B2, B5).
-  [ "$oks" -eq 93 ]
+  # 93 -> 94: a non-schema STOPPED line is a reason and outranks a child's Error line (ca7ba9a B1, B3).
+  [ "$oks" -eq 94 ]
 }
 
 @test "the canonical encoder refuses NaN rather than folding it to null" {
