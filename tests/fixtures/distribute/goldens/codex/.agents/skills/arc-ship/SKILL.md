@@ -7,7 +7,7 @@ description: "Lint, build, test, then deploy — in one shot."
 Ship the current branch. Run these in order and STOP at the first failure:
 
 1. `npm run lint`
-2. `npm run build`
+2. `npm run build --if-present`
 3. If the repo has no deploy target (step 4), shipping is a PR, and `npm run test` may be what reads its CI, so
    before the test: run `git branch --show-current` and `git rev-parse --abbrev-ref @{u}`. If the branch has no
    upstream, or its upstream is not `origin/<that branch>`, STOP and say the branch must be pushed with `-u` first;

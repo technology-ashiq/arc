@@ -80,7 +80,9 @@ wrap() {
   [ "$(_arc_json "$T/env.json" 'j.ARC_HARNESS')" = "opencode" ] || { cat "$T/env.json"; false; }
   [ "$(_arc_json "$T/env.json" 'j.ARC_MODEL')" = "openrouter/x/y" ] || { cat "$T/env.json"; false; }
   # OpenCode reads its project directory from PWD before the spawn cwd (the first live smoke ran in the wrong checkout).
-  [ "$(_arc_json "$T/env.json" 'j.PWD.split(String.fromCharCode(92)).join("/").toLowerCase()')" = "$(printf '%s' "$(native "$T/wt")" | tr 'A-Z' 'a-z')" ] || { echo "PWD not the session cwd"; cat "$T/env.json"; false; }
+  # Both sides through realpath: a Windows runner spells the temp dir as an 8.3 short name on one side only.
+  run node -e 'const f=require("fs"),n=(p)=>f.realpathSync.native(p).toLowerCase();process.stdout.write(String(n(JSON.parse(f.readFileSync(process.argv[1],"utf8")).PWD)===n(process.argv[2])))' "$(native "$T/env.json")" "$(native "$T/wt")"
+  [ "$status" -eq 0 ] && [ "$output" = "true" ] || { echo "PWD not the session cwd: $output"; cat "$T/env.json"; false; }
   local want got
   # Lower-cased: Windows git may spell the drive letter in either case.
   want="$(printf '%s' "$(native "$T/repo")/.claude/state/hq" | tr 'A-Z' 'a-z')"
