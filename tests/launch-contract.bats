@@ -596,6 +596,8 @@ arm() {
   [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.answerer')" = "true sandbox.automemory.ai + www.googleapis.com" ] || { echo "$DONE"; false; }
   [ "$(j 'Object.values(o.frontendVerify.evidence.scores).every(v => v >= 90)')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.kinds.release.join(",") + " " + o.kinds.frontend.join(",")')" = "release-commit,github-tag frontend-shell" ] || { echo "$DONE"; false; }
+  # ADR-1753: every PageSpeed call carries the owner's key, and no answer repeats it.
+  [ "$(j 'o.psKeyed + " " + o.psKeyLeaked')" = "true false" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a Lighthouse score under 90 fails, and a PageSpeed quota answer is UNSCANNED" {

@@ -1,7 +1,8 @@
 // frontend slot: the Next shell (ADR-1704, ADR-1726, ADR-1730). Commits a minimal App Router shell to main in ONE commit
 // through the Git Data API; release has already lifted the production hold, so that push is a production build. verify
 // is the first proof the venture serves: the live domain answers 200 with this shell, and PageSpeed Insights scores all
-// four Lighthouse categories at 90 or better. A PageSpeed quota or error answer is UNSCANNED(reason).
+// four Lighthouse categories at 90 or better, asked with the owner's PageSpeed key (ADR-1753). A PageSpeed quota or error
+// answer is UNSCANNED(reason).
 const GITHUB = "https://api.github.com";
 const PAGESPEED = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 const MARK = "arc-launch";
@@ -95,7 +96,7 @@ const decode = (b) => (b && b.type === "file" && b.encoding === "base64" && type
 const utf8 = (bin) => new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 
 export function envContract() {
-  return ["GITHUB_TOKEN"];
+  return ["GITHUB_TOKEN", "PAGESPEED_API_KEY"];
 }
 
 export async function scaffold(ctx) {
@@ -191,6 +192,10 @@ async function probe(ctx) {
 
   const q = new URLSearchParams({ url, strategy: "mobile" });
   for (const c of Object.values(CATS)) q.append("category", c);
+  // Keyless calls share one Google-wide daily quota that is spent before most runs start (ADR-1753); the key rides
+  // only in this query, never in an answer.
+  const key = String((ctx.env && ctx.env.PAGESPEED_API_KEY) || "").trim();
+  if (key) q.append("key", key);
   let r;
   try { r = await ctx.fetch(`${PAGESPEED}?${q}`, { method: "GET", headers: { "user-agent": "arc-launch" } }); } catch (e) { if (e && e.code) throw e; return unscanned("pagespeed unreachable"); }
   if (r.status === 429) return unscanned("pagespeed quota (429)");

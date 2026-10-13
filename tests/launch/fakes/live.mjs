@@ -5,6 +5,7 @@
 //   pagespeed   an HTTP status PageSpeed answers instead (429, 500), or "unreachable"
 export function makeLive({ github, full, domain, inner, scores = { performance: 98, accessibility: 100, "best-practices": 100, seo: 100 }, pagespeed = 200, healthBody = null } = {}) {
   const calls = [];
+  const keys = []; // the PageSpeed key each call carried, null when keyless
   const html = (s, body) => new Response(body, { status: s, headers: { "content-type": "text/html" } });
   const json = (s, body) => new Response(JSON.stringify(body), { status: s, headers: { "content-type": "application/json" } });
   const serving = () => {
@@ -31,6 +32,7 @@ export function makeLive({ github, full, domain, inner, scores = { performance: 
       return html(200, `<!DOCTYPE html><html lang="en"><head><meta name="generator" content="${gen}"/></head><body><main>shell</main></body></html>`);
     }
     if (url.hostname === "www.googleapis.com") {
+      keys.push(url.searchParams.get("key"));
       if (pagespeed === "unreachable") throw new TypeError("fetch failed");
       if (pagespeed !== 200) return json(pagespeed, { error: { code: pagespeed, message: "Quota exceeded for quota metric 'Queries'" } });
       if (!serving()) return json(200, { error: { code: 500, message: "Lighthouse returned error: FAILED_DOCUMENT_REQUEST" } });
@@ -38,5 +40,5 @@ export function makeLive({ github, full, domain, inner, scores = { performance: 
     }
     return inner(input, init);
   }
-  return { fetch, calls, serving };
+  return { fetch, calls, keys, serving };
 }

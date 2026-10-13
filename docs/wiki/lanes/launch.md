@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (53)
+## Decisions (54)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -81,6 +81,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1750`](../../../docs/adr/1750-the-weekly-watch-is-verify-public-only-raising-one-incident-per-regression.md) | the weekly watch is `verify --all --public-only`, run by a daily job that acts every seven days | accepted | 2026-10-09 |
 | [`1751`](../../../docs/adr/1751-wiring-slots-query-arcs-own-organs-through-ctx-probe-arc.md) | the wiring slots ask arc's own organs through `ctx.probe.arc`, answered by the runner | accepted | 2026-10-09 |
 | [`1752`](../../../docs/adr/1752-environments-follows-frontend-and-rebuilds-its-probe-on-main.md) | `environments` follows `frontend` and rebuilds its probe branch on main's head | accepted | 2026-10-13 |
+| [`1753`](../../../docs/adr/1753-frontend-asks-pagespeed-with-the-owners-key.md) | `frontend` asks PageSpeed with the owner's key, and pins a Next.js Vercel will deploy | accepted | 2026-10-13 |
 
 ## Source
 

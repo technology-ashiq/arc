@@ -36,7 +36,8 @@ globalThis.fetch = live.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-release-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const state = { hosting: [], release: [], frontend: [], repo: [{ kind: "github-repo", id: FULL }] };
-const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789" };
+const PS_KEY = "AIzaFixturePageSpeedKey0123456789abcdef"; // gitleaks:allow -- fixture, never a real key
+const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", PAGESPEED_API_KEY: PS_KEY };
 // A fresh ctx per call, as the runner builds one per attempt; `approvals` stands in for the owner's gate-2 decision.
 const ctxFor = (slot, { row, upstream, approvals = [] }) => makeCtx({
   profile: { slug: "arc-sandbox", brand: { name: "arc sandbox", domain: DOMAIN } }, board: {}, slot: { id: slot }, row,
@@ -71,6 +72,8 @@ switch (scenario) {
     out.frontendAgain = await attempt(() => frontend.mod.scaffold(F()));
     out.shellCommits = repo().commits.filter((c) => c.files && c.files["package.json"]).length;
     out.frontendVerify = await frontend.mod.verify(F());
+    out.psKeyed = live.keys.length > 0 && live.keys.every((k) => k === PS_KEY);
+    out.psKeyLeaked = JSON.stringify(out.frontendVerify).includes(PS_KEY);
     out.releaseVerifyAfter = await release.mod.verify(R(["deploy-prod-first"]));
     out.kinds = { release: state.release.map((r) => r.kind), frontend: state.frontend.map((r) => r.kind) };
     break;
