@@ -13,7 +13,7 @@ compact) and runs `scanSecrets`, the emitter's own scan. Before the fix:
 | bare-https | `https://wt-oc-req03.vercel.app` | **hit connection-string-password** |
 | team-https | `https://wt-oc-req03-technology-ashiqs-projects.vercel.app` | **hit connection-string-password** |
 | pr-url | `https://github.com/technology-ashiq/arc/pull/416` | clean |
-| control (a real DSN) | `postgres://arc:hunter2222@db.internal:5432/x` | hit |
+| control (a real DSN, assembled at runtime so no credential shape sits in the repo) | a postgres DSN for user `arc` with a 10-character password at `db.internal` | hit |
 
 ## Cause
 
