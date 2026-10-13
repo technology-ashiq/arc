@@ -209,6 +209,7 @@ export function fold(payloads, ctx) {
       "Passports",
       "/api/ventures",
       "Each venture's passport -- live, candidate or attic, its stage and its own repo -- with a row that leaves only by your stamp and never by deletion. ventures.yaml holds kill criteria only; the passports are a PORTFOLIO.md table that only the board lint's awk reads -- filed to the ledger lane.",
+      { owner: "ledger" },
     ),
     rules: servedTable(projected(venturesSt, "rows", (b) => {
       if (!Array.isArray(b["criteria"]) || !Array.isArray(b["ventures"])) return undefined;
@@ -240,6 +241,7 @@ export function fold(payloads, ctx) {
       "The base rate",
       "/api/ventures",
       "How many ventures the kill criteria were planned to expect to live, written before the first launch -- so a death is a data point, not a surprise. The criteria file does not state it: the figure is prose in the master execution plan, which no parser reads -- filed to the ledger lane.",
+      { owner: "ledger" },
     ),
     shipWith: "A venture without a distribution plan does not ship. Launch week is a written playbook -- a channel at a time, personal and honest -- and growth wakes as a module only when a live venture pulls it.",
     board: roomLink(ctx, "board"),

@@ -206,6 +206,7 @@ export function fold(payloads, ctx) {
       "The base rate",
       "/api/ventures",
       "How many ventures the kill criteria were planned to expect to live, written before the first launch -- so a death is a data point, not a surprise. The criteria file does not state it: the figure is prose in the master execution plan, which no parser reads -- filed to the ledger lane.",
+      { owner: "ledger" },
     ),
     ventures: venturesKill(venturesSt, "Ventures"),
     reads,

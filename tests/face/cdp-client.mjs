@@ -340,12 +340,17 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 
 // ---- smoke + harness pure half ----
 {
-  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
+  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
   check("the verdict passes a full, clean, settled run", smoke.judge(good).ok);
   const stub = JSON.parse(readFileSync(join(REPO, "tests", "fixtures", "face", "smoke-stub-report.json"), "utf8"));
   check("the verdict FAILS the stub report of a smoke that never navigated", !smoke.judge(stub).ok && smoke.judge(stub).reasons.some((r) => /opened=0/.test(r)));
   check("the verdict FAILS when nothing was openable", !smoke.judge({ ...good, openable: 0, opened: 0 }).ok);
   check("the verdict FAILS one counted error", !smoke.judge({ ...good, countedErrors: 1 }).ok);
+  // Phase 15 (ADR-1354): a report that never counted the five states, or counted a panel with none, or counted nothing.
+  check("the verdict FAILS a report with no availability block, a panel with no state, and zero states measured",
+    !smoke.judge({ ...good, availability: undefined }).ok && !smoke.judge({ ...good, availability: { ...good.availability, bad: 1 } }).ok
+    && !smoke.judge({ ...good, availability: { states: { served: 0, zero: 0, unknown: 0, "not-applicable": 0, "not-instrumented": 0 }, bad: 0, rooms: [] } }).ok
+    && !smoke.judge({ ...good, availability: { states: null, bad: null, rooms: [] } }).ok);
   check("the verdict FAILS a room that never settled", !smoke.judge({ ...good, unsettled: ["today"] }).ok);
   check("the verdict FAILS a report that does not say what settled", !smoke.judge({ openable: 33, opened: 33, countedErrors: 0 }).ok);
   check("the verdict FAILS NaN or missing counts", !smoke.judge({ ...good, openable: NaN, opened: NaN }).ok && !smoke.judge({ ...good, countedErrors: undefined }).ok);
@@ -510,7 +515,7 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a class list that was not read, or a near-miss class, never holds",
     !smoke.moodHolds(null, "dark") && !smoke.moodHolds(undefined, "light") && !smoke.moodHolds("hq-lightish hq", "light") && !smoke.moodHolds("hqx", "dark") && !smoke.moodHolds("hq", "sepia"));
 
-  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
+  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
   check("a clean light run passes", smoke.judge({ ...clean, mood: "light", moodMiss: [] }).ok);
   const noLight = smoke.judge({ ...clean, mood: "light", moodMiss: [{ id: "today", htmlClass: "hq" }, { id: "inbox", htmlClass: "hq" }] });
   check("a light run whose rooms lack hq-light FAILS with the spec's words",

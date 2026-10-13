@@ -92,6 +92,7 @@ export function fold(payloads, ctx) {
       "Certification",
       "/api/roster",
       "The certification each hire passes before it is dispatched anything, fixture by fixture, and which fixture a failed one missed. The engine lane writes it as Markdown evidence, and no parser reads that into a table yet -- filed to the engine lane.",
+      { owner: "engine" },
     ),
     runs: runsTable,
     hireVerb: verbPending(
