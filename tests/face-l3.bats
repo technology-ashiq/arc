@@ -271,6 +271,10 @@ load 'test_helper'
              "a decision id quoted as an op receipt does not count" \
              "an op receipt from another day does not count" \
              "one receipt journalled twice is one op" \
+             "a same-day event of another kind does not count as the op" \
+             "an op the registry does not know does not count" \
+             "no registry given proves no op, never every op" \
+             "a row that names a process holds the receipt to it" \
              "a journal line that is not an object is torn, not a crash" \
              "and only a ULID receipt is read as an op" \
              "--day refuses a non-date" \
@@ -285,7 +289,7 @@ load 'test_helper'
   local arms ran; arms=$(printf '%s\n' "$output" | grep -c "PASS$")
   ran=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) arms$/\1/p')
   [ -n "$ran" ] && [ "$arms" -eq "$ran" ] || { echo "PASS=$arms RAN=$ran: $output"; false; }
-  [ "$ran" -ge 34 ] || { echo "only $ran arms registered: $output"; false; }
+  [ "$ran" -ge 38 ] || { echo "only $ran arms registered: $output"; false; }
 }
 
 @test "face-dogfood --day refuses a day it cannot honour, before reading anything" {
