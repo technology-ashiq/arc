@@ -1,0 +1,24 @@
+CI run 38415953364 @ e5fd6f32 (PR #412 head, merged as eb8065ec): 19/19 jobs green
+P05 suites: distribute-opencode-session (15 tests) + distribute-harness-stamp (6 tests), x5 legs
+count = legs on which the test printed this line (5 legs: ubuntu 18/20/22, one windows shard, one macos shard)
+      5 ok distribute-harness-stamp: a malformed harness or evidence is refused by name
+      5 ok distribute-harness-stamp: a payload naming another harness is refused, never overwritten
+      5 ok distribute-harness-stamp: an explicit --evidence wins over ARC_EVIDENCE, and a matching harness passes
+      5 ok distribute-harness-stamp: ARC_HARNESS and ARC_EVIDENCE stamp a payload that names neither
+      5 ok distribute-harness-stamp: every test in the file is registered
+      5 ok distribute-harness-stamp: unset, the sealed line is byte-identical to the emitter before ADR-2020
+      5 ok distribute-opencode-session: a clean run writes the proof header, every event verbatim, and spent last
+      5 ok distribute-opencode-session: a killed run finds its session by title and charges the subagents it never streamed
+      5 ok distribute-opencode-session: a stall is killed at the wall clock, tree and all, and exits 5
+      5 ok distribute-opencode-session: a subagent export that fails makes the run COST-UNREADABLE, never a pass
+      5 ok distribute-opencode-session: a subagent export with no step-finish is COST-UNREADABLE, never a free run
+      5 ok distribute-opencode-session: a subagent's spend is read from its export, nested tasks included, and counts toward the cap
+      5 ok distribute-opencode-session: a transcript inside a repo is stamped as that repo-relative evidence path
+      5 ok distribute-opencode-session: every test in the file is registered
+      5 ok distribute-opencode-session: only step-finish cost is spend, and a numeric string is read as its number
+      5 ok distribute-opencode-session: OpenCode exiting non-zero is CHILD-FAILED (exit 1) with its spend kept
+      5 ok distribute-opencode-session: refusals happen before spend, invoke nothing and write no transcript
+      5 ok distribute-opencode-session: spend reaching the cap kills the whole tree and exits 3
+      5 ok distribute-opencode-session: steps with no cost are COST-UNREADABLE (exit 4), never a capped pass
+      5 ok distribute-opencode-session: the child gets the exact argv, no shell, and the message byte-identical
+      5 ok distribute-opencode-session: the child is told its harness, model, transcript and the canonical spine

@@ -14,9 +14,9 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-13 green on 3 legs per job; every `--check` (goldens, sync golden, wiki) green
-- [ ] attack pass on the phase commit (max 2 rounds)
-- [ ] tracker updated
+- [x] REQ-13 green on 3 legs per job; every `--check` (goldens, sync golden, wiki) green
+- [x] attack pass on the phase commit (max 2 rounds)
+- [x] tracker updated
 
 ## Verification plan
 

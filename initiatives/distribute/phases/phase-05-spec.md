@@ -16,11 +16,11 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-11 and REQ-12 bats green on all 3 CI legs per job (`ci-digest` on the pushed head)
-- [ ] the smoke receipt id is found in the main clone's `events/` with `payload.harness == "opencode"` and `evidence` = the committed transcript path; `_quarantine/` listed, 0 from the run
-- [ ] smoke spend read from the transcript ≤ $0.10 (50% tripwire); tripwire answer written in PROGRESS
-- [ ] attack pass (`/arc-attack`, max 2 rounds) on the phase commit, findings fixed or ledgered
-- [ ] tracker updated (PROGRESS row + done-log); the phase close itself runs from the main clone after the cycle's merge
+- [x] REQ-11 and REQ-12 bats green on all 3 CI legs per job (`ci-digest` on the pushed head)
+- [x] the smoke receipt id is found in the main clone's `events/` with `payload.harness == "opencode"` and `evidence` = the committed transcript path; `_quarantine/` listed, 0 from the run
+- [x] smoke spend read from the transcript ≤ $0.10 (50% tripwire); tripwire answer written in PROGRESS
+- [x] attack pass (`/arc-attack`, max 2 rounds) on the phase commit, findings fixed or ledgered
+- [x] tracker updated (PROGRESS row + done-log); the phase close itself runs from the main clone after the cycle's merge
 
 ## Verification plan
 

@@ -14,8 +14,8 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-03 acceptance met in full, or each unmet clause recorded owed with its transcript
-- [ ] closed via `/arc-phase-done 07 --lane distribute`; retro written
+- [x] REQ-03 acceptance met in full, or each unmet clause recorded owed with its transcript
+- [x] closed via `/arc-phase-done 07 --lane distribute`; retro written
 
 ## Verification plan
 

@@ -11,7 +11,7 @@
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-distribute (Cycle 2, opened 2026-10-13) |
 | Product | — |
 

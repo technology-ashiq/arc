@@ -14,8 +14,15 @@ Every run went through `node .claude/scripts/engine/opencode-session.mjs` with t
 | `01M4T09AKR4B01A0FH6KFHF2PX` | `commit.done` | sha `6405eef1` — the review archive (run 3) |
 | `01M4TFXJ3SBRKA9JXCJRH9QP4P` | `ship.done` | url `wt-oc-req03.vercel.app` — run 5c; a deploy, not the PR (see Findings) |
 
-`_quarantine/`: no file for 2026-10-13 (latest entries are 2026-08-18, 08-19, 10-01, 10-07, 10-09), so no receipt
-from this cycle was rejected.
+Each receipt's `evidence` names a committed transcript whose line 1 carries `opencode 1.17.18 session=ses_…`
+(checked on `origin/main` at the close: `smoke-arc-commit-4`, `1-arc-commit`, `2c-arc-review`, `3-arc-commit`,
+`5c-arc-ship`).
+
+`_quarantine/2026-10-13.jsonl` holds **1 stub, 0 receipts**: `{"code":"SECRET","stub_only":true}` at 16:50:50, run 5c's
+first `ship.done` emit, which the redactor's `connection-string-password` rule refused (the stub keeps no payload, so the
+matched text is not recoverable; the run's text reports the URL scheme as the trigger). The same run re-emitted
+scheme-less and `01M4TFXJ3SBRKA9JXCJRH9QP4P` landed 25 s later. No receipt of the run was lost; the refusal is the
+redactor's, recorded as debt row 24. Earlier 10-13 runs left no quarantine file.
 
 ## Runs and spend
 
@@ -62,6 +69,15 @@ secret-diff-scan: SECRET in the added lines -- gitleaks findings (redacted)
   read that file as a declared target and deployed to production (`dpl_FANMbv3WqNUUQYoAK2E4x3MvLA1C`, READY). Two
   holes: the `Bash(vercel:*)` fence lets the model create the very target the "declared target" check trusts, and a
   wrapper kill on Windows can leave the OpenCode tree alive. No secret was in the tree (no `.env*` but
-  `.env.example`). Cleanup: the local `.vercel/` and the `.gitignore` line were removed; the Vercel project deletion
-  is the owner's (`vercel project rm wt-oc-req03`). REQ-03's `ship.done` exists, but its url is that deploy, not
+  `.env.example`). Cleanup: the local `.vercel/` and the `.gitignore` line were removed; the owner deleted the Vercel
+  project (`vercel project rm wt-oc-req03`, 2026-10-13: absent from `vercel project ls`, the URL answers 404). REQ-03's `ship.done` exists, but its url is that deploy, not
   PR #416.
+
+## The session's PR, merged after required checks
+
+PR #416 (`feat/distribute-c2-oc-session`, opened by `gh pr create --fill` inside OpenCode run 5) merged 2026-10-13 as
+`7598708a` after #412 (`eb8065ec`). Its head `01534267` (the operator's merge of main, which resolved three conflicts the
+squash of #412 left: PROGRESS and debt-ledger took main's side, the Cycle 1 archive kept OpenCode's correction line) went
+19/19 on run 38421631372 after one `--failed` rerun of Windows shard 1 (`face-browser` test 5, a file neither PR
+touches). It landed three OpenCode-made files on main: the review archive
+`docs/reviews/2026-10-13-0448-feat-distribute-c2-oc-session.md`, the Cycle 1 archive correction and this folder's README.
