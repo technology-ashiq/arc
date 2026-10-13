@@ -122,7 +122,18 @@ export function parseRuling(what) {
     const m = /^(.+?) (?:is|are) exempt$/i.exec(clause);
     if (!m) continue;
     sawExempt = true;
-    const items = m[1].replace(/,? and /gi, ",").split(",").map((s) => s.trim().toLowerCase());
+    // Split on commas and a final "and" OUTSIDE parentheses only: "engine (metered runs, nightly)" is one item.
+    const items = [];
+    let depth = 0, cur = "";
+    const src = m[1].replace(/,? and /gi, "\u0000");
+    for (const ch of src) {
+      if (ch === "(") depth++;
+      if (ch === ")") depth = Math.max(0, depth - 1);
+      if ((ch === "," || ch === "\u0000") && depth === 0) { items.push(cur); cur = ""; continue; }
+      cur += ch === "\u0000" ? " and " : ch;
+    }
+    items.push(cur);
+    for (let k = 0; k < items.length; k++) items[k] = items[k].trim().toLowerCase();
     for (const item of items) {
       let k;
       if (item === "") return { error: "an empty item in the exempt list" };

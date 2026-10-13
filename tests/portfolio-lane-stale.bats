@@ -261,8 +261,54 @@ BL="$ARC_ROOT/.claude/scripts/core/board-lint.sh"
   [[ "$output" != *"FAIL [board-stale-hand-written]"* ]]
 }
 
+@test "stale: round-2 L1 -- a rehearsal or test receipt naming the lane does not reset the clock" {
+  _repo
+  _lane growth LIVE
+  printf '{"id":"01M4VQ0000000000000000000C","kind":"phase.closed","ts":"2026-10-13T05:30:00+05:30","supersedes":null,"payload":{"lane":"growth","rehearsal":true}}\n' >> "$ARC_SPINE_ROOT/events/2026-10-13.jsonl"
+  printf '{"id":"01M4VQ0000000000000000000D","kind":"phase.closed","ts":"2026-10-13T05:30:00+05:30","supersedes":null,"payload":{"lane":"growth","test":"false"}}\n' >> "$ARC_SPINE_ROOT/events/2026-10-13.jsonl"
+  _job
+  _ran
+  [ "$(_stale_of growth)" = true ]
+  _named growth 2026-10-13 01M4VQ0000000000000000000E
+  _job
+  [ "$(_stale_of growth)" = false ]
+}
+
+@test "stale: round-2 L2 -- a never-named lane back LIVE in a new cycle is a new episode and is raised again" {
+  _repo
+  _lane growth LIVE
+  _job
+  [[ "$output" == *"raised 1 new"* ]]
+  printf 'status: LIVE\ncycle: arc-growth (Cycle 2)\n\n# tracker\n' > "$SANDBOX/initiatives/growth/PROGRESS.md"
+  _job
+  _ran
+  [[ "$output" == *"raised 1 new"* ]]
+  [ "$(_incidents)" -eq 2 ]
+  _job
+  [[ "$output" == *"raised 0 new, 1 already raised"* ]]
+}
+
+@test "stale: round-2 L3 -- the brief prints a lane-stale line only for a lane name in the lane grammar" {
+  _repo
+  printf '{"id":"01M4VQ0000000000000000000F","kind":"incident.raised","ts":"2026-10-14T05:30:00+05:30","supersedes":null,"payload":{"class":"lane-stale","silent_lane":"**evil** [x](y)","last_receipt_ts":"garbage"}}\n' >> "$ARC_SPINE_ROOT/events/2026-10-14.jsonl"
+  printf '{"id":"01M4VQ0000000000000000000G","kind":"incident.raised","ts":"2026-10-14T05:31:00+05:30","supersedes":null,"payload":{"class":"lane-stale","silent_lane":"growth","last_receipt_ts":"garbage"}}\n' >> "$ARC_SPINE_ROOT/events/2026-10-14.jsonl"
+  run node "$SANDBOX/.claude/scripts/hq/arc-brief.mjs" --date 2026-10-14
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"incident.raised  lane-stale  growth  LIVE, no lane receipt since an unreadable date"* ]]
+  [[ "$output" != *"evil"* ]]
+}
+
+@test "board-lint --strict: round-2 B6 -- a row with no trailing pipe keeps its last cell" {
+  _board_repo
+  awk '{ if (index($0, "| alpha |") == 1) { sub(/ \|$/, ""); sub(/NEXTCELL$/, "stale: yes") } print }' "$SANDBOX/PORTFOLIO.md" > "$SANDBOX/b.tmp" && mv "$SANDBOX/b.tmp" "$SANDBOX/PORTFOLIO.md"
+  grep -q "| stale: yes$" "$SANDBOX/PORTFOLIO.md"
+  run bash "$BL" --root "$SANDBOX" --strict
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FAIL [board-stale-hand-written]"* ]]
+}
+
 @test "stale: this suite registers every case it declares" {
   n=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$n" -eq 16 ]
-  [ "$BATS_TEST_NUMBER" -eq 16 ]
+  [ "$n" -eq 20 ]
+  [ "$BATS_TEST_NUMBER" -eq 20 ]
 }

@@ -233,8 +233,27 @@ _ran() { [ "$(printf '%s\n' "$output" | head -n1)" = "Selected lane: x (via arg)
   [[ "$output" != *"[new-cycle-unknown]"* ]]
 }
 
+@test "debt: no lane on this PR opens a cycle over its debt budget (the merge-time gate)" {
+  cd "$ARC_ROOT"
+  if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+    git fetch -q --depth=1 origin main:refs/remotes/origin/main
+  fi
+  local l ran=0 bad=""
+  for l in $(ls initiatives); do
+    [ -f "initiatives/$l/PROGRESS.md" ] || continue
+    run node "$LINT" "$ARC_ROOT" --lane "$l" --base origin/main
+    [ "$(printf '%s\n' "$output" | head -n1)" = "Selected lane: $l (via arg)" ] || { bad="$bad $l(no-run)"; continue; }
+    ran=$((ran + 1))
+    [[ "$output" == *"[new-cycle-unknown]"* ]] && bad="$bad $l(base-unknown)"
+    [[ "$output" == *"FAIL  [debt-budget]"* ]] && bad="$bad $l(debt-budget)"
+  done
+  echo "linted=$ran bad=[$bad]"
+  [ "$ran" -gt 10 ]
+  [ -z "$bad" ]
+}
+
 @test "debt: this suite registers every case it declares" {
   n=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$n" -eq 13 ]
-  [ "$BATS_TEST_NUMBER" -eq 13 ]
+  [ "$n" -eq 14 ]
+  [ "$BATS_TEST_NUMBER" -eq 14 ]
 }

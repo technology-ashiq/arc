@@ -400,8 +400,18 @@ _ran() { [ "$(printf '%s\n' "$output" | head -n1)" = "Selected lane: $1 (via arg
   [[ "$output" == *"[kernel-freeze] lane memory"* ]]
 }
 
+@test "freeze: round-2 L8 -- a comma inside a parenthesised note does not split the item" {
+  _repo engine
+  _ruling "$RULING_ID" 'kernel freeze: no kickoff on a kernel lane; launch, engine (metered runs, nightly only) and growth are exempt'
+  _set_cycle engine "arc-engine (Cycle 2)"
+  _lint engine
+  _ran engine
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"only for: metered runs, nightly only"* ]]
+}
+
 @test "freeze: this suite registers every case it declares (bats drops non-ASCII titles silently)" {
   n=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$n" -eq 28 ]
-  [ "$BATS_TEST_NUMBER" -eq 28 ]
+  [ "$n" -eq 29 ]
+  [ "$BATS_TEST_NUMBER" -eq 29 ]
 }

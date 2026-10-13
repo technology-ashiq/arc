@@ -547,7 +547,8 @@ function apiBoard(ctx) {
     const progress = join(ctx.repo, "initiatives", lane, "PROGRESS.md");
     if (!existsSync(progress)) continue; // a board row without a lane dir is the lint's problem, not a lie to serve
     if (!insideRepo(ctx, progress)) { outside.push(lane); continue; }
-    const d = derived && derived.lanes[lane];
+    // An own property only: a lane named like an Object.prototype key must never read an inherited value.
+    const d = derived && Object.prototype.hasOwnProperty.call(derived.lanes, lane) ? derived.lanes[lane] : null;
     lanes.push({ lane, header: laneHeader(progress), stale: d && typeof d.stale === "boolean" ? d.stale : null });
   }
   return { mode: ctx.mode, badge: "file, not log", updated, lanes, outside, stale_derived_at: derived && typeof derived.derived_at === "string" ? derived.derived_at : null };

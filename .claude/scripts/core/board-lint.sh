@@ -806,7 +806,7 @@ if [ "$STRICT" = 1 ] && [ -f "$BOARD" ] && [ -r "$BOARD" ]; then
     line !~ /^[ 	]*\|/ { rows = 0; next }
     { rows++
       n = split(line, cell, "|")
-      for (i = 2; i < n; i++) {
+      for (i = 2; i <= n; i++) {   # <= n: a row with no trailing pipe keeps its last cell (round 2 B6)
         c = clean(cell[i])
         if (rows == 1 && c == "stale") { print NR ": header cell stale"; next }
         if (rows > 2 && c ~ /(^|[^a-z0-9-])stale[ 	]*[:=]/) { print NR ": cell " c; next }

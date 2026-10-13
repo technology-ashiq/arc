@@ -28,3 +28,7 @@ was never made.
 - **(q) one message for two failures, again.** A git that is missing or timed out is not "the ref does not resolve" (Phase 04 r2 B3).
 - **(r) a duplicate the emitter must quarantine.** A daily job checks the spine for its own episode before emitting; leaning on `DUP_IDEM` filed one quarantine line per silent lane per day (Phase 06 demo).
 - **(s) a needs-you line that does not say where.** The brief printed a bare `incident.raised`; an alarm that does not name its subject is not actionable (Phase 06 demo).
+- **(t) the episode key must change when the situation does.** `lane|never` stayed suppressed for ever across cycles; the episode now carries the cycle identity (Phase 06 r2 L2).
+- **(u) text off the spine into a rendered line.** Print a spine field only when it matches its own grammar (Phase 06 r2 L3).
+- **(v) a split that ignores nesting.** A comma inside a parenthesised note is not an item separator (Phase 04 r2 L8).
+- **(w) the last cell of a pipe table.** A row without a trailing pipe keeps its last cell (Phase 06 r2 B6).
