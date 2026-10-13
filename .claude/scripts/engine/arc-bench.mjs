@@ -707,6 +707,23 @@ export function discoverClasses(root) {
 }
 
 /**
+ * The one stderr line that says WHY an arc-run attempt failed.
+ *
+ * Taking the last line was wrong (real event, 2026-10-14): after a schema stop arc-run prints its
+ * bookkeeping -- the receipt, "STOPPED. A tier-change PROPOSAL was recorded" and an indented
+ * continuation about editing the router -- so every NOT SCORED row read "Acting on it means editing
+ * engine/router.yaml", and the contract failure itself never reached the scorecard. Continuation
+ * lines (leading whitespace) and bookkeeping are skipped; a contract-failure line wins if present.
+ * @param {string|Buffer|null|undefined} stderr
+ * @param {number} status
+ */
+export function failureLine(stderr, status) {
+  const lines = String(stderr || "").split(/\r?\n/)
+    .filter((l) => l.trim() && !/^\s/.test(l) && !/^arc-run: (receipt run\.completed |STOPPED\.)/.test(l));
+  return lines.filter((l) => /failed the contract/.test(l)).pop() || lines.pop() || `arc-run exited ${status}`;
+}
+
+/**
  * Can this driver actually carry a model? ASKED, never remembered.
  *
  * `arc-run` keeps the list (`MODEL_CAPABLE`), and a second copy here would be a second copy that
@@ -970,8 +987,7 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     }
     const status = res.status ?? 1;
     if (status !== 0) {
-      // The receipt line arc-run prints last is bookkeeping, not the reason the run failed.
-      const line = String(res.stderr || "").trim().split("\n").filter((l) => l && !/^arc-run: receipt run\.completed /.test(l)).pop() || `arc-run exited ${status}`;
+      const line = failureLine(res.stderr, status);
       // SCHEMA IS ONLY EVALUATED WHERE AN OUTPUT EXISTED. A driver that never answered leaves the
       // schema question unasked, and counting that as a schema failure would blame the process
       // for a fault arc-run has already attributed elsewhere (ADR-0204).

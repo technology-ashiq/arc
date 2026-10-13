@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import {
   EXIT, EncodeError, NORMALIZER_VERSION, OperatorError,
   admitGroup, canonicalHash, canonicalJson, canonicalString,
-  discoverClasses, medianWithSpread, newBudgetState, parseArgs, reconcileGroup, worstCaseFor,
+  discoverClasses, failureLine, medianWithSpread, newBudgetState, parseArgs, reconcileGroup, worstCaseFor,
 } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -471,6 +471,24 @@ function recordingsWithCost(name, inr) {
   bad(["--replay", ""], "EMPTY value");
   const ok = parseArgs(["--replay", "x", "--out", "y"]);
   check("replay needs neither a driver nor a budget", ok.replay === "x" && ok.out === "y");
+}
+
+// --- the failure reason (real event, 2026-10-14) --------------------------------------------------
+// The stderr shape is the one arc-run printed on a real schema stop: contract failure, retry,
+// receipt, STOPPED, and an indented router note that used to be reported as the reason.
+{
+  const stop = [
+    "arc-run: output failed the contract (commits.0 is missing); retrying once on the same tier",
+    "arc-run: receipt run.completed 01ABC landed",
+    "arc-run: STOPPED. A tier-change PROPOSAL was recorded as 01XYZ; nothing was escalated.",
+    "         Acting on it means editing engine/router.yaml in a reviewed diff citing ADR-0069.",
+    "",
+  ].join("\r\n");
+  check("a schema stop reports the contract failure, not the router note",
+    /failed the contract \(commits\.0 is missing\)/.test(failureLine(stop, 1)), failureLine(stop, 1));
+  check("without a contract line, the last non-bookkeeping line is the reason",
+    failureLine("arc-run: driver timed out\narc-run: receipt run.completed 01ABC landed\n", 1) === "arc-run: driver timed out");
+  check("empty stderr names the exit status", failureLine("", 7) === "arc-run exited 7");
 }
 
 rmSync(scratch, { recursive: true, force: true });

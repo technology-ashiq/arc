@@ -2279,6 +2279,16 @@ if (a.verdict === "schema") {
     attempts: attemptsMade,
     hops: HOPS,
   };
+  // A TRIAL PROPOSES NO TIER CHANGE. The ladder's proposal is about the ROUTED tier, and a
+  // --trial-model run never used it, so its contract failure is evidence about the trial model only.
+  // Bench's real event (2026-10-14) put five "escalate commit-msg-draft" approvals in the owner's
+  // inbox from a trial model that had no tools and could not have committed anything.
+  if (trialModel) {
+    console.error(`arc-run: STOPPED. --trial-model ${JSON.stringify(trialModel)} failed the contract; a trial proposes no tier change, so nothing was recorded for the route.`);
+    emitRun({ outcome: "fail", reason: "schema", driver, attempts: attemptsMade, fault_hint: faultHint, cost: retry.cost ?? undefined });
+    process.exit(1);
+  }
+
   // The identity flags were MISSING here while the other two call sites carried them, so a
   // rung-2 proposal was attributed to `arc-event@1.0.0` (the emitter's own fallback) instead of
   // the process it proposes escalating, and inherited the default `outcome: ok` for a run that

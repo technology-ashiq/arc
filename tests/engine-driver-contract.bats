@@ -72,6 +72,20 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$status" -eq 0 ]
 }
 
+@test "REQ-04: a trial-model contract failure stops without proposing a tier change" {
+  # Bench real event 2026-10-14: trial failures filed route escalations in the owner inbox.
+  ARC_DRIVER_FAKE="$(FAKE badschema)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --trial-model haiku --root "$ARC_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"retrying once on the same tier"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"a trial proposes no tier change"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"PROPOSAL was recorded"* ]] || { echo "$output"; false; }
+  # the run itself is still on the spine, and no escalation is
+  run grep -rl '"reason":"schema"' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ] || { echo "no run receipt"; false; }
+  run grep -rl "engine-escalation" "$ARC_SPINE_ROOT/events"
+  [ "$status" -ne 0 ]
+}
+
 @test "REQ-04: fault_hint separates a driver fault from a process fault" {
   # The process is self-consistent (its eval fixture satisfies its own schema), so a bad
   # driver answer must be blamed on the DRIVER.
