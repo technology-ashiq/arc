@@ -340,7 +340,7 @@ heading_verdict() {
   # bats prints `$output` only when a test FAILS, so on a green job the evidence Phase 00 lists
   # per job -- which leg RAN, each mood's summary, any SLOW room and what its network held at
   # 10 s -- would never reach the log. fd 3 does.
-  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW |flows: |flow: |sessions: )' | sed 's/^/# /' >&3 || true
+  printf '%s\n' "$output" | grep -E '^(face-browser: RAN leg=|face-browser: mood=|smoke: opened=|smoke: render |smoke: not-served |smoke: served |smoke: availability |smoke: verbs-pending|smoke: rehearsal |smoke: planned |smoke: extras |smoke: runner-errors |smoke: largest-body |smoke: heading |smoke: WARN |smoke: FAIL |face-browser: [0-9]+/[0-9]+ rooms|ok [a-z0-9-]+ settle-ms=[0-9]+ SLOW |flows: |flow: |sessions: )' | sed 's/^/# /' >&3 || true
   # Both moods are judged, each from its own line, before the exit status is trusted: a harness
   # that ran only dark must not pass on dark's line (ADR-1331).
   local mood verdicts=0
@@ -385,6 +385,23 @@ heading_verdict() {
       || { echo "mood=$mood: the browser drew '$svPanels' served panels, the served list names $svExpected"; false; }
     [ "$svRooms" = "$svRoomsExpected" ] \
       || { echo "mood=$mood: served panels per room read '$svRooms', the served list names '$svRoomsExpected'"; false; }
+    # Phase 15 (REQ-19, ADR-1354): every served and NOT SERVED panel the page drew carries one of the five states, counted
+    # per state in the page; none drew without one, the states add up to the two panel counts above, and each of the five
+    # rooms the spec names drew states of its own.
+    local avLine avTotal avBad avRooms room
+    avLine="$(printf '%s\n' "$output" | grep "^smoke: availability mood=$mood " | tail -1)"
+    printf '%s\n' "$avLine" | grep -qE "^smoke: availability mood=$mood served=[0-9]+ zero=[0-9]+ unknown=[0-9]+ not-applicable=[0-9]+ not-instrumented=[0-9]+ bad=[0-9]+ rooms=[a-z0-9:,-]+\$" \
+      || { echo "no availability line for mood=$mood: '$avLine' (harness exit $status)"; false; }
+    avTotal="$(printf '%s\n' "$avLine" | sed -n 's/.* served=\([0-9]*\) zero=\([0-9]*\) unknown=\([0-9]*\) not-applicable=\([0-9]*\) not-instrumented=\([0-9]*\) bad=.*/\1 \2 \3 \4 \5/p' | awk '{print $1+$2+$3+$4+$5}')"
+    avBad="$(printf '%s\n' "$avLine" | sed -n 's/.* bad=\([0-9]*\) rooms=.*/\1/p')"
+    avRooms="$(printf '%s\n' "$avLine" | sed -n 's/.* rooms=\(.*\)$/\1/p')"
+    [ "$avBad" = "0" ] || { echo "mood=$mood: '$avBad' panel(s) drew no availability state: $avLine"; false; }
+    [ -n "$avTotal" ] && [ "$avTotal" -gt 0 ] && [ "$avTotal" -eq $((nsPanels + svPanels)) ] \
+      || { echo "mood=$mood: the states add to '$avTotal', the page drew $nsPanels NOT SERVED + $svPanels served panels"; false; }
+    for room in money ventures legal growth leads; do
+      printf '%s\n' "$avRooms" | tr ',' '\n' | grep -qE "^$room:[1-9][0-9]*\$" \
+        || { echo "mood=$mood: the $room room drew no availability state: $avLine"; false; }
+    done
     vpCards="$(printf '%s\n' "$output" | grep "^smoke: verbs-pending mood=$mood cards=" | tail -1 | sed -n "s/^smoke: verbs-pending mood=$mood cards=\([0-9][0-9]*\) rooms=.*/\1/p")"
     vpRooms="$(printf '%s\n' "$output" | grep "^smoke: verbs-pending mood=$mood cards=" | tail -1 | sed -n "s/^smoke: verbs-pending mood=$mood cards=[0-9]* rooms=\(.*\)\$/\1/p")"
     vpExpected="$(head -1 "$BATS_TEST_TMPDIR/vp-expected")"

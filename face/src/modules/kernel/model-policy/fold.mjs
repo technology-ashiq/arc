@@ -111,6 +111,7 @@ export function fold(payloads, ctx) {
       "Egress allowlist",
       "/api/model-policy",
       "The exact host and port each driver may reach. The router file carries no egress block; the allowlist is engine/egress-allowlist.txt, which only the egress proxy parses, in Python, so no parser exists for the door to import -- filed to the engine lane.",
+      { owner: "engine" },
     ),
     bench: roomLink(ctx, "bench"),
   };

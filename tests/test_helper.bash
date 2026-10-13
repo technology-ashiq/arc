@@ -941,7 +941,7 @@ _arc_legal_sandbox() {
   for _f in core/evolve-manifest.mjs core/one-line.mjs core/variant-grammar.mjs hq/arc-event.mjs hq/lib/redact.mjs \
             hq/lib/validate.mjs hq/lib/validate-absorb.mjs hq/lib/validate-content.mjs hq/lib/validate-experiment.mjs \
             hq/lib/validate-leads.mjs hq/lib/validate-ledger.mjs hq/lib/validate-policy.mjs hq/lib/owner-sig.mjs \
-            hq/lib/validate-policy-refusal.mjs; do
+            hq/lib/validate-policy-refusal.mjs hq/lib/validate-bindings.mjs; do
     cp "$ARC_ROOT/.claude/scripts/$_f" "$SANDBOX/.claude/scripts/$_f"
   done
   mkdir -p "$SANDBOX/spine/events"

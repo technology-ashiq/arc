@@ -554,6 +554,73 @@ load 'test_helper'
   done
 }
 
+@test "face v2: five-state availability -- a throw is unknown never 0, every field names its source, FIELD_UNKNOWN refuses (Phase 15)" {
+  # REQ-19, ADR-1354: one enum, a failed source is unknown (a mutant mapping a throw to 0 is FAILED), every field the
+  # folds draw names a source, the header counts, the literal-state lint, the two gated ops and the as-of replay.
+  run node "$ARC_ROOT/tests/face/availability.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "THROW: a fake adapter that throws maps to unknown with its failure class, never to 0" \
+             "THROW MUTANT: an adapter mapping a throw to 0 is FAILED by the same check" \
+             "THROW: a declared not-applicable stays not-applicable when its adapter throws" \
+             "FOLDS MUTANT: a field with no source FAILs the walker" \
+             "COUNTS: 2 unknown + 1 not-instrumented read 2 and 1 in the header (served and not-applicable counted in neither)" \
+             "LINT: a module spelling not-instrumented in a string FAILs" \
+             "FIELD_UNKNOWN: money.ingest planned against an unreadable ventures.yaml refuses FIELD_UNKNOWN (status 409), and no tool ran" \
+             "FIELD_UNKNOWN: ventures.kill-review planned against an unreadable ventures.yaml refuses FIELD_UNKNOWN (status 409), and no tool ran" \
+             "FIELD_UNKNOWN: no event was written -- the spine directory was never created" \
+             "REPLAY: two replays of one spine prefix give byte-identical states"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: approval bindings -- WAITING, STALE, DUPLICATE_OF folded from the spine, and approve refuses each (Phase 16)" {
+  # REQ-20, ADR-1355: bound_to / depends_on / decision_key ride approval.requested's open payload; the inbox folds the
+  # states from the spine alone and the face draws the same fold. Real CLIs on a scratch spine, bounded children.
+  run node "$ARC_ROOT/tests/face/approval-bindings.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "EMIT: a cycle A -> B -> A is refused (PARENT_CYCLE)" \
+             "PARENT: approve on a rejected parent's child refuses PARENT_REJECTED, the spine's line count unchanged" \
+             "EMIT: a parent that is a decision's ULID is refused (PARENT_NOT_REQUEST), nothing written" \
+             "PROFILE: a decision_key with a trailing space is refused -- exact, never normalised" \
+             "BOUND: the re-derive wrote nothing -- the spine, the export and every lock are byte-identical before and after" \
+             "BOUND: approve refuses PLAN_STALE, the apply's own code, nothing written" \
+             "KEY: deciding either resolves both -- the sibling reads resolved-by <decision>, one decision.recorded" \
+             "REPLAY: as of the first day the child is WAITING, twice byte-identical; as of the parent's decision it is OPEN" \
+             "FACE: the five states are drawn as five badges from the door's fold"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face v2: the discover room reads discover's own receipts through GET /api/discover, never planned again (Phase 17)" {
+  # REQ-21, ADR-1356: a sandbox spine with a capture, a hunt, a judge, an open and a rejected winner; the honest edges
+  # (zero, unknown naming the day, a face capture not counted); no second grammar; the room no longer planned.
+  run node "$ARC_ROOT/tests/face/discover-room.mjs"
+  [[ "$output" == *"RAN: "*" checks, "*" failed"* ]] || { echo "the suite never reached its end (exit $status): $output"; false; }
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local n
+  n="$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) checks, 0 failed$/\1/p')"
+  [ -n "$n" ] && [ "$n" -ge 20 ] || { echo "only '$n' checks ran: $output"; false; }
+  local arm
+  for arm in "ROUTE: a rejected winner reads rejected, with the deciding receipt and its reason" \
+             "EDGES: a face idea.captured (no discover process) is not a discover capture" \
+             "EDGES MUTANT: a route that does not select by discover's process counts the face capture, and is caught" \
+             "EDGES: an unreadable spine day is unknown, naming the day, never 0" \
+             "GRAMMAR: the winner gate and the process are spelled nowhere under face/src, in reads.mjs or in the route" \
+             "ROOM: the View wears no data-planned and draws no REHEARSAL card or planned line"; do
+    [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
+  done
+}
+
 @test "face v2: Phase 04 served panels answer every loaded branch, and the door refuses a hostile tree by name" {
   # The Phase 04 attackers' surviving mutants, each pinned by a check that fails when its decision is removed: an
   # empty table for a body with no list, a sum across substances or currencies, the overdue flag ignored, a seal drawn

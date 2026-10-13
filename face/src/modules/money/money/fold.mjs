@@ -156,11 +156,13 @@ export function fold(payloads, ctx) {
       "The milestone line",
       "/api/strategy",
       "The honest ranges the company has written down for when money arrives, read from its strategy documents rather than typed into this screen. They are prose in the master execution plan, and no parser reads them -- filed to the plan lane.",
+      { owner: "plan" },
     ),
     sources: notServed(
       "Where money comes from",
       "/api/ventures",
       "Each venture's revenue model and price, and what the factory itself may earn, from each venture's own record -- never a sentence typed into this room. No venture record carries a revenue model or a price: ventures.yaml holds kill criteria only -- filed to the ledger lane.",
+      { owner: "ledger" },
     ),
     // "Set a venture's kill criteria", "Close the month" and "Record real revenue" are LIVE since face v2 Phase 05
     // (ADR-1339, ADR-1342): the work door's money.criteria, money.close-month and money.ingest ops, drawn under this
