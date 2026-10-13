@@ -256,9 +256,39 @@ load 'test_helper'
              "four days does not pass as five" \
              "nine decisions in one day is still one day" \
              "an empty journal is NOT met, and does not throw" \
-             "a torn journal line makes the count a floor"; do
+             "a torn journal line makes the count a floor" \
+             "all history still fails on an old outside decision" \
+             "two named clean days with an op each are MET" \
+             "and the outside count across ALL history is still reported" \
+             "an outside decision on a named day fails the window" \
+             "a named day with no face op fails the window" \
+             "an op whose receipt the spine lacks does not count" \
+             "a spine without ids proves no op, never every op" \
+             "a named day with no face decision fails the window" \
+             "one named day does not pass a two-day floor" \
+             "a day named twice is still one day" \
+             "an op outside the window does not count for a named day" \
+             "--day refuses a future day"; do
     [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
+  # Floor the arm count: a selftest that silently stopped registering arms also exits 0.
+  local arms; arms=$(printf '%s\n' "$output" | grep -c "PASS$")
+  [ "$arms" -ge 29 ] || { echo "only $arms arms ran: $output"; false; }
+}
+
+@test "face-dogfood --day refuses a day it cannot honour, before reading anything" {
+  # A named day is the claim the Phase 08 window checks; a typo must be a named refusal
+  # (exit 2), never a NOT MET that sends someone looking at the owner's day.
+  for bad in "2026-02-30" "14-10-2026" "2999-01-01"; do
+    run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day "$bad" --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+    [ "$status" -eq 2 ] || { echo "--day $bad: expected exit 2, got $status: $output"; false; }
+    [[ "$output" == *"--day $bad"* ]] || { echo "$output"; false; }
+  done
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day 2026-10-01 --day 2026-10-01 --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ] && [[ "$output" == *"named twice"* ]] || { echo "$output"; false; }
+  # Control: a usable day gets past the guard to the input check, which fails on the read.
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day 2026-10-01 --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ] && [[ "$output" == *"about this READ"* ]] || { echo "$output"; false; }
 }
 
 @test "face-dogfood fails CLOSED when it cannot find its inputs, and says which" {
