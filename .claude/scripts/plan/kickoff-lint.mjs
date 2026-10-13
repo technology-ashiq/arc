@@ -43,6 +43,8 @@ const argv = process.argv.slice(2);
 let baseRef = "origin/main";
 let baseSeen = 0;
 for (let i = 0; i < argv.length; i++) {
+  // The value of a flag the lane parser owns is that flag's, even when it reads `--base`.
+  if (["--lane", "--root", "--for", "--print", "--text"].includes(argv[i])) { i++; continue; }
   if (argv[i] === "--base") { baseRef = argv[i + 1] ?? ""; argv.splice(i, 2); i--; baseSeen++; }
   else if (argv[i].startsWith("--base=")) { baseRef = argv[i].slice(7); argv.splice(i, 1); i--; baseSeen++; }
 }

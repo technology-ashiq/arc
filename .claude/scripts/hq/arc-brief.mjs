@@ -147,6 +147,11 @@ const AUTHORITY_KINDS = new Set(["policy.level.changed", "policy.demoted"]);
 function eventLine(ev, group) {
   if (group === "money") return moneyLine(ev);
   if (AUTHORITY_KINDS.has(ev.kind)) return authorityLine(ev);
+  // A silent lane is only actionable when the line names it (portfolio REQ-08, ADR-0079): a bare
+  // `incident.raised` says something is wrong and not where. Scoped to the one class this cycle
+  // owns, so every other incident line -- and every golden that pins one -- is unchanged.
+  if (ev.kind === "incident.raised" && ev.payload && ev.payload.class === "lane-stale" && typeof ev.payload.silent_lane === "string")
+    return `  ${ev.kind}  lane-stale  ${ev.payload.silent_lane}  LIVE, no lane receipt since ${typeof ev.payload.last_receipt_ts === "string" ? ev.payload.last_receipt_ts.slice(0, 10) : "ever"}`;
   return `  ${ev.kind}`;
 }
 

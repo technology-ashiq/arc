@@ -23,3 +23,8 @@ was never made.
 - **(l) order on an append-only log.** A supersedes/decision line only acts on a record that existed before it (Phase 04 r1 L4).
 - **(m) tracker paths in two forms.** A path used both on disk and as a git tree path must be repo-relative POSIX (Phase 04 r1 B3).
 - **(n) rows without a header.** Markdown ledgers append rows under later prose without repeating the header; code-fenced pipe lines are not rows (Phase 05 demo).
+- **(o) env paths resolved against cwd.** A relative `ARC_SPINE_ROOT` handed to a gate that lints a root argument resolves against that root, never cwd (Phase 04 r2 B1).
+- **(p) a flag value that looks like another flag.** The value after `--text`, `--lane`, `--root`, `--for`, `--print` belongs to that flag, even when it reads `--base` (Phase 04 r2 B2).
+- **(q) one message for two failures, again.** A git that is missing or timed out is not "the ref does not resolve" (Phase 04 r2 B3).
+- **(r) a duplicate the emitter must quarantine.** A daily job checks the spine for its own episode before emitting; leaning on `DUP_IDEM` filed one quarantine line per silent lane per day (Phase 06 demo).
+- **(s) a needs-you line that does not say where.** The brief printed a bare `incident.raised`; an alarm that does not name its subject is not actionable (Phase 06 demo).

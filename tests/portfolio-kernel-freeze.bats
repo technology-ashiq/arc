@@ -376,8 +376,32 @@ _ran() { [ "$(printf '%s\n' "$output" | head -n1)" = "Selected lane: $1 (via arg
   [[ "$output" == *"[kernel-freeze] lane memory is frozen by owner ruling $RULING_ID"* ]]
 }
 
+@test "freeze: round-2 B1 -- a relative ARC_SPINE_ROOT resolves against the linted root, not cwd" {
+  _repo memory
+  _ruling "$RULING_ID" "$STD_WHAT"
+  _set_cycle memory "arc-memory (Cycle 2)"
+  mkdir -p "$SANDBOX/rel-spine/events"
+  cp "$SPINE/events/2026-10-14.jsonl" "$SANDBOX/rel-spine/events/"
+  export ARC_SPINE_ROOT="rel-spine"
+  cd "$BATS_TEST_TMPDIR"
+  _lint memory
+  _ran memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[kernel-freeze] lane memory is frozen by owner ruling $RULING_ID"* ]]
+}
+
+@test "freeze: round-2 B2 -- a --text value that reads --base is text, not the flag" {
+  _repo memory
+  _ruling "$RULING_ID" "$STD_WHAT"
+  _set_cycle memory "arc-memory (Cycle 2)"
+  run node "$LINT" "$SANDBOX" --lane memory --text --base --base base
+  _ran memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[kernel-freeze] lane memory"* ]]
+}
+
 @test "freeze: this suite registers every case it declares (bats drops non-ASCII titles silently)" {
   n=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$n" -eq 26 ]
-  [ "$BATS_TEST_NUMBER" -eq 26 ]
+  [ "$n" -eq 28 ]
+  [ "$BATS_TEST_NUMBER" -eq 28 ]
 }

@@ -61,8 +61,11 @@ export function newCycle({ root, tracker, base = "origin/main" }) {
   const now = readHeader(text);
   if (!now.status || now.status.trim().toUpperCase() !== "LIVE") return { state: "not-live", reason: `status ${now.status ?? "absent"}` };
   const identity = cycleIdentity(now.cycle);
-  try { git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]); } catch {
-    return { state: "unknown", reason: `base ref \`${base}\` does not resolve in ${root} — the new-cycle gates (kernel-freeze, debt-budget) did not run; pass --base <ref>` };
+  try { git(root, ["rev-parse", "--verify", "--quiet", `${base}^{commit}`]); } catch (e) {
+    // A git that is missing or hung is not a ref that does not resolve: say which, so a CI leg that
+    // skipped the gates for a tooling reason is not read as "no base on this checkout".
+    const why = e && e.code && e.code !== 1 ? `git failed (${e.code})` : `base ref \`${base}\` does not resolve in ${root}`;
+    return { state: "unknown", reason: `${why} — the new-cycle gates (kernel-freeze, debt-budget) did not run; pass --base <ref>` };
   }
   // Absent at the base (a lane born on this branch) is a NEW cycle; a base that cannot be read is
   // UNKNOWN. Folding both into null made every git hiccup refuse a mid-cycle lane.
@@ -90,7 +93,8 @@ export function spineDirFor(root) {
   if ("ARC_SPINE_ROOT" in process.env) {
     const named = process.env.ARC_SPINE_ROOT;
     if (typeof named !== "string" || named.trim() === "") return { dir: null, error: "ARC_SPINE_ROOT is set but empty" };
-    return { dir: resolve(named) };
+    // Relative to the LINTED root, never to cwd: the same lint run from two directories must read one spine.
+    return { dir: resolve(root, named) };
   }
   // The MAIN worktree is the first entry git lists. dirname(git common dir) is not it for a
   // separate-git-dir checkout or a submodule, and that silently read "no spine".
