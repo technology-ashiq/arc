@@ -1,6 +1,6 @@
 ---
 description: "The tool fence of /arc-council; runs only through that command."
-mode: subagent
+mode: all
 hidden: true
 permission:
   "*": deny

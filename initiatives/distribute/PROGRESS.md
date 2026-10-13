@@ -34,12 +34,19 @@ merged once at cycle end; each phase closes from the main clone after that merge
   the seal. Simulation gate: 4 + 4 blockers, all missing spec facts, fixed in the spec; the second non-zero round is a
   human call by rule, taken by the owner's standing "don't wait, ask only if needed" and reported.
 
-**Appetite burn:** 0 of 3 planned days used (4-day cap): 0%. Kill checkpoint at the end of P08; 50% tripwire at day 2.
+- **P08 2026-10-14** (built, not closed): `compile --self` + committed outputs (177 files), `action-stale-self-render`
+  row + pre-commit line, `distribute-self-render.bats`. **Kill checkpoint: YES** — a fresh clone opened in OpenCode ran
+  the committed `/arc-resume` through its fence and returned the 5-block report, no tracked change after
+  (`evidence/phase-08/kill.md`, $0.0393). Debt 22 fixed and probed live (top-level session fenced, `probe.md`, $0.0083);
+  23 fixed (deploy fence, tracked target, tree recorded and reaped after a killed wrapper, exit 7); 24 reproduced and
+  fixed in the redactor (`redact-replay.md`). A-15 holds statically (`codex-skills.md`). First CI run on `161a384d`: 2
+  red tests across 6 jobs (plan-bound allowlist, a RAN regex), both fixed. Cycle spend $0.0476 of $0.15.
+
+**Appetite burn:** ~0.5 of 3 planned days used (4-day cap): ~12%. Kill checkpoint answered YES; 50% tripwire at day 2.
 
 ---
 
 ## Now
 
 **Current position: Cycle 3 kickoff written 2026-10-14 on `feat/distribute-c3`; the owner pre-approved building in chat.**
-**Next step:** Phase 08 scope item 1, `compile --self`, then the CI check and the shared-surface sweep, push, and the kill
-check before any debt work. The `v0.2.0` tag moved to the seal (kickoff attack).
+**Next step:** `/arc-attack` on the P08 commit, fix, one push, CI green, then Phase 09 (`outdated` + `upgrade` + manifest v2 + `version-lint`).

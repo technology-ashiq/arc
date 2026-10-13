@@ -20,7 +20,7 @@ probe() {
 @test "distribute-ship-nodeploy: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-ship-nodeploy: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 8 ] || { echo "declared $declared, expected 8"; false; }
+  [ "$declared" -eq 9 ] || { echo "declared $declared, expected 8"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -92,7 +92,7 @@ probe() {
   grep -qF 'Bash(git rev-parse --abbrev-ref @{u})' "$f" && grep -qF 'or its upstream is not `origin/<that branch>`, STOP' "$f" || { echo "no stop on an unpushed or foreign-tracking branch"; false; }
   grep -qF 'When it exits 3 (CI still running: each call waits at most 9 minutes), run it again, up to' "$f" || { echo "no bounded re-run of npm run test"; false; }
   grep -qF '2. `npm run build --if-present`' "$f" && grep -qF 'Bash(npm run build --if-present)' "$f" || { echo "build is not optional"; false; }
-  grep -qF 'Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists)' "$f" || { echo "no declared-target branch"; false; }
+  grep -qF 'Deploy only if the repo declares a deploy target: a `vercel.json` or `.vercel/project.json` that git tracks' "$f" || { echo "no declared-target branch"; false; }
   grep -qF '`vercel --prod`' "$f" || { echo "the deploy line for a declared target is gone"; false; }
   grep -qF 'deploy: none declared — the PR is the ship' "$f" || { echo "no named no-deploy line"; false; }
   grep -qF 'gh pr create --fill' "$f" || { echo "no PR-create step"; false; }
@@ -101,4 +101,19 @@ probe() {
   local callers
   callers=$(cd "$ARC_ROOT" && git grep -lE 'npm (run )?test([^A-Za-z0-9_]|$)' -- .github .githooks .claude/hooks tests ':!tests/fixtures' ':!tests/kickoff-lint.bats' ':!tests/distribute-ship-nodeploy.bats' | tr -d '\r' | sort | tr '\n' ' ')
   [ "$callers" = ".claude/hooks/PreToolUse.d/50-deploy.sh " ] || { echo "npm test callers: [$callers]"; false; }
+}
+
+@test "distribute-ship-nodeploy: the deploy fence grants vercel --prod only and a target counts only when git tracks it" {
+  local f="$ARC_ROOT/.claude/commands/arc-ship.md" g="$ARC_ROOT/.opencode/agents/arc-ship-fence.md"
+  [ -s "$f" ] && [ -s "$g" ] || { echo "no arc-ship.md or its rendered fence"; false; }
+  local tools; tools=$(sed -n 's/^allowed-tools: //p' "$f")
+  [ -n "$tools" ] || { echo "no allowed-tools line"; false; }
+  if printf '%s' "$tools" | grep -qF 'Bash(vercel:*)'; then echo "the whole vercel CLI is granted again (debt row 23)"; false; fi
+  printf '%s' "$tools" | grep -qF 'Bash(vercel --prod), Bash(vercel --prod --yes), Bash(git ls-files --error-unmatch:*)' || { echo "fence: $tools"; false; }
+  grep -qF 'that git tracks' "$f" && grep -qF 'git ls-files --error-unmatch .vercel/project.json' "$f" || { echo "no tracked-target check"; false; }
+  grep -qF 'deploy: <file> exists but is not tracked by git — not a declared target' "$f" || { echo "no named untracked-target line"; false; }
+  # The rendered fence is what binds an OpenCode session: it allows exactly the two deploy forms and no other vercel.
+  grep -qxF '    "vercel --prod": allow' "$g" && grep -qxF '    "vercel --prod --yes": allow' "$g" || { echo "rendered fence: $(cat "$g")"; false; }
+  [ "$(grep -c '"vercel' "$g")" -eq 2 ] || { echo "rendered fence grants another vercel form: $(grep '"vercel' "$g")"; false; }
+  grep -qxF 'mode: all' "$g" || { echo "the fence is not launchable as the session's own agent (debt row 22)"; false; }
 }

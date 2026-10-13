@@ -15,9 +15,13 @@ Ship the current branch. Run these in order and STOP at the first failure:
    run `gh pr create --fill`.
    Then `npm run test`. When it exits 3 (CI still running: each call waits at most 9 minutes), run it again, up to
    4 times in all; any other non-zero exit is a failure.
-4. Deploy only if the repo declares a deploy target (`vercel.json` or `.vercel/project.json` exists): deploy with
-   `vercel --prod` (the pre-deploy-guard hook will re-check tests). Otherwise do not deploy: print
+4. Deploy only if the repo declares a deploy target: a `vercel.json` or `.vercel/project.json` that git tracks
+   (`git ls-files --error-unmatch vercel.json`, then `git ls-files --error-unmatch .vercel/project.json`; either one
+   succeeding is enough). Then deploy with `vercel --prod` (the pre-deploy-guard hook will re-check tests). A file that
+   exists but is not tracked is never a declared target, since this session may have made it: print
+   `deploy: <file> exists but is not tracked by git — not a declared target`. Otherwise do not deploy: print
    `deploy: none declared — the PR is the ship`, and use the PR's URL from `gh pr view --json url,state` as the URL below.
+   Never run any other `vercel` subcommand (`link`, `project`, `env`): creating a target is the owner's step.
 5. **Leave the receipt (spine)** — record the ship on the spine (hook-mode, never blocks the flow):
    ```bash
    bash .claude/scripts/hq/arc-event.sh emit ship.done --payload '{"url":"<prod-url or PR url>","summary":"<one line>"}'

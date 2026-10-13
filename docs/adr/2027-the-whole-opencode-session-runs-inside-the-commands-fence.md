@@ -70,3 +70,20 @@ Option 2 for row 22, plus named fixes for rows 23 and 24.
   agent binds the top-level session under `run --agent` is **unverified** and is the P08 probe (assumption A-14).
 
 **Confidence:** high on 23 and 24; medium on 22 until the probe runs.
+
+## Amendment 1 — measured in P08 (2026-10-14)
+
+- **22 holds (A-14 confirmed live).** With fences rendered `mode: all` and the wrapper launching `--agent arc-commit-fence`,
+  the command ran in the top-level session with no `task` hop, and OpenCode denied that session's `ls -la` by the fence's
+  rules (`evidence/phase-08/probe.md`, $0.0083).
+- **23c is changed by measurement.** Verifying a kill after `taskkill` is not enough, because P07's survivor came from the
+  *wrapper* being killed from outside, so no kill ran at all. Killing the wrapper on Windows takes only its direct
+  children (libuv's job object), and a detached descendant survives with a dead parent, so a leader pid cannot lead to it.
+  Decision: while the leader lives, the wrapper re-snapshots the tree every 3 s (`Get-CimInstance Win32_Process`) into
+  `<transcript>.pid` as `{pid, cmd}` rows. A clean finish removes the file. Every run first reaps any `*.jsonl.pid` under
+  its ledger: each recorded pid whose command line is unchanged is killed (pid reuse guard), and a survivor refuses the
+  run `STALE-RUN`. POSIX kills the recorded leader's process group. A kill that leaves a survivor exits 7
+  `KILL-INCOMPLETE`. Verified on this box before CI: a SIGKILLed wrapper's 3-process tree (cmd → fake → detached
+  grandchild) was reaped by the next run, and the grandchild never wrote its marker.
+- **24 reproduced, so the redactor is fixed** (`evidence/phase-08/redact-replay.md`): `"` is excluded from the
+  `connection-string-password` user/password classes.

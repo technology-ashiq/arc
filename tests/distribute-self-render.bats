@@ -14,7 +14,7 @@ ARC() { printf '%s' "$ARC_ROOT/bin/arc.mjs"; }
 INST() { printf '%s' "$ARC_ROOT/.claude/scripts/engine/arc-install.mjs"; }
 native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 count() { printf '%s\n' "$output" | tr -d '\r' | grep -cE "$1" || true; }
-ran() { [ "$(count '^self-render: [0-9]+ file\(s\) ')" -eq 1 ] || { echo "self-render never reached its summary line: $output $stderr"; return 1; }; }
+ran() { [ "$(count '^self-render: ([0-9]+ file\(s\) checked |wrote [0-9]+ of [0-9]+ file\(s\) )')" -eq 1 ] ||{ echo "self-render never reached its summary line: $output $stderr"; return 1; }; }
 
 # A copy of what the render reads, plus the committed outputs and the brain; asserted non-empty.
 fixture() {

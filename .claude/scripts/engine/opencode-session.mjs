@@ -12,14 +12,15 @@
  * from an argv array. The binary is `ARC_OPENCODE_BIN`, else `opencode` on PATH.
  *
  * Exit: 0 ok · 1 OpenCode exited non-zero · 2 refused before spend (usage, model, cap, cycle cap, binary,
- * version, transcript already present) · 3 cap breach · 4 COST-UNREADABLE · 5 timeout.
+ * version, transcript already present, NO-FENCE, STALE-RUN) · 3 cap breach · 4 COST-UNREADABLE · 5 timeout ·
+ * 7 KILL-INCOMPLETE (a process of the run's tree outlived the kill; it is named).
  * Every path that spawned OpenCode ends the transcript with `spent=<sum>`.
  *
  * Zero dependencies, Node 18+.
  */
 
 import { spawn, spawnSync, execFileSync } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -243,6 +244,105 @@ function killTree(child) {
   }
 }
 
+// ---------- the tree is gone, or the run says so (ADR-2027, debt row 23) ----------
+// In P07 Claude Code reaped the WRAPPER for memory pressure, so killTree never ran and the OpenCode child linked a
+// Vercel project nobody asked for. Two defences: a kill is verified (exit 7 KILL-INCOMPLETE names a survivor), and
+// every spawn leaves `<transcript>.pid` until the tree is verifiably gone, so the next run reaps an orphan before it
+// spends anything.
+
+// pid -> { ppid, cmd } on Windows, read once per call; null when the listing itself fails.
+function winProcs() {
+  const ps = "Get-CimInstance Win32_Process | ForEach-Object { [string]$_.ProcessId + ' ' + [string]$_.ParentProcessId + ' ' + [string]$_.CommandLine }";
+  const r = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", ps], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
+  if (r.error || r.status !== 0) return null;
+  const out = new Map();
+  for (const line of String(r.stdout).split(/\r?\n/)) {
+    const m = /^(\d+) (\d+) ?(.*)$/.exec(line);
+    if (m) out.set(Number(m[1]), { ppid: Number(m[2]), cmd: m[3] });
+  }
+  return out;
+}
+
+/** Every pid in the tree under ROOT (root included). POSIX kills by group, so the root stands for the group. */
+function treePids(root, listing) {
+  if (process.platform !== "win32") return [root];
+  const procs = listing ?? winProcs();
+  if (!procs) return [root];
+  const seen = new Set([root]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [pid, p] of procs) if (!seen.has(pid) && seen.has(p.ppid)) { seen.add(pid); grew = true; }
+  }
+  return [...seen];
+}
+
+const alive = (pid, group = false) => {
+  try { process.kill(group ? -pid : pid, 0); return true; } catch (e) { return e.code === "EPERM"; }
+};
+
+/** Poll up to 5 s for every pid to be gone; returns the survivors. */
+function survivors(pids, group) {
+  const until = Date.now() + 5000;
+  let left = pids.filter((p) => alive(p, group));
+  while (left.length && Date.now() < until) {
+    spawnSync(process.execPath, ["-e", "setTimeout(()=>{},200)"], { stdio: "ignore", windowsHide: true });
+    left = left.filter((p) => alive(p, group));
+  }
+  return left;
+}
+
+function commandLine(pid) {
+  if (process.platform === "win32") return winProcs()?.get(pid)?.cmd ?? null;
+  const r = spawnSync("ps", ["-o", "args=", "-p", String(pid)], { encoding: "utf8" });
+  return r.status === 0 ? String(r.stdout).trim() : null;
+}
+
+/**
+ * Reap what a killed wrapper left behind: every `*.jsonl.pid` under the ledger names the leader of a run whose
+ * wrapper never confirmed its tree gone. A live pid whose command line names opencode is killed (tree or group) and
+ * verified; a pid that is gone, or now belongs to something else, is only cleared. A survivor refuses the run.
+ */
+export function reapStale(ledger) {
+  const found = [];
+  const walk = (d) => {
+    let names;
+    try { names = readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const n of names) {
+      const p = join(d, n.name);
+      if (n.isDirectory() && !n.isSymbolicLink()) walk(p);
+      else if (n.isFile() && n.name.endsWith(".jsonl.pid")) found.push(p);
+    }
+  };
+  walk(ledger);
+  const lines = [];
+  for (const f of found.sort()) {
+    let rec;
+    try { rec = JSON.parse(readFileSync(f, "utf8")); } catch { rec = null; }
+    const leader = rec && Number.isInteger(rec.pid) && rec.pid > 0 ? rec.pid : null;
+    let live = [];
+    if (process.platform === "win32") {
+      // On Windows the wrapper's death takes its direct children (libuv's job), and what survives is a detached
+      // descendant whose parent is gone, so the leader cannot lead to it: every pid seen in the tree is recorded
+      // with its command line, and one is killed only while that command line is unchanged (pid reuse).
+      const procs = winProcs();
+      if (!procs) throw new Refusal("STALE-RUN", `${f} names a run whose processes cannot be listed; check by hand before any new run`);
+      const tree = Array.isArray(rec?.tree) ? rec.tree : [];
+      live = tree.filter((t) => t && Number.isInteger(t.pid) && procs.get(t.pid)?.cmd === t.cmd && typeof t.cmd === "string" && t.cmd !== "").map((t) => t.pid);
+      for (const pid of live) killTree({ pid });
+      const left = survivors(live, false);
+      if (left.length) throw new Refusal("STALE-RUN", `${f} names a live OpenCode tree that survived a kill: pid ${left.join(", ")}; end it by hand before any new run`);
+    } else if (leader !== null && alive(leader, true) && /opencode/i.test(commandLine(leader) ?? "")) {
+      live = [leader];
+      killTree({ pid: leader });
+      const left = survivors(live, true);
+      if (left.length) throw new Refusal("STALE-RUN", `${f} names a live OpenCode group that survived a kill: pid ${left.join(", ")}; end it by hand before any new run`);
+    }
+    lines.push(live.length ? `reaped: pid=${leader} tree=${live.length} from ${posix(f)}` : `cleared: ${posix(f)} (no live process of that run)`);
+    unlinkSync(f);
+  }
+  return lines;
+}
+
 const posix = (p) => p.split(sep).join("/");
 const money = (n) => String(Math.round(n * 1e9) / 1e9);
 // A line longer than this is not an OpenCode event; holding it unbounded would let one unterminated line
@@ -279,8 +379,30 @@ export function exportedSpend(text, id) {
   return { cost, finishes, kids: [...kids] };
 }
 
+/**
+ * The fence a command runs under (ADR-2027, debt row 22). A rendered command whose front matter names
+ * `agent: <stem>-fence` carries its tool fence in that agent; launching the session AS that agent puts the
+ * top-level session inside the fence too, where a subagent fence left the parent with its own tools (P07 run 5).
+ * An explicit --agent wins. A command that names a fence whose file is missing is refused, never run unfenced.
+ * Returns the agent name, or null for a command with no fence (no allowed-tools in its source).
+ */
+export function commandFence(cwd, command) {
+  const file = join(cwd, ".opencode", "commands", `${command}.md`);
+  if (!existsSync(file)) return null;
+  const text = readFileSync(file, "utf8").replace(/\r/g, "");
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(text);
+  const m = front && /^agent:\s*(\S+)\s*$/m.exec(front[1]);
+  if (!m) return null;
+  const agent = m[1].replace(/^["']|["']$/g, "");
+  if (agent !== `${command}-fence`) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md names agent \`${agent}\`, not its own fence ${command}-fence`);
+  if (!existsSync(join(cwd, ".opencode", "agents", `${agent}.md`))) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md names the fence ${agent}, and .opencode/agents/${agent}.md is missing: the run would be unfenced`);
+  return agent;
+}
+
 export async function run(o) {
   const cwd = resolve(o.cwd ?? process.cwd());
+  const fence = o.agent ? null : commandFence(cwd, o.command);
+  if (fence) o.agent = fence;
   const transcript = resolve(o.transcript);
   const errPath = `${transcript}.stderr`;
   for (const p of [transcript, errPath])
@@ -294,6 +416,7 @@ export async function run(o) {
     throw new Refusal("TRANSCRIPT", `${transcript} is not a transcripts/*.jsonl file under the ledger ${ledger}, so the cycle cap would never count it`);
   if (prior + o.cap > o.cycleCap + 1e-12)
     throw new Refusal("CYCLE-CAP", `prior spend ${money(prior)} + this cap ${o.cap} exceeds the cycle cap ${o.cycleCap}; remaining ${money(Math.max(0, o.cycleCap - prior))}`);
+  for (const l of reapStale(ledger)) process.stderr.write(`opencode-session: ${l}\n`);
   const bin = resolveBin();
   // Never --auto (measured on 1.17.18, P05 probes): headless, a permission OpenCode would ask about is refused,
   // which is the fence working; --auto approved every such ask under a primary agent and hung forever under a
@@ -328,7 +451,7 @@ export async function run(o) {
     if (/[\s\\]/.test(v) || Buffer.byteLength(v, "utf8") > 512) throw new Refusal("EVIDENCE", `${k} \`${v}\` holds whitespace, a backslash or is too long for the header and the receipt`);
 
   const header = (session) =>
-    `harness-proof: opencode ${ver} session=${session} model=${o.model} cap_usd=${o.cap} command=${o.command} cwd=${posix(cwd)} spine=${posix(spine)} evidence=${evidence} date=${started}`;
+    `harness-proof: opencode ${ver} session=${session} model=${o.model} cap_usd=${o.cap} command=${o.command} cwd=${posix(cwd)} spine=${posix(spine)} evidence=${evidence} date=${started} fence=${fence ?? (o.agent ? `explicit:${o.agent}` : "none")}`;
   const started = new Date().toISOString();
   const errFd = openSync(errPath, "wx");
   let fd;
@@ -380,16 +503,25 @@ export async function run(o) {
       for (const k of kids) charge(k);
     } catch (e) { unpriced++; out(`sweep: COST-UNREADABLE ${e.message}`); }
   };
-  let child = null, finalised = false, interrupted = null;
+  let child = null, finalised = false, interrupted = null, stopSnap = () => {};
   const stop = (v) => { if (verdict === null) { verdict = v; if (child) killTree(child); } };
   const finalise = (code) => {
     if (finalised) return verdict;
     finalised = true;
-    if (child) killTree(child); // a leader that exited may have left its group behind (stragglers keep spending)
+    let left = [];
+    stopSnap();
+    if (child) {
+      // The tree is read while its leader lives; a leader that already exited has no tree left to walk.
+      const leading = child.exitCode === null && child.signalCode === null;
+      const tree = leading ? treePids(child.pid) : [child.pid];
+      killTree(child); // a leader that exited may have left its group behind (stragglers keep spending)
+      left = survivors(tree, process.platform !== "win32");
+    }
     // A killed run never streams the finished task events, so its subagents' spend is read from the parent's own
     // export, found by title when no event named the session (attack 7c30208 B1).
     if (child && (verdict !== null || interrupted)) sweep();
-    if (interrupted) { verdict = 6; out(`interrupted: ${interrupted}`); }
+    if (left.length) { verdict = 7; for (const pid of left) out(`kill: survivor pid=${pid}`); }
+    else if (interrupted) { verdict = 6; out(`interrupted: ${interrupted}`); }
     else if (verdict === 3) out(`cap-breach: spent=${money(spent)} cap=${o.cap}`);
     else if (verdict === 5) out(`timeout: after ${o.timeoutS}s`);
     else if (overflow) out(`overflow: a stdout line passed ${MAX_LINE_BYTES} bytes`);
@@ -401,6 +533,7 @@ export async function run(o) {
     else if (code !== 0) { verdict = 1; out(`child-failed: exit ${code}`); }
     else verdict = 0;
     out(`spent=${money(spent)}`);
+    if (!left.length) { try { unlinkSync(`${transcript}.pid`); } catch { /* never written */ } }
     try { closeSync(fd); } catch { /* reported above */ }
     try { closeSync(errFd); } catch { /* reported above */ }
     try {
@@ -425,6 +558,20 @@ export async function run(o) {
     const env = { ...process.env, PWD: cwd, ARC_HARNESS: "opencode", ARC_MODEL: o.model, ARC_SPINE_ROOT: spine, ARC_EVIDENCE: evidence };
     const l = launch(bin, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true });
     child = spawn(l.cmd, l.args, l.opts);
+    const seen = new Map();
+    const record = () => {
+      if (!child.pid) return;
+      if (process.platform === "win32" && child.exitCode === null && child.signalCode === null) {
+        const procs = winProcs();
+        if (procs) for (const pid of treePids(child.pid, procs)) if (!seen.has(pid) && procs.get(pid)?.cmd) seen.set(pid, procs.get(pid).cmd);
+      }
+      try { writeFileSync(`${transcript}.pid`, `${JSON.stringify({ pid: child.pid, started, tree: [...seen].map(([pid, cmd]) => ({ pid, cmd })) })}\n`); } catch (e) { ioFailed ??= e; }
+    };
+    record();
+    // A wrapper that dies leaves this file behind; the tree in it is what the next run reaps.
+    const snap = process.platform === "win32" ? [setTimeout(record, 1000), setInterval(record, 3000)] : [];
+    for (const t of snap) t.unref();
+    stopSnap = () => { clearTimeout(snap[0]); clearInterval(snap[1]); };
     let buf = "";
     const onLine = (line) => {
       if (line === "") return;
@@ -471,7 +618,7 @@ export async function run(o) {
   return { code: v, spent, session, transcript };
 }
 
-const NAMES = { 0: "ok", 1: "CHILD-FAILED", 3: "CAP-BREACH", 4: "COST-UNREADABLE", 5: "TIMEOUT", 6: "INTERRUPTED" };
+const NAMES = { 0: "ok", 1: "CHILD-FAILED", 3: "CAP-BREACH", 4: "COST-UNREADABLE", 5: "TIMEOUT", 6: "INTERRUPTED", 7: "KILL-INCOMPLETE" };
 
 async function main(argv) {
   let o;

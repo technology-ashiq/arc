@@ -52,6 +52,16 @@
       "why": "a generator: its output is a tracked file that CI regenerates with --check and fails on any drift, so the PR diff is the plan the owner reads"
     },
     {
+      "verb": "engine/arc-install",
+      "class": "writer",
+      "why": "the installer CLI (distribute ADR-2018, ADR-2023): writes into a consumer directory through install-targets/common after printing the full plan, or with --self re-renders arc's own .codex/ .opencode/ .agents/skills/, a generator whose committed output CI checks with --self --check and fails on drift, so the PR diff is the plan the owner reads"
+    },
+    {
+      "verb": "engine/install-targets/self-render",
+      "class": "writer",
+      "why": "a generator (distribute ADR-2023): writes only the adapters' rendered files under .codex/ .opencode/ .agents/skills/, never AGENTS.md or a manifest; CI regenerates with compile --self --check and fails on any drift, so the PR diff is the plan the owner reads"
+    },
+    {
       "verb": "engine/install-targets/common",
       "class": "writer",
       "why": "the installer transaction (distribute ADR-2018): it writes only into the consumer directory named by --dir, refused when that directory overlaps the arc source, after printing the full plan; --dry-run is the plan the operator reads, and it never writes arc's own tracked tree"
