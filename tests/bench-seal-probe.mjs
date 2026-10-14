@@ -378,6 +378,16 @@ function eventsOn(spine) {
   gitIn(f, "branch", "made-by-another-worktree");
   gitIn(f, "stash", "list");
   check("a tag or a branch another session makes does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  // 2026-10-14: a sibling worktree's `checkout -b <name> origin/main` wrote branch.<name>.* into the
+  // shared config, and the tripwire stopped a paid run on it.
+  gitIn(f, "config", "branch.made-by-another-worktree.remote", "origin");
+  gitIn(f, "config", "branch.made-by-another-worktree.merge", "refs/heads/main");
+  check("another branch's tracking config, which a sibling worktree writes, does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  const own = gitIn(f, "symbolic-ref", "--short", "HEAD").stdout.trim();
+  gitIn(f, "config", `branch.${own}.remote`, "elsewhere");
+  check("this worktree's own branch config still moves it", checkoutFingerprint(f).digest !== fp0.digest);
+  gitIn(f, "config", "--unset", `branch.${own}.remote`);
+  check("and unsetting it again restores it", checkoutFingerprint(f).digest === fp0.digest);
   // attack a522a4e and 680e889: each of these left HEAD and its branch looking untouched.
   const fp1 = checkoutFingerprint(f);
   writeFileSync(join(f, "a.txt"), "changed", "utf8");

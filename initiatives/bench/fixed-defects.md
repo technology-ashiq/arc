@@ -30,3 +30,9 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   hashed every branch, tag and worktree of the shared repository, so any sibling session's commit
   or fetch would have voided a paid run. Any "nothing changed" check over shared state has this
   twin. Fix: scope it to what the run could have touched.
+- **The same over-wide scope, one layer down: the shared config file** (2026-10-14, the first
+  champion re-run after #424). `git config --local` reads the one config file every worktree
+  shares, and `checkout -b X origin/main` in a sibling worktree writes `branch.X.remote/merge`
+  there. The tripwire stopped a paid run two attempts in, on the building session's own branch.
+  Fix: keep only this worktree's `branch.<name>.` section; every other config line still counts.
+  Twin: any per-worktree check that reads a repository-wide file.

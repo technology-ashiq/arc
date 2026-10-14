@@ -39,9 +39,10 @@ directory. ADR-0915's isolation note ("for bench that is the materialized fixtur
   that matters.
 - **Bench fingerprints the arc checkout and checks it after every attempt, and once more at the
   end.** The fingerprint is HEAD, the branch HEAD names, this worktree's HEAD reflog, the content
-  of every tracked file that differs from HEAD, and the local config. It is scoped to the
+  of every tracked file that differs from HEAD, and the local config, less the other branches'
+  sections in it. It is scoped to the
   worktree, not the repository: the owner runs parallel sessions in sibling worktrees that share
-  branches, tags, the stash and the worktree list, and any of those in the digest would void a
+  branches, tags, the stash, the worktree list and the one config file, and any of those in the digest would void a
   paid run whenever another lane committed or fetched. The reflog catches a model that commits and
   resets back; file content, not a status code, catches an edit to an already-dirty file.
   Untracked files are left out, because bench writes its captures into the tree. The first attempt
@@ -75,3 +76,13 @@ commit from its own model's.
 a model answering about the arc repo, not the fixture. Their captures are not evidence and are not
 committed. The stray branches in the main clone are local, unpushed and hold only model commits;
 the owner decides whether to delete them.
+
+## Correction (2026-10-14, the first re-run after the merge)
+
+The first champion re-run stopped itself after two attempts, and the fingerprint was right to the
+letter and wrong in scope. The building session had run `checkout -b <name> origin/main` in a sibling
+worktree, which writes `branch.<name>.remote` and `.merge` into the one config file every worktree
+shares. `config --local` read that file whole. HEAD, the branch and the reflog were untouched, and
+both completed attempts were real fixture commits. The config component now drops every
+`branch.<name>.` section except this worktree's own branch; everything else in the file still
+counts. The probe pins both sides. The stopped run, `champion-sonnet3`, is void like the two before it.

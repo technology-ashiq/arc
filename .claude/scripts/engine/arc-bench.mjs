@@ -1496,8 +1496,8 @@ export function routerSha(root) {
  * scoring. The router SHA could not see it, because nothing touched the router.
  *
  * SCOPED TO THIS WORKTREE, not the repository (attack 680e889 B4). The owner runs parallel sessions
- * in sibling worktrees that share refs/heads, tags, the stash and the worktree list; any of those in
- * the digest would void a paid run whenever another lane committed or fetched. The reflog is here
+ * in sibling worktrees that share refs/heads, tags, the stash, the worktree list and the other
+ * branches' config sections; any of those in the digest would void a paid run whenever another lane committed or fetched. The reflog is here
  * so a model that commits and resets back is still caught (a522a4e L3, L6), and file CONTENT, not a
  * status code, so an edit to an already-dirty file is seen (680e889 B1).
  *
@@ -1538,7 +1538,12 @@ export function checkoutFingerprint(root) {
       return `${p} ${createHash("sha256").update(bytes).digest("hex")}`;
     }).join("\n");
     // `config --local` exits 1 when there is no local config file at all; that is a state.
-    const config = probe(["config", "--local", "--list"], "");
+    // That file is shared by every worktree: another session's `checkout -b` writes its own
+    // branch.<name>.remote/merge here, and on 2026-10-14 that alone voided a paid run. Only this
+    // worktree's branch section is kept; every other line still counts.
+    const own = branch.startsWith("refs/heads/") ? `branch.${branch.slice(11)}.` : null;
+    const config = probe(["config", "--local", "--list"], "").split("\n")
+      .filter((l) => !l.startsWith("branch.") || (own && l.startsWith(own))).join("\n");
     const digest = createHash("sha256").update([head, branch, reflog, content, config].join("|\n|"), "utf8").digest("hex");
     return { head, branch, digest };
   } catch (e) {
