@@ -107,6 +107,8 @@ try {
 
   r = await j("/api/board", { headers: H });
   check("board: file-not-log badge + machine headers", r.status === 200 && r.body.badge === "file, not log" && r.body.lanes.length >= 10);
+  // portfolio REQ-08 (ADR-0079): `stale` is served BESIDE each lane from the lane-stale job's state, never read off the board.
+  check("board: every lane carries a derived stale (boolean, or null before the job ran) and stale_derived_at", r.status === 200 && r.body.lanes.length > 0 && r.body.lanes.every((l) => "stale" in l && (l.stale === null || typeof l.stale === "boolean")) && "stale_derived_at" in r.body);
   r = await j("/api/lane/face", { headers: H });
   check("lane header via the sanctioned parser", r.status === 200 && r.body.header && typeof r.body.header.status === "string");
   r = await j("/api/lane/no-such-lane", { headers: H });
