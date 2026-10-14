@@ -1,0 +1,14 @@
+CI run 38566913612 @ f1fb1594 (PR #419 head, merged as b478b743): 19/19 jobs green
+P09 suites: distribute-lifecycle
+count = legs on which the test printed its line (5 legs: ubuntu 18/20/22, one windows shard, one macos shard)
+      5 ok distribute-lifecycle: a BREAKING entry in the range refuses without --confirm and writes nothing
+      5 ok distribute-lifecycle: a Cycle 1 version-1 manifest is read by outdated and rewritten as version 2 by upgrade
+      5 ok distribute-lifecycle: a manifest naming a path outside the project is refused by name and nothing is written
+      5 ok distribute-lifecycle: every test in the file is registered
+      5 ok distribute-lifecycle: no manifest is not-installed (3), an unknown commit and a diverged one are exit 4, never a count
+      5 ok distribute-lifecycle: outdated at the fixture HEAD is up to date, exit 0
+      5 ok distribute-lifecycle: outdated three commits behind names both sides and the changelog range, exit 1
+      5 ok distribute-lifecycle: the install records tag and commit in a version-2 manifest
+      5 ok distribute-lifecycle: --to a tag renders that tag and records it; a tag not fetched is exit 6
+      5 ok distribute-lifecycle: upgrade replaces what changed, backs up a local edit, and leaves an unmanaged file byte-identical
+      5 ok distribute-lifecycle: version-lint passes the committed tree and fails each drift
