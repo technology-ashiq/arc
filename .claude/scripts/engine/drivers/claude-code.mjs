@@ -20,10 +20,12 @@ import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, sett
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
 import { SessionSpend } from "./session-spend.mjs";
 
-// A session that ended -- even in an error -- may still have spent. Its figure rides the failure (`arcCost`), because
-// only a measured figure may say so and dropping it would make a failed attempt read as free (ADR-0229).
+// A session that STARTED may have spent, however it ended. Its figure rides the failure (`arcCost`) when the envelope
+// survived, and when it did not -- cut by a cap, killed before its result, unparseable -- the driver still says it
+// looked and found none (`not-reported`), which is unproven to the cap, never free (ADR-0229; attack 3e5fc9e B2, B3).
+// Only a CLI that never launched (cliMissing) leaves no spend key at all.
 const withSpend = (err, envelope) => {
-  if (envelope && typeof envelope === "object" && envelope.total_cost_usd !== undefined) err.arcCost = { spend: SessionSpend.read(envelope), source: "measured" };
+  err.arcCost = { spend: SessionSpend.read(envelope), source: "measured" };
   return err;
 };
 
@@ -94,11 +96,11 @@ function runStreaming(args, prompt) {
       for (const s of [child.stdout, child.stderr]) { try { s.destroy(); } catch { /* already closed */ } }
       if (buf) onLine(buf);
       const tail = errTail ? ` (${errTail.split("\n").filter(Boolean).pop()})` : "";
-      if (overflow) return rejectP(new Error(`claude CLI failed: ${overflow}`));
+      if (overflow) return rejectP(withSpend(new Error(`claude CLI failed: ${overflow}`), result));
       // A non-zero exit, a signal, or a result the CLI marks as an error is a failed run -- as execFileSync made it on
       // the json path -- never an answer to parse (B2).
       if (exited && (exited.code !== 0 || exited.signal)) return rejectP(withSpend(new Error(`claude CLI failed: exit ${exited.code ?? "none"}${exited.signal ? ` (${exited.signal})` : ""}${tail}`), result));
-      if (!result) return rejectP(new Error(`claude CLI failed: no result event${tail}`));
+      if (!result) return rejectP(withSpend(new Error(`claude CLI failed: no result event${tail}`), null));
       if (result.is_error === true) return rejectP(withSpend(new Error(`claude CLI failed: the result is an error (${String(result.subtype ?? "error").slice(0, 60)})`), result));
       resolveP(result);
     };
@@ -192,7 +194,8 @@ await runDriver("claude-code", async ({ processName, input }) => {
     } catch (e) {
       const err = new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
       // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
-      if (cliMissing(e)) err.arcFailureClass = "provider-unavailable";
+      // A CLI that never launched spent nothing and says nothing about spend.
+      if (cliMissing(e)) { err.arcFailureClass = "provider-unavailable"; throw err; }
       // A CLI that exits non-zero after a session still printed its envelope, and that envelope says what it spent.
       let failed = null;
       try { failed = JSON.parse(String(e.stdout ?? "")); } catch { failed = null; }

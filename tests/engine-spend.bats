@@ -36,9 +36,16 @@ section_green() {
   [[ "$output" == *"ok C: a CLI that fails after its session (json, exit 1) still books what the session spent"* ]] || { echo "$output"; false; }
 }
 
+@test "spend cap: a row max_cost refuses the next attempt with a typed refusal, and a cap nothing meters will not load" {
+  section_green cap 19
+  [[ "$output" == *"ok K: a reached cap refuses the schema retry before it starts (hits 1), receipted as budget with MAX_COST_REACHED"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok K: the refusal's spent equals the cost.incurred amount the same run wrote"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok K: a streamed claude-code run that reports nothing is MAX_COST_UNPROVEN, never a silent pass (hits 0)"* ]] || { echo "$output"; false; }
+}
+
 @test "spend suite registers all of its tests" {
   # bats drops a @test whose name carries a non-ASCII character without a word; this file proves a rule, so it
   # counts itself (.claude/rules/testing.md, the test that was never there).
   run grep -c '^@test ' "$BATS_TEST_FILENAME"
-  [ "$output" -eq 4 ]
+  [ "$output" -eq 5 ]
 }

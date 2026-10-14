@@ -36,7 +36,7 @@
     "growth-lints.bats": 74,
     "engine-driver-contract.bats": 72,
     "engine-failure-class.bats": 240,
-    "engine-spend.bats": 150,
+    "engine-spend.bats": 300,
     "design-explore.bats": 71,
     "engine-process-lint.bats": 65,
     "bench-seal.bats": 65,

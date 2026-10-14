@@ -5,6 +5,7 @@
 //   unit   the pure money functions: spendOf's corpus (decimal strings, never `x * 100`), sumSpend's one rounding,
 //          isSpend's shape check, spendBasis, and unbookedRuns.
 //   cc     claude-code session spend through a fake CLI on the json and stream paths (pinned by real captures).
+//   cap    a row max_cost bites: load faults, the typed refusal, and the refusal through the real arc-run (ADR-0231).
 //   run    the REAL arc-run in a copied tree: `mock` and `generic-api` against a local server whose answer carries (or
 //          omits) `usage.cost`; the spine is read back from `events/`, and every money row is traced to its receipt.
 //
@@ -126,7 +127,7 @@ if (want("unit")) {
 // =====================================================================================================================
 // run -- the real arc-run in a copied tree
 // =====================================================================================================================
-const needTree = want("run") || want("cc");
+const needTree = want("run") || want("cc") || want("cap");
 const tmp = mkdtempSync(join(tmpdir(), "engine-spend-"));
 const root = join(tmp, "root");
 const rec = join(tmp, "rec");
@@ -152,7 +153,9 @@ if (needTree) {
     && existsSync(join(root, "processes/commit-msg-draft.process.yaml")) && readdirSync(join(rec, "commit-msg-draft")).length === 4);
 }
 
-const writeRouter = (chain) => {
+const writeRouter = (chain, o = {}) => {
+  const first = o.driver ?? "mock";
+  const cap = o.cap ?? (first === "mock" || chain.includes("mock") ? ["    max_cost: 100000", "    max_cost_currency: INR"] : ["    max_cost: 100000", "    max_cost_currency: USD"]);
   writeFileSync(join(root, "engine/router.yaml"), [
     "version: 1",
     "tiers:",
@@ -163,18 +166,19 @@ const writeRouter = (chain) => {
     "classes:",
     "  commit-msg-draft:",
     "    tier: balanced-workhorse",
-    "    driver: mock",
+    `    driver: ${first}`,
     ...(chain.length ? ["    fallback:", ...chain.map((d) => `      - ${d}`)] : ["    fallback: []"]),
     "    max_attempts: 3",
     "    max_wall_ms: 3600000",
-    "    max_cost: 100000",
+    ...cap,
     "default:",
     "  tier: balanced-workhorse",
     "  driver: claude-code",
     "  fallback: []",
     "  max_attempts: 2",
     "  max_wall_ms: 3600000",
-    "  max_cost: unmetered",
+    "  max_cost: 1000",
+    "  max_cost_currency: USD",
     "",
   ].join("\n"));
 };
@@ -191,7 +195,7 @@ const startServer = () => new Promise((ok) => {
       server.hits++;
       try { server.lastBody = JSON.parse(b); } catch { server.lastBody = null; }
       const usage = { prompt_tokens: 3, completion_tokens: 4, ...(server.cost !== undefined ? { cost: server.cost } : {}) };
-      const content = server.answer === "notjson" ? "this is not json at all" : JSON.stringify(VALID);
+      const content = server.answer === "notjson" ? "this is not json at all" : server.answer === "badschema" ? JSON.stringify({ not: "the contract" }) : JSON.stringify(VALID);
       if (server.sse) {
         res.writeHead(200, { "content-type": "text/event-stream" });
         res.write(`data: ${JSON.stringify({ model: "openai/test-model", choices: [{ delta: { content } }] })}\n\n`);
@@ -328,7 +332,7 @@ try {
       r4.code === 0 && r4.runs === 1 && r4.receipt?.spend === null && r4.receipt?.spend_absence === "not-reported" && r4.money.length === 0 && /refusing a provider spend/.test(r4.err), `${r4.receipt?.spend_absence} ${tail(r4)}`);
 
     // R5 -- two attempts: the sum is exact and rounded ONCE.
-    writeRouter(["generic-api"]);
+    writeRouter(["generic-api"], { cap: ["    max_cost: 100000", "    max_cost_currency: USD"] });
     server.cost = 0.004; server.sse = true;
     const r5 = await arcRun({ port, fixture: "transport-spent" });
     check("R: a spent transport failure hops to generic-api (SSE, usage on the last chunk) and the run succeeds there",
@@ -414,6 +418,86 @@ try {
     const fs2 = await cc(0.03, { FAKE_SPEND_FAIL: "1" }, { stream: true });
     check("C: ... and on the stream path, an is_error result still books its spend",
       fs2.code !== 0 && same(fs2.receipt?.spend, usd(3, "0.03")) && fs2.money.length === 1, `code=${fs2.code} ${JSON.stringify(fs2.receipt?.spend)} ${tail(fs2)}`);
+  }
+
+  // ===================================================================================================================
+  // cap -- a row's max_cost bites (ADR-0231): load faults, the typed refusal, and the refusal through the real arc-run
+  // ===================================================================================================================
+  if (want("cap")) {
+    const FC = await import(pathToFileURL(join(REPO, ".claude/scripts/engine/failure-class.mjs")).href);
+    const row = (o) => ({ driver: "claude-code", fallback: ["generic-api"], max_attempts: 3, max_wall_ms: 3600000, max_cost: 100, max_cost_currency: "USD", ...o });
+    const F = (o) => FC.chainTermFaults("classes.x", row(o));
+    check("K: claude-code and generic-api meter, codex and hermes do not (ADR-0231)",
+      FC.METERING_DRIVERS.has("claude-code") && FC.METERING_DRIVERS.has("generic-api") && !FC.METERING_DRIVERS.has("codex") && !FC.METERING_DRIVERS.has("hermes"));
+    check("K: a sound metered row with a USD cap has no term fault", F({}).length === 0, JSON.stringify(F({})));
+    check("K: a numeric cap with no currency is a load fault naming max_cost_currency", F({ max_cost_currency: undefined }).some((x) => /max_cost_currency. is absent/.test(x)));
+    check("K: an empty, lowercase or unknown currency is a load fault, never defaulted",
+      ["", "usd", "EUR", 840].every((c) => F({ max_cost_currency: c }).some((x) => /not INR or USD/.test(x))));
+    check("K: a currency on an unmetered row is a load fault (a cap that is not there)",
+      F({ driver: "codex", fallback: [], max_cost: "unmetered" }).some((x) => /unmetered row/.test(x)));
+    check("K: a numeric cap on a chain no driver meters is refused at load as a lie",
+      F({ driver: "codex", fallback: [] }).some((x) => /nothing could ever be measured/.test(x)));
+
+    const ctx = { elapsedMs: 0, runRemainingMs: undefined };
+    const terms = (amount, currency = "USD") => ({ max_cost: amount, max_cost_currency: currency });
+    const h = (cls, spend) => ({ driver: "generic-api", class: cls, ...(spend !== undefined ? { spend } : {}) });
+    const reached = FC.termsCheck(terms(1), [h("model-invalid", C.spendOf(0.004, "USD")), h("transport", C.spendOf(0.004, "USD"))], ctx);
+    check("K: 0.004 + 0.004 against a 1-cent cap is MAX_COST_REACHED with spent 1 -- the receipt's one rounding, not 2",
+      reached.ok === false && reached.refusal?.code === "MAX_COST_REACHED" && same(reached.refusal.spent, { amount: 1, currency: "USD" }) && same(reached.refusal.cap, { amount: 1, currency: "USD" }), JSON.stringify(reached));
+    check("K: ... and the same spend under a 2-cent cap may take the next attempt (control)",
+      FC.termsCheck(terms(2), [h("model-invalid", C.spendOf(0.004, "USD")), h("transport", C.spendOf(0.004, "USD"))], ctx).ok === true);
+    const other = FC.termsCheck(terms(1000, "INR"), [h("model-invalid", C.spendOf(0.004, "USD"))], ctx);
+    check("K: spend in another currency than the cap is MAX_COST_UNPROVEN, never converted", other.ok === false && other.refusal?.code === "MAX_COST_UNPROVEN" && /reported its spend in USD/.test(other.why), JSON.stringify(other));
+    const silent = FC.termsCheck(terms(1000), [h("model-invalid", null)], ctx);
+    check("K: an answered attempt that reported nothing is MAX_COST_UNPROVEN (F3)", silent.ok === false && silent.refusal?.code === "MAX_COST_UNPROVEN", JSON.stringify(silent));
+    check("K: an answer-less attempt with no figure is 0, and nextHop carries the typed refusal out",
+      FC.termsCheck(terms(1), [h("transport", null)], ctx).ok === true
+      && FC.nextHop({ remaining: ["codex"], terms: terms(1) }, [h("transport", C.spendOf(0.05, "USD"))], { ...ctx, familyOf: () => "x" }).refusal?.code === "MAX_COST_REACHED");
+
+    const { parseYamlSubset } = await import(pathToFileURL(join(REPO, ".claude/scripts/engine/yaml-subset.mjs")).href);
+    const { routerFaults } = await import(pathToFileURL(join(REPO, ".claude/scripts/engine/router-row.mjs")).href);
+    const real = parseYamlSubset(readFileSync(join(REPO, "engine/router.yaml"), "utf8"));
+    const rows = real.ok ? [...Object.entries(real.value.classes), ["default", real.value.default]] : [];
+    const meteredRows = rows.filter(([, r]) => [r.driver, ...(r.fallback || [])].some((d) => FC.METERING_DRIVERS.has(d)));
+    check("K: the REAL router loads clean, every metered row carries a USD cap, and the hermes row stays unmetered",
+      real.ok && routerFaults(real.value).length === 0 && meteredRows.length >= 10
+      && meteredRows.every(([, r]) => Number.isInteger(r.max_cost) && r.max_cost > 0 && r.max_cost_currency === "USD")
+      && rows.filter(([, r]) => r.driver === "hermes").every(([, r]) => r.max_cost === "unmetered"), real.ok ? JSON.stringify(routerFaults(real.value)) : "parse");
+
+    // Through the real arc-run. generic-api answers a contract fault that cost 1 cent; the cap is 1 cent, so the
+    // ADR-0204 same-tier retry is refused BEFORE it starts -- the server's hit count is the counter.
+    writeRouter([], { driver: "generic-api", cap: ["    max_cost: 1", "    max_cost_currency: USD"] });
+    server.cost = 0.01; server.sse = false; server.answer = "badschema";
+    const k1 = await arcRun({ port });
+    const m1 = k1.money[0]?.payload;
+    check("K: a reached cap refuses the schema retry before it starts (hits 1), receipted as budget with MAX_COST_REACHED",
+      k1.code === 1 && k1.hits === 1 && k1.runs === 1 && k1.receipt?.failure_class === "budget" && k1.receipt?.reason === "budget"
+      && k1.receipt?.refusal?.code === "MAX_COST_REACHED" && same(k1.receipt.refusal.cap, { amount: 1, currency: "USD" }), `hits=${k1.hits} ${JSON.stringify(k1.receipt?.refusal)} ${tail(k1)}`);
+    check("K: the refusal's spent equals the cost.incurred amount the same run wrote",
+      k1.money.length === 1 && m1?.amount === k1.receipt?.refusal?.spent?.amount && m1?.run_ref === k1.run?.id, `${JSON.stringify(k1.receipt?.refusal?.spent)} money=${JSON.stringify(m1)}`);
+    writeRouter([], { driver: "generic-api", cap: ["    max_cost: 100", "    max_cost_currency: USD"] });
+    const k1ok = await arcRun({ port });
+    check("K: control -- the same spend under a 100-cent cap takes the retry (hits 2), no refusal",
+      k1ok.hits === 2 && k1ok.receipt?.refusal === undefined, `hits=${k1ok.hits} ${JSON.stringify(k1ok.receipt?.refusal)} ${tail(k1ok)}`);
+
+    // claude-code first: its contract fault hops across families to generic-api, unless the cap is reached.
+    const fake = join(REPO, "tests/fixtures/engine/fake-claude-spend.mjs");
+    const bad = join(tmp, "cap-bad.json");
+    writeFileSync(bad, JSON.stringify({ not: "the contract" }));
+    const ccEnv = (cost) => ({ ARC_CLAUDE_CLI: fake, FAKE_SPEND_COST: String(cost), FAKE_SPEND_OUTPUT: bad });
+    server.answer = "valid"; server.cost = 0.001;
+    writeRouter(["generic-api"], { driver: "claude-code", cap: ["    max_cost: 5", "    max_cost_currency: USD"] });
+    const k2 = await arcRun({ port, env: ccEnv(0.0731) });
+    check("K: claude-code (json path) spent 8 cents against a 5-cent cap: the cross-family hop never starts (hits 0), and the overshoot is on the receipt",
+      k2.code === 1 && k2.hits === 0 && k2.receipt?.refusal?.code === "MAX_COST_REACHED" && k2.receipt.refusal.spent.amount === 8 && k2.receipt.refusal.cap.amount === 5,
+      `hits=${k2.hits} ${JSON.stringify(k2.receipt?.refusal)} ${tail(k2)}`);
+    writeRouter(["generic-api"], { driver: "claude-code", cap: ["    max_cost: 100", "    max_cost_currency: USD"] });
+    const k2ok = await arcRun({ port, env: ccEnv(0.0731) });
+    check("K: control -- under a 100-cent cap the same claude-code fault hops to generic-api (hits 1) and the run succeeds",
+      k2ok.code === 0 && k2ok.hits === 1, `code=${k2ok.code} hits=${k2ok.hits} ${tail(k2ok)}`);
+    const k3 = await arcRun({ port, stream: true, env: ccEnv("absent") });
+    check("K: a streamed claude-code run that reports nothing is MAX_COST_UNPROVEN, never a silent pass (hits 0)",
+      k3.code === 1 && k3.hits === 0 && k3.receipt?.refusal?.code === "MAX_COST_UNPROVEN", `hits=${k3.hits} ${JSON.stringify(k3.receipt?.refusal)} ${tail(k3)}`);
   }
 } finally {
   if (srv) srv.close();

@@ -12,7 +12,7 @@
  * Read-only; reads the spine only through `query` (spine-reader-lint).
  */
 import { resolve } from "node:path";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isSpend } from "./drivers/common.mjs";
 
@@ -49,7 +49,9 @@ async function main(argv) {
   // A flag where the path belongs is a usage error, never a path: `--spine --json` read a spine named "--json", found
   // nothing, and said every run was booked (attack e2dc399 B3).
   if (at >= 0 && (named === undefined || named.startsWith("--"))) { console.error("spend-trace: --spine needs a path"); return 2; }
-  if (named !== undefined && !existsSync(named)) { console.error(`spend-trace: no spine at ${named}`); return 2; }
+  // One spine per trace: a second --spine would be silently ignored, typo and all (attack 3e5fc9e B5).
+  if (argv.filter((a) => a === "--spine").length > 1) { console.error("spend-trace: --spine given twice"); return 2; }
+  if (named !== undefined && !(existsSync(named) && statSync(named).isDirectory())) { console.error(`spend-trace: no spine directory at ${named}`); return 2; }
   const { query, spineRoot } = await import("../hq/spine.mjs");
   // The SPINE root, resolved the way the emitter resolves it (ARC_SPINE_ROOT, else the repo's own, refusing a linked
   // worktree whose state dir is an empty copy) -- never the cwd, which made a worktree trace read nothing (B2).

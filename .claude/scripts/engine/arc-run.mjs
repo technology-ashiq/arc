@@ -2206,7 +2206,7 @@ if (overBudget()) {
 // THE CHAIN'S TERMS (ADR-0228 item 6), read off the routed row on the auto path only. An explicit
 // `--driver` consults no row and has no chain (F4), so it has no terms either.
 const chainTerms = driverArg === "auto" && routedRow
-  ? { max_attempts: routedRow.max_attempts, max_wall_ms: routedRow.max_wall_ms, max_cost: routedRow.max_cost }
+  ? { max_attempts: routedRow.max_attempts, max_wall_ms: routedRow.max_wall_ms, max_cost: routedRow.max_cost, max_cost_currency: routedRow.max_cost_currency }
   : {};
 // The model each driver WOULD run, for the family table: the current driver's is what this run chose,
 // a hop's is its pin under the routed tier.
@@ -2272,7 +2272,8 @@ while (a.verdict !== "ok" && !overBudget()) {
 // saying "driver" would send a reader looking for a driver bug.
 if (a.verdict !== "ok" && chainStop && chainStop.byTerms) {
   console.error(`arc-run: ${driver} failed as ${a.failureClass} (${a.why}); NOT falling back -- ${chainStop.why}`);
-  emitRun({ outcome: "fail", reason: "budget", failure_class: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
+  // A money term's refusal is TYPED on the receipt (ADR-0231): a reader switches on `refusal.code`, never on prose.
+  emitRun({ outcome: "fail", reason: "budget", failure_class: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined, ...(chainStop.refusal ? { refusal: chainStop.refusal } : {}) });
   process.exit(1);
 }
 
@@ -2303,7 +2304,7 @@ if (a.verdict === "schema") {
     const tc = termsCheck(chainTerms, HOPS, hopCtx());
     if (!tc.ok) {
       console.error(`arc-run: output failed the contract (${a.why}); NOT retrying -- ${tc.why}`);
-      emitRun({ outcome: "fail", reason: "budget", failure_class: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
+      emitRun({ outcome: "fail", reason: "budget", failure_class: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined, ...(tc.refusal ? { refusal: tc.refusal } : {}) });
       process.exit(1);
     }
     console.error(`arc-run: output failed the contract (${a.why}); retrying once on the same tier`);
