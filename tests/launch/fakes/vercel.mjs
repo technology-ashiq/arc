@@ -52,7 +52,8 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const proj = byIdOrName(m[1]);
       if (!proj) return err(404, "not_found", "Project not found");
       if (url.searchParams.has("decrypt")) decryptAsked = true;
-      return json(200, { envs: (proj.envs || []).map((e, i) => ({ id: `env_${i}`, key: e.key, target: e.target, type: "encrypted", value: e.value })) });
+      // Vercel answers each variable's own id and its times; auth's stale-build check reads updatedAt.
+      return json(200, { envs: (proj.envs || []).map((e, i) => ({ id: e.id || `env_${i}`, key: e.key, target: e.target, type: "encrypted", value: e.value, createdAt: e.createdAt, updatedAt: e.updatedAt })) });
     }
     // auth places the two public Supabase values (ADR-1757); a production rebuild from main is only counted.
     if (m && method === "POST") {
@@ -105,7 +106,7 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const target = url.searchParams.get("target");
       const prod = (target && target !== "production" ? [] : after).filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: stateOf(c), target: "production", createdAt: c.at ?? 0, meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
       // Every branch commit is a preview, READY unless previewState says otherwise, at a vercel.app URL.
-      const previews = proj.previewDeploymentsDisabled ? [] : Object.entries((r && r.branches) || {}).flatMap(([b, cs]) => cs.slice(1).filter((c) => !sha || c.sha === sha)
+      const previews = proj.previewDeploymentsDisabled || target === "production" ? [] : Object.entries((r && r.branches) || {}).flatMap(([b, cs]) => cs.slice(1).filter((c) => !sha || c.sha === sha)
         .map((c) => ({ uid: `dpl_prev_${c.sha.slice(0, 8)}`, readyState: previewState, target: null, url: `arc-sandbox-git-${b.replace(/[^a-z0-9]/g, "-")}.vercel.app`, meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha, githubCommitRef: b } })));
       // A rebuild from main is the newest production deployment, of main's head, when no commit filter is asked.
       const head = r && r.commits[r.commits.length - 1];

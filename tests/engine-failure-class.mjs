@@ -89,17 +89,17 @@ if (want("unit")) {
   check("U: max_wall_ms needs MIN_HOP_MS of the term left, and caps the hop's timeout at what is left",
     nh(["generic-api"], [hop("transport")], ctx({ elapsedMs: 6000 }), { max_wall_ms: 10000 }).byTerms === true
     && nh(["generic-api"], [hop("transport")], ctx({ elapsedMs: 4000, runRemainingMs: 9000 }), { max_wall_ms: 10000 }).timeoutMs === 6000);
-  check("U: max_cost -- an answering attempt with no spend is unproven (F3)", /unproven/.test(String(nh(["generic-api"], [hop("model-invalid")], ctx(), { max_cost: 100 }).why)));
-  check("U: max_cost -- an answer-less attempt's absent spend counts as 0 (F3)", nh(["generic-api"], [hop("transport")], ctx(), { max_cost: 100 }).hop === true);
+  check("U: max_cost -- an answering attempt with no spend is unproven (F3)", /unproven/.test(String(nh(["generic-api"], [hop("model-invalid")], ctx(), { max_cost: 100, max_cost_currency: "INR" }).why)));
+  check("U: max_cost -- an answer-less attempt's absent spend counts as 0 (F3)", nh(["generic-api"], [hop("transport")], ctx(), { max_cost: 100, max_cost_currency: "INR" }).hop === true);
   check("U: max_cost -- measured spend at the cap refuses, under it hops",
-    nh(["generic-api"], [hop("model-invalid", { cost: { inr: 500 } })], ctx(), { max_cost: 100 }).byTerms === true
-    && nh(["generic-api"], [hop("model-invalid", { cost: { inr: 50 } })], ctx(), { max_cost: 100 }).hop === true);
+    nh(["generic-api"], [hop("model-invalid", { spend: { amount: 500, currency: "INR", provider_amount: "5" } })], ctx(), { max_cost: 100, max_cost_currency: "INR" }).byTerms === true
+    && nh(["generic-api"], [hop("model-invalid", { spend: { amount: 50, currency: "INR", provider_amount: "0.5" } })], ctx(), { max_cost: 100, max_cost_currency: "INR" }).hop === true);
   check("U: max_cost unmetered skips the money check", nh(["generic-api"], [hop("model-invalid")], ctx(), { max_cost: "unmetered" }).hop === true);
   check("U: termsCheck binds a same-tier retry the same way", FC.termsCheck({ max_attempts: 1 }, [hop("model-invalid")], ctx()).ok === false);
   check("U: (B2) a declaration from a driver that does not declare is ignored and read as unknown",
     FC.classifyAttempt({ code: 1, declared: "transport", driver: "hermes" }).cls === "unknown" && FC.classifyAttempt({ code: 1, declared: "transport", driver: "generic-api" }).cls === "transport");
   check("U: (B5) a present but unreadable spend is unproven even on an answer-less attempt",
-    nh(["generic-api"], [hop("transport", { cost: { inr_invalid: true } })], ctx(), { max_cost: 100 }).byTerms === true);
+    nh(["generic-api"], [hop("transport", { cost: { inr_invalid: true } })], ctx(), { max_cost: 100, max_cost_currency: "INR" }).byTerms === true);
   {
     // (B3) the driver side writes only a class-shaped name; anything else leaves no declaration at all.
     const { writeFailureClass } = await import(pathToFileURL(join(REPO, ".claude/scripts/engine/drivers/common.mjs")).href);
@@ -127,19 +127,19 @@ if (want("unit")) {
   const twice = JSON.stringify(nh(["codex", "claude-code"], rec, ctx({ elapsedMs: 50, runRemainingMs: 60000 }), { max_attempts: 5, max_wall_ms: 90000 }));
   check("U: (c) nextHop over the same recorded hops is identical twice and mutates nothing", once === twice && JSON.stringify(rec) === frozen && once.includes("\"hop\":true"));
 
-  const T = (o) => FC.chainTermFaults("classes.x", { driver: "mock", fallback: [], max_attempts: 2, max_wall_ms: 1000, max_cost: 100, ...o });
+  const T = (o) => FC.chainTermFaults("classes.x", { driver: "mock", fallback: [], max_attempts: 2, max_wall_ms: 1000, max_cost: 100, max_cost_currency: "INR", ...o });
   check("U: a sound metered row has no term fault", T({}).length === 0);
-  check("U: a sound unmetered row has no term fault", T({ driver: "claude-code", max_cost: "unmetered" }).length === 0);
+  check("U: a sound unmetered row has no term fault", T({ driver: "codex", max_cost: "unmetered", max_cost_currency: undefined }).length === 0);
   for (const [k, v, label] of [["max_attempts", undefined, "absent"], ["max_attempts", null, "null"], ["max_attempts", "", "empty"], ["max_attempts", 1.5, "fraction"],
     ["max_attempts", -1, "negative"], ["max_attempts", 0, "zero"], ["max_wall_ms", 0, "zero"], ["max_wall_ms", "soon", "a word"],
     ["max_cost", undefined, "absent"], ["max_cost", null, "null"], ["max_cost", "", "empty"], ["max_cost", -1, "negative"], ["max_cost", 2.5, "fraction"]]) {
-    const row = { driver: "mock", fallback: [], max_attempts: 2, max_wall_ms: 1000, max_cost: 100 };
+    const row = { driver: "mock", fallback: [], max_attempts: 2, max_wall_ms: 1000, max_cost: 100, max_cost_currency: "INR" };
     if (v === undefined) delete row[k]; else row[k] = v;
     const f = FC.chainTermFaults("classes.x", row);
     check(`U: ${k} ${label} is a load fault naming it`, f.length >= 1 && f.some((x) => x.includes(`\`${k}\``)), JSON.stringify(f));
   }
   check("U: unmetered on a chain holding a metering driver is a fault", T({ max_cost: "unmetered" }).some((x) => /reports spend/.test(x)));
-  check("U: a paise cap on a chain with no metering driver is a fault", T({ driver: "claude-code", fallback: ["codex"] }).some((x) => /unmetered/.test(x)));
+  check("U: a paise cap on a chain with no metering driver is a fault", T({ driver: "codex", fallback: [] }).some((x) => /unmetered/.test(x)));
 
   const real = parseYamlSubset(readFileSync(join(REPO, "engine", "router.yaml"), "utf8"));
   const rows = real.ok ? [...Object.entries(real.value.classes), ["default", real.value.default]] : [];
@@ -216,13 +216,16 @@ const writeRouter = (o = {}) => {
     `    max_attempts: ${o.maxAttempts ?? 3}`,
     "    max_wall_ms: 3600000",
     `    max_cost: ${o.maxCost ?? 100000}`,
+    // ADR-0231: a numeric cap names its currency; mock's recorded figures are paise.
+    ...((o.maxCost ?? 100000) === "unmetered" ? [] : ["    max_cost_currency: INR"]),
     "default:",
     "  tier: balanced-workhorse",
     "  driver: claude-code",
     "  fallback: []",
     "  max_attempts: 2",
     "  max_wall_ms: 3600000",
-    "  max_cost: unmetered",
+    "  max_cost: 1000",
+    "  max_cost_currency: USD",
     "",
   ].join("\n"));
 };
@@ -351,7 +354,7 @@ try {
       ma.code === 1 && ma.hits === 0 && ma.receipt?.reason === "budget" && ma.receipt?.failure_class === "budget" && /allows 1 attempt/.test(ma.err), `${ma.err.slice(-300)} ${JSON.stringify(ma.receipt)}`);
     writeRouter({ maxCost: 100 }); server.mode = "valid";
     const mc = await arcRun({ port, fixture: "bad-cost500" });
-    check("(c) measured spend at max_cost refuses the cross-family hop (count 0)", mc.code === 1 && mc.hits === 0 && mc.receipt?.reason === "budget" && /paise spent/.test(mc.err), mc.err.slice(-300));
+    check("(c) measured spend at max_cost refuses the cross-family hop (count 0)", mc.code === 1 && mc.hits === 0 && mc.receipt?.reason === "budget" && /INR minor units spent/.test(mc.err), mc.err.slice(-300));
     writeRouter({ maxCost: 100000 }); server.mode = "valid";
     const mcOk = await arcRun({ port, fixture: "bad-cost500" });
     check("(c control) the same spend under a higher max_cost hops (count 1)", mcOk.code === 0 && mcOk.hits === 1, mcOk.err.slice(-300));

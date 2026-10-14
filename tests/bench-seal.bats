@@ -123,7 +123,28 @@ S_STATUS() { cat "$BATS_FILE_TMPDIR/seal.status"; }
   [[ "$(S)" == *"invoking bench through a SYMLINK still runs it"* || "$(S)" == *"SKIPPED the symlink guard pin"* ]]
 }
 
+@test "ADR-0916: a driver that works inside arc stops the run after one attempt" {
+  # The 2026-10-14 defect: claude-code read ARC_ROOT as its work root and the benched model committed
+  # into the owner's checkout. Attributability first -- the mutant must really have made the branch.
+  [ "$(S_STATUS)" -eq 0 ]
+  [[ "$(S)" == *"ok MUTANT C anchor is present in the mock driver"* ]]
+  [[ "$(S)" == *"ok MUTANT C actually made a branch inside arc -- the negative control is real"* ]]
+  [[ "$(S)" == *"ok and the run STOPPED after the first attempt that did it"* ]]
+  [[ "$(S)" == *"ok naming the moved checkout, not some unrelated fault"* ]]
+  [[ "$(S)" == *"ok and the spine shows ONE arc-run attempt, not the group of three"* ]]
+  [[ "$(S)" == *"ok a clean git sandbox reports no moved checkout"* ]]
+  [[ "$(S)" == *"ok and its three attempts all ran"* ]]
+  [[ "$(S)" == *"ok an untracked file, which is what a capture is, does not move it"* ]]
+  [[ "$(S)" == *"ok a remote-tracking ref, which another session's fetch writes, does not move it"* ]]
+  [[ "$(S)" == *"ok a tag or a branch another session makes does not move it"* ]]
+  [[ "$(S)" == *"ok an edit to a tracked file moves it"* ]]
+  [[ "$(S)" == *"ok a second edit to an already-dirty file moves it again, by content"* ]]
+  [[ "$(S)" == *"ok a local config write moves it"* ]]
+  [[ "$(S)" == *"ok a commit on the current branch moves it"* ]]
+  [[ "$(S)" == *"ok a commit reset back to where it was still moves it, through the reflog"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ]
 }

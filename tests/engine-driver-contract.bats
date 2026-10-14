@@ -229,7 +229,7 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   mkdir -p "$d/processes" "$d/engine" "$d/.claude"
   cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
   cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$d/processes/"
-  printf 'version: 1\ntiers:\n  - balanced-workhorse\nclasses:\n  something-else:\n    tier: balanced-workhorse\n    driver: claude-code\n    max_attempts: 2\n    max_wall_ms: 3600000\n    max_cost: unmetered\n' > "$d/engine/router.yaml"
+  printf 'version: 1\ntiers:\n  - balanced-workhorse\nclasses:\n  something-else:\n    tier: balanced-workhorse\n    driver: claude-code\n    max_attempts: 2\n    max_wall_ms: 3600000\n    max_cost: 1000\n    max_cost_currency: USD\n' > "$d/engine/router.yaml"
   run node "$(RUN)" --process commit-msg-draft --driver auto --dry-run --root "$d"
   [ "$status" -eq 1 ]
   [[ "$output" == *"no route for task class"* ]]
@@ -366,6 +366,30 @@ has_line() { [[ $'\n'"$1" == *$'\n'"$2"* ]]; }
     run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
   [ -s "$argv" ] || { echo "control never reached the CLI: $output"; false; }
   ! grep -q -- '--setting-sources' "$argv" || { echo "isolated without being asked: $(cat "$argv")"; false; }
+}
+
+@test "ADR-0916: claude-code and codex run their CLI in the work root, never in the arc checkout" {
+  # 2026-10-14: both drivers read ARC_ROOT, which arc-run keeps pointed at arc, so a benched model holding Bash
+  # committed into the owner's checkout. The work root arrives as ARC_WORK_ROOT plus the driver's cwd.
+  local wr mark="arc-0916-cwd-$$"
+  wr="$(mktemp -d)"
+  git -C "$wr" init -q
+  export FAKE_CLAUDE_TOUCH="$mark" FAKE_CLAUDE_PAUSE_MS=1 ARC_CLAUDE_CLI="$(FAKE_CLI)"
+  run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT" --work-root "$wr"
+  if [ -f "$ARC_ROOT/$mark" ]; then rm -f "$ARC_ROOT/$mark"; echo "claude-code ran its CLI inside arc: $output"; false; fi
+  [ -f "$wr/$mark" ] || { echo "claude-code never ran its CLI in the work root: $output"; false; }
+  # codex has no fake CLI, so node stands in: node runs the script named exec from ITS cwd, and only the work
+  # root holds one. The run then fails to parse, which is not the point; the mark is.
+  printf '%s\n' 'require("fs").writeFileSync("codex-cwd.mark", "x");' > "$wr/exec"
+  ARC_CODEX_CLI=node run node "$(RUN)" --process commit-msg-draft --driver codex --root "$ARC_ROOT" --work-root "$wr"
+  rm -f "$ARC_ROOT/codex-cwd.mark"
+  [ -f "$wr/codex-cwd.mark" ] || { echo "codex never ran its CLI in the work root: $output"; false; }
+  # CONTROL: with no --work-root the work root IS arc, so the same fake marks arc. The checks above were not
+  # passing because the fake never writes anything.
+  run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ -f "$ARC_ROOT/$mark" ] || { echo "control: the fake marked nothing: $output"; false; }
+  rm -f "$ARC_ROOT/$mark"
+  unset FAKE_CLAUDE_TOUCH FAKE_CLAUDE_PAUSE_MS ARC_CLAUDE_CLI
 }
 
 @test "stream mode: progress and live lines name each step, withhold secrets, and never forge the receipt line" {
