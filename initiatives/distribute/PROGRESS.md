@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-distribute (Cycle 3, opened 2026-10-14)
 phase: 10
 appetite: 4d
-burn: 1.75d
+burn: 2.25d
 blocked-on: —
 depends-on: —
 
@@ -61,7 +61,15 @@ merged once at cycle end; each phase closes from the main clone after that merge
   `owner-apply-radar-policy.mjs` for the three ceiling files. `tests/distribute-p10.bats` (7). The launch slot is the
   launch lane's (`evidence/phase-08/launch-prompt.md`).
 
-**Appetite burn:** ~1.75 of 3 planned days used (4-day cap): ~44%. Kill checkpoint answered YES; 50% tripwire at day 2.
+- **P09/P10 attack + real checks 2026-10-14**: attack on the P09+P10 commits only (`cc5f385`, 120 KB; boundary 13,
+  logic 15): mediums fixed (registry lock and no links, GIT_* scrubbed, `--force` backs up, radar via node with
+  timeouts), lows and already-covered ledgered (debt 32-33), fixed-defects (dp)-(dt). CI on the first push
+  (`9443de57`) found `version-lint` without a face room and a hash-only sync-golden row from the merge-conflict regen;
+  both fixed in `e08d759f`. Real-system checks: a genuine v1 consumer made by the `4741c770` CLI read `11 commits
+  behind`, upgraded to v2 with its owner file untouched (`evidence/phase-09/demo.md`); a venture born with every harness,
+  watched, then uninstalled to its own files (`evidence/phase-10/demo.md`).
+
+**Appetite burn:** ~2.25 of 3 planned days used (4-day cap): ~56%. 50% tripwire: REQ-16 arms green on CI is read on `e08d759f`. Kill checkpoint answered YES; 50% tripwire at day 2.
 
 ---
 
