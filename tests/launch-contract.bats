@@ -407,6 +407,11 @@ arm() {
   arm environments main-moved
   [ "$(j 'o.scaffold.ok + " " + o.branchBase + " " + o.branchCommits + " " + o.prs')" = "true true 2 1" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+  # attack d8f943a L9: two of launch's commits are moved; an owner commit under launch's head refuses and stays.
+  arm environments two-of-ours
+  [ "$(j 'o.scaffold.ok + " " + o.branchBase + " " + o.branchCommits')" = "true true 2" ] || { echo "$DONE"; false; }
+  arm environments owner-under-ours
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.code + " " + o.branchBase + " " + o.branchCommits')" = "false FOREIGN_BRANCH false 4" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: environments refuses a preview-check branch it did not make, opening no PR" {
@@ -460,7 +465,10 @@ arm() {
 @test "launch-contract: tls reads HSTS from the venture only when the host refused SSL Labs, never over a scanner that saw it absent" {
   arm tls scanner-refused
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.hsts_from + " " + o.liveCalls')" = "true api.ssllabs.com + sandbox.automemory.ai venture 1" ] || { echo "$DONE"; false; }
-  for s in scanner-refused-no-live scanner-refused-zero; do
+  # attack d8f943a L7: a redirect within the host is followed to the header; one off the host is "no".
+  arm tls redirect-same-host
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.hsts_from + " " + o.liveCalls')" = "true venture 2" ] || { echo "$DONE"; false; }
+  for s in scanner-refused-no-live scanner-refused-zero redirect-elsewhere; do
     arm tls "$s"
     [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false ssllabs: "*"no HSTS"* ]] || { echo "$s: $DONE"; false; }
   done
@@ -622,11 +630,13 @@ arm() {
   [ "$(j 'o.psKeyed + " " + o.psKeyLeaked')" = "true false" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: a Lighthouse score under 90 fails, and a PageSpeed quota answer is UNSCANNED" {
+@test "launch-contract: a Lighthouse score under 90 fails, a PageSpeed quota answer is UNSCANNED, and a bad key shape is refused unsent" {
   arm release low-score
   [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.reason')" = "false lighthouse below 90: performance 71" ] || { echo "$DONE"; false; }
   arm release quota
   [ "$(j 'o.frontendVerify.reason')" = "UNSCANNED(pagespeed quota (429))" ] || { echo "$DONE"; false; }
+  arm release bad-ps-key
+  [ "$(j 'o.frontendVerify.ok + " " + o.frontendVerify.reason + " " + o.psCalls + " " + o.psKeyLeaked')" = "false PAGESPEED_API_KEY is not a key shape; its value is not printed 0 false" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: frontend never commits over the owner's code, and release never lifts a hold hosting did not place" {
@@ -1006,8 +1016,8 @@ arm() {
   [ "$(j 'o.auth.ok + " " + o.authAgain.ok + " " + o.siteUrl')" = "true true https://sandbox.automemory.ai" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.env')" == *"NEXT_PUBLIC_SUPABASE_URL="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.authVerify.ok + " " + JSON.stringify(o.authVerify.evidence)')" = 'true {"user":"launch-probe-a@sandbox.automemory.ai","login":303,"me":200,"logout":200,"after":401}' ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.auth.join(",")')" = "vercel-env,vercel-env,auth-config,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.authTeardown.join(",")')" = "delete-probe-users (launch-probe-a/b/c),restore-site-url-if-unchanged,delete-vercel-env,delete-vercel-env" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.auth.join(",")')" = "vercel-env,vercel-env,auth-smtp,auth-config,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.authTeardown.join(",")')" = "delete-probe-users (launch-probe-a/b/c),restore-site-url-if-unchanged,clear-launch-smtp-if-unchanged,delete-vercel-env,delete-vercel-env" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: authz -- A reads its own org and gets 403 on B's; orgs are created once" {
@@ -1083,11 +1093,17 @@ arm() {
   [[ "$(j 'o.env')" == "NEXT_PUBLIC_SUPABASE_URL=https://mine.example.com NEXT_PUBLIC_SUPABASE_ANON_KEY=true"* ]] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: auth adds production beside a preview-only value, reports env ids, and re-sends its own SMTP key (attack 913d01d B1-B3)" {
+@test "launch-contract: auth adds production beside a preview-only value, reports env ids, and re-sends its own SMTP key (attack 913d01d B1-B3, d8f943a L1-L3)" {
   arm login public-env-preview
   [ "$(j 'o.auth.ok + " " + o.targets + " " + o.ids')" = "true preview production true" ] || { echo "$DONE"; false; }
   arm login smtp-rotate
-  [ "$(j 'o.again.ok + " " + o.rotated')" = "true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.again.ok + " " + o.rotated + " " + o.recorded')" = "true true 1" ] || { echo "$DONE"; false; }
+  arm login smtp-owner-resend
+  [ "$(j 'o.auth.ok + " " + o.kept + " " + o.recorded')" = "true true 0" ] || { echo "$DONE"; false; }
+  arm login public-env-dev
+  [ "$(j 'o.auth.ok + " " + o.targets')" = "true development production+preview" ] || { echo "$DONE"; false; }
+  arm login stale-build
+  [ "$(j 'o.again.ok + " " + o.third.ok + " " + o.before + " " + o.after + " " + o.afterThird')" = "true true 0 1 1" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: the auth probe reads a minted token at the top level and in properties" {
@@ -1249,6 +1265,11 @@ arm() {
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false the live response lacks content-security-policy script-src with a nonce and no 'unsafe-inline'" ]] || { echo "$DONE"; false; }
   arm headers static
   [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false 2 of 2 script tags lack this response's CSP nonce (is the page statically rendered?)" ] || { echo "$DONE"; false; }
+  # attack d8f943a L6: a single-quoted nonce after a line break passes; a nonce inside another value or a comment does not.
+  arm headers single-quoted
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.nonced_scripts')" = "true 2" ] || { echo "$DONE"; false; }
+  arm headers decoy
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false 2 of 2 script tags lack this response's CSP nonce (is the page statically rendered?)" ] || { echo "$DONE"; false; }
   arm headers rate-limited
   [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false UNSCANNED(observatory rate-limited)" ] || { echo "$DONE"; false; }
   arm headers unreachable
@@ -1344,7 +1365,7 @@ arm() {
   arm backup thread
   [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
   [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.noUpload + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs')" = "drill true true true true false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.noUpload + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs + " " + o.workflow.usersGuarded')" = "drill true true true true false true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.steps.join("+")')" = "true api.github.com dump and checksum+restore and compare row counts" ] || { echo "$DONE"; false; }
 }
 
@@ -1361,8 +1382,10 @@ arm() {
   arm backup step-lag-red
   [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "false false" ] || { echo "$DONE"; false; }
   # restore-drill trusts the newest drill digest backup reported, never an earlier file.
-  arm backup digest-moved
-  [ "$(j 'o.rVerify.ok')" = "true" ] || { echo "$DONE"; false; }
+  for s in digest-moved digest-reordered; do
+    arm backup "$s"
+    [ "$(j 'o.rVerify.ok')" = "true" ] || { echo "$s: $DONE"; false; }
+  done
 }
 
 @test "launch-contract: a red restore fails both slots, a red backup fails both, a missing secret and a stale drill are not ok (ADR-1709, ADR-1746)" {
@@ -1380,7 +1403,7 @@ arm() {
   arm backup cancelled-newer
   [ "$(j 'o.verify.ok + " " + o.rVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
   arm backup foreign-drill
-  [[ "$(j 'o.rVerify.ok + " " + o.rVerify.reason')" == "false no completed backup-drill.yml run on main ran launch"* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.rVerify.ok + " " + o.rVerify.reason')" = "false FOREIGN_DRILL: the backup-drill.yml on main is not a drill file backup wrote" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: errors finds the venture's Sentry project, commits the probe route with its DSN once, and verify sees the thrown error as an issue (ADR-1747)" {

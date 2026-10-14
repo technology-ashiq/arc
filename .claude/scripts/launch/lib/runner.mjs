@@ -325,6 +325,9 @@ export async function verifySlots(opts, log = console.log) {
   }
 }
 
+// 0xC0000409 as spawnSync reports it on Windows: node aborting in libuv while a closed socket drains.
+const WIN_LIBUV_ABORT = 3221226505;
+
 // Runs under the venture lock. Returns true when the provider answered.
 function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
   const id = slot.id;
@@ -346,10 +349,12 @@ function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
   }
   const lv = slotRow(loadState(P.stateDir, slug), id).last_verify;
   const timedOut = r.error && r.error.code === "ETIMEDOUT";
-  // The answer is last_verify, cleared above, so a saved one is this probe's. The exit code is not the answer: on Windows
-  // node can abort in libuv AFTER the worker saved it (0xC0000409), and that read as no answer (attack 5ce0104 B1).
-  const good = !timedOut && !!lv && lv.ok === true;
-  const reason = good ? null : timedOut ? "timeout" : lv && lv.reason ? lv.reason : `worker ended without an answer (${r.signal ? `signal ${r.signal}` : `exit ${r.status}`})`;
+  // The answer is last_verify, cleared above, so a saved one is this probe's. On Windows node can abort in libuv AFTER the
+  // worker saved it (0xC0000409), which read as no answer (attack 5ce0104 B1). Only that abort is forgiven: a signal or any
+  // other non-zero exit fails, even beside a saved ok (attack d8f943a B1).
+  const exitOk = !r.signal && (r.status === 0 || (process.platform === "win32" && r.status === WIN_LIBUV_ABORT));
+  const good = !timedOut && exitOk && !!lv && lv.ok === true;
+  const reason = good ? null : timedOut ? "timeout" : lv && lv.reason ? lv.reason : lv && lv.ok === true ? `worker saved an answer, then ended ${r.signal ? `on signal ${r.signal}` : `with exit ${r.status}`}` : `worker ended without an answer (${r.signal ? `signal ${r.signal}` : `exit ${r.status}`})`;
   if (!lv) saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } }));
   emit("run.completed", { slot: id, provider: prow.id, honesty_class: profile.honesty_class, attempt: r0.attempt || 0, mode: "verify", outcome: good ? "ok" : "fail" }, slug, log);
   log(`${id}: ${good ? `verified now (answered by ${clean(lv.answerer)})` : `VERIFY FAILED -- ${clean(reason)}`}`);

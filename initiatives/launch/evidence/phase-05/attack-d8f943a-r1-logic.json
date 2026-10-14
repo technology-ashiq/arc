@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:resendSmtp",
+      "breaking_input": "The project has smtp_host = 'smtp.resend.com' and smtp_user = 'resend' set by launch, and the owner rotates RESEND_API_KEY. The re-run sees host+user match launch's own and re-sends the new key, so that path is fine. But the project has smtp_host = 'smtp.resend.com' with smtp_user = 'resend' that launch set, and the owner has since changed smtp_user to something else (e.g. 'resend2') while keeping the host. The guard `host === \"smtp.resend.com\" && conf.smtp_user === \"resend\"` now fails, so launch treats the whole block as the owner's and keeps it, never refreshing the rotated key. The login email silently breaks after rotation.",
+      "why": "The \"launch's own\" test requires both host and user to match launch's exact values. If the owner (or a drift) changes only the user, launch no longer recognises its own SMTP block as its own, and the rotated key never reaches Supabase. This is the same 'present = owner's' guard defect the fix claimed to address, but the ownership marker is still inferred from current values rather than recorded as a resource.",
+      "fix": "Record an auth-smtp resource when launch sets the block, and on re-run treat that recorded resource as launch's regardless of the current user value, refreshing the password whenever the host is smtp.resend.com and the recorded resource exists.",
+      "twin_of": "launch's own credential was never refreshed"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:publicEnv",
+      "breaking_input": "A Vercel project has NEXT_PUBLIC_SUPABASE_URL set for target [\"preview\"] only. publicEnv computes onProd (no production) and anywhere (has the key), so it POSTs with target [\"production\"] only. That is fine. But a key set for target [\"development\"] only, or a key whose target list is empty (Vercel can answer an env with no target), is in `anywhere` but not onProd, so launch POSTs target [\"production\"] and Vercel answers 400 ENV_CONFLICT because the name already exists for the overlapping target set. The throw happens after the Supabase PATCH already ran, leaving the slot half-made.",
+      "why": "Existence is computed from target membership, but the write's target set is derived from the same membership; a key with an empty or development-only target list is treated as 'anywhere' and the production write collides. The check and the create still disagree on scope.",
+      "fix": "Compute the target set per key as production minus existing targets, and treat ENV_ALREADY_EXISTS/ENV_CONFLICT as keep rather than throw.",
+      "twin_of": "Existence checked on one target set, the write covered another"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:scaffold (rebuild condition)",
+      "breaking_input": "A previous attempt placed both env values and then failed before committing. The re-run finds both values already on production (onProd has both), so placed = 0, and pushedOut.pushed is false because commitFiles found nothing changed. The condition `env.placed && !pushedOut.pushed` is false, so no rebuild is requested. The live production build still predates the placed values, so NEXT_PUBLIC_SUPABASE_URL/ANON_KEY are baked empty and /auth/confirm stays 500.",
+      "why": "The rebuild is keyed on whether THIS run placed a value, not on whether the live build predates the values. A failure between placing and committing leaves the values placed but the build stale, and the re-run does nothing.",
+      "fix": "Rebuild when any vercel-env resource exists whose creation postdates the latest production deployment, not only when this run placed one.",
+      "twin_of": "\"Did I push\" inferred from two head reads"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:129-133 and runAttempt:361-364",
+      "breaking_input": "Two `apply probe --again` invocations race. apply() reads row.state === \"verified\" outside the lock and passes. runAttempt re-checks under the lock: prev.state === \"verified\" and opts.again, so it proceeds. The second invocation, arriving after the first has taken the slot to \"applying\", reads prev.state === \"applying\" under the lock and returns EXIT.REFUSED, which is correct. But if the first invocation's worker dies holding the lock and the slot is left \"applying\" with no receipt, a later --again sees prev.state === \"applying\" and refuses, even though the slot was verified before the first --again. The user cannot re-apply a verified slot that a crashed --again left applying.",
+      "why": "The under-lock re-check refuses any state other than verified, but a crashed --again attempt leaves the slot in \"applying\" with no receipt, and the comment says that state is closed as failed before a new attempt. The --again path never closes it, so the slot is stuck.",
+      "fix": "When opts.again and prev.state === \"applying\" with no receipt, close the attempt as failed (as the plain path does) and then re-check whether the slot was verified before the crashed attempt; if it was, proceed with the re-apply.",
+      "twin_of": "A runner killed while holding the lock left its attempt with no receipt, so \"every attempt ends with exactly one receipt\" held only for workers"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:probe (PageSpeed key)",
+      "breaking_input": "PAGESPEED_API_KEY is appended via q.append(\"key\", key) with no shape check. A key value containing `&url=https://evil.example` or CR/LF is accepted. The URL is then passed to ctx.fetch; on a transport error or a non-2xx, the error message or the runner's log can include the full URL including key=..., leaking the key. The ADR claims no log carries it, but only the happy path is pinned.",
+      "why": "Unlike the other env keys, PAGESPEED_API_KEY has no shape validation and no scrubbing of the URL from error paths. A key with a CR or an ampersand injects extra query parameters and can leak in a fetch TypeError that quotes the URL.",
+      "fix": "Validate /^[A-Za-z0-9_-]{20,60}$/ before use and scrub the URL from every error and log line.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/security-headers/next-headers.mjs:probe (nonce regex)",
+      "breaking_input": "The live page serves `<script nonce='abc'>` with single quotes, or `<script\\nnonce=\"abc\">` with a newline before the attribute. The regex `\\snonce=\"([^\"]*)\"` matches only double-quoted nonces with a preceding whitespace. A valid page with single-quoted or newline-separated attributes is judged as lacking the nonce and fails, even though every script carries it. Conversely, a page with `<script type=\"x\\\" nonce=\\\"VALID\\\"` inside an attribute value of another tag matches the regex and passes.",
+      "why": "The check is a regex over raw HTML, not a tokenizer. It cannot handle the full attribute grammar, and it counts script tags inside comments or strings. The ADR requires proving the nonce works, but this check both false-fails and false-passes.",
+      "fix": "Parse attributes with a small tokenizer, strip comments and CDATA, and accept both quote styles.",
+      "twin_of": "Import regexes assumed whitespace, so `import{x}from\"pkg\"` matched nothing; commented imports were counted"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:probe (liveHsts)",
+      "breaking_input": "The venture host answers a 301 redirect to http:// or to www.example.com (which lacks HSTS). liveHsts uses redirect: \"manual\" and reads the strict-transport-security header of the 301 response itself. A 301 that carries no HSTS header reads as \"no\", and the slot fails even though the final host serves HSTS.",
+      "why": "liveHsts reads the header of the first response without following or classifying a 3xx. The ADR says HSTS is read from the venture only when the host refused SSL Labs, but a redirect is neither a refusal nor an absence of HSTS.",
+      "fix": "Follow or classify a 3xx before reading the header; require a 2xx/3xx final status and read the header from the final response.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs FILES (users.src)",
+      "breaking_input": "The first docker run writes users.src through `>` and fails for a reason other than the missing launch_ops.user_ids() function (e.g. a network error or a bad URL). The `|| \\\\` fallback then runs and overwrites users.src with the direct query, which also fails (same network error), leaving users.src empty or half-written. No `test -s users.src` follows, so the restore step reads an empty file and loads zero users. The drill passes against a project with no users, and a real failure is hidden by `2>/dev/null`.",
+      "why": "The fallback is keyed on any failure, not on the specific missing-function error, and the `>` truncates the file before the command runs. The empty file is indistinguishable from a project with no users.",
+      "fix": "Add `test -s users.src` after the fallback, keep stderr in a log file, and fall back only on the specific missing-function error.",
+      "twin_of": "shell-string rule: 2>/dev/null on a command whose failure matters"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/environments/vercel-environments.mjs:scaffold (parents check)",
+      "breaking_input": "The launch-owned probe branch has two commits (the probe commit plus a later launch commit), and its head's immediate parent is the probe commit, not main's head. `parents.includes(base)` is false, so the scaffold force-moves the branch to main and re-commits the probe file, discarding the two commits even though the branch is launch's and the PR is open. The force-move rewrites the PR head.",
+      "why": "Only the head's immediate parent is tested, not whether the branch is behind main. A branch with two launch commits is judged stale and force-moved.",
+      "fix": "Use the compare API (base...branch) to decide behind/ahead, and force-move only when the branch's single commit is launch's.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "products/launch/providers/release/arc-ship-release.mjs:probe (BUILT = READY only)",
+      "breaking_input": "A production deployment of the tagged commit is in state READY but the commit's build was actually a static site because hosting created the project with no preset and frontend has not yet set the Next.js preset (the preset lands only when frontend runs). The release slot verifies READY as its receipt, but the tagged commit holds no app, so the receipt proves only that a static site built, not that the venture's app is deployable. The ADR-1755 intent was that READY of the tagged commit means the app built, but on a fresh venture release runs before frontend, so READY is a static build.",
+      "why": "The READY-only change removed the ERROR path but did not tie READY to the presence of the app. On a fresh venture, release verifies before frontend, and READY is a static site, which is not a deploy receipt for the venture's app.",
+      "fix": "Require the tagged commit to hold an app (package.json present) for READY to count, or reorder so release verifies only after frontend.",
+      "twin_of": "A deploy receipt accepted ERROR, which also accepts a real broken build"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "products/launch/providers/restore-drill/pg-restore-scratch.mjs:digestOf",
+      "breaking_input": "backup reports two drill-digest resources, the newest first in ctx.upstream. The code filters and pops the last element, which is the OLDEST digest, not the newest. The comment says backup reports oldest first, but if backup reports newest first (or the order is unspecified), restore-drill trusts an old drill file that may not match the current workflow.",
+      "why": "The fix assumes a specific ordering of upstream resources that is not enforced. If the order differs, the wrong digest is trusted.",
+      "fix": "Compare the digests against the workflow file's current content on main, or have backup report the newest explicitly rather than relying on list order.",
+      "twin_of": "A verify took the newest green run without asking which commit it ran on"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:mint (hashed_token)",
+      "breaking_input": "GoTrue answers generate_link with `properties: null` and `hashed_token` at the top level. The code sets `from = b.properties && typeof b.properties === \"object\" ? b.properties : b`, so with properties null it falls back to b and reads the top-level token. That is correct. But GoTrue answers with `properties: { hashed_token: null }` and the top-level token present: `from` is properties, and `typeof from.hashed_token === \"string\"` is false, so the top-level token is ignored and the probe fails.",
+      "why": "The either/or logic prefers properties whenever it is an object, even if the token inside it is null, and never falls back to the top level. The comment says 'either, never both read loosely', but a null inside properties should fall back.",
+      "fix": "Read the token from properties only if it is a string there; otherwise read the top level.",
+      "twin_of": "verify read the slot's provider, attempt and adapter check outside the lock, then ran under it -> validate one read, use another, across a lock boundary"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs:probe (body read)",
+      "breaking_input": "The homepage body streams slowly or is hundreds of MB. The code does `html = (await res.text()).slice(0, 500000)`, buffering the entire body before slicing. A slow or huge response ties the probe up until the slot timeout.",
+      "why": "The bound is applied to the result, not to the read. The earlier code cancelled the body on the failure path, but the success path still buffers everything.",
+      "fix": "Read through the stream reader with a byte cap and cancel at the limit.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/errors/sentry.mjs:sentry",
+      "breaking_input": "SENTRY_AUTH_TOKEN of shape `sntryu_` followed by a value containing a `+` or `/` (base64 alphabet) is accepted by the regex `sntry[su]_[A-Za-z0-9+/=_-]{20,400}`. A token with a CR or LF inside the value is also accepted because the character class does not exclude control characters. The token is placed in a Bearer header; a CR in the header value can cause a fetch TypeError that quotes the header, leaking the token.",
+      "why": "The regex allows base64 characters and does not exclude CR/LF, unlike the other env key shapes. The ADR claims no log carries the token, but only the happy path is pinned.",
+      "fix": "Restrict the character class to /^sntry[su]_[A-Za-z0-9_-]{20,400}$/ and scrub the header from every error.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:probe (loop cap)",
+      "breaking_input": "A failing cached answer starts a fresh scan (startNew=on) and continues. The loop still caps at 9 iterations of 30s waits, so a cached failure plus a slow fresh scan (DNS, IN_PROGRESS polls) plus the liveHsts GET can exceed the 300s slot timeout. The liveHsts GET is also repeated on every iteration while any endpoint is blind, and a rate-limited PUT or a slow venture response can push the total past the window.",
+      "why": "The worst case grows beyond the slot window and the lock's stale window. The comment promises inside the slot timeout, but the restart consumes iterations and time.",
+      "fix": "Derive the deadline from the slot timeout, memoize liveHsts per probe, and reduce the poll count after a restart.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    }
+  ]
+}

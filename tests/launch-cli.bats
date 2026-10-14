@@ -87,13 +87,19 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [ "$(grep -c '"slot":"probe"' "$ARC_SPINE_ROOT"/events/*.jsonl | awk -F: '{s+=$NF} END{print s}')" -eq 2 ] || { cat "$ARC_SPINE_ROOT"/events/*.jsonl; false; }
 }
 
-@test "launch-cli: a verify worker that dies after saving its answer is read by the answer, not the exit code (attack 5ce0104 B1)" {
+@test "launch-cli: a verify worker that dies after saving ok fails on any exit but the Windows libuv abort (attack 5ce0104 B1, d8f943a B1)" {
   run node "$(L)" new --venture fx-sandbox $FX_FLAGS
   run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   export FAKE_DIE_AFTER=7
   run node "$(L)" verify probe --venture fx-sandbox $FX_FLAGS
-  [ "$status" -eq 0 ] && [[ "$output" == *"probe: verified now"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 1 ] && [[ "$output" == *"probe: VERIFY FAILED -- worker saved an answer, then ended with exit 7"* ]] || { echo "$output"; false; }
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      export FAKE_DIE_AFTER=3221226505
+      run node "$(L)" verify probe --venture fx-sandbox $FX_FLAGS
+      [ "$status" -eq 0 ] && [[ "$output" == *"probe: verified now"* ]] || { echo "$output"; false; } ;;
+  esac
 }
 
 @test "launch-cli: verify after the provider lost a resource fails, names why, and leaves the slot state alone" {

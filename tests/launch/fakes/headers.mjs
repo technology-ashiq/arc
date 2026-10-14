@@ -7,7 +7,8 @@
 //   hostHeaders  headers the host adds beside the build's (Vercel's own HSTS, say)
 //   observatory  { status, grade, score } the Observatory answers, or "unreachable"
 //   up           false = the domain answers 404 (nothing deployed)
-//   rendering    "dynamic" (Next nonces its scripts) or "static" (built ahead, no nonce)
+//   rendering    "dynamic" (Next nonces its scripts) or "static" (built ahead, no nonce); "single-quoted" nonces with
+//                single quotes after a line break; "decoy" hides the nonce inside another attribute's value and a comment
 // Node 18 has no global crypto; the edge runtime the middleware runs in does, so the stub supplies it.
 const NEXT_SERVER_STUB = "const NextResponse = { next: (init = {}) => ({ headers: new Headers(), request: init.request || {} }) }; const crypto = globalThis.crypto || (await import(\"node:crypto\")).webcrypto;";
 
@@ -55,9 +56,10 @@ export function makeHeaders({ github, full, domain, inner, serve = (src) => src,
       // The host's own headers first; the build's headers win where both set one (Vercel's order).
       for (const [k, v] of Object.entries(hostHeaders)) h.set(k, v);
       for (const { key, value } of s.headers) h.set(key, value);
-      const nonce = rendering === "dynamic" ? (s.requestCsp.match(/'nonce-([^']+)'/) || [])[1] : null;
-      const attr = nonce ? ` nonce="${nonce}"` : "";
-      const body = `<!DOCTYPE html><html><head><script src="/_next/static/chunks/main.js" async=""${attr}></script></head><body>shell<script${attr}>self.__next_f=self.__next_f||[]</script></body></html>`;
+      const nonce = rendering === "static" ? null : (s.requestCsp.match(/'nonce-([^']+)'/) || [])[1];
+      const attr = !nonce ? "" : rendering === "single-quoted" ? `\nnonce='${nonce}'` : rendering === "decoy" ? ` data-x=" nonce=${nonce}" title='>'` : ` nonce="${nonce}"`;
+      const comment = rendering === "decoy" ? `<!-- <script nonce="${nonce}"> -->` : "";
+      const body = `<!DOCTYPE html><html><head>${comment}<script src="/_next/static/chunks/main.js" async=""${attr}></script></head><body>shell<script${attr}>self.__next_f=self.__next_f||[]</script></body></html>`;
       return new Response(body, { status: 200, headers: h });
     }
     if (url.hostname === "observatory-api.mdn.mozilla.net") {

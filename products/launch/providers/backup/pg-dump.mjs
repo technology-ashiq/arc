@@ -173,8 +173,12 @@ const FILES = {
     "          sha256sum dump.pgc > dump.sha256",
     `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.src`,
     "          test -s counts.src",
-    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS}\" > users.src 2>/dev/null || \\`,
+    // The owner-made reader first; only ITS absence falls back to auth.users. Any other failure stops the drill with
+    // psql's own error, never a quiet empty user list (attack d8f943a L8, B4).
+    `          if ! docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS}\" > users.src 2> users.err; then`,
+    `            grep -qE 'launch_ops.*does not exist' users.err || { cat users.err; exit 1; }`,
     `            docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS_DIRECT}\" > users.src`,
+    `          fi`,
     `      - name: ${STEP_RESTORE}`,
     "        run: |",
     "          sha256sum -c dump.sha256",
@@ -187,7 +191,7 @@ const FILES = {
     "          echo \"restored $(wc -l < counts.dst) tables, every row count equal\"",
     "      - name: remove the dump",
     "        if: always()",
-    "        run: rm -f dump.pgc users.src",
+    "        run: rm -f dump.pgc users.src users.err",
     "",
   ].join("\n"),
 };

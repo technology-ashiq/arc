@@ -327,7 +327,9 @@ async function publicEnv(ctx, full, ref) {
   const targets = (e) => (Array.isArray(e.target) ? e.target : [e.target]);
   const rows = list(env.body && env.body.envs).filter((e) => typeof e.key === "string");
   const onProd = new Set(rows.filter((e) => targets(e).includes("production")).map((e) => e.key));
-  const anywhere = new Set(rows.map((e) => e.key));
+  // The targets each name already holds: launch posts only the ones it lacks, so a development-only or target-less value
+  // never collides (attack d8f943a L2).
+  const held = (key) => new Set(rows.filter((e) => e.key === key).flatMap(targets));
   const keys = list((await sb(ctx, "GET", `/projects/${ref}/api-keys`)).body);
   const anon = (keys.find((x) => x.name === "anon" && typeof x.api_key === "string") || {}).api_key;
   if (!anon) throw refuse("NO_ANON_KEY", "supabase returned no anon key for the project");
@@ -335,29 +337,46 @@ async function publicEnv(ctx, full, ref) {
   let placed = 0;
   for (const [key, value] of Object.entries(want)) {
     if (onProd.has(key)) continue;
-    const made = await vc(ctx, "POST", `/v10/projects/${encodeURIComponent(pid)}/env`, { key, value, type: "plain", target: anywhere.has(key) ? ["production"] : ["production", "preview"] });
+    const made = await vc(ctx, "POST", `/v10/projects/${encodeURIComponent(pid)}/env`, { key, value, type: "plain", target: ["production", "preview"].filter((t) => !held(key).has(t)) });
     const c = made.body && (made.body.created || made.body);
     const envId = c && typeof c.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(c.id) ? c.id : "";
     if (!envId) throw new Error(`vercel created ${key} without naming its id; teardown could not delete it alone`);
     ctx.report({ kind: "vercel-env", id: `${pid}:${key}:${envId}` });
     placed++;
   }
-  return { pid, org, name, placed };
+  const at = (e) => Number(e.updatedAt ?? e.createdAt);
+  const changedAt = Math.max(...rows.filter((e) => ENV_NAMES.includes(e.key) && targets(e).includes("production")).map(at).filter(Number.isFinite), 0);
+  return { pid, org, name, placed, changedAt };
+}
+
+// Whether the newest production build predates the public values: a value placed by a killed attempt, or by the owner after
+// the last build, is baked empty until a rebuild (attack d8f943a L3). No build yet is not stale: the next push builds.
+async function builtBefore(ctx, pid, changedAt) {
+  if (!changedAt) return false;
+  const d = await vc(ctx, "GET", `/v6/deployments?projectId=${encodeURIComponent(pid)}&target=production&limit=1`);
+  const latest = list(d.body && d.body.deployments)[0];
+  if (!latest) return false;
+  const built = Number(latest.createdAt ?? latest.created);
+  return !Number.isFinite(built) || built < changedAt;
 }
 
 // Supabase's free tier refuses a template change while the project sends through Supabase's own mailer, so the login
 // email goes through the venture's Resend domain (email-transactional). An SMTP host the owner set is theirs and kept
 // (ADR-1756). The key rides only in the PATCH body; the config API never answers it back.
-function resendSmtp(ctx, conf, domain) {
+function resendSmtp(ctx, conf, domain, ref) {
   const host = typeof conf.smtp_host === "string" ? conf.smtp_host.trim() : "";
-  // launch's own settings are re-sent every apply, so a rotated RESEND_API_KEY reaches Supabase (attack 913d01d B2);
-  // any other host is the owner's and kept.
-  if (host && !(host === "smtp.resend.com" && conf.smtp_user === "resend")) return {};
+  // launch's own block is re-sent every apply, so a rotated RESEND_API_KEY reaches Supabase (attack 913d01d B2). Launch's
+  // is the block it recorded setting, or its exact signature from before that record existed; an owner who edits any field
+  // of it, or set Resend themselves, keeps theirs (attack d8f943a L1).
+  const recorded = ctx.resources.some((r) => r.kind === "auth-smtp" && r.id === `${ref}:smtp.resend.com`);
+  const signature = host === "smtp.resend.com" && conf.smtp_user === "resend" && conf.smtp_admin_email === `login@${domain}`;
+  if (host && !(host === "smtp.resend.com" && (recorded || signature))) return {};
   const sent = list(ctx.upstream && ctx.upstream["email-transactional"]).some((r) => r.kind === "resend-domain" || r.kind === "resend-domain-found");
   if (!sent) throw refuse("UPSTREAM_MISSING", "the project sends with Supabase's own mailer and email-transactional reported no Resend domain to send through");
   const key = String(ctx.env.RESEND_API_KEY || "").trim();
   if (!/^re_[A-Za-z0-9_]{20,}$/.test(key)) throw refuse("BAD_TOKEN", "RESEND_API_KEY is not a Resend key shape; its value is not printed");
   const name = ctx.profile && ctx.profile.brand && typeof ctx.profile.brand.name === "string" ? say(ctx.profile.brand.name, 60) : domain;
+  if (!recorded) ctx.report({ kind: "auth-smtp", id: `${ref}:smtp.resend.com` });
   return { smtp_host: "smtp.resend.com", smtp_port: "465", smtp_user: "resend", smtp_pass: key, smtp_admin_email: `login@${domain}`, smtp_sender_name: name };
 }
 
@@ -381,7 +400,7 @@ export async function scaffold(ctx) {
   // Supabase's from an owner's own). A new project's API answers that stock text, not empty (arc-sandbox, 2026-10-14).
   const stock = !tpl.trim() || SUPABASE_STOCK.has(squash(tpl));
   if (!stock && !tpl.includes("/auth/confirm?token_hash={{ .TokenHash }}")) throw refuse("TEMPLATE_FOREIGN", "the project's magic-link email is the owner's own and does not land on /auth/confirm; launch does not rewrite it");
-  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}), ...(stock || squash(tpl) === squash(TEMPLATE) ? resendSmtp(ctx, conf, domain) : {}) };
+  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}), ...(stock || squash(tpl) === squash(TEMPLATE) ? resendSmtp(ctx, conf, domain, ref) : {}) };
   await sb(ctx, "PATCH", `/projects/${ref}/config/auth`, patch);
   // What it was, so the exit plan can put it back.
   // Recorded once, from the first apply: a re-run sees launch's own site URL and must not record it as "what it was"
@@ -400,7 +419,7 @@ export async function scaffold(ctx) {
     },
   }, "auth: magic-link login, session cookie, logout (ADR-1734)", pushedOut);
   // A new commit builds with the placed values; with none, the live build predates them and is rebuilt from main.
-  if (env.placed && !pushedOut.pushed) await vc(ctx, "POST", "/v13/deployments", { name: env.name, project: env.pid, target: "production", gitSource: { type: "github", org: env.org, repo: env.name, ref: "main" } });
+  if (!pushedOut.pushed && (env.placed || (await builtBefore(ctx, env.pid, env.changedAt)))) await vc(ctx, "POST", "/v13/deployments", { name: env.name, project: env.pid, target: "production", gitSource: { type: "github", org: env.org, repo: env.name, ref: "main" } });
   ctx.report({ kind: "auth-routes", id: `${full}:${sha}` });
   ctx.report({ kind: "venture-repo", id: full });
   ctx.report({ kind: "supabase-ref", id: ref });
@@ -446,6 +465,8 @@ export async function teardown(ctx) {
   // The site URL goes back to what the first apply found, if it still points at launch's (re-checked at run time).
   const cfg = ctx.resources.find((r) => r.kind === "auth-config");
   if (cfg) steps.push({ action: "restore-site-url-if-unchanged", resource: cfg.id });
+  // launch's Resend block goes back to Supabase's own mailer, only while it is still launch's (re-checked at run time).
+  for (const r of ctx.resources.filter((x) => x.kind === "auth-smtp")) steps.push({ action: "clear-launch-smtp-if-unchanged", resource: r.id });
   // By the env id launch created, never by key: a variable the owner set later under the same name stays (attack 913d01d B3).
   for (const r of ctx.resources.filter((x) => x.kind === "vercel-env")) steps.push({ action: "delete-vercel-env", resource: r.id });
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };

@@ -5,6 +5,8 @@
 //   projects     seed projects: [{ name, link: { type, org, repo } }]
 //   failDeployments  the deployments list answers 500
 //   previewState     readyState of every preview deployment
+import { tick } from "./clock.mjs";
+
 export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [], failDeployments = false, previewState = "READY" } = {}) {
   let n = 0;
   const id = (p) => `${p}_${String(++n).padStart(6, "0")}`;
@@ -61,13 +63,15 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const tg = (t) => (Array.isArray(t) ? t : [t]);
       if (proj.envs.some((e) => e.key === body.key && tg(e.target).some((t) => tg(body.target).includes(t)))) return err(400, "ENV_CONFLICT", "A variable with the name already exists for this target");
       const envId = id("env");
-      proj.envs.push({ id: envId, key: body.key, target: body.target, value: body.value });
+      const now = tick();
+      proj.envs.push({ id: envId, key: body.key, target: body.target, value: body.value, createdAt: now, updatedAt: now });
       return json(201, { created: { id: envId, key: body.key, target: body.target } });
     }
     if (method === "POST" && p === "/v13/deployments") {
       const proj = byIdOrName(body.project);
       if (!proj) return err(404, "not_found", "Project not found");
       proj.rebuilds = (proj.rebuilds || 0) + 1;
+      (proj.rebuiltAt = proj.rebuiltAt || []).push(tick());
       return json(200, { id: id("dpl"), readyState: "QUEUED" });
     }
     m = p.match(/^\/v9\/projects\/([^/]+)\/domains\/([^/]+)$/);
@@ -99,11 +103,15 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const presetAt = (i) => (proj.presetFrom === undefined || i >= proj.presetFrom ? proj.framework : proj.createdFramework);
       const stateOf = (c) => { const i = all.indexOf(c); const upto = all.slice(0, i + 1); const h = upto.filter((x) => typeof x.hold === "boolean").pop(); if (!(h && h.hold === false)) return "CANCELED"; return presetAt(i) === "nextjs" ? (upto.some((x) => x.app) ? "READY" : "ERROR") : "READY"; };
       const target = url.searchParams.get("target");
-      const prod = (target && target !== "production" ? [] : after).filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: stateOf(c), target: "production", meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
+      const prod = (target && target !== "production" ? [] : after).filter((c) => !sha || c.sha === sha).reverse().map((c, i) => ({ uid: `dpl_${c.sha.slice(0, 8)}_${i}`, readyState: stateOf(c), target: "production", createdAt: c.at ?? 0, meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha } }));
       // Every branch commit is a preview, READY unless previewState says otherwise, at a vercel.app URL.
       const previews = proj.previewDeploymentsDisabled ? [] : Object.entries((r && r.branches) || {}).flatMap(([b, cs]) => cs.slice(1).filter((c) => !sha || c.sha === sha)
         .map((c) => ({ uid: `dpl_prev_${c.sha.slice(0, 8)}`, readyState: previewState, target: null, url: `arc-sandbox-git-${b.replace(/[^a-z0-9]/g, "-")}.vercel.app`, meta: { githubDeployment: "1", githubCommitOrg: proj.link.org, githubCommitRepo: proj.link.repo, githubCommitSha: c.sha, githubCommitRef: b } })));
-      return json(200, { deployments: [...previews, ...prod] });
+      // A rebuild from main is the newest production deployment, of main's head, when no commit filter is asked.
+      const head = r && r.commits[r.commits.length - 1];
+      const rebuilt = !sha && head && (!target || target === "production") ? (proj.rebuiltAt || []).map((at, i) => ({ uid: `dpl_rebuild_${i}`, readyState: stateOf(head), target: "production", createdAt: at, meta: { githubCommitSha: head.sha } })) : [];
+      const prodAll = [...rebuilt, ...prod].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      return json(200, { deployments: [...previews, ...prodAll] });
     }
     return err(404, "not_found", `fake vercel: ${method} ${p} not modelled`);
   }

@@ -88,9 +88,13 @@ if (a.mode === "verify") {
   // The in-attempt verify sees what this scaffold just reported: the ctx was built before it ran, so verify on that
   // snapshot read zero resources, failed, and the retry made a second test order (arc-sandbox payment-test, ADR-1760).
   // An unreadable state file at this moment falls back to the scaffold's own snapshot, never a TypeError (attack 913d01d B6).
+  // The union with the snapshot, deduplicated by kind and id: an older state read never drops what this attempt knew
+  // (attack d8f943a B3).
   const cur = loadState(a.stateDir, a.venture);
-  const now = cur ? slotRow(cur, a.slot).resources || [] : ctx.resources;
-  const v = await mod.verify(Object.freeze({ ...ctx, resources: [...now] }));
+  const now = [];
+  for (const r of [...ctx.resources, ...(cur ? slotRow(cur, a.slot).resources || [] : [])])
+    if (r && !now.some((x) => x.kind === r.kind && x.id === r.id)) now.push(r);
+  const v = await mod.verify(Object.freeze({ ...ctx, resources: now }));
   clearTimeout(timer);
   if (v && v.ok === true && typeof v.answerer === "string" && v.answerer) {
     save({ state: "verified", answerer: v.answerer, evidence: v.evidence ?? null, queued: ctx.queued, verified_at: new Date().toISOString() });

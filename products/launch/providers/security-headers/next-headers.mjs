@@ -113,6 +113,35 @@ async function oursAtHead(ctx, full, FILES) {
 // ---- end of the shared block
 
 // security-headers slot as Next config headers (ADR-1704, ADR-1742, ADR-1754). Commits `next.config.mjs`, whose
+// A tag's attributes, left to right: a quoted value is consumed whole, so text inside it is never read as an attribute.
+function attrsOf(tag) {
+  const out = {};
+  // Quote characters are written \x22 (double), \x27 (single) and \x60 (backtick) so a source lexer never sees one open.
+  const re = /([^\s\x22\x27>/=]+)(?:\s*=\s*(?:\x22([^\x22]*)\x22|\x27([^\x27]*)\x27|([^\s\x22\x27=<>\x60]+)))?/g;
+  const body = tag.replace(/^<script\b/i, "").replace(/\/?>$/, "");
+  let m;
+  while ((m = re.exec(body))) { const k = m[1].toLowerCase(); if (!(k in out)) out[k] = m[2] ?? m[3] ?? m[4] ?? ""; }
+  return out;
+}
+
+// The read itself is bounded, not only its result: a page streaming without end is cut at the cap and cancelled (attack
+// d8f943a B9).
+async function readCapped(res, cap) {
+  if (!res.body || typeof res.body.getReader !== "function") return (await res.text()).slice(0, cap);
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let text = "";
+  let bytes = 0;
+  while (bytes < cap) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.length;
+    text += dec.decode(value, { stream: true });
+  }
+  await reader.cancel().catch(() => {});
+  return text.slice(0, cap);
+}
+
 // `headers()` sets five response headers on every route, and `middleware.js`, which sets the CSP with a fresh nonce per
 // request so script-src needs no 'unsafe-inline' (Next applies the nonce to its own scripts on a dynamic page). verify
 // reads them from the live response (never from the file), checks every script the page serves carries that request's
@@ -250,9 +279,11 @@ async function probe(ctx) {
   // the header alone is not the proof. Every script tag must carry this response's nonce, and there must be one.
   const nonce = (String(res.headers.get("content-security-policy") || "").match(/'nonce-([A-Za-z0-9+/=_-]+)'/) || [])[1];
   let html = "";
-  try { html = (await res.text()).slice(0, 500000); } catch { html = ""; }
-  const tags = html.match(/<script\b[^>]*>/gi) || [];
-  const bare = tags.filter((t) => !(t.match(/\snonce="([^"]*)"/i) || [])[1] || (t.match(/\snonce="([^"]*)"/i) || [])[1] !== nonce);
+  try { html = await readCapped(res, 500000); } catch { html = ""; }
+  // Tags are read by their attribute grammar, comments out first: a quoted value never hides a ">" or a decoy nonce, and
+  // either quote style counts (attack d8f943a L6).
+  const tags = html.replace(/<!--[\s\S]*?-->/g, "").match(/<script\b(?:[^>\x22\x27]|\x22[^\x22]*\x22|\x27[^\x27]*\x27)*>/gi) || [];
+  const bare = tags.filter((t) => { const n = attrsOf(t).nonce; return !n || n !== nonce; });
   if (!tags.length) return { ok: false, reason: `https://${domain}/ served no script tag to check the nonce on` };
   if (bare.length) return { ok: false, reason: `${bare.length} of ${tags.length} script tags lack this response's CSP nonce (is the page statically rendered?)` };
   // The grade is Mozilla's, asked fresh on every verify.

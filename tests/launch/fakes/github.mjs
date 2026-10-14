@@ -9,6 +9,8 @@
 //   secrets         names of Actions secrets the repo holds (values are never modelled)
 export const LEGS = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
+import { tick } from "./clock.mjs";
+
 export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, stepLag = false, auditConclusion = "success", jobConclusions = {} } = {}) {
   // The workflows other than arc-ci a fixture models, each with its jobs; a run of one has id + 10000 * (index + 1).
   const EXTRA = { "dependency-scan.yml": ["audit"], "backup-drill.yml": ["drill"] };
@@ -30,7 +32,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
   const workflows = (r) => Object.keys(r.files).filter((f) => f.startsWith(".github/workflows/")).map((f) => f.slice(".github/workflows/".length));
   const wrap64 = (b64) => `${(String(b64).match(/.{1,60}/g) || []).join("\n")}\n`;
   function commit(r, message, files) {
-    const c = { sha: sha(), message, files };
+    const c = { sha: sha(), message, files, at: tick() };
     r.commits.push(c);
     r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: c.sha, branch: "main", pending: pendingPolls, workflows: workflows(r), created_at: new Date().toISOString(),
       jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
@@ -53,7 +55,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       if (store.has(full)) return err(422, "Repository creation failed.");
       const r = fresh({ private: !!body.private, description: body.description || "" });
       store.set(full, r);
-      if (body.auto_init) r.commits.push({ sha: sha(), message: "Initial commit", files: {} });
+      if (body.auto_init) r.commits.push({ sha: sha(), message: "Initial commit", files: {}, at: tick() });
       return json(201, view(full, r));
     }
     let m = p.match(/^\/repos\/([^/]+\/[^/]+)$/);
@@ -101,6 +103,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       if (p.c.parents[0] !== head("main").sha) return err(422, "Update is not a fast forward");
       for (const e of p.entries) r.files[e.path] = { sha: e.sha, content: Buffer.from(r.blobs[e.sha], "utf8").toString("base64") };
       p.c.app = p.entries.some((e) => e.path === "package.json");
+      p.c.at = tick();
       r.commits.push(p.c);
       // A push to main runs arc-ci, like any other commit (ADR-1733's orm verify reads it).
       r.runs.unshift({ id: r.runs.length + 1, status: "completed", head_sha: p.c.sha, branch: "main", pending: pendingPolls, workflows: workflows(r), created_at: new Date().toISOString(),
@@ -134,6 +137,15 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       if (!from) return err(422, "Object does not exist");
       r.branches[b] = [from];
       return json(201, { ref: body.ref, object: { sha: body.sha } });
+    }
+    // compare/{main sha}...{branch}: the branch line is [its base, ...commits past it]; behind = main commits after the base.
+    const cmpm = rest.match(/^compare\/([0-9a-f]{40})\.\.\.(.+)$/);
+    if (cmpm && method === "GET") {
+      const line = r.branches[decodeURIComponent(cmpm[2])];
+      if (!line) return err(404, "Not Found");
+      const at = r.commits.findIndex((c) => c.sha === line[0].sha);
+      const to = r.commits.findIndex((c) => c.sha === cmpm[1]);
+      return json(200, { ahead_by: line.length - 1, behind_by: at < 0 || to < 0 ? 0 : Math.max(0, to - at), commits: line.slice(1).map((c) => ({ sha: c.sha, commit: { message: c.message } })) });
     }
     const hm = rest.match(/^commits\/([^/]+)$/);
     if (hm && method === "GET") {
