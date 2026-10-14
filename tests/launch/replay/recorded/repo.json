@@ -1,0 +1,158 @@
+{
+ "slot": "repo",
+ "provider": "github",
+ "recorded_at": "2026-10-14T10:47:50.562Z",
+ "profile": {
+  "slug": "arc-sandbox",
+  "type": "saas-b2b",
+  "region": "in",
+  "payment_model": "gateway",
+  "tenancy": "multi",
+  "ai": false,
+  "honesty_class": "rehearsal",
+  "ci_protection": "absent-plan",
+  "compliance": [
+   "dpdp",
+   "gst"
+  ],
+  "brand": {
+   "name": "arc sandbox",
+   "domain": "sandbox.automemory.ai"
+  },
+  "repository": "technology-ashiq/arc-sandbox",
+  "kill_lines": {
+   "days_without_revenue": 90,
+   "traffic_floor_monthly": 100
+  }
+ },
+ "resources": [
+  {
+   "kind": "github-repo",
+   "id": "technology-ashiq/arc-sandbox",
+   "tag": "arc-sandbox@repo@github"
+  }
+ ],
+ "upstream": {},
+ "env_keys": [
+  "GITHUB_TOKEN"
+ ],
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://api.github.com/user",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:47:47 GMT",
+    "etag": "W/\"64b5100c8d6a3197513e473508d5d586874a0b42c986d310e8ae656ab0b0e7e8\"",
+    "last-modified": "Fri, 24 Jul 2026 22:36:50 GMT",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "558B:36AABB:C3DA2:11985D:6ACF5DD2",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4859",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "141",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false,\"name\":\"owner\",\"email\":null,\"public_repos\":22,\"public_gists\":0,\"followers\":2,\"following\":1,\"created_at\":\"2019-11-22T05:53:45Z\",\"updated_at\":\"2026-07-24T22:36:50Z\"}"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:47:48 GMT",
+    "etag": "W/\"c5ba535fcfda8ba8557d14982ee1a547e536c2edc0ebbdd2f6539c2277b13f67\"",
+    "last-modified": "Tue, 13 Oct 2026 23:20:50 GMT",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "repo",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "558B:36AABB:C40C6:119CB5:6ACF5DD3",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4858",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "142",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"id\":1407837311,\"node_id\":\"R_kgDOU-nkfw\",\"name\":\"arc-sandbox\",\"full_name\":\"technology-ashiq/arc-sandbox\",\"private\":true,\"owner\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox\",\"description\":\"arc sandbox [arc-launch arc-sandbox@repo@github]\",\"fork\":false,\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox\",\"forks_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/forks\",\"keys_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/keys{/key_id}\",\"collaborators_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/collaborators{/collaborator}\",\"teams_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/teams\",\"hooks_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/hooks\",\"issue_events_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/issues/events{/number}\",\"events_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/events\",\"assignees_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/assignees{/user}\",\"branches_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/branches{/branch}\",\"tags_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/tags\",\"blobs_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/blobs{/sha}\",\"git_tags_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/tags{/sha}\",\"git_refs_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/refs{/sha}\",\"trees_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/trees{/sha}\",\"statuses_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/statuses/{sha}\",\"languages_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/languages\",\"stargazers_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/stargazers\",\"contributors_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/contributors\",\"subscribers_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/subscribers\",\"subscription_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/subscription\",\"commits_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits{/sha}\",\"git_commits_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits{/sha}\",\"comments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/comments{/number}\",\"issue_comment_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/issues/comments{/number}\",\"contents_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/{+path}\",\"compare_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/compare/{base}...{head}\",\"merges_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/merges\",\"archive_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/{archive_format}{/ref}\",\"downloads_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/downloads\",\"issues_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/issues{/number}\",\"pulls_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/pulls{/number}\",\"milestones_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/milestones{/number}\",\"notifications_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/notifications{?since,all,participating}\",\"labels_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/labels{/name}\",\"releases_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/releases{/id}\",\"deployments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/deployments\",\"created_at\":\"2026-10-06T19:36:14Z\",\"updated_at\":\"2026-10-13T23:20:50Z\",\"pushed_at\":\"2026-10-13T23:20:46Z\",\"git_url\":\"git://github.com/technology-ashiq/arc-sandbox.git\",\"ssh_url\":\"owner@example.invalid:technology-ashiq/arc-sandbox.git\",\"clone_url\":\"https://github.com/technology-ashiq/arc-sandbox.git\",\"svn_url\":\"https://github.com/technology-ashiq/arc-sandbox\",\"homepage\":\"https://arc-sandbox.vercel.app\",\"size\":47,\"stargazers_count\":0,\"watchers_count\":0,\"language\":\"JavaScript\",\"has_issues\":true,\"has_projects\":true,\"has_downloads\":false,\"has_wiki\":false,\"has_pages\":false,\"has_discussions\":false,\"forks_count\":0,\"mirror_url\":null,\"archived\":false,\"disabled\":false,\"open_issues_count\":3,\"license\":null,\"allow_forking\":true,\"is_template\":false,\"web_commit_signoff_required\":false,\"has_pull_requests\":true,\"pull_request_creation_policy\":\"all\",\"topics\":[],\"visibility\":\"private\",\"forks\":0,\"open_issues\":3,\"watchers\":0,\"default_branch\":\"main\",\"permissions\":{\"admin\":true,\"maintain\":true,\"push\":true,\"triage\":true,\"pull\":true},\"temp_clone_token\":\"AN27T5WI5LEIVH2JG3AODJDKZ5PQA\",\"allow_squash_merge\":true,\"allow_merge_commit\":true,\"allow_rebase_merge\":true,\"allow_auto_merge\":false,\"delete_branch_on_merge\":false,\"allow_update_branch\":false,\"use_squash_pr_title_as_default\":false,\"squash_merge_commit_message\":\"COMMIT_MESSAGES\",\"squash_merge_commit_title\":\"COMMIT_OR_PR_TITLE\",\"merge_commit_message\":\"PR_TITLE\",\"merge_commit_title\":\"MERGE_MESSAGE\",\"network_count\":0,\"subscribers_count\":0}"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/branches/main",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:47:49 GMT",
+    "etag": "W/\"857a0694dadc22f9f5003bd962fe9346a20171e6d21c0be12747cef70eca00f9\"",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "558B:36AABB:C446A:11A1E9:6ACF5DD4",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4857",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "143",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"name\":\"main\",\"commit\":{\"sha\":\"d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"node_id\":\"C_kwDOU-nkf9oAKGQ2ZTIzZWE4ZTMzNzUyZmQxN2Q0MGFhYWUyYmE3YjY5ZGI3MmNiZTA\",\"commit\":{\"author\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T23:20:46Z\"},\"committer\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T23:20:46Z\"},\"message\":\"migration-rollback: paired up/down migration and the rollback test (ADR-1744)\\n\\nArc-Launch-Tag: arc-sandbox@migration-rollback@drizzle-down\",\"tree\":{\"sha\":\"ba42d456b0767515ded05095c9984fcf78f152b6\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/trees/ba42d456b0767515ded05095c9984fcf78f152b6\"},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"comments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/comments\",\"author\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[{\"sha\":\"3b0c3026e21c7d3f7dfffc19723ee984dbfffdd1\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/3b0c3026e21c7d3f7dfffc19723ee984dbfffdd1\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/3b0c3026e21c7d3f7dfffc19723ee984dbfffdd1\"}]},\"_links\":{\"self\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/branches/main\",\"html\":\"https://github.com/technology-ashiq/arc-sandbox/tree/main\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/branches/main/protection\"}"
+  }
+ ],
+ "answer": {
+  "ok": true,
+  "answerer": "api.github.com"
+ }
+}

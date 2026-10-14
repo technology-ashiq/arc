@@ -1,0 +1,594 @@
+{
+ "slot": "authz",
+ "provider": "rls-roles",
+ "recorded_at": "2026-10-14T10:51:01.693Z",
+ "profile": {
+  "slug": "arc-sandbox",
+  "type": "saas-b2b",
+  "region": "in",
+  "payment_model": "gateway",
+  "tenancy": "multi",
+  "ai": false,
+  "honesty_class": "rehearsal",
+  "ci_protection": "absent-plan",
+  "compliance": [
+   "dpdp",
+   "gst"
+  ],
+  "brand": {
+   "name": "arc sandbox",
+   "domain": "sandbox.automemory.ai"
+  },
+  "repository": "technology-ashiq/arc-sandbox",
+  "kill_lines": {
+   "days_without_revenue": 90,
+   "traffic_floor_monthly": 100
+  }
+ },
+ "resources": [
+  {
+   "kind": "db-tables",
+   "id": "fixtureref0000000001:public.orgs+public.memberships",
+   "tag": "arc-sandbox@authz@rls-roles"
+  },
+  {
+   "kind": "authz-routes",
+   "id": "technology-ashiq/arc-sandbox:eed4d3bac3f7515323833476283d6459aa5ad413",
+   "tag": "arc-sandbox@authz@rls-roles"
+  },
+  {
+   "kind": "venture-repo",
+   "id": "technology-ashiq/arc-sandbox",
+   "tag": "arc-sandbox@authz@rls-roles"
+  },
+  {
+   "kind": "supabase-ref",
+   "id": "fixtureref0000000001",
+   "tag": "arc-sandbox@authz@rls-roles"
+  }
+ ],
+ "upstream": {
+  "auth": [
+   {
+    "kind": "auth-config",
+    "id": "fixtureref0000000001:site_url=https://sandbox.automemory.ai:was=http://localhost:3000",
+    "tag": "arc-sandbox@auth@supabase-auth"
+   },
+   {
+    "kind": "auth-routes",
+    "id": "technology-ashiq/arc-sandbox:4577951ea78fee6b3982f8b9e8124fcf71ecf2fa",
+    "tag": "arc-sandbox@auth@supabase-auth"
+   },
+   {
+    "kind": "venture-repo",
+    "id": "technology-ashiq/arc-sandbox",
+    "tag": "arc-sandbox@auth@supabase-auth"
+   },
+   {
+    "kind": "supabase-ref",
+    "id": "fixtureref0000000001",
+    "tag": "arc-sandbox@auth@supabase-auth"
+   },
+   {
+    "kind": "vercel-env",
+    "id": "prj_Fixture100000000000000000000:NEXT_PUBLIC_SUPABASE_URL",
+    "tag": "arc-sandbox@auth@supabase-auth"
+   },
+   {
+    "kind": "vercel-env",
+    "id": "prj_Fixture100000000000000000000:NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "tag": "arc-sandbox@auth@supabase-auth"
+   }
+  ]
+ },
+ "env_keys": [
+  "SUPABASE_ACCESS_TOKEN",
+  "GITHUB_TOKEN"
+ ],
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/git/ref/heads/main",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:50:49 GMT",
+    "etag": "W/\"87e68ee40baf13ca510e2d30f0aa2de1696de653881392caaee9c533cd7aa8ad\"",
+    "last-modified": "Tue, 13 Oct 2026 23:20:50 GMT",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "repo",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "7C2E:A700D:DE64A:140D3B:6ACF5E89",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-poll-interval": "300",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4796",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "204",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"ref\":\"refs/heads/main\",\"node_id\":\"REF_kwDOU-nkf69yZWZzL2hlYWRzL21haW4\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/refs/heads/main\",\"object\":{\"sha\":\"d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"type\":\"commit\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\"}}"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/app/api/orgs/route.js?ref=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-length": "2913",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:50:50 GMT",
+    "etag": "\"8b0a79d35fcd09b59781a577489e19bfb66d1dd8\"",
+    "last-modified": "Tue, 13 Oct 2026 23:20:46 GMT",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP, Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "repo",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "7C2E:A700D:DE764:140F1D:6ACF5E8A",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4795",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "205",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"name\":\"route.js\",\"path\":\"app/api/orgs/route.js\",\"sha\":\"8b0a79d35fcd09b59781a577489e19bfb66d1dd8\",\"size\":1296,\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/app/api/orgs/route.js?ref=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/blob/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/app/api/orgs/route.js\",\"git_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/blobs/8b0a79d35fcd09b59781a577489e19bfb66d1dd8\",\"download_url\":\"https://raw.githubusercontent.com/technology-ashiq/arc-sandbox/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/app/api/orgs/route.js?token=XX00X0XXX00XXX0XX0XXXXXXX0XXXXX\",\"type\":\"file\",\"content\":\"Ly8gVGhlIG9yZ3MgdGhlIHNpZ25lZC1pbiB1c2VyIGJlbG9uZ3MgdG8sIGFu\\nZCBjcmVhdGluZyBvbmUgKGFyYyBsYXVuY2gsIGF1dGh6IHNsb3QpLiBSTFMg\\nZG9lcyB0aGUgc2NvcGluZy4KaW1wb3J0IHsgc3VwYWJhc2UgfSBmcm9tICIu\\nLi8uLi8uLi9saWIvc3VwYWJhc2Uvc2VydmVyLmpzIjsKCmV4cG9ydCBjb25z\\ndCBkeW5hbWljID0gImZvcmNlLWR5bmFtaWMiOwoKYXN5bmMgZnVuY3Rpb24g\\nc2lnbmVkSW4oZGIpIHsKICBjb25zdCB7IGRhdGEgfSA9IGF3YWl0IGRiLmF1\\ndGguZ2V0VXNlcigpOwogIHJldHVybiBkYXRhICYmIGRhdGEudXNlciA/IGRh\\ndGEudXNlciA6IG51bGw7Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBHRVQo\\nKSB7CiAgY29uc3QgZGIgPSBhd2FpdCBzdXBhYmFzZSgpOwogIGlmICghKGF3\\nYWl0IHNpZ25lZEluKGRiKSkpIHJldHVybiBSZXNwb25zZS5qc29uKHsgZXJy\\nb3I6ICJub3Qgc2lnbmVkIGluIiB9LCB7IHN0YXR1czogNDAxIH0pOwogIGNv\\nbnN0IHsgZGF0YSwgZXJyb3IgfSA9IGF3YWl0IGRiLmZyb20oIm9yZ3MiKS5z\\nZWxlY3QoImlkLCBuYW1lIik7CiAgaWYgKGVycm9yKSByZXR1cm4gUmVzcG9u\\nc2UuanNvbih7IGVycm9yOiAicmVhZCBmYWlsZWQiIH0sIHsgc3RhdHVzOiA1\\nMDAgfSk7CiAgcmV0dXJuIFJlc3BvbnNlLmpzb24oeyBvcmdzOiBkYXRhIH0p\\nOwp9CgpleHBvcnQgYXN5bmMgZnVuY3Rpb24gUE9TVChyZXF1ZXN0KSB7CiAg\\nY29uc3QgZGIgPSBhd2FpdCBzdXBhYmFzZSgpOwogIGlmICghKGF3YWl0IHNp\\nZ25lZEluKGRiKSkpIHJldHVybiBSZXNwb25zZS5qc29uKHsgZXJyb3I6ICJu\\nb3Qgc2lnbmVkIGluIiB9LCB7IHN0YXR1czogNDAxIH0pOwogIGNvbnN0IGJv\\nZHkgPSBhd2FpdCByZXF1ZXN0Lmpzb24oKS5jYXRjaCgoKSA9PiAoe30pKTsK\\nICBjb25zdCBuYW1lID0gdHlwZW9mIGJvZHkubmFtZSA9PT0gInN0cmluZyIg\\nPyBib2R5Lm5hbWUudHJpbSgpIDogIiI7CiAgaWYgKCFuYW1lIHx8IG5hbWUu\\nbGVuZ3RoID4gODApIHJldHVybiBSZXNwb25zZS5qc29uKHsgZXJyb3I6ICJh\\nIG5hbWUgb2YgMSB0byA4MCBjaGFyYWN0ZXJzIiB9LCB7IHN0YXR1czogNDAw\\nIH0pOwogIGNvbnN0IHsgZGF0YSwgZXJyb3IgfSA9IGF3YWl0IGRiLnJwYygi\\nY3JlYXRlX29yZyIsIHsgb3JnX25hbWU6IG5hbWUgfSk7CiAgaWYgKGVycm9y\\nKSByZXR1cm4gUmVzcG9uc2UuanNvbih7IGVycm9yOiAiY3JlYXRlIGZhaWxl\\nZCIgfSwgeyBzdGF0dXM6IDUwMCB9KTsKICByZXR1cm4gUmVzcG9uc2UuanNv\\nbih7IGlkOiBkYXRhIH0sIHsgc3RhdHVzOiAyMDEgfSk7Cn0K\\n\",\"encoding\":\"base64\",\"_links\":{\"self\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/app/api/orgs/route.js?ref=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"git\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/blobs/8b0a79d35fcd09b59781a577489e19bfb66d1dd8\",\"html\":\"https://github.com/technology-ashiq/arc-sandbox/blob/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/app/api/orgs/route.js\"}}"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/commits?path=app%2Fapi%2Forgs%2Froute.js&sha=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0&per_page=1",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:50:51 GMT",
+    "etag": "W/\"03c96f072fa3813468ed266173b8fccc248eaec9e62e9f4313f1b27dcedce47b\"",
+    "last-modified": "Tue, 13 Oct 2026 22:22:31 GMT",
+    "link": "<https://api.github.com/repositories/1407837311/commits?path=app%2Fapi%2Forgs%2Froute.js&sha=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0&per_page=1&page=2>; rel=\"next\", <https://api.github.com/repositories/1407837311/commits?path=app%2Fapi%2Forgs%2Froute.js&sha=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0&per_page=1&page=1>; rel=\"last\"",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "42B1:91143:DA2A8:13B558:6ACF5E8A",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4794",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "206",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "[{\"sha\":\"eed4d3bac3f7515323833476283d6459aa5ad413\",\"node_id\":\"C_kwDOU-nkf9oAKGVlZDRkM2JhYzNmNzUxNTMyMzgzMzQ3NjI4M2Q2NDU5YWE1YWQ0MTM\",\"commit\":{\"author\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T22:22:31Z\"},\"committer\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T22:22:31Z\"},\"message\":\"authz: orgs and memberships, member-only reads (ADR-1734)\\n\\nArc-Launch-Tag: arc-sandbox@authz@rls-roles\",\"tree\":{\"sha\":\"5dcbf77f9ceb144b042302e06c31e593c735ccc2\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/trees/5dcbf77f9ceb144b042302e06c31e593c735ccc2\"},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits/eed4d3bac3f7515323833476283d6459aa5ad413\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/eed4d3bac3f7515323833476283d6459aa5ad413\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/eed4d3bac3f7515323833476283d6459aa5ad413\",\"comments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/eed4d3bac3f7515323833476283d6459aa5ad413/comments\",\"author\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[{\"sha\":\"4577951ea78fee6b3982f8b9e8124fcf71ecf2fa\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/4577951ea78fee6b3982f8b9e8124fcf71ecf2fa\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/4577951ea78fee6b3982f8b9e8124fcf71ecf2fa\"}]}]"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/app/api/orgs/[id]/route.js?ref=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-length": "2338",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:50:51 GMT",
+    "etag": "\"b4b983f2a8ec6177bb0882976335c1b11e22967d\"",
+    "last-modified": "Tue, 13 Oct 2026 23:20:46 GMT",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP, Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "repo",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "7C2E:A700D:DEAF6:141406:6ACF5E8A",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4793",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "207",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"name\":\"route.js\",\"path\":\"app/api/orgs/[id]/route.js\",\"sha\":\"b4b983f2a8ec6177bb0882976335c1b11e22967d\",\"size\":853,\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/app/api/orgs/[id]/route.js?ref=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/blob/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/app/api/orgs/[id]/route.js\",\"git_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/blobs/b4b983f2a8ec6177bb0882976335c1b11e22967d\",\"download_url\":\"https://raw.githubusercontent.com/technology-ashiq/arc-sandbox/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/app/api/orgs/%5Bid%5D/route.js?token=XX00X0XXX0XXXXXX0XXXXXXXX0XXXXX\",\"type\":\"file\",\"content\":\"Ly8gT25lIG9yZywgb3IgNDAzIHdoZW4gaXQgaXMgbm90IHlvdXJzOiBSTFMg\\naGlkZXMgYW5vdGhlciB0ZW5hbnQncyByb3cgKGFyYyBsYXVuY2gsIGF1dGh6\\nIHNsb3QpLgppbXBvcnQgeyBzdXBhYmFzZSB9IGZyb20gIi4uLy4uLy4uLy4u\\nL2xpYi9zdXBhYmFzZS9zZXJ2ZXIuanMiOwoKZXhwb3J0IGNvbnN0IGR5bmFt\\naWMgPSAiZm9yY2UtZHluYW1pYyI7CgpleHBvcnQgYXN5bmMgZnVuY3Rpb24g\\nR0VUKHJlcXVlc3QsIHsgcGFyYW1zIH0pIHsKICBjb25zdCB7IGlkIH0gPSBh\\nd2FpdCBwYXJhbXM7CiAgY29uc3QgZGIgPSBhd2FpdCBzdXBhYmFzZSgpOwog\\nIGNvbnN0IHsgZGF0YTogd2hvIH0gPSBhd2FpdCBkYi5hdXRoLmdldFVzZXIo\\nKTsKICBpZiAoIXdobyB8fCAhd2hvLnVzZXIpIHJldHVybiBSZXNwb25zZS5q\\nc29uKHsgZXJyb3I6ICJub3Qgc2lnbmVkIGluIiB9LCB7IHN0YXR1czogNDAx\\nIH0pOwogIGlmICghL15bMC05YS1mLV17MzZ9JC8udGVzdChpZCkpIHJldHVy\\nbiBSZXNwb25zZS5qc29uKHsgZXJyb3I6ICJub3QgYW4gb3JnIGlkIiB9LCB7\\nIHN0YXR1czogNDAwIH0pOwogIGNvbnN0IHsgZGF0YSwgZXJyb3IgfSA9IGF3\\nYWl0IGRiLmZyb20oIm9yZ3MiKS5zZWxlY3QoImlkLCBuYW1lIikuZXEoImlk\\nIiwgaWQpLm1heWJlU2luZ2xlKCk7CiAgaWYgKGVycm9yKSByZXR1cm4gUmVz\\ncG9uc2UuanNvbih7IGVycm9yOiAicmVhZCBmYWlsZWQiIH0sIHsgc3RhdHVz\\nOiA1MDAgfSk7CiAgaWYgKCFkYXRhKSByZXR1cm4gUmVzcG9uc2UuanNvbih7\\nIGVycm9yOiAibm90IGEgbWVtYmVyIG9mIHRoaXMgb3JnIiB9LCB7IHN0YXR1\\nczogNDAzIH0pOwogIHJldHVybiBSZXNwb25zZS5qc29uKGRhdGEpOwp9Cg==\\n\",\"encoding\":\"base64\",\"_links\":{\"self\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/contents/app/api/orgs/[id]/route.js?ref=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"git\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/blobs/b4b983f2a8ec6177bb0882976335c1b11e22967d\",\"html\":\"https://github.com/technology-ashiq/arc-sandbox/blob/d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0/app/api/orgs/[id]/route.js\"}}"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/commits?path=app%2Fapi%2Forgs%2F%5Bid%5D%2Froute.js&sha=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0&per_page=1",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:50:52 GMT",
+    "etag": "W/\"03c96f072fa3813468ed266173b8fccc248eaec9e62e9f4313f1b27dcedce47b\"",
+    "last-modified": "Tue, 13 Oct 2026 22:22:31 GMT",
+    "link": "<https://api.github.com/repositories/1407837311/commits?path=app%2Fapi%2Forgs%2F%5Bid%5D%2Froute.js&sha=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0&per_page=1&page=2>; rel=\"next\", <https://api.github.com/repositories/1407837311/commits?path=app%2Fapi%2Forgs%2F%5Bid%5D%2Froute.js&sha=d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0&per_page=1&page=1>; rel=\"last\"",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "42B1:91143:DA547:13B914:6ACF5E8B",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4792",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "208",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "[{\"sha\":\"eed4d3bac3f7515323833476283d6459aa5ad413\",\"node_id\":\"C_kwDOU-nkf9oAKGVlZDRkM2JhYzNmNzUxNTMyMzgzMzQ3NjI4M2Q2NDU5YWE1YWQ0MTM\",\"commit\":{\"author\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T22:22:31Z\"},\"committer\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T22:22:31Z\"},\"message\":\"authz: orgs and memberships, member-only reads (ADR-1734)\\n\\nArc-Launch-Tag: arc-sandbox@authz@rls-roles\",\"tree\":{\"sha\":\"5dcbf77f9ceb144b042302e06c31e593c735ccc2\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/trees/5dcbf77f9ceb144b042302e06c31e593c735ccc2\"},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits/eed4d3bac3f7515323833476283d6459aa5ad413\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/eed4d3bac3f7515323833476283d6459aa5ad413\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/eed4d3bac3f7515323833476283d6459aa5ad413\",\"comments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/eed4d3bac3f7515323833476283d6459aa5ad413/comments\",\"author\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[{\"sha\":\"4577951ea78fee6b3982f8b9e8124fcf71ecf2fa\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/4577951ea78fee6b3982f8b9e8124fcf71ecf2fa\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/4577951ea78fee6b3982f8b9e8124fcf71ecf2fa\"}]}]"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.supabase.com/v1/projects/fixtureref0000000001/api-keys",
+   "status": 200,
+   "headers": {
+    "access-control-allow-credentials": "true",
+    "access-control-expose-headers": "x-connection-encrypted,x-forwarded-for,user-agent,CF-Connecting-IP,Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a6068c9c750553-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:50:52 GMT",
+    "etag": "W/\"60e-ABlwWbrFQVh4OE571qxql7LPqYc\"",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin",
+    "x-gotrue-id": "00000000-0000-4000-8000-000000000001",
+    "x-powered-by": "Express",
+    "x-ratelimit-limit": "120",
+    "x-ratelimit-remaining": "117",
+    "x-ratelimit-reset": "2"
+   },
+   "setCookie": [
+    "__cf_bm=5W7PF9leJK6y3i4FFV54UXCdPkkCQ.m262YCpN6zb2E-1791975052.25625-1.0.1.1-7kUxM9vdh_nLO.AR0W4sVwHv9qqA.gvmJVTrpKpLiS4RmTJiHKoJ0oCzdJpxciauOijuncr7afG7kA_s9DBip0aQoPKTjKpB.6NH6TyVCpOvspLU9o3JbuLy5Be0cwnx; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.com; Expires=Wed, 14 Oct 2026 11:20:52 GMT"
+   ],
+   "body": "[{\"api_key\":\"eyJxaXaxXxXXXxX0XxXxXxX0aXX0XxxXXXX0.axXxa0XxXxXxaXXxXxXxXXXxXxXxXxX0Xx0xaXXxa0xxax00XxXxaXX0axxxXxxxax0xXXX0XxXxa00xXXXxXXXxXxX0XXX0Xxx0XxaxXxX0aXX0XxXxXxXxXXXxX00.x0xX0XX0XXXx0X00axax0xXxXxXX0xXXXXXxxXXxax0\",\"id\":\"anon\",\"type\":\"legacy\",\"prefix\":\"j9gY3\",\"name\":\"anon\",\"description\":\"Legacy anon API key\",\"hash\":\"MnDoDoZk6eEH2Q1I0iuWGkNkKYbVmaZ8-4UO34BT4Ns\"},{\"api_key\":\"eyJxaXaxXxXXXxX0XxXxXxX0aXX0XxxXXXX0.axXxa0XxXxXxaXXxXxXxXXXxXxXxXxX0Xx0xaXXxa0xxax00XxXxaXX0axxxXxxxax0xXXX0XxXxaxXxX0Xaax0xXXXxXxxxaXX0XXa0XXxxXXXxXxxxXXxxXxxxXXX0XXX0XXX0aX.XxXxX-XxxxX-0-xX0xXX00x00xXx00X0Xx0-x_Xxa0X\",\"id\":\"service_role\",\"type\":\"legacy\",\"prefix\":\"QqDuR\",\"name\":\"service_role\",\"description\":\"Legacy service_role API key\",\"hash\":\"8ZwkfWaugl27rDnFE2ERCRBEV1lyNDN4Dr3F0xtBFWQ\"},{\"api_key\":\"sb_publishable_xa00xXXXxxxxXxxaXaXXXX_0xaaX0Xx\",\"id\":\"00000000-0000-4000-8000-000000000002\",\"type\":\"publishable\",\"prefix\":\"sb_publishable_he36w\",\"name\":\"default\",\"description\":null,\"hash\":\"u38YNwnV8XZgg-ux49UxqA5_vKrIosqPqGWEyumjvo0\",\"secret_jwt_template\":null,\"inserted_at\":\"2026-10-12T18:23:47.599129+00:00\",\"updated_at\":\"2026-10-12T18:23:47.599129+00:00\"},{\"api_key\":\"sb_secret_J3C3Y··························\",\"id\":\"00000000-0000-4000-8000-000000000003\",\"type\":\"secret\",\"prefix\":\"sb_secret_J3C3Y\",\"name\":\"default\",\"description\":null,\"hash\":\"IhsrBwtv6yQvskNURhrRcR4hxmJy_JVJG3bEACuG9bw\",\"secret_jwt_template\":{\"role\":\"service_role\"},\"inserted_at\":\"2026-10-12T18:23:47.599129+00:00\",\"updated_at\":\"2026-10-12T18:23:47.599129+00:00\"}]"
+  },
+  {
+   "method": "POST",
+   "url": "https://fixtureref0000000001.supabase.co/auth/v1/admin/users",
+   "status": 422,
+   "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a6068ef84ca90e-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:52 GMT",
+    "sb-gateway-version": "2",
+    "sb-jwt-alg": "HS256",
+    "sb-jwt-iss": "supabase",
+    "sb-project-ref": "fixtureref0000000001",
+    "sb-request-id": "00000000-0000-4000-8000-000000000010",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin, Accept-Encoding",
+    "x-content-type-options": "nosniff",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-upstream-service-time": "4",
+    "x-sb-error-code": "email_exists"
+   },
+   "setCookie": [
+    "__cf_bm=FNyPV5CxV8BLIqllB4U4r9A6FvJUzVPDjiyCJOKzYe4-1791975052.6412308-1.0.1.1-nqq70mPDMW.osp0OujZlZmONjJpz_plxoXd.ZjQ0.f_1abaRBxG0QZn5FLVGzBWsS00RzYPyZEyMetZnAVh2vJBGhHySgJCww8TQoP9a5ZbYpOjWYqaFfNOTgZakSYMK; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Wed, 14 Oct 2026 11:20:52 GMT"
+   ],
+   "body": "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email address has already been registered\"}"
+  },
+  {
+   "method": "POST",
+   "url": "https://fixtureref0000000001.supabase.co/auth/v1/admin/generate_link",
+   "status": 200,
+   "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a6068fa8faa90e-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:52 GMT",
+    "sb-gateway-version": "2",
+    "sb-jwt-alg": "HS256",
+    "sb-jwt-iss": "supabase",
+    "sb-project-ref": "fixtureref0000000001",
+    "sb-request-id": "00000000-0000-4000-8000-000000000011",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin, Accept-Encoding",
+    "x-content-type-options": "nosniff",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-upstream-service-time": "5"
+   },
+   "setCookie": [
+    "__cf_bm=WOOMnSnom8ozVpjU_hpQU4bebMBqzeY31YCRb3eYmP8-1791975052.7486472-1.0.1.1-_Ndo6Bd71.FQOy.MkgDzFkKCyZ7Rrg1Y99vSJ12hay7kLAWTLotBDbGY2Q11Wq41YGpSVsIf3BlReGmSkaIOP4Wo1dDtPNWdZlikJH8tqiRg.z88Ma2Jri0t71wdFsn7; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Wed, 14 Oct 2026 11:20:52 GMT"
+   ],
+   "body": "{\"id\":\"00000000-0000-4000-8000-000000000008\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"launch-probe-a@sandbox.automemory.ai\",\"email_confirmed_at\":\"2026-10-13T22:11:31.253459Z\",\"confirmed_at\":\"2026-10-13T22:11:31.253459Z\",\"recovery_sent_at\":\"2026-10-14T10:50:52.811887194Z\",\"last_sign_in_at\":\"2026-10-14T10:50:36.995834Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true},\"identities\":[{\"identity_id\":\"00000000-0000-4000-8000-000000000009\",\"id\":\"00000000-0000-4000-8000-000000000008\",\"user_id\":\"00000000-0000-4000-8000-000000000008\",\"identity_data\":{\"email\":\"launch-probe-a@sandbox.automemory.ai\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"00000000-0000-4000-8000-000000000008\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-10-13T22:11:31.237738Z\",\"created_at\":\"2026-10-13T22:11:31.237811Z\",\"updated_at\":\"2026-10-13T22:11:31.237811Z\",\"email\":\"launch-probe-a@sandbox.automemory.ai\"}],\"created_at\":\"2026-10-13T22:11:31.222698Z\",\"updated_at\":\"2026-10-14T10:50:52.812566Z\",\"is_anonymous\":false,\"action_link\":\"https://fixtureref0000000001.supabase.co/auth/v1/verify?token=00000aa000a0aa00a00a00aa0aaa0aa0aa00a0aa00a0a000aaa0a0aa&type=magiclink&redirect_to=https://sandbox.automemory.ai\",\"email_otp\":\"33589388\",\"hashed_token\":\"00000aa000a0aa00a00a00aa0aaa0aa0aa00a0aa00a0a000aaa0a0aa\",\"verification_type\":\"magiclink\",\"redirect_to\":\"https://sandbox.automemory.ai\"}"
+  },
+  {
+   "method": "GET",
+   "url": "https://sandbox.automemory.ai/auth/confirm?token_hash=00000aa000a0aa00a00a00aa0aaa0aa0aa00a0aa00a0a000aaa0a0aa&type=magiclink",
+   "status": 303,
+   "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-length": "0",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'nonce-MTZhZmFlYjYtYzUyZi00MzBhLThkODEtMDUwY2Y0M2E0OThh' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "date": "Wed, 14 Oct 2026 10:50:53 GMT",
+    "location": "https://sandbox.automemory.ai/",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-matched-path": "/auth/confirm",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "bom1::iad1::mh4sz-1791975053129-5197e0f745d2"
+   },
+   "setCookie": [
+    "sb-fixtureref0000000001-auth-token=base64-axXxX0Xxa0XaaX0xXX0xXxXxaXxxXxaxaX0xXxXXaxxxXxxXa0xxaXXaX0x0XXxXax0XXXXaXXaxXXXxXX00XXXXXXXxXXxxaXxXXXXXXXX0Xx0XaX0xXxxXaxXxXxxXa0xxXxXxX0x0XXxxXXXXXxxxXXxXaXXxXXxXaXxxXXxXa0X0a0XXXxXxX0aaaXXxaXxxaXXxXX0XaXXXXxXxaXXxXX0XXXXXXxxXXX0xXX0XaxxxXxXxX0a0XXxXaXxXXxxxX0xxX0xXa00XXXXXXXX0XXxxXX0xXXXXXXXxXXXXaX0XXXxXXxX0X0XXXX0xXxxXXXxxXxaXaXxXXxxxX0XxX0xXaXXXXx0aXxXxXXaXaXXXXxxXaXaxXxxxa0xxa0xXaxx0X0XxXX0xXXxXX0xxXXxXaX0xXXXXXXX0XxxXa00XXXXXaXX0XXaxa0xxa0xxX0XxXx0Xa0xXXxxxXxxxXXaXXXXxXxXaX0x0XXX0aXXXXxXxX0X0XxXXXXxxXxXXaXaxX0axaxXxXXxXaXxxXXXXaXXXXxXxX0XxXXaXaXXXXXxXaxXxX0xXaxXxaXxaXXxxX0xXaXXXXxXxX0xxXX0XaXXxXxXaX0X0X0xXXxa0XxxxX0XxXxXXXXXXa0xxXX0xX0x0aXxXXxxaX0XxXXXXXxX0XxxxX0XxXxX0XxxXXxXaaXxxXxXXXxXXXxXaXXXxXX0XaxXXXXxXaXxxXXxXa0xXXXXxX00xXXaXa0xxa0xXX0XxXXxxaXxXXxXXX0xxXX0XaXXxXXXXX0XxXxaXXXXXXXxXax0xXxXXa0xxa0xxX0x0XxxXXXxXXXaXax00XxxxaX0XXxXXXXX0XxXxa0xxXxxxX00xXxX0XxXXXXxXaXxxXXxxaX0XXXXaaXXxXxaXX0xXXXXaaXX0X0XXXX0XXX0XaxX0XXxXXX0XXXaXaxXxXXXXaXXxXXxxaXx0XXaxaxXXXXxXaXxxXxxXaXXXXxxxXXX0Xx0xX0axX0XxaXx0XXxXa0XxXxXxXxaXXXXxX0Xxa0XXXX0xXX0xXxxxXXx0aXx0XXaXaX0xa0a0Xxx0XXXxXxXxaXxXaxxxX0xXXXaxXXXxXxxxaX0xXX0aaXxxXXX0XxXxXXXxaxXxXxX0aXxxXXXaaX0xXxX0XXXxXxX0aXxxXXXaXXXxXxX0XXX0Xxx0XXXxXxXxXxXxa0xaaX0xXX0xXxXxaXx0XxX0aXX0Xx0xXXX0a0XxXxx0XxxxXxxxXXxxXXXxXXXxXXXxXX00XXX0XXx0XXXxXxx0XXX0XXxxX0XxXxxxXXXxXxxxXXX0aXXxaXxxXXXxXXXxXxXxaXXxXxXxaXXxXX00aXXxaXXxXxxxXX0xaXxxXxXxXXXxX0xxaXXxXxXxXXXxXX0xXx00XxX0aX0xXX0xaxxxXXxxXXXxaXXxaX0xa00xaXXxXXXaXXXxXxXxXXX0XXXxXXXxXXXxXxXxXxXxXxX0XxX0XXxxXXXxaX0xXXX0XxXxXxXxaxXxax0xXX0xaXX0XxXxXxXxXXXxXXXXXxX0XXX0XxXxXxXxXXX0XxXxXxXxX000XXX0X0XxaxXaXXXxXxXxXXX0XXXxXXX0XXXxXxXxXxXxXxxxXXx0X0xxXXXxXXX0X0XxX00aaX0aXXXxXxXxXXX0XXXxXXX0XXXxXxXxXxXxXxXxXXXxXxxxX0xxXXXxaXXaaXX0XXXxaXXxXxxxaXXxaxxxXXXxXxXxaXXxaXXxXxXxa0XxXXXxaxX0XxXxaXXxaXXaaXxxaXXxax0xXXXxXXX0XXX0axXxaXXxaX00XXXxXxxxXXX0aXX0XX0xXxxxXX00aXXxXXXxXxx0XxxxXX00aXX0X0xxXxxxXxXxXXXxXxxxXXXxXX00XXxxXXXxXXXxXXxxXxx0XXXxXxXxXxxxaXXxXxXxXXX0XXX0Xx00XxX0XXX0XXXxXXaxXX0xXXX0XxXxXXX0XXXxXXX0a0XxX0xxXxxxXXxxXXXxXXXxXXXxXX00XXX0XXx0XXXxXxx0XXX0XXxxX0XxXxxxaXXxaxXxaXxaXXX0XXX0axXxaXXxaXX0XxxxaX0xaX0xax0xXX0xXXXxaxXxa0xxXXX0a00xaX0xaX0xaXXxXxXxXXxxX0XxaxxxaXXxXxxxXXxxXXxxaXxxaxXaaxXxaXXxXXXxXxXxaXXxXXXxaXXxXxXxXXX0XXX0Xx00XxX0XXX0XXXxXXaxXX0xXXX0XxXxXXX0XXXxaXxxaXXxaxxxXXXxXxXxaXXxaXXxXxxxa0Xaa0xxax0xax0xaXX0XxXxXxXxXXXxXXXXXxX0XXX0XxXxXxX0XxX0XxXxXxXxXXX0XXXaXXXxXxXxXXX0XXXxXXXxXXXxXxXxXxXxXxXxXxxxXXxxXXX0aXXxaXXxX0X0XxxxXxXxXx0xXX0xX0XxXxxxXXxxXX0xXxa0XXXaXxxxXX0xaXxxXxXxXXXxX0xxaXXxXxXxXXXxXX0xXx00XxX0aX0xXX0xaxxxXXxxaX0xXxXxXXX0XXXaXXXxXxXxXXX0XXXxXXXxXXXxXxXxXxXxXxXxXxX0XXxxXXX0aXXxaXXxX0X0XxxxXxXxXx0xXX0xXXXxXXx0XXx0Xx00XxX0XXXaXxxxaXXaXX0xaxxxa0XxXxxxXXxxXX00; Path=/; Expires=Thu, 18 Nov 2027 10:50:53 GMT; Max-Age=34560000; SameSite=lax"
+   ],
+   "body": ""
+  },
+  {
+   "method": "POST",
+   "url": "https://fixtureref0000000001.supabase.co/auth/v1/admin/users",
+   "status": 422,
+   "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a6069608bda90e-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:53 GMT",
+    "sb-gateway-version": "2",
+    "sb-jwt-alg": "HS256",
+    "sb-jwt-iss": "supabase",
+    "sb-project-ref": "fixtureref0000000001",
+    "sb-request-id": "00000000-0000-4000-8000-000000000012",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin, Accept-Encoding",
+    "x-content-type-options": "nosniff",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-upstream-service-time": "2",
+    "x-sb-error-code": "email_exists"
+   },
+   "setCookie": [
+    "__cf_bm=J9YWadmrKWYZdtUDpoHs59fNnFC.JsA98EvDJ7bcD88-1791975053.7665505-1.0.1.1-URyx1En07HymQP75JbCkv.CVHa_Dt8NPbi_geN4iXyet65esW22UvWqmSb3bmgSSbLYwb_cgo1CWVOuhRVYE6SYgrxLyNw6ij6Sh7QOO7N6QBRh.6GtKh3ycJt89PWwq; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Wed, 14 Oct 2026 11:20:53 GMT"
+   ],
+   "body": "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email address has already been registered\"}"
+  },
+  {
+   "method": "POST",
+   "url": "https://fixtureref0000000001.supabase.co/auth/v1/admin/generate_link",
+   "status": 200,
+   "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a60696a975a90e-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:53 GMT",
+    "sb-gateway-version": "2",
+    "sb-jwt-alg": "HS256",
+    "sb-jwt-iss": "supabase",
+    "sb-project-ref": "fixtureref0000000001",
+    "sb-request-id": "00000000-0000-4000-8000-000000000013",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin, Accept-Encoding",
+    "x-content-type-options": "nosniff",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-upstream-service-time": "5"
+   },
+   "setCookie": [
+    "__cf_bm=0JRUa9S2E5Hpi0SfXpN9w6qO3I009.oszd.Z3rJLD2c-1791975053.8715134-1.0.1.1-1FzNSc_Cneqei5gJZKf3tUDPdl_xi5Kmlj782x5uU63e7HGE0nz_t6S_pgwEVRqRtxKmPW6Xo2Blwx.v2v.5Hap00GjaC4T7mo4ulFhb_SObCEtJGEN2CkLOaezMMlU0; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Wed, 14 Oct 2026 11:20:53 GMT"
+   ],
+   "body": "{\"id\":\"00000000-0000-4000-8000-000000000014\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"launch-probe-b@sandbox.automemory.ai\",\"email_confirmed_at\":\"2026-10-13T22:22:36.411055Z\",\"confirmed_at\":\"2026-10-13T22:22:36.411055Z\",\"recovery_sent_at\":\"2026-10-14T10:50:53.946352942Z\",\"last_sign_in_at\":\"2026-10-14T08:01:25.734225Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true},\"identities\":[{\"identity_id\":\"00000000-0000-4000-8000-000000000015\",\"id\":\"00000000-0000-4000-8000-000000000014\",\"user_id\":\"00000000-0000-4000-8000-000000000014\",\"identity_data\":{\"email\":\"launch-probe-b@sandbox.automemory.ai\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"00000000-0000-4000-8000-000000000014\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-10-13T22:22:36.409146Z\",\"created_at\":\"2026-10-13T22:22:36.409221Z\",\"updated_at\":\"2026-10-13T22:22:36.409221Z\",\"email\":\"launch-probe-b@sandbox.automemory.ai\"}],\"created_at\":\"2026-10-13T22:22:36.403557Z\",\"updated_at\":\"2026-10-14T10:50:53.946825Z\",\"is_anonymous\":false,\"action_link\":\"https://fixtureref0000000001.supabase.co/auth/v1/verify?token=000aaa0000a00aaa000aaa0aaaa00aaaaaaaaaaaaaa0a000000a0a0a&type=magiclink&redirect_to=https://sandbox.automemory.ai\",\"email_otp\":\"33170096\",\"hashed_token\":\"000aaa0000a00aaa000aaa0aaaa00aaaaaaaaaaaaaa0a000000a0a0a\",\"verification_type\":\"magiclink\",\"redirect_to\":\"https://sandbox.automemory.ai\"}"
+  },
+  {
+   "method": "GET",
+   "url": "https://sandbox.automemory.ai/auth/confirm?token_hash=000aaa0000a00aaa000aaa0aaaa00aaaaaaaaaaaaaa0a000000a0a0a&type=magiclink",
+   "status": 303,
+   "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-length": "0",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'nonce-NmM2ZGQ5YzMtMWQzNi00OGYwLTkwNTUtNmM1ODIzY2ZiNzAx' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "date": "Wed, 14 Oct 2026 10:50:54 GMT",
+    "location": "https://sandbox.automemory.ai/",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-matched-path": "/auth/confirm",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "bom1::iad1::8znn2-1791975054026-c24e6fbb3f5b"
+   },
+   "setCookie": [
+    "sb-fixtureref0000000001-auth-token=base64-axXxX0Xxa0XaaX0xXX0xXxXxaXxxXxaxaX0xXxXXaxxxXxxXa0xxaXXaX0x0XXxXax0XXXXaXXaxXXXxXX00XXXXXXXxXXxxaXxXXXXXXXX0Xx0XaX0xXxxXaxXxXxxXa0xxXxXxX0x0XXxxXXXXXxxxXXxXaXXxXXxXaXxxXXxXa0X0a0XXXxXxX0aaaXXxaXxxaXXxXX0XaXXXXxXxaXXxXX0XXXXXXxxXXX0xXX0XaxxxXxXxX0a0XXxXaXxXXxxxX0xxX0xXaX0Xa0xXXXxxXxxxXX0xaXxXXXXxXXxXaXxxXxxXaXXxXxxxXXxxXxxXax0xXxxXaXxXXxxxX0XxX0xXaXXXXx0aXxXxXXaXaXXXXxxXaXaxXxxxa0xxa0xXaxx0X0XxXX0xXXXXX0xxXXxXaX0xXXXXXXX0XxxXa00XXXXXaXX0XXaxa0xxa0xxX0XxXx0Xa0xXXxxxXxxxXXaXXXXxXxXaX0x0XXX0aXXXXxXxX0X0XxXXXXxxXxXXaXaxX0axaxXxXXxXaXxxXXXXaXXXXxXxX0XxXXaXaXXXXXxXaxXxX0xXaxXxaXxaXXxxX0xXaXXXXxXxX0xxXX0XaXXxXxXaX0X0X0xXXxa0XxxxX0XxXxXXXXXXa0xxXX0xX0x0aXxXXxxaX0XxXXXXXxX0XxxxX0XxXxX0XxxXXxXaaXxxXxXXXxXXXxXaXXXxXX0XaxXXXXxXaXxxXXxXa0xXXXXxX00xXXaXa0xxa0xXX0XxXXxxaXxXXxXXX0xxXX0XaXXxXXXXX0XxXxaXXXXXXXxXax0xXxXXa0xxa0xxX0x0XxxXXXxXXXaXax00XxxxaX0XXxXXXXXxXxXxa0xxXxxxX00xXxX0XxXXXXxXaXx0XxxxXxx0XXXXXxX0X0aXaXxXXxxaaXx0XXXXa0xxXXXXXXXxXxxXaX0XXxxaaXxxXXXXaXXxXXxxaXx0XXaxaxXXXXxXaXxxXxxXaXXXXxXXXX0Xa0x0aXXxX0xxXXXaX0xxaXxxX0x0Xx0Xa00XaX0XXXXXXXxxXXxXXXxXX0xXX0XxXXXXaXX0XXXXXXX0aXXXa0XxXxXXa0X0X0xXXXXXXXXXXxxxaX0xXX0aaXxxXXX0XxXxXXXxaxXxXxX0aXxxXXXaaX0xXxX0XXXxXxX0aXxxXXXaXXXxXxX0XXX0Xxx0XXXxXxXxXxXxa0xaaX0xXX0xXxXxaxxxaXX0aXX0XX0xXXX0a0XxXxx0XxxxXxxxXXX0XxX0XxaxXXX0XX00XXX0XXX0XXaxXXX0XXXxXxXxXXaxXxxxXXXxXxxxXXX0aXXxaXxxXXXxXXXxXxXxaXXxXxXxaXXxXX00aXXxaXXxXxxxXX0xaXxxXxXxXXXxX0xxaXXxXxXxXxXxXX0xXx00XxX0aX0xXX0xaxxxXXxxXXXxaXXxaX0xa00xaXXxXXXaXXXxXxXxXXX0XXXxXXXxXXXxXxXxXxX0XxXxXXX0XXxxXXXxaX0xXXX0XxXxXxXxaxXxax0xXX0xaXX0XxXxXxXxXXXxXXXXXxX0XxX0XxXxXXXxXXX0XxXxXxXxX000XXX0X0XxaxXaXXXxXxXxXXX0XXXxXXX0XXXxXxXxXxXxXxx0XxX0XxxxXXXxXXX0X0XxX00aaX0aXXXxXxXxXXX0XXXxXXX0XXXxXxXxXxX0XxXxXXa0XXXxXXxxXXXxaXXaaXX0XXXxaXXxXxxxaXXxaxxxXXXxXxXxaXXxaXXxXxXxa0XxXXXxaxX0XxXxaXXxaXXaaXxxaXXxax0xXXXxXXX0XXX0axXxaXXxaX00XXXxXxxxXXX0aXX0XX0xXxxxXX00aXXxXXXxXxx0XxxxXX00aXX0X0xxXxxxXxX0XXX0XXxxXxX0XX00XXX0XXxxXxxxXXXxXxX0XXxxXXX0XxxxaXXxXxXxXXxxXXxxXx00XxxxXXX0XxXxXxXxXx0xXxx0X0XxXxXxXxXxXXX0a0XxX0xxXxxxXXX0XxX0XxaxXXX0XX00XXX0XXX0XXaxXXX0XXXxXxXxXXaxXxxxaXXxaxXxaXxaXXX0XXX0axXxaXXxaXX0XxxxaX0xaX0xax0xXX0xXXXxaxXxa0xxXXX0a00xaX0xaX0xaXXxXxXxXXxxX0XxaxxxaXXxXxxxXXxxXXxxaXxxaxXaaxXxaXXxXXXxXxXxaXXxXXXxaXXxXxXxXXxxXXxxXx00XxxxXXX0XxXxXxXxXx0xXxx0X0XxXxXxXxXxaXxxaXXxaxxxXXXxXxXxaXXxaXXxXxxxa0Xaa0xxax0xax0xaXX0XxXxXxXxXXXxXXXXXxX0XxX0XxXxXXX0XXX0XxXxXxXxXXX0XXXaXXXxXxXxXXX0XXXxXXXxXXXxXxXxXxX0XxXxXXXxXXxxXXX0aXXxaXXxX0X0XxxxXxXxXx0xXX0xX0XxXxxxXxxxXx00XXxxXxXaXxxxXX0xaXxxXxXxXXXxX0xxaXXxXxXxXxXxXX0xXx00XxX0aX0xXX0xaxxxXXxxaX0xXxXxXXX0XXXaXXXxXxXxXXX0XXXxXXXxXXXxXxXxXxX0XxXxXxX0X0xxXXX0aXXxaXXxX0X0XxxxXxXxXx0xXX0xXXXxXXx0XXx0XX0xXxa0XxXaXxxxaXXaXX0xaxxxa0XxXxxxXXxxXX00; Path=/; Expires=Thu, 18 Nov 2027 10:50:54 GMT; Max-Age=34560000; SameSite=lax"
+   ],
+   "body": ""
+  },
+  {
+   "method": "GET",
+   "url": "https://sandbox.automemory.ai/api/orgs",
+   "status": 200,
+   "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-encoding": "br",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'nonce-OWNjNmMyOGUtODJmZi00ZWYwLThmZjItMDE0OThjMDkxNTZi' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:56 GMT",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-matched-path": "/api/orgs",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "bom1::iad1::wb87r-1791975054741-57d68ff1fc42"
+   },
+   "setCookie": [],
+   "body": "{\"orgs\":[{\"id\":\"00000000-0000-4000-8000-000000000016\",\"name\":\"launch-probe-a\"}]}"
+  },
+  {
+   "method": "GET",
+   "url": "https://sandbox.automemory.ai/api/orgs",
+   "status": 200,
+   "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-encoding": "br",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'nonce-OTc1ZTNiNzktOWZhNi00OGU0LTk1OTYtMzM5NGQ4NTcwMWU0' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:57 GMT",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-matched-path": "/api/orgs",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "bom1::iad1::d4npz-1791975057332-fdf040786340"
+   },
+   "setCookie": [],
+   "body": "{\"orgs\":[{\"id\":\"00000000-0000-4000-8000-000000000017\",\"name\":\"launch-probe-b\"}]}"
+  },
+  {
+   "method": "GET",
+   "url": "https://sandbox.automemory.ai/api/orgs/00000000-0000-4000-8000-000000000016",
+   "status": 200,
+   "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-encoding": "br",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'nonce-ZjcyOGVjMGUtMjk4NC00NDAyLTgzNzItMjMwNDc4MjYyMTUy' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:50:59 GMT",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-matched-path": "/api/orgs/[id]",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "bom1::iad1::cdk8k-1791975058740-cb90d39bb918"
+   },
+   "setCookie": [],
+   "body": "{\"id\":\"00000000-0000-4000-8000-000000000016\",\"name\":\"launch-probe-a\"}"
+  },
+  {
+   "method": "GET",
+   "url": "https://sandbox.automemory.ai/api/orgs/00000000-0000-4000-8000-000000000017",
+   "status": 403,
+   "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-encoding": "br",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'nonce-ZjkzYzAwM2EtZGRiOC00ZmU2LTkzNWYtNDNkZjBlZGIwOTRi' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:51:01 GMT",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-matched-path": "/api/orgs/[id]",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "bom1::iad1::bwzk7-1791975060396-45bb730d73dc"
+   },
+   "setCookie": [],
+   "body": "{\"error\":\"not a member of this org\"}"
+  }
+ ],
+ "answer": {
+  "ok": true,
+  "answerer": "sandbox.automemory.ai + fixtureref0000000001.supabase.co"
+ }
+}
