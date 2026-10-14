@@ -39,8 +39,8 @@ directory. ADR-0915's isolation note ("for bench that is the materialized fixtur
   that matters.
 - **Bench fingerprints the arc checkout and checks it after every attempt, and once more at the
   end.** The fingerprint is HEAD, the branch HEAD names, this worktree's HEAD reflog, the content
-  of every tracked file that differs from HEAD, and the local config, less the other branches'
-  sections in it. It is scoped to the
+  of every tracked file that differs from HEAD, and the local config, less the other branches' and the
+  remotes' sections in it. It is scoped to the
   worktree, not the repository: the owner runs parallel sessions in sibling worktrees that share
   branches, tags, the stash, the worktree list and the one config file, and any of those in the digest would void a
   paid run whenever another lane committed or fetched. The reflog catches a model that commits and
@@ -84,5 +84,6 @@ letter and wrong in scope. The building session had run `checkout -b <name> orig
 worktree, which writes `branch.<name>.remote` and `.merge` into the one config file every worktree
 shares. `config --local` read that file whole. HEAD, the branch and the reflog were untouched, and
 both completed attempts were real fixture commits. The config component now drops every
-`branch.<name>.` section except this worktree's own branch; everything else in the file still
-counts. The probe pins both sides. The stopped run, `champion-sonnet3`, is void like the two before it.
+`branch.<name>.*` section except this worktree's own branch, and every `remote.<name>.*`, matched by
+exact subsection and read with `-z`. Section-level keys and everything else in the file still count,
+so a sibling's write elsewhere stops a run rather than passing one. The probe pins both sides. The stopped run, `champion-sonnet3`, is void like the two before it.

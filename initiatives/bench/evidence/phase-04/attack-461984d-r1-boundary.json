@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1545",
+      "breaking_input": "A model run (or a tool it spawns) in the arc checkout executes `git config --local branch.autoSetupMerge always`, or `branch.autoSetupRebase always`, or `branch.sort -committerdate`. In `config --list` these appear as `branch.autosetupmerge=always` and similar. They have no per-branch subsection, so they start with `branch.` and do not start with `own`.",
+      "why": "The filter drops every `branch.*` line that is not this worktree's own section. That also drops the global, section-level `branch.*` keys, which change how later `checkout -b` and `pull` behave. The ADR and fixed-defects entry claim 'every other config line still counts', but these lines are silently excluded. A real tripwire change goes undetected, and the tests only exercise `.remote` and `.merge`.",
+      "fix": "Drop only lines of the form `branch.<subsection>.<var>=`, i.e. those with at least two dots before the first `=`, and keep `branch.<var>=` lines. Pin that with a probe case for `branch.autosetupmerge`.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1544",
+      "breaking_input": "This worktree is on `refs/heads/feat/bench`. A sibling worktree runs `checkout -b feat/bench.v2 origin/main`, which writes `branch.feat/bench.v2.remote=origin`.",
+      "why": "`own` is the prefix `branch.feat/bench.`, and `l.startsWith(own)` matches `branch.feat/bench.v2.remote=...`, so the sibling's section is counted as this worktree's own. The tripwire fires again on the same sibling `checkout -b` the fix targets. A sibling branch whose name is the own name plus `.something` triggers it, e.g. own `v1` and sibling `v1.2`. The prefix match cannot tell where the subsection ends.",
+      "fix": "Parse each line as `branch.<sub>.<var>=<value>` by splitting at the last dot before the first `=`. Compare `<sub>` for equality with the branch name, not by prefix.",
+      "twin_of": "The same over-wide scope, one layer down: the shared config file"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1544",
+      "breaking_input": "A sibling worktree does `git remote add upstream <url>`, `git remote set-url origin <url2>`, `git submodule init`, `git lfs install --local`, or `git sparse-checkout init`. Each writes `remote.*`, `submodule.*`, `filter.lfs.*` or `core.*` lines into the one shared local config file.",
+      "why": "The fix removes only `branch.*` lines, but the file is shared by every worktree, so these sibling writes still change `config --local --list` and void a paid run. This is the same failure class, one section over. The fix patches the one observed symptom and leaves the root cause (a repo-wide file read for a per-worktree check) in place.",
+      "fix": "Either allow-list the keys that matter for this worktree's isolation (`core.hookspath`, `core.worktree`, `include.*`, `alias.*`, `url.*`, `credential.*`, `diff.*`, `filter.*`), or hash a per-worktree view. Pin each non-branch section as either ignored or counted in the probe.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1544",
+      "breaking_input": "A sibling session runs `git branch --edit-description other` with a multi-line description. `config --list` prints a value containing a newline as `branch.other.description=line1` followed by raw `line2` lines. Conversely, a model writes `alias.x` with a value containing a newline followed by `branch.zzz.y=1`.",
+      "why": "The filter works line by line and assumes one line per key. A continuation line of a dropped section does not start with `branch.`, so it is kept and the digest still moves. A forged continuation line that starts with `branch.` inside another key's value is dropped and hidden from the digest. Neither is a clean per-key decision.",
+      "fix": "Read with `git config --local --list -z`, split on NUL, and split each record at the first newline into key and value before filtering on the key.",
+      "twin_of": null
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1541",
+      "breaking_input": "The repo has `extensions.worktreeConfig=true`. A model run executes `git config --worktree core.hooksPath /tmp/x`, or the sibling's `--worktree` writes go to its own `config.worktree`.",
+      "why": "The comment promises scoping to this worktree, but `config --local` reads only the shared `.git/config`. It never reads this worktree's `config.worktree`, which is where this worktree's real per-worktree state lives. A tamper with that file is invisible, while all the shared state is still hashed. The scope is both too wide and too narrow.",
+      "fix": "Also hash `git config --worktree --list` (when `extensions.worktreeConfig` is set), and use `--local` only for the shared remainder.",
+      "twin_of": "A failed read folded into a comparison as a constant"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1543",
+      "breaking_input": "HEAD is detached, so `branch` is not `refs/heads/...`, `own` is null, and every `branch.*` line is dropped. A model then rewrites `branch.<previous>.merge` or `.remote` for the branch it came from.",
+      "why": "With a detached HEAD the filter removes all branch sections, so the digest cannot see any branch config change. No probe case covers the detached state.",
+      "fix": "When HEAD is detached, keep `branch.*` lines unfiltered (a stricter tripwire) or fail closed. Add a detached-HEAD probe case.",
+      "twin_of": null
+    }
+  ]
+}

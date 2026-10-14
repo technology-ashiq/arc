@@ -388,6 +388,14 @@ function eventsOn(spine) {
   check("this worktree's own branch config still moves it", checkoutFingerprint(f).digest !== fp0.digest);
   gitIn(f, "config", "--unset", `branch.${own}.remote`);
   check("and unsetting it again restores it", checkoutFingerprint(f).digest === fp0.digest);
+  // attack 461984d: the match is exact, a multi-line value is one entry, remote.* is shared too.
+  gitIn(f, "config", `branch.${own}.0.remote`, "a sibling branch whose name extends this one");
+  gitIn(f, "config", "branch.made-by-another-worktree.description", "line one\nline two");
+  gitIn(f, "config", "remote.upstream.url", "https://example.invalid/upstream.git");
+  check("a sibling branch whose name extends this one, a multi-line value and a remote do not move it", checkoutFingerprint(f).digest === fp0.digest);
+  gitIn(f, "config", "branch.autoSetupMerge", "always");
+  check("a section-level branch key still moves it", checkoutFingerprint(f).digest !== fp0.digest);
+  gitIn(f, "config", "--unset", "branch.autoSetupMerge");
   // attack a522a4e and 680e889: each of these left HEAD and its branch looking untouched.
   const fp1 = checkoutFingerprint(f);
   writeFileSync(join(f, "a.txt"), "changed", "utf8");

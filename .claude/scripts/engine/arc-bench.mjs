@@ -1539,11 +1539,19 @@ export function checkoutFingerprint(root) {
     }).join("\n");
     // `config --local` exits 1 when there is no local config file at all; that is a state.
     // That file is shared by every worktree: another session's `checkout -b` writes its own
-    // branch.<name>.remote/merge here, and on 2026-10-14 that alone voided a paid run. Only this
-    // worktree's branch section is kept; every other line still counts.
-    const own = branch.startsWith("refs/heads/") ? `branch.${branch.slice(11)}.` : null;
-    const config = probe(["config", "--local", "--list"], "").split("\n")
-      .filter((l) => !l.startsWith("branch.") || (own && l.startsWith(own))).join("\n");
+    // branch.<name>.remote/merge here, and on 2026-10-14 that alone voided a paid run. Dropped:
+    // every branch.<name>.* section but this worktree's own, and remote.<name>.*, which sibling
+    // sessions write as routinely. A section-level key such as branch.autosetupmerge still counts
+    // (attack 461984d B1), and so does every other line, so a sibling write elsewhere stops a run
+    // rather than passing one. The subsection is matched exactly, never as a prefix: `v1` is not
+    // `v1.0` (L1, B2). `-z` keeps a multi-line value one entry (L5, B4).
+    const own = branch.startsWith("refs/heads/") ? branch.slice(11) : null;
+    const shared = (key) => {
+      const m = /^(branch|remote)\.(.+)\.[^.]+$/.exec(key);
+      return Boolean(m) && !(m[1] === "branch" && m[2] === own);
+    };
+    const config = probe(["config", "--local", "--list", "-z"], "").split("\0").filter(Boolean)
+      .filter((entry) => !shared(entry.split("\n")[0])).join("\0");
     const digest = createHash("sha256").update([head, branch, reflog, content, config].join("|\n|"), "utf8").digest("hex");
     return { head, branch, digest };
   } catch (e) {

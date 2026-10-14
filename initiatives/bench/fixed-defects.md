@@ -34,5 +34,6 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   champion re-run after #424). `git config --local` reads the one config file every worktree
   shares, and `checkout -b X origin/main` in a sibling worktree writes `branch.X.remote/merge`
   there. The tripwire stopped a paid run two attempts in, on the building session's own branch.
-  Fix: keep only this worktree's `branch.<name>.` section; every other config line still counts.
+  Fix: drop other branches' `branch.<name>.*` and every `remote.<name>.*`, matched exactly by
+  subsection, read with `-z`; section-level keys and every other line still count.
   Twin: any per-worktree check that reads a repository-wide file.
