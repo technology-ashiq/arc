@@ -97,8 +97,8 @@ init_all() { run --separate-stderr node "$(ARC)" init --dir "$(native "$D")" "$@
   printf 'keep\n' > "$BATS_TEST_TMPDIR/sentinel.txt"
   mkdir -p "$BATS_TEST_TMPDIR/outside" && printf 'keep\n' > "$BATS_TEST_TMPDIR/outside/x.md"
   local link="$D/escape" built=0
-  if ln -s "$BATS_TEST_TMPDIR/outside" "$link" 2>/dev/null && [ -L "$link" ]; then built=1
-  elif command -v cmd >/dev/null 2>&1 && cmd //c mklink //J "$(cygpath -w "$link")" "$(cygpath -w "$BATS_TEST_TMPDIR/outside")" >/dev/null 2>&1 && [ -e "$link/x.md" ]; then built=1; fi
+  # node builds it: a junction on Windows needs no privilege (MSYS ln -s silently copies), a symlink elsewhere.
+  node -e 'require("fs").symlinkSync(process.argv[1], process.argv[2], "junction")' "$(native "$BATS_TEST_TMPDIR/outside")" "$(native "$link")"     && node -e 'const f=require("fs");process.exit(f.lstatSync(process.argv[1]).isSymbolicLink() && f.realpathSync(process.argv[1]) !== process.argv[1] ? 0 : 1)' "$(native "$link")" && built=1
   [ "$built" -eq 1 ] && [ -e "$link/x.md" ] || { echo "the escape link was never built: a skip here would be a vacuous pass"; false; }
   # The mutant loop rewrites the record compactly; normalise it once so the baseline holds the same bytes.
   node -e 'const f=process.argv[1],fs=require("fs");fs.writeFileSync(f,JSON.stringify(JSON.parse(fs.readFileSync(f,"utf8"))))' "$(native "$D/.arc-install.json")"
