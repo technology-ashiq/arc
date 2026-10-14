@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (63)
+## Decisions (64)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -91,6 +91,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1760`](../../../docs/adr/1760-apply-again-and-the-in-attempt-verify-reads-fresh-resources.md) | `apply --again`, and the in-attempt verify reads what scaffold reported | accepted | 2026-10-14 |
 | [`1761`](../../../docs/adr/1761-recorded-real-verifies-replay-on-ci.md) | Recorded real verifies replay on CI, redacted at a refusing gate | accepted | 2026-10-14 |
 | [`1762`](../../../docs/adr/1762-the-day-12-tripwire-cuts-nothing.md) | The day-12 tripwire cuts nothing; the overrun was the wait for owner keys | accepted | 2026-10-14 |
+| [`1763`](../../../docs/adr/1763-arc-harnesses-is-a-core-wiring-slot.md) | `arc-harnesses` is a core wiring slot: a venture is born with arc installed | accepted | 2026-10-15 |
 
 ## Source
 

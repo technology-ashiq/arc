@@ -1486,6 +1486,17 @@ arm() {
   [ "$(j 'o.result.verify.ok + " " + o.result.verify.evidence.steps + " " + o.result.verify.evidence.resources')" = "true 5 1" ] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: arc-harnesses installs arc into the venture tree once and is verified by arc's own doctor (ADR-1763)" {
+  arm wiring harnesses
+  [ "$(j 'o.noRepo.scaffold.code + " " + o.before.ok')" = "UPSTREAM_MISSING false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.first.scaffold.ok + " " + o.first.scaffold.kinds.join(",") + " " + o.manifest')" = "true arc-install true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.first.verify.ok + " " + o.first.verify.answerer + " " + o.first.verify.evidence.harnesses + " " + o.first.verify.evidence.missing + " " + o.first.verify.evidence.unmanaged_conflict')" = "true arc doctor --dir 4 0 0" ] || { echo "$DONE"; false; }
+  [ "$(j '(o.first.verify.evidence.placed > 0) + " " + o.again.scaffold.ok + " " + o.again.verify.ok')" = "true true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.drifted.ok + " " + o.doctorConflicts')" = "false 1" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.drifted.reason')" == "arc doctor: 0 missing, 1 unmanaged-conflict" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.noRoot.ok + " " + o.noRoot.reason')" == "false NO_VENTURE_ROOT:"* ]] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: a slot outside the wiring group cannot ask arc's organs (ADR-1751)" {
   arm wiring not-wiring
   [ "$(j 'o.code')" = "ARC_PROBE_REFUSED" ] || { echo "$DONE"; false; }

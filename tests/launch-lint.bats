@@ -19,7 +19,7 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
 @test "launch-lint: the real catalog and registry pass, and the pass names what it read" {
   run node "$(LINT)"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"launch-lint: ok -- 85 slots, "*" provider rows, "*" candidate-unbuilt"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"launch-lint: ok -- 86 slots, "*" provider rows, "*" candidate-unbuilt"* ]] || { echo "$output"; false; }
 }
 
 @test "launch-lint: mutant self-test refuses all 13 mutants after a clean baseline" {
@@ -65,11 +65,11 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
   [[ "$output" == *"FAIL [predicate] tenancy"* ]] || { echo "$output"; false; }
 }
 
-@test "launch-coverage: derives 85 slots as 33 core, 35 required, 17 optional" {
+@test "launch-coverage: derives 86 slots as 34 core, 35 required, 17 optional" {
   run node "$(COV)"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"85 slots (33 core · 35 required · 17 optional)"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"core slots with a row 33/33"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"86 slots (34 core · 35 required · 17 optional)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"core slots with a row 34/34"* ]] || { echo "$output"; false; }
 }
 
 @test "launch-coverage: --require-core-vetted fails while any core slot has zero vetted providers" {

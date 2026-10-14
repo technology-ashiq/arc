@@ -9,7 +9,7 @@ ADR-1719), the slot's `run.completed` receipt on the spine, the outside answerer
 (2026-10-14, main clone, exit 0), and that verify's date. A row is vetted only after the owner's decision.recorded
 on the one approval.requested that cites this file; its digest must still match the adapter at that moment.
 
-Providers that ran live: **32** of 36 rows. Not here, and not vetted by this record:
+Providers that ran live: **33** of 37 rows. Not here, and not vetted by this record:
 - `cloudflare-registrar` (domain, candidate) -- the slot is a named ABSENT
 - `dodo` (payment-test, candidate) -- no live run through this row
 - `stripe` (payment-test, blocked) -- no live run through this row
@@ -48,4 +48,5 @@ Providers that ran live: **32** of 36 rows. Not here, and not vetted by this rec
 | venture-register | passport | `providers/passport/venture-register.mjs` | `9e539eed01d28d0e974938de8b3e1580971fbf9c8b23560b705fa1fcbb783172` | 01M4RZ5MZS8Q4DCJV51R83HKSJ | arc venture-register --dry-run | 2026-10-14 |
 | ledger-source | ledger-source | `providers/ledger-source/ledger-source.mjs` | `54fd9d5668d84abdfe019cf05cff75df24030e5fd2a3dbf7ff6b659f047f18be` | 01M4VR7V1D9XD4HTZKMMEJ52PW | arc spine | 2026-10-14 |
 | face-planned | face-room | `providers/face-room/face-planned.mjs` | `d0bc27f403d2d519c6ae42421e87f9839eb00b1ac445df0d8f415eefa8a7153a` | 01M4VTAQTJC473NTQ6R7BRCC6R | arc face contract | 2026-10-14 |
+| arc-checkout | arc-harnesses | `providers/arc-harnesses/arc-checkout.mjs` | `4079cef9e4b42075f0aa9f5d715cf23af5fab8b6d64e261353cedea692db29e1` | 01M4YA96HKTWZNWSMYDQMCVKYS | arc doctor --dir (673 placed, 20 degraded, 0 missing, 0 unmanaged-conflict; claude-code, codex, opencode, skills-only) | 2026-10-15 |
 | teardown-render | teardown-plan | `providers/teardown-plan/teardown-render.mjs` | `7621eb3fe644842cfd1c2e86c58d0ff2563e1ef6f85142e1b4d781a8736cc55e` | 01M4RZ5PY3R29VCKK95K4DNE79 | arc teardown render | 2026-10-14 |

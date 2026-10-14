@@ -163,7 +163,7 @@ flowchart TB
 
 Review adjudication (design source, 2026-10-03): findings 1 (count) → REQ-01, ADR-1717 · 2 (payment order) →
 ADR-1720 · 3 (`payment_model: none`) → ADR-1717 · 4 (default word) → ADR-1703 · 5 (DAG) → REQ-01 · 6 (scope) →
-33 core slots + Cycle 2 below · 7 (runner) → REQ-02, ADR-1718 · 8 (trust) → REQ-09, ADR-1719.
+33 core slots (34 since ADR-1763 added `arc-harnesses`) + Cycle 2 below · 7 (runner) → REQ-02, ADR-1718 · 8 (trust) → REQ-09, ADR-1719.
 
 ## Non-negotiables
 

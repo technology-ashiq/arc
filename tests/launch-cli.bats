@@ -31,7 +31,7 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [[ "$output" == *"dns: REFUSED -- no vetted provider for dns · candidates: cloudflare-dns (candidate)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"payment-test: REFUSED"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
   [[ "$output" != *"recommended"* ]] || { echo "a candidate was recommended: $output"; false; }
-  [[ "$output" == *"arc-sandbox: 85 slots · "*" REFUSED (no vetted provider)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"arc-sandbox: 86 slots · "*" REFUSED (no vetted provider)"* ]] || { echo "$output"; false; }
 }
 
 @test "launch-cli: plan recommends a vetted, fitting row with the reasons it fits" {

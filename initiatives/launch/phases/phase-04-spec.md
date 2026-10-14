@@ -7,7 +7,7 @@
 
 ## Scope
 
-- fit-rule engine + `plan` reasons + override receipt (ADR-1706); neon row (ADR-1721) + adapter in its own PR with the file-list bats check; digest-drift / hosts / write-root / sensitive-action fixtures; wiring block last-but-one (ADR-1711): passport dry-run · ledger-source · face-room `planned` · `teardown --plan` naming recorded resource ids (ADR-1714); weekly `verify --all` job row (ADR-1716).
+- `arc-harnesses` core wiring slot (ADR-1763, distribute REQ-15): `arc init` into the venture tree, verified by `arc doctor --dir`. fit-rule engine + `plan` reasons + override receipt (ADR-1706); neon row (ADR-1721) + adapter in its own PR with the file-list bats check; digest-drift / hosts / write-root / sensitive-action fixtures; wiring block last-but-one (ADR-1711): passport dry-run · ledger-source · face-room `planned` · `teardown --plan` naming recorded resource ids (ADR-1714); weekly `verify --all` job row (ADR-1716).
 
 ## Exit criteria (Definition of Done)
 

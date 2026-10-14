@@ -796,6 +796,25 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  - id: arc-checkout
+    slot: arc-harnesses
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    hosts:
+      - sandbox.automemory.ai
+    credentials:
+      scope: "none -- arc installs itself and reads its own doctor through ctx.probe.arc (ADR-1751, ADR-1763)"
+    adapter: providers/arc-harnesses/arc-checkout.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
   - id: teardown-render
     slot: teardown-plan
     status: candidate
