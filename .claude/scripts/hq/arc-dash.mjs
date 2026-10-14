@@ -517,6 +517,17 @@ async function apiPnl(ctx, url) {
   return { mode: ctx.mode, month, model: safeModel, kill: reads.scrubDeep(panel, ctx.repo) };
 }
 
+// The lane-stale job's derivation (portfolio REQ-08, ADR-0079), read from instance state beside the spine
+// (`.claude/state/portfolio/` next to `.claude/state/hq/`). `stale` is never a board field: it is served
+// here beside the lane, or not at all -- null when the job has not run, so absence never reads as "fresh".
+function laneStale(ctx) {
+  try {
+    const v = JSON.parse(readFileSync(join(dirname(ctx.root), "portfolio", "lane-stale.json"), "utf8"));
+    if (!v || typeof v !== "object" || !v.lanes || typeof v.lanes !== "object" || Array.isArray(v.lanes)) return null;
+    return v;
+  } catch { return null; }
+}
+
 function apiBoard(ctx) {
   const boardPath = join(ctx.repo, "PORTFOLIO.md");
   if (existsSync(boardPath) && !insideRepo(ctx, boardPath)) throw new DashError("SOURCE_OUTSIDE", "PORTFOLIO.md resolves outside this tree -- not served");
@@ -531,13 +542,16 @@ function apiBoard(ctx) {
   // A lane whose files resolve off the tree is NAMED here and never read: its header would have been another tree's
   // status, drawn as a LIVE lane of this company (Phase 04 round 3).
   const outside = [];
+  const derived = laneStale(ctx);
   for (const lane of [...new Set(order)]) {
     const progress = join(ctx.repo, "initiatives", lane, "PROGRESS.md");
     if (!existsSync(progress)) continue; // a board row without a lane dir is the lint's problem, not a lie to serve
     if (!insideRepo(ctx, progress)) { outside.push(lane); continue; }
-    lanes.push({ lane, header: laneHeader(progress) });
+    // An own property only: a lane named like an Object.prototype key must never read an inherited value.
+    const d = derived && Object.prototype.hasOwnProperty.call(derived.lanes, lane) ? derived.lanes[lane] : null;
+    lanes.push({ lane, header: laneHeader(progress), stale: d && typeof d.stale === "boolean" ? d.stale : null });
   }
-  return { mode: ctx.mode, badge: "file, not log", updated, lanes, outside };
+  return { mode: ctx.mode, badge: "file, not log", updated, lanes, outside, stale_derived_at: derived && typeof derived.derived_at === "string" ? derived.derived_at : null };
 }
 
 /** The heading a phase spec opens with, as a title rather than as markdown. */
