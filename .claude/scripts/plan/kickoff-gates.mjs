@@ -37,7 +37,7 @@ export function readHeader(text) {
   const out = { status: null, cycle: null, appetite: null };
   for (const line of head) {
     if (/^##\s/.test(line)) break;
-    const m = /^(status|cycle):[ \t]*(.*?)[ \t]*$/i.exec(line);
+    const m = /^(status|cycle|appetite):[ \t]*(.*?)[ \t]*$/i.exec(line);
     if (m && out[m[1].toLowerCase()] === null) out[m[1].toLowerCase()] = m[2];
   }
   return out;
@@ -98,6 +98,16 @@ export function spineDirFor(root) {
   }
   // The MAIN worktree is the first entry git lists. dirname(git common dir) is not it for a
   // separate-git-dir checkout or a submodule, and that silently read "no spine".
+  // Not a linked worktree (git dir == common dir): the checkout itself is the main one. `worktree list` names the
+  // git dir, not the checkout, for a separate-git-dir repo, so it is asked only from a linked worktree.
+  let gitDir, commonDir;
+  try {
+    gitDir = resolve(root, git(root, ["rev-parse", "--git-dir"]).trim());
+    commonDir = resolve(root, git(root, ["rev-parse", "--git-common-dir"]).trim());
+  } catch { return { dir: null }; }
+  if (gitDir === commonDir) {
+    try { return { dir: join(git(root, ["rev-parse", "--show-toplevel"]).trim(), ".claude", "state", "hq") }; } catch { return { dir: null }; }
+  }
   let list;
   try { list = git(root, ["worktree", "list", "--porcelain"]); } catch { return { dir: null }; }
   const firstBlock = list.split(/\r?\n\r?\n/)[0];

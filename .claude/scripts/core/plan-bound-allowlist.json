@@ -430,6 +430,21 @@
       "verb": "launch/owner-apply-watch-policy",
       "class": "lane-tool",
       "why": "the owner one-shot apply for the deny-floor policy row, the job row and the stub tools (ADR-1750); the owner runs it by hand and commits the result, so the commit is the record. Not a face op"
+    },
+    {
+      "verb": "plan/kickoff-gates",
+      "class": "lane-tool",
+      "why": "kickoff-lint's new-cycle gates (ADR-0076..0078): the audit reads its git calls as a possible write, but every one is a read (rev-parse --verify, ls-tree, show, worktree list --porcelain), and the module writes no file at all. Not a face op"
+    },
+    {
+      "verb": "hq/jobs/lane-stale",
+      "class": "lane-tool",
+      "why": "the portfolio lane-stale daily job (ADR-0079): it writes only its derivation in instance state, .claude/state/portfolio/lane-stale.json, and emits incident.raised through arc-event; never a tracked file. Not a face op"
+    },
+    {
+      "verb": "core/owner-apply-lane-stale",
+      "class": "lane-tool",
+      "why": "the owner one-shot apply for the lane-stale policy subject, job row and stub (portfolio REQ-08, ADR-0079, on ADR-1750's pattern); the owner runs it by hand and commits the result, so the commit is the record. Not a face op"
     }
   ]
 }

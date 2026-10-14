@@ -32,3 +32,6 @@ was never made.
 - **(u) text off the spine into a rendered line.** Print a spine field only when it matches its own grammar (Phase 06 r2 L3).
 - **(v) a split that ignores nesting.** A comma inside a parenthesised note is not an item separator (Phase 04 r2 L8).
 - **(w) the last cell of a pipe table.** A row without a trailing pipe keeps its last cell (Phase 06 r2 B6).
+- **(x) an edit that never landed.** The header regex never gained `appetite` (a scripted edit failed silently), so the debt gate refused every over-threshold lane as "no readable appetite"; found by CI, not by the author (Phase 05 CI).
+- **(y) separate-git-dir's main worktree.** `git worktree list` names the git dir there; use `--show-toplevel` when git dir == common dir (Phase 04 CI).
+- **(z) locale ranges in awk/bash.** `[^a-z0-9-]` collates differently per locale; spell the characters out (Phase 06 CI, portability.bats).

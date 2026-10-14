@@ -109,7 +109,7 @@
 .claude/scripts/core/arc-profile.sh	8583b252787e2c5424e2dff090dfc0050fe4f7d5213984c5d2c7cfbfc98944ba
 .claude/scripts/core/arc-settings-merge.mjs	bab6957e3a4277a9facaec78be27b42736b75730c5536919c65672ea6a161b48
 .claude/scripts/core/arc-status.sh	923697030d9ae7c0a786727b09871463fc521b74362b044bd22f5cb16c588e21
-.claude/scripts/core/board-lint.sh	2401b5693747657c23a48fc533b6628630db4607fbea386c04f84189604d20c1
+.claude/scripts/core/board-lint.sh	de9d3e704c02f0ed5ee7ad60b1f6365ba4dcea2c2fa1a0d2e83bafbd600df333
 .claude/scripts/core/brain-drift.mjs	ae99569474b0b7b6b0fe1d8c91c9102617ac85983f33649b095a08de57fee316
 .claude/scripts/core/branch-guard.sh	33d4a0cc6a650f437ba6263be5ffdcd8969e7d4ddea4b2fdb60be004af7e55b5
 .claude/scripts/core/common.sh	7ce39ae885d3bb6b12bf80c7265b77c87126ee1a217e3e2480cd170849098c60
@@ -132,7 +132,7 @@
 .claude/scripts/core/one-line.mjs	de7576a87c7710b049a6984a6f60b48937b44d626a9ebd347f5af12b74625a65
 .claude/scripts/core/owner-apply-lane-stale.mjs	78bca5ef2edb730cab0478b9b5366d53b6da71bcf1f9dadbcec194e09bfe23a7
 .claude/scripts/core/ownership-lint.sh	f6f24f2afaf6b845cca533728a85693926fa4c22b73d741fc868ce28bddc82dc
-.claude/scripts/core/plan-bound-allowlist.json	7d02533fae8b6578220ae187b7e9715da8d293c0402aeca486100b7663d99369
+.claude/scripts/core/plan-bound-allowlist.json	51a41188680ec07c1567135ed529b55766f56266817692900d3832e71e6c6bbf
 .claude/scripts/core/plan-bound-audit.mjs	c8b375c36c494d647aa2f55d9c9bc966a9496eca2ef44601f62407868ff34f4c
 .claude/scripts/core/plan-expect.mjs	94d5d89b19db14ab02c6121f4dc5ec8218f4c01ba69c60ffd9cb5500cd14bc4c
 .claude/scripts/core/product-lint.mjs	9f2c1edd27b93f4649ec25a9dae1439eee040ea377f8a7dcd1b97b18e93247e3
@@ -438,7 +438,7 @@
 .claude/scripts/org/skill-import.mjs	d7b98da131267949d3943e165495cbbad6a9b408e4b02694fae12790c09dbab2
 .claude/scripts/plan/arc-bytediff.sh	252b971a2c8a7e2267fcdedcec34c85ecfa4a520d65590c0995c29f6d0e424f8
 .claude/scripts/plan/arc-evidence.sh	ddbc49a3da693499d34d2e7e904db017a045e6fb4558f5b0c867c432b9f013e0
-.claude/scripts/plan/kickoff-gates.mjs	63fc1f9628d46ec3346c432c457f3ce50bbe5c8c2bef137eb93690615fa4ee17
+.claude/scripts/plan/kickoff-gates.mjs	97cc98ccb3442dc653fd3319c8723d9a22d967f85b55942b76e7a161b47c95ff
 .claude/scripts/plan/kickoff-lint.mjs	01eb9e9ff4098a84171293fb80366242e0dcaf60dff2e0521cea32e5098149b7
 .claude/scripts/review/arc-scan/adapters/codeql.sh	2096a51e1440b321f5ca1a2b7f1cb6870c661c10d82e64f8dc60b170ad80b7a2
 .claude/scripts/review/arc-scan/adapters/gitleaks.sh	efac63b8cf026d05eaafabbec934bb287b2bb67c6f72d0cee7806c088631ff9d

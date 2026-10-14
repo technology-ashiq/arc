@@ -809,7 +809,7 @@ if [ "$STRICT" = 1 ] && [ -f "$BOARD" ] && [ -r "$BOARD" ]; then
       for (i = 2; i <= n; i++) {   # <= n: a row with no trailing pipe keeps its last cell (round 2 B6)
         c = clean(cell[i])
         if (rows == 1 && c == "stale") { print NR ": header cell stale"; next }
-        if (rows > 2 && c ~ /(^|[^a-z0-9-])stale[ 	]*[:=]/) { print NR ": cell " c; next }
+        if (rows > 2 && c ~ /(^|[^abcdefghijklmnopqrstuvwxyz0123456789-])stale[ 	]*[:=]/) { print NR ": cell " c; next }
       }
     }' "$BOARD")"
   if [ -n "$_STALE" ]; then
