@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2218-2222 (moneyPair INR branch)",
+      "breaking_input": "candidate.cost_inr=5, champion.cost_inr=5 (both present), candidate.spend=null, champion.spend=null, but candidate has a spend_gap and champion has no gap",
+      "why": "moneyPair prefers INR when either side has a non-null cost_inr, even if one side's INR figure is stale or fabricated while the other side's spend is the only real money. The code checks one-side-only absence but not that the INR figures are both from the same basis. A candidate could inject cost_inr=0 and win the cost gate even though its spend is absent/gapped.",
+      "fix": "When both sides have cost_inr, also verify they are on the same basis (e.g., both 'measured') before comparing; otherwise fall back to spend or flag not comparable."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:851-874 (receiptSpend)",
+      "breaking_input": "spend = {amount: 1, currency: 'USD', provider_amount: '0.01'} but spend.amount is greater than provider_amount rounded up (e.g., amount=2 with provider_amount='0.01')",
+      "why": "isSpend (imported from common.mjs) is trusted to validate the shape, but the comment says the integer minor unit must equal the provider figure rounded up. Yet receiptSpend only calls isSpend(spend) which apparently does not enforce the rounding relationship (the probe test checks 'refuses an amount that is not the provider figure rounded up' and passes, but only because isSpend presumably does check it). However, if isSpend is lenient about provider_amount, a harness can report arbitrary spend amounts. The real risk: the code trusts that isSpend already enforces the rounding invariant, but a malicious receipt could set amount=0 with provider_amount='0.00' and still pass, making spend free.",
+      "fix": "Explicitly verify spend.amount equals ceil(parseFloat(provider_amount) * 100) when basis is harness-reported, and refuse otherwise."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1892 (latencies.money = foldSpend)",
+      "breaking_input": "Two attempts in the same class: attempt1 spend={amount:5,currency:'USD',basis:'harness-reported'}, attempt2 spend={amount:5,currency:'USD',basis:'harness-reported'} plus the second attempt also has a payload.spend_basis that is the same. foldSpend sums correctly. But if an attempt's spend is null (no spend) and another has a spend, the whole class becomes ABSENT. Now in runBench line 1892, the attempt's spend is folded BEFORE the attempt's verdict is checked. A budget-overspend attempt still gets its spend folded in, even though it should arguably be excluded or marked.",
+      "why": "An attempt that times out (ETIMEDOUT) returns with spend set (line 1047) and is folded into the class sum. A champion that always times out but has a small spend can still be compared on cost, which is misleading because the attempt never produced an answer. The all-or-nothing semantics do not distinguish 'no answer' from 'expensive answer'.",
+      "fix": "Only fold spend from attempts that reached an answer (i.e., after the schema/verdict is resolved), not from timeouts or incomplete runs."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2271-2289 (tierDiffLine)",
+      "breaking_input": "router.yaml has a class with a tier line like 'tier: balanced-workhorse   # pinned model expected' and models block has only one tier pinning the driver to the model, but that tier is 'balanced-workhorse' itself. The function sees current='balanced-workhorse' and pins(current)===model, so it returns 'already routes'. However, the tier line could have a comment that changes the meaning, and the code strips the comment with a regex but does not consider that the tier name might have different whitespace. More critically, if models has a key that is a prefix of another (e.g., 'twin' and 'twin-a'), and the candidate model is 'twin', then pins('twin') could match the prefix tier and also 'twin-a' and 'twin-b', giving tiers.length>1 incorrectly.",
+      "why": "The tier matching is done by exact string equality after trimming, but the model names are looked up by the tier key. A model named 'twin' when there are tiers 'twin-a' and 'twin-b' would cause a false refusal because the code sees multiple tiers pinning 'twin' (it iterates all keys and compares pins(t) === model, which uses models[t] and then [driver] — but tier keys are not normalized, so 'twin-a' and 'twin' are distinct keys and would not both equal 'twin' unless the model string accidentally equals a tier key). Actually the risk is that a tier key could be a substring of another and the model name exactly equals the shorter tier key, making pins() return that tier's model and also another tier's model if the model is repeated. That is a real ambiguity the code refuses, which is safe but could block a legitimate proposal. More dangerous: if model is undefined (model_applied is null), the function errors on pins(current) === model (comparing undefined) and returns 'already routes' even when it should refuse.",
+      "fix": "Ensure model is a non-empty string before entering the same-driver tier branch; if model is null, do not attempt tier substitution, return the reason that no model was applied."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2403-2406 (withMetrics)",
+      "breaking_input": "A champion provenance.json is hand-edited (as the champion directory is 'handed to us') and contains spend: {amount: -5, currency:'USD', basis:'harness-reported'}. classSpend returns null because amount < 0. But the champion's cost_inr might be non-null (e.g., 0), and moneyPair would then use the INR branch and compare cost_inr, bypassing the spend check. This allows a champion to claim cost_inr=0 to win cost, while its actual spend is invalid.",
+      "why": "The moneyPair picks INR whenever either side has a cost_inr, even if the spend is malformed or absent. A champion can fabricate cost_inr to dodge the spend validation. The proof: a champion with cost_inr=0 and a spend that is invalid still compares on INR, and 0 vs a positive candidate INR makes champion cheaper.",
+      "fix": "When cost_inr is present on both sides, also validate that each side's spend (if any) is well-formed, and if one side has an invalid spend, mark not comparable rather than falling back to INR."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1046-1049 (modelInvalid computation)",
+      "breaking_input": "A receipt with payload.failure_class='model-invalid' but also payload contains a valid output field (i.e., the model returned JSON that failed the schema, but the driver misclassified it). The code treats ANY failure_class='model-invalid' as a schema failure, regardless of whether the model actually produced a non-JSON answer or the driver buggyly sets that class. An attacker controlling the receipt (spine is a file anyone can append to) can set failure_class='model-invalid' on a perfectly valid run to make it a schema failure, potentially lowering candidate's schema rate and affecting gates.",
+      "why": "The fix trusts the receipt's failure_class field without cross-validating that the answer was actually non-JSON. A malicious receipt can label any failure as 'model-invalid' to turn an otherwise run-failure into a scoreable schema failure (which is worse for the candidate, potentially losing on schema), or vice versa.",
+      "fix": "Use the driver's reported failure_class only when the receipt also indicates the answer was non-JSON (e.g., by checking an 'invalid_json' flag from the driver), not just trusting the string."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:898-911 (SPEND_BASES)",
+      "breaking_input": "A receipt with spend_basis='recorded' but the amount is negative (e.g., -1) — isSpend may allow negative amounts? The comment says integer minor units, but isSpend (in common.mjs) might not reject negative. receiptSpend would accept it and later foldSpend could sum a negative amount, making a class's spend negative, which then passes classSpend (which rejects negative) but the analysis path uses foldSpend's result directly, and moneyPair compares amounts that could be negative.",
+      "why": "The shape-check in receiptSpend relies on isSpend which may not enforce non-negative integers. A negative spend could make a candidate appear cheaper than champion and win the cost gate spuriously.",
+      "fix": "Add an explicit amount >= 0 check in receiptSpend, mirroring classSpend."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2301-2319 (tierDiffLine parsing)",
+      "breaking_input": "router.yaml with a tier line that has extra spaces or a comment like 'tier: balanced-workhorse # comment with a colon: and equal sign' — the regex /^\\s{4}tier:\\s*/ matches but the strip of comment /\\s+#.*$/ removes the comment, and the trim leaves 'balanced-workhorse'. However, if the tier name itself contains a '#' character (unlikely but possible in a YAML string), the replacement would truncate it.",
+      "why": "The comment-stripping on a YAML line assumes the tier value is a simple scalar without '#' inside. A tier named 'high#value' would be mis-parsed to 'high'. While contrived, it is a parser error that could cause a wrong tier to be selected in the diff.",
+      "fix": "Parse the tier value using the YAML subset parser rather than regex comment stripping, or at least disallow '#' in tier names."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1864-1879 (metrics accumulation)",
+      "breaking_input": "A class with K attempts where one attempt is a timeout (verdict 'budget') and returns spend=null (line 1047 has spend but the timeout branch returns spend). Actually line 1047 includes spend in the return, so timeout attempts have spend. But if the attempt times out AFTER the driver wrote a spend receipt, the spend is folded in even though the attempt did not finish. This could make a class's spend look complete when in fact it should be gapped because one attempt was interrupted.",
+      "why": "The folding at 1892 runs for every attempt regardless of whether it reached an answer. A timeout attempt that had a partial spend gets counted, and the class is not marked as having a gap even though the run was incomplete. This can make a candidate look cheaper (less spend) because a timeout attempt often has lower spend, biasing the cost comparison.",
+      "fix": "Do not fold spend from attempts whose verdict is 'budget' / timeout; instead mark the class as having a gap because an attempt did not complete."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2419-2421 (buildEvidenceTable cost column)",
+      "breaking_input": "Rows where moneyPair returns unit 'USD minor, harness-reported' — the cost delta is printed as '42 (USD minor, harness-reported)'. A reader might misinterpret '42' as a large number without realizing it is cents, but that is cosmetic. However, if the unit is the same but amounts are in different scales (e.g., candidate in USD minor, champion in INR minor) the comparison is refused so that is fine. The real issue: when both sides have a spend and a cost_inr, the table shows the INR delta but the manifest writes both spend and cost_inr. The evidence table can be misleading if it shows INR delta while the actual decision was made on spend.",
+      "why": "A reader of the evidence table sees a delta of e.g., '`3 (INR)`' when the candidate and champion actually have different currencies in spend, but because both have cost_inr, moneyPair uses INR and the cost column shows INR delta while the manifest stores spend that is not comparable. The table suggests a decision that the moneyPair function did not actually make on the important figure.",
+      "fix": "Make the evidence table show which unit the decision was actually based on, and if both cost_inr and spend are present, clearly label which one was used for the verdict."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2178-2194 (evaluateGates)",
+      "breaking_input": "A candidate with cost_inr=null and spend={amount:100, currency:'USD', basis:'harness-reported'}, champion with cost_inr=100 and spend={amount:1, currency:'USD', basis:'harness-reported'}. moneyPair sees candidate INR null, champion INR 100 → returns fail because one side only. But the spend figures are both present and same currency/basis; the code refuses the comparison entirely because INR is present on one side, even though INR is the less reliable figure. A candidate could set cost_inr to force a non-comparability and avoid losing on spend.",
+      "why": "The INR branch takes precedence even when only one side has INR. If a candidate wants to avoid a cost comparison that it would lose, it can fabricate a cost_inr on only its side, making the comparison 'not comparable' and the gate fails, which is arguably a denial-of-service.",
+      "fix": "If one side has INR and the other does not, fall back to using spend if both spends are present and comparable, rather than immediately failing."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1060-1063",
+      "breaking_input": "A receipt with payload.failure_class=null but the model actually output non-JSON prose. In the claude-code driver change, only the parse error from parseModelJson sets arcFailureClass='model-invalid'. But if the CLI exits 0 with a non-JSON string that happens to parse as JSON (e.g., the model answers a string that is a valid JSON number like '42'), then parseModelJson may accept it but the output is not the expected object. The code would treat it as a successful run, not a schema failure, even though the answer violates the contract.",
+      "why": "The fix only catches the case where the answer is not JSON at all. A valid-JSON-but-wrong-shape answer (e.g., a JSON string instead of an envelope object) is still the model's fault but is not declared model-invalid; it becomes a run failure or a schema failure via the score, but the verdict logic for 'model-invalid' on a timed-out or driver-fail path is bypassed. The control test only checks the envelope parse failure, not a JSON-but-invalid-result case.",
+      "fix": "In the claude-code driver, also check that the parsed JSON has the expected envelope shape; if not, throw with arcFailureClass='model-invalid'."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2301-2319",
+      "breaking_input": "router.yaml with a tier value that is quoted, e.g., 'tier: \"balanced-workhorse\"' — the regex strips the comment but leaves the quotes: current becomes '\"balanced-workhorse\"'. Then pins(current) uses that string as a key into models, which has keys unquoted, so it returns undefined, and the function returns 'no tier pins' even though the router is valid YAML.",
+      "why": "The tier parsing does not handle quoted YAML scalars. A router edited by a user with quotes (common in YAML) would cause a false refusal, preventing a legitimate proposal.",
+      "fix": "Strip surrounding quotes and handle YAML escape sequences when parsing the tier value."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2271-2289",
+      "breaking_input": "A class where the driver line is the same but the model is not provided (model=null). The code checks if before===after and then `if (!model) return { diff: null, why: 'the router already routes...' }`. This means a same-driver candidate with no model_applied (e.g., because model_source is not 'trial') is told 'already routes', which is fine. But if model is an empty string (''), that is truthy in JavaScript, so it proceeds to tierDiffLine with model='', which then pins(current)==='' is false, and it looks for a tier with '' model, likely finds none and refuses. That is a safe failure, but the message might be confusing.",
+      "why": "No security issue, just a minor robustness concern; empty model is treated as a real model name.",
+      "fix": "Treat empty string model as null."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2461-2464",
+      "breaking_input": "In buildProposal, candidateModel is taken from report.provenance.model_applied, but the report comes from the run's provenance.json which is written by runAttempt? Actually the provenance is built from the receipt. If the receipt lies (someone appends to spine), model_applied could be a model that no tier pins. Then buildRouterDiff will refuse (no diff), but the evidence table and summary will show the fake model name. This is a logic confusion but not a direct exploit.",
+      "why": "The candidate name in the evidence table is derived from the untrusted receipt's model_applied. A malicious receipt could make the proposal heading claim a different model than the one actually benched, misleading the owner.",
+      "fix": "Validate candidateModel against the router's known models before using it in the table; if it is not found, degrade to the driver name only."
+    }
+  ]
+}

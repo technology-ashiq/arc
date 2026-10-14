@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   ASSERTION_BAND_PP, EXIT, MIN_FIXTURES, OperatorError,
-  buildRouterDiff, classSpend, evaluateGates, foldSpend, moneyPair, parseArgs, receiptSpend, routerSha,
+  artifactModel, buildRouterDiff, classSpend, evaluateGates, foldSpend, moneyPair, parseArgs, receiptSpend, routerSha,
 } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -306,6 +306,18 @@ const REV = { candidateRevision: "1.0.0", championRevision: "1.0.0" };
   check("a DIFFERENT driver still rewrites the driver line, model or not",
     /^-\s+driver: claude-code$/m.test(drv.diff || "") && /^\+\s+driver: mock$/m.test(drv.diff || "") && !/tier: cheap-scan/.test(drv.diff || ""), drv.diff);
 
+  // Attack ab2d484 L8/L13: a quoted tier with a trailing comment is the SAME tier, read through the router parser.
+  const qroot = dir("tier-router-quoted");
+  mkdirSync(join(qroot, "engine"), { recursive: true });
+  writeFileSync(join(qroot, "engine", "router.yaml"), readFileSync(join(rroot, "engine", "router.yaml"), "utf8")
+    .replace("    tier: balanced-workhorse", "    tier: \"balanced-workhorse\"  # the workhorse"), "utf8");
+  const qsha = routerSha(qroot);
+  const qInc = buildRouterDiff(qroot, "commit-msg-draft", "claude-code", qsha, { model: "sonnet" });
+  check("a QUOTED tier with a comment still reads as the incumbent's tier",
+    qInc.diff === null && /already routes commit-msg-draft to claude-code\/sonnet \(tier balanced-workhorse\)/.test(qInc.why || ""), qInc.why || qInc.diff);
+  const qNew = buildRouterDiff(qroot, "commit-msg-draft", "claude-code", qsha, { model: "haiku" });
+  check("and a new model still diffs that line to the tier that pins it", /^\+\s+tier: cheap-scan$/m.test(qNew.diff || ""), qNew.why || qNew.diff);
+
   // MONEY, LIKE FOR LIKE. The receipt's spend is integer minor units, a currency and a basis.
   const usd = (amount, basis = "harness-reported") => ({ amount, currency: "USD", basis });
   check("receiptSpend reads a well-formed spend with its basis",
@@ -335,6 +347,16 @@ const REV = { candidateRevision: "1.0.0", championRevision: "1.0.0" };
   check("nor are two currencies, with no rate anyone maintains", cur.gate === "cost-comparability" && /not like for like/.test(cur.reason), cur.reason);
   const oneSide = evaluateGates(side(usd(40)), side(null), REV);
   check("spend on one side only is not comparable", oneSide.gate === "cost-comparability" && /spend is reported on one side only/.test(oneSide.reason), oneSide.reason);
+  // Attack ab2d484 B2: a champion directory is a file anyone can hand us, so its model id reaches a table only as a plain id.
+  check("an applied trial model reaches an artifact as a plain id",
+    artifactModel({ model_source: "trial", model_applied: "haiku" }) === "haiku" && artifactModel({ model_source: "trial", model_applied: "anthropic/claude-haiku-5.5" }) === "anthropic/claude-haiku-5.5");
+  check("but a model id that could break a table cell or a link is dropped, and so is a non-trial one",
+    artifactModel({ model_source: "trial", model_applied: "haiku | **PROPOSE** [x](y)" }) === null
+      && artifactModel({ model_source: "router", model_applied: "haiku" }) === null && artifactModel({ model_source: "trial", model_applied: "" }) === null);
+  // Attack ab2d484 L5: a malformed spend is NOT an absence -- two of them must not read as "comparable".
+  const bad = evaluateGates(cls({ spend: null, spend_malformed: true }), cls({ spend: null, spend_malformed: true }), REV);
+  check("a MALFORMED spend on both sides is not comparable, never two absences that pass",
+    bad.gate === "cost-comparability" && /spend on both sides is not money bench can read/.test(bad.reason || ""), bad.reason || "eligible");
   const inrWins = moneyPair(side(usd(1), 5), side(usd(999), 9));
   check("a rupee cost block on both sides is still the figure compared", inrWins.candidate === 5 && inrWins.champion === 9 && inrWins.unit === "INR", JSON.stringify(inrWins));
 

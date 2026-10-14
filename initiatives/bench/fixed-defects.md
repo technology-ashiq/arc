@@ -57,3 +57,12 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   for claude-code; its spend rides `payload.spend` in USD. Bench read only the first, so cost never decided.
   Fix: read the spend, sum all-or-nothing, compare only same currency and basis (ADR-0917). Twin: the drift
   guard's `classifyCostDelta`, still rupee-only (debt).
+- **A CLI's own error text read as the model's answer** (2026-10-15, attack ab2d484 B1). The ADR-0917
+  `model-invalid` line fired on every result that failed to parse, including an `is_error` envelope that
+  exits 0 with a usage-limit notice, so a rate-limited candidate would read as a contract regression. Fix:
+  declare `model-invalid` only for a non-empty result from a session reporting success; pinned with an
+  exit-0 error envelope. Twin: every driver that reads an answer out of an envelope that can also carry
+  an error.
+- **Malformed read as absent** (2026-10-15, attack ab2d484 L5). A spend that fails the shape check on both
+  sides read as two absences, which gate 5 calls comparable. Fix: `spend_malformed`, refused by name.
+  Twin: every "ABSENT is comparable" rule fed by a validator that returns null for both absent and bad.

@@ -2228,6 +2228,10 @@ export function evaluateGates(candidate, champion, { candidateRevision, champion
  * @returns {{ candidate: number|null, champion: number|null, unit: string|null, fail: string|null }}
  */
 export function moneyPair(candidate, champion) {
+  if (candidate.spend_malformed || champion.spend_malformed) {
+    const who = candidate.spend_malformed && champion.spend_malformed ? "both sides" : candidate.spend_malformed ? "the candidate" : "the champion";
+    return { candidate: null, champion: null, unit: null, fail: `the spend on ${who} is not money bench can read -- not comparable` };
+  }
   const cInr = candidate.cost_inr ?? null;
   const chInr = champion.cost_inr ?? null;
   if (cInr !== null || chInr !== null) {
@@ -2301,6 +2305,16 @@ export function buildRouterDiff(root, taskClass, candidateDriver, sha, { model =
   return { diff, why: null };
 }
 
+// A model id as it may appear in an artifact a person reads: the grammar of a real id, nothing that could close a
+// table cell or start a markdown link (attack ab2d484 B2 -- a champion directory is a file anyone can hand us).
+const ARTIFACT_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+
+/** The model a run APPLIED, when it was a trial and its id is a plain model id; otherwise null. */
+export function artifactModel(prov) {
+  const m = prov && prov.model_source === "trial" ? prov.model_applied : null;
+  return typeof m === "string" && ARTIFACT_MODEL_RE.test(m) ? m : null;
+}
+
 /**
  * The tier line a same-driver model change rewrites, or why there is none. NEVER A GUESS: no tier pinning the model is
  * a refusal (a new `models:` row is a reviewed policy change, not a bench diff), and two tiers pinning it is a refusal
@@ -2312,9 +2326,11 @@ function tierDiffLine(text, lines, classIdx, taskClass, driver, model) {
     if (/^\s{4}tier:/.test(lines[i])) { tierIdx = i; break; }
   }
   if (tierIdx < 0) return { why: `\`classes.${taskClass}\` declares no tier line, so no model can be re-pinned` };
-  const current = lines[tierIdx].replace(/^\s{4}tier:\s*/, "").replace(/\s+#.*$/, "").trim();
   const parsed = parseYamlSubset(text);
   if (!parsed.ok) return { why: `engine/router.yaml could not be read (line ${parsed.error?.line ?? "?"}: ${parsed.error?.what ?? "unparseable"})` };
+  // The PARSED tier, never the line's text: a quoted scalar or a trailing comment is the same tier (attack ab2d484 L8, L13).
+  const current = parsed.value?.classes?.[taskClass]?.tier;
+  if (typeof current !== "string" || current === "") return { why: `\`classes.${taskClass}\` has no tier the router parser can read, so no model can be re-pinned` };
   const models = parsed.value?.models;
   if (!models || typeof models !== "object" || Array.isArray(models)) return { why: "engine/router.yaml has no `models:` block, so no tier pins a model" };
   const pins = (tier) => (models[tier] && typeof models[tier] === "object" ? models[tier][driver] : undefined);
@@ -2364,7 +2380,11 @@ export function buildEvidenceTable(rows, { candidateSubject, championSubject, ro
  */
 function withMetrics(entry, metrics) {
   const m = metrics?.[entry.task_class] ?? {};
-  return { ...entry, cost_inr: m.cost_inr ?? null, spend: classSpend(m.spend), p95_ms: m.p95_ms ?? null };
+  const spend = classSpend(m.spend);
+  // A spend key holding something that is not money is MALFORMED, not absent: two malformed figures read as two
+  // absences would be "comparable" and the cost gate would pass on nothing (attack ab2d484 L5).
+  const spendMalformed = m.spend !== undefined && m.spend !== null && spend === null;
+  return { ...entry, cost_inr: m.cost_inr ?? null, spend, ...(spendMalformed ? { spend_malformed: true } : {}), p95_ms: m.p95_ms ?? null };
 }
 
 /**
@@ -2434,8 +2454,8 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
     candidateSubject: report.provenance.subject,
     championSubject: champProv.subject,
     routerSha: shaAtRead,
-    candidateModel: report.provenance.model_source === "trial" ? report.provenance.model_applied ?? null : null,
-    championModel: champProv.model_source === "trial" ? champProv.model_applied ?? null : null,
+    candidateModel: artifactModel(report.provenance),
+    championModel: artifactModel(champProv),
   });
   writeFileSync(join(dir, "evidence.md"), `${table}\n`, "utf8");
 
@@ -2469,7 +2489,7 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
   const summary = [];
   const proposed = rows.filter((r) => r.verdict.eligible);
   // The model the candidate APPLIED, never the one it asked for (PR 3b round-4): a same-driver proposal is about it.
-  const candidateModel = report.provenance.model_source === "trial" && typeof report.provenance.model_applied === "string" ? report.provenance.model_applied : null;
+  const candidateModel = artifactModel(report.provenance);
   const candidateName = candidateModel ? `${report.provenance.subject.driver}/${candidateModel}` : report.provenance.subject.driver;
   const proposedWithDiff = [];
   let diffWritten = 0;

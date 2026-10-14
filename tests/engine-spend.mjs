@@ -424,6 +424,10 @@ try {
     // The negative control: the CLI failing is not the model answering, so it must NOT be declared model-invalid.
     check("C: a CLI that fails after its session is NOT model-invalid -- that is the CLI, not the model's answer",
       fj.code !== 0 && fj.receipt?.failure_class !== "model-invalid", `failure_class=${fj.receipt?.failure_class}`);
+    // Attack ab2d484 B1: an ERROR envelope that exits 0 (a usage limit) carries the CLI's text, not an answer.
+    const soft = await cc(0.01, { FAKE_SPEND_FAIL: "soft" });
+    check("C: an is_error envelope that exits 0 is NOT model-invalid -- a usage-limit notice is the CLI text, not an answer",
+      soft.code !== 0 && soft.runs === 1 && soft.receipt?.failure_class !== "model-invalid", `code=${soft.code} failure_class=${soft.receipt?.failure_class} ${tail(soft)}`);
     check("C: a CLI that fails after its session (json, exit 1) still books what the session spent",
       fj.code !== 0 && same(fj.receipt?.spend, usd(2, "0.02")) && fj.money.length === 1, `code=${fj.code} ${JSON.stringify(fj.receipt?.spend)} ${tail(fj)}`);
     const fs2 = await cc(0.03, { FAKE_SPEND_FAIL: "1" }, { stream: true });
