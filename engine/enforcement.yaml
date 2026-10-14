@@ -43,6 +43,12 @@ rules:
     tool_time: "none (fragment census 2026-10-07)"
     commit_time: "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code"
     merge_time: "tests/engine-compile.bats::the post-flip gate is a DIFFERENT comparison, and it is the hand-edit detector"
+  - id: action-stale-self-render
+    source: "action:stale-self-render"
+    class: blocking
+    tool_time: "none: a source edit is legitimate; only merging it without the regenerated outputs is not (ADR-2023)"
+    commit_time: "node bin/arc.mjs compile --self --check"
+    merge_time: "tests/distribute-self-render.bats::distribute-self-render: the committed outputs match a fresh render of this tree"
   - id: action-failing-tests
     source: "action:failing-tests"
     class: blocking

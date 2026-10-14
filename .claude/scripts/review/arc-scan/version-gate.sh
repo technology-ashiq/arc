@@ -24,3 +24,11 @@ elif grep -qiE '^\#\#[[:space:]]*\[?Unreleased' "$CL"; then
 else
   fail "VERSION '$ver' not found in CHANGELOG.md and no [Unreleased] section"
 fi
+
+# The fuller contract (distribute ADR-2025): package.json equals VERSION, [Unreleased] first, release sections dated
+# and descending, none newer than VERSION, a tag for VERSION has its section. One gate, extended -- not a second one --
+# and in arc's own tree only.
+# arc's own tree only: a consumer keeps its own version scheme, and may have no package.json at all.
+if [ -f "$ROOT/products/engine/manifest.json" ] && [ -f "$ROOT/.claude/scripts/core/version-lint.mjs" ]; then
+  node "$ROOT/.claude/scripts/core/version-lint.mjs" --root "$ROOT" || fail "version-lint failed (above)"
+fi

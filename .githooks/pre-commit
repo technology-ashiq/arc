@@ -7,3 +7,4 @@ cd "$(git rev-parse --show-toplevel)"
 bash .claude/scripts/core/branch-guard.sh
 bash .claude/scripts/core/secret-diff-scan.sh --staged
 node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code
+node bin/arc.mjs compile --self --check
