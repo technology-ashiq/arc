@@ -62,7 +62,7 @@ import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { EXIT, canonicalDoc, msUntilDeadline, pinnedModel, runDriver, seatPersona, settle, writeCost } from "./common.mjs";
+import { EXIT, canonicalDoc, contractLines, msUntilDeadline, pinnedModel, runDriver, seatPersona, settle, writeCost } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
 // The seat grammar is imported from the spine's OWN validator rather than re-spelled here.
 // A second copy of a regex is a second thing to keep in sync, and the failure this guards
@@ -781,6 +781,7 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     "INPUT (JSON):",
     JSON.stringify(input),
     "",
+    ...contractLines(declared.ok ? declared.doc : null),
     "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 
