@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-launch (Cycle 1, opened 2026-10-03)
-phase: 01
+phase: 04
 appetite: 18d
-burn: 6d
+burn: 12d
 blocked-on: —
 depends-on: —
 
@@ -16,10 +16,10 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Contracts + registry + lint + durable runner on fakes | 2.5d | ✅ 2026-10-04 |
-| 01 | Steel thread on `arc-sandbox` (day-3 kill inside) | 5d | ⏳ next |
-| 02 | Money, test mode | 3d | ⏳ |
-| 03 | Trust + data minimum | 2d | ⏳ |
-| 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | ⏳ |
+| 01 | Steel thread on `arc-sandbox` (day-3 kill inside) | 5d | ✅ 2026-10-14 |
+| 02 | Money, test mode | 3d | ✅ 2026-10-14 |
+| 03 | Trust + data minimum | 2d | ✅ 2026-10-14 |
+| 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | ⏳ next |
 | 05 | Close | 1d | ⏳ |
 
 ## Done-log
@@ -32,31 +32,80 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
   every high/medium fixed; 2 lows + 1 follow-up in `debt-ledger.md`; 25 patterns in `fixed-defects.md`. CI run
   37144642041 was red on two causes (CATALOG row, a Windows-only CR guard), both fixed. 1 day vs 2.5d.
   amendments: 0 · reopened: n · t-to-phase0: 1 day (kickoff 2026-10-03).
+- **Phase 01 ✅ 2026-10-14** — the steel thread runs for real on `arc-sandbox`. Day-3 kill answered YES:
+  `sandbox.automemory.ai` answers 200 from a git-triggered Vercel deploy, and the state file resumes (`apply --again`,
+  ADR-1760). 16 slots are verified live: repo, ci, environments, hosting, dns, tls, secrets, release, frontend, backend,
+  database, orm, email-transactional, auth, authz, tenancy.
+  - auth: login 303 → me 200 → logout 200 → after 401.
+  - authz: cross-tenant 403.
+  - tenancy: invite 201 → join 200 → scoped 200 / out-of-scope 403.
+  - frontend: PageSpeed 100/100/100/100.
+  Every Phase 01 adapter's real verify is recorded, redacted and replayed on CI (ADR-1761). PRs #410 (`d8f943a0`),
+  #425, and the replay PR. CI per job in `evidence/phase-01/test-output.log`. **272 launch tests.** Bugs found live and
+  routed through /arc-change: release READY-only (ADR-1755), the auth stock template, auth SMTP via Resend (ADR-1756),
+  the public Supabase values (ADR-1757), PageSpeed with the owner's key (ADR-1753), the CSP nonce (ADR-1754).
+  10 days vs 5d. amendments: 7 · reopened: n.
+- **Phase 02 ✅ 2026-10-14** — REQ-04 on `arc-sandbox`, Razorpay test mode:
+  - plans: pro 200, downgraded 403 on a gated route.
+  - checkout-portal and payment-test: test orders.
+  - webhooks-ledger: 2 replays of one webhook store 1 event.
+  - ledger-source: exactly `revenue.simulated` (2 events: the purchase and its refund).
+  - refunds: rfnd_ArcProbe…, nets cash-in to 0 in `arc pnl --simulated` on the labelled simulated line.
+  - payment-live: REFUSED at gate 3 (approval.requested 01M4VRAKRFHJJKHGPSEM6YZTA9; refusal proven, never crossed).
+  The 50% tripwire was checked: it fired at day 12, and the scope-cut decision cuts nothing (ADR-1762). 1 day of real run
+  vs 3d. amendments: 1 (ADR-1760) · reopened: n.
+- **Phase 03 ✅ 2026-10-14** — REQ-06. Every verified slot names its outside answerer:
+  - DNS from 8.8.8.8 and 1.1.1.1.
+  - TLS A/A with HSTS.
+  - security-headers A+ (110) with 9 nonced scripts.
+  - backup: `pg_dump` over the session pooler, restored into a Supabase-shaped scratch with every table's row count
+    equal (venture CI run 38479353075, step "restore and compare row counts").
+  - restore-drill: reads that digest.
+  - errors: a Sentry issue from a thrown probe.
+  - dependency-scan: green on the venture CI after the shell pins (ADR-1759).
+  - migration-rollback: down migration on CI.
+  legal-pages is a named ABSENT (renderer not ready). 1 day vs 2d. amendments: 2 (ADR-1758, ADR-1759) · reopened: n.
 
-**Appetite burn:** 6 of 15.5 days planned (calendar, 2026-10-03..09; 18-day cap; 33%). Day-7.5 checkpoint (Phase 01
-closed?) falls 2026-10-10: Phase 01 is built on fakes and waits only on the owner tokens below, so that checkpoint is a
-scope-cut conversation unless the tokens land. 50% tripwire at the Phase 02 exit (9 days).
+**Appetite burn:** 12 of 18 days (calendar, 2026-10-03..14; 67%). Both checkpoints fired late: day 7.5 (Phase 01 not
+closed) and the day-12 tripwire (Phase 02 not closed). The scope-cut conversation was held as ADR-1762: nothing is cut,
+because every cut-order item but REQ-08's second provider is already verified live. The overrun was the wait for owner
+keys. Next checkpoint: 100% (day 18) → cut or kill, never extend.
 
 ## Now
 
-**Current position:** Phases 01 and 02 are built on fakes. Phase 02's refunds and gate 3 are PR #398 (ADR-1740, ADR-1741).
-Phase 03 is built on fakes: seven trust and data slots, ADR-1742..1747, attacked in two rounds. These are security
-headers, dependency scan, migration rollback, legal pages, the backup drill, the restore drill and Sentry errors.
-Phase 04 is also built on fakes, ADR-1748..1751, attacked in two rounds:
-- fit rules carry ids, plan ranks the vetted rows, and an override goes through the inbox;
-- the trust sweep covers 28 adapters;
-- neon enters the database slot through its row and its adapter only (REQ-08);
-- four wiring slots ask arc through `ctx.probe.arc`;
-- the weekly `launch-watch` job runs `verify --public-only`.
-Phases 03 and 04 ship together in one PR.
-**Real runs (PR #410, 2026-10-13):** Phase 01 on arc-sandbox, 13 slots verified. Bug routed via /arc-change: release took a Vercel ERROR build as its receipt; fixed READY-only, with hosting creating the project with no preset and frontend setting Next.js before its push (ADR-1755). Frontend waits on the owner's PageSpeed key (ADR-1753), then security-headers (ADR-1754) and the rest of the chain. Gap: release on arc-sandbox now verifies READY live (dpl_4naPC rebuilt with no preset), but its state row still carries the old ERROR evidence and receipt, because `apply` no-ops a verified slot and `verify` writes no receipt; a re-receipt path for a verified slot is owed. Bug (2026-10-14): auth refused arc-sandbox as TEMPLATE_FOREIGN because Supabase's config API answers its default magic-link text, not empty; auth now treats that exact default as stock (mutant: one word changed refuses). Gap: security-headers verified once before the frontend's new build was live and failed; it passed on a re-run, and should wait for the live build as frontend does. 2026-10-14 real-run fixes: auth on the free tier sends the login email through the Resend domain (ADR-1756) and places the public Supabase URL and anon key on Vercel, probes read GoTrue's top-level token (ADR-1757); the backup drill restores into a Supabase-shaped scratch, trusts a green job with unconcluded steps, and restore-drill reads backup's newest digest (ADR-1758). Phase 01 slots on arc-sandbox: all verified but legal-pages (ABSENT: renderer not ready). Owed: backup provisions its own pooler role and SUPABASE_DB_URL (done by hand on arc-sandbox). Phases 02-04 real runs (2026-10-14): plans, payment-test, checkout-portal, webhooks-ledger, refunds, ledger-source verified; one test purchase booked as revenue.simulated and its refund nets cash-in to 0 in `arc pnl --simulated`; payment-live REFUSED at gate 3 (rehearsal). migration-rollback and face-room (seated planned, homed in ventures) verified. dependency-scan went red on real advisories and the shell pins fixed it (ADR-1759); `apply --again`, a fresh-resources in-attempt verify and payment-test on its newest order (ADR-1760). The owner's Razorpay test keys, webhook secret and the Supabase service key were placed on Vercel as sensitive variables by the agent, from the private env file; `secrets` placing runtime keys itself is owed. Known: the branch runner's verify-mode worker crashes on Windows for payment-test (0xC0000409, libuv); main's runner verifies it.
-**Next step:** merge the Phase 03+04 PR on green CI. Phase 05 (close: `verify --all` on arc-sandbox, the retro) runs
-for real once the owner tokens land, and so does each earlier phase's real close.
+**Current position:** Phases 00–03 closed. Phase 04 is built on fakes (ADR-1748..1751). Its real half is next.
+On `arc-sandbox`, 31 slots are verified live and three are named ABSENT:
+- `domain` and `payment-live`: behind their gates.
+- `legal-pages`: the renderer is not ready.
 
-**Owner actions (one message unblocks every phase's real half):** the `launch-watch` rows: run
-`node .claude/scripts/launch/owner-apply-watch-policy.mjs` in the main clone, which writes `hq.policy.yaml` and `hq.jobs.yaml`, then commit both. ·
-`GITHUB_TOKEN` · Razorpay test keys plus `RAZORPAY_WEBHOOK_SECRET` · `SENTRY_AUTH_TOKEN` · `NEON_API_KEY` · the `SUPABASE_DB_URL` Actions secret on
-arc-sandbox · `CLOUDFLARE_API_TOKEN` (DNS edit, zone automemory.ai) ·
-a new `VERCEL_TOKEN` (the current one is invalid) · the Vercel GitHub App installed with access to `arc-sandbox` and the
-GitHub login connected to Vercel (browser-only) · `SUPABASE_ACCESS_TOKEN` · `RESEND_API_KEY`. Stamps waiting in
-arc-inbox: kickoff `01M40ZHP72PYVBJT17R7A4WZ3W`, owner rulings `01M41MH9JG9VEN5G085T56CNHH` + `01M41MHA25TV1WXYHHGM59ND5V`.
+`verify --all` from the main clone exits 0 (31/31).
+
+**Next step:** Phase 04's real half. Three items:
+1. **REQ-08.** One real `database` verify through `neon`, on a free-tier project. Then neon reaches `vetted` in a PR
+   that changes exactly the registry and its adapter. The first vet run (2026-10-14, private state copy, receipt
+   01M4XC8MM4Y0NYBYFZ28H4SQTE) was refused by Neon: `404 action restricted; organization is managed by Vercel`. The
+   owner's only Neon org came from the Vercel integration, and Neon creates no projects there through its API. Nothing
+   was created. A-06 has not fired yet: a key from a Neon org Vercel does not manage unblocks it.
+2. **REQ-05 and REQ-09.** Vet the 31 providers that ran live. One consolidated scout record and one approval.requested
+   go to the owner from the main clone. After his stamp, every row carries `status: vetted`, `vetted_by`, `scout` and
+   its `digest`.
+3. **REQ-10.** The `launch-watch` job row is an owner apply (deny-floor).
+
+Then Phase 05: `verify --all`, the evidence bundle, and REQ-12 recorded as OPEN-at-first-venture, then `/arc-retro`.
+
+**Owed (gaps found live):**
+- `release`: its state row carries the ERROR evidence of its first receipt. Its `last_verify` answers READY, but `apply`
+  no-ops a verified slot, so a re-receipt path is owed.
+- `backup`: should provision its own pooler role and `SUPABASE_DB_URL` (done by hand on arc-sandbox).
+- `secrets`: should place the runtime keys itself (done by the agent from the private env file).
+- `security-headers`: should wait for the live build, as frontend does.
+
+**Owner actions:**
+- Run `node .claude/scripts/launch/owner-apply-watch-policy.mjs` in the main clone, which writes `hq.policy.yaml` and
+  `hq.jobs.yaml`, then commit both.
+- In console.neon.tech, create a new organization (free, not through Vercel) and an org API key. Put it as
+  `NEON_API_KEY` in the private env file.
+- Stamp the provider-vetting approval when it lands in arc-inbox.
+- Stamp the phase-done approvals for 01–03.
+- Earlier stamps in arc-inbox: kickoff `01M40ZHP72PYVBJT17R7A4WZ3W`, owner rulings `01M41MH9JG9VEN5G085T56CNHH` and
+  `01M41MHA25TV1WXYHHGM59ND5V`.
