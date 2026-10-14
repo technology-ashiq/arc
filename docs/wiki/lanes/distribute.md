@@ -5,14 +5,14 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/distribute.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*distribute Cycle 2 "arc's loop under OpenCode on a non-Anthropic model"*
+*distribute Cycle 3 "zero-step access and the lifecycle"*
 
 ## At a glance
 
 | | |
 |---|---|
 | Status | IDLE |
-| Cycle | arc-distribute (Cycle 2, opened 2026-10-13) |
+| Cycle | arc-distribute (Cycle 3, opened 2026-10-14) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/distribute/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/distribute/PROGRESS.md)
 
-## Decisions (23)
+## Decisions (28)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -51,6 +51,11 @@ ADRs whose `Product:` line names this lane first.
 | [`2020`](../../../docs/adr/2020-a-foreign-harness-session-stamps-its-receipts-and-writes-to-the-canonical-spine.md) | a foreign-harness session stamps its receipts and writes to the canonical spine | accepted | 2026-10-13 |
 | [`2021`](../../../docs/adr/2021-arc-ship-in-a-repo-with-no-deploy-target-ships-to-a-pr-and-reads-ci.md) | `arc-ship` in a repo with no deploy target ships to a PR and reads CI | accepted | 2026-10-13 |
 | [`2022`](../../../docs/adr/2022-opencode-command-fences-deny-and-the-wrapper-charges-subagent-spend.md) | OpenCode command fences deny, and the wrapper charges subagent spend | accepted (amends ADR-2018's OpenCode fence rule and ADR-2019's cap) | 2026-10-13 |
+| [`2023`](../../../docs/adr/2023-arc-renders-its-rendered-targets-into-its-own-tree-as-committed-outputs.md) | arc renders its rendered targets into its own tree as committed outputs | accepted | 2026-10-14 |
+| [`2024`](../../../docs/adr/2024-the-install-lifecycle-is-npms-and-every-verb-reads-the-manifest-first.md) | The install lifecycle is npm's, and every verb reads the manifest first | accepted | 2026-10-14 |
+| [`2025`](../../../docs/adr/2025-arc-versions-are-git-tags-and-the-changelog-is-the-contract-between-two.md) | arc versions are git tags, and the CHANGELOG is the contract between two | accepted | 2026-10-14 |
+| [`2026`](../../../docs/adr/2026-consumers-register-locally-the-radar-only-reads-and-launch-births-ventures-with-every-harness.md) | Consumers register locally, the radar only reads, and launch births ventures with every harness | accepted | 2026-10-14 |
+| [`2027`](../../../docs/adr/2027-the-whole-opencode-session-runs-inside-the-commands-fence.md) | The whole OpenCode session runs inside the command's fence, and a deploy needs a tracked target | accepted | 2026-10-14 |
 
 ## Source
 

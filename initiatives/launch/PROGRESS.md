@@ -41,7 +41,7 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
   - tenancy: invite 201 → join 200 → scoped 200 / out-of-scope 403.
   - frontend: PageSpeed 100/100/100/100.
   Every Phase 01 adapter's real verify is recorded, redacted and replayed on CI (ADR-1761). PRs #410 (`d8f943a0`),
-  #425, and the replay PR. CI per job in `evidence/phase-01/test-output.log`. **272 launch tests.** Bugs found live and
+  #425 (with the replay). CI per job in `evidence/phase-01/test-output.log`. **272 launch tests.** Bugs found live and
   routed through /arc-change: release READY-only (ADR-1755), the auth stock template, auth SMTP via Resend (ADR-1756),
   the public Supabase values (ADR-1757), PageSpeed with the owner's key (ADR-1753), the CSP nonce (ADR-1754).
   10 days vs 5d. amendments: 7 · reopened: n.

@@ -1,6 +1,6 @@
 {
   "name": "arc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "arc: tracked plans, deterministic gates, a receipt spine and agent workflows, installable into a project for Claude Code, Codex, OpenCode or any agentskills reader.",
   "private": true,
   "license": "UNLICENSED",
