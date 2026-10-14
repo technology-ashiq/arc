@@ -440,7 +440,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt, withExclusiveLockSync } from "../core/plan-expect.mjs";
 import { bashEnv } from "../core/spawn-bounded.mjs";
 
-import { parseBudget } from "./drivers/common.mjs";
+import { isSpend, parseBudget } from "./drivers/common.mjs";
 
 /** The `--process` identity on bench's own receipts (M6). Bench is a runner, never a process. */
 export const BENCH_ID = "bench@0.1.0";
@@ -898,6 +898,44 @@ function routeLapsedOn(root, processName, driver, trialModel) {
  * harness that only cleans up on success fills the runner disk exactly when something is already
  * wrong, which is the moment the next diagnosis needs the disk.
  */
+// Whose figure a spend is: the closed set common.mjs writes (ADR-0230). Anything else reads as no spend at all.
+const SPEND_BASES = new Set(["harness-reported", "provider-reported", "recorded", "unstated"]);
+
+/**
+ * A receipt's spend as bench compares it: integer minor units, a currency, and a basis -- or null. `isSpend` is the
+ * shape arc-run wrote, checked again here because the spine is a file anyone can append to; a figure that fails it is
+ * ABSENT, never 0 (ADR-0069 b5). Nothing is converted: USD and INR are not one axis without a rate nobody maintains.
+ */
+export function receiptSpend(spend, basis) {
+  if (!isSpend(spend)) return null;
+  if (typeof basis !== "string" || !SPEND_BASES.has(basis)) return null;
+  return { amount: spend.amount, currency: spend.currency, basis };
+}
+
+/** A class's summed spend as provenance.json carries it -- a file the champion directory hands us, so re-checked. */
+export function classSpend(v) {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  if (!Number.isSafeInteger(v.amount) || v.amount < 0) return null;
+  if (typeof v.currency !== "string" || !/^[A-Z]{3}$/.test(v.currency)) return null;
+  if (typeof v.basis !== "string" || !SPEND_BASES.has(v.basis)) return null;
+  return { amount: v.amount, currency: v.currency, basis: v.basis };
+}
+
+/**
+ * Fold one attempt's spend into its class. ALL OR NOTHING: a class's money is a sum only when every attempt reported
+ * one, in one currency, on one basis. A missing figure or a mixed pair makes the class's money ABSENT and says why,
+ * because a sum over some of the attempts reads as the price of all of them (ADR-0917).
+ */
+export function foldSpend(acc, spend) {
+  if (acc.gap) return acc;
+  if (!spend) return { spend: null, gap: "an attempt reported no spend" };
+  if (!acc.spend) return { spend: { ...spend }, gap: null };
+  if (acc.spend.currency !== spend.currency || acc.spend.basis !== spend.basis) {
+    return { spend: null, gap: `mixed spend (${acc.spend.currency}/${acc.spend.basis} and ${spend.currency}/${spend.basis})` };
+  }
+  return { spend: { ...acc.spend, amount: acc.spend.amount + spend.amount }, gap: null };
+}
+
 export function runAttempt(root, { processName, fixture, driver, trialModel, budget, timeoutMs }) {
   const stateDir = join(fixture.dir, "repo-states", fixture.id);
   const state = materializeRepoState(stateDir);
@@ -991,9 +1029,13 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     // rate and classified an unchanged price as "both the rate and the usage moved".
     const tokensTotal = Number.isFinite(tIn) && Number.isFinite(tOut) ? tIn + tOut : null;
     const costSource = receipt?.cost?.source ?? receipt?.payload?.tokens?.source ?? null;
+    // THE SPEND THE RECEIPT CARRIES, in the provider's currency and with whose figure it is (ADR-0229/0230). A
+    // claude-code session reports USD and no rupee figure, so reading the cost block alone left its money ABSENT on
+    // both sides of every comparison and the cost axis never ran (ADR-0917). Shape-checked, never converted.
+    const spend = receiptSpend(receipt?.payload?.spend, receipt?.payload?.spend_basis);
 
     if (res.error && res.error.code === "ETIMEDOUT") {
-      return { ok: false, verdict: "budget", why: "arc-run exceeded the attempt timeout", elapsedMs, after, schema: null, measuredInr, tokensTotal, costSource, receiptsSeen, reason: "budget" };
+      return { ok: false, verdict: "budget", why: "arc-run exceeded the attempt timeout", elapsedMs, after, schema: null, measuredInr, tokensTotal, costSource, spend, receiptsSeen, reason: "budget" };
     }
     const status = res.status ?? 1;
     if (status !== 0) {
@@ -1001,17 +1043,23 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
       // SCHEMA IS ONLY EVALUATED WHERE AN OUTPUT EXISTED. A driver that never answered leaves the
       // schema question unasked, and counting that as a schema failure would blame the process
       // for a fault arc-run has already attributed elsewhere (ADR-0204).
-      const schema = reason === "schema" ? false : null;
-      return { ok: false, verdict: reason || "run", why: line, elapsedMs, after, schema, measuredInr, tokensTotal, costSource, receiptsSeen, reason };
+      //
+      // AND A MODEL THAT ANSWERED SOMETHING OTHER THAN JSON DID ANSWER (ADR-0917). arc-run receipts that as
+      // `reason: driver` with `failure_class: model-invalid`, because the driver threw; but the answer existed and broke
+      // the contract, so it is a schema failure the model earned -- a scoreable outcome, not a missing one. Read as
+      // `driver`, sonnet's one prose answer in 15 made its whole champion run incomparable.
+      const modelInvalid = receipt?.payload?.failure_class === "model-invalid";
+      const schema = reason === "schema" || modelInvalid ? false : null;
+      return { ok: false, verdict: modelInvalid ? "schema" : (reason || "run"), why: line, elapsedMs, after, schema, measuredInr, tokensTotal, costSource, spend, receiptsSeen, reason };
     }
     let output;
     try { output = JSON.parse(res.stdout); }
-    catch (e) { return { ok: false, verdict: "run", why: `arc-run stdout is not JSON: ${e.message}`, elapsedMs, after, schema: null, measuredInr, tokensTotal, costSource, receiptsSeen, reason }; }
+    catch (e) { return { ok: false, verdict: "run", why: `arc-run stdout is not JSON: ${e.message}`, elapsedMs, after, schema: null, measuredInr, tokensTotal, costSource, spend, receiptsSeen, reason }; }
 
     const score = scoreAssertions(output, fixture.doc.assertions, fixture.id);
     // arc-run validates the output against the process schema before it ever prints it
     // (arc-run.mjs:184-186), so an exit-0 attempt is a schema PASS by construction.
-    return { ok: true, verdict: "ok", output, score, elapsedMs, after, schema: true, measuredInr, tokensTotal, costSource, receiptsSeen, reason: null };
+    return { ok: true, verdict: "ok", output, score, elapsedMs, after, schema: true, measuredInr, tokensTotal, costSource, spend, receiptsSeen, reason: null };
   } finally {
     try { rmSync(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* litter, never the outcome (PR 3b) */ }
     state.cleanup();
@@ -1815,7 +1863,7 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
       // Latency and cost are measurements OF THE RUN, so they are collected here and land in
       // provenance -- never in the scorecard, which has to be a function of captured bytes alone
       // or the byte-identity claim is untestable.
-      const latencies = metrics.get(cov.taskClass) ?? { latencies_ms: [], cost_inr: null, tokens_total: null, cost_source: null };
+      const latencies = metrics.get(cov.taskClass) ?? { latencies_ms: [], cost_inr: null, tokens_total: null, cost_source: null, money: { spend: null, gap: null } };
       metrics.set(cov.taskClass, latencies);
       for (let k = 0; k < state.k; k++) {
         const perAttempt = { ...remaining };
@@ -1831,6 +1879,7 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
           latencies.cost_inr = (latencies.cost_inr ?? 0) + r.measuredInr;
         }
         if (r.tokensTotal !== null && r.tokensTotal !== undefined) latencies.tokens_total = (latencies.tokens_total ?? 0) + r.tokensTotal;
+        latencies.money = foldSpend(latencies.money, r.spend ?? null);
         // The spine's closed set, checked HERE too. `comparability` does exact string equality on
         // this, so `"measured "` against `"measured"` silently disabled the whole cost axis -- and
         // last-wins across a group meant one odd attempt decided it for all K.
@@ -1976,6 +2025,8 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
       // The non-deterministic half, deliberately kept OUT of the scorecard.
       metrics: Object.fromEntries([...metrics.entries()].map(([k, v]) => [k, {
         cost_inr: v.cost_inr,
+        spend: v.money?.gap ? null : (v.money?.spend ?? null),
+        ...(v.money?.gap ? { spend_gap: v.money.gap } : {}),
         tokens_total: v.tokens_total,
         cost_source: v.cost_source,
         p95_ms: percentile(v.latencies_ms, 95),
@@ -2142,11 +2193,10 @@ export function evaluateGates(candidate, champion, { candidateRevision, champion
   // comparable -- neither side claims anything, so the cost tiebreak simply does not run. One
   // absence against one measurement is NOT: that is a comparison between a number and a fact
   // about an instrument (ADR-0904).
-  const cCost = candidate.cost_inr ?? null;
-  const chCost = champion.cost_inr ?? null;
-  if ((cCost === null) !== (chCost === null)) {
-    return fail("cost-comparability", `cost is reported on one side only (candidate ${cCost === null ? "ABSENT" : cCost}, champion ${chCost === null ? "ABSENT" : chCost}) -- not comparable`);
-  }
+  const money = moneyPair(candidate, champion);
+  if (money.fail) return fail("cost-comparability", money.fail);
+  const cCost = money.candidate;
+  const chCost = money.champion;
 
   // 6. SAME EVAL-PACK REVISION. Different fixtures are a different exam.
   if (candidateRevision === null || championRevision === null) {
@@ -2171,15 +2221,45 @@ export function evaluateGates(candidate, champion, { candidateRevision, champion
 }
 
 /**
+ * The money the cost gate compares, from whichever figure the two sides share (ADR-0917). A rupee cost block wins when
+ * either side has one, exactly as before. Otherwise the receipts' own spend is used -- but only like against like: one
+ * currency AND one basis, because a harness's notional list price and a provider's invoice are different facts even
+ * in the same currency (ADR-0230), and converting between currencies needs a rate nobody maintains.
+ * @returns {{ candidate: number|null, champion: number|null, unit: string|null, fail: string|null }}
+ */
+export function moneyPair(candidate, champion) {
+  const cInr = candidate.cost_inr ?? null;
+  const chInr = champion.cost_inr ?? null;
+  if (cInr !== null || chInr !== null) {
+    if ((cInr === null) !== (chInr === null)) {
+      return { candidate: null, champion: null, unit: null, fail: `cost is reported on one side only (candidate ${cInr === null ? "ABSENT" : cInr}, champion ${chInr === null ? "ABSENT" : chInr}) -- not comparable` };
+    }
+    return { candidate: cInr, champion: chInr, unit: "INR", fail: null };
+  }
+  const cS = candidate.spend ?? null;
+  const chS = champion.spend ?? null;
+  if (cS === null && chS === null) return { candidate: null, champion: null, unit: null, fail: null };
+  if ((cS === null) !== (chS === null)) {
+    const shown = (x) => (x ? `${x.amount} ${x.currency} minor, ${x.basis}` : "ABSENT");
+    return { candidate: null, champion: null, unit: null, fail: `spend is reported on one side only (candidate ${shown(cS)}, champion ${shown(chS)}) -- not comparable` };
+  }
+  if (cS.currency !== chS.currency || cS.basis !== chS.basis) {
+    return { candidate: null, champion: null, unit: null, fail: `spend is not like for like (candidate ${cS.currency}/${cS.basis}, champion ${chS.currency}/${chS.basis}) -- not comparable` };
+  }
+  return { candidate: cS.amount, champion: chS.amount, unit: `${cS.currency} minor, ${cS.basis}`, fail: null };
+}
+
+/**
  * A stable unified diff against the router, pinned to the SHA the run READ.
  *
  * Stable means byte-identical for the same inputs: no timestamp anywhere in the body, and the
  * SHA occupies the field where a diff normally puts one. It is a REVIEW ARTIFACT and nothing
  * applies it -- bench has no write path to `engine/router.yaml`, ever.
  */
-export function buildRouterDiff(root, taskClass, candidateDriver, sha) {
+export function buildRouterDiff(root, taskClass, candidateDriver, sha, { model = null } = {}) {
   const path = join(root, "engine", "router.yaml");
-  const lines = readFileSync(path, "utf8").split("\n");
+  const text = readFileSync(path, "utf8");
+  const lines = text.split("\n");
   const classIdx = lines.findIndex((l) => l === `  ${taskClass}:`);
   if (classIdx < 0) return { diff: null, why: `engine/router.yaml has no \`classes.${taskClass}\` row -- there is nothing to re-route` };
   let driverIdx = -1;
@@ -2187,16 +2267,27 @@ export function buildRouterDiff(root, taskClass, candidateDriver, sha) {
     if (/^\s{4}driver:/.test(lines[i])) { driverIdx = i; break; }
   }
   if (driverIdx < 0) return { diff: null, why: `\`classes.${taskClass}\` declares no driver line` };
-  const before = lines[driverIdx];
-  const after = `    driver: ${candidateDriver}`;
-  if (before === after) return { diff: null, why: `the router already routes ${taskClass} to ${candidateDriver}` };
+  let changeIdx = driverIdx;
+  let before = lines[driverIdx];
+  let after = `    driver: ${candidateDriver}`;
+  if (before === after) {
+    // SAME DRIVER, ANOTHER MODEL (ADR-0917). ADR-0914's candidate is a second model under the incumbent's driver, and a
+    // driver line cannot say that: the model comes from the class's TIER through `models:`. So the review artifact is
+    // the tier line, which is what ADR-0069 says a model change is. Bench still applies nothing.
+    if (!model) return { diff: null, why: `the router already routes ${taskClass} to ${candidateDriver}` };
+    const t = tierDiffLine(text, lines, classIdx, taskClass, candidateDriver, model);
+    if (t.why) return { diff: null, why: t.why };
+    changeIdx = t.idx;
+    before = t.before;
+    after = t.after;
+  }
 
   const ctx = 3;
-  const from = Math.max(0, driverIdx - ctx);
-  const to = Math.min(lines.length - 1, driverIdx + ctx);
+  const from = Math.max(0, changeIdx - ctx);
+  const to = Math.min(lines.length - 1, changeIdx + ctx);
   const body = [];
   for (let i = from; i <= to; i++) {
-    if (i === driverIdx) { body.push(`-${before}`, `+${after}`); continue; }
+    if (i === changeIdx) { body.push(`-${before}`, `+${after}`); continue; }
     body.push(` ${lines[i]}`);
   }
   const count = to - from + 1;
@@ -2211,15 +2302,40 @@ export function buildRouterDiff(root, taskClass, candidateDriver, sha) {
 }
 
 /**
+ * The tier line a same-driver model change rewrites, or why there is none. NEVER A GUESS: no tier pinning the model is
+ * a refusal (a new `models:` row is a reviewed policy change, not a bench diff), and two tiers pinning it is a refusal
+ * too, because choosing one would be bench deciding a tier.
+ */
+function tierDiffLine(text, lines, classIdx, taskClass, driver, model) {
+  let tierIdx = -1;
+  for (let i = classIdx + 1; i < lines.length && /^\s{4}/.test(lines[i]); i++) {
+    if (/^\s{4}tier:/.test(lines[i])) { tierIdx = i; break; }
+  }
+  if (tierIdx < 0) return { why: `\`classes.${taskClass}\` declares no tier line, so no model can be re-pinned` };
+  const current = lines[tierIdx].replace(/^\s{4}tier:\s*/, "").replace(/\s+#.*$/, "").trim();
+  const parsed = parseYamlSubset(text);
+  if (!parsed.ok) return { why: `engine/router.yaml could not be read (line ${parsed.error?.line ?? "?"}: ${parsed.error?.what ?? "unparseable"})` };
+  const models = parsed.value?.models;
+  if (!models || typeof models !== "object" || Array.isArray(models)) return { why: "engine/router.yaml has no `models:` block, so no tier pins a model" };
+  const pins = (tier) => (models[tier] && typeof models[tier] === "object" ? models[tier][driver] : undefined);
+  if (pins(current) === model) return { why: `the router already routes ${taskClass} to ${driver}/${model} (tier ${current})` };
+  const tiers = Object.keys(models).filter((t) => pins(t) === model);
+  if (tiers.length === 0) return { why: `no tier in engine/router.yaml pins ${driver} to ${model} -- a new \`models:\` row is a reviewed tier change (ADR-0069), not a bench diff` };
+  if (tiers.length > 1) return { why: `${tiers.length} tiers pin ${driver} to ${model} (${tiers.join(", ")}) -- choosing one is a tier decision bench does not make` };
+  return { idx: tierIdx, before: lines[tierIdx], after: `    tier: ${tiers[0]}`, why: null };
+}
+
+/**
  * The human evidence table (ADR-0907 artifact 1). It is the interface: a reader decides from
  * this, so every row carries the verdict AND the sentence that produced it.
  */
-export function buildEvidenceTable(rows, { candidateSubject, championSubject, routerSha }) {
+export function buildEvidenceTable(rows, { candidateSubject, championSubject, routerSha, candidateModel = null, championModel = null }) {
+  const who = (subject, model) => (model ? `${subject.driver}/${model}` : subject.driver);
   const out = [
     "# bench proposal — evidence",
     "",
-    `Candidate: **${candidateSubject.driver}**${candidateSubject.driver_version ? ` (\`${candidateSubject.driver_version}\`)` : ""}`,
-    `Champion:  **${championSubject.driver}**${championSubject.driver_version ? ` (\`${championSubject.driver_version}\`)` : ""}`,
+    `Candidate: **${who(candidateSubject, candidateModel)}**${candidateSubject.driver_version ? ` (\`${candidateSubject.driver_version}\`)` : ""}`,
+    `Champion:  **${who(championSubject, championModel)}**${championSubject.driver_version ? ` (\`${championSubject.driver_version}\`)` : ""}`,
     `Router SHA read by this run: \`${routerSha}\``,
     "",
     "| Task class | Champion | Candidate | Contract (schema) | Quality (assertions) | Cost Δ | Latency p95 Δ | Recommendation |",
@@ -2233,9 +2349,10 @@ export function buildEvidenceTable(rows, { candidateSubject, championSubject, ro
       ? "ABSENT"
       : `${pp(r.candidate.schema.rate - r.champion.schema.rate)}`;
     // ABSENT, never a dash and never 0: a placeholder in a cost column is a claim.
-    const cost = r.candidate.cost_inr === null || r.champion.cost_inr === null ? "ABSENT" : String(r.candidate.cost_inr - r.champion.cost_inr);
+    const m = moneyPair(r.candidate, r.champion);
+    const cost = m.candidate === null || m.champion === null ? "ABSENT" : `${m.candidate - m.champion} (${m.unit})`;
     const lat = r.candidate.p95_ms === null || r.champion.p95_ms === null ? "ABSENT" : `${r.candidate.p95_ms - r.champion.p95_ms}ms`;
-    out.push(`| ${r.task_class} | ${r.champion.assertions.rate === null ? "ABSENT" : pp(r.champion.assertions.rate)} | ${r.candidate.assertions.rate === null ? "ABSENT" : pp(r.candidate.assertions.rate)} | ${s} | ${q} | ${cost} | ${lat} | ${r.verdict.eligible ? `**PROPOSE ${candidateSubject.driver}** (decided on ${r.verdict.decidedBy})` : r.verdict.reason} |`);
+    out.push(`| ${r.task_class} | ${r.champion.assertions.rate === null ? "ABSENT" : pp(r.champion.assertions.rate)} | ${r.candidate.assertions.rate === null ? "ABSENT" : pp(r.candidate.assertions.rate)} | ${s} | ${q} | ${cost} | ${lat} | ${r.verdict.eligible ? `**PROPOSE ${who(candidateSubject, candidateModel)}** (decided on ${r.verdict.decidedBy})` : r.verdict.reason} |`);
   }
   out.push("", "Latency is a TIEBREAK ONLY (ADR-0906) and never overturns a contract or quality verdict.", "");
   return out.join("\n");
@@ -2247,7 +2364,7 @@ export function buildEvidenceTable(rows, { candidateSubject, championSubject, ro
  */
 function withMetrics(entry, metrics) {
   const m = metrics?.[entry.task_class] ?? {};
-  return { ...entry, cost_inr: m.cost_inr ?? null, p95_ms: m.p95_ms ?? null };
+  return { ...entry, cost_inr: m.cost_inr ?? null, spend: classSpend(m.spend), p95_ms: m.p95_ms ?? null };
 }
 
 /**
@@ -2317,6 +2434,8 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
     candidateSubject: report.provenance.subject,
     championSubject: champProv.subject,
     routerSha: shaAtRead,
+    candidateModel: report.provenance.model_source === "trial" ? report.provenance.model_applied ?? null : null,
+    championModel: champProv.model_source === "trial" ? champProv.model_applied ?? null : null,
   });
   writeFileSync(join(dir, "evidence.md"), `${table}\n`, "utf8");
 
@@ -2334,8 +2453,8 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
       gate_failed: r.verdict.gate,
       reason: r.verdict.reason,
       ...(r.verdict.eligible ? { decided_by: r.verdict.decidedBy } : {}),
-      candidate: { assertions: r.candidate.assertions, schema: r.candidate.schema, cost_inr: r.candidate.cost_inr, p95_ms: r.candidate.p95_ms },
-      champion: { assertions: r.champion.assertions, schema: r.champion.schema, cost_inr: r.champion.cost_inr, p95_ms: r.champion.p95_ms },
+      candidate: { assertions: r.candidate.assertions, schema: r.candidate.schema, cost_inr: r.candidate.cost_inr, spend: r.candidate.spend ?? null, p95_ms: r.candidate.p95_ms },
+      champion: { assertions: r.champion.assertions, schema: r.champion.schema, cost_inr: r.champion.cost_inr, spend: r.champion.spend ?? null, p95_ms: r.champion.p95_ms },
     })),
   };
   writeFileSync(join(dir, "manifest.json"), canonicalJson(manifest), "utf8");
@@ -2349,16 +2468,19 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
 
   const summary = [];
   const proposed = rows.filter((r) => r.verdict.eligible);
+  // The model the candidate APPLIED, never the one it asked for (PR 3b round-4): a same-driver proposal is about it.
+  const candidateModel = report.provenance.model_source === "trial" && typeof report.provenance.model_applied === "string" ? report.provenance.model_applied : null;
+  const candidateName = candidateModel ? `${report.provenance.subject.driver}/${candidateModel}` : report.provenance.subject.driver;
   const proposedWithDiff = [];
   let diffWritten = 0;
   if (!abort) {
     for (const r of proposed) {
-      const { diff, why } = buildRouterDiff(root, r.task_class, report.provenance.subject.driver, shaAtRead);
+      const { diff, why } = buildRouterDiff(root, r.task_class, report.provenance.subject.driver, shaAtRead, { model: candidateModel });
       if (!diff) { summary.push(`${r.task_class}: NO DIFF -- ${why}`); continue; }
       writeFileSync(join(dir, `${r.task_class}.router.diff`), diff, "utf8");
       diffWritten += 1;
       proposedWithDiff.push(r.task_class);
-      summary.push(`${r.task_class}: PROPOSE ${report.provenance.subject.driver} (decided on ${r.verdict.decidedBy})`);
+      summary.push(`${r.task_class}: PROPOSE ${candidateName} (decided on ${r.verdict.decidedBy})`);
     }
   }
   // A class at NO PROPOSAL produces artifacts 1 and 2 and NO DIFF AT ALL -- never an empty or
@@ -2381,7 +2503,7 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
   // zz-unrouted" beside one diff (PR 3b round-2 logic attack -- the receipt's own row, one field over).
   const raisedRows = proposed.filter((r) => proposedWithDiff.includes(r.task_class));
   const wouldRaise = !abort && diffWritten > 0 ? {
-    what: `route ${raisedRows.map((r) => r.task_class).join(", ")} to ${report.provenance.subject.driver}`,
+    what: `route ${raisedRows.map((r) => r.task_class).join(", ")} to ${candidateName}`,
     gate: "router-merge",
     router_sha: shaAtRead,
     candidate: report.provenance.subject,

@@ -42,3 +42,18 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   Windows, a ~28-attempt mock run pushed the face's `bench.run-model` flow past its 30 s CDP
   timeout on one Windows shard. Fix: three processes per check, the toplevel and git dir cached
   per root, the HEAD reflog read as a file. Twin: any check added inside a per-attempt loop.
+- **A twin-fix left behind across drivers: the non-JSON answer** (2026-10-15, `champion-sonnet4`).
+  generic-api declared a prose answer `model-invalid` (ADR-0228) and claude-code did not, so sonnet's one
+  prose answer read `failure_class: unknown`, `reason: driver`, and bench's completeness gate refused the
+  whole champion. Fix: claude-code declares it too; bench reads `model-invalid` as a schema failure, with an
+  undeclared failure as the control (ADR-0917). Twin: every driver's answer-parse catch, and every reader
+  that copies `reason` without looking at `failure_class`.
+- **A diff that can only say one of the two things a route is** (2026-10-15). `buildRouterDiff` rewrote
+  `driver:` only, so ADR-0914's same-driver candidate produced NO DIFF and no approval. Fix: a tier-line
+  diff to the single tier that pins the model, refused when none or several do (ADR-0917). Twin: any
+  artifact keyed on the driver where the subject is driver AND model (the `--from` identity already had
+  this, PR 3b round 4).
+- **Money read from one of the two places it lives** (2026-10-15). The receipt's rupee cost block is null
+  for claude-code; its spend rides `payload.spend` in USD. Bench read only the first, so cost never decided.
+  Fix: read the spend, sum all-or-nothing, compare only same currency and basis (ADR-0917). Twin: the drift
+  guard's `classifyCostDelta`, still rupee-only (debt).

@@ -115,7 +115,28 @@ PROP_STATUS() { cat "$BATS_FILE_TMPDIR/prop.status"; }
   [[ "$(PROP)" == *"ok the manifest names the router SHA the run read"* ]]
 }
 
+@test "ADR-0917: a same-driver model is proposed as a tier line, never guessed" {
+  # The real event's candidate is a second model under the incumbent's driver (ADR-0914), and a driver
+  # line cannot say that: the router took NO DIFF and raised no approval for it.
+  [ "$(PROP_STATUS)" -eq 0 ]
+  [[ "$(PROP)" == *"ok ADR-0917: a second model under the same driver yields a diff, not NO DIFF"* ]]
+  [[ "$(PROP)" == *"ok and the diff rewrites the TIER line to the tier that pins that model"* ]]
+  [[ "$(PROP)" == *"ok a model no tier pins is REFUSED, never given a new tier"* ]]
+  [[ "$(PROP)" == *"ok a model two tiers pin is REFUSED, because choosing one is a tier decision"* ]]
+  [[ "$(PROP)" == *"ok a DIFFERENT driver still rewrites the driver line, model or not"* ]]
+}
+
+@test "ADR-0917: spend is compared like for like, and a prose answer is the model's schema failure" {
+  [ "$(PROP_STATUS)" -eq 0 ]
+  [[ "$(PROP)" == *"ok ADR-0917: a quality tie with less spend, same currency and basis, is decided on COST"* ]]
+  [[ "$(PROP)" == *"ok a harness's notional figure and a provider's invoice are NOT compared"* ]]
+  [[ "$(PROP)" == *"ok one attempt with no spend makes the class's money ABSENT and says why, never a partial sum"* ]]
+  [[ "$(PROP)" == *"ok the model-invalid run RAN and wrote a scorecard"* ]]
+  [[ "$(PROP)" == *"ok ADR-0917: a model-invalid attempt is a SCHEMA failure the model earned, not a driver fault"* ]]
+  [[ "$(PROP)" == *"ok and the undeclared failure beside it stays unscoreable -- the control"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ]
 }

@@ -19,6 +19,8 @@ One row per finding that was not fixed in its PR, with the reason and the trigge
 | 13 | attack 461984d r1 boundary B5 (low) | `config --local` reads the shared `.git/config`, never a worktree's own `config.worktree` | accepted: `extensions.worktreeConfig` is off in arc's clones | worktree config is turned on in the owner's clones |
 | 14 | attack 0cf219e r2 boundary B1 (low) | a model that rewrites `remote.origin.url` in the arc checkout is not seen by the fingerprint | accepted: a remote rewrite moves no file, ref or HEAD in this checkout, and the run never pushes; the sibling-write false stop it avoids is the measured failure | a benched process ever pushes |
 | 15 | attack 0cf219e r2 boundary B2 (low) | on a detached HEAD no branch section is in the digest | accepted: bench runs from the main clone on `main`; a detached checkout has no section of its own | bench is ever run from a detached checkout |
+| 16 | ADR-0917 (self-recorded) | the drift guard's `classifyCostDelta` reads the rupee figure only, so a claude-code drift check reports `unknown-mixed` on money | accepted: the proposal gate reads spend; the guard is owner-started monthly and its quality axes are unaffected | the first drift check on a claude-code champion |
+| 17 | ADR-0917 (self-recorded) | `tests/shard-timings.json` still weights `bench-proposal.bats` at 41 s after one more mock run was added to its probe | accepted: one mock K=3 run is seconds; the table is re-measured as a named step, never by guess | the next shard re-measure pass |
 
 Rejected (ADR-0067 taxonomy): a59752e L1 and ca7ba9a L1 (an indented contract line; arc-run prints
 both at column 0), a59752e L3 and ca7ba9a L5 (control characters in `--trial-model`; `MODEL_RE`

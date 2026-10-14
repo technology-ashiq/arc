@@ -31,8 +31,10 @@ section_green() {
 }
 
 @test "spend cc: claude-code reads its session spend at session end on the json and stream paths" {
-  section_green cc 11
+  section_green cc 13
   [[ "$output" == *"ok C: json path -- total_cost_usd 0.0731 is 8 cents on run.completed, basis harness-reported"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: ... and that answer is the MODEL's failure: failure_class model-invalid, as generic-api has said since ADR-0228"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok C: a CLI that fails after its session is NOT model-invalid -- that is the CLI, not the model's answer"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok C: a CLI that fails after its session (json, exit 1) still books what the session spent"* ]] || { echo "$output"; false; }
 }
 

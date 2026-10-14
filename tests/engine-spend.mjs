@@ -416,7 +416,14 @@ try {
     const nj = await cc(0.01, { FAKE_SPEND_ANSWER: "notjson" });
     check("C: an answer that is not JSON still books the session's spend on the failed run",
       nj.code !== 0 && nj.runs === 1 && same(nj.receipt?.spend, usd(1, "0.01")) && nj.money.length === 1, `code=${nj.code} ${JSON.stringify(nj.receipt?.spend)} ${tail(nj)}`);
+    // ADR-0917: the twin of generic-api's ADR-0228 line. Left undeclared it read `unknown`, and bench scored a model
+    // that answered in prose as a harness fault.
+    check("C: ... and that answer is the MODEL's failure: failure_class model-invalid, as generic-api has said since ADR-0228",
+      nj.receipt?.failure_class === "model-invalid", `failure_class=${nj.receipt?.failure_class}`);
     const fj = await cc(0.02, { FAKE_SPEND_FAIL: "1" });
+    // The negative control: the CLI failing is not the model answering, so it must NOT be declared model-invalid.
+    check("C: a CLI that fails after its session is NOT model-invalid -- that is the CLI, not the model's answer",
+      fj.code !== 0 && fj.receipt?.failure_class !== "model-invalid", `failure_class=${fj.receipt?.failure_class}`);
     check("C: a CLI that fails after its session (json, exit 1) still books what the session spent",
       fj.code !== 0 && same(fj.receipt?.spend, usd(2, "0.02")) && fj.money.length === 1, `code=${fj.code} ${JSON.stringify(fj.receipt?.spend)} ${tail(fj)}`);
     const fs2 = await cc(0.03, { FAKE_SPEND_FAIL: "1" }, { stream: true });

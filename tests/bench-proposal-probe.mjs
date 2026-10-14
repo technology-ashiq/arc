@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   ASSERTION_BAND_PP, EXIT, MIN_FIXTURES, OperatorError,
-  buildRouterDiff, evaluateGates, parseArgs, routerSha,
+  buildRouterDiff, classSpend, evaluateGates, foldSpend, moneyPair, parseArgs, receiptSpend, routerSha,
 } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -254,6 +254,118 @@ const REV = { candidateRevision: "1.0.0", championRevision: "1.0.0" };
   check("the proposing run's receipt records the proposal", runs.some((e) => e.payload.proposal && e.payload.proposal.diffs === 1));
   check("and the NO PROPOSAL classes with their gates",
     runs.some((e) => (e.payload.proposal?.no_proposal || []).some((n) => n.gate === "coverage")));
+}
+
+// ---- 5. ADR-0917: a same-driver model is a tier line, money is like for like, prose is the model's -----------
+{
+  // A SYNTHETIC ROUTER, so these checks do not move when engine/router.yaml is re-tiered for real.
+  const rroot = dir("tier-router");
+  mkdirSync(join(rroot, "engine"), { recursive: true });
+  writeFileSync(join(rroot, "engine", "router.yaml"), [
+    "models:",
+    "  cheap-scan:",
+    "    claude-code: haiku",
+    "  balanced-workhorse:",
+    "    claude-code: sonnet",
+    "  high-judgment:",
+    "    claude-code: opus",
+    "  twin-a:",
+    "    claude-code: twin",
+    "  twin-b:",
+    "    claude-code: twin",
+    "classes:",
+    "  commit-msg-draft:",
+    "    tier: balanced-workhorse",
+    "    driver: claude-code",
+    "    max_attempts: 4",
+    "  no-tier-class:",
+    "    driver: claude-code",
+    "",
+  ].join("\n"), "utf8");
+  const sha = routerSha(rroot);
+  const t = buildRouterDiff(rroot, "commit-msg-draft", "claude-code", sha, { model: "haiku" });
+  check("ADR-0917: a second model under the same driver yields a diff, not NO DIFF", typeof t.diff === "string", t.why);
+  check("and the diff rewrites the TIER line to the tier that pins that model",
+    /^-\s+tier: balanced-workhorse$/m.test(t.diff || "") && /^\+\s+tier: cheap-scan$/m.test(t.diff || ""), t.diff);
+  check("and changes exactly one line, leaving the driver line as it was",
+    ((t.diff || "").match(/^-[^-]/gm) || []).length === 1 && ((t.diff || "").match(/^\+[^+]/gm) || []).length === 1 && /^ \s+driver: claude-code$/m.test(t.diff || ""), t.diff);
+  const t2 = buildRouterDiff(rroot, "commit-msg-draft", "claude-code", sha, { model: "haiku" });
+  check("the tier diff is byte-identical for the same inputs", t.diff === t2.diff);
+  const inc = buildRouterDiff(rroot, "commit-msg-draft", "claude-code", sha, { model: "sonnet" });
+  check("the incumbent's own model yields NO diff, naming the tier",
+    inc.diff === null && /already routes commit-msg-draft to claude-code\/sonnet \(tier balanced-workhorse\)/.test(inc.why), inc.why);
+  const none = buildRouterDiff(rroot, "commit-msg-draft", "claude-code", sha, { model: "gpt-9" });
+  check("a model no tier pins is REFUSED, never given a new tier",
+    none.diff === null && /no tier in engine\/router\.yaml pins claude-code to gpt-9/.test(none.why) && /ADR-0069/.test(none.why), none.why);
+  const twin = buildRouterDiff(rroot, "commit-msg-draft", "claude-code", sha, { model: "twin" });
+  check("a model two tiers pin is REFUSED, because choosing one is a tier decision",
+    twin.diff === null && /2 tiers pin claude-code to twin \(twin-a, twin-b\)/.test(twin.why), twin.why);
+  const noTier = buildRouterDiff(rroot, "no-tier-class", "claude-code", sha, { model: "haiku" });
+  check("a class with no tier line is refused by name", noTier.diff === null && /declares no tier line/.test(noTier.why), noTier.why);
+  const drv = buildRouterDiff(rroot, "commit-msg-draft", "mock", sha, { model: "haiku" });
+  check("a DIFFERENT driver still rewrites the driver line, model or not",
+    /^-\s+driver: claude-code$/m.test(drv.diff || "") && /^\+\s+driver: mock$/m.test(drv.diff || "") && !/tier: cheap-scan/.test(drv.diff || ""), drv.diff);
+
+  // MONEY, LIKE FOR LIKE. The receipt's spend is integer minor units, a currency and a basis.
+  const usd = (amount, basis = "harness-reported") => ({ amount, currency: "USD", basis });
+  check("receiptSpend reads a well-formed spend with its basis",
+    JSON.stringify(receiptSpend({ amount: 6, currency: "USD", provider_amount: "0.05795" }, "harness-reported")) === JSON.stringify(usd(6)));
+  check("and refuses an amount that is not the provider figure rounded up", receiptSpend({ amount: 5, currency: "USD", provider_amount: "0.05795" }, "harness-reported") === null);
+  check("and refuses a basis outside the closed set", receiptSpend({ amount: 6, currency: "USD", provider_amount: "0.05795" }, "invoice") === null);
+  check("classSpend refuses a negative or fractional sum from a provenance file",
+    classSpend(usd(-1)) === null && classSpend(usd(1.5)) === null && JSON.stringify(classSpend(usd(82))) === JSON.stringify(usd(82)));
+  let acc = foldSpend({ spend: null, gap: null }, usd(6));
+  acc = foldSpend(acc, usd(5));
+  check("foldSpend sums a class's attempts", acc.spend?.amount === 11 && acc.gap === null, JSON.stringify(acc));
+  const holed = foldSpend(acc, null);
+  check("one attempt with no spend makes the class's money ABSENT and says why, never a partial sum",
+    holed.spend === null && /reported no spend/.test(holed.gap) && foldSpend(holed, usd(9)).spend === null);
+  const mixed = foldSpend(acc, usd(3, "provider-reported"));
+  check("a mixed basis makes it ABSENT too", mixed.spend === null && /mixed spend/.test(mixed.gap), JSON.stringify(mixed));
+
+  const side = (spend, cost_inr = null) => cls({ spend, cost_inr });
+  const cheaper = evaluateGates(side(usd(40)), side(usd(82)), REV);
+  check("ADR-0917: a quality tie with less spend, same currency and basis, is decided on COST", cheaper.eligible && cheaper.decidedBy === "cost", JSON.stringify(cheaper));
+  const dearer = evaluateGates(side(usd(90)), side(usd(82)), REV);
+  check("and with MORE spend it loses on cost", dearer.eligible === false && dearer.gate === "cost-comparability" && /lost on cost \(90 vs 82\)/.test(dearer.reason), dearer.reason);
+  const basis = evaluateGates(side(usd(40, "provider-reported")), side(usd(82)), REV);
+  check("a harness's notional figure and a provider's invoice are NOT compared",
+    basis.gate === "cost-comparability" && /not like for like/.test(basis.reason), basis.reason);
+  const cur = evaluateGates(side({ amount: 40, currency: "INR", basis: "harness-reported" }), side(usd(82)), REV);
+  check("nor are two currencies, with no rate anyone maintains", cur.gate === "cost-comparability" && /not like for like/.test(cur.reason), cur.reason);
+  const oneSide = evaluateGates(side(usd(40)), side(null), REV);
+  check("spend on one side only is not comparable", oneSide.gate === "cost-comparability" && /spend is reported on one side only/.test(oneSide.reason), oneSide.reason);
+  const inrWins = moneyPair(side(usd(1), 5), side(usd(999), 9));
+  check("a rupee cost block on both sides is still the figure compared", inrWins.candidate === 5 && inrWins.champion === 9 && inrWins.unit === "INR", JSON.stringify(inrWins));
+
+  // LIVE: a recording that declares model-invalid scores as a SCHEMA failure; an undeclared one stays unscoreable.
+  const src = join(ROOT, "tests/fixtures/bench/mock-replay/commit-msg-draft");
+  const recRoot = dir("model-invalid-rec");
+  const dst = join(recRoot, "commit-msg-draft");
+  mkdirSync(dst, { recursive: true });
+  for (const f of readdirSync(src)) {
+    let doc = JSON.parse(readFileSync(join(src, f), "utf8"));
+    if (f === "new-feature-file.json") doc = { __failure: { class: "model-invalid", message: "the model answer is not JSON: prose" } };
+    if (f === "docs-only.json") doc = { __failure: { class: null, message: "an undeclared failure -- the control" } };
+    writeFileSync(join(dst, f), JSON.stringify(doc), "utf8");
+  }
+  check("fixture: the altered recordings were written (non-empty set)", readdirSync(dst).length >= 5, String(readdirSync(dst).length));
+  const mout = join(scratch, "model-invalid-out");
+  const mr = bench(["--driver", "mock", "--budget", "inr=500,min=15", "--out", mout], { ARC_SPINE_ROOT: dir("model-invalid-spine"), ARC_MOCK_DIR: recRoot });
+  const scPath = join(mout, "scorecard.json");
+  check("the model-invalid run RAN and wrote a scorecard", existsSync(scPath), `status ${mr.status}: ${mr.stderr.split("\n")[0]}`);
+  if (existsSync(scPath)) {
+    const row = JSON.parse(readFileSync(scPath, "utf8")).classes.find((c) => c.task_class === "commit-msg-draft");
+    const fx = (id) => (row?.fixtures || []).find((f) => f.id === id);
+    const nf = fx("new-feature-file");
+    check("ADR-0917: a model-invalid attempt is a SCHEMA failure the model earned, not a driver fault",
+      nf && nf.attempts.length === 3 && nf.attempts.every((a) => a.scored === false && a.verdict === "schema" && a.schema === false), JSON.stringify(nf?.attempts));
+    const ctl = fx("docs-only");
+    check("and the undeclared failure beside it stays unscoreable -- the control",
+      ctl && ctl.attempts.every((a) => a.scored === false && a.verdict !== "schema" && a.schema === null), JSON.stringify(ctl?.attempts));
+    check("the schema denominator counts the model-invalid attempts and not the undeclared ones",
+      row.schema.evaluated === 12 && row.schema.passed === 9, JSON.stringify(row.schema));
+  }
 }
 
 rmSync(scratch, { recursive: true, force: true });
