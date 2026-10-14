@@ -182,7 +182,7 @@ out-of-cycle: work done after a cycle closed, routed through the change process 
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-engine (Cycle 9, opened 2026-10-14) |
 | Product | [engine](../products/engine.md) |
 

@@ -1,0 +1,20 @@
+{
+  "phase": "11",
+  "commit": "1fedd504715a045b5dc0885ad5412534e66fc79d",
+  "short": "1fedd504",
+  "generated": "2026-10-14T11:13:16Z",
+  "files": [
+    {
+      "name": "attack-e2dc399-r1-boundary.json",
+      "sha256": "3413e3e61cefbef4e41fecf1629c5673135f2927ff78b03c30be2afa86be9656"
+    },
+    {
+      "name": "attack-e2dc399-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "ci-results.md",
+      "sha256": "383b726d8a8aabc0db3dc763da5ef23a2c213782def8619f60fc7594b460bee4"
+    }
+  ]
+}
