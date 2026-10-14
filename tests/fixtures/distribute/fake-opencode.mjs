@@ -59,7 +59,8 @@ if (process.env.FAKE_OC_GRANDCHILD) {
   // grandchild breaks away from libuv's kill-on-close job (detached), or the wrapper's own exit would kill it and the
   // positive control could never write; taskkill /T still reaches it through the parent pid while the fake lives.
   // Elsewhere it stays in the fake's process group, which is what the wrapper's group kill must reach.
-  spawn(process.execPath, ["-e", code, process.env.FAKE_OC_GRANDCHILD], { stdio: "ignore", detached: process.platform === "win32" }).unref();
+  // FAKE_OC_GRANDCHILD_DETACH=1 detaches it on POSIX too (its own session), the shape a group kill cannot reach.
+  spawn(process.execPath, ["-e", code, process.env.FAKE_OC_GRANDCHILD], { stdio: "ignore", detached: process.platform === "win32" || process.env.FAKE_OC_GRANDCHILD_DETACH === "1" }).unref();
 }
 
 const session = "ses_fake0001TestSession";

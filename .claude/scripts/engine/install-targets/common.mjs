@@ -65,10 +65,38 @@ export function readManifest(dir, only) {
     try { j = JSON.parse(readFileSync(p, "utf8")); } catch (e) { throw new Refused("bad-manifest", `${rel} does not parse: ${e.message}`); }
     const m = j && typeof j === "object" ? pick(j) : undefined;
     if (m === undefined && rel === REGISTRY) continue;
-    if (!m || typeof m !== "object" || m.version !== 1 || !m.files || typeof m.files !== "object" || Array.isArray(m.files)) throw new Refused("bad-manifest", `${rel} holds no version-1 install record`);
-    return { rel, manifest: m };
+    if (!m || typeof m !== "object" || (m.version !== 1 && m.version !== 2) || !m.files || typeof m.files !== "object" || Array.isArray(m.files)) throw new Refused("bad-manifest", `${rel} holds no version-1 or version-2 install record`);
+    return { rel, manifest: normalize(m, rel) };
   }
   return null;
+}
+
+/**
+ * One shape for both record versions (ADR-2024): `files` is path -> sha, `owners` path -> target, `targets` the list.
+ * v1 (Cycle 1 consumers) had one `target` and a `source` commit and no tag; it is read, never rewritten here.
+ */
+function normalize(m, rel) {
+  const bad = (why) => { throw new Refused("bad-manifest", `${rel}: ${why}`); };
+  for (const p of Object.keys(m.files)) if (p === "" || p.includes("\u0000")) bad("a file path is empty or holds a NUL");
+  // A commit or tag goes into git's argv: only a full hex id (or "unknown") and a vX.Y.Z tag are ever accepted
+  // (attack 0eb78f6 B6).
+  const commitOk = (c) => c === "unknown" || (typeof c === "string" && /^[0-9a-f]{40}$/.test(c));
+  if (m.version === 1) {
+    if (typeof m.target !== "string") bad("a version-1 record names no target");
+    if (m.source !== undefined && !commitOk(m.source)) bad(`source ${JSON.stringify(m.source)} is not a commit id`);
+    const files = {};
+    for (const [p, v] of Object.entries(m.files)) { if (typeof v !== "string") bad(`${p} has no sha`); files[p] = v; }
+    return { ...m, targets: [m.target], tag: null, commit: typeof m.source === "string" ? m.source : "unknown", files, owners: Object.fromEntries(Object.keys(files).map((p) => [p, m.target])), hooks_path_set: false };
+  }
+  if (!Array.isArray(m.targets) || !m.targets.length || m.targets.some((t) => typeof t !== "string")) bad("a version-2 record names no targets");
+  if (!commitOk(m.commit)) bad(`commit ${JSON.stringify(m.commit)} is not a commit id`);
+  if (m.tag !== null && m.tag !== undefined && !(typeof m.tag === "string" && /^v\d+\.\d+\.\d+$/.test(m.tag))) bad(`tag ${JSON.stringify(m.tag)} is not vX.Y.Z`);
+  const files = {}, owners = {};
+  for (const [p, v] of Object.entries(m.files)) {
+    if (!v || typeof v !== "object" || typeof v.sha !== "string" || typeof v.target !== "string") bad(`${p} is not {sha, target}`);
+    files[p] = v.sha; owners[p] = v.target;
+  }
+  return { ...m, target: m.targets.join("+"), tag: typeof m.tag === "string" ? m.tag : null, commit: typeof m.commit === "string" ? m.commit : "unknown", files, owners, hooks_path_set: m.hooks_path_set === true };
 }
 
 /**
@@ -191,11 +219,16 @@ function mkdirTree(dir, rel, created) {
   }
 }
 
-/** The install record: every file the run owns, by CR-stripped sha256, plus what it could not hold. */
-export function manifestRecord(target, ops, degraded, forced, source) {
+/**
+ * The install record (ADR-2024, version 2): every file the run owns, by CR-stripped sha256 and the target that wrote
+ * it, the arc tag and commit it came from, what it could not hold, and whether `init` itself set core.hooksPath.
+ * `ops` may carry `op.target`; otherwise every file is the one `targets` entry's.
+ */
+export function manifestRecord(targets, ops, degraded, forced, { tag = null, commit = "unknown", hooksPathSet = false } = {}) {
+  const list = Array.isArray(targets) ? targets : [targets];
   const files = {};
-  for (const op of ops) if (op.kind !== "mkdir") files[op.path] = op.sha;
-  return { version: 1, target, source, files, degraded, forced };
+  for (const op of ops) if (op.kind !== "mkdir") files[op.path] = { sha: op.sha, target: op.target ?? list[0] };
+  return { version: 2, targets: list, tag, commit, files, degraded, forced, hooks_path_set: hooksPathSet };
 }
 
 /** The truth of an install, path by path (REQ-07). Returns `{ lines, counts }`. */
