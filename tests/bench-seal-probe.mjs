@@ -416,6 +416,11 @@ function eventsOn(spine) {
     `head ${fp4.head === fp3.head ? "restored" : "differs"}`);
   check("checkoutMovedSince agrees, and names the move", checkoutMovedSince(f, fp3).moved === true && checkoutMovedSince(f, fp4).moved === false);
   check("a directory with no git has no fingerprint", checkoutFingerprint(dir("no-git")) === null);
+  // The one-process HEAD read falls back to the two probes on an unborn HEAD (PR 426 speed fix).
+  const u = dir("unborn");
+  gitIn(u, "init", "-q");
+  const fpu = checkoutFingerprint(u);
+  check("an unborn repo still has a fingerprint, through the fallback probes", Boolean(fpu) && fpu.head === "(unborn)" && /^refs\/heads\//.test(fpu.branch), JSON.stringify(fpu));
 }
 
 rmSync(scratch, { recursive: true, force: true });

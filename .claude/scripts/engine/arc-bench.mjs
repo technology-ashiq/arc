@@ -1518,19 +1518,45 @@ function gitRead(root, args) {
   return { status: r.error ? null : r.status, stdout: r.stdout ?? "", stderr: String(r.stderr || (r.error && r.error.message) || "") };
 }
 
+// THREE git processes per check, not seven. Bench checks after every attempt, a mock run over every
+// class is ~28 attempts, and a git process costs 0.1-0.4 s to start on Windows: seven per check put the
+// face's bench.run-model flow past its 30 s CDP timeout on Windows CI (PR 426, shard 1/12). Where the
+// toplevel and git dir are does not change during a run, so they are read once per root; the HEAD
+// reflog is read as the file git keeps it in.
+const checkoutPlaces = new Map();
+
 export function checkoutFingerprint(root) {
   const fail = (args, r) => { throw new Error(`git ${args[0]} ${r.status === null ? "could not run" : `exited ${r.status}`}: ${r.stderr.trim().split("\n")[0] || "no message"}`); };
   const must = (args) => { const r = gitRead(root, args); if (r.status !== 0) fail(args, r); return r.stdout; };
   // `-q` probes exit 1 for "no such ref" and nothing else; any other status is a failure.
   const probe = (args, onOne) => { const r = gitRead(root, args); if (r.status === 0) return r.stdout.trim(); if (r.status === 1) return onOne; fail(args, r); };
-  const inside = gitRead(root, ["rev-parse", "--is-inside-work-tree"]);
-  if (inside.status !== 0 && /not a git repository/i.test(inside.stderr)) return null;
+  let places = checkoutPlaces.get(root);
+  if (!places) {
+    const where = gitRead(root, ["rev-parse", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir"]);
+    if (where.status !== 0 && /not a git repository/i.test(where.stderr)) return null;
+    if (where.status !== 0) return { unreadable: `git rev-parse exited ${where.status ?? "(could not run)"}: ${where.stderr.trim().split("\n")[0] || "no message"}` };
+    const [, top, gitDir] = where.stdout.split("\n").map((s) => s.trim());
+    if (!top || !gitDir) return { unreadable: "git rev-parse named no toplevel or git dir" };
+    places = { top, gitDir };
+    checkoutPlaces.set(root, places);
+  }
+  const { top, gitDir } = places;
   try {
-    if (inside.status !== 0) fail(["rev-parse"], inside);
-    const head = probe(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)");
-    const branch = probe(["symbolic-ref", "-q", "HEAD"], "(detached)");
-    const reflog = head === "(unborn)" ? "" : must(["reflog", "show", "--format=%H %gs", "HEAD"]);
-    const top = must(["rev-parse", "--show-toplevel"]).trim();
+    // HEAD and the ref it names in one process; an unborn or failing HEAD falls back to the two
+    // probes, whose exit statuses are documented.
+    let head, branch;
+    const both = gitRead(root, ["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"]);
+    const lines = both.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (both.status === 0 && lines.length === 2 && /^[0-9a-f]{40,64}$/.test(lines[0])) {
+      head = lines[0];
+      branch = lines[1].startsWith("refs/") ? lines[1] : "(detached)";
+    } else {
+      head = probe(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)");
+      branch = probe(["symbolic-ref", "-q", "HEAD"], "(detached)");
+    }
+    // A missing reflog is a state (an unborn HEAD, or logging turned off); any other read error is not.
+    let reflog = "";
+    try { reflog = readFileSync(join(gitDir, "logs", "HEAD"), "utf8"); } catch (e) { if (e.code !== "ENOENT") throw e; }
     const dirty = head === "(unborn)" ? [] : must(["diff", "--name-only", "-z", "HEAD"]).split("\0").filter(Boolean).sort();
     const content = dirty.map((p) => {
       let bytes;

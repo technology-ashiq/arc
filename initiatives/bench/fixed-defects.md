@@ -37,3 +37,8 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   Fix: drop other branches' `branch.<name>.*` and every `remote.<name>.*`, matched exactly by
   subsection, read with `-z`; section-level keys and every other line still count.
   Twin: any per-worktree check that reads a repository-wide file.
+- **A per-attempt check priced as if a process were free** (2026-10-14, PR 426 CI). The checkout
+  fingerprint spawned seven git processes after every attempt; at 0.1-0.4 s per process on
+  Windows, a ~28-attempt mock run pushed the face's `bench.run-model` flow past its 30 s CDP
+  timeout on one Windows shard. Fix: three processes per check, the toplevel and git dir cached
+  per root, the HEAD reflog read as a file. Twin: any check added inside a per-attempt loop.

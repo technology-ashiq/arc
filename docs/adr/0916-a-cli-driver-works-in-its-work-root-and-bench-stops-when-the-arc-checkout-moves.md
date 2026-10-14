@@ -87,3 +87,7 @@ both completed attempts were real fixture commits. The config component now drop
 `branch.<name>.*` section except this worktree's own branch, and every `remote.<name>.*`, matched by
 exact subsection and read with `-z`. Section-level keys and everything else in the file still count,
 so a sibling's write elsewhere stops a run rather than passing one. The probe pins both sides. The stopped run, `champion-sonnet3`, is void like the two before it.
+
+The same PR cut the check from seven git processes to three: the toplevel and git dir are read once
+per root, the HEAD reflog is read as git's own file, and HEAD and its ref come from one call. Seven
+processes after every attempt put a 28-attempt mock run past the face flow's 30 s timeout on Windows CI.

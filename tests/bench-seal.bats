@@ -142,6 +142,7 @@ S_STATUS() { cat "$BATS_FILE_TMPDIR/seal.status"; }
   [[ "$(S)" == *"ok and unsetting it again restores it"* ]]
   [[ "$(S)" == *"ok a sibling branch whose name extends this one, a multi-line value and a remote do not move it"* ]]
   [[ "$(S)" == *"ok a section-level branch key still moves it"* ]]
+  [[ "$(S)" == *"ok an unborn repo still has a fingerprint, through the fallback probes"* ]]
   [[ "$(S)" == *"ok an edit to a tracked file moves it"* ]]
   [[ "$(S)" == *"ok a second edit to an already-dirty file moves it again, by content"* ]]
   [[ "$(S)" == *"ok a local config write moves it"* ]]
