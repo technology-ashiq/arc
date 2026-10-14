@@ -77,13 +77,19 @@ export function readManifest(dir, only) {
  */
 function normalize(m, rel) {
   const bad = (why) => { throw new Refused("bad-manifest", `${rel}: ${why}`); };
+  // A commit or tag goes into git's argv: only a full hex id (or "unknown") and a vX.Y.Z tag are ever accepted
+  // (attack 0eb78f6 B6).
+  const commitOk = (c) => c === "unknown" || (typeof c === "string" && /^[0-9a-f]{40}$/.test(c));
   if (m.version === 1) {
     if (typeof m.target !== "string") bad("a version-1 record names no target");
+    if (m.source !== undefined && !commitOk(m.source)) bad(`source ${JSON.stringify(m.source)} is not a commit id`);
     const files = {};
     for (const [p, v] of Object.entries(m.files)) { if (typeof v !== "string") bad(`${p} has no sha`); files[p] = v; }
     return { ...m, targets: [m.target], tag: null, commit: typeof m.source === "string" ? m.source : "unknown", files, owners: Object.fromEntries(Object.keys(files).map((p) => [p, m.target])), hooks_path_set: false };
   }
   if (!Array.isArray(m.targets) || !m.targets.length || m.targets.some((t) => typeof t !== "string")) bad("a version-2 record names no targets");
+  if (!commitOk(m.commit)) bad(`commit ${JSON.stringify(m.commit)} is not a commit id`);
+  if (m.tag !== null && m.tag !== undefined && !(typeof m.tag === "string" && /^v\d+\.\d+\.\d+$/.test(m.tag))) bad(`tag ${JSON.stringify(m.tag)} is not vX.Y.Z`);
   const files = {}, owners = {};
   for (const [p, v] of Object.entries(m.files)) {
     if (!v || typeof v !== "object" || typeof v.sha !== "string" || typeof v.target !== "string") bad(`${p} is not {sha, target}`);

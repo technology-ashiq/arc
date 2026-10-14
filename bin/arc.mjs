@@ -12,6 +12,11 @@
  *                              target. Exit 0 means this copy of arc can install.
  *   arc doctor --dir DIR       the truth of an install in DIR (placed / degraded / missing / unmanaged-conflict)
  *   arc doctor --repo [...]    main's branch protection read back (arc-doctor.mjs)
+ *   arc outdated [--dir DIR]     how far DIR's install is behind this arc: tag@commit both sides, commits behind, the
+ *                              CHANGELOG sections between (exit 0 up to date · 1 behind · 3 not-installed · 4 unknown/diverged)
+ *   arc upgrade [--dir DIR] [--to vX.Y.Z] [--confirm] [--force]
+ *                              re-render DIR's install from this arc (or from tag --to), back up local edits, refuse a
+ *                              BREAKING range without --confirm (exit 5), a tag not fetched exits 6 (ADR-2024, ADR-2025)
  *   arc compile --self [--check]  render codex, opencode and skills-only into this arc checkout (ADR-2023)
  *   arc compile ARGS...        arc-compile.mjs ARGS...
  *   arc --version | help
@@ -22,7 +27,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(realpathSync(fileURLToPath(import.meta.url))), "..");
 const S = (p) => join(ROOT, ".claude", "scripts", ...p.split("/"));
@@ -35,7 +40,7 @@ const run = (script, args, opts = {}) => spawnSync(process.execPath, [script, ..
 const git = (dir, args) => { const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); return { status: r.error ? -1 : r.status, stdout: (r.stdout || "").trim() }; };
 
 function usage(code) {
-  (code ? console.error : console.log)("usage: arc init --target <claude-code|codex|opencode|skills-only> [--dir DIR] [--dry-run] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc compile --self [--check]\n       arc compile <arc-compile args>\n       arc --version");
+  (code ? console.error : console.log)("usage: arc init --target <claude-code|codex|opencode|skills-only> [--dir DIR] [--dry-run] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc outdated [--dir DIR]\n       arc upgrade [--dir DIR] [--to vX.Y.Z] [--confirm] [--force]\n       arc compile --self [--check]\n       arc compile <arc-compile args>\n       arc --version");
   return code;
 }
 
@@ -112,6 +117,44 @@ function selfDoctor() {
   return bad ? 1 : 0;
 }
 
+// One parser for the lifecycle verbs: each flag once, a value never flag-shaped (attack 188f724 L6, B7).
+function lifecycleArgs(verb, args, flags, values) {
+  const o = { dir: process.cwd() };
+  const seen = new Set();
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (seen.has(a)) { console.error(`arc ${verb}: ${a} given twice`); return null; }
+    seen.add(a);
+    if (values.includes(a)) {
+      const v = args[i + 1];
+      if (v === undefined || v === "" || v.startsWith("--")) { console.error(`arc ${verb}: ${a} needs a value`); return null; }
+      o[a.slice(2)] = v; i++;
+    } else if (flags.includes(a)) o[a.slice(2)] = true;
+    else { console.error(`arc ${verb}: unknown argument ${a}`); return null; }
+  }
+  return o;
+}
+
+async function lifecycle(verb, args) {
+  const L = await import(pathToFileURL(S("engine/install-targets/lifecycle.mjs")).href);
+  const { TARGETS } = await import(pathToFileURL(INSTALL).href);
+  const { Refused, targetDir } = await import(pathToFileURL(S("engine/install-targets/common.mjs")).href);
+  const o = verb === "outdated" ? lifecycleArgs(verb, args, [], ["--dir"]) : lifecycleArgs(verb, args, ["--confirm", "--force"], ["--dir", "--to"]);
+  if (!o) return usage(2);
+  try {
+    const dir = targetDir(o.dir);
+    const r = verb === "outdated" ? L.outdated(dir, ROOT) : L.upgrade(dir, ROOT, TARGETS, { to: o.to ?? null, confirm: o.confirm === true, force: o.force === true });
+    for (const l of r.lines) console.log(l);
+    console.log(`RAN arc-${verb}`);
+    return r.code;
+  } catch (e) {
+    if (!(e instanceof Refused)) throw e;
+    console.log(`refused [${e.reason}] ${e.message.slice(e.reason.length + 2)}`);
+    console.log(`RAN arc-${verb}`);
+    return e.reason === "manifest-path" || e.reason === "bad-manifest" ? 2 : 1;
+  }
+}
+
 function main(argv) {
   const [verb, ...rest] = argv;
   if (verb === "--version" || verb === "-v") { console.log(version()); return 0; }
@@ -123,10 +166,11 @@ function main(argv) {
     if (rest[0] === "--repo") return run(S("engine/arc-doctor.mjs"), rest).status ?? 1;
     return rest.length ? usage(2) : selfDoctor();
   }
+  if (verb === "outdated" || verb === "upgrade") return lifecycle(verb, rest);
   if (verb === "compile" && rest[0] === "--self") return run(INSTALL, ["--self", ...rest.slice(1)]).status ?? 1;
   if (verb === "compile") return run(S("engine/arc-compile.mjs"), rest).status ?? 1;
   console.error(`arc: unknown command ${verb}`);
   return usage(2);
 }
 
-process.exitCode = main(process.argv.slice(2));
+Promise.resolve(main(process.argv.slice(2))).then((c) => { process.exitCode = c; });

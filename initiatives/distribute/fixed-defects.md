@@ -128,4 +128,10 @@ and lane finds are appended under their PR.
 - **(df) a process listing parsed by line.** A command line can hold a line break and forge a row; fold it to one line at the source (B8).
 - **(dg) a record written in place.** A wrapper killed mid-write leaves half a file; write temp + rename, and refuse (never silently clear) a record that cannot be read (B9).
 - **(dh) a refusal test that never checks nothing was written.** Assert the tree is unchanged after a refused write path, not only that the refusal printed (L10).
-
+- **(di) identity by command line alone.** A reused pid can run the same command line; record and compare the process start time too (Windows `CreationDate`, POSIX `lstart`), and never act on a run record git tracks: it came from a clone (attack 0eb78f6 L3, L7, L9).
+- **(dj) a kill set that trusts every pid it ever saw.** Kill only recorded pids whose identity is unchanged, and keep the survivors on record for the next reap (B1, B3).
+- **(dk) a fence check that is shape, not content.** In a tree that holds the source and the renderer, compare the fence byte for byte with a fresh render; a hand-edited or pre-narrowing fence is NO-FENCE (B4).
+- **(dl) a writer that checks then writes in place.** Write to a temp name and rename, so a link planted between the check and the write is replaced, never followed (L6).
+- **(dm) a manifest value passed to git as given.** Validate a commit as 40 hex and a tag as vX.Y.Z before any git argv sees it (B6, B13).
+- **(dn) a record rewritten before its removals land.** A removal that fails puts its path back in the record; never drop a path from the manifest while the file is still on disk (B7).
+- **(do) a second gate beside an existing one.** `version-gate.sh` already ran in CI; extend it to call the fuller lint, scoped to the tree whose contract it is, rather than add a parallel step (P09 build).

@@ -38,8 +38,11 @@ Option 2.
 - **Path safety.** Each manifest path is checked before use: relative, no `..` segment, no drive letter or leading `/`,
   no NUL, and `realpath(dir/path)` inside `realpath(dir)`. A manifest path that fails this is refused **by name**
   (`Refused("manifest-path", <path>)`) and nothing is written or removed. Symlinks are never followed out of the project.
-- **`upgrade --to <tag>`** renders from a read-only `git archive <tag>` extract of arc in a scratch dir (never a checkout or
-  `git worktree` in the running CLI's tree); a tag absent locally exits 6 `tags: not fetched`, 0 writes.
+- **`upgrade --to <tag>`** renders from a read-only extract of that tag in a scratch dir: `git read-tree` + `checkout-index`
+  through a temporary `GIT_INDEX_FILE`, so the checkout's own index, HEAD and worktree list are untouched (never a checkout
+  or `git worktree` in the running CLI's tree, and no `tar`, which on Windows can be GNU tar reading `C:` as a host). A tag
+  absent locally exits 6 `tags: not fetched`, 0 writes. A move to an older tag lists the sections it crosses backwards,
+  and their BREAKING lines still stop it without `--confirm`.
 - **`upgrade`** re-renders, compares each managed path's on-disk sha with the manifest's: an unchanged path is replaced,
   a locally changed one is copied to `.arc-install-backup/<stamp>/<path>` first and listed `backed-up`. A path the new
   render drops is removed only if its bytes still match the manifest. A path that is new in this render and already
@@ -50,6 +53,10 @@ Option 2.
 - **No `--all` write verb.** `outdated --all` reads. Each `upgrade` is one project, and its result is a change the owner commits.
 - The CLI's own version (the checkout `arc` runs from) and a project's rendered version (the manifest) are two different
   numbers. `arc upgrade` moves only the second.
+
+Measured in P09 (attack rounds on `8707a5c` and `0eb78f6`): a commit is accepted into git's argv only as 40 hex (or
+`unknown`) and a tag only as `vX.Y.Z`; a managed file that cannot be removed (locked) stays in the record as
+`kept (locked)`; an upgrade from an arc checkout with uncommitted changes says so.
 
 ## Consequences
 

@@ -6,7 +6,7 @@
  * names, checked before any write). The CLI's own checkout is one version; the project's rendered version is another,
  * recorded in the manifest as tag + commit. `outdated` compares the two and prints the CHANGELOG sections between
  * them; `upgrade` re-renders, backs up locally changed managed files, refuses a BREAKING range without --confirm, and
- * with --to renders from a read-only `git archive` of that tag, never a checkout in the running tree.
+ * with --to renders from a read-only extract of that tag (a temporary index), never a checkout in the running tree.
  *
  * Exit codes are the caller's (bin/arc.mjs): outdated 0 up to date · 1 behind · 3 not-installed · 4 unknown or
  * diverged commit; upgrade 0 done · 1 refused/conflict/failed · 3 not-installed · 5 BREAKING without --confirm ·
@@ -90,8 +90,11 @@ export function changelogSections(text) {
  */
 export function changelogRange(text, fromTag, toTag) {
   const secs = changelogSections(text);
-  const from = semver(fromTag), to = semver(toTag);
+  let from = semver(fromTag), to = semver(toTag);
   const notes = [];
+  // A move to an OLDER tag crosses the same sections backwards: they are listed, and their BREAKING lines still stop
+  // it (attack 0eb78f6 B12).
+  if (from && to && cmp(from, to) > 0) { notes.push(`changelog: rolling back over the sections after ${toTag}`); [from, to] = [to, from]; }
   if (fromTag && !secs.some((s) => s.version === String(fromTag).replace(/^v/, ""))) notes.push(`changelog: no section for ${fromTag}`);
   const pick = secs.filter((s) => {
     if (s.version === "Unreleased") return toTag === null;
@@ -152,17 +155,24 @@ export function outdated(dir, tree) {
   return { code: 1, lines };
 }
 
-/** A read-only extract of `tag` from the arc checkout, in a temp dir the caller removes. */
+/**
+ * A read-only extract of `tag` from the arc checkout, in a temp dir the caller removes. Pure git through a temporary
+ * index file (read-tree + checkout-index), so the checkout's own index, HEAD and worktree list are untouched; no tar,
+ * which on Windows may be GNU tar reading `C:` as a remote host.
+ */
 function archiveTree(tree, tag) {
   if (git(tree, ["rev-parse", "-q", "--verify", `refs/tags/${tag}^{commit}`]).status !== 0) return null;
   const out = mkdtempSync(join(tmpdir(), "arc-upgrade-"));
-  const tar = join(out, "src.tar");
-  const a = spawnSync("git", ["-C", tree, "archive", "--format=tar", "-o", tar, tag], { stdio: "ignore" });
-  if (a.status !== 0) { rmSync(out, { recursive: true, force: true }); throw new Refused("archive", `git archive ${tag} failed`); }
   const dest = join(out, "tree");
   mkdirSync(dest);
-  const x = spawnSync("tar", ["-xf", tar, "-C", dest], { stdio: "ignore" });
-  if (x.status !== 0 || !existsSync(join(dest, "engine"))) { rmSync(out, { recursive: true, force: true }); throw new Refused("archive", `extracting ${tag} failed`); }
+  const env = { ...process.env, GIT_INDEX_FILE: join(out, "index") };
+  for (const k of ["GIT_DIR", "GIT_WORK_TREE"]) delete env[k];
+  const gitDir = git(tree, ["rev-parse", "--absolute-git-dir"]).out;
+  const step = (args) => spawnSync("git", ["--git-dir", gitDir, ...args], { cwd: out, env, stdio: "ignore" }).status === 0;
+  if (!gitDir || !step(["read-tree", `${tag}^{tree}`]) || !step(["--work-tree", dest, "checkout-index", "-a", "-f"]) || !existsSync(join(dest, "engine"))) {
+    rmSync(out, { recursive: true, force: true });
+    throw new Refused("archive", `extracting ${tag} failed`);
+  }
   return { dir: dest, cleanup: () => rmSync(out, { recursive: true, force: true }) };
 }
 
@@ -201,6 +211,9 @@ export function upgrade(dir, tree, TARGETS, { to = null, confirm = false, force 
   if (found.rel !== MANIFEST) return { code: 1, lines: [`refused [registry-install] ${dir} holds a claude-code install in ${found.rel}; upgrade it with arc init --target claude-code`] };
   let src = tree, cleanup = () => {};
   let target = arcPosition(tree);
+  // A render from the working tree is recorded as HEAD: an uncommitted change in the arc checkout would be installed
+  // under a commit that does not hold it, so it is named (attack 0eb78f6 B10).
+  const dirty = to === null && git(tree, ["status", "--porcelain", "--untracked-files=no"]).out !== "";
   if (to !== null) {
     if (!/^v\d+\.\d+\.\d+$/.test(to)) return { code: 1, lines: [`refused [bad-tag] --to ${JSON.stringify(to)} is not vMAJOR.MINOR.PATCH`] };
     const a = archiveTree(tree, to);
@@ -252,11 +265,21 @@ export function upgrade(dir, tree, TARGETS, { to = null, confirm = false, force 
     const record = manifestRecord(m.targets, files, plan.degraded, [...new Set([...(m.forced ?? []), ...forced])], { tag: target.tag, commit: target.commit, hooksPathSet: m.hooks_path_set });
     const text = `${JSON.stringify(record, null, 2)}\n`;
     const r = apply(writes, dir, { kind: "write", path: MANIFEST, text, sha: sha(Buffer.from(text)) }, { backup: backups });
+    // A file that cannot be removed (locked, read-only) stays arc's: it is put back into the record, never dropped
+    // from it while still on disk (attack 0eb78f6 B7).
+    const stuck = [];
     for (const p of removes) {
-      rmSync(safePath(dir, p), { force: true });
+      try { rmSync(safePath(dir, p), { force: true }); } catch (e) { stuck.push(p); lines.push(`kept (locked) ${p}: ${e.code || e.message}`); continue; }
       // Directories this record's files lived in, removed only when empty, never above the project.
       for (let d = dirname(p); d !== "."; d = dirname(d)) { try { rmdirSync(join(dir, d)); } catch { break; } }
     }
+    if (stuck.length) {
+      const rec2 = { ...record, files: { ...record.files } };
+      for (const p of stuck) rec2.files[p] = { sha: m.files[p], target: m.owners?.[p] ?? m.targets[0] };
+      const t2 = `${JSON.stringify(rec2, null, 2)}\n`;
+      apply([], dir, { kind: "write", path: MANIFEST, text: t2, sha: sha(Buffer.from(t2)) });
+    }
+    if (dirty) lines.push("note: the arc checkout has uncommitted changes; they are in this render but not in the recorded commit");
     lines.push(`upgrade: ${m.tag ?? "untagged"}@${short(m.commit)} -> ${target.tag ?? "untagged"}@${short(target.commit)}: ${writes.length} written, ${unchanged} unchanged, ${removes.length} removed, ${backups.length} backed up${r.backup ? ` in ${r.backup}` : ""}${m.version === 1 ? "; record rewritten as version 2" : ""}`);
     return { code: 0, lines };
   } finally { cleanup(); }

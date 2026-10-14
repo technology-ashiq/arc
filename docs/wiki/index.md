@@ -22,13 +22,13 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 413 of 
 | Product | Version | Requires | Commands | Agents | Scripts |
 |---|---|---|---|---|---|
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
-| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 41 |
+| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 42 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 20 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 8 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
-| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 49 |
+| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 50 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |

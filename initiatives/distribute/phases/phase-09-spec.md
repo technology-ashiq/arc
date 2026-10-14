@@ -9,7 +9,7 @@
 
 1. Manifest v2 writer + v1/v2 reader in `install-targets/common.mjs` (ADR-2024): `targets`, `tag`, `commit`, `files:{path:{sha,target}}`, `hooks_path_set`; path-safety check shared by every verb (`Refused("manifest-path", <path>)`).
 2. `arc outdated [--dir D]`: installed tag@commit vs the CLI checkout's tag@commit, `git rev-list --count`, CHANGELOG sections in range; exits 0 up to date / 1 behind / 3 not-installed / 4 unknown commit.
-3. `arc upgrade [--dir D] [--to <tag>] [--confirm] [--force]`: re-render (`--to {tag}` renders from a read-only `git archive {tag}` extract into a scratch dir, never a checkout or worktree; a tag absent locally exits 6 `tags: not fetched`), per-path replaced/backed-up/removed/added, BREAKING refusal (exit 5), v1→v2 rewrite.
+3. `arc upgrade [--dir D] [--to <tag>] [--confirm] [--force]`: re-render (`--to {tag}` renders from a read-only temp-index extract of that tag into a scratch dir, never a checkout or worktree; a tag absent locally exits 6 `tags: not fetched`), per-path replaced/backed-up/removed/added, BREAKING refusal (exit 5), v1→v2 rewrite.
 4. `.claude/scripts/core/version-lint.mjs` (ADR-2025) wired into `npm run lint` and `tests/distribute-version-lint.bats`; `CHANGELOG.md` gains the `[0.2.0] - 2026-10-14` section.
 5. `tests/distribute-lifecycle.bats` (outdated + upgrade arms), fixture repos built in `setup()` with repo-local git identity and full history; measured shard-weight entries.
 6. Wiki / sync golden / products rows as the gates ask.

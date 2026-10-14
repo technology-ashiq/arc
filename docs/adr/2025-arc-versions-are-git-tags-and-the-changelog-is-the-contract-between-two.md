@@ -27,8 +27,9 @@ Option 3.
   the merged `main` commit that carries the `[0.2.0]` CHANGELOG section with `version-lint` green, after the owner's explicit OK
   for that push (kickoff attack: a tag at `4741c770` would hold only `[Unreleased]`, could never pass the lint, and could never move). Later tags are cut
   only after a PR merges, never on a branch head.
-- **Lint** (`node .claude/scripts/core/version-lint.mjs`, run from `npm run lint` and a bats test): `VERSION` is one
-  semver line; `CHANGELOG.md` has `## [Unreleased]` first and a `## [<VERSION>] - YYYY-MM-DD` section for the current
+- **Lint** (`node .claude/scripts/core/version-lint.mjs`), called by the existing CI step `version-gate.sh` in arc's own
+  tree (one gate extended, not a second one; consumers keep their own version scheme), and pinned by a bats arm. It checks: `VERSION` is one
+  semver line; `package.json` `version` equals `VERSION`; `CHANGELOG.md` has `## [Unreleased]` first and a `## [<VERSION>] - YYYY-MM-DD` section for the current
   version once that version is tagged; section versions strictly descend; no section is a version newer than `VERSION`.
   A tag that exists for `VERSION` but has no section is a FAIL. In a clone without tags (CI checkouts are shallow), the
   tag clause reports `tags: not fetched` and is skipped by name, never silently passed.

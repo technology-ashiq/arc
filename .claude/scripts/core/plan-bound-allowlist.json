@@ -57,6 +57,11 @@
       "why": "the installer CLI (distribute ADR-2018, ADR-2023): writes into a consumer directory through install-targets/common after printing the full plan, or with --self re-renders arc's own .codex/ .opencode/ .agents/skills/, a generator whose committed output CI checks with --self --check and fails on drift, so the PR diff is the plan the owner reads"
     },
     {
+      "verb": "engine/install-targets/lifecycle",
+      "class": "writer",
+      "why": "the install lifecycle (distribute ADR-2024): arc upgrade writes only into the consumer directory named by --dir, through install-targets/common apply() after reading its manifest and judging every path; it never writes arc's own tracked tree, and each upgrade is a change the owner reviews and commits"
+    },
+    {
       "verb": "engine/install-targets/self-render",
       "class": "writer",
       "why": "a generator (distribute ADR-2023): writes only the adapters' rendered files under .codex/ .opencode/ .agents/skills/, never AGENTS.md or a manifest; CI regenerates with compile --self --check and fails on any drift, so the PR diff is the plan the owner reads"

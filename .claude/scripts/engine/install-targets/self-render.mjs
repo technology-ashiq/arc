@@ -16,7 +16,7 @@
  * Zero dependencies, Node 18+.
  */
 
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 
 import { confineRel, verifiedRows } from "../frontmatter-lint.mjs";
@@ -40,7 +40,7 @@ export function selfPlanFrom(renders) {
       // A plain relative path, no `.`/`..` segment, under one of the three roots: `.codex/../AGENTS.md` starts with a
       // root and would land on the brain (attack 8707a5c L3).
       if (confineRel(path) === null || path.endsWith("/") || !SELF_ROOTS.some((r) => path.startsWith(r))) throw new Refused("path-owner", `${t} renders ${JSON.stringify(path)}, not a plain path under ${SELF_ROOTS.join(" ")}`);
-      const prior = files.get(path);
+      const prior = files.get(path) ?? [...files].find(([k]) => k.toLowerCase() === path.toLowerCase())?.[1];
       if (prior) {
         const shared = path.startsWith(SHARED) && SHARED_BY.has(prior.target) && SHARED_BY.has(t);
         if (!shared) throw new Refused("path-owner", `${path} is rendered by both ${prior.target} and ${t}`);
@@ -109,6 +109,8 @@ export function selfRender(tree, { check = false } = {}) {
   if (check) {
     for (const [path, { text }] of plan) {
       const abs = join(tree, path);
+      // --check reads only through real directories: a linked segment is a finding of its own (attack 0eb78f6 B8).
+      try { writable(tree, path); } catch (e) { if (!(e instanceof Refused)) throw e; lines.push(`[link] ${path} — ${e.message.slice(e.reason.length + 2)}`); findings++; continue; }
       if (!existsSync(abs)) { lines.push(`[missing] ${path} — run: node bin/arc.mjs compile --self`); findings++; continue; }
       if (norm(readFileSync(abs, "utf8")) !== norm(text)) { lines.push(`[differs] ${path} — run: node bin/arc.mjs compile --self`); findings++; }
     }
@@ -124,7 +126,12 @@ export function selfRender(tree, { check = false } = {}) {
     const abs = join(tree, path);
     if (existsSync(abs) && norm(readFileSync(abs, "utf8")) === norm(text)) continue;
     mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, text);
+    writable(tree, path);
+    // Temp + rename: a link planted on the file's name between the check and the write is replaced, never followed
+    // (attack 0eb78f6 L6).
+    const tmp = `${abs}.arc-self-${process.pid}.tmp`;
+    writeFileSync(tmp, text, { flag: "wx" });
+    renameSync(tmp, abs);
     wrote++;
   }
   // A stale render left behind by a removed source file is extra, and only --check names it: the writer never

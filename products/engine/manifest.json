@@ -36,6 +36,7 @@
     ".claude/scripts/engine/install-targets/codex.mjs",
     ".claude/scripts/engine/install-targets/common.mjs",
     ".claude/scripts/engine/install-targets/opencode.mjs",
+    ".claude/scripts/engine/install-targets/lifecycle.mjs",
     ".claude/scripts/engine/install-targets/rendered.mjs",
     ".claude/scripts/engine/install-targets/self-render.mjs",
     ".claude/scripts/engine/install-targets/skills-only.mjs",

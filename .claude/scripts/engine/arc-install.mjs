@@ -45,7 +45,8 @@ export function sourceCommit(tree) {
 
 // The tag that names exactly that commit, or null (ADR-2025: an untagged install says so, never a guess).
 export function sourceTag(tree) {
-  if (process.env.ARC_REGISTRY_COMMIT) return process.env.ARC_REGISTRY_TAG || null;
+  // Test door, as ARC_REGISTRY_COMMIT is; a value that is not vX.Y.Z is dropped, never recorded (attack 0eb78f6 B13).
+  if (process.env.ARC_REGISTRY_COMMIT) return /^v\d+\.\d+\.\d+$/.test(process.env.ARC_REGISTRY_TAG || "") ? process.env.ARC_REGISTRY_TAG : null;
   try { return execFileSync("git", ["-C", tree, "describe", "--tags", "--exact-match", "--match", "v[0-9]*", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null; } catch { return null; }
 }
 

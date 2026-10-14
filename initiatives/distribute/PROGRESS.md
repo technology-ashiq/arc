@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-distribute (Cycle 3, opened 2026-10-14)
-phase: 08
+phase: 09
 appetite: 4d
-burn: 0d
+burn: 1.25d
 blocked-on: —
 depends-on: —
 
@@ -20,8 +20,8 @@ merged once at cycle end; each phase closes from the main clone after that merge
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
-| 08 | Self-render + kill check + debt 22-24 (REQ-14) | 1d | ⬜ |
-| 09 | `outdated` + `upgrade` + manifest v2 + `version-lint` (REQ-16, 17) | 1d | ⬜ |
+| 08 | Self-render + kill check + debt 22-24 (REQ-14) | 1d | 🔨 built, attack r1+r2 done |
+| 09 | `outdated` + `upgrade` + manifest v2 + `version-lint` (REQ-16, 17) | 1d | 🔨 built |
 | 10 | `uninstall` + `init` default-all + registry + launch slot + radar; retro + seal (REQ-15, 18, 19) | 1d | ⬜ |
 
 ## Done-log
@@ -42,11 +42,23 @@ merged once at cycle end; each phase closes from the main clone after that merge
   fixed in the redactor (`redact-replay.md`). A-15 holds statically (`codex-skills.md`). First CI run on `161a384d`: 2
   red tests across 6 jobs (plan-bound allowlist, a RAN regex), both fixed. Cycle spend $0.0476 of $0.15.
 
-**Appetite burn:** ~0.5 of 3 planned days used (4-day cap): ~12%. Kill checkpoint answered YES; 50% tripwire at day 2.
+- **P08 attack 2026-10-14**: round 1 on `8707a5c` (boundary 10, logic 12; the logic surface returned malformed JSON
+  once and was re-run on the same model, as the rule asks) and round 2 on `0eb78f6` (boundary 15, logic 12). Every
+  critical/high/medium fixed or answered already-covered, lows ledgered (debt 25-31), fixed-defects (ct)-(do). Two
+  findings changed the design: the reaper keys a process on pid + start time + command line, never pid alone, and a
+  run record git tracks is refused. To run at all, the attack input had to leave out the 211 generated or recorded
+  files (`build-attack-input.mjs` GENERATED/RECORDS; ~1 MB of diff down to ~230 KB).
+- **P09 2026-10-14** (built with P08's attack fixes, not closed): manifest v2 (`targets`, `tag`, `commit`, per-file
+  target; v1 still read), `arc outdated` and `arc upgrade [--to] [--confirm] [--force]` in
+  `install-targets/lifecycle.mjs` (`--to` renders from a temp-index extract, never a checkout), `version-lint.mjs`
+  called by the existing `version-gate.sh`, `package.json` 0.1.0 → 0.2.0 and a dated `[0.2.0]` (the lint found both
+  drifts on its first run), `tests/distribute-lifecycle.bats` (11).
+
+**Appetite burn:** ~1.25 of 3 planned days used (4-day cap): ~31%. Kill checkpoint answered YES; 50% tripwire at day 2.
 
 ---
 
 ## Now
 
 **Current position: Cycle 3 kickoff written 2026-10-14 on `feat/distribute-c3`; the owner pre-approved building in chat.**
-**Next step:** `/arc-attack` on the P08 commit, fix, one push, CI green, then Phase 09 (`outdated` + `upgrade` + manifest v2 + `version-lint`).
+**Next step:** push P08 + P09 once, read CI per job (50% tripwire = REQ-16 arms green), fix what CI finds, then Phase 10.
