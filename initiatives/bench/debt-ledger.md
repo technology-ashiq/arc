@@ -17,6 +17,8 @@ One row per finding that was not fixed in its PR, with the reason and the trigge
 | 11 | attack 680e889 r2 boundary B8 (low) | an unreadable read reports the command, not only the failure | partly closed: the reason now carries the git command, its exit status and its first stderr line | — |
 | 12 | attack 461984d r1 boundary B3 (medium, accepted in part) | a sibling session's write to a shared config section other than `branch.<name>` and `remote.<name>` (`submodule.*`, `filter.lfs.*`, `core.*`) still stops a run | accepted: that direction is a false STOP, never a false pass, and costs only what the run spent so far; the two sections sibling sessions write routinely are excluded | a run is stopped by a sibling's config write again |
 | 13 | attack 461984d r1 boundary B5 (low) | `config --local` reads the shared `.git/config`, never a worktree's own `config.worktree` | accepted: `extensions.worktreeConfig` is off in arc's clones | worktree config is turned on in the owner's clones |
+| 14 | attack 0cf219e r2 boundary B1 (low) | a model that rewrites `remote.origin.url` in the arc checkout is not seen by the fingerprint | accepted: a remote rewrite moves no file, ref or HEAD in this checkout, and the run never pushes; the sibling-write false stop it avoids is the measured failure | a benched process ever pushes |
+| 15 | attack 0cf219e r2 boundary B2 (low) | on a detached HEAD no branch section is in the digest | accepted: bench runs from the main clone on `main`; a detached checkout has no section of its own | bench is ever run from a detached checkout |
 
 Rejected (ADR-0067 taxonomy): a59752e L1 and ca7ba9a L1 (an indented contract line; arc-run prints
 both at column 0), a59752e L3 and ca7ba9a L5 (control characters in `--trial-model`; `MODEL_RE`

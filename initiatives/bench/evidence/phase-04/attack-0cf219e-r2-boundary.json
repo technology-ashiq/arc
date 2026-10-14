@@ -1,0 +1,23 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1549",
+      "breaking_input": "A benched model, or a tool it spawns, runs `git remote set-url origin <other-url>` or `git config remote.origin.pushurl <other-url>` or `git config remote.origin.fetch +refs/*:refs/*`, or adds `git remote add evil <url>`. These write `remote.origin.url`, `remote.origin.pushurl`, `remote.origin.fetch` and `remote.evil.url`.",
+      "why": "`shared()` drops every `remote.<name>.<var>` entry, not only the ones sibling sessions write routinely. The fingerprint is blind to a run that repoints the arc checkout's origin or its fetch refspec. A later fetch or pull then moves refs the digest never sees until HEAD moves. This is the same over-wide scope as the pattern it fixes, now inverted: a guard scoped wider than what it guards. Debt row 12 accepts the false-STOP direction for `submodule.*` and `core.*`. It does not mention that excluding `remote.*` creates a false-pass direction for tampering.",
+      "fix": "Drop only the `remote.<name>.*` keys that sibling `git remote add` or `git fetch` writes (the name is new, or the entry is `remote.<name>.fetch` for a fresh name), not `url`, `pushurl` or `fetch` of a remote that already existed at the baseline. Alternatively, hash the remote URLs separately, since a sibling rarely rewrites them. At minimum, record the false-pass direction in debt-ledger row 12 and in the ADR correction, which currently says only that a sibling's write elsewhere stops a run.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1543",
+      "breaking_input": "HEAD is detached, so `branch` is not under `refs/heads/` and `own` is null. A model rewrites `branch.<previous-branch>.merge` or `.remote`, or any other `branch.*.*` key.",
+      "why": "With `own` null, `shared()` drops every `branch.<sub>.<var>` entry. The digest then cannot see any branch config change. The prior B6 and L3 were rejected as 'a detached HEAD has no branch section of its own', but dropping all sections is the opposite of fail-closed. No probe case covers the detached state, so the rejection is not pinned by a test.",
+      "fix": "When `own` is null, keep all `branch.*.*` entries (a stricter tripwire that can only cause a false STOP), and add a detached-HEAD probe case.",
+      "twin_of": "A failed read folded into a comparison as a constant"
+    }
+  ]
+}
