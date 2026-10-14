@@ -52,7 +52,7 @@ _ledger() {
 
 # _debt_phase CAPABILITY APPETITE -- rewrite phase 1 of the plan's phase table.
 _debt_phase() {
-  awk -v cap="$1" -v app="$2" 'index($0, "| 1 | Real DB + health endpoint |") == 1 { print "| 1 | " cap " | " app " |"; next } { print }' \
+  awk -v cap="$1" -v app="$2" '/^## Phases/ { ph = 1 } ph && index($0, "| 1 | ") == 1 { print "| 1 | " cap " | " app " |"; next } { print }' \
     "$D/PLAN.md" > "$D/PLAN.tmp" && mv "$D/PLAN.tmp" "$D/PLAN.md"
   grep -qF "| 1 | $1 |" "$D/PLAN.md"
 }
