@@ -1,0 +1,63 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/plan/kickoff-lint.mjs:40-48",
+      "breaking_input": "node kickoff-lint.mjs --lane memory --base   (or `--base --lane memory`)",
+      "why": "`--base` consumes argv[i+1] unconditionally. With `--base --lane memory`, the value becomes the string \"--lane\" and the splice removes `--lane` from argv, so the lane is silently dropped and the resolver falls back to auto-resolve (possibly a different lane, or root-mode). Only a truly missing value is caught, not a following flag. This is the unquoted-flag-value-smuggling class from fixed-defects #2. A trailing `--base ''` exits 5, but `--base -x` gets passed to git.",
+      "fix": "Reject a --base value that starts with `-`, and treat the token after `--base` as a value only if it is not a flag. Reject duplicate --base with differing values, as lane parsing does.",
+      "twin_of": "fixed-defects #2: unquoted or word-split flag values letting a value smuggle a flag"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:57-60",
+      "breaking_input": "--base '--output=/tmp/x' or a ref beginning with '-' such as '--upload-pack=cmd'; also base 'main:..'",
+      "why": "`base` is interpolated into `git rev-parse --verify ${base}^{commit}` and `git show ${base}:${rel}` with no `--end-of-options` separator, so a leading-dash value is parsed by git as an option. For `git show`, a value like `--output=<path>` followed by `:rel` is read as an option and can write a file. It is an argv-injection surface fed from a CLI flag that CI wrappers may populate from a PR base SHA or branch name.",
+      "fix": "Validate base against /^[A-Za-z0-9._\\/@^~{}-]+$/ and reject a leading '-'. Pass `--end-of-options` to rev-parse, and resolve to a SHA first before `git show <sha>:path`."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:50-51",
+      "breaking_input": "tracker = absolute Windows path 'C:\\\\...\\\\initiatives\\\\x' (laneRes.tracker may be absolute), or a tracker containing '..'",
+      "why": "`rel` is used both as join(root, rel) and as the `git show base:rel` pathspec. If tracker is absolute or backslashed beyond the replace, join(root, rel) reads the file but `git show base:C:/...` fails and returns null, so baseIdentity is null and every LIVE lane reads as `new` — a false freeze refusal on a mid-cycle lane. The failure to read the base is not distinguished from the file being absent at the base.",
+      "fix": "Normalise tracker to a repo-relative path before use. Distinguish `path not in base` (exit 128 with a specific message, genuinely new) from other git failures, and treat the latter as state 'unknown', not 'new'."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:60-62",
+      "breaking_input": "base ref resolves, but is a shallow CI checkout lacking the commit that holds the lane's PROGRESS.md; or git is not on PATH; or git show fails with a transient error (index lock, EPIPE)",
+      "why": "Any exception from `git show` is swallowed into baseText=null with stderr ignored, which maps to baseIdentity=null and so to state 'new'. A boundary failure (permission, missing object in a partial clone, process killed) therefore fails closed in the wrong direction: it triggers FAIL [kernel-freeze] on a lane that is mid-cycle, turning an environment fault into a red build blamed on the owner ruling.",
+      "fix": "Inspect the error: treat it as 'new' only when git reports the path does not exist in the base. Otherwise return state 'unknown' with a WARN."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:78-90",
+      "breaking_input": "ARC_SPINE_ROOT unset, linted root is a git worktree whose common dir is relative ('.git') or a bare/separate-git-dir repo, e.g. `git init --separate-git-dir`",
+      "why": "The spine dir is dirname(common git dir) + .claude/state/hq. For a separate-git-dir or bare repo, dirname(commonDir) is not the working checkout, so it points at the wrong parent and silently reports 'no spine', a WARN that skips the freeze. A submodule's common dir (.git/modules/x) similarly resolves to a directory inside .git. The freeze then does not run, and the only signal is a WARN.",
+      "fix": "Resolve the main worktree via `git worktree list --porcelain` (first entry), or verify that basename(common) === '.git' and otherwise fail closed."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:106 (execFileSync git helper)",
+      "breaking_input": "a large `git show` output or a hung git (credential prompt, locked repo) on a CI leg",
+      "why": "execFileSync has no timeout and the default maxBuffer is 1MB, so a PROGRESS.md over 1MB throws ENOBUFS, which the catch maps to null and then to 'new'. A hung git blocks the lint forever with stdin ignored but no timeout.",
+      "fix": "Set `timeout` and a larger `maxBuffer`, and map ENOBUFS/ETIMEDOUT to state 'unknown' rather than 'new'."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:78-82",
+      "breaking_input": "ARC_SPINE_ROOT='C:\\\\relative\\\\..\\\\..\\\\elsewhere' or a path whose events dir is a symlink to a different tree",
+      "why": "The env override is resolved with resolve() against cwd, not against the linted root, so the same CLI invocation run from two cwds reads two spines. This is the fixed-defects #4 class of reading cwd rather than the linted repo, and it is now reachable through the override.",
+      "fix": "Resolve a relative ARC_SPINE_ROOT against root, or reject non-absolute values.",
+      "twin_of": "fixed-defects #4: reading cwd's repo/spine instead of the linted repo's"
+    }
+  ]
+}

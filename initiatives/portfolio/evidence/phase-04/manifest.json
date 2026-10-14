@@ -1,0 +1,32 @@
+{
+  "phase": "04",
+  "commit": "507cf1c9a8434776dc51703500ac7b3668e4e77f",
+  "short": "507cf1c9",
+  "generated": "2026-10-14T09:09:42Z",
+  "files": [
+    {
+      "name": "attack-148c6aa-r2-boundary.json",
+      "sha256": "1ec0d43807d9363bc2e7bd1d176e31468fbf067d6111de91fbdc51655fc810be"
+    },
+    {
+      "name": "attack-148c6aa-r2-logic.json",
+      "sha256": "c5932d3b06ff10f624e4b8447fba741d9b1faf52139b5f8828ce4996c6815692"
+    },
+    {
+      "name": "attack-2df81d4-r1-boundary.json",
+      "sha256": "d49e950c4461cde4512043566741df7ae71f8c43a9c8c4fb0c532b5eb15fe5fa"
+    },
+    {
+      "name": "attack-2df81d4-r1-logic.json",
+      "sha256": "c666afdf971c410353ce27c9910932b5a75f1c2eea74548a726071de48096d0f"
+    },
+    {
+      "name": "attack-e143177-r2-boundary.json",
+      "sha256": "76665249ae3f9afdee85be037aad746e6f8093cb5f0aa9e22061fc107bd2c744"
+    },
+    {
+      "name": "live-demo.md",
+      "sha256": "dce1831075dba1cb4aa2c6edce64426d9f07a91041ab2c8ff6d203446dbccd49"
+    }
+  ]
+}

@@ -15,14 +15,14 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **152** | **34** |
 
-Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 429 of 499 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 433 of 503 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
 | Product | Version | Requires | Commands | Agents | Scripts |
 |---|---|---|---|---|---|
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
-| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 42 |
+| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 43 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 20 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
@@ -32,13 +32,13 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 429 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 87 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 88 |
 | [launch](products/launch.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 15 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [org](products/org.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 16 |
-| [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 3 |
+| [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 4 |
 | [qa](products/qa.md) | 1.0.0 | [core](products/core.md) | 3 | 2 | 0 |
 | [review](products/review.md) | 1.0.0 | [core](products/core.md) | 4 | 2 | 22 |
 
@@ -65,7 +65,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 429 of 
 | [model-policy](lanes/model-policy.md) | IDLE | model-policy v2 (opened 2026-10-05, closed 2026-10-06) |
 | [org](lanes/org.md) | IDLE | arc-org (Cycle 20, opened 2026-10-05) |
 | [policy](lanes/policy.md) | IDLE | arc-policy cycle 2 (opened 2026-10-07) |
-| [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
+| [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 5, opened 2026-10-14) |
 | [scheduler](lanes/scheduler.md) | IDLE | arc-scheduler (Cycle 12, sealed 2026-10-07) |
 
 ## Processes
@@ -92,7 +92,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 429 of 
 
 | Band | ADRs | Headers missing a field |
 |---|---|---|
-| [0000–0099](adr/0000.md) | 75 | 62 |
+| [0000–0099](adr/0000.md) | 79 | 62 |
 | [0100–0199](adr/0100.md) | 12 | 0 |
 | [0200–0299](adr/0200.md) | 32 | 2 |
 | [0300–0399](adr/0300.md) | 12 | 0 |

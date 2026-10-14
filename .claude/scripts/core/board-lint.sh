@@ -12,7 +12,11 @@
 #
 # Zero deps, offline, READ-ONLY: it never creates, moves or writes anything.
 #
-# Usage: board-lint.sh [--root DIR]
+# Usage: board-lint.sh [--root DIR] [--strict]
+#   --strict adds the ONE blocking class, `board-stale-hand-written` (portfolio Cycle 5, ADR-0079):
+#   `stale` is derived by the lane-stale job into instance state and is never a board field, so a
+#   table header cell `stale` or a data cell `stale: ...` / `stale=...` was typed by hand. Under
+#   --strict that prints a FAIL and exits 1; without it nothing about this script's exit changes.
 #   Whole-board by design; there is no `--lane`. The board is a company organ (ADR-0053)
 #   and half a board is not a verdict about a board. Every other token is ignored, exactly
 #   as lane-resolve.sh ignores tokens that belong to the calling command.
@@ -63,8 +67,10 @@ _T=""; _N=""; _V=""; _CL=1; _BN=""; _EX=""; _C5=""; _C6=""
 
 # ---------- flags ----------
 ROOT=""
+STRICT=0
 while [ $# -gt 0 ]; do
   case "$1" in
+    --strict)  STRICT=1; shift;;
     --root)    if [ $# -ge 2 ]; then ROOT="$2"; shift 2; else shift; fi;;
     --root=*)  ROOT="${1#--root=}"; shift;;
     *)         shift;;
@@ -777,5 +783,43 @@ for _l in "${LANES[@]}"; do
     _w_ex  "$_EX"
   fi
 done
+
+# ---------- --strict: a hand-written stale field (ADR-0079) ----------
+# Its own pass over the board, not a tenth WARN class: the WARN registry is pinned at nine and this
+# is the one rule that blocks. Fences and HTML comments are skipped exactly as the board pass skips
+# them, so a code sample or the closing note can never trip it. The prose word stale inside a next
+# or blocked-on cell is not a field and does not count.
+if [ "$STRICT" = 1 ] && [ -f "$BOARD" ] && [ -r "$BOARD" ]; then
+  _STALE="$(awk '
+    function clean(c) { gsub(/[*`_]/, "", c); gsub(/^[ 	]+|[ 	]+$/, "", c); return tolower(c) }
+    { sub(/$/, "") }
+    /^[ 	]*```/ { fence = !fence; next }
+    fence { next }
+    { line = $0
+      if (incom) { p = index(line, "-->"); if (!p) next; line = substr(line, p + 3); incom = 0 }
+      while ((p = index(line, "<!--")) > 0) {
+        q = index(substr(line, p + 4), "-->")
+        if (q) line = substr(line, 1, p - 1) substr(line, p + 4 + q + 2)
+        else { line = substr(line, 1, p - 1); incom = 1 }
+      }
+    }
+    line !~ /^[ 	]*\|/ { rows = 0; next }
+    { rows++
+      n = split(line, cell, "|")
+      for (i = 2; i <= n; i++) {   # <= n: a row with no trailing pipe keeps its last cell (round 2 B6)
+        c = clean(cell[i])
+        if (rows == 1 && c == "stale") { print NR ": header cell stale"; next }
+        if (rows > 2 && c ~ /(^|[^abcdefghijklmnopqrstuvwxyz0123456789-])stale[ 	]*[:=]/) { print NR ": cell " c; next }
+      }
+    }' "$BOARD")"
+  if [ -n "$_STALE" ]; then
+    printf '%s
+' "$_STALE" | while IFS= read -r _hit; do
+      printf 'FAIL [board-stale-hand-written] %s:%s â stale is derived by the lane-stale job (ADR-0079) and is never typed on the board
+' "$BOARD_CITE" "$_hit"
+    done
+    exit 1
+  fi
+fi
 
 exit 0

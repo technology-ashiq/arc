@@ -1,0 +1,12 @@
+{
+  "phase": "05",
+  "commit": "507cf1c9a8434776dc51703500ac7b3668e4e77f",
+  "short": "507cf1c9",
+  "generated": "2026-10-14T09:09:54Z",
+  "files": [
+    {
+      "name": "live-demo.md",
+      "sha256": "a63eaacd51004f56f7053d1ee9bdab00134f5c1963074e4e9634de8431fbab5b"
+    }
+  ]
+}
