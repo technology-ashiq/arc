@@ -1,0 +1,23 @@
+name: lane-stale
+version: 1.0.0
+intent: "Derive stale for every LIVE lane no receipt has named in 14 days and raise it to needs-you."
+permissions: declared
+job_stub: true
+inputs: []
+tools:
+  - fs.read
+  - fs.write
+  - shell.run:
+      - "node .claude/scripts/hq/arc-event.mjs:*"
+body: |
+
+  NOT AN ENGINE PROCESS. This file exists so the lane-stale job has a POLICY SUBJECT (ADR-0504,
+  ADR-0802), exactly as launch-watch does (ADR-1750). `job_stub: true` makes `arc-run --process
+  lane-stale` a loud refusal.
+
+  The owner apply `owner-apply-lane-stale.mjs` wrote this file together with its hq.policy.yaml
+  subject and its hq.jobs.yaml row: none of the three may land without the others (ADR-0079).
+
+  The real work lives in `.claude/scripts/hq/jobs/lane-stale.mjs` and is run by `arc-jobs`, never
+  from here: daily, it reads the spine, writes `.claude/state/portfolio/lane-stale.json` and raises
+  one `incident.raised` `class: lane-stale` per silent LIVE lane (portfolio REQ-08).

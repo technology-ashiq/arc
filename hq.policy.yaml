@@ -217,6 +217,19 @@ kinds:
     deploy: { level: L0 }
     spend: { level: L0 }
 
+  # portfolio REQ-08 (ADR-0079): the daily lane-stale job reads the spine and PROGRESS headers, writes its derivation
+  # under .claude/state/portfolio/ and emits incident.raised through arc-event. No network, never a tracked file.
+  "process:lane-stale":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/portfolio/**", ".claude/state/hq/**"] }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
   "process:build-in-public-draft":
     e2: []
     read: { level: L3 }
