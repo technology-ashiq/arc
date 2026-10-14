@@ -16,8 +16,8 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, rmdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 
 import { MANIFEST, Refused, apply, preflight, readManifest, sha, manifestRecord } from "./common.mjs";
@@ -285,3 +285,143 @@ export function upgrade(dir, tree, TARGETS, { to = null, confirm = false, force 
   } finally { cleanup(); }
 }
 
+
+// ---------- the consumer registry (ADR-2026) ----------
+// `~/.arc-private/consumers.json`, never the repo: machine paths stay off a public tree. ARC_PRIVATE_DIR is the one
+// door (tests point it at a temp dir). With no door set and no `~/.arc-private/` on the box, registration is skipped
+// by name: a CI runner or a stranger's machine gets no new directory in its home.
+export function registryPath() {
+  if (process.env.ARC_PRIVATE_DIR) return { dir: process.env.ARC_PRIVATE_DIR, file: join(process.env.ARC_PRIVATE_DIR, "consumers.json"), door: true };
+  const dir = join(homedir(), ".arc-private");
+  return { dir, file: join(dir, "consumers.json"), door: false };
+}
+
+/** { state: "ok"|"none"|"corrupt", consumers, why } -- a corrupt file is reported, never read as empty. */
+export function readRegistry() {
+  const r = registryPath();
+  if (!existsSync(r.file)) return { state: "none", consumers: [], path: r.file };
+  let j;
+  try { j = JSON.parse(readFileSync(r.file, "utf8")); } catch (e) { return { state: "corrupt", consumers: [], path: r.file, why: e.message }; }
+  if (!j || j.version !== 1 || !Array.isArray(j.consumers) || j.consumers.some((c) => !c || typeof c.path !== "string")) return { state: "corrupt", consumers: [], path: r.file, why: "not a version-1 consumer list" };
+  return { state: "ok", consumers: j.consumers, path: r.file };
+}
+
+function writeRegistry(consumers) {
+  const r = registryPath();
+  mkdirSync(r.dir, { recursive: true });
+  // temp + rename: two inits never leave half a file, and the reader sees the old list or the new one.
+  const tmp = `${r.file}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify({ version: 1, consumers }, null, 2)}\n`);
+  renameSync(tmp, r.file);
+}
+
+/** Add or drop a project. Returns one line saying what happened; never throws on the registry's account. */
+export function register(dir, add) {
+  const r = registryPath();
+  if (!r.door && !existsSync(r.dir)) return `registry: skipped (no ${r.dir}; create it to have the radar watch this project)`;
+  const real = (() => { try { return realpathSync(dir); } catch { return dir; } })();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const cur = readRegistry();
+    if (cur.state === "corrupt") {
+      // Moved aside, never overwritten: the owner's list is theirs to recover (attack A5 at kickoff).
+      try { renameSync(cur.path, `${cur.path}.bad`); } catch { /* reported below */ }
+      return `registry: corrupt (${cur.why}); moved to ${cur.path}.bad, nothing registered -- re-run arc init to start a fresh list`;
+    }
+    const others = cur.consumers.filter((c) => fold(c.path) !== fold(real));
+    const next = add ? [...others, { path: real, added: new Date().toISOString().slice(0, 10) }] : others;
+    try { writeRegistry(next.sort((a, b) => (a.path < b.path ? -1 : 1))); } catch (e) { return `registry: skipped (${e.code || e.message})`; }
+    // A second init writing at the same moment can win the rename; re-read and retry until this change holds.
+    const after = readRegistry();
+    const holds = after.state === "ok" && after.consumers.some((c) => fold(c.path) === fold(real)) === add;
+    if (holds) return `registry: ${add ? "registered" : "removed"} ${real}`;
+  }
+  return "registry: skipped (another arc init kept rewriting the list; run this one again)";
+}
+
+/** `arc outdated --all`: one line per registered project; never writes inside one. */
+export function outdatedAll(tree) {
+  const reg = readRegistry();
+  if (reg.state === "none") return { code: 3, lines: [`registry: none (${reg.path}); arc init registers a project`], counts: null };
+  if (reg.state === "corrupt") return { code: 3, lines: [`registry: corrupt (${reg.why})`], counts: null };
+  if (!reg.consumers.length) return { code: 0, lines: ["registry: empty -- no project registered yet"], counts: { consumers: 0, behind: 0, unmeasurable: 0 } };
+  const lines = [];
+  const counts = { consumers: reg.consumers.length, behind: 0, unmeasurable: 0, current: 0, missing: 0 };
+  for (const c of reg.consumers) {
+    let head;
+    if (!existsSync(c.path)) { head = "missing-dir"; counts.missing++; }
+    else {
+      try {
+        const r = outdated(c.path, tree);
+        head = r.code === 0 ? "up to date" : r.code === 1 ? r.lines[0].replace(/^installed /, "behind: ") : r.code === 3 ? "not-installed" : `unmeasurable: ${r.lines[0]}`;
+        if (r.code === 1) counts.behind++; else if (r.code === 0) counts.current++; else counts.unmeasurable++;
+      } catch (e) { head = `unmeasurable: ${e.message}`; counts.unmeasurable++; }
+    }
+    lines.push(`${c.path} · ${head}`);
+  }
+  lines.push(`outdated --all: ${counts.consumers} project(s) · ${counts.behind} behind · ${counts.current} up to date · ${counts.unmeasurable} unmeasurable · ${counts.missing} missing`);
+  return { code: counts.behind || counts.unmeasurable || counts.missing ? 1 : 0, lines, counts };
+}
+
+// ---------- every harness at once (ADR-2024, REQ-15) ----------
+export const ALL_TARGETS = Object.freeze(["claude-code", "codex", "opencode", "skills-only"]);
+
+/**
+ * The plan `arc init` with no --target applies: the union of the four targets under ADR-2023's owner rule, plus the
+ * claude-code registry file (`.claude/arc-registry.json`) as an ordinary managed file, since the v2 manifest is the one
+ * record of the install.
+ */
+export function allPlan(TARGETS, tree) {
+  const plan = unionPlan(TARGETS, tree, ALL_TARGETS);
+  const cc = TARGETS["claude-code"];
+  if (typeof cc.manifestText === "function") {
+    const reg = JSON.parse(cc.manifestText(tree, {}));
+    delete reg.install;
+    const text = `${JSON.stringify(reg, null, 2)}\n`;
+    plan.ops = plan.ops.filter((o) => o.path !== cc.MANIFEST_PATH);
+    plan.ops.push({ kind: "write", path: cc.MANIFEST_PATH, text, sha: sha(Buffer.from(text)), target: "claude-code" });
+  }
+  return plan;
+}
+
+// ---------- uninstall (ADR-2024, REQ-18) ----------
+/**
+ * Remove exactly what the manifest lists: an unchanged managed file goes, a changed one stays (`kept (modified)`)
+ * unless --force, directories left empty go, core.hooksPath is unset only when init set it and it still points at
+ * arc's hooks, and the manifest goes last. Every path is judged before anything is removed.
+ */
+export function uninstall(dir, { force = false, hooksPath = ".claude/templates/githooks" } = {}) {
+  const found = readInstall(dir);
+  if (!found) return { code: 3, lines: [`not-installed: ${dir} has no ${MANIFEST} and no install record`] };
+  const m = found.manifest;
+  const lines = [];
+  let removed = 0, kept = 0;
+  const dirs = new Set();
+  for (const p of Object.keys(m.files).sort()) {
+    if (p === found.rel) continue;
+    const abs = safePath(dir, p);
+    let st = null;
+    try { st = lstatSync(abs); } catch { st = null; }
+    if (!st) { lines.push(`gone ${p}`); continue; }
+    if (!st.isFile()) { lines.push(`kept (not a file) ${p}`); kept++; continue; }
+    if (sha(readFileSync(abs)) !== m.files[p] && !force) { lines.push(`kept (modified) ${p}`); kept++; continue; }
+    try { rmSync(abs, { force: true }); } catch (e) { lines.push(`kept (locked) ${p}: ${e.code || e.message}`); kept++; continue; }
+    removed++;
+    for (let d = dirname(p); d !== "."; d = dirname(d)) dirs.add(d);
+  }
+  // Deepest first, only when empty: a directory holding anything of the owner's stays.
+  for (const d of [...dirs].sort((a, b) => b.split("/").length - a.split("/").length)) { try { rmdirSync(join(dir, d)); } catch { /* not empty */ } }
+  if (kept && !force) {
+    lines.push(`uninstall: ${removed} removed, ${kept} kept; the record ${found.rel} stays so a second run (or --force) can finish`);
+    return { code: 1, lines };
+  }
+  // Only a finished uninstall gives the hooks back: a partial one keeps the commit-time line on (it is still arc's).
+  if (m.hooks_path_set) {
+    const have = git(dir, ["config", "--get", "core.hooksPath"]);
+    if (have.status === 0 && have.out === hooksPath) { git(dir, ["config", "--unset", "core.hooksPath"]); lines.push(`hooks: core.hooksPath unset (init had set it to ${hooksPath})`); }
+    else lines.push(`hooks: core.hooksPath left as ${have.out || "unset"} (not the value init set)`);
+  } else lines.push("hooks: core.hooksPath untouched (init did not set it)");
+  rmSync(join(dir, found.rel), { force: true });
+  lines.push(register(dir, false));
+  lines.push(`uninstall: ${removed} removed, ${kept} kept, record ${found.rel} removed`);
+  return { code: 0, lines };
+}

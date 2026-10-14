@@ -55,3 +55,20 @@ Option 3.
 - `hq.jobs.yaml:62-70` (launch-watch row shape); `products/launch/{launch.slots.yaml, manifest.json}`, `launch-coverage.mjs --require-core-vetted` (survey 2026-10-14).
 
 **Confidence:** high on the job shape; medium on the launch slot, whose catalog contract is the launch lane's and is confirmed before use.
+
+## Amendment 1 — as built in P10 (2026-10-14)
+
+- **The registry is opt-in by directory.** With `ARC_PRIVATE_DIR` unset, `arc init` registers only when
+  `~/.arc-private/` already exists, and otherwise prints `registry: skipped (no ~/.arc-private; create it ...)`. A CI
+  runner or a stranger's machine gets no new directory in its home; the owner's box has the directory already
+  (LexOS keeps its private values there).
+- **The job is born by an owner apply, not by the agent.** `hq.policy.yaml` is a ceiling file (POL-A): a change is a
+  human edit in a reviewed diff, and this session's sandbox refuses even to copy it. So
+  `.claude/scripts/engine/owner-apply-radar-policy.mjs` writes the policy subject, the `hq.jobs.yaml` row and the
+  `processes/distribute-radar.process.yaml` stub together, exactly as launch's `owner-apply-watch-policy.mjs` did
+  (ADR-1750). The job script, its tests and its allowlist rows ship in the PR; the owner's one command switches it on.
+- **The receipt** is `metric.observed` in its closed shape (`module: distribute`, `surface: consumers`,
+  `metric: behind`, `value` = projects behind, `unit_count` = projects registered, a 7-day window, `source_id:
+  radar-<day>`). Exit-4 projects are counted `unmeasurable`, never as up to date.
+- **The launch slot** is the launch lane's to add (`evidence/phase-08/launch-prompt.md`); until it answers, REQ-15's
+  slot clause is owed under cut order 2, and `arc init` with no `--target` is what a venture is born with by hand.

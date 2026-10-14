@@ -16,6 +16,8 @@
     ".claude/scripts/engine/frontmatter-lint.mjs",
     ".claude/scripts/engine/arc-install.mjs",
     ".claude/scripts/engine/opencode-session.mjs",
+    ".claude/scripts/engine/owner-apply-radar-policy.mjs",
+    ".claude/scripts/hq/jobs/distribute-radar.mjs",
     ".claude/scripts/engine/source-render.mjs",
     ".claude/scripts/engine/arc-run.mjs",
     ".claude/scripts/engine/calibrate-budget.mjs",

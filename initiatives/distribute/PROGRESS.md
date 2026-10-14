@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-distribute (Cycle 3, opened 2026-10-14)
-phase: 09
+phase: 10
 appetite: 4d
-burn: 1.25d
+burn: 1.75d
 blocked-on: —
 depends-on: —
 
@@ -22,7 +22,7 @@ merged once at cycle end; each phase closes from the main clone after that merge
 | 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
 | 08 | Self-render + kill check + debt 22-24 (REQ-14) | 1d | 🔨 built, attack r1+r2 done |
 | 09 | `outdated` + `upgrade` + manifest v2 + `version-lint` (REQ-16, 17) | 1d | 🔨 built |
-| 10 | `uninstall` + `init` default-all + registry + launch slot + radar; retro + seal (REQ-15, 18, 19) | 1d | ⬜ |
+| 10 | `uninstall` + `init` default-all + registry + launch slot + radar; retro + seal (REQ-15, 18, 19) | 1d | 🔨 built |
 
 ## Done-log
 
@@ -54,7 +54,14 @@ merged once at cycle end; each phase closes from the main clone after that merge
   called by the existing `version-gate.sh`, `package.json` 0.1.0 → 0.2.0 and a dated `[0.2.0]` (the lint found both
   drifts on its first run), `tests/distribute-lifecycle.bats` (11).
 
-**Appetite burn:** ~1.25 of 3 planned days used (4-day cap): ~31%. Kill checkpoint answered YES; 50% tripwire at day 2.
+- **P10 2026-10-14** (built, not closed): `arc init` with no `--target` places all four harnesses under one v2 manifest
+  (668 files on a scratch project; a second init writes only the record), registers the project in
+  `~/.arc-private/consumers.json` (opt-in by directory), `arc uninstall [--force]` (managed files only, modified kept,
+  record kept until done, hooks unset only when init set them), `arc outdated --all`, the radar job script, and
+  `owner-apply-radar-policy.mjs` for the three ceiling files. `tests/distribute-p10.bats` (7). The launch slot is the
+  launch lane's (`evidence/phase-08/launch-prompt.md`).
+
+**Appetite burn:** ~1.75 of 3 planned days used (4-day cap): ~44%. Kill checkpoint answered YES; 50% tripwire at day 2.
 
 ---
 

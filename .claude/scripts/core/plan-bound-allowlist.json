@@ -437,6 +437,16 @@
       "why": "NO, filed 2026-10-09 (face Phase 14): legal.full-read applies with --expect, but inside the declaration that holds the check a write (rmSync of the staged dir) comes before it, so the audit reads write-before-check"
     },
     {
+      "verb": "engine/owner-apply-radar-policy",
+      "class": "lane-tool",
+      "why": "the owner one-shot apply for the distribute-radar policy row, job row and stub (ADR-2026), the launch-watch pattern; the owner runs it by hand and commits the result, so the commit is the record. Not a face op"
+    },
+    {
+      "verb": "hq/jobs/distribute-radar",
+      "class": "lane-tool",
+      "why": "the distribute lane weekly radar job (ADR-2026): it writes only its own stamp in instance state, .claude/state/distribute/.radar-last, and one path-free metric.observed receipt; it never writes inside a consumer. Not a face op"
+    },
+    {
       "verb": "hq/jobs/launch-watch",
       "class": "lane-tool",
       "why": "the launch lane weekly watch job (ADR-1750): its only write is its own per-board stamp in instance state, .claude/state/launch/.watch-last; the slots it re-verifies are written by the runner. Not a face op. Debt carried by the launch lane, visible here"
