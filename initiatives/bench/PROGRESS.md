@@ -146,6 +146,16 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
+**2026-10-14 (later): #420 merged, and the re-run found a third harness fault: the CLI ran inside
+arc (ADR-0916).** The contract fix held: every captured answer passed the schema, with no
+`branch` key. But `claude-code` spawned its CLI in `ARC_ROOT` (arc), not the fixture repo, so
+sonnet committed into the owner's main clone: 11 commits on a new local branch
+`feat/bench-phase03-evidence` before the run was stopped by hand. The earlier sonnet attempts left
+the same on `feat/council-sessions-bench-evidence`. Both branches are local and unpushed. Fixed on
+`feat/bench-p03-work-root`: both CLI drivers read `ARC_WORK_ROOT`, and bench stops a run at the
+first attempt that moves the arc checkout. NEXT: merge, re-run sonnet then haiku `--propose` from
+the main clone, read the chain off the spine, then the owner's verdict.
+
 **2026-10-14: the real event ran twice and measured the harness, not the model. Both faults are
 fixed on `feat/bench-p03-real-event-close` (ADR-0915), and the re-run follows their merge.** On
 `generic-api`, DeepSeek had no tools and could not commit (16.7%). On `claude-code`, sonnet added a

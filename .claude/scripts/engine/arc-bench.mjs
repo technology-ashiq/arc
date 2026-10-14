@@ -1487,6 +1487,26 @@ export function routerSha(root) {
   return existsSync(p) ? createHash("sha256").update(readFileSync(p)).digest("hex") : null;
 }
 
+/**
+ * WHAT THE ARC CHECKOUT POINTS AT: HEAD, the branch it names, and every local branch and tag.
+ * A benched attempt works in its materialized fixture repo and must leave this exactly as it was
+ * (ADR-0916). On 2026-10-14 a driver ran the CLI inside arc instead, and sonnet -- holding Bash --
+ * created a branch and committed into the owner's checkout once per attempt while the run kept
+ * scoring. The router SHA could not see it, because nothing touched the router.
+ *
+ * Remote-tracking refs are left out, so a fetch from another session is not a violation. Returns
+ * null outside a git repository, and two nulls compare equal: a tree with no git has no refs to move.
+ */
+export function checkoutFingerprint(root) {
+  let head;
+  try { head = git(root, ["rev-parse", "--verify", "-q", "HEAD"]).trim(); } catch { return null; }
+  let branch = "";
+  try { branch = git(root, ["symbolic-ref", "-q", "HEAD"]).trim(); } catch { branch = "(detached)"; }
+  let refs = "";
+  try { refs = git(root, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/tags"]); } catch { refs = "(unreadable)"; }
+  return { head, branch, digest: createHash("sha256").update([head, branch, refs].join("|"), "utf8").digest("hex") };
+}
+
 /** The SHA of a fixture's input, for the provenance tuple (ADR-0913). */
 function inputSha(input) {
   return createHash("sha256").update(canonicalString(input ?? {}), "utf8").digest("hex");
@@ -1613,6 +1633,9 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
   const worstCase = worstCaseFor(ceilings, driver, appliedModel);
   const identity = driverIdentity(root, driver);
   const shaBefore = routerSha(root);
+  const checkoutBefore = checkoutFingerprint(root);
+  // Set by the first attempt after which the arc checkout no longer matches; nothing runs after it.
+  let checkoutMoved = null;
 
   const classes = [];
   const packRevisions = {};
@@ -1660,6 +1683,12 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
       if (!fx.id) { entry.unselected.push({ file: fx.file, reason: "declares no repo_state -- the case cannot be posed" }); continue; }
       entry.selected += 1;
       if (dryRun) { entry.fixtures.push({ id: fx.id, dry_run: true }); continue; }
+
+      if (checkoutMoved) {
+        partial = true;
+        entry.unselected.push({ file: fx.file, reason: `the arc checkout moved after ${checkoutMoved.after}, so the run stopped spending (ADR-0916)` });
+        continue;
+      }
 
       if (state.exhausted) {
         partial = true;
@@ -1721,6 +1750,10 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
         if (r.receiptsSeen === 0) {
           invocationViolations.push({ task_class: cov.taskClass, fixture: fx.id, k, why: "the attempt left no arc-run receipt -- it did not go through arc-run (M1)" });
         }
+        // CHECKED AFTER EVERY ATTEMPT, not once at the end: an attempt that wrote into arc will do
+        // it again on the next one, and each one is paid for.
+        const checkoutNow = checkoutFingerprint(root);
+        const moved = (checkoutBefore?.digest ?? null) !== (checkoutNow?.digest ?? null);
 
         // THE CAPTURE RECORD, not the bare output. It carries the schema verdict and the failure
         // reason as well, because neither is derivable from output bytes -- and a replay that
@@ -1734,6 +1767,15 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
           const dir = join(capture, cov.taskClass, fx.id);
           mkdirSync(dir, { recursive: true });
           writeFileSync(join(dir, `${k}.json`), canonicalJson(record), "utf8");
+        }
+        if (moved) {
+          partial = true;
+          checkoutMoved = {
+            after: `${cov.taskClass}/${fx.id} attempt ${k}`,
+            before: checkoutBefore ? { head: checkoutBefore.head, branch: checkoutBefore.branch } : null,
+            now: checkoutNow ? { head: checkoutNow.head, branch: checkoutNow.branch } : null,
+          };
+          break;
         }
       }
 
@@ -1816,6 +1858,9 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
       // applied. The model seam closed the model half of this and not this half.
       router_sha_at_read: shaBefore,
       router_unchanged: shaBefore === shaAfter,
+      // ADR-0916: did any attempt move the arc checkout (HEAD, its branch, a local branch or tag)?
+      checkout_unchanged: !checkoutMoved,
+      ...(checkoutMoved ? { checkout_moved: checkoutMoved } : {}),
       // The non-deterministic half, deliberately kept OUT of the scorecard.
       metrics: Object.fromEntries([...metrics.entries()].map(([k, v]) => [k, {
         cost_inr: v.cost_inr,
@@ -2994,6 +3039,12 @@ function main() {
   // is on the record rather than only on a terminal that has since scrolled away.
   if (!report.provenance.router_unchanged) {
     console.error("arc-bench: the router SHA CHANGED across this run -- propose-only was violated and this run is not evidence of anything");
+    process.exit(EXIT.PARTIAL);
+  }
+  if (report.provenance.checkout_unchanged === false) {
+    const m = report.provenance.checkout_moved ?? {};
+    console.error(`arc-bench: the ARC CHECKOUT MOVED after ${m.after ?? "an attempt"} -- an attempt worked inside arc instead of its fixture repo, and this run is not evidence of anything (ADR-0916)`);
+    console.error(`           before: ${m.before ? `${m.before.branch} ${m.before.head}` : "(no repo)"} · now: ${m.now ? `${m.now.branch} ${m.now.head}` : "(no repo)"}`);
     process.exit(EXIT.PARTIAL);
   }
   const viol = report.provenance.invocation_violations ?? [];

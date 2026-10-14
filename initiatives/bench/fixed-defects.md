@@ -16,3 +16,8 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   carry has this twin.
 - **A benched CLI loading the operator's own setup** (2026-10-14, ADR-0915). `claude -p` read
   user hooks, plugins and MCP servers. Any spawned CLI that reads user-level config has this twin.
+- **A CLI driver spawned in ARC_ROOT, not the work root** (2026-10-14, ADR-0916). arc-run keeps
+  `ARC_ROOT` pointed at arc and passes the work root as `ARC_WORK_ROOT` plus the cwd; two drivers
+  read `ARC_ROOT`, so the benched model committed into arc. Any reader of `ARC_ROOT` that means
+  "where the work happens" has this twin. Fix: read `ARC_WORK_ROOT`, and bench checks the arc
+  checkout after every attempt.

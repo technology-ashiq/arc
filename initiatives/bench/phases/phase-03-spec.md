@@ -40,6 +40,15 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## CHANGE (2026-10-14, later): the benched CLI ran inside arc (ADR-0916)
+
+The re-run after ADR-0915 passed the contract, and then its commit subjects named bench's own
+evidence files. `claude-code` and `codex` spawned their CLI in `ARC_ROOT`, which is arc, not in the
+work root, so sonnet committed into the owner's main clone once per attempt. Both drivers now take
+`ARC_WORK_ROOT`, and bench stops a run at the first attempt that moves the arc checkout. The
+partial runs `champion-sonnet` and `champion-sonnet2` are void. The extra exit criterion: **the
+champion run leaves the arc checkout's HEAD, branch and local refs exactly as they were.**
+
 ## CHANGE (2026-10-14): back to `claude-code`, after ADR-0915 (ADR-0914 Amendment 2)
 
 The `generic-api` champion run measured a model with no tools and no repo: 16.7%, every answer

@@ -134,7 +134,10 @@ const CLI = process.env.ARC_CLAUDE_CLI || "claude";
 // MACHINERY root instead (ADR-0220 splits them; ADR-0223 records why it matters): the policy gate
 // validates the file at policyRoot(), so a driver building its prompt and its tool grant from a
 // file at $ARC_ROOT is validating one read and using another.
-const WORK_ROOT = process.env.ARC_ROOT || process.cwd();
+// ARC_WORK_ROOT, NEVER ARC_ROOT: arc-run keeps ARC_ROOT pointed at arc (its machinery) and hands the work root
+// down as ARC_WORK_ROOT plus the cwd it spawns this driver in. Reading ARC_ROOT here ran a benched CLI, holding
+// Bash, inside the arc checkout, and it committed there (2026-10-14, ADR-0916).
+const WORK_ROOT = process.env.ARC_WORK_ROOT || process.cwd();
 
 await runDriver("claude-code", async ({ processName, input }) => {
   // ONE READER for the canonical document (canonicalDoc). This body used to open the file itself,

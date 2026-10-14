@@ -23,7 +23,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { EXIT, admitGroup, canonicalJson, newBudgetState } from "../.claude/scripts/engine/arc-bench.mjs";
+import { EXIT, admitGroup, canonicalJson, checkoutFingerprint, newBudgetState } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -305,6 +305,74 @@ function eventsOn(spine) {
   check("the planted key appears in NO stored artifact", leaks.length === 0, leaks.map((f) => f.replace(out, "")).join(","));
   check("and the sweep covered the scorecard, the provenance and the captures",
     files.some((f) => f.endsWith("scorecard.json")) && files.some((f) => f.endsWith("provenance.json")) && files.some((f) => /capture/.test(f)));
+}
+
+// ---- 7. MUTANT C -- a driver that works inside ARC instead of its fixture repo (ADR-0916) ------
+//
+// The 2026-10-14 defect, reproduced on the mock driver: claude-code read ARC_ROOT as its work root,
+// and the benched model committed into the owner's checkout once per attempt. The mutant makes a
+// branch in ARC_ROOT, which is arc, so the sandbox must be a git repo for there to be refs to move.
+{
+  const gitIn = (d, ...args) => spawnSync("git", ["-C", d, ...args], { encoding: "utf8" });
+  const gitSandbox = (name) => {
+    const d = sandbox(name);
+    gitIn(d, "init", "-q");
+    gitIn(d, "config", "user.email", "bench-seal@example.invalid");
+    gitIn(d, "config", "user.name", "bench seal");
+    gitIn(d, "config", "commit.gpgsign", "false");
+    gitIn(d, "add", "-A");
+    gitIn(d, "commit", "-q", "-m", "sandbox");
+    return d;
+  };
+  const branches = (d) => gitIn(d, "for-each-ref", "--format=%(refname)", "refs/heads").stdout.split("\n").filter(Boolean);
+
+  const d = gitSandbox("mutant-escape");
+  const spine = dir("mutant-escape-spine");
+  const mockPath = join(d, ".claude/scripts/engine/drivers/mock.mjs");
+  const anchor = "const ROOT = process.env.ARC_ROOT || process.cwd();";
+  const src = readFileSync(mockPath, "utf8");
+  check("MUTANT C anchor is present in the mock driver", src.includes(anchor));
+  writeFileSync(mockPath, src.replace(anchor, anchor +
+    "\n(await import(\"node:child_process\")).spawnSync(\"git\", [\"-C\", ROOT, \"branch\", \"escaped-\" + process.pid]);"), "utf8");
+  // Committed, so the mutation itself is not what moves the checkout.
+  gitIn(d, "commit", "-q", "-am", "mutant");
+  const before = branches(d).length;
+
+  const r = runIn(d, ["--driver", "mock", "--budget", "inr=1000,min=15"], { ARC_SPINE_ROOT: spine });
+  const made = branches(d).length - before;
+  check("MUTANT C actually made a branch inside arc -- the negative control is real", made >= 1, `made ${made}`);
+  check("and the run STOPPED after the first attempt that did it", made === 1, `made ${made}`);
+  check("and the guard REJECTED the run", r.status !== EXIT.OK, `status ${r.status}`);
+  check("naming the moved checkout, not some unrelated fault",
+    /the ARC CHECKOUT MOVED after commit-msg-draft\/[a-z-]+ attempt 0/.test(r.stderr), r.stderr.split("\n").slice(-4).join(" | "));
+  const runs = eventsOn(spine).filter((e) => e.kind === "run.completed" && e.process !== "bench@0.1.0");
+  check("and the spine shows ONE arc-run attempt, not the group of three", runs.length === 1, `saw ${runs.length}`);
+
+  // CONTROL: the same git sandbox with the mock unmutated moves nothing, so the guard is not
+  // firing on the captures bench writes, or on git being present at all.
+  const c = gitSandbox("escape-control");
+  const rc = runIn(c, ["--driver", "mock", "--budget", "inr=1000,min=15"], { ARC_SPINE_ROOT: dir("escape-control-spine") });
+  check("a clean git sandbox reports no moved checkout", !/ARC CHECKOUT MOVED/.test(rc.stderr), rc.stderr.slice(0, 200));
+  check("and its three attempts all ran", eventsOn(join(scratch, "escape-control-spine")).filter((e) => e.kind === "run.completed" && e.process !== "bench@0.1.0").length === 3);
+
+  // What the fingerprint counts, one fact at a time, on a small repo of its own.
+  const f = dir("fingerprint");
+  gitIn(f, "init", "-q");
+  gitIn(f, "config", "user.email", "bench-seal@example.invalid");
+  gitIn(f, "config", "user.name", "bench seal");
+  gitIn(f, "config", "commit.gpgsign", "false");
+  writeFileSync(join(f, "a.txt"), "a", "utf8");
+  gitIn(f, "add", "-A");
+  gitIn(f, "commit", "-q", "-m", "one");
+  const fp0 = checkoutFingerprint(f);
+  check("a repo has a fingerprint", Boolean(fp0) && /^[0-9a-f]{64}$/.test(fp0.digest), JSON.stringify(fp0));
+  writeFileSync(join(f, "untracked.json"), "{}", "utf8");
+  check("an untracked file, which is what a capture is, does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  gitIn(f, "update-ref", "refs/remotes/origin/main", "HEAD");
+  check("a remote-tracking ref, which another session's fetch writes, does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  gitIn(f, "tag", "t1");
+  check("a new tag moves it", checkoutFingerprint(f).digest !== fp0.digest);
+  check("a directory with no git has no fingerprint", checkoutFingerprint(dir("no-git")) === null);
 }
 
 rmSync(scratch, { recursive: true, force: true });
