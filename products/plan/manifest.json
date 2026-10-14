@@ -20,6 +20,7 @@
   ],
   "scripts": [
     ".claude/scripts/plan/kickoff-lint.mjs",
+    ".claude/scripts/plan/kickoff-gates.mjs",
     ".claude/scripts/plan/arc-evidence.sh",
     ".claude/scripts/plan/arc-bytediff.sh"
   ],
