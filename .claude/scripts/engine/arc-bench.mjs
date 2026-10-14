@@ -707,6 +707,31 @@ export function discoverClasses(root) {
 }
 
 /**
+ * The one stderr line that says WHY an arc-run attempt failed.
+ *
+ * Taking the last line was wrong (real event, 2026-10-14): after a schema stop arc-run prints its
+ * bookkeeping -- the receipt, "STOPPED. A tier-change PROPOSAL was recorded" and an indented
+ * continuation about editing the router -- so every NOT SCORED row read "Acting on it means editing
+ * engine/router.yaml", and the contract failure itself never reached the scorecard. Continuation
+ * lines (leading whitespace), bookkeeping and Node's version trailer are skipped. Then arc-run's own
+ * contract line wins, anchored at the line start so text a model got into stderr cannot pose as it
+ * (attack a59752e B5). A crash is reported by its `Error:` line, not by the trailer (B2).
+ * @param {string|Buffer|null|undefined} stderr
+ * @param {number} status
+ */
+export function failureLine(stderr, status) {
+  const lines = String(stderr || "").split(/\r?\n/)
+    .filter((l) => l.trim() && !/^\s/.test(l) && !/^Node\.js v\d/.test(l)
+      // Only the two schema-stop trailers are bookkeeping; any other STOPPED line is a reason (attack ca7ba9a B1).
+      && !/^arc-run: (receipt run\.completed |STOPPED\. A tier-change PROPOSAL |STOPPED\. --trial-model )/.test(l));
+  // arc-run's own lines outrank any child's `Error:` line (attack ca7ba9a B3).
+  return lines.filter((l) => /^arc-run: output failed the contract /.test(l)).pop()
+    || lines.filter((l) => /^arc-run: /.test(l)).pop()
+    || lines.filter((l) => /^[A-Za-z]*Error\b/.test(l)).pop()
+    || lines.pop() || `arc-run exited ${status}`;
+}
+
+/**
  * Can this driver actually carry a model? ASKED, never remembered.
  *
  * `arc-run` keeps the list (`MODEL_CAPABLE`), and a second copy here would be a second copy that
@@ -920,7 +945,9 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
       // truncated a large but valid answer and the driver was blamed for it. Same reasoning here.
       maxBuffer: 64 * 1024 * 1024,
       killSignal: "SIGKILL",
-      env: { ...process.env, ARC_MOCK_FIXTURE: fixture.id },
+      // ARC_DRIVER_ISOLATE: on claude-code a score no longer reads the owner's user hooks, plugins and MCP
+      // servers (ADR-0915). codex and hermes ignore it; the ADR names that limit.
+      env: { ...process.env, ARC_MOCK_FIXTURE: fixture.id, ARC_DRIVER_ISOLATE: "1" },
     });
 
     const elapsedMs = Date.now() - started;
@@ -970,8 +997,7 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
     }
     const status = res.status ?? 1;
     if (status !== 0) {
-      // The receipt line arc-run prints last is bookkeeping, not the reason the run failed.
-      const line = String(res.stderr || "").trim().split("\n").filter((l) => l && !/^arc-run: receipt run\.completed /.test(l)).pop() || `arc-run exited ${status}`;
+      const line = failureLine(res.stderr, status);
       // SCHEMA IS ONLY EVALUATED WHERE AN OUTPUT EXISTED. A driver that never answered leaves the
       // schema question unasked, and counting that as a schema failure would blame the process
       // for a fault arc-run has already attributed elsewhere (ADR-0204).

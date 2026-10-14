@@ -332,6 +332,21 @@ export function seatPersona() {
   return text ? `${text}\n\n---\nTHE PROCESS YOU ARE SEATED IN:\n` : null;
 }
 
+/**
+ * The output contract as prompt lines, placed after the input and before the closing instruction
+ * (ADR-0915). Every driver asked for "ONE JSON document matching this process's output contract"
+ * and none ever showed the contract, so a model guessed the shape: bench's real event saw sonnet
+ * add `branch` to every answer and fail `additionalProperties: false`. A process with no `output`
+ * block yields no lines, leaving its prompt as it was.
+ * @param {{ output?: unknown } | null | undefined} doc
+ * @returns {string[]}
+ */
+export function contractLines(doc) {
+  const out = doc && doc.output;
+  if (!out || typeof out !== "object") return [];
+  return ["OUTPUT CONTRACT (JSON Schema):", JSON.stringify(out), ""];
+}
+
 /** Load a recorded response for the fake path, or null when running for real. */
 export function fakeResponse(processName) {
   const dir = process.env.ARC_DRIVER_FAKE;

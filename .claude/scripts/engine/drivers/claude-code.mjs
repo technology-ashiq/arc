@@ -16,7 +16,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, SessionSpend, settle } from "./common.mjs";
+import { canonicalDoc, contractLines, parseModelJson, pinnedModel, runDriver, seatPersona, SessionSpend, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
 
 // A session that STARTED may have spent, however it ended. Its figure rides the failure (`arcCost`) when the envelope
@@ -171,6 +171,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
     "INPUT (JSON):",
     JSON.stringify(input),
     "",
+    ...contractLines(doc),
     "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 
@@ -181,6 +182,10 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // The tier reaches the model here, or the run is unpinned and the receipt says so.
   const model = pinnedModel();
   if (model) args.push("--model", model);
+  // A BENCHED RUN DOES NOT LOAD THE OWNER'S OWN SETUP (ADR-0915). Without this the CLI read the
+  // user-level settings -- their hooks, plugins and MCP servers -- so a score measured the owner's
+  // machine as much as the model. Project and local settings still load; auth is untouched.
+  if (process.env.ARC_DRIVER_ISOLATE === "1") args.push("--setting-sources", "project,local", "--strict-mcp-config");
 
   let raw, envelope;
   if (process.env.ARC_DRIVER_PROGRESS === "1") {
