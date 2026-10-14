@@ -516,7 +516,7 @@ function eventsOn(spine) {
       "    hosted: cloud", "    judge: fixture", "    review_by: 2000-01-01", "    fallback: []",
       "    max_attempts: 2", "    max_wall_ms: 3600000", "    max_cost: unmetered",
       "default:", "  tier: balanced-workhorse", "  driver: claude-code", "  fallback: []",
-      "  max_attempts: 2", "  max_wall_ms: 3600000", "  max_cost: unmetered", "",
+      "  max_attempts: 2", "  max_wall_ms: 3600000", "  max_cost: 1000", "  max_cost_currency: USD", "",
     ].join("\n"), "utf8");
     return t;
   };
@@ -672,9 +672,9 @@ function eventsOn(spine) {
   writeFileSync(join(benchTree, "engine/router.yaml"), ["version: 1", "tiers:", "  - balanced-workhorse", "classes:",
     "  commit-msg-draft:", "    tier: balanced-workhorse", "    driver: mock", "    cap: L1-drafts", "    hosted: local",
     "    judge: fixture", "    review_by: 2000-01-01", "    fallback: []",
-    "    max_attempts: 2", "    max_wall_ms: 3600000", "    max_cost: 100000",
+    "    max_attempts: 2", "    max_wall_ms: 3600000", "    max_cost: 100000", "    max_cost_currency: INR",
     "default:", "  tier: balanced-workhorse", "  driver: claude-code", "  fallback: []",
-    "  max_attempts: 2", "  max_wall_ms: 3600000", "  max_cost: unmetered", ""].join("\n"), "utf8");
+    "  max_attempts: 2", "  max_wall_ms: 3600000", "  max_cost: 1000", "  max_cost_currency: USD", ""].join("\n"), "utf8");
   const benchSpine = spineFor("tenure-bench-run");
   const heldSpine = process.env.ARC_SPINE_ROOT;
   process.env.ARC_SPINE_ROOT = benchSpine;

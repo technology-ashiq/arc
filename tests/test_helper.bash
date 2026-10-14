@@ -1146,6 +1146,7 @@ default:
   fallback: []
   max_attempts: 2
   max_wall_ms: 3600000
-  max_cost: unmetered
+  max_cost: 1000
+  max_cost_currency: USD
 GRANTYAML
 }

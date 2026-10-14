@@ -29,6 +29,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { routerFaults } from "./router-row.mjs";
+import { METERING_DRIVERS } from "./failure-class.mjs";
 import { planProposal, proposalBranch, writeProposal, baseText, mainDirNames, ProposalError } from "../core/proposal-branch.mjs";
 import { planDigest, expectLine, staleReason, spineRefusal, emitReceipt } from "../core/plan-expect.mjs";
 import { isOneLine } from "../core/one-line.mjs";
@@ -146,6 +147,53 @@ export function retireHire(text, cls, to) {
 }
 
 /**
+ * The router text with one class's MONEY TERM following its chain (ADR-0231). A cap is valid only on a chain a driver
+ * meters, so a driver change can turn a sound row into one the loader refuses: a capped row moved onto codex alone
+ * would carry a cap nothing measures, and a hire retired onto claude-code would say `unmetered` about a driver that
+ * reports spend. The term follows -- never invented: a chain that no longer meters becomes `unmetered` (its currency
+ * and the cap's reason comment go with it), and a chain that newly meters takes the `default:` row's cap and currency,
+ * the router's own figure for a class nobody priced. Anything else is left exactly as it was.
+ * @param {string} text  the router text after the driver edit @param {string} cls
+ * @returns {{ text: string, money: null | { max_cost: number | string, max_cost_currency?: string } }}
+ */
+export function followMoneyTerm(text, cls) {
+  const parsed = parseYamlSubset(text);
+  if (!parsed.ok) return { text, money: null };
+  const router = parsed.value;
+  const row = router.classes && router.classes[cls];
+  if (!row) return { text, money: null };
+  const chain = [row.driver, ...(Array.isArray(row.fallback) ? row.fallback : [])].map((d) => String(d ?? "").trim());
+  const meters = chain.some((d) => METERING_DRIVERS.has(d));
+  const capped = row.max_cost !== "unmetered" && row.max_cost !== undefined;
+  if (meters === capped || row.max_cost === undefined) return { text, money: null };
+  const lines = text.split("\n");
+  const top = lines.findIndex((l) => l === "classes:");
+  const at = lines.findIndex((l, i) => i > top && l === `  ${cls}:`);
+  let costAt = -1, curAt = -1;
+  for (let i = at + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.trim() === "" || /^\s*#/.test(l)) continue;
+    if (!/^ {4}/.test(l)) break;
+    if (/^ {4}max_cost:/.test(l)) costAt = i;
+    if (/^ {4}max_cost_currency:/.test(l)) curAt = i;
+  }
+  if (costAt < 0) return { text, money: null };
+  if (!meters) {
+    const drop = new Set([costAt, ...(curAt >= 0 ? [curAt] : [])]);
+    for (let j = costAt - 1; j > at && /^ {4}#/.test(lines[j]); j--) drop.add(j);
+    const out = lines.map((l, i) => (i === costAt ? "    max_cost: unmetered" : l)).filter((_, i) => i === costAt || !drop.has(i));
+    return { text: out.join("\n"), money: { max_cost: "unmetered" } };
+  }
+  const d = router.default || {};
+  if (!Number.isInteger(d.max_cost) || typeof d.max_cost_currency !== "string") {
+    die(2, `the proposed chain for ${cls} reports spend, and the router's default row carries no cap to give it -- set its max_cost by hand, citing ADR-0231`);
+  }
+  const out = [...lines.slice(0, costAt), "    # the default row's cap: this chain newly reports spend (ADR-0231)",
+    `    max_cost: ${d.max_cost}`, `    max_cost_currency: ${d.max_cost_currency}`, ...lines.slice(costAt + 1).filter((_, k) => k + costAt + 1 !== curAt)];
+  return { text: out.join("\n"), money: { max_cost: d.max_cost, max_cost_currency: d.max_cost_currency } };
+}
+
+/**
  * The proposal branch. The class goes LAST: a class ending in "sk" (face-ask) followed by "-" made "sk-" inside the
  * branch name, the spine's secret scanner read it plus the neighbouring strings as an API key, and every face-ask
  * proposal wrote its branch and then had its approval refused (PR 3a logic attack). proposalBranch defuses an "sk-" the
@@ -190,7 +238,10 @@ async function main() {
     args.to = dflt;
   }
 
-  const { text: proposed, from } = args.verb === "retire" ? retireHire(text, args.class, args.to) : editRouter(text, args.class, args.verb, args.to);
+  const edited = args.verb === "retire" ? retireHire(text, args.class, args.to) : editRouter(text, args.class, args.verb, args.to);
+  const { from } = edited;
+  // The money term follows the new chain (ADR-0231), or a driver change would hand the loader a cap nothing measures.
+  const { text: proposed, money } = followMoneyTerm(edited.text, args.class);
   // The router's OWN loader, over the proposed file: a proposal arc-run would refuse to load is refused here, in the
   // router's words -- routing a class to the agent runtime without its terms is the case this catches.
   const reparsed = parseYamlSubset(proposed);
@@ -201,7 +252,10 @@ async function main() {
   // the block lines under a tenure key behind, and they became a silent `fallback` the approval never mentioned (PR 4
   // logic attack). The proposed file, parsed, must equal main's with only that row changed.
   if (args.verb === "retire") {
-    const row = Object.fromEntries(Object.entries(router.classes[args.class]).filter(([k]) => !TENURE_KEYS.includes(k)).map(([k, v]) => [k, k === "driver" ? args.to : v]));
+    // The money term, when it followed the chain, sits where the file puts it: max_cost, then its currency.
+    const row = Object.fromEntries(Object.entries(router.classes[args.class])
+      .filter(([k]) => !TENURE_KEYS.includes(k) && !(money && k === "max_cost_currency"))
+      .flatMap(([k, v]) => (k === "driver" ? [[k, args.to]] : k === "max_cost" && money ? Object.entries(money) : [[k, v]])));
     const want = { ...router, classes: { ...router.classes, [args.class]: row } };
     if (JSON.stringify(reparsed.value) !== JSON.stringify(want))
       die(2, `ending the hire of ${args.class} would change ${ROUTER} beyond its row's driver and tenure terms (a tenure term carries a block value?) -- edit it by hand, citing ADR-0069`);

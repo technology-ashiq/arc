@@ -1,0 +1,79 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:28",
+      "breaking_input": "A claude CLI that exits non-zero with stdout containing a JSON envelope whose `total_cost_usd` is, say, a very large number like 1e300, or a string that parses to a number via `JSON.parse` of the whole stdout but where the field is a decimal-in-exponent.",
+      "why": "In the json path's catch block, `failed` is the parsed JSON of the whole stdout. `withSpend` calls `SessionSpend.read(failed)` which takes `failed.total_cost_usd` raw — no type check that it is a finite non-negative number. The same raw figure flows into `arcCost.spend.value`. Later `writeCost` / `spendOf` may reject it, but on this failure path there is no test that the spend is valid before it is attached, and the code comment says 'the envelope says what it spent'. A malformed CLI output could book an absurd or negative cost as 'measured'.",
+      "fix": "In the failed-run path, validate the parsed envelope's `total_cost_usd` with the same predicate used on the success path (finite non-negative number) before attaching as `arcCost`; otherwise leave it as `not-reported`.",
+      "twin_of": "A present-but-unreadable spend counted as zero"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:101",
+      "breaking_input": "An endpoint that is openrouter.ai but returns `usage.cost` as a string like \"0.002\" or as a negative number, or a non-number object.",
+      "why": "`SPEND_OPENROUTER` only adds the `spend` field when `u.cost` exists; it does not validate that `u.cost` is a finite non-negative number. `cost.spend = { value: u.cost, currency: \"USD\" }` is sent raw. `writeCost` presumably later rejects non-number, but on the success path the receipt's `spend` field carries an unvalidated value, and the code comment claims it is 'measured'. A hostile/misconfigured OpenRouter-compatible endpoint can inject a string or an absurd magnitude into the money ledger.",
+      "fix": "Read `u.cost` via a predicate (`Number.isFinite(x) && x >= 0`), and set `spend` only when the value is a valid non-negative finite number; otherwise leave `spend` absent so the run is `not-reported`."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:244",
+      "breaking_input": "An endpoint that returns `usage.cost` as the number 0 and `usage.prompt_tokens` as `NaN` (or as a numeric string that `Number.isFinite` accepts but that is actually a string).",
+      "why": "`cost.spend` is attached whenever `SPEND_OPENROUTER` is true and `u.cost` is present, even if `u.cost` is 0 or negative or a non-finite number. Similarly `tokensIn`/`tokensOut` use `Number.isFinite` which rejects a numeric string like \"3\" even though many APIs send numbers. The current code drops a legitimate numeric string token count, making the receipt's cost incomplete while still labelling it `source: \"measured\"`. That is a measurement of nothing for tokens.",
+      "fix": "Coerce numeric strings for tokens, and validate `u.cost` as a finite non-negative number before booking."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:107",
+      "breaking_input": "A claude CLI stream where the final `result` event has `is_error: false` and no `total_cost_usd`, but a preceding intermediate event (e.g. a `system` event) carried a `total_cost_usd`. The CLI's usage is only on the result event; the driver reads only the `result` envelope in `onResult`'s `result`, so a missing figure is treated as `not-reported`.",
+      "why": "`SessionSpend.read` is applied only to the final `result` object. If the CLI reports cost on a different field name or in `usage` cost in that event, this driver never reads it, and the spent run is booked as `not-reported`. But that is the documented interface; the real issue is the fixed-B1 pattern in generic-api was not applied to claude-code: the driver doesn't validate the figure's type in the stream path either.",
+      "fix": "Reuse the same validate-and-read helper on both paths, and add a test with a malformed `total_cost_usd` on the stream path."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:128",
+      "breaking_input": "A CLI that exits 0 but its stdout JSON envelope has `result` containing a string with nested JSON and also `total_cost_usd` as the string \"0\" (a zero string).",
+      "why": "In the success json path, `cost` is built before parsing `result`, but `u.input_tokens`/`u.output_tokens` are not validated for being integers (only finite); `total_cost_usd` is not type-validated here — the validation is left to `SessionSpend.read` which merely returns whatever `total_cost_usd` is. A string \"0\" becomes `spend.value = \"0\"`, which `writeCost` may later reject or coerce. The comment says 'the provider's figure or nothing', but the driver returns a raw unvalidated figure labelled `measured`.",
+      "fix": "Apply a single validation predicate to `total_cost_usd` in `SessionSpend.read` and to `u.input_tokens`/`u.output_tokens` (integers), returning `undefined` for anything not a finite non-negative formatted number."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:255",
+      "breaking_input": "The `ARC_LLM_SPEND=openrouter` env var set alongside an endpoint host that is NOT openrouter.ai — the opt-in can be set by a user who mistakenly believes the gateway is OpenRouter-compatible, but the gateway returns `usage.cost` in credits or its own currency.",
+      "why": "The opt-in is a flat bypass: `ARC_LLM_SPEND=openrouter` alone enables reading `usage.cost` as USD even when the host is not an openrouter.ai host. The comment says 'or a gateway the owner declares speaks it', but the declaration is unverified; the hostname check is bypassed entirely. A misconfiguration books a foreign figure as measured USD.",
+      "fix": "Require BOTH the hostname match AND the opt-in, or else document and enforce that the opt-in names the gateway type."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/spend-trace.mjs:80",
+      "breaking_input": "A spine whose events include `run.completed` with `spend` as `{ value: 0, currency: \"USD\" }` — a legitimate paid run with zero cost exactly.",
+      "why": "`unbookedRuns` presumably treats `isSpend` figures; if `value === 0` is not considered a spend (isSpend may require a positive integer minor units), and a `cost.incurred` row for the zero amount is absent, the trace will report the run as unbooked, or conversely as booked. Zero is a legitimate metered price (free tier). The code needs to distinguish \"raw zero meant no spend\" from \"absent\" — the driver dropped the distinction by merging `spend: undefined` into `not-reported`.",
+      "fix": "Define `isSpend` to accept `0` as a valid amount, and have the driver preserve the distinction between `value: 0` (a measured zero) and `value: undefined`."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:1297",
+      "breaking_input": "If `emitRun` fails and `money.groups` is undefined or not an object (e.g. the run never reached the point where money groups were set), `emitSpend(money.groups, \"\")` throws a TypeError inside the error path, and the true failure message is lost.",
+      "why": "The new line added in the failure branch calls `emitSpend` without a try-wrapped guard. The defect pattern 'a sidecar write before die() with no guard' is relevant: the original error about the emitter rejection is replaced by a secondary error from `emitSpend`, hiding the primary.",
+      "fix": "Wrap the `emitSpend` call in its own try/catch, and preserve the original error.",
+      "twin_of": "A sidecar write before die() with no guard"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/session-spend.mjs:19",
+      "breaking_input": "An `envelope` object that has a `total_cost_usd` with value `null` or `0` or a string.",
+      "why": "`SessionSpend.read` returns any truthy value as-is; `null` becomes `{ value: null }` which downstream may treat as present and call `spendOf` on, rejecting or producing NaN. The interface claims 'a missing field is value: undefined', but it does not distinguish a present-but-invalid figure from absent.",
+      "fix": "Return `undefined` except when `total_cost_usd` is a finite non-negative number."
+    }
+  ]
+}

@@ -17,6 +17,12 @@ import { canonicalDoc, contractLines, msUntilDeadline, parseModelJson, pinnedMod
 import { explainKey } from "../../hq/lib/keys.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
+// OpenRouter's usage accounting (ADR-0229) is OpenRouter's field: asked for, and its `usage.cost` read as USD, only on
+// openrouter.ai or on a gateway the owner declares speaks it (`ARC_LLM_SPEND=openrouter`). Another endpoint may reject
+// the unknown parameter outright, or report a `usage.cost` in its own units -- and booking that as measured USD would
+// be a measurement of nothing (attack e2dc399 B1). Elsewhere the driver reads no figure: the run is `driver-unmetered`.
+const SPEND_OPENROUTER = (() => { try { return /(^|\.)openrouter\.ai$/i.test(new URL(ENDPOINT).hostname); } catch { return false; } })()
+  || process.env.ARC_LLM_SPEND === "openrouter";
 // The key, by the owner's keys store (ADR-1351): ARC_LLM_KEY_NAME names which stored key to use (OPENROUTER_API_KEY);
 // without it, ARC_LLM_API_KEY as always.
 // explainKey reads the environment first, so a set variable is never overridden; with no value it says why (a store
@@ -175,6 +181,9 @@ await runDriver("generic-api", async ({ processName, input }) => {
     // Streamed to get past undici's 300 s headers cap (see fromSse); usage rides the last chunk.
     stream: true,
     stream_options: { include_usage: true },
+    // OpenRouter's usage accounting: the provider's own spend in `usage.cost` (USD credits), asked for explicitly
+    // (ADR-0229). An endpoint that ignores the field returns none, and the spend is then `not-reported`, never 0.
+    ...(SPEND_OPENROUTER ? { usage: { include: true } } : {}),
   };
   if (REASONING_OFF) process.stderr.write("generic-api: reasoning off (ARC_LLM_REASONING=off)\n");
 
@@ -236,22 +245,22 @@ await runDriver("generic-api", async ({ processName, input }) => {
   // arc-run's job, and a driver that pre-judges hides a process fault as a driver fault.
   // An answer that is not JSON at all is still the MODEL's answer, so it is `model-invalid`
   // (ADR-0228): another model family might answer it, a retry of the transport would not.
+  const u = envelope.usage || {};
+  // Read BEFORE the answer is judged: a model that answered something other than JSON was still paid for.
+  const cost = {
+    tokensIn: Number.isFinite(u.prompt_tokens) ? u.prompt_tokens : undefined,
+    tokensOut: Number.isFinite(u.completion_tokens) ? u.completion_tokens : undefined,
+    // The PROVIDER's figure or nothing: `usage.cost` when the endpoint reports it, turned into money by `spendOf`
+    // alone. Deriving it from tokens and a price table nobody maintains would be an estimate wearing a
+    // measurement's clothes (ADR-0069 b5).
+    ...(SPEND_OPENROUTER ? { spend: { value: u.cost, currency: "USD" } } : {}),
+    source: "measured",
+  };
   let output;
   try { output = parseModelJson(content, "the model answer"); }
-  catch (err) { err.arcFailureClass = "model-invalid"; throw err; }
+  catch (err) { err.arcFailureClass = "model-invalid"; err.arcCost = cost; throw err; }
 
-  const u = envelope.usage || {};
-  return {
-    output,
-    cost: {
-      tokensIn: Number.isFinite(u.prompt_tokens) ? u.prompt_tokens : undefined,
-      tokensOut: Number.isFinite(u.completion_tokens) ? u.completion_tokens : undefined,
-      // No inr figure: this endpoint does not return one, and deriving it from a price table
-      // nobody maintains would be an estimate wearing a measurement's clothes (ADR-0069 b5).
-      source: "measured",
-    },
-    model: pinnedModel() ?? "unpinned",
-  };
+  return { output, cost, model: pinnedModel() ?? "unpinned" };
 });
 
 settle();

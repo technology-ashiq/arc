@@ -176,14 +176,14 @@ receipt: one line on arc's logbook saying a run finished and what it cost.
 out-of-cycle: work done after a cycle closed, routed through the change process and charged to no budget.
 ```
 
-*Cycle 8 · arc-engine "Governed Fallback"*
+*Cycle 9 · arc-engine "Metered Runs"*
 
 ## At a glance
 
 | | |
 |---|---|
 | Status | IDLE |
-| Cycle | arc-engine (Cycle 8, opened 2026-10-07) |
+| Cycle | arc-engine (Cycle 9, opened 2026-10-14) |
 | Product | [engine](../products/engine.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -193,7 +193,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/engine/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/engine/PROGRESS.md)
 
-## Decisions (26)
+## Decisions (29)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -225,6 +225,9 @@ ADRs whose `Product:` line names this lane first.
 | [`0226`](../../../docs/adr/0226-the-pr-loops-attacker-pass-and-ci-read-run-as-governed-engine-work.md) | the PR loop's attacker pass and CI read run as governed engine work, not inside the building session | proposed | 2026-09-23 |
 | [`0227`](../../../docs/adr/0227-the-schema-subset-gains-one-nullable-pair-and-nothing-else.md) | The schema subset gains one nullable pair, and nothing else | accepted | 2026-09-26 |
 | [`0228`](../../../docs/adr/0228-fallback-is-governed-by-a-failure-classifier-and-a-per-chain-budget.md) | Fallback is governed by a failure classifier and a per-chain budget (ENG-H) | accepted | 2026-10-07 |
+| [`0229`](../../../docs/adr/0229-spend-is-the-providers-own-figure-in-its-own-currency-rounded-up-to-the-minor-unit.md) | Spend is the provider's own figure, in its own currency, rounded UP to the minor unit | accepted | 2026-10-14 |
+| [`0230`](../../../docs/adr/0230-one-cost-incurred-per-metered-run-and-unmetered-is-a-named-absence.md) | One `cost.incurred` per metered run, and unmetered is a named absence | accepted | 2026-10-14 |
+| [`0231`](../../../docs/adr/0231-a-metered-rows-max-cost-carries-its-currency-and-a-reached-cap-is-a-typed-refusal.md) | A metered row's `max_cost` carries its currency, and a reached cap is a typed refusal | accepted | 2026-10-14 |
 
 ## Source
 
