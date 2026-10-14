@@ -57,7 +57,9 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       const proj = byIdOrName(m[1]);
       if (!proj) return err(404, "not_found", "Project not found");
       proj.envs = proj.envs || [];
-      if (proj.envs.some((e) => e.key === body.key)) return err(400, "ENV_ALREADY_EXISTS", "A variable with the name already exists");
+      // Vercel refuses a name only where its targets overlap: production beside a preview-only value is allowed.
+      const tg = (t) => (Array.isArray(t) ? t : [t]);
+      if (proj.envs.some((e) => e.key === body.key && tg(e.target).some((t) => tg(body.target).includes(t)))) return err(400, "ENV_CONFLICT", "A variable with the name already exists for this target");
       const envId = id("env");
       proj.envs.push({ id: envId, key: body.key, target: body.target, value: body.value });
       return json(201, { created: { id: envId, key: body.key, target: body.target } });

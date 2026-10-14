@@ -26,14 +26,6 @@
       "line": ["hq_query", "hq_brief", "hq_pnl", "hq_inbox", "hq_approve"],
       "note": "the same L2 reader + the same decision path exposed as MCP tools for other clients; renders as Ask arc's second door, never a separate truth (ADR-1307)",
       "takes_over": "manifest face: section when the brief wakes"
-    },
-    {
-      "room": "arc-sandbox",
-      "ring": "money",
-      "source": "initiatives/launch/PLAN.md (the Cycle 1 rehearsal venture, ADR-1711)",
-      "line": ["launch board", "slot receipts", "revenue.simulated", "teardown --plan"],
-      "note": "a rehearsal venture: seated planned so launch's face-room slot verifies without a passport row or kill lines (honesty_class rehearsal)",
-      "takes_over": "venture-register seats a real venture in the ventures room"
     }
   ]
 }

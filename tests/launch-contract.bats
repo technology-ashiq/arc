@@ -1006,7 +1006,7 @@ arm() {
   [ "$(j 'o.auth.ok + " " + o.authAgain.ok + " " + o.siteUrl')" = "true true https://sandbox.automemory.ai" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.env')" == *"NEXT_PUBLIC_SUPABASE_URL="*"NEXT_PUBLIC_SUPABASE_ANON_KEY="* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.authVerify.ok + " " + JSON.stringify(o.authVerify.evidence)')" = 'true {"user":"launch-probe-a@sandbox.automemory.ai","login":303,"me":200,"logout":200,"after":401}' ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.auth.join(",")')" = "auth-config,vercel-env,vercel-env,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.auth.join(",")')" = "vercel-env,vercel-env,auth-config,auth-routes,venture-repo,supabase-ref" ] || { echo "$DONE"; false; }
   [ "$(j 'o.authTeardown.join(",")')" = "delete-probe-users (launch-probe-a/b/c),restore-site-url-if-unchanged,delete-vercel-env,delete-vercel-env" ] || { echo "$DONE"; false; }
 }
 
@@ -1458,6 +1458,7 @@ arm() {
   [[ "$(j 'o.result.verify.ok + " " + o.result.verify.reason')" == "false venture-register --dry-run exited "*": venture-register"* ]] || { echo "$DONE"; false; }
   arm wiring face
   [ "$(j 'o.unseated.verify.ok + " " + o.seated.verify.ok + " " + o.seated.verify.evidence.room')" = "false true ventures" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.sandbox.verify.ok + " " + o.sandbox.verify.evidence.room + " " + o.sandbox.verify.evidence.status')" = "true ventures planned" ] || { echo "$DONE"; false; }
   arm wiring teardown
   [ "$(j 'o.result.verify.ok + " " + o.result.verify.evidence.steps + " " + o.result.verify.evidence.resources')" = "true 5 1" ] || { echo "$DONE"; false; }
 }

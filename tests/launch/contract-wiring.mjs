@@ -50,8 +50,10 @@ switch (scenario) {
     out.result = await run("passport", "venture-register");
     break;
   case "face":
-    out.unseated = await run("face-room", "face-planned");
+    // arc-sandbox is seated (plannedRooms.map), so the unseated arm names a venture no contract row holds.
+    out.unseated = await run("face-room", "face-planned", { slug: "unseated-venture" });
     out.seated = await run("face-room", "face-planned", { slug: "lexos" });
+    out.sandbox = await run("face-room", "face-planned");
     break;
   case "teardown": {
     let s = emptyState(PROFILE("arc-sandbox"));
