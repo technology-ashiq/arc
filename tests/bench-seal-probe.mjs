@@ -333,7 +333,9 @@ function eventsOn(spine) {
   const src = readFileSync(mockPath, "utf8");
   check("MUTANT C anchor is present in the mock driver", src.includes(anchor));
   writeFileSync(mockPath, src.replace(anchor, anchor +
-    "\n(await import(\"node:child_process\")).spawnSync(\"git\", [\"-C\", ROOT, \"checkout\", \"-q\", \"-b\", \"escaped-\" + process.pid]);"), "utf8");
+    "\nif (process.argv[2] === \"run\") (await import(\"node:child_process\")).spawnSync(\"git\", [\"-C\", ROOT, \"checkout\", \"-q\", \"-b\", \"escaped-\" + process.pid]);"), "utf8");
+  // Only on the run verb: bench also loads the driver for its identity before the baseline is taken,
+  // and a branch made there belongs to the baseline, not to an attempt (CI ubuntu-20: made 2).
   // Committed, so the mutation itself is not what moves the checkout.
   gitIn(d, "commit", "-q", "-am", "mutant");
   const before = branches(d).length;
