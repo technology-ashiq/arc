@@ -85,6 +85,7 @@ check("a mask key that is not 4 bytes is refused", throwsLike(() => cdp.encodeFr
         api.reply({ id: msg.id, result: {} });
       }
       else if (msg.method === "Page.probe") api.reply({ id: msg.id, result: {} });
+      else if (msg.method === "Slow.answer") setTimeout(() => api.reply({ id: msg.id, result: { slow: true } }), 1800);
       // "Never.answer" gets no reply on purpose.
     },
   });
@@ -118,6 +119,22 @@ check("a mask key that is not 4 bytes is refused", throwsLike(() => cdp.encodeFr
     let pongOk = false;
     for (let i = 0; i < 30 && !pongOk; i++) { await new Promise((r) => setTimeout(r, 20)); pongOk = fake.pongs.some((b) => b.toString() === "pp"); }
     check("a server ping is answered with a pong carrying the same payload", pongOk);
+
+    // A per-call timeoutMs overrides the session default in BOTH directions: shorter fires first and names its own limit,
+    // and the page wrapper passes it through (bench.run-model hit the 30 s default under a 180 s flow cap, 2026-10-14).
+    const shortAt = Date.now();
+    let shortMsg = "";
+    try { await page.send("Never.answer", {}, { timeoutMs: 200 }); } catch (e) { shortMsg = String(e.message); }
+    check("a page call with timeoutMs 200 times out at its own limit, not the session's 1500",
+      /timed out after 200 ms/.test(shortMsg) && Date.now() - shortAt < 1200, shortMsg);
+    let badMsg = "";
+    try { await s.send("Never.answer", {}, undefined, { timeoutMs: -5 }); } catch (e) { badMsg = String(e.message); }
+    check("a non-positive timeoutMs falls back to the session default", /timed out after 1500 ms/.test(badMsg), badMsg);
+    // The direction the bug was in: a reply at 1800 ms is lost under the 1500 ms default and arrives under timeoutMs 4000.
+    check("without timeoutMs a reply slower than the session default is lost", await rejectsLike(page.send("Slow.answer", {}), /timed out after 1500 ms/));
+    let slow = null;
+    try { slow = await page.send("Slow.answer", {}, { timeoutMs: 4000 }); } catch (e) { slow = { error: String(e.message) }; }
+    check("with timeoutMs 4000 the same slow reply resolves through the page wrapper", slow && slow.slow === true, JSON.stringify(slow));
 
     check("a call nobody answers times out instead of hanging", await rejectsLike(s.send("Never.answer"), /timed out/));
     // A close must reject at once with the close reason -- not by the 1500 ms call timeout,
