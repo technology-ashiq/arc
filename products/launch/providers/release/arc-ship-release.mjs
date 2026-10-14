@@ -1,6 +1,6 @@
-// release slot (ADR-1704, ADR-1727, ADR-1730). Crosses gate 2: after the owner approves `deploy-prod-first`, lifts the
+// release slot (ADR-1704, ADR-1727, ADR-1730, ADR-1755). Crosses gate 2: after the owner approves `deploy-prod-first`, lifts the
 // production hold hosting placed by committing vercel.json as `{}` with release's trailer, and tags that commit. Its
-// verify is the deploy receipt: Vercel BUILT a production deployment of the tagged commit (it was not skipped).
+// verify is the deploy receipt: Vercel built a production deployment of the tagged commit and it is READY.
 import { Buffer } from "node:buffer";
 
 const VERCEL = "https://api.vercel.com";
@@ -11,8 +11,9 @@ const LIFTED = "{}\n";
 // Byte-for-byte what hosting commits (providers/hosting/vercel.mjs HOLD); adapters are one file each, so it is restated.
 const HOLD =`${JSON.stringify({ ignoreCommand: "[ \"$VERCEL_ENV\" = production ]" }, null, 2)}\n`;
 const SHA = /^[0-9a-f]{40}$/;
-// Built means Vercel ran the build: READY, or ERROR while main has no app yet (frontend proves it serves, ADR-1730).
-const BUILT = new Set(["READY", "ERROR"]);
+// Only READY is a receipt. hosting creates the project with no framework preset, so a commit with no app yet builds
+// READY as a static site; a failed build is a failed release, never a receipt (ADR-1755).
+const BUILT = new Set(["READY"]);
 const PENDING = new Set(["QUEUED", "INITIALIZING", "BUILDING"]);
 
 const refuse = (code, message) => Object.assign(new Error(message), { code });
@@ -153,12 +154,7 @@ async function probe(ctx) {
     const d = list(deps.body && deps.body.deployments).find((x) => x.meta && x.meta.githubCommitSha === sha && x.target === "production");
     if (!d) continue;
     const state = say(d.readyState || d.state, 20);
-    // ERROR counts only while the tagged commit holds no app: once package.json is there, a failed build is a failed
-    // release, not a receipt (attack 5e06edf B2).
-    if (state === "ERROR") {
-      const pkg = await gh(ctx, "GET", `/repos/${full}/contents/package.json?ref=${sha}`, undefined, [404]);
-      if (pkg.status !== 404) return { ok: false, reason: `production build of ${sha.slice(0, 7)} failed (ERROR) and the commit holds an app` };
-    }
+    if (state === "ERROR") return { ok: false, reason: `production build ${say(d.uid, 40)} of ${sha.slice(0, 7)} failed (ERROR)` };
     if (BUILT.has(state)) return { ok: true, answerer: "api.vercel.com", evidence: { project: pid, tag: TAG, sha, deployment: say(d.uid, 64), state } };
     if (!PENDING.has(state)) return { ok: false, reason: `production deployment ${say(d.uid, 40)} of ${sha.slice(0, 7)} is ${state || "unknown"} -- the hold still skips it` };
     last = `production deployment ${say(d.uid, 40)} is ${state}`;

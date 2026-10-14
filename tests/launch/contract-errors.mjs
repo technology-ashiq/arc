@@ -20,7 +20,10 @@ const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 const FULL = "technology-ashiq/arc-sandbox";
 const DOMAIN = "sandbox.automemory.ai";
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
+// A personal (user) token: the only Sentry token kind that can read projects and issues; org tokens are CI-scoped.
+const USER_TOKEN = `sntryu_${"0123456789abcdef".repeat(4)}`; // gitleaks:allow -- fixture, never a real token
 const opts = {
+  "user-token": { token: USER_TOKEN },
   "no-project": { projects: [{ slug: "someone-else", org: "automemory" }] },
   "two-projects": { projects: [{ slug: "arc-sandbox", org: "automemory" }, { slug: "arc-sandbox", org: "other-org" }] },
   "no-key": { keys: false },
@@ -32,7 +35,7 @@ globalThis.fetch = sentry.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-errors-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const state = [];
-const ENV = { SENTRY_AUTH_TOKEN: "sntrys_fixtureToken0123456789abcdef", GITHUB_TOKEN: "gho_fixtureToken0123456789" }; // gitleaks:allow
+const ENV = { SENTRY_AUTH_TOKEN: scenario === "user-token" ? USER_TOKEN : "sntrys_fixtureToken0123456789abcdef", GITHUB_TOKEN: "gho_fixtureToken0123456789" }; // gitleaks:allow
 const UP = { hosting: [{ kind: "vercel-project", id: "prj_fixture01" }, { kind: "github-file", id: `${FULL}:vercel.json` }] };
 const ctxNow = ({ domain = DOMAIN, upstream = UP } = {}) => makeCtx({
   profile: { slug: "arc-sandbox", region: "in", brand: { name: "arc sandbox", domain } }, board: {}, slot: { id: "errors" }, row,
@@ -58,6 +61,7 @@ switch (scenario) {
     out.issueCount = sentry.issues.length;
     out.teardown = (await adapter.teardown(ctxNow())).steps.map((s) => s.action);
     break;
+  case "user-token":
   case "no-project":
   case "two-projects":
   case "no-key":

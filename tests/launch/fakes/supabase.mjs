@@ -6,7 +6,9 @@
 //   becomeHealthy how many GETs a new project answers COMING_UP before ACTIVE_HEALTHY
 //   rlsOff        the probe table's RLS is ignored (a broken database) -- anon sees every row
 //   policy        a policy exists on the probe table
-export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs = [{ id: "org_fixture", name: "ashiq" }], projects = [], becomeHealthy = 1, rlsOff = false, policy = false, queryShape = "rows" } = {}) {
+//   freeTierMail  a template change is refused while the project sends with Supabase's own mailer (no smtp_host),
+//                 as the free tier answers; smtp_pass is stored and never answered back
+export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs = [{ id: "org_fixture", name: "ashiq" }], projects = [], becomeHealthy = 1, rlsOff = false, policy = false, queryShape = "rows", freeTierMail = false } = {}) {
   const store = projects.map((p) => ({ status: "ACTIVE_HEALTHY", tables: {}, polls: 0, ...p }));
   const calls = [];
   const bodies = [];
@@ -111,8 +113,14 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
       const proj = store.find((x) => x.id === m[1]);
       if (!proj) return err(404, "project not found");
       proj.auth = proj.auth || { site_url: "http://localhost:3000" };
-      if (method === "GET") return json(200, proj.auth);
-      if (method === "PATCH") { Object.assign(proj.auth, body); return json(200, proj.auth); }
+      const shown = () => Object.fromEntries(Object.entries(proj.auth).filter(([k]) => k !== "smtp_pass"));
+      if (method === "GET") return json(200, shown());
+      if (method === "PATCH") {
+        const tpl = Object.keys(body).some((k) => k.startsWith("mailer_templates_"));
+        if (freeTierMail && tpl && !(body.smtp_host || proj.auth.smtp_host)) return err(400, "Email template modification is not available for free tier projects using the default email provider. Please upgrade your plan or configure a custom SMTP provider.");
+        Object.assign(proj.auth, body);
+        return json(200, shown());
+      }
     }
     m = p.match(/^\/projects\/([a-z0-9]{20})\/api-keys$/);
     if (m && method === "GET") return store.some((x) => x.id === m[1]) ? json(200, ["anon", "service_role"].map((name) => Object.fromEntries([["name", name], ["api_key", `${name === "anon" ? "anon" : "service"}-key-${m[1]}`]]))) : err(404, "project not found");

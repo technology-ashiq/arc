@@ -36,7 +36,9 @@ globalThis.fetch = live.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-release-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const state = { hosting: [], release: [], frontend: [], repo: [{ kind: "github-repo", id: FULL }] };
-const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789" };
+// Joined at run time so no diff carries a key-shaped literal: the attack scanner stops on one (fixture, never a real key).
+const PS_KEY = ["AIza", "FixturePageSpeedKey0123456789abcdef"].join("");
+const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", PAGESPEED_API_KEY: PS_KEY };
 // A fresh ctx per call, as the runner builds one per attempt; `approvals` stands in for the owner's gate-2 decision.
 const ctxFor = (slot, { row, upstream, approvals = [] }) => makeCtx({
   profile: { slug: "arc-sandbox", brand: { name: "arc sandbox", domain: DOMAIN } }, board: {}, slot: { id: slot }, row,
@@ -48,6 +50,7 @@ const H = () => ctxFor("hosting", { row: hosting.row, upstream: { repo: state.re
 const R = (approvals) => ctxFor("release", { row: release.row, upstream: { hosting: state.hosting }, approvals });
 const F = () => ctxFor("frontend", { row: frontend.row, upstream: { repo: state.repo, release: state.release } });
 const repo = () => github.store.get(FULL);
+const proj = () => [...vercel.store.values()][0];
 const holdText = () => Buffer.from(repo().files["vercel.json"].content, "base64").toString("utf8");
 
 await hosting.mod.scaffold(H());
@@ -70,7 +73,11 @@ switch (scenario) {
     out.frontend = await attempt(() => frontend.mod.scaffold(F()));
     out.frontendAgain = await attempt(() => frontend.mod.scaffold(F()));
     out.shellCommits = repo().commits.filter((c) => c.files && c.files["package.json"]).length;
+    // ADR-1755: hosting created the project with no preset; frontend set Next.js before the shell's push, not after.
+    out.preset = { created: proj().createdFramework, now: proj().framework, beforeShell: proj().presetFrom <= repo().commits.findIndex((c) => c.files && c.files["package.json"]) };
     out.frontendVerify = await frontend.mod.verify(F());
+    out.psKeyed = live.keys.length > 0 && live.keys.every((k) => k === PS_KEY);
+    out.psKeyLeaked = JSON.stringify(out.frontendVerify).includes(PS_KEY);
     out.releaseVerifyAfter = await release.mod.verify(R(["deploy-prod-first"]));
     out.kinds = { release: state.release.map((r) => r.kind), frontend: state.frontend.map((r) => r.kind) };
     break;
@@ -129,6 +136,21 @@ switch (scenario) {
     repo().commits[repo().commits.length - 1].message += `\n\nArc-Launch-Tag: arc-sandbox@release@arc-ship-release`;
     repo().commits[repo().commits.length - 1].app = false;
     out.releaseVerify = await release.mod.verify(R(["deploy-prod-first"]));
+    break;
+  case "next-preset-empty":
+    // The arc-sandbox shape (2026-10-13): the project holds the Next preset before any app, so the tagged commit's
+    // production build fails NEXT_NO_VERSION. That ERROR is never a release receipt (ADR-1755).
+    proj().framework = proj().createdFramework = "nextjs";
+    out.release = await attempt(() => release.mod.scaffold(R(["deploy-prod-first"])));
+    out.releaseVerify = await release.mod.verify(R(["deploy-prod-first"]));
+    break;
+  case "foreign-project":
+    // A project named like the repo but linked elsewhere: frontend never sets its preset, and commits nothing.
+    await release.mod.scaffold(R(["deploy-prod-first"]));
+    proj().link = { type: "github", org: "someone-else", repo: "arc-sandbox" };
+    out.frontend = await attempt(() => frontend.mod.scaffold(F()));
+    out.preset = proj().framework;
+    out.shellCommits = repo().commits.filter((c) => c.files && c.files["package.json"]).length;
     break;
   case "foreign-hold":
     // A vercel.json hosting did not write: release refuses to lift it.

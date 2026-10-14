@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (52)
+## Decisions (61)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -80,6 +80,15 @@ ADRs whose `Product:` line names this lane first.
 | [`1749`](../../../docs/adr/1749-the-trust-fixtures-sweep-every-built-adapter.md) | the trust fixtures sweep every built adapter, not one fake | accepted | 2026-10-09 |
 | [`1750`](../../../docs/adr/1750-the-weekly-watch-is-verify-public-only-raising-one-incident-per-regression.md) | the weekly watch is `verify --all --public-only`, run by a daily job that acts every seven days | accepted | 2026-10-09 |
 | [`1751`](../../../docs/adr/1751-wiring-slots-query-arcs-own-organs-through-ctx-probe-arc.md) | the wiring slots ask arc's own organs through `ctx.probe.arc`, answered by the runner | accepted | 2026-10-09 |
+| [`1752`](../../../docs/adr/1752-environments-follows-frontend-and-rebuilds-its-probe-on-main.md) | `environments` follows `frontend` and rebuilds its probe branch on main's head | accepted | 2026-10-13 |
+| [`1753`](../../../docs/adr/1753-frontend-asks-pagespeed-with-the-owners-key.md) | `frontend` asks PageSpeed with the owner's key and pins a Next.js Vercel will deploy; `tls` never fails on a cached scan | accepted | 2026-10-13 |
+| [`1754`](../../../docs/adr/1754-security-headers-sets-csp-with-a-per-request-nonce.md) | `security-headers` sets the CSP with a per-request nonce, and the shell renders per request | accepted | 2026-10-13 |
+| [`1755`](../../../docs/adr/1755-release-receipt-is-ready-only-and-the-next-preset-follows-the-app.md) | `release`'s receipt is READY only; the Next.js preset arrives with the app | accepted | 2026-10-13 |
+| [`1756`](../../../docs/adr/1756-auth-sends-the-login-email-through-the-ventures-resend-domain.md) | `auth` sends the login email through the venture's Resend domain | accepted | 2026-10-14 |
+| [`1757`](../../../docs/adr/1757-auth-places-the-public-supabase-values-on-the-venture-host.md) | `auth` places the public Supabase values on the venture's host | accepted | 2026-10-14 |
+| [`1758`](../../../docs/adr/1758-the-backup-drill-restores-into-a-supabase-shaped-scratch.md) | the backup drill restores into a Supabase-shaped scratch | accepted | 2026-10-14 |
+| [`1759`](../../../docs/adr/1759-the-shell-pins-clear-the-venture-dependency-audit.md) | the shell's pins clear the venture's dependency audit | accepted | 2026-10-14 |
+| [`1760`](../../../docs/adr/1760-apply-again-and-the-in-attempt-verify-reads-fresh-resources.md) | `apply --again`, and the in-attempt verify reads what scaffold reported | accepted | 2026-10-14 |
 
 ## Source
 

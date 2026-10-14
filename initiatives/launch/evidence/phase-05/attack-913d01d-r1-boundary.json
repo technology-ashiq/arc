@@ -1,0 +1,140 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs (scaffold: publicEnv before commitFiles)",
+      "breaking_input": "A Vercel project already has NEXT_PUBLIC_SUPABASE_URL set only for target [\"preview\"], or has a production var whose value is stale/wrong. The `have` set filters on production target only, but the POST creates target [\"production\",\"preview\"]. Vercel answers 400 ENV_ALREADY_EXISTS for the preview collision, and the throw kills the scaffold after the supabase PATCH already ran.",
+      "why": "The PATCH of auth config (site_url, smtp, template) is already applied and vercel-env resources for earlier keys may be reported, but the throw leaves the slot half-made. Existence is checked on one target set, the write covers another (validate one read, use another). A key present for production with a different value is silently kept, so a wrong URL stays live.",
+      "fix": "Check existence per key across both targets, create only the missing targets, and run publicEnv and its refusals before any supabase PATCH. Compare values for ones launch placed.",
+      "twin_of": "A batch of DNS writes refused on its last record after writing the others -> every multi-write scaffold: plan, then write"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs (resendSmtp / patch)",
+      "breaking_input": "The project has no smtp_host and the template is stock, so the PATCH sets smtp_pass to RESEND_API_KEY. The re-run sees smtp_host already set to smtp.resend.com and keeps it, but the owner has since rotated RESEND_API_KEY.",
+      "why": "A host present means launch never refreshes the credential, so login email breaks silently after rotation. The smtp config launch wrote is not recorded as a resource, so teardown cannot restore it. Ownership of the SMTP block is not tracked, which contradicts the 'did launch create it' rule.",
+      "fix": "Record an auth-smtp resource when launch sets it. On re-run, if the host is smtp.resend.com and was launch's, refresh the password. Add a teardown step that restores the previous values.",
+      "twin_of": "Protection launch only extended was recorded as launch's, so the exit plan would unprotect the owner's branch -> every resource launch reports: did launch create it, or touch something that was already there?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs (teardown delete-vercel-env; publicEnv report)",
+      "breaking_input": "A vercel-env is reported with id `${pid}:${key}`. The owner later deletes launch's variable and recreates NEXT_PUBLIC_SUPABASE_URL with their own value. Teardown runs delete-vercel-env on that id.",
+      "why": "The step deletes by project and key, not by the Vercel env id or value, so it removes the owner's variable. The step does not re-check ownership at run time.",
+      "fix": "Record the Vercel env id and the value hash. At teardown re-read the variable and delete it only if the id and value still match.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since -> every exit-plan step: does it re-check ownership at run time?"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs (rebuild POST /v13/deployments), nextjs-shell.mjs nextPreset",
+      "breaking_input": "`before` is the main head read before commitFiles. commitFiles returns the sha of the tip, and when the file set was already identical it returns main's head, which an owner commit may have advanced between the `before` read and the commit. Then `pushed` is true although launch pushed nothing and the build predates the placed env values, so no rebuild is requested. In the other direction, an owner push during the call makes the sha differ and the rebuild is skipped.",
+      "why": "`pushed` is inferred by comparing two reads at different times; it does not mean launch made a commit. NEXT_PUBLIC values are baked at build time, so the live site keeps empty values and /auth/confirm returns 500.",
+      "fix": "Have commitFiles report whether it created a commit. Rebuild whenever env.placed and no commit was created by this call.",
+      "twin_of": "frontend checked files at one main head and committed on a later one -> every check-then-write across separate reads"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:~76 (verify mode, no process.exit)",
+      "breaking_input": "A provider verify leaves a handle open: a keep-alive socket, an unref'd-less timer, or a pending AbortController listener. Verify mode now relies on the loop draining, and the ctx timer was cleared at the top.",
+      "why": "The worker never exits, so the parent waits for the full slot timeout. The exit path moved from a hard exit to a drain, with no deadline of its own. A stuck handle reads as a hang, and the saved last_verify is then discarded, since the runner reads a killed worker as no answer.",
+      "fix": "Keep process.exitCode and add an unref'd fallback timer that calls process.exit after a short grace. Alternatively destroy the global dispatcher before returning.",
+      "twin_of": "A killed verify left the previous run's `last_verify`, which the log then printed as this run's reason"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs (scaffold branch: slotRow(loadState(...)) before verify)",
+      "breaking_input": "loadState returns null for a missing or corrupt state file, since runner.mjs calls it as `loadState(...) || emptyState(profile)`. The worker calls slotRow(loadState(a.stateDir, a.venture), a.slot) with no fallback.",
+      "why": "If the state file is unreadable at that moment, slotRow(null, ...) throws a TypeError outside the verify try/catch. The attempt dies after scaffold already created provider resources, and the retry creates them again. This repeats the second-order bug the change was meant to fix.",
+      "fix": "Fall back to `loadState(...) || {}` and to ctx.resources. Catch a read failure and verify on the merged list.",
+      "twin_of": "`typeof null === \"object\"` let `\"slots\": null` past the state shape guard into a TypeError -> every `typeof x === \"object\"` guard in the lane"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs FILES (users.src line)",
+      "breaking_input": "The workflow line is `docker run ... \"${USERS}\" > users.src 2>/dev/null || \\ docker run ... \"${USERS_DIRECT}\" > users.src`. launch_ops.user_ids() succeeds with an empty set, or the first command fails midway after truncating users.src. On a failure the `>` has already truncated the file, and the fallback overwrites it.",
+      "why": "An empty users.src with exit 0 passes the `test -s` style checks, since only counts.src is tested. COPY then loads zero users, and a table with foreign keys to auth.users fails on restore, or the drill passes against a dataset with no users. The `2>/dev/null` on a command whose failure decides the fallback also hides the reason. A failed dump is not distinguished from a missing function.",
+      "fix": "Add `test -s users.src` after the fallback, and drop `2>/dev/null` or capture it to a log. Distinguish 'function missing' from other errors.",
+      "twin_of": "shell-string rule: 2>/dev/null on a command whose failure matters"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs SCRATCH constant",
+      "breaking_input": "SCRATCH contains single quotes (`as 'select null::uuid'`) and is interpolated inside double quotes into `sh -c '...' \"${SCRATCH}\"` in a generated YAML. The comment asserts there is no dollar sign. The statement is passed as $0 to an inner single-quoted sh -c.",
+      "why": "It works only because the value travels as a separate argument. But the repo rule says an embedded program in a shell string carries no apostrophes, and SCRATCH has four of them. Any edit that adds a `$` or a backtick, and any YAML renderer that quotes the line, breaks the drill silently. The workflow `run: |` is also never parsed in the tests, which check only the digest and the fake conclusions.",
+      "fix": "Move the SQL to a committed .sql file in the workflow's repo, or pass it via a heredoc/stdin. Add a test that parses the generated run block with a shell syntax check.",
+      "twin_of": "A program embedded in a shell string carries no apostrophes and no single quotes"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs scaffold (parents check)",
+      "breaking_input": "The head commit of the launch-owned probe branch has parents [base] after main advances through a merge commit, or the branch has two commits. The check `parents.includes(base)` tests only the immediate parent of the head.",
+      "why": "A branch with two commits that includes the base two levels down is judged stale and force-moved, discarding the commits. A force-move can also run while a PR is open, and the PUT after it rewrites the PR head. A kill between the PATCH and the PUT is recoverable, but a rate-limited PUT after a force-move leaves a branch with no probe commit.",
+      "fix": "Use the compare API (base...branch) to decide behind/ahead, and only force-move when the branch's single commit is launch's.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign"
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs probe (liveHsts, fromCache restart)",
+      "breaking_input": "A failing cached answer sets url to startNew=on and `continue`s. On the next iteration the fetch happens after `wait(30000)`, and the loop caps at 9 iterations. When the scan restarts, the first startNew answer is status DNS, so an iteration is consumed per poll. liveHsts is also called once per loop iteration while any endpoint is blind.",
+      "why": "The worst case grows: a cached failure plus polling can exceed the 300 s slot timeout the comment promises, and liveHsts repeats a venture GET at every READY answer. The venture request is also sent to the host with `redirect: manual`, so a 301 to http or www without HSTS reads as 'no', and a status of 403 from the host is not distinguished.",
+      "fix": "Compute the deadline from the slot timeout, and reduce the poll count after a restart. Cache the liveHsts result per probe. Require the live response status to be 2xx/3xx.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs probe (res.text())",
+      "breaking_input": "The homepage body streams slowly or is huge: `await res.text()` buffers the whole body, and only then slices to 500000.",
+      "why": "The bound is applied to the result, not to the read. The earlier code cancelled the body on purpose, and the new path drops that for the success case. A large or slow response ties the probe up until the slot timeout.",
+      "fix": "Read through the stream reader with a byte cap and cancel at the limit.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing -> every bounded read: bound the READ, not the result"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs probe (nonce regex)",
+      "breaking_input": "A page serves `<script nonce='abc'>` with single quotes, an unquoted nonce, or `<script\\nnonce=...>` with a newline before the attribute. The regex `\\snonce=\"([^\"]*)\"` handles only double quotes. The reverse also holds: `<script data-nonce=\"X\">` matches `\\snonce=`? No, but `<script type=\"x\" nonce=\"VALID\"` inside an attribute value of another tag does match.",
+      "why": "React/Next emits double quotes, but the check is an HTML regex over tags: a script tag in a comment or in a string counts as a tag, and a valid page with a single-quoted attribute fails. Also `<script` matches `<scriptfoo`? The `\\b` rules that out, but `<script>` inside an inline JSON blob is counted as a script that needs a nonce.",
+      "fix": "Parse attributes with a small tokenizer, strip comments and CDATA, and accept both quote styles.",
+      "twin_of": "Import regexes assumed whitespace ... every regex over source code: minified syntax, comments, template literals"
+    },
+    {
+      "id": "B13",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:129-133 (--again) and runAttempt:360",
+      "breaking_input": "`apply probe --again` run twice at once, or an --again against a slot whose row is verified when read outside the lock but another apply takes it to applying under the lock. The first check `row.state !== \"verified\"` reads state outside the lock; inside the lock the code accepts `prev.state === \"verified\" && opts.again` and continues for any prev state.",
+      "why": "Inside the lock, the --again check is only the no-op bypass; the state precondition and the gate refusal are not repeated. If prev is `failed` or `applying`, a plain run would take the same path, but `slot.gate` was read from the registry outside the lock. A concurrent change in state is validated on one read and used on another.",
+      "fix": "Re-assert `prev.state === \"verified\"` under the lock when opts.again is set, and refuse otherwise.",
+      "twin_of": "`verify` read the slot's provider, attempt and adapter check outside the lock, then ran under it -> validate one read, use another, across a lock boundary"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs vc() / nextPreset",
+      "breaking_input": "The Vercel API answers a 3xx for /v9/projects/<name>, and ctx.fetch follows redirects with the Bearer header. The new vc() sends the credential header and does not set `redirect: \"manual\"`. The same applies to the vc added in supabase-auth.mjs via call().",
+      "why": "This is a credential-carrying call whose redirect follows an unchecked host. The prior defects list records exactly this for Razorpay. The new Vercel and PageSpeed paths repeat it, so the ctx.fetch allowlist is checked once on the first URL only.",
+      "fix": "Pass redirect: \"manual\" on every authenticated call, and treat a 3xx as an error.",
+      "twin_of": "The Razorpay calls carrying the Basic key pair followed redirects -> every call with a credential header: is a redirect followed?"
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs probe (PageSpeed key in query string)",
+      "breaking_input": "PAGESPEED_API_KEY is appended to the PageSpeed URL as a `key=` query parameter. A failed fetch whose error message includes the URL, or a runner log that prints `${PAGESPEED}?${q}` on a non-2xx, carries the key.",
+      "why": "The ADR says no reason, evidence or log carries it, but only the happy-path tests check this. The error text here is `pagespeed unreachable`, but other paths (`r.status` reasons or ctx.fetch's own host-allowlist and redirect errors) may quote the URL. The key's shape is not validated, so a value with `&` or `#` injects extra parameters (for example a second `url=`), and unlike the other env keys it is not checked for CR/LF.",
+      "fix": "Validate the key shape, for example /^[A-Za-z0-9_-]{20,60}$/, before use. Scrub the URL from every error and log line.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included -> every adapter that builds an auth header from ctx.env"
+    }
+  ]
+}
