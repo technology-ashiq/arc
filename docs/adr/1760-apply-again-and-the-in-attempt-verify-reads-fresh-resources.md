@@ -23,6 +23,9 @@ Three defects came out of the first real Phase 01 to 03 runs on `arc-sandbox`:
   state, where a plain apply already runs it. It is also refused for a gated slot: a re-run must neither reuse nor
   re-ask an owner's gate decision.
 - The worker hands verify a ctx whose `resources` are re-read from state after scaffold.
+- The verify-mode worker sets `process.exitCode` and lets the loop drain instead of calling `process.exit`: on Windows,
+  exiting while a provider's keep-alive socket closed aborted node in libuv (0xC0000409) after `last_verify` was saved,
+  and the runner read that as no answer (payment-test failed three runs in a row; zero after the change).
 - `payment-test` verify stands on the newest recorded order and requires every recorded id to be an order id.
   Teardown still lists every one.
 

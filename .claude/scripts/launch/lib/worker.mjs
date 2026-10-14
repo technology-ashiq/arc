@@ -76,10 +76,10 @@ if (a.mode === "verify") {
   clearTimeout(timer);
   const ok = !!(v && v.ok === true && typeof v.answerer === "string" && v.answerer);
   save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : (v && v.reason) || "verify:no answerer named" } });
-  process.exit(ok ? 0 : 1);
-}
-
-try {
+  // No process.exit here: on Windows, exiting while a provider's keep-alive socket is closing aborts node in libuv
+  // (0xC0000409), and the runner read the crash as no answer though last_verify was saved. The loop drains instead.
+  process.exitCode = ok ? 0 : 1;
+} else try {
   const out = await mod.scaffold(ctx);
   save({ state: "applied", files: (out && out.files) || [], queued: ctx.queued });
   // The in-attempt verify sees what this scaffold just reported: the ctx was built before it ran, so verify on that
