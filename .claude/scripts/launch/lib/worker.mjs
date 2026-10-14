@@ -1,8 +1,8 @@
 // One attempt of one slot, run as a child of the runner so the slot timeout is a real kill (ADR-1718).
 // It persists every reported resource BEFORE the adapter continues, so whatever kills this process, the record of
 // what exists outlives it. Exit: 0 verified · 1 failed (reason in state) · 5 a sensitive action awaits the owner.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { join, resolve, dirname } from "node:path";
 import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
@@ -78,24 +78,35 @@ const ctx = makeCtx({
 if (a.mode === "verify") {
   // Every answer ctx.fetch receives, in order, with the inputs verify ran on: the probe is replayed from exactly these.
   const exchanges = [];
-  if (recordDir) {
+  // A raw record holds live keys and cookies: it is written only outside every git work tree (attack 9eaf4f1 B1), and
+  // a URL never keeps a `key` query value (B2).
+  const insideRepo = (dir) => { for (let d = resolve(dir); ; d = dirname(d)) { if (existsSync(join(d, ".git"))) return true; if (dirname(d) === d) return false; } };
+  const recording = recordDir && !insideRepo(recordDir);
+  if (recordDir && !recording) process.stderr.write(`worker: ARC_LAUNCH_RECORD ${recordDir} is inside a git work tree; nothing is recorded\n`);
+  if (recording) {
     const real = globalThis.fetch;
+    const urlOf = (u) => { try { const x = new URL(String(u)); x.searchParams.delete("key"); return x.href; } catch { return "(not a URL)"; } };
     globalThis.fetch = async (u, init = {}) => {
-      const res = await real(u, init);
+      let res;
+      // A request that never answered is recorded too, so the replay throws where the run threw (B3).
+      try { res = await real(u, init); } catch (e) { exchanges.push({ method: String(init.method || "GET"), url: urlOf(u), error: String((e && e.name) || "Error") }); throw e; }
       let body = "";
       try { body = await res.clone().text(); } catch { body = ""; }
       const headers = {};
       for (const [k, val] of res.headers) if (k !== "set-cookie") headers[k] = val;
-      exchanges.push({ method: String(init.method || "GET"), url: String(u), status: res.status, headers, setCookie: typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [], body });
+      exchanges.push({ method: String(init.method || "GET"), url: urlOf(u), status: res.status, headers, setCookie: typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [], body });
       return res;
     };
   }
   let v;
   try { v = await mod.verify(ctx); } catch (e) { v = { ok: false, reason: e.code ? `refused:${e.code}` : `error:${e.message}` }; }
   clearTimeout(timer);
-  if (recordDir) {
-    mkdirSync(recordDir, { recursive: true });
-    writeFileSync(join(recordDir, `${a.slot}.json`), JSON.stringify({ slot: a.slot, provider: row.id, recorded_at: new Date().toISOString(), profile, resources: prior.resources, upstream, env_keys: keys, exchanges, answer: v }, null, 1));
+  // A record that cannot be written never costs the probe its answer (B4).
+  if (recording) {
+    try {
+      mkdirSync(recordDir, { recursive: true });
+      writeFileSync(join(recordDir, `${a.slot}.json`), JSON.stringify({ slot: a.slot, provider: row.id, recorded_at: new Date().toISOString(), profile, resources: prior.resources, upstream, env_keys: keys, exchanges, answer: v }, null, 1));
+    } catch (e) { process.stderr.write(`worker: the record was not written (${(e && e.code) || "error"})\n`); }
   }
   const ok = !!(v && v.ok === true && typeof v.answerer === "string" && v.answerer);
   save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : (v && v.reason) || "verify:no answerer named" } });

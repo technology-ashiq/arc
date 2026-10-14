@@ -26,14 +26,15 @@ const FIXTURE_ENV = {
 const env = Object.fromEntries(mod.envContract().map((k) => [k, FIXTURE_ENV[k] || ""]));
 
 // The clock the recording was made at, and waits that do not wait: the answers are already in.
-const T = Date.parse(rec.recorded_at);
+// The clock moves by each wait's length, so a budget or deadline loop ends as it would have (attack 9eaf4f1 B5).
+let T = Date.parse(rec.recorded_at);
 const RealDate = Date;
 globalThis.Date = class extends RealDate {
   constructor(...a) { super(...(a.length ? a : [T])); }
   static now() { return T; }
 };
 const realTimeout = globalThis.setTimeout;
-globalThis.setTimeout = (fn, ms, ...rest) => realTimeout(fn, 0, ...rest);
+globalThis.setTimeout = (fn, ms, ...rest) => realTimeout(() => { T += Math.max(0, Number(ms) || 0); fn(...rest); }, 0);
 
 // A request is its method and URL; the PageSpeed key is the one query value a recording never holds.
 const keyOf = (method, url) => {
@@ -49,6 +50,8 @@ globalThis.fetch = async (input, init = {}) => {
   if (i < 0) { unmatched.push(k); return new Response("not in the recording", { status: 599 }); }
   used.add(i);
   const x = rec.exchanges[i];
+  // A request that never answered during the recording throws here too (B3).
+  if (x.error) throw new TypeError(`fetch failed (recorded ${x.error})`);
   const h = new Headers(x.headers || {});
   h.delete("content-encoding");
   h.delete("content-length");

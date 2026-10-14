@@ -29,6 +29,8 @@ for (const f of files) {
     if (!/@sandbox\.automemory\.ai$/.test(m[0]) && m[0] !== "owner@example.invalid") add("an e-mail address");
   if (/(?<!technology-)ashiq/i.test(s)) add("the owner's name");
 }
+// A directory with no recording is not a clean one (attack 9eaf4f1 B8).
+if (!files.length) findings.push(`${dir}: no recording to scan`);
 for (const x of findings) console.log(x);
 console.log(`scan: files=${files.length} findings=${findings.length}`);
 process.exit(findings.length ? 1 : 0);

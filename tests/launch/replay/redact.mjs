@@ -15,7 +15,11 @@ if (!rawDir || !outDir || !envFile || !slots.length) { console.error("usage: red
 const mask = (s, keep = 0) => s.slice(0, keep) + s.slice(keep).replace(/[a-f]/g, "a").replace(/[g-z]/g, "x").replace(/[A-Z]/g, "X").replace(/[0-9]/g, "0");
 
 const secrets = readFileSync(envFile, "utf8").split(/\r?\n/).map((l) => l.replace(/^export\s+/, "")).filter((l) => /^[A-Z][A-Z0-9_]*=/.test(l))
-  .map((l) => l.slice(l.indexOf("=") + 1).trim().replace(/^["']|["']$/g, "")).filter((v) => v.length >= 8);
+  .map((l) => l.slice(l.indexOf("=") + 1).trim().replace(/^["']|["']$/g, "")).filter((v) => v.length >= 8)
+  // Longest first, so a secret inside a longer one is never half-replaced (attack 9eaf4f1 L12).
+  .sort((x, y) => y.length - x.length);
+// A value appears raw, JSON-escaped once (in the record) and twice (inside a recorded body string) (B7).
+const forms = (v) => [...new Set([v, JSON.stringify(v).slice(1, -1), JSON.stringify(JSON.stringify(v).slice(1, -1)).slice(1, -1)])];
 
 const map = new Map();
 const counters = {};
@@ -94,7 +98,8 @@ for (const slot of slots) {
   for (const x of rec.exchanges) {
     let b;
     try { b = JSON.parse(x.body); } catch { continue; }
-    const path = new URL(x.url).pathname;
+    let path = "";
+    try { path = new URL(x.url).pathname; } catch { path = ""; }
     if (/^\/v1\/projects\/?$/.test(path) && Array.isArray(b)) b = b.filter((p) => p && (ventureRefs.has(p.id) || ventureRefs.has(p.ref)));
     if (/^\/domains\/?$/.test(path) && b && Array.isArray(b.data)) b.data = b.data.filter((d) => d && d.name === domain);
     x.body = JSON.stringify(scrub(b));
@@ -103,7 +108,7 @@ for (const slot of slots) {
   // The project ref is read from what launch recorded, never guessed, and replaced before any generic rule runs.
   const refs = new Set([...ventureRefs].map((r) => `${r}.supabase.co`));
   for (const r of refs) s = s.split(r.slice(0, 20)).join(FIXTURE_REF);
-  for (const v of secrets) s = s.split(v).join(stable(v, () => mask(v)));
+  for (const v of secrets) for (const f of forms(v)) s = s.split(f).join(mask(f));
   for (const [re, fn] of RULES) s = s.replace(re, fn);
   outs[slot] = { s, refs: [...refs].map((r) => r.slice(0, 20)) };
 }
@@ -115,7 +120,7 @@ for (const o of Object.values(outs)) for (const [orig, to] of pairs) o.s = o.s.s
 // The gate: nothing private survives in any file, or nothing is written.
 const leaks = [];
 for (const [slot, { s, refs }] of Object.entries(outs)) {
-  for (const v of secrets) if (s.includes(v)) leaks.push(`${slot}: an env-file secret value`);
+  for (const v of secrets) if (forms(v).some((f) => s.includes(f))) leaks.push(`${slot}: an env-file secret value`);
   for (const r of refs) if (s.includes(r)) leaks.push(`${slot}: the Supabase project ref`);
   for (const orig of map.keys()) if (s.includes(orig)) leaks.push(`${slot}: an original value the map replaced (${orig.length} chars)`);
   if (/@gmail\.com/i.test(s)) leaks.push(`${slot}: a gmail address`);
