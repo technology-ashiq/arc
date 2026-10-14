@@ -62,7 +62,7 @@ const cases = {
 
   /** An ordinary row carrying NONE of the four is untouched — this lands as one diff, not a rewrite. */
   untouched() {
-    const ordinary = { driver: "claude-code", tier: "balanced-workhorse", fallback: ["codex"], max_attempts: 3, max_wall_ms: 3600000, max_cost: "unmetered" };
+    const ordinary = { driver: "claude-code", tier: "balanced-workhorse", fallback: ["codex"], max_attempts: 3, max_wall_ms: 3600000, max_cost: 1000, max_cost_currency: "USD" };
     const faults = rowFaults("commit-msg-draft", ordinary);
     console.log(`ordinary_faults=${faults.length}`);
     // ...but a PARTIAL row must not sneak through by not being a runtime row.

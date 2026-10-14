@@ -1,0 +1,74 @@
+{
+  "door": "http://127.0.0.1:47754/api/pnl",
+  "status": 200,
+  "overhead_lines": 2,
+  "engine_lines": [
+    {
+      "id": "01M4X16K73W8VD4KREN17FQEQ3",
+      "amount": 13,
+      "currency": "USD",
+      "label": "engine face-ask claude-code harness-reported",
+      "run_ref": "01M4X16H6PGXKW0RF5718FXDE7",
+      "traced": true,
+      "basis": "harness-reported",
+      "process": "face-ask"
+    },
+    {
+      "id": "01M4X1EXHZS6JB171Z1C5ZDZRA",
+      "amount": 1,
+      "currency": "USD",
+      "label": "engine face-ask generic-api provider-reported",
+      "run_ref": "01M4X1EV8J98BA7NM0CNAXK5BB",
+      "traced": true,
+      "basis": "provider-reported",
+      "process": "face-ask"
+    }
+  ],
+  "engine_positive": 2,
+  "untraced": 0,
+  "raw": {
+    "mode": "live",
+    "month": null,
+    "model": {
+      "engine": "scan",
+      "mode": "real",
+      "month": null,
+      "ventureFilter": null,
+      "ventures": [],
+      "overhead": {
+        "venture": "arc",
+        "lines": [
+          {
+            "id": "01M4X16K73W8VD4KREN17FQEQ3",
+            "ts": "2026-10-14T16:31:45+05:30",
+            "source": "measured",
+            "amount": 13,
+            "currency": "USD",
+            "label": "engine face-ask claude-code harness-reported"
+          },
+          {
+            "id": "01M4X1EXHZS6JB171Z1C5ZDZRA",
+            "ts": "2026-10-14T16:36:18+05:30",
+            "source": "measured",
+            "amount": 1,
+            "currency": "USD",
+            "label": "engine face-ask generic-api provider-reported"
+          }
+        ]
+      },
+      "mrr": {
+        "byVenture": {},
+        "transitions": [],
+        "asOfMonth": null
+      },
+      "needsYou": [],
+      "counts": {
+        "revenue": 0,
+        "charges": 0,
+        "refunds": 0,
+        "costs": 2
+      },
+      "refundLinks": []
+    }
+  }
+}
