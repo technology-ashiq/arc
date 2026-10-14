@@ -12,6 +12,9 @@ const MIGRATION = [
   "do $$ begin if not exists (select 1 from pg_roles where rolname = 'launch_anon') then create role launch_anon nologin nobypassrls; end if; end $$",
   "grant usage on schema public to launch_anon",
   "grant select on public.launch_probe to launch_anon",
+  // Postgres 16 gives a CREATEROLE creator ADMIN on the new role but not SET, so verify's `set local role launch_anon`
+  // was refused on the first real run (receipt 01M4Y1XF8F1NDV77ADNZ5H2NKG) until the owner grants the role to itself.
+  "grant launch_anon to current_user",
 ];
 const PROJECT_ID = /^[a-z0-9-]{4,60}$/;
 const HOST = /^[a-z0-9-]{1,63}(?:\.[a-z0-9-]{1,63})*\.neon\.tech$/;
