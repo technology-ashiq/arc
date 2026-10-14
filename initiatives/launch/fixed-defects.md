@@ -132,3 +132,10 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A fix refused launch's own half-made resource as foreign** — record intent before create, adopt on intent, B1 (530c056) — *every refuse-the-unrecorded guard: can launch itself leave an unrecorded resource?*
 - **One failing member re-ran the whole fleet and re-raised every incident** — per-member stamps, B2 (530c056) — *every batch stamp: is success all-or-nothing when the members are independent?*
 - **A ranking key and its printed value disagreed** — one validated value feeds both, L2 (530c056) — *every sort key that is also displayed*
+- **Existence checked on one target set, the write covered another** — a preview-only env name collided with launch's production+preview POST after the Supabase config was already patched, B1 (913d01d) — *every check-then-create: does the create's scope equal the check's?*
+- **launch's own credential was never refreshed** — any SMTP host read as the owner's, so a rotated key never reached Supabase, B2 (913d01d) — *every "present = owner's" guard: can launch itself be the one present?*
+- **Teardown named a variable by key, not by the id launch made**, B3 (913d01d) — *every teardown step: does it name the resource launch created, or anything with that name?*
+- **"Did I push" inferred from two head reads** — commitFiles now says it, B4 (913d01d) — *every inferred fact a callee already knows*
+- **A worker with no hard exit could hold the runner to the slot timeout**, B5; **a state re-read could throw on an unreadable file**, B6; **--again's precondition was checked outside the lock**, B13 (913d01d)
+- **A process exit code was read as the answer after the answer was saved** — Windows libuv abort after the save; the runner now trusts the cleared-then-saved last_verify, B1 (5ce0104) — *every child result: is the result the file it wrote, or how it died?*
+- **--again keyed on the gate string only** — an owner-approval slot is refused too, B3 (5ce0104)

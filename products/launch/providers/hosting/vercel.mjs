@@ -112,7 +112,10 @@ export async function scaffold(ctx) {
   // as found, and the exit plan leaves it alone. One this slot created on an earlier attempt stays its own.
   let found = await vc(ctx, "GET", `/v9/projects/${name}`, undefined, [404]);
   let made = false;
-  if (found.status === 404) { found = await vc(ctx, "POST", "/v11/projects", { name, framework: "nextjs", gitRepository: { type: "github", repo: full } }); made = true; }
+  // No framework preset: until frontend lands an app, a production build of the repo is a static site that builds
+  // READY. A Next preset fails every build of a commit with no package.json (NEXT_NO_VERSION), and release's receipt
+  // is READY only. frontend sets the preset just before it commits the shell (ADR-1755).
+  if (found.status === 404) { found = await vc(ctx, "POST", "/v11/projects", { name, framework: null, gitRepository: { type: "github", repo: full } }); made = true; }
   const project = own(found.body, full);
   const pkind = made || before("vercel-project", project.id) ? "vercel-project" : "vercel-project-found";
   ctx.report({ kind: pkind, id: project.id });
