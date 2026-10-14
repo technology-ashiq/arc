@@ -147,7 +147,10 @@ async function mint(ctx, ref, key, who) {
   const email = probeEmail(ctx, who);
   await admin(ctx, ref, key, "POST", "/users", { email, email_confirm: true }, [422]);
   const link = await admin(ctx, ref, key, "POST", "/generate_link", { type: "magiclink", email });
-  const hash = link.body && link.body.properties && typeof link.body.properties.hashed_token === "string" ? link.body.properties.hashed_token : "";
+  // GoTrue answers the token at the top level today, inside `properties` on older builds: either, never both read loosely.
+  const b = link.body && typeof link.body === "object" ? link.body : {};
+  const from = b.properties && typeof b.properties === "object" ? b.properties : b;
+  const hash = typeof from.hashed_token === "string" ? from.hashed_token : "";
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(hash)) throw new Error("supabase minted no usable magic-link token");
   return { email, hash };
 }

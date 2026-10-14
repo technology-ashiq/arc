@@ -126,7 +126,13 @@ export async function apply(opts, log = console.log) {
       log(`${slot.id}: skipped (${entry.reason})`);
       return EXIT.OK;
     }
-    if (row.state === "verified") {
+    // --again re-applies a VERIFIED slot whose adapter changed, as a new attempt with its own receipt (ADR-1760). Never a
+    // gated slot: a re-run must not reuse or re-ask an owner's gate decision.
+    if (opts.again && row.state !== "verified") throw new LaunchError("REFUSED", `${slot.id} is ${row.state}; --again re-applies a verified slot only (a plain apply runs this one)`);
+    if (opts.again && slot.gate && slot.gate !== "none") throw new LaunchError("REFUSED", `${slot.id} sits behind ${slot.gate}; --again never re-runs a gated slot`);
+    // An owner approval is a gate too (attack 5ce0104 B3).
+    if (opts.again && slot.approval === true) throw new LaunchError("REFUSED", `${slot.id} needs the owner's approval; --again never re-runs it`);
+    if (row.state === "verified" && !opts.again) {
       log(`${slot.id}: verified -- no-op (receipt ${row.receipt})`);
       return EXIT.OK;
     }
@@ -340,7 +346,9 @@ function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
   }
   const lv = slotRow(loadState(P.stateDir, slug), id).last_verify;
   const timedOut = r.error && r.error.code === "ETIMEDOUT";
-  const good = r.status === 0 && !!lv && lv.ok === true;
+  // The answer is last_verify, cleared above, so a saved one is this probe's. The exit code is not the answer: on Windows
+  // node can abort in libuv AFTER the worker saved it (0xC0000409), and that read as no answer (attack 5ce0104 B1).
+  const good = !timedOut && !!lv && lv.ok === true;
   const reason = good ? null : timedOut ? "timeout" : lv && lv.reason ? lv.reason : `worker ended without an answer (${r.signal ? `signal ${r.signal}` : `exit ${r.status}`})`;
   if (!lv) saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: { ok: false, at: new Date().toISOString(), answerer: null, reason } }));
   emit("run.completed", { slot: id, provider: prow.id, honesty_class: profile.honesty_class, attempt: r0.attempt || 0, mode: "verify", outcome: good ? "ok" : "fail" }, slug, log);
@@ -353,7 +361,9 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
     return underLock(P, slug, () => {
       let s = loadState(P.stateDir, slug, { onFallback: log }) || emptyState(profile);
       const prev = slotRow(s, slot.id);
-      if (prev.state === "verified") { log(`${slot.id}: verified -- no-op (receipt ${prev.receipt})`); return EXIT.OK; }
+      if (prev.state === "verified" && !opts.again) { log(`${slot.id}: verified -- no-op (receipt ${prev.receipt})`); return EXIT.OK; }
+      // Re-checked under the lock: the slot may have left verified since apply() read it (attack 913d01d B13).
+      if (opts.again && prev.state !== "verified") { log(`${slot.id} is ${prev.state}; --again re-applies a verified slot only`); return EXIT.REFUSED; }
       // An attempt left `applying` belonged to a runner that died holding the lock: it never wrote its receipt, so
       // the attempt is closed here, as failed, before a new one starts -- every attempt ends with exactly one receipt.
       if (prev.state === "applying" && prev.attempt && !prev.receipt) {

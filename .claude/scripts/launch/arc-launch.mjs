@@ -33,6 +33,7 @@ export function parseArgs(argv) {
     const a = argv[i];
     if (a === "--vet") { o.vet = true; continue; }
     if (a === "--all") { o.all = true; continue; }
+    if (a === "--again") { o.again = true; continue; }
     if (a === "--plan") { o.plan = true; continue; }
     if (a === "--public-only") { o.publicOnly = true; continue; }
     if (VALUE_FLAGS[a]) {

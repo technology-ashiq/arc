@@ -1,0 +1,42 @@
+# arc-sandbox live transcript (2026-10-13T23:52:00.023Z)
+# hostnames and status/header lines only; the per-request CSP nonce is replaced
+GET https://sandbox.automemory.ai/ -> HTTP 200
+  content-type: text/html; charset=utf-8
+  strict-transport-security: max-age=63072000; includeSubDomains; preload
+  content-security-policy: default-src 'self'; script-src 'self' 'nonce-<per-request>' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  x-frame-options: DENY
+  x-content-type-options: nosniff
+  referrer-policy: strict-origin-when-cross-origin
+  permissions-policy: camera=(), microphone=(), geolocation=()
+GET https://sandbox.automemory.ai/auth/confirm -> HTTP 400
+  content-type: application/json
+  strict-transport-security: max-age=63072000; includeSubDomains; preload
+  content-security-policy: default-src 'self'; script-src 'self' 'nonce-<per-request>' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  x-frame-options: DENY
+  x-content-type-options: nosniff
+  referrer-policy: strict-origin-when-cross-origin
+  permissions-policy: camera=(), microphone=(), geolocation=()
+GET https://sandbox.automemory.ai/api/me -> HTTP 401
+  content-type: application/json
+  strict-transport-security: max-age=63072000; includeSubDomains; preload
+  content-security-policy: default-src 'self'; script-src 'self' 'nonce-<per-request>' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  x-frame-options: DENY
+  x-content-type-options: nosniff
+  referrer-policy: strict-origin-when-cross-origin
+  permissions-policy: camera=(), microphone=(), geolocation=()
+GET https://sandbox.automemory.ai/checkout -> HTTP 200
+  content-type: text/html; charset=utf-8
+  strict-transport-security: max-age=63072000; includeSubDomains; preload
+  content-security-policy: default-src 'self'; script-src 'self' 'nonce-<per-request>' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  x-frame-options: DENY
+  x-content-type-options: nosniff
+  referrer-policy: strict-origin-when-cross-origin
+  permissions-policy: camera=(), microphone=(), geolocation=()
+GET https://sandbox.automemory.ai/privacy -> HTTP 404
+  content-type: text/html; charset=utf-8
+  strict-transport-security: max-age=63072000; includeSubDomains; preload
+  content-security-policy: default-src 'self'; script-src 'self' 'nonce-<per-request>' 'strict-dynamic' https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  x-frame-options: DENY
+  x-content-type-options: nosniff
+  referrer-policy: strict-origin-when-cross-origin
+  permissions-policy: camera=(), microphone=(), geolocation=()

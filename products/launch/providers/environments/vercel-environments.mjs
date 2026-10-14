@@ -96,6 +96,14 @@ export async function scaffold(ctx) {
     const head = await gh(ctx, "GET", `/repos/${full}/commits/${encodeURIComponent(BRANCH)}`);
     if (!isOurs(ctx, head.body && head.body.commit && head.body.commit.message))
       throw refuse("FOREIGN_BRANCH", `${full} already has a branch ${BRANCH} launch did not make; it is not reused`);
+    // The preview must build main's CURRENT code: a probe commit sitting on an older main previews an app the venture
+    // no longer has (the first real run built an empty repo and failed). Move the branch to main, then lay the probe
+    // file on top again; a kill between the two lands in the at-main case above (ADR-1752).
+    const parents = list(head.body && head.body.parents).map((x) => String(x && x.sha));
+    if (!parents.includes(base)) {
+      await gh(ctx, "PATCH", `/repos/${full}/git/refs/heads/${BRANCH}`, { sha: base, force: true });
+      await gh(ctx, "PUT", `/repos/${full}/contents/${FILE}`, { message: `environments: preview check (ADR-1728)\n\n${trailer(ctx)}`, content: b64(BODY), branch: BRANCH });
+    }
   }
   ctx.report({ kind: "github-branch", id: `${full}:${BRANCH}` });
 

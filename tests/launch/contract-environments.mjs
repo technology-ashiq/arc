@@ -49,6 +49,20 @@ switch (scenario) {
     out.verify = await adapter.verify(ctxFor());
     out.teardown = (await adapter.teardown(ctxFor())).steps.map((s) => s.action);
     break;
+  case "main-moved": {
+    // main gained the app after the probe branch was cut: the re-run moves the branch onto main's head, so the
+    // preview builds the current code, and still opens no second PR (ADR-1752).
+    await adapter.scaffold(ctxFor());
+    const app = { sha: "c".repeat(40), message: "frontend: app", files: { "package.json": "blob" } };
+    repo().commits.push(app);
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    const line = repo().branches["arc/preview-check"] || [];
+    out.branchBase = line.length ? line[0].sha === app.sha : false;
+    out.branchCommits = line.length;
+    out.prs = repo().pulls.length;
+    out.verify = await adapter.verify(ctxFor());
+    break;
+  }
   case "foreign-branch":
     repo().branches = { "arc/preview-check": [repo().commits[0], { sha: "b".repeat(40), message: "owner work", files: {} }] };
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));

@@ -22,7 +22,8 @@ const restore = await import(pathToFileURL(join(PRODUCT, rRow.adapter)).href);
 const FULL = "technology-ashiq/arc-sandbox";
 const github = makeGithub({
   repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }], secrets: scenario === "no-db-url" ? [] : ["SUPABASE_DB_URL"] }],
-  jobConclusions: { "restore-red": { restore: "failure" }, "backup-red": { dump: "failure", restore: "skipped" } }[scenario] || {},
+  stepLag: scenario.startsWith("step-lag"),
+  jobConclusions: { "step-lag-red": { restore: "failure" }, "restore-red": { restore: "failure" }, "backup-red": { dump: "failure", restore: "skipped" } }[scenario] || {},
 });
 globalThis.fetch = github.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-backup-"));
@@ -68,6 +69,15 @@ switch (scenario) {
     out.teardown = (await backup.teardown(bCtx())).steps.map((s) => s.action).concat((await restore.teardown(rCtx())).steps.map((s) => s.action));
     break;
   }
+  case "digest-moved":
+    // backup wrote an earlier drill file before this one: its digest is still in the slot, oldest first.
+    bState.push({ kind: "drill-digest", id: "0".repeat(64) });
+    await backup.scaffold(bCtx());
+    await restore.scaffold(rCtx());
+    out.rVerify = await restore.verify(rCtx());
+    break;
+  case "step-lag":
+  case "step-lag-red":
   case "restore-red":
   case "backup-red":
   case "no-db-url":
