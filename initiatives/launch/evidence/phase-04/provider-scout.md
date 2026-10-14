@@ -9,9 +9,8 @@ ADR-1719), the slot's `run.completed` receipt on the spine, the outside answerer
 (2026-10-14, main clone, exit 0), and that verify's date. A row is vetted only after the owner's decision.recorded
 on the one approval.requested that cites this file; its digest must still match the adapter at that moment.
 
-Providers that ran live: **31** of 36 rows. Not here, and not vetted by this record:
+Providers that ran live: **32** of 36 rows. Not here, and not vetted by this record:
 - `cloudflare-registrar` (domain, candidate) -- the slot is a named ABSENT
-- `neon` (database, candidate) -- no live run through this row
 - `dodo` (payment-test, candidate) -- no live run through this row
 - `stripe` (payment-test, blocked) -- no live run through this row
 - `arc-legal` (legal-pages, candidate) -- the slot is a named ABSENT
@@ -29,6 +28,7 @@ Providers that ran live: **31** of 36 rows. Not here, and not vetted by this rec
 | nextjs-shell | frontend | `providers/frontend/nextjs-shell.mjs` | `c6340bd5db436b4746d49425cf4594f817176aeb23594f70495cf7d48cfd0da7` | 01M4VRMGF33AZ9851JTTTT3M8W | sandbox.automemory.ai + www.googleapis.com | 2026-10-14 |
 | next-route-handlers | backend | `providers/backend/next-route-handlers.mjs` | `956a77f41fcaf262b5464d38f31baadfc69740415ae97d8582632a54c0f64404` | 01M4VGEA8XM74N19WXTGZ5Q7DF | sandbox.automemory.ai | 2026-10-14 |
 | supabase | database | `providers/database/supabase.mjs` | `213c746fedcf5ada453f201e18c55a5a283e8c9d48da00acc2216262d808baa0` | 01M4RYHT0EJ3JEMSGKS7C900EP | api.supabase.com + <ref>.supabase.co | 2026-10-14 |
+| neon | database | `providers/database/neon.mjs` | `414c62424fe252ac5aee7c3a4077eb593088e1037760e377d34b4311c20e02b0` | 01M4Y295RKMHSHBS52T7DE9Q08 | console.neon.tech + the project pooler (RLS: owner 1 row, launch_anon 0; vet run on a private state copy, the sandbox stays on supabase; digest is the adapter with its role-grant fix, which lands in the REQ-08 PR on its own) | 2026-10-15 |
 | drizzle | orm | `providers/orm/drizzle.mjs` | `4d1e14f76d36a4fa6d6cfaf132a6440f9783f00dc11b65367474e85dca7c71a3` | 01M4VGHHQKSFA4Z7YCDYS9RCFT | api.github.com | 2026-10-14 |
 | resend | email-transactional | `providers/email-transactional/resend.mjs` | `7ae5de308b80495d616964cb7f3c0d30acbba7865e62095fc2b92d6a1d4eb4bf` | 01M4S0YBSCTPGC0EW3VA9SBN3P | api.resend.com + dns.google + cloudflare-dns.com | 2026-10-14 |
 | supabase-auth | auth | `providers/auth/supabase-auth.mjs` | `846ff2ff244e027f3b2e4fd87afc746b17358d22d5b655d0b03c29ccd4cec68e` | 01M4VNR44T2N5GQ3JRMCMNYKDQ | sandbox.automemory.ai + <ref>.supabase.co | 2026-10-14 |
