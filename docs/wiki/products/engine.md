@@ -189,7 +189,7 @@ diff: the list of exactly what changed between two versions of the files.
 
 None declared.
 
-## Scripts (48)
+## Scripts (49)
 
 - [`.claude/scripts/engine/adapters/claude-code.mjs`](../../../.claude/scripts/engine/adapters/claude-code.mjs)
 - [`.claude/scripts/engine/adapters/codex.mjs`](../../../.claude/scripts/engine/adapters/codex.mjs)
@@ -237,6 +237,7 @@ None declared.
 - [`.claude/scripts/engine/router-row.mjs`](../../../.claude/scripts/engine/router-row.mjs)
 - [`.claude/scripts/engine/schema-subset.mjs`](../../../.claude/scripts/engine/schema-subset.mjs)
 - [`.claude/scripts/engine/source-render.mjs`](../../../.claude/scripts/engine/source-render.mjs)
+- [`.claude/scripts/engine/spend-trace.mjs`](../../../.claude/scripts/engine/spend-trace.mjs)
 - [`.claude/scripts/engine/type-tagged-hash.mjs`](../../../.claude/scripts/engine/type-tagged-hash.mjs)
 - [`.claude/scripts/engine/yaml-subset.mjs`](../../../.claude/scripts/engine/yaml-subset.mjs)
 
