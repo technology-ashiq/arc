@@ -72,6 +72,20 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$status" -eq 0 ]
 }
 
+@test "REQ-04: a trial-model contract failure stops without proposing a tier change" {
+  # Bench real event 2026-10-14: trial failures filed route escalations in the owner inbox.
+  ARC_DRIVER_FAKE="$(FAKE badschema)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --trial-model haiku --root "$ARC_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"retrying once on the same tier"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"a trial proposes no tier change"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"PROPOSAL was recorded"* ]] || { echo "$output"; false; }
+  # the run itself is still on the spine, and no escalation is
+  run grep -rl '"reason":"schema"' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ] || { echo "no run receipt"; false; }
+  run grep -rl "engine-escalation" "$ARC_SPINE_ROOT/events"
+  [ "$status" -ne 0 ]
+}
+
 @test "REQ-04: fault_hint separates a driver fault from a process fault" {
   # The process is self-consistent (its eval fixture satisfies its own schema), so a bad
   # driver answer must be blamed on the DRIVER.
@@ -333,6 +347,26 @@ FAKE_CLI() { echo "$ARC_ROOT/tests/fixtures/engine/fake-claude-stream.mjs"; }
 # Does $1 hold a LINE that begins with $2? Anchored by a leading newline, in bash: grep -F would read a
 # newline inside its pattern as two patterns, one of them empty, and match everything.
 has_line() { [[ $'\n'"$1" == *$'\n'"$2"* ]]; }
+
+@test "ADR-0915: the prompt carries the output contract, and an isolated run skips user settings" {
+  local argv="$BATS_TEST_TMPDIR/iso.argv" prompt="$BATS_TEST_TMPDIR/iso.prompt"
+  # The fake answers in stream-json, so this non-stream run fails to parse; the argv and the prompt are
+  # written before that, and they are what is asserted. The run failing is not the point here.
+  ARC_DRIVER_ISOLATE=1 ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_ARGV_FILE="$argv" FAKE_CLAUDE_PROMPT_FILE="$prompt" FAKE_CLAUDE_PAUSE_MS=1 \
+    run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ -s "$argv" ] || { echo "the CLI was never reached: $output"; false; }
+  [ -s "$prompt" ] || { echo "no prompt reached the CLI: $output"; false; }
+  grep -q '"--setting-sources","project,local"' "$argv" || { echo "not isolated: $(cat "$argv")"; false; }
+  grep -q '"--strict-mcp-config"' "$argv" || { echo "MCP not isolated: $(cat "$argv")"; false; }
+  grep -q '^OUTPUT CONTRACT (JSON Schema):$' "$prompt" || { echo "no contract: $(cat "$prompt")"; false; }
+  grep -q '"required":\["commits"\]' "$prompt" || { echo "the contract is not the process schema: $(cat "$prompt")"; false; }
+  # CONTROL: without the flag the CLI gets no isolation, so the grep above was not matching something always there.
+  rm -f "$argv"
+  ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_ARGV_FILE="$argv" FAKE_CLAUDE_PAUSE_MS=1 \
+    run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ -s "$argv" ] || { echo "control never reached the CLI: $output"; false; }
+  ! grep -q -- '--setting-sources' "$argv" || { echo "isolated without being asked: $(cat "$argv")"; false; }
+}
 
 @test "stream mode: progress and live lines name each step, withhold secrets, and never forge the receipt line" {
   run node "$ARC_ROOT/tests/engine-progress-line-probe.mjs"
