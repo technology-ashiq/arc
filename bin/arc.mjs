@@ -5,13 +5,22 @@
  * A dispatcher, never a second implementation: every verb hands its arguments to a script that already
  * exists, with the package root as the arc source.
  *
- *   arc init --target claude-code|codex|opencode|skills-only [--dir DIR] [--dry-run] [--force]
+ *   arc init [--target claude-code|codex|opencode|skills-only] [--dir DIR] [--dry-run] [--force]
  *        install arc into DIR (default: the current directory) through arc-install.mjs; in a git repo whose
  *        core.hooksPath is unset, point it at the installed consumer hooks (.claude/templates/githooks).
+ *        With no --target: every verified harness at once, one version-2 manifest (ADR-2024, REQ-15). A successful
+ *        install registers DIR in ~/.arc-private/consumers.json when that directory exists (ADR-2026).
+ *   arc uninstall [--dir DIR] [--force]   remove exactly what DIR's manifest lists (REQ-18)
  *   arc doctor                 the package checks itself: Node version, its own files, and a plan for every
  *                              target. Exit 0 means this copy of arc can install.
  *   arc doctor --dir DIR       the truth of an install in DIR (placed / degraded / missing / unmanaged-conflict)
  *   arc doctor --repo [...]    main's branch protection read back (arc-doctor.mjs)
+ *   arc outdated [--dir DIR | --all]  how far DIR's install is behind this arc: tag@commit both sides, commits behind, the
+ *                              CHANGELOG sections between (exit 0 up to date · 1 behind · 3 not-installed · 4 unknown/diverged)
+ *   arc upgrade [--dir DIR] [--to vX.Y.Z] [--confirm] [--force]
+ *                              re-render DIR's install from this arc (or from tag --to), back up local edits, refuse a
+ *                              BREAKING range without --confirm (exit 5), a tag not fetched exits 6 (ADR-2024, ADR-2025)
+ *   arc compile --self [--check]  render codex, opencode and skills-only into this arc checkout (ADR-2023)
  *   arc compile ARGS...        arc-compile.mjs ARGS...
  *   arc --version | help
  *
@@ -21,7 +30,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = resolve(dirname(realpathSync(fileURLToPath(import.meta.url))), "..");
 const S = (p) => join(ROOT, ".claude", "scripts", ...p.split("/"));
@@ -34,7 +43,7 @@ const run = (script, args, opts = {}) => spawnSync(process.execPath, [script, ..
 const git = (dir, args) => { const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); return { status: r.error ? -1 : r.status, stdout: (r.stdout || "").trim() }; };
 
 function usage(code) {
-  (code ? console.error : console.log)("usage: arc init --target <claude-code|codex|opencode|skills-only> [--dir DIR] [--dry-run] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc compile <arc-compile args>\n       arc --version");
+  (code ? console.error : console.log)("usage: arc init [--target <claude-code|codex|opencode|skills-only>] [--dir DIR] [--dry-run] [--force]\n       arc uninstall [--dir DIR] [--force]\n       arc doctor [--dir DIR | --repo ...]\n       arc outdated [--dir DIR | --all]\n       arc upgrade [--dir DIR] [--to vX.Y.Z] [--confirm] [--force]\n       arc compile --self [--check]\n       arc compile <arc-compile args>\n       arc --version");
   return code;
 }
 
@@ -42,7 +51,7 @@ function version() {
   return JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
 }
 
-function init(args) {
+async function init(args) {
   const out = [];
   let dir = process.cwd(), dirGiven = false, dryRun = false, target = "";
   for (let i = 0; i < args.length; i++) {
@@ -56,10 +65,62 @@ function init(args) {
     } else if (a === "--dry-run" || a === "--force" || a === "--quiet") { if (a === "--dry-run") dryRun = true; out.push(a); }
     else { console.error(`arc init: unknown argument ${a}`); return 2; }
   }
+  if (target === "") return initAll(dir, dirGiven, out);
   if (!TARGETS.includes(target)) { console.error(`arc init: --target must be one of ${TARGETS.join(", ")}`); return 2; }
   const r = run(INSTALL, ["--target", target, "--dir", dir, "--source", ROOT, ...out]);
   if (r.status !== 0 || dryRun) return r.status ?? 1;
-  return wireHooks(dir, target);
+  const h = wireHooks(dir, target);
+  if (h === 0) await registerLine(dir);
+  return h;
+}
+
+async function engine(name) { return import(pathToFileURL(S(`engine/${name}`)).href); }
+async function registerLine(dir) { const L = await engine("install-targets/lifecycle.mjs"); console.log(L.register(dir, true)); }
+
+// Every verified harness into DIR as one transaction and one version-2 record (ADR-2024, REQ-15).
+async function initAll(dirArg, dirGiven, flags) {
+  const L = await engine("install-targets/lifecycle.mjs");
+  const { TARGETS: MODS, sourceCommit, sourceTag } = await engine("arc-install.mjs");
+  const C = await engine("install-targets/common.mjs");
+  const dryRun = flags.includes("--dry-run"), force = flags.includes("--force");
+  try {
+    const plan = L.allPlan(MODS, ROOT);
+    const files = plan.ops.filter((o) => o.kind !== "mkdir");
+    console.log(`plan: ${L.ALL_TARGETS.join("+")} — ${files.length} file(s) into ${dirGiven || !dryRun ? dirArg : "<dir>"}`);
+    for (const d of plan.degraded) console.log(`degraded: ${d}`);
+    if (!dirGiven && dryRun) { console.log("dry-run: nothing written"); return 0; }
+    const dir = C.targetDir(dirArg);
+    if (C.overlaps(dir, ROOT)) throw new C.Refused("inside-source", `${dir} and the arc source ${ROOT} overlap; install into a separate project`);
+    const prior = C.readManifest(dir);
+    if (prior && prior.rel !== C.MANIFEST) throw new C.Refused("other-target", `${dir} holds a claude-code install in ${prior.rel}; arc uninstall it, then arc init`);
+    if (prior) for (const pth of Object.keys(prior.manifest.files)) L.safePath(dir, pth);
+    const pre = C.preflight(plan.ops, dir, prior?.manifest);
+    const writes = plan.ops.filter((o) => o.kind === "mkdir" || !prior || prior.manifest.files[o.path] !== o.sha || !existsSync(join(dir, o.path)));
+    if (dryRun) { for (const c of pre.conflicts) console.log(`unmanaged-conflict ${c}`); console.log(`dry-run: ${writes.filter((o) => o.kind !== "mkdir").length} file(s) would be written; nothing written`); return 0; }
+    if (pre.conflicts.length && !force) {
+      for (const c of pre.conflicts) console.log(`unmanaged-conflict ${c} — a file this install did not write; refusing (--force overwrites it, after a backup)`);
+      console.log(`apply: refused, ${pre.conflicts.length} unmanaged-conflict(s); nothing written`);
+      return 1;
+    }
+    const had = git(dir, ["config", "--get", "core.hooksPath"]).stdout;
+    const record = (hooksPathSet) => C.manifestRecord(L.ALL_TARGETS, files, plan.degraded, pre.conflicts, { tag: sourceTag(ROOT), commit: sourceCommit(ROOT), hooksPathSet });
+    const text = (rec) => `${JSON.stringify(rec, null, 2)}\n`;
+    const t0 = text(record(prior?.manifest.hooks_path_set === true));
+    const r = C.apply(writes.filter((o) => o.kind !== "mkdir"), dir, { kind: "write", path: C.MANIFEST, text: t0, sha: C.sha(Buffer.from(t0)) }, { backup: pre.conflicts });
+    console.log(`apply: wrote ${r.written} file(s) into ${dir} (every harness); record ${C.MANIFEST}${r.backup ? `; the overwritten originals are in ${r.backup}` : ""}`);
+    const h = wireHooks(dir, "claude-code");
+    const now = git(dir, ["config", "--get", "core.hooksPath"]).stdout;
+    if (!had && now === HOOKS && prior?.manifest.hooks_path_set !== true) {
+      const t1 = text(record(true));
+      C.apply([], dir, { kind: "write", path: C.MANIFEST, text: t1, sha: C.sha(Buffer.from(t1)) });
+    }
+    if (h === 0) console.log(L.register(dir, true));
+    return h;
+  } catch (e) {
+    if (!(e && e.reason)) throw e;
+    console.log(`refused [${e.reason}] ${e.message.slice(e.reason.length + 2)}`);
+    return e.reason === "missing" || e.reason === "not-a-directory" || e.reason === "symlink" ? 2 : 1;
+  }
 }
 
 /**
@@ -111,6 +172,50 @@ function selfDoctor() {
   return bad ? 1 : 0;
 }
 
+// One parser for the lifecycle verbs: each flag once, a value never flag-shaped (attack 188f724 L6, B7).
+function lifecycleArgs(verb, args, flags, values) {
+  const o = { dir: process.cwd() };
+  const seen = new Set();
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (seen.has(a)) { console.error(`arc ${verb}: ${a} given twice`); return null; }
+    seen.add(a);
+    if (values.includes(a)) {
+      const v = args[i + 1];
+      if (v === undefined || v === "" || v.startsWith("--")) { console.error(`arc ${verb}: ${a} needs a value`); return null; }
+      o[a.slice(2)] = v; i++;
+    } else if (flags.includes(a)) o[a.slice(2)] = true;
+    else { console.error(`arc ${verb}: unknown argument ${a}`); return null; }
+  }
+  return o;
+}
+
+async function lifecycle(verb, args) {
+  const L = await import(pathToFileURL(S("engine/install-targets/lifecycle.mjs")).href);
+  const { TARGETS } = await import(pathToFileURL(INSTALL).href);
+  const { Refused, targetDir } = await import(pathToFileURL(S("engine/install-targets/common.mjs")).href);
+  const o = verb === "outdated" ? lifecycleArgs(verb, args, ["--all"], ["--dir"])
+    : verb === "uninstall" ? lifecycleArgs(verb, args, ["--force"], ["--dir"])
+    : lifecycleArgs(verb, args, ["--confirm", "--force"], ["--dir", "--to"]);
+  if (!o) return usage(2);
+  if (o.all && args.includes("--dir")) { console.error("arc outdated: --all reads the registry; it takes no --dir"); return usage(2); }
+  try {
+    if (o.all) { const r = L.outdatedAll(ROOT); for (const l of r.lines) console.log(l); console.log(`RAN arc-${verb}`); return r.code; }
+    const dir = targetDir(o.dir);
+    const r = verb === "outdated" ? L.outdated(dir, ROOT)
+      : verb === "uninstall" ? L.uninstall(dir, { force: o.force === true, hooksPath: HOOKS })
+      : L.upgrade(dir, ROOT, TARGETS, { to: o.to ?? null, confirm: o.confirm === true, force: o.force === true });
+    for (const l of r.lines) console.log(l);
+    console.log(`RAN arc-${verb}`);
+    return r.code;
+  } catch (e) {
+    if (!(e instanceof Refused)) throw e;
+    console.log(`refused [${e.reason}] ${e.message.slice(e.reason.length + 2)}`);
+    console.log(`RAN arc-${verb}`);
+    return e.reason === "manifest-path" || e.reason === "bad-manifest" ? 2 : 1;
+  }
+}
+
 function main(argv) {
   const [verb, ...rest] = argv;
   if (verb === "--version" || verb === "-v") { console.log(version()); return 0; }
@@ -122,9 +227,11 @@ function main(argv) {
     if (rest[0] === "--repo") return run(S("engine/arc-doctor.mjs"), rest).status ?? 1;
     return rest.length ? usage(2) : selfDoctor();
   }
+  if (verb === "outdated" || verb === "upgrade" || verb === "uninstall") return lifecycle(verb, rest);
+  if (verb === "compile" && rest[0] === "--self") return run(INSTALL, ["--self", ...rest.slice(1)]).status ?? 1;
   if (verb === "compile") return run(S("engine/arc-compile.mjs"), rest).status ?? 1;
   console.error(`arc: unknown command ${verb}`);
   return usage(2);
 }
 
-process.exitCode = main(process.argv.slice(2));
+Promise.resolve(main(process.argv.slice(2))).then((c) => { process.exitCode = c; }, (e) => { console.error(`arc: ${e && e.message}`); process.exitCode = 2; });

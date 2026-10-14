@@ -82,7 +82,11 @@ export const DENY_RULES = Object.freeze([
   { name: "google-api-key", re: /AIza[0-9A-Za-z_-]{35}/ },
   { name: "npm-token", re: /npm_[A-Za-z0-9]{36}/ },
   { name: "private-key-block", re: /-----BEGIN [A-Z ]{0,32}PRIVATE KEY-----/ },
-  { name: "connection-string-password", re: /[a-z][a-z0-9+.-]{1,32}:\/\/[^\s:/@]{1,64}:[^\s:/@]{6,64}@/i },
+  // No bare `"` in user or password: a bare-host URL ending a JSON payload ran on into `"process":"arc-event@1.0.0"`
+  // and read as `scheme://user:pass@`, quarantining every ship.done that named a deploy URL (distribute debt row 24,
+  // replayed by tests/distribute-redact-replay.bats). A quote INSIDE a credential reaches the canonical text escaped,
+  // as `\"`, so that pair is one allowed unit (attack 8707a5c B5); a bare quote is JSON structure, never a credential.
+  { name: "connection-string-password", re: /[a-z][a-z0-9+.-]{1,32}:\/\/(?:\\"|[^\s:/@"]){1,64}:(?:\\"|[^\s:/@"]){6,64}@/i },
   { name: "bearer-token", re: /\bbearer\s{1,8}[A-Za-z0-9._-]{16,512}/i },
   // An ENVIRONMENT READ is not a credential: `API_KEY = process.env.ARC_LLM_API_KEY` names where a key comes from and
   // holds none, and it refused every attack diff whose context reached that line of drivers/generic-api.mjs (engine

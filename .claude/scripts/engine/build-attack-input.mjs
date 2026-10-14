@@ -118,6 +118,16 @@ export function parseArgs(argv) {
   return { opts };
 }
 
+/** Generated trees, by the generator that owns each and checks it on CI. */
+export const GENERATED = Object.freeze([
+  ".codex/", ".opencode/", ".agents/skills/", // arc compile --self (ADR-2023)
+  "docs/wiki/", // wiki-build --check
+  "tests/fixtures/distribute/goldens/", // arc-compile --check --input source
+  "tests/fixtures/sync-golden/", // sync.bats
+]);
+/** Records, not code: a harness session's verbatim JSONL transcript (ADR-2019) is evidence the attacker cannot judge. */
+export const RECORDS = Object.freeze([":(glob)**/transcripts/*.jsonl", ":(glob)**/transcripts/*.jsonl.stderr"]);
+
 function gitRoot() {
   return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 }
@@ -137,9 +147,16 @@ export function main(argv) {
 
   // Args array, never a shell string -- a ref is one argv element and nothing else.
   const range = o.base ? `${o.base}...HEAD` : `${o.since}..HEAD`;
-  let diff;
+  // Generated outputs are left out: each is regenerated from a source in the same diff and byte-checked on CI by its
+  // generator's --check, so an attacker reading them reads the source twice. The distribute self-render alone is 177
+  // files, about 1 MB, which buried its ~40 KB of code past the logic model's window. The count is printed in the
+  // diff itself, so the attacker knows what it was not shown and where it lives.
+  const gen = [...GENERATED.map((g) => `:(exclude)${g}`), ...RECORDS.map((r) => r.replace(":(glob)", ":(exclude,glob)"))];
+  let diff, skipped = [];
   try {
-    diff = execFileSync("git", ["diff", "--no-color", "--no-ext-diff", range], { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    skipped = execFileSync("git", ["diff", "--name-only", "--no-ext-diff", range, "--", ...GENERATED, ...RECORDS], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split(/\r?\n/).filter(Boolean);
+    diff = execFileSync("git", ["diff", "--no-color", "--no-ext-diff", range, "--", ".", ...gen], { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    if (skipped.length) diff = `# build-attack-input: ${skipped.length} generated or recorded file(s) not shown (generated ones are regenerated and --check'ed on CI; transcripts are run records): ${[...GENERATED.filter((g) => skipped.some((f) => f.startsWith(g))), ...(skipped.some((f) => /\/transcripts\/[^/]+\.jsonl(\.stderr)?$/.test(f)) ? ["transcripts/*.jsonl"] : [])].join(" ")}${"\n"}${diff}`;
   } catch (e) {
     process.stderr.write(`build-attack-input: git diff ${range} failed: ${String(e.message).split("\n")[0]}\n`);
     return 2;

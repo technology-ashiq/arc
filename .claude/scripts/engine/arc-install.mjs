@@ -6,10 +6,14 @@
  *   arc-install.mjs --target claude-code|codex|opencode|skills-only --dry-run [--dir DIR] [--source ARC]
  *   arc-install.mjs --target T --dir DIR [--force] [--quiet] [--source ARC]
  *   arc-install.mjs --doctor DIR
+ *   arc-install.mjs --self [--check] [--source ARC]
  *
  * `--dry-run` prints the plan and writes nothing. Without it, the plan is applied as one transaction
  * (install-targets/common.mjs). A file already at a managed path that the last install did not write
  * refuses the run, `unmanaged-conflict` by name, unless `--force`, which the record then lists.
+ *
+ * `--self` renders codex, opencode and skills-only into the arc checkout itself (ADR-2023, install-targets/self-render.mjs):
+ * the adapters' files only, never the payload or a manifest. `--self --check` writes nothing and names each stale path.
  *
  * Exit: 0 done (or doctor clean) · 1 a refusal, a conflict, a failed apply (rolled back), or a doctor
  * finding · 2 usage, or a path refused before planning.
@@ -27,19 +31,27 @@ import * as claudeCode from "./install-targets/claude-code.mjs";
 import * as codex from "./install-targets/codex.mjs";
 import * as opencode from "./install-targets/opencode.mjs";
 import * as skillsOnly from "./install-targets/skills-only.mjs";
+import { selfRender } from "./install-targets/self-render.mjs";
 
 export const TARGETS = Object.freeze({ "claude-code": claudeCode, codex, opencode, "skills-only": skillsOnly });
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 // The commit the files came from, as the registry stamps it: an override for tests, else git, else "unknown".
-function sourceCommit(tree) {
+export function sourceCommit(tree) {
   if (process.env.ARC_REGISTRY_COMMIT) return process.env.ARC_REGISTRY_COMMIT;
   try { return execFileSync("git", ["-C", tree, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return "unknown"; }
 }
 
+// The tag that names exactly that commit, or null (ADR-2025: an untagged install says so, never a guess).
+export function sourceTag(tree) {
+  // Test door, as ARC_REGISTRY_COMMIT is; a value that is not vX.Y.Z is dropped, never recorded (attack 0eb78f6 B13).
+  if (process.env.ARC_REGISTRY_COMMIT) return /^v\d+\.\d+\.\d+$/.test(process.env.ARC_REGISTRY_TAG || "") ? process.env.ARC_REGISTRY_TAG : null;
+  try { return execFileSync("git", ["-C", tree, "describe", "--tags", "--exact-match", "--match", "v[0-9]*", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null; } catch { return null; }
+}
+
 export function main(argv) {
-  const opt = { target: "", dir: "", source: "", dryRun: false, force: false, quiet: false, doctor: "" };
+  const opt = { target: "", dir: "", source: "", dryRun: false, force: false, quiet: false, doctor: "", self: false, check: false };
   const given = new Map();
   const value = (flag, i) => {
     const v = argv[i + 1];
@@ -54,8 +66,25 @@ export function main(argv) {
     if (a === "--dry-run") opt.dryRun = true;
     else if (a === "--force") opt.force = true;
     else if (a === "--quiet") opt.quiet = true;
+    else if (a === "--self") opt.self = true;
+    else if (a === "--check") opt.check = true;
     else if (["--target", "--dir", "--source", "--doctor"].includes(a)) { if ((v = value(a, i++)) === null) return 2; opt[a.slice(2)] = v; }
     else { console.error(`arc-install: unknown argument ${a}`); return 2; }
+  }
+
+  if (opt.check && !opt.self) { console.error("arc-install: --check goes with --self"); return 2; }
+  if (opt.self) {
+    if (opt.target || opt.dir || opt.dryRun || opt.force || opt.doctor) { console.error("arc-install: --self takes --check and --source and nothing else"); return 2; }
+    const tree = realpathSync(resolve(opt.source || join(HERE, "..", "..", "..")));
+    try {
+      const r = selfRender(tree, { check: opt.check });
+      for (const l of r.lines) console.log(l);
+      return r.findings ? 1 : 0;
+    } catch (e) {
+      if (!(e instanceof Refused)) throw e;
+      console.log(`refused [${e.reason}] ${e.message.slice(e.reason.length + 2)}`);
+      return 1;
+    }
   }
 
   if (opt.doctor) {
@@ -90,7 +119,7 @@ export function main(argv) {
     if (dir && typeof mod.finishPlan === "function") p = mod.finishPlan(p, tree, dir);
     const prior = dir ? readManifest(dir, mod.MANIFEST_PATH) : null;
     // Two targets in one project would overwrite one record with the other (attack d32e714 B4).
-    if (prior && prior.manifest.target !== opt.target) throw new Refused("other-target", `${dir} already holds a \`${prior.manifest.target}\` install in ${prior.rel}; one record names one target`);
+    if (prior && (prior.manifest.targets.length !== 1 || prior.manifest.targets[0] !== opt.target)) throw new Refused("other-target", `${dir} already holds a \`${prior.manifest.target}\` install in ${prior.rel}; one record names one target`);
     const pre = dir ? preflight(p.ops, dir, prior?.manifest) : { conflicts: [], dirs: [] };
     if (opt.dryRun) {
       if (!opt.quiet) for (const o of p.ops) console.log(`${o.kind === "mkdir" ? "mkdir" : o.kind} ${o.path}`);
@@ -104,7 +133,7 @@ export function main(argv) {
       return 1;
     }
     const degraded = p.degraded.map((d) => `${d.cell} (${d.kind}) — ${d.why}`);
-    const record = manifestRecord(opt.target, p.ops, degraded, pre.conflicts, sourceCommit(tree));
+    const record = manifestRecord(opt.target, p.ops, degraded, pre.conflicts, { tag: sourceTag(tree), commit: sourceCommit(tree), hooksPathSet: prior?.manifest.hooks_path_set === true });
     const text = mod.MANIFEST_PATH === ".arc-install.json" ? `${JSON.stringify(record, null, 2)}\n` : mod.manifestText(tree, record);
     const manifestOp = { kind: "write", path: mod.MANIFEST_PATH, text, sha: sha(Buffer.from(text)) };
     try {
