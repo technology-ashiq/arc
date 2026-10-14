@@ -1,7 +1,7 @@
 // One attempt of one slot, run as a child of the runner so the slot timeout is a real kill (ADR-1718).
 // It persists every reported resource BEFORE the adapter continues, so whatever kills this process, the record of
 // what exists outlives it. Exit: 0 verified · 1 failed (reason in state) · 5 a sensitive action awaits the owner.
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
@@ -80,18 +80,47 @@ if (a.mode === "verify") {
   const exchanges = [];
   // A raw record holds live keys and cookies: it is written only outside every git work tree (attack 9eaf4f1 B1), and
   // a URL never keeps a `key` query value (B2).
-  const insideRepo = (dir) => { for (let d = resolve(dir); ; d = dirname(d)) { if (existsSync(join(d, ".git"))) return true; if (dirname(d) === d) return false; } };
+  // Every existing ancestor is read through its real path too, so a link from outside into a work tree counts as inside
+  // (attack 1dc6035 B1).
+  const insideRepo = (dir) => {
+    for (let d = resolve(dir); ; d = dirname(d)) {
+      let real = d;
+      try { real = realpathSync(d); } catch { real = d; }
+      if (existsSync(join(d, ".git")) || existsSync(join(real, ".git"))) return true;
+      if (real !== d && insideRepo(real)) return true;
+      if (dirname(d) === d) return false;
+    }
+  };
   const recording = recordDir && !insideRepo(recordDir);
   if (recordDir && !recording) process.stderr.write(`worker: ARC_LAUNCH_RECORD ${recordDir} is inside a git work tree; nothing is recorded\n`);
   if (recording) {
     const real = globalThis.fetch;
-    const urlOf = (u) => { try { const x = new URL(String(u)); x.searchParams.delete("key"); return x.href; } catch { return "(not a URL)"; } };
+    // No userinfo and no secret-named query value is kept in a raw URL (B3).
+    const urlOf = (u) => {
+      try {
+        const x = new URL(String(u));
+        x.username = "";
+        x.password = "";
+        for (const k of [...x.searchParams.keys()]) if (/^(key|api_?key|token|secret|password|access_token)$/i.test(k)) x.searchParams.delete(k);
+        return x.href;
+      } catch { return "(not a URL)"; }
+    };
     globalThis.fetch = async (u, init = {}) => {
       let res;
       // A request that never answered is recorded too, so the replay throws where the run threw (B3).
       try { res = await real(u, init); } catch (e) { exchanges.push({ method: String(init.method || "GET"), url: urlOf(u), error: String((e && e.name) || "Error") }); throw e; }
       let body = "";
-      try { body = await res.clone().text(); } catch { body = ""; }
+      // The copy is read up to 2 MB and cancelled there, so a page streaming without end never stalls the record (B4).
+      try {
+        const c = res.clone();
+        if (c.body && typeof c.body.getReader === "function") {
+          const r = c.body.getReader();
+          const dec = new TextDecoder();
+          let n = 0;
+          while (n < 2097152) { const { done, value } = await r.read(); if (done) break; n += value.length; body += dec.decode(value, { stream: true }); }
+          await r.cancel().catch(() => {});
+        } else body = await c.text();
+      } catch { body = ""; }
       const headers = {};
       for (const [k, val] of res.headers) if (k !== "set-cookie") headers[k] = val;
       exchanges.push({ method: String(init.method || "GET"), url: urlOf(u), status: res.status, headers, setCookie: typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [], body });

@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "tests/launch/replay/redact.mjs:28-33",
+      "breaking_input": "a private env value that is exactly 8 characters and consists only of characters in the MASKED set, e.g. the literal 8-char value `abcdefgh` (all lower hex). The redactor's `mask()` maps it to `aaaaaaax` (still all maskable), the leak gate checks `s.includes(v)` for the original which is gone, and the scan's MASKED regex accepts the masked form, so a real 8-char secret of that shape survives as a constant in the committed fixture.",
+      "why": "mask() maps [a-f]→a, [g-z]→x, [A-Z]→X, [0-9]→0. A real secret whose characters all fall in those classes becomes a fixed, guessable string that the scan accepts because it only contains 'a','x','X','0'. The gate only searches for the original value, never the masked form, so it passes. This is the L4 finding from the prior attack, and the fix (mask with a per-value salt or check the masked form) is not present.",
+      "fix": "Make mask() inject a per-value random salt or a counter so masked values are not universally identical, and have the leak gate also check that the masked form is not a valid secret shape (e.g. require the masked value to contain a non-maskable marker).",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included -> every adapter that builds an auth header from ctx.env"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "tests/launch/replay/redact.mjs:36",
+      "breaking_input": "a JWT whose payload's first 3 characters are not maskable, e.g. a real JWT `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc...` where the payload starts with `abc`. The JWT rule masks with keep=3, so the first 3 payload chars (`abc`) survive. The scan only checks the captured group after `eyJ` (the first 6+ chars of the payload) with MASKED, so `abc` (all maskable? no: `a`,`b`,`c` are all in [a-f], so they ARE maskable, but the first 3 chars are kept, so the scan sees `abc` which is not maskable? Actually `a`,`b`,`c` are maskable, so the kept 3 chars pass MASKED). The real issue: any JWT payload whose first 3 chars are maskable but whose remaining chars are not — the scan only checks the first 6+ chars, and the redactor keeps the first 3 unmasked, so a payload like `abcXYZ...` keeps `abc` which the scan accepts as maskable, but the rest of the payload may be unmasked and not checked.",
+      "why": "The JWT rule keeps 3 chars of the payload unmasked. The scan's JWT check only tests the captured group (the 6+ chars after `eyJ`) with MASKED. If those 6+ chars are all maskable (e.g. `aaaaaa`), the scan passes even though the payload's remaining characters (after the first 6) are original and never checked. A real JWT whose payload begins with 6 maskable chars then a non-maskable secret leaks.",
+      "fix": "Mask the entire JWT (keep=0) and have the scan reject any JWT whose payload is not fully masked.",
+      "twin_of": "A PageSpeed key with no shape check -> every env value: shape-checked before use, cut from every error"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "tests/launch/replay/redact.mjs:42",
+      "breaking_input": "a session cookie value `base64-` followed by 8 chars that are all in the MASKED set, e.g. `base64-aaaaaaax`. The redactor masks with keep=7, so the first 7 chars after `base64-` are kept; the scan's base64 check tests MASKED on the captured group after `base64-`, and if those 7 chars are maskable, the scan passes even though they are original.",
+      "why": "keep=7 leaves the first 7 chars of the cookie value unmasked. The scan only checks the captured group (the 8+ chars after `base64-`) with MASKED. A real cookie whose first 7 chars are maskable (e.g. `aaaaaaa`) passes the scan while the remaining chars are never checked.",
+      "fix": "Mask the whole value after `base64-` (keep=0) and require the scan to see no original characters.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included -> every adapter that builds an auth header from ctx.env"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:44",
+      "breaking_input": "a login token value that is exactly 8 characters and all in the MASKED set, e.g. `aaaaaaax`. The token rule masks with keep=0, so the value becomes `xxxxxxx0` (all maskable), and the scan's `hashed_token` check tests MASKED on the captured value, which passes even though the original was a real token of that shape.",
+      "why": "The scan accepts any token that is composed entirely of maskable characters ('a','x','X','0','_','+','/','=','.','-'). A real token of that shape (e.g. a short magic-link token) is not distinguishable from a masked one, so the gate passes and the real token is committed.",
+      "fix": "Make the scan require the token to be a placeholder (e.g. starts with a fixed non-maskable marker or is a known fixture value), not merely composed of maskable characters.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:35",
+      "breaking_input": "a provider token prefix like `sbp_` followed by 8 chars that are all maskable, e.g. `sbp_aaaaaaax`. The token rule keeps the prefix and masks the rest; the scan checks MASKED on the captured rest, which passes if the rest is maskable, so a real token with that shape survives.",
+      "why": "The scan's token check only tests the captured rest with MASKED. A real token whose random alphabet happens to be all maskable characters (e.g. `sbp_aaaaaaax`) passes the scan as if masked.",
+      "fix": "Same as L4: require a token placeholder that cannot be confused with a real token's random alphabet (e.g. a fixed marker like `fixture_`).",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included -> every adapter that builds an auth header from ctx.env"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:49",
+      "breaking_input": "a 32-hex id that is all zeros followed by a number, e.g. `00000000000000000000000000000001`. The 32-hex rule masks to `String(next).padStart(32,'0')`, which is all zeros then a number; the scan accepts any 32-hex id matching /^0+[0-9]+$/, so a real id of that shape passes as a placeholder.",
+      "why": "The placeholder is indistinguishable from a real 32-hex id that happens to be all zeros then a digit. The scan's regex accepts it, so a real id of that shape is not flagged.",
+      "fix": "Make the placeholder a fixed non-hex pattern (e.g. `fixturehex32...`) and have the scan require that exact pattern.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:45",
+      "breaking_input": "an e-mail address `owner@example.invalid` already present in the raw recording. The address rule replaces every non-sandbox address with `owner@example.invalid`; if a real address is exactly that placeholder, it is replaced with itself, and the scan accepts it as the placeholder, so a real address that equals the placeholder leaks.",
+      "why": "The placeholder is a valid e-mail address format. A real address that happens to be `owner@example.invalid` (e.g. a test account) is not changed, and the scan's address check explicitly allows it.",
+      "fix": "Use a placeholder that cannot be a real address (e.g. `owner@invalid.local` with a reserved TLD) or check that the address was actually changed.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:33",
+      "breaking_input": "a secret value from the env file that is a substring of another secret value, e.g. env value `abc12345` is a prefix of `abc1234567`. The secrets are sorted longest-first, so the longer one is replaced first; but the leak gate checks `s.includes(v)` for each original, so after the longer one is replaced, the shorter one may still appear in a fragment that is not the full value, and the gate passes.",
+      "why": "Actually the gate would flag it as a leak (false positive), not a leak. But the finding is that the fix (sort longest first) does not prevent the shorter value from being a substring of the longer one in a way that the gate flags. The breaking input is a clean recording that is refused, blocking the gate.",
+      "fix": "When checking leaks, only check the original list, not substrings; or replace secrets in a single pass with a trie.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:56",
+      "breaking_input": "a person record where the key is `name` but the object does not have `login` or `username` and the parent key is not in PERSON, e.g. a GitHub user object nested under `assignee` or `requested_reviewer`. The `name` rule only masks when `PERSON.has(key)` or `login`/`username` exists; otherwise the real name survives. The scan does not check names at all except the `ashiq` regex, so a different owner name leaks.",
+      "why": "PERSON only covers a fixed set of keys. A GitHub user object under `assignee`, `requested_reviewer`, `milestone.creator`, or any other key not in PERSON, and without a `login` field, keeps the real name. The scan has no general name check.",
+      "fix": "Extend PERSON to cover all person-like keys, or mask any `name` that is not a known safe value.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:53",
+      "breaking_input": "a Supabase org id that is 20 chars but contains uppercase letters, e.g. `ABCDEFGHIJKLMNOPQRST`. The org id rule only matches `[a-z0-9]{20}`; an uppercase id is not masked, and the scan's org id check also only matches lowercase, so it passes.",
+      "why": "Supabase org ids are lowercase hex, but a different provider or a malformed id with uppercase would not be masked. The scan's regex also only matches lowercase, so it passes.",
+      "fix": "Use a case-insensitive pattern and normalize.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:36",
+      "breaking_input": "a JWT that appears in a URL query string with URL-encoded dots, e.g. `?token=eyJ%2E...%2E...`. The JWT rule matches `eyJ` followed by dots, but `%2E` is not a dot, so the JWT is not masked. The scan's JWT check also only looks for literal dots, so it passes. A real JWT with encoded dots leaks.",
+      "why": "The redactor and scan both use regexes that require literal `.` characters. URL-encoded dots (`%2E`) bypass both.",
+      "fix": "Decode URL-encoded bodies before scanning, or add rules for encoded JWTs.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included -> every adapter that builds an auth header from ctx.env"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:47",
+      "breaking_input": "a resource id like `fixtureid0000000001` (20 chars, starts with 'fixtureid') already in the raw recording. The generic 20-char id rule uses `(?!fixture)` to avoid re-masking fixture values, so a real id that happens to start with `fixture` is never masked.",
+      "why": "The negative lookahead assumes no real id starts with `fixture`. A provider could legitimately use such a prefix, and the id would survive into the committed fixture.",
+      "fix": "Drop the negative lookahead; mask every 20-char id, then let the stable map unify it with the fixture replacement.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:29",
+      "breaking_input": "a private env value that is exactly 8 characters and contains only characters that `mask` maps to themselves, e.g. `abcdefgh` (all lower hex). The masked form `aaaaaaax` is still a valid secret shape, and the scan's MASKED regex accepts it, so a real secret of that shape is committed as a constant.",
+      "why": "This is the same as L4 but for env values specifically. The gate only checks the original value, which is replaced, so it passes. The masked value is a fixed, guessable string.",
+      "fix": "Same as L4: make mask() inject a per-value salt or counter, and have the gate check the masked form.",
+      "twin_of": "A PageSpeed key with no shape check -> every env value: shape-checked before use, cut from every error"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:66-69",
+      "breaking_input": "a raw recording where the venture's Supabase ref appears only in a field that is not `resources` or `upstream` (e.g. inside the answer or a header), and no resource/upstream id matches /^[a-z0-9]{20}$/. The script exits 1 with 'no recording names the venture's Supabase ref' and refuses to redact at all, blocking the gate.",
+      "why": "ventureRefs is built only from rec.resources and rec.upstream ids. If the ref never appears there, the script refuses to write anything, so a legitimate recording cannot be redacted and the whole CI gate fails.",
+      "fix": "Collect the ref from every string in the recording that matches the shape and is followed by `.supabase.co`, or require the operator to pass it explicitly.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:31",
+      "breaking_input": "a value in the env file that is exactly 8 characters and is a substring of a longer secret, e.g. env value `abc12345` is a substring of `abc1234567`. The secrets are sorted longest-first, so the longer one is replaced first; but the leak gate checks `s.includes(v)` for each original, so after the longer one is replaced, the shorter one may still appear in a fragment that is not the full value, and the gate passes.",
+      "why": "Actually the gate would flag it as a leak (false positive), not a leak. But the finding is that the fix (sort longest first) does not prevent the shorter value from being a substring of the longer one in a way that the gate flags. The breaking input is a clean recording that is refused, blocking the gate.",
+      "fix": "When checking leaks, only check the original list, not substrings; or replace secrets in a single pass with a trie.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    }
+  ]
+}

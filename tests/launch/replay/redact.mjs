@@ -96,10 +96,12 @@ for (const slot of slots) {
   // venture's name, ref or domain never reaches this repo.
   const domain = rec.profile && rec.profile.brand ? rec.profile.brand.domain : "";
   for (const x of rec.exchanges) {
-    let b;
-    try { b = JSON.parse(x.body); } catch { continue; }
     let path = "";
     try { path = new URL(x.url).pathname; } catch { path = ""; }
+    const listing = /^\/v1\/projects\/?$/.test(path) || /^\/domains\/?$/.test(path);
+    let b;
+    // A listing that is not JSON cannot be filtered to the venture's entry, so it refuses rather than pass whole (B7).
+    try { b = JSON.parse(x.body); } catch { if (listing && x.body) { console.error(`${slot}: a listing answer is not JSON; nothing written`); process.exit(1); } continue; }
     if (/^\/v1\/projects\/?$/.test(path) && Array.isArray(b)) b = b.filter((p) => p && (ventureRefs.has(p.id) || ventureRefs.has(p.ref)));
     if (/^\/domains\/?$/.test(path) && b && Array.isArray(b.data)) b.data = b.data.filter((d) => d && d.name === domain);
     x.body = JSON.stringify(scrub(b));
