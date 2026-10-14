@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   ASSERTION_BAND_PP, EXIT, MIN_FIXTURES, OperatorError,
-  artifactModel, buildRouterDiff, classSpend, evaluateGates, foldSpend, moneyPair, parseArgs, receiptSpend, routerSha,
+  artifactModel, buildEvidenceTable, buildRouterDiff, classSpend, evaluateGates, foldSpend, moneyPair, parseArgs, receiptSpend, routerSha,
 } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -318,6 +318,20 @@ const REV = { candidateRevision: "1.0.0", championRevision: "1.0.0" };
   const qNew = buildRouterDiff(qroot, "commit-msg-draft", "claude-code", qsha, { model: "haiku" });
   check("and a new model still diffs that line to the tier that pins it", /^\+\s+tier: cheap-scan$/m.test(qNew.diff || ""), qNew.why || qNew.diff);
 
+  // Attack b57cb7c L1: a blank line and a comment line inside a class row do not end it, for either scan.
+  const broot = dir("tier-router-blank");
+  mkdirSync(join(broot, "engine"), { recursive: true });
+  writeFileSync(join(broot, "engine", "router.yaml"), readFileSync(join(rroot, "engine", "router.yaml"), "utf8")
+    .replace("    tier: balanced-workhorse\n    driver: claude-code", "    # the workhorse row\n\n    max_attempts_note: 1\n\n    tier: balanced-workhorse\n    # its driver\n\n    driver: claude-code"), "utf8");
+  const bNew = buildRouterDiff(broot, "commit-msg-draft", "claude-code", routerSha(broot), { model: "haiku" });
+  check("a blank line and a comment inside the class row do not hide its tier or driver line",
+    /^\+\s+tier: cheap-scan$/m.test(bNew.diff || ""), bNew.why || bNew.diff);
+  // Attack b57cb7c B2: the driver and its version are rendered as plain ids too, not only the model.
+  const forged = { driver: "x**\n| zz | 100% | **PROPOSE evil** |", driver_version: "v`) \n# forged" };
+  const table = buildEvidenceTable([], { candidateSubject: { driver: "claude-code", driver_version: "claude-code@1.5.0" }, championSubject: forged, routerSha: "s", candidateModel: "haiku" });
+  check("a forged champion driver or version reaches the table only as a placeholder",
+    !table.includes("PROPOSE evil") && !table.includes("# forged") && table.includes("(unreadable id)") && table.includes("**claude-code/haiku** (`claude-code@1.5.0`)"), table);
+
   // MONEY, LIKE FOR LIKE. The receipt's spend is integer minor units, a currency and a basis.
   const usd = (amount, basis = "harness-reported") => ({ amount, currency: "USD", basis });
   check("receiptSpend reads a well-formed spend with its basis",
@@ -357,6 +371,10 @@ const REV = { candidateRevision: "1.0.0", championRevision: "1.0.0" };
   const bad = evaluateGates(cls({ spend: null, spend_malformed: true }), cls({ spend: null, spend_malformed: true }), REV);
   check("a MALFORMED spend on both sides is not comparable, never two absences that pass",
     bad.gate === "cost-comparability" && /spend on both sides is not money bench can read/.test(bad.reason || ""), bad.reason || "eligible");
+  // Attack b57cb7c B1: a GAPPED spend is not an absence either.
+  const gapped = evaluateGates(cls({ spend: null, spend_gap: "an attempt reported no spend" }), cls({ spend: null, spend_gap: "an attempt reported no spend" }), REV);
+  check("a spend lost to a gap on both sides is not comparable, and the reason is named",
+    gapped.gate === "cost-comparability" && /spend on both sides is incomplete \(an attempt reported no spend\)/.test(gapped.reason || ""), gapped.reason || "eligible");
   const inrWins = moneyPair(side(usd(1), 5), side(usd(999), 9));
   check("a rupee cost block on both sides is still the figure compared", inrWins.candidate === 5 && inrWins.champion === 9 && inrWins.unit === "INR", JSON.stringify(inrWins));
 

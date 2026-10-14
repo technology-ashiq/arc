@@ -66,3 +66,10 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
 - **Malformed read as absent** (2026-10-15, attack ab2d484 L5). A spend that fails the shape check on both
   sides read as two absences, which gate 5 calls comparable. Fix: `spend_malformed`, refused by name.
   Twin: every "ABSENT is comparable" rule fed by a validator that returns null for both absent and bad.
+- **One field of an attacker-supplied file sanitized, not the file** (2026-10-15, attack b57cb7c B2). The
+  round-1 fix checked the champion's model id, and `subject.driver` and `driver_version` beside it still
+  reached the evidence table raw. Fix: every id rendered from provenance goes through one `artifactId`.
+  Twin: every artifact that renders more than one field of a file it did not write.
+- **A gap read as an absence** (2026-10-15, attack b57cb7c B1), the same shape as ab2d484 L5 one field
+  over: `spend_gap` never reached the gate, so two gapped sides were "comparable". Fix: carried and refused
+  by name.

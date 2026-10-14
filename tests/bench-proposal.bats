@@ -125,6 +125,8 @@ PROP_STATUS() { cat "$BATS_FILE_TMPDIR/prop.status"; }
   [[ "$(PROP)" == *"ok a model two tiers pin is REFUSED, because choosing one is a tier decision"* ]]
   [[ "$(PROP)" == *"ok a DIFFERENT driver still rewrites the driver line, model or not"* ]]
   [[ "$(PROP)" == *"ok a QUOTED tier with a comment still reads as the incumbent's tier"* ]]
+  [[ "$(PROP)" == *"ok a blank line and a comment inside the class row do not hide its tier or driver line"* ]]
+  [[ "$(PROP)" == *"ok a forged champion driver or version reaches the table only as a placeholder"* ]]
   [[ "$(PROP)" == *"ok but a model id that could break a table cell or a link is dropped, and so is a non-trial one"* ]]
 }
 
@@ -134,6 +136,7 @@ PROP_STATUS() { cat "$BATS_FILE_TMPDIR/prop.status"; }
   [[ "$(PROP)" == *"ok a harness's notional figure and a provider's invoice are NOT compared"* ]]
   [[ "$(PROP)" == *"ok one attempt with no spend makes the class's money ABSENT and says why, never a partial sum"* ]]
   [[ "$(PROP)" == *"ok a MALFORMED spend on both sides is not comparable, never two absences that pass"* ]]
+  [[ "$(PROP)" == *"ok a spend lost to a gap on both sides is not comparable, and the reason is named"* ]]
   [[ "$(PROP)" == *"ok the model-invalid run RAN and wrote a scorecard"* ]]
   [[ "$(PROP)" == *"ok ADR-0917: a model-invalid attempt is a SCHEMA failure the model earned, not a driver fault"* ]]
   [[ "$(PROP)" == *"ok and the undeclared failure beside it stays unscoreable -- the control"* ]]

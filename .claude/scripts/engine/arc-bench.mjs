@@ -2240,6 +2240,10 @@ export function moneyPair(candidate, champion) {
     }
     return { candidate: cInr, champion: chInr, unit: "INR", fail: null };
   }
+  if (candidate.spend_gap || champion.spend_gap) {
+    const who = candidate.spend_gap && champion.spend_gap ? "both sides" : candidate.spend_gap ? "the candidate" : "the champion";
+    return { candidate: null, champion: null, unit: null, fail: `the spend on ${who} is incomplete (${candidate.spend_gap || champion.spend_gap}) -- not comparable` };
+  }
   const cS = candidate.spend ?? null;
   const chS = champion.spend ?? null;
   if (cS === null && chS === null) return { candidate: null, champion: null, unit: null, fail: null };
@@ -2263,13 +2267,11 @@ export function moneyPair(candidate, champion) {
 export function buildRouterDiff(root, taskClass, candidateDriver, sha, { model = null } = {}) {
   const path = join(root, "engine", "router.yaml");
   const text = readFileSync(path, "utf8");
-  const lines = text.split("\n");
+  // CRLF-tolerant: a router checked out with CRLF would otherwise match no class line at all (attack b57cb7c B4).
+  const lines = text.split(/\r?\n/);
   const classIdx = lines.findIndex((l) => l === `  ${taskClass}:`);
   if (classIdx < 0) return { diff: null, why: `engine/router.yaml has no \`classes.${taskClass}\` row -- there is nothing to re-route` };
-  let driverIdx = -1;
-  for (let i = classIdx + 1; i < lines.length && /^\s{4}/.test(lines[i]); i++) {
-    if (/^\s{4}driver:/.test(lines[i])) { driverIdx = i; break; }
-  }
+  const driverIdx = classChildLine(lines, classIdx, /^\s{4}driver:/);
   if (driverIdx < 0) return { diff: null, why: `\`classes.${taskClass}\` declares no driver line` };
   let changeIdx = driverIdx;
   let before = lines[driverIdx];
@@ -2305,14 +2307,34 @@ export function buildRouterDiff(root, taskClass, candidateDriver, sha, { model =
   return { diff, why: null };
 }
 
-// A model id as it may appear in an artifact a person reads: the grammar of a real id, nothing that could close a
-// table cell or start a markdown link (attack ab2d484 B2 -- a champion directory is a file anyone can hand us).
-const ARTIFACT_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+/**
+ * The index of a class row's child line matching `re`, or -1. A blank line or a comment line inside the row does not
+ * end it -- only a line indented less than a child does (attack b57cb7c L1). Shared by the driver and the tier scans,
+ * which had the same early stop.
+ */
+function classChildLine(lines, classIdx, re) {
+  for (let i = classIdx + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^\s*$/.test(l) || /^\s*#/.test(l)) continue;
+    if (!/^\s{4}/.test(l)) return -1;
+    if (re.test(l)) return i;
+  }
+  return -1;
+}
 
-/** The model a run APPLIED, when it was a trial and its id is a plain model id; otherwise null. */
+// An id as it may appear in an artifact a person reads -- a model, a driver, a driver version: the grammar of a real
+// id, nothing that could close a table cell or start a markdown link. A champion directory is a file anyone can hand
+// us, so EVERY field of it rendered into a table goes through this, not only the model (attack ab2d484 B2, b57cb7c B2).
+const ARTIFACT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:@/+-]{0,127}$/;
+
+/** A plain id, or null. */
+export function artifactId(v) {
+  return typeof v === "string" && ARTIFACT_ID_RE.test(v) ? v : null;
+}
+
+/** The model a run APPLIED, when it was a trial and its id is a plain id; otherwise null. */
 export function artifactModel(prov) {
-  const m = prov && prov.model_source === "trial" ? prov.model_applied : null;
-  return typeof m === "string" && ARTIFACT_MODEL_RE.test(m) ? m : null;
+  return artifactId(prov && prov.model_source === "trial" ? prov.model_applied : null);
 }
 
 /**
@@ -2321,10 +2343,7 @@ export function artifactModel(prov) {
  * too, because choosing one would be bench deciding a tier.
  */
 function tierDiffLine(text, lines, classIdx, taskClass, driver, model) {
-  let tierIdx = -1;
-  for (let i = classIdx + 1; i < lines.length && /^\s{4}/.test(lines[i]); i++) {
-    if (/^\s{4}tier:/.test(lines[i])) { tierIdx = i; break; }
-  }
+  const tierIdx = classChildLine(lines, classIdx, /^\s{4}tier:/);
   if (tierIdx < 0) return { why: `\`classes.${taskClass}\` declares no tier line, so no model can be re-pinned` };
   const parsed = parseYamlSubset(text);
   if (!parsed.ok) return { why: `engine/router.yaml could not be read (line ${parsed.error?.line ?? "?"}: ${parsed.error?.what ?? "unparseable"})` };
@@ -2346,12 +2365,19 @@ function tierDiffLine(text, lines, classIdx, taskClass, driver, model) {
  * this, so every row carries the verdict AND the sentence that produced it.
  */
 export function buildEvidenceTable(rows, { candidateSubject, championSubject, routerSha, candidateModel = null, championModel = null }) {
-  const who = (subject, model) => (model ? `${subject.driver}/${model}` : subject.driver);
+  // Every subject field rendered here is a plain id or a visible placeholder, never raw provenance text.
+  const shown = (v) => artifactId(v) ?? "(unreadable id)";
+  const who = (subject, model) => {
+    const d = shown(subject.driver);
+    const m = artifactId(model);
+    return m ? `${d}/${m}` : d;
+  };
+  const ver = (subject) => (subject.driver_version ? ` (\`${shown(subject.driver_version)}\`)` : "");
   const out = [
     "# bench proposal — evidence",
     "",
-    `Candidate: **${who(candidateSubject, candidateModel)}**${candidateSubject.driver_version ? ` (\`${candidateSubject.driver_version}\`)` : ""}`,
-    `Champion:  **${who(championSubject, championModel)}**${championSubject.driver_version ? ` (\`${championSubject.driver_version}\`)` : ""}`,
+    `Candidate: **${who(candidateSubject, candidateModel)}**${ver(candidateSubject)}`,
+    `Champion:  **${who(championSubject, championModel)}**${ver(championSubject)}`,
     `Router SHA read by this run: \`${routerSha}\``,
     "",
     "| Task class | Champion | Candidate | Contract (schema) | Quality (assertions) | Cost Δ | Latency p95 Δ | Recommendation |",
@@ -2384,7 +2410,10 @@ function withMetrics(entry, metrics) {
   // A spend key holding something that is not money is MALFORMED, not absent: two malformed figures read as two
   // absences would be "comparable" and the cost gate would pass on nothing (attack ab2d484 L5).
   const spendMalformed = m.spend !== undefined && m.spend !== null && spend === null;
-  return { ...entry, cost_inr: m.cost_inr ?? null, spend, ...(spendMalformed ? { spend_malformed: true } : {}), p95_ms: m.p95_ms ?? null };
+  // A GAP is carried too: money lost to an attempt that reported none is not the same fact as money nobody claimed,
+  // and reading it as plain absence let two gapped sides pass gate 5 as "comparable" (attack b57cb7c B1).
+  const gap = typeof m.spend_gap === "string" && m.spend_gap !== "" ? m.spend_gap.slice(0, 120) : null;
+  return { ...entry, cost_inr: m.cost_inr ?? null, spend, ...(spendMalformed ? { spend_malformed: true } : {}), ...(gap ? { spend_gap: gap } : {}), p95_ms: m.p95_ms ?? null };
 }
 
 /**
@@ -2490,11 +2519,17 @@ export function buildProposal(root, report, championDir, outDir, { emit = true, 
   const proposed = rows.filter((r) => r.verdict.eligible);
   // The model the candidate APPLIED, never the one it asked for (PR 3b round-4): a same-driver proposal is about it.
   const candidateModel = artifactModel(report.provenance);
-  const candidateName = candidateModel ? `${report.provenance.subject.driver}/${candidateModel}` : report.provenance.subject.driver;
+  const candidateDriverShown = artifactId(report.provenance.subject.driver) ?? "(unreadable id)";
+  const candidateName = candidateModel ? `${candidateDriverShown}/${candidateModel}` : candidateDriverShown;
+  // A trial model that APPLIED but is not a plain id is refused by name. Dropping it to null sent the same-driver case
+  // down the no-model branch, which reported "already routes" -- false (attack b57cb7c B3).
+  const applied = report.provenance.model_source === "trial" ? report.provenance.model_applied : null;
+  const modelUnrenderable = typeof applied === "string" && applied !== "" && candidateModel === null;
   const proposedWithDiff = [];
   let diffWritten = 0;
   if (!abort) {
     for (const r of proposed) {
+      if (modelUnrenderable) { summary.push(`${r.task_class}: NO DIFF -- the applied model id is not a plain id bench can render, so no route is proposed for it`); continue; }
       const { diff, why } = buildRouterDiff(root, r.task_class, report.provenance.subject.driver, shaAtRead, { model: candidateModel });
       if (!diff) { summary.push(`${r.task_class}: NO DIFF -- ${why}`); continue; }
       writeFileSync(join(dir, `${r.task_class}.router.diff`), diff, "utf8");
