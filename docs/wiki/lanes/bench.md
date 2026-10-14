@@ -201,7 +201,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/bench/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/bench/PROGRESS.md)
 
-## Decisions (16)
+## Decisions (17)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -223,6 +223,7 @@ ADRs whose `Product:` line names this lane first.
 | [`0913`](../../../docs/adr/0913-reproducibility-is-replay-determinism-with-honest-variance.md) | reproducibility is replay-determinism with honest variance (BEN-B) | accepted | 2026-08-12 |
 | [`0914`](../../../docs/adr/0914-the-real-event-candidate-is-a-second-model-under-the-proven-driver.md) | the real-event candidate is a second model under the proven driver (REQ-05) | accepted | 2026-08-12 |
 | [`0915`](../../../docs/adr/0915-a-benched-model-sees-the-contract-and-not-the-owners-setup.md) | a benched model sees the contract, and not the owner's setup | accepted | 2026-10-14 |
+| [`0916`](../../../docs/adr/0916-a-cli-driver-works-in-its-work-root-and-bench-stops-when-the-arc-checkout-moves.md) | a CLI driver works in its work root, and bench stops when the arc checkout moves | accepted | 2026-10-14 |
 
 ## Source
 

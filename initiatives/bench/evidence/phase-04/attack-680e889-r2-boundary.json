@@ -1,0 +1,71 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1525 (checkoutFingerprint, the `status --porcelain=v1 --untracked-files=no` read)",
+      "breaking_input": "The checkout starts with a tracked file already dirty, as it does here (` M docs/session-log.md`). A benched model appends to or overwrites that file. Its porcelain line is still ` M docs/session-log.md`, so the digest is unchanged. The opposite case also breaks: the file starts clean and one of arc's own hooks appends to the tracked docs/session-log.md during the run. A ` M` line appears and the run is voided as 'the arc checkout moved' with no model write at all.",
+      "why": "Porcelain v1 reports only per-path status codes, never content. An edit to an already-dirty tracked file is invisible, which contradicts the ADR's claim that tracked edits are covered. A hook or another writer touching a clean tracked file looks identical to the model moving the checkout.",
+      "fix": "Hash the content of dirty tracked files, for example `git diff HEAD` piped through sha256 or `git hash-object` of each path listed by `diff --name-only HEAD`. Name hook-owned paths such as docs/session-log.md and exclude them explicitly, rather than relying on the status code."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1507 (`try { git(root, [\"rev-parse\",\"--git-dir\"]) } catch { return null; }`)",
+      "breaking_input": "The arc checkout is a real repo, but `rev-parse --git-dir` fails for a reason other than 'not a repository': git missing from PATH (ENOENT), 'detected dubious ownership' (exit 128, common on Windows worktrees owned by another SID), or a corrupt .git. The fingerprint returns null both before and after, and two nulls compare equal. The run proceeds with containment silently unchecked.",
+      "why": "Every failure of the first call is folded into 'no repository', the same constant-for-a-failed-read pattern the PR claims to have closed. The unreadable path covers only failures after this first call. `checkoutMovedSince` retries only `.unreadable`, not null. A transient failure of this call on the later read is reported as 'moved' with '(no repo)'.",
+      "fix": "Return null only when git reports the not-a-repository case (exit 128 with that message, or `rev-parse --is-inside-work-tree` giving a definite answer). Every other failure returns `{unreadable}`, and the null case retries too.",
+      "twin_of": "A failed read folded into a comparison as a constant"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1510-1523 (the `read(args, fallback)` helper and its callers)",
+      "breaking_input": "`rev-parse --verify -q HEAD`, `symbolic-ref -q HEAD` or `reflog show` fails with something other than the expected exit 1 (a lock, a corrupt object, ENOBUFS on a long HEAD reflog past the execFileSync 1 MB default). The catch substitutes '(unborn)', '(detached)' or '' regardless of the cause.",
+      "why": "The fallback catches every error, not just the one the comment names. A failing reflog read silently drops the reflog from the digest, so the commit-then-reset-back coverage (L3/L6) vanishes with no signal. A transient HEAD failure becomes '(unborn)' on one read and the real SHA on the other, giving a false 'moved' with a misleading report. The reflog is the one unbounded read, and it is the one with a swallow-all fallback.",
+      "fix": "Apply a fallback only for the specific expected exit status (1 for `-q` probes), and let every other failure throw into `{unreadable}`. Raise maxBuffer for the reflog read, or cap it with `-n`.",
+      "twin_of": "A failed read folded into a comparison as a constant"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1519-1521 (for-each-ref over all non-remote refs, and `worktree list --porcelain`)",
+      "breaking_input": "The arc checkout is a linked worktree (arc-bench-2 here), and the owner runs parallel sessions in sibling worktrees of the same repo. Another worktree commits or creates a branch, or any session runs `git fetch --tags`. refs/heads, refs/tags and the worktree list (which carries every worktree's HEAD SHA) all change during the run, so the digest changes and bench stops.",
+      "why": "The fingerprint scopes to the whole shared repository, not to this checkout. The ADR's 'needs the checkout to itself' consequence is understated: it means the whole repo, including every worktree and every tag fetch. Valid paid runs get voided, and the user has a standing workflow of parallel sessions.",
+      "fix": "Take the worktree list for this worktree only. Treat other worktrees' HEADs and branches as informational, or compare them as a separate non-fatal 'shared state moved' field. Exclude refs/tags from fetch-driven changes, or fingerprint them separately."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1794-1810 (the capture write happens before the `if (ck.moved)` break)",
+      "breaking_input": "Attempt k answers while working inside arc and moves the checkout. `ck.moved` is true, but the capture record is written first, as `${dir}/${k}.json`, with no contamination marker. A later `--replay` or `--capture` consumer reads that dir and scores the contaminated answer as a valid attempt.",
+      "why": "ADR-0916 says the partial runs are void and their captures are not evidence. The code still persists the contaminated attempt's capture, indistinguishable from a clean one, and the record carries no checkout state.",
+      "fix": "Skip writing the capture when `ck.moved`, or write it with `contaminated: true` plus the checkout move reason. Make replay refuse such records."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:142 and drivers/codex.mjs:28",
+      "breaking_input": "ARC_WORK_ROOT names a directory that does not exist: a stale temp fixture, or an MSYS-style `/c/Users/...` value that `resolve()` turns into `C:\\c\\Users\\...`. `spawn` with a nonexistent cwd fails with ENOENT.",
+      "why": "The drivers classify ENOENT as 'CLI not installed / driver unavailable', so a bad work root is reported as a missing CLI. B5 from round 1 asked to fail closed when the path is not an existing directory. The fix only normalised the path, so the misattribution remains. The `resolve()` also gives a relative value an absolute path that may differ from the cwd arc-run actually spawned in.",
+      "fix": "After `resolve`, `statSync(...).isDirectory()` and fail with a distinct 'work root does not exist' error before spawning. Assert that it equals `process.cwd()` unless the two are known to differ."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1525 (`git status` run after every attempt)",
+      "breaking_input": "The owner's own session or a hook runs `git commit` or `git add` in the same worktree at the moment bench's per-attempt `git status` refreshes the index. Plain `git status` takes `.git/index.lock` to write the refreshed index. The owner's command fails with 'Unable to create .../index.lock'.",
+      "why": "A read-only check mutates arc's index and holds the lock, so it can break the owner's concurrent git operation. On Windows with core.fsmonitor it can also start a per-worktree daemon.",
+      "fix": "Set `GIT_OPTIONAL_LOCKS=0` in the environment of every fingerprint read, or use `git --no-optional-locks status`."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1531 (`String(e.message).split(\"\\n\")[0]`) and 1544-1546 (the immediate retry)",
+      "breaking_input": "A git read fails under execFileSync. The first line of `e.message` is 'Command failed: git -C <root> <args>', and the actual stderr reason is on the following lines. The retry in `checkoutMovedSince` runs back-to-back with no delay.",
+      "why": "The reported reason is the command line, not the failure, which is the pattern of taking one line of mixed output as the reason. A back-to-back retry cannot outlast a lock or a gc that holds for hundreds of milliseconds, so the 'transient lock' justification does not hold and a paid run still gets voided.",
+      "fix": "Report `e.stderr` trimmed to its first non-empty line, with the exit status. Sleep roughly 250-500 ms between the retries, and retry up to three times."
+    }
+  ]
+}
