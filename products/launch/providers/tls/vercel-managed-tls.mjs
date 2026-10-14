@@ -63,15 +63,20 @@ const unscanned = (why) => ({ ok: false, reason: `UNSCANNED(${say(why, 100)})` }
 
 // Asked of SSL Labs: a cached result up to a day old is used first, then a scan is polled for up to ~4.5 minutes,
 // inside the slot's 300 s timeout. Every endpoint (each IP the name resolves to) must grade A or better with HSTS.
+// A cached answer may pass but never fail: it can predate the app (arc-sandbox's first run read "no HSTS" from a scan
+// of the pre-frontend 404 while the live site sent HSTS), so a failing cached answer starts one fresh scan (ADR-1753).
 async function probe(ctx) {
   const domain = domainOf(ctx);
   let url = `${SSLLABS}/analyze?host=${encodeURIComponent(domain)}&publish=off&fromCache=on&maxAge=24&all=done`;
   let last = "scan not started";
+  let cached = true;
   for (let i = 0; i < 9; i++) {
     if (i) await wait(30000, ctx.signal);
     const r = await ctx.fetch(url, { method: "GET", headers: { "user-agent": "arc-launch" } }).then(
       async (res) => { let b = null; try { b = await res.json(); } catch { b = null; } return { status: res.status, body: b }; },
       (e) => { if (e && e.code) throw e; return { status: 0, body: null }; });
+    const fromCache = cached;
+    cached = false;
     url = `${SSLLABS}/analyze?host=${encodeURIComponent(domain)}&publish=off&all=done`;
     if (r.status === 0) return unscanned("ssllabs unreachable");
     if (r.status === 429 || r.status === 529) return unscanned(`ssllabs rate-limited (${r.status})`);
@@ -84,12 +89,34 @@ async function probe(ctx) {
     if (!Array.isArray(r.body.endpoints)) return { ok: false, reason: "ssllabs answered READY without an endpoints list" };
     const eps = list(r.body.endpoints);
     if (!eps.length) return unscanned("ssllabs returned no endpoints");
-    const bad = eps.filter((e) => !GOOD.has(e.grade) || !(e.details && e.details.hstsPolicy && e.details.hstsPolicy.status === "present"));
+    // SSL Labs reads HSTS from its own HTTP request; when the host refuses the scanner (Vercel answers its servers 403)
+    // that reading is blind, not "absent", and the header is read from the venture itself instead (ADR-1753).
+    const hsts = (e) => !!(e.details && e.details.hstsPolicy && e.details.hstsPolicy.status === "present");
+    const blind = (e) => { const s = Number(e.details && e.details.httpStatusCode); return !(s >= 200 && s < 400); };
+    const live = eps.some((e) => !hsts(e) && blind(e)) ? await liveHsts(ctx, domain) : false;
+    const bad = eps.filter((e) => !GOOD.has(e.grade) || !(hsts(e) || (blind(e) && live)));
+    if (bad.length && fromCache) {
+      url = `${SSLLABS}/analyze?host=${encodeURIComponent(domain)}&publish=off&startNew=on&all=done`;
+      last = "fresh scan started after a failing cached answer";
+      continue;
+    }
     if (bad.length)
       return { ok: false, reason: `ssllabs: ${bad.map((e) => `${say(e.ipAddress, 45)} grade ${say(e.grade, 4) || "none"}${e.details && e.details.hstsPolicy && e.details.hstsPolicy.status === "present" ? "" : ", no HSTS"}`).join("; ")}` };
-    return { ok: true, answerer: "api.ssllabs.com", evidence: { host: domain, grades: eps.map((e) => e.grade), hsts: true } };
+    const viaLive = eps.some((e) => !hsts(e));
+    return { ok: true, answerer: viaLive ? `api.ssllabs.com + ${domain}` : "api.ssllabs.com", evidence: { host: domain, grades: eps.map((e) => e.grade), hsts: true, hsts_from: viaLive ? "venture" : "ssllabs" } };
   }
   return unscanned(last);
+}
+
+// The venture's own answer to a browser-shaped GET: HSTS present with a positive max-age. Any failure is "no".
+async function liveHsts(ctx, domain) {
+  let res;
+  try { res = await ctx.fetch(`https://${domain}/`, { method: "GET", redirect: "manual", headers: { "user-agent": "arc-launch" } }); } catch (e) {
+    if (e && e.code) throw e;
+    return false;
+  }
+  const m = String((res.headers && res.headers.get("strict-transport-security")) || "").match(/(?:^|;)\s*max-age\s*=\s*"?(\d+)"?\s*(?:;|$)/i);
+  return !!m && Number(m[1]) > 0;
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.
@@ -99,7 +126,7 @@ export async function verify(ctx) {
   try {
     return await probe({ ...ctx, fetch: ask });
   } catch (e) {
-    if (e && e.code === "ABORTED") throw e;
+    if (e && e.code) throw e;
     return { ok: false, reason: `${(e && e.code) || "error"}: ${say(e && e.message)}` };
   }
 }

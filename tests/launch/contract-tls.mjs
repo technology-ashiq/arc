@@ -26,6 +26,11 @@ const opts = {
   overloaded: { status: 529 },
   unreachable: { status: "unreachable" },
   misconfigured: { misconfigured: true },
+  "stale-cache": { stale: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false }] },
+  "scanner-refused": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: "max-age=63072000" },
+  "scanner-refused-no-live": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: null },
+  "scanner-refused-zero": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: "max-age=0" },
+  "no-hsts-live-has": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false }], liveHsts: "max-age=63072000" },
 }[scenario] || {};
 const fake = makeSslLabs(opts);
 globalThis.fetch = fake.fetch;
@@ -48,4 +53,6 @@ if (scenario === "misconfigured" || scenario === "apply") {
 }
 out.verify = await adapter.verify(ctx);
 out.ssllabsCalls = fake.calls.filter((c) => c.startsWith("api.ssllabs.com")).length;
+out.rescans = fake.calls.filter((c) => c.includes("startNew=on")).length;
+out.liveCalls = fake.calls.filter((c) => c.startsWith("sandbox.automemory.ai")).length;
 console.log(`DONE ${JSON.stringify(out)}`);

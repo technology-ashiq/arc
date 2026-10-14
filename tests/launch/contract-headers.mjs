@@ -22,7 +22,9 @@ const DOMAIN = "sandbox.automemory.ai";
 const ENV = { GITHUB_TOKEN: "gho_fixtureToken0123456789" };
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const opts = {
-  "csp-dropped": { serve: (src) => src.replace("\"key\": \"Content-Security-Policy\"", "\"key\": \"X-Csp-Disabled\"") },
+  "csp-dropped": { serve: (src) => src.split("res.headers.set(\"content-security-policy\", csp);").join("") },
+  "unsafe-inline": { serve: (src) => src.split("'strict-dynamic'").join("'unsafe-inline'").split("'nonce-{NONCE}' ").join("") },
+  "static": { rendering: "static" },
   "host-hsts": { hostHeaders: { "Strict-Transport-Security": "max-age=63072000" } },
   "grade-b": { observatory: { status: 200, grade: "B", score: 75 } },
   "rate-limited": { observatory: { status: 429 } },
@@ -54,12 +56,15 @@ switch (scenario) {
     out.commits = commits();
     out.kinds = state.map((r) => r.kind);
     out.config = Buffer.from(repo().files["next.config.mjs"].content, "base64").toString("utf8");
+    out.middleware = Buffer.from(repo().files["middleware.js"].content, "base64").toString("utf8");
     out.verify = await adapter.verify(ctxNow());
     out.observatoryCalls = live.calls.filter((c) => c.includes("observatory")).length;
     out.teardown = (await adapter.teardown(ctxNow())).steps.map((s) => s.action);
     break;
   }
   case "csp-dropped":
+  case "unsafe-inline":
+  case "static":
   case "host-hsts":
   case "grade-b":
   case "rate-limited":

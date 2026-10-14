@@ -117,6 +117,7 @@ slots:
     verify: environments-probe
     depends_on:
       - hosting
+      - frontend
     gate: none
     approval: false
     timeout: 300

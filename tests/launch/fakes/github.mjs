@@ -5,10 +5,11 @@
 //   pendingPolls    how many runs-list reads show a new run as in_progress before it completes
 //   auditConclusion what the dependency-scan workflow's audit job concludes on a push (success unless set)
 //   jobConclusions  { step: conclusion } for the drill job's steps (dump, restore); success unless set
+//   stepLag         the drill job answers its own conclusion while its steps still read in_progress/null, as GitHub can
 //   secrets         names of Actions secrets the repo holds (values are never modelled)
 export const LEGS = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
-export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, auditConclusion = "success", jobConclusions = {} } = {}) {
+export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureToken0123456789", repos = [], runConclusions = null, planLimit = false, pendingPolls = 0, stepLag = false, auditConclusion = "success", jobConclusions = {} } = {}) {
   // The workflows other than arc-ci a fixture models, each with its jobs; a run of one has id + 10000 * (index + 1).
   const EXTRA = { "dependency-scan.yml": ["audit"], "backup-drill.yml": ["drill"] };
   const DRILL_STEPS = [["dump and checksum", "dump"], ["restore and compare row counts", "restore"]];
@@ -106,6 +107,16 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
         jobs: LEGS.map((os, i) => ({ name: `test (${os})`, status: "completed", conclusion: (runConclusions && runConclusions[i]) || "success" })) });
       return json(200, { ref: "refs/heads/main", object: { sha: p.c.sha } });
     }
+    // A forced move of a non-main branch to a main commit: the branch line restarts at that commit.
+    const bm = rest.match(/^git\/refs\/heads\/(.+)$/);
+    if (bm && method === "PATCH" && bm[1] !== "main") {
+      if (!r.branches[bm[1]]) return err(422, "Reference does not exist");
+      const to = r.commits.find((c) => c.sha === body.sha);
+      if (!to) return err(422, "Object does not exist");
+      if (!body.force) return err(422, "Update is not a fast forward");
+      r.branches[bm[1]] = [to];
+      return json(200, { ref: `refs/heads/${bm[1]}`, object: { sha: to.sha } });
+    }
     r.tags = r.tags || {};
     const tm = rest.match(/^git\/ref\/tags\/(.+)$/);
     if (tm && method === "GET") return r.tags[tm[1]] ? json(200, { ref: `refs/tags/${tm[1]}`, object: { sha: r.tags[tm[1]] } }) : err(404, "Not Found");
@@ -128,7 +139,11 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
     if (hm && method === "GET") {
       const key = decodeURIComponent(hm[1]);
       const c = head(key) || [...r.commits, ...Object.values(r.branches).flat()].find((x) => x.sha === key);
-      return c ? json(200, { sha: c.sha, commit: { message: c.message } }) : err(404, "No commit found");
+      if (!c) return err(404, "No commit found");
+      // A commit's parent is the one before it in whichever line holds it -- a branch line first, then main.
+      const line = [...Object.values(r.branches), r.commits].find((l) => l.indexOf(c) > 0);
+      const parents = line ? [{ sha: line[line.indexOf(c) - 1].sha }] : [];
+      return json(200, { sha: c.sha, commit: { message: c.message }, parents });
     }
     if (rest === "pulls" && method === "GET") {
       const h = url.searchParams.get("head");
@@ -223,7 +238,7 @@ export function makeGithub({ login = "technology-ashiq", token = "gho_fixtureTok
       const id = Number(jm[1]);
       const k = Math.floor(id / 10000);
       const run = r.runs.find((x) => x.id === id - 10000 * k);
-      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name), ...(name === "drill" ? { steps: steps() } : {}) })) });
+      if (run && k > 0) return json(200, { jobs: (EXTRA[EXTRA_NAMES[k - 1]] || []).map((name) => ({ name, status: "completed", conclusion: conclude(name), ...(name === "drill" ? { steps: stepLag ? steps().map((s) => ({ ...s, status: "in_progress", conclusion: null })) : steps() } : {}) })) });
       return run ? json(200, { jobs: run.jobs }) : err(404, "Not Found");
     }
     return err(404, `fake github: ${method} ${p} not modelled`);

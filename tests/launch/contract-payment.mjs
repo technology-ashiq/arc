@@ -100,6 +100,13 @@ switch (scenario) {
     out.missing = await adapter.verify(ctxNow());
     break;
   }
+  case "two-recorded":
+    // An earlier attempt recorded an order before this one: verify stands on the newest (ADR-1760).
+    reported.push({ kind: "razorpay-test-order", id: "order_StaleEarlier01", tag: TAG });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
+    out.verify = await adapter.verify(ctxNow());
+    out.order = reported[reported.length - 1].id;
+    break;
   case "verify-no-record":
     out.verify = await adapter.verify(ctxNow());
     out.calls = rz.calls.length;
