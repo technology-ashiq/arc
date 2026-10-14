@@ -1,0 +1,40 @@
+{
+  "phase": "10",
+  "commit": "b478b7438fce77c61a40eb105bdf58bde61fb5c3",
+  "short": "b478b743",
+  "generated": "2026-10-14T14:45:35Z",
+  "files": [
+    {
+      "name": "attack-cc5f385-r1-boundary.json",
+      "sha256": "e053436be8474863b13466842e66c2d5eb0856a2c632767d466d7cf100f12b30"
+    },
+    {
+      "name": "attack-cc5f385-r1-logic.json",
+      "sha256": "6995c66b1098f2c6bab9ef5a7965e4e6cb60455fe792d2f9030beecdb42304b0"
+    },
+    {
+      "name": "ci-38566913612-p10-suites.txt",
+      "sha256": "7a47c31b602f98616cd7dc612f088fea30976dcb9047f3475934e972b1d8b02f"
+    },
+    {
+      "name": "demo.md",
+      "sha256": "bc53cf555de5dbce37837daa550c6d45970cdbe31ad5dbedc84bd140b1040f42"
+    },
+    {
+      "name": "kill-seal.md",
+      "sha256": "5da11986a35403ecb7a5f11331817742a84a8582edbf2cb64899822f4af3b283"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "7a47c31b602f98616cd7dc612f088fea30976dcb9047f3475934e972b1d8b02f"
+    },
+    {
+      "name": "transcripts/kill-main-arc-resume.jsonl",
+      "sha256": "fffee4f7de4f307202898ee067f73769802bfa4c96319af9ef3c15839da2b80b"
+    },
+    {
+      "name": "transcripts/kill-main-arc-resume.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

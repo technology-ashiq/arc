@@ -1,0 +1,10 @@
+CI run 38566913612 @ f1fb1594 (PR #419 head, merged as b478b743): 19/19 jobs green
+P10 suites: distribute-p10
+count = legs on which the test printed its line (5 legs: ubuntu 18/20/22, one windows shard, one macos shard)
+      5 ok distribute-p10: a manifest naming a path outside the project is refused by name and nothing is removed
+      5 ok distribute-p10: a modified managed file is kept and the record stays; hooks the owner set are left alone
+      5 ok distribute-p10: a second init writes only the record, and a dry run or a refusal never registers
+      5 ok distribute-p10: every test in the file is registered
+      5 ok distribute-p10: init with no --target places every harness under one version-2 manifest and registers the project
+      5 ok distribute-p10: the radar reports drift as one path-free receipt and leaves every consumer byte-identical
+      5 ok distribute-p10: uninstall removes the managed files, keeps the owner's, and unsets the hooks init set
