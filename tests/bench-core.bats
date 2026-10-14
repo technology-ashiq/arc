@@ -58,7 +58,11 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   # contains those four digits about 0.19% of the time -- it finally rolled one, and the failure
   # read exactly like a real ceiling leak. Excluding a field without asserting it stays opaque would
   # have been a hole, so the count moved by one rather than staying still.
-  [ "$oks" -eq 88 ]
+  #
+  # 88 -> 91 on 2026-10-14: three checks for `failureLine`, the reason a NOT SCORED attempt reports.
+  # 91 -> 93 the same day: the crash trailer and the forged contract line (attack a59752e B2, B5).
+  # 93 -> 94: a non-schema STOPPED line is a reason and outranks a child's Error line (ca7ba9a B1, B3).
+  [ "$oks" -eq 94 ]
 }
 
 @test "the canonical encoder refuses NaN rather than folding it to null" {

@@ -13,7 +13,7 @@
  * second kill criterion anticipates.
  */
 
-import { canonicalDoc, msUntilDeadline, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
+import { canonicalDoc, contractLines, msUntilDeadline, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { explainKey } from "../../hq/lib/keys.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
@@ -161,6 +161,7 @@ await runDriver("generic-api", async ({ processName, input }) => {
     "INPUT (JSON):",
     JSON.stringify(input),
     "",
+    ...contractLines(read.doc),
     "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 

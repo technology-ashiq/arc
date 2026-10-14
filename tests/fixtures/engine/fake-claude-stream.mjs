@@ -9,6 +9,7 @@
 //                             absent        a well-formed id no spine holds
 //                             old           a real-looking id minted in 2020
 //                             (unset)       no receipt_id in the output at all
+//   FAKE_CLAUDE_PROMPT_FILE where to write the prompt it read on stdin (ADR-0915: the contract is in it)
 //   FAKE_CLAUDE_PAUSE_MS    the pause after each event (default 400)
 //   FAKE_CLAUDE_FAIL        1: end with an is_error result and exit 1, as the real CLI fails
 //   (FAKE_CLAUDE_RECEIPT also takes other:<kind> -- fresh and on the spine, but emitted by another process)
@@ -44,8 +45,10 @@ function receiptId() {
   return undefined;
 }
 
-process.stdin.resume();
+let promptIn = "";
+process.stdin.on("data", (d) => { promptIn += d; });
 process.stdin.on("end", async () => {
+  if (process.env.FAKE_CLAUDE_PROMPT_FILE) writeFileSync(process.env.FAKE_CLAUDE_PROMPT_FILE, promptIn);
   const events = [
     { type: "system", subtype: "init" },
     { type: "assistant", message: { content: [{ type: "text", text: "starting" }, { type: "tool_use", name: "Agent", input: { subagent_type: "council-researcher" } }] } },
