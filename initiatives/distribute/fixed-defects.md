@@ -118,3 +118,14 @@ and lane finds are appended under their PR.
 - **(cv) a secret pattern whose character class crosses JSON structure.** `[^\s:/@]` admitted `"`, `}` and `,`, so a URL ending one field joined the next field's `@` into `user:pass@`. A credential inside a JSON string holds no raw quote: exclude `"` in every DENY_RULES class that spans a value, and replay with a positive control split across fields.
 - **(cw) a ran() check that knows one of a command's two summary lines.** The writer and the checker print different last lines; a RAN assertion written against one fails the other path. Match every terminal line the code can print, and cover each path with its own test.
 - **(cx) a writer-of-tracked-files verb with no plan-bound allowlist row.** A new script that writes the repo's own tree is `UNBOUND` to `plan-bound-audit` (CI-only red); allowlist it with the generator reason in the same commit.
+- **(cy) a reaper that cannot tell a dead run from a live one.** Two wrappers can share a ledger; a pidfile whose writer is still running is a run in progress. Record the writer's pid and command line, and reap only when that writer is gone (attack 8707a5c B1).
+- **(cz) a pid trusted by number.** A recorded pid can be reused or planted in a committed file; kill only a pid whose command line still equals the one recorded at spawn, on every OS (B2, L5).
+- **(da) a grant that is the dangerous half of a rule.** `vercel --prod --yes` lets the CLI create the project the tracked-target prose then trusts; grant the narrowest form and let the tool's own prompt stop the rest (B3).
+- **(db) a fence check that trusts the command file.** A missing render, a command with no `agent:` line, or a fence file left `mode: subagent` must refuse NO-FENCE when the command's source carries `allowed-tools`; never fall back to the default agent (B4, L1).
+- **(dc) a character class that drops an escape.** Excluding `"` from a credential class also drops `\"`, the form a real quote takes in canonical JSON; allow the escaped pair as one unit (B5).
+- **(dd) liveness by kill(0).** A zombie answers kill(pid, 0); a wrapper polling synchronously never reaps its child, so read process state (`ps` stat Z) instead (B6, L6).
+- **(de) a generator that writes through links or out of its roots.** Confine every rendered path (no `..`, under its root) and refuse a link on any existing segment before writing; a writer for one tree checks it is that tree (B7, L3, L4, L9).
+- **(df) a process listing parsed by line.** A command line can hold a line break and forge a row; fold it to one line at the source (B8).
+- **(dg) a record written in place.** A wrapper killed mid-write leaves half a file; write temp + rename, and refuse (never silently clear) a record that cannot be read (B9).
+- **(dh) a refusal test that never checks nothing was written.** Assert the tree is unchanged after a refused write path, not only that the refusal printed (L10).
+

@@ -21,7 +21,8 @@ Ship the current branch. Run these in order and STOP at the first failure:
    exists but is not tracked is never a declared target, since this session may have made it: print
    `deploy: <file> exists but is not tracked by git — not a declared target`. Otherwise do not deploy: print
    `deploy: none declared — the PR is the ship`, and use the PR's URL from `gh pr view --json url,state` as the URL below.
-   Never run any other `vercel` subcommand (`link`, `project`, `env`): creating a target is the owner's step.
+   Never run any other `vercel` subcommand or flag (`link`, `project`, `env`, `--yes`): creating or confirming a target
+   is the owner's step, and `vercel --prod` with no linked project stops at its own prompt.
 5. **Leave the receipt (spine)** — record the ship on the spine (hook-mode, never blocks the flow):
    ```bash
    bash .claude/scripts/hq/arc-event.sh emit ship.done --payload '{"url":"<prod-url or PR url>","summary":"<one line>"}'

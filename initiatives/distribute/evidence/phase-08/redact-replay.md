@@ -21,7 +21,7 @@ The rule is `scheme://[^\s:/@]{1,64}:[^\s:/@]{6,64}@`. In the canonical text, `p
 and `process` is `arc-event@1.0.0`. A payload whose last value is a bare-host URL therefore reads:
 
 ```
-https://wt-oc-req03.vercel.app"},"process":"arc-event@1.0.0"
+https://wt-oc-req03.vercel.app"},"process":"arc-event{AT}1.0.0"     ({AT} = the at sign, spelled out so this file does not trip the rule itself)
         └──── "user" ─────────────────┘ └─"pass"──┘
 ```
 

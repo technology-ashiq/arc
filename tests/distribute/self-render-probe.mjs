@@ -1,7 +1,7 @@
 // tests/distribute/self-render-probe.mjs -- drives the self-render owner rule (ADR-2023) with planted renders, for
 // tests/distribute-self-render.bats. The real renders collide only on .agents/skills/, so a second collision can be
 // induced only here.
-// Usage: node tests/distribute/self-render-probe.mjs double|shared   Last line: `RAN self-render-probe`.
+// Usage: node tests/distribute/self-render-probe.mjs double|shared|escape   Last line: `RAN self-render-probe`.
 import { selfPlanFrom } from "../../.claude/scripts/engine/install-targets/self-render.mjs";
 import { Refused } from "../../.claude/scripts/engine/install-targets/common.mjs";
 
@@ -12,8 +12,10 @@ const renders = {
   double: [["codex", m([[".codex/a.toml", "a"]])], ["opencode", m([[".opencode/x", "first"]])], ["skills-only", m([[".opencode/x", "second"]])]],
   // codex then skills-only claim one skill: skills-only's bytes are kept, in either order.
   shared: [["codex", m([[".agents/skills/s/SKILL.md", "codex"]])], ["skills-only", m([[".agents/skills/s/SKILL.md", "skills-only"], [".agents/skills/t/SKILL.md", "t"]])]],
+  // A path that starts with a root and climbs out of it: it would land on the brain (attack 8707a5c L3).
+  escape: [["codex", m([[".codex/../AGENTS.md", "x"]])]],
 }[mode];
-if (!renders) throw new Error(`mode must be double or shared, got ${mode}`);
+if (!renders) throw new Error(`mode must be double, shared or escape, got ${mode}`);
 process.stdout.write("RAN self-render-probe\n");
 try {
   const plan = selfPlanFrom(renders);

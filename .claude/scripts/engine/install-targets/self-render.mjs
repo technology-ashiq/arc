@@ -16,10 +16,10 @@
  * Zero dependencies, Node 18+.
  */
 
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, join, sep } from "node:path";
 
-import { verifiedRows } from "../frontmatter-lint.mjs";
+import { confineRel, verifiedRows } from "../frontmatter-lint.mjs";
 import { renderSourceTree } from "../source-render.mjs";
 import { Refused } from "./common.mjs";
 
@@ -37,7 +37,9 @@ export function selfPlanFrom(renders) {
   const files = new Map();
   for (const [t, rendered] of renders) {
     for (const [path, text] of rendered) {
-      if (!SELF_ROOTS.some((r) => path.startsWith(r))) throw new Refused("path-owner", `${t} renders ${path}, outside ${SELF_ROOTS.join(" ")}`);
+      // A plain relative path, no `.`/`..` segment, under one of the three roots: `.codex/../AGENTS.md` starts with a
+      // root and would land on the brain (attack 8707a5c L3).
+      if (confineRel(path) === null || path.endsWith("/") || !SELF_ROOTS.some((r) => path.startsWith(r))) throw new Refused("path-owner", `${t} renders ${JSON.stringify(path)}, not a plain path under ${SELF_ROOTS.join(" ")}`);
       const prior = files.get(path);
       if (prior) {
         const shared = path.startsWith(SHARED) && SHARED_BY.has(prior.target) && SHARED_BY.has(t);
@@ -73,8 +75,32 @@ function foreignSet(tree) {
 
 const norm = (s) => s.replace(/\r/g, "");
 
+const fold = (p) => (process.platform === "win32" || process.platform === "darwin" ? p.toLowerCase() : p);
+
+// The writer never follows a link: every existing segment from the tree down to the file must be a real directory
+// (or, last, a regular file) whose realpath stays in the tree, or the path is refused by name (attack 8707a5c L4, B7).
+function writable(tree, path) {
+  const root = realpathSync(tree);
+  let at = root;
+  const segs = path.split("/");
+  for (let i = 0; i < segs.length; i++) {
+    at = join(at, segs[i]);
+    let st;
+    try { st = lstatSync(at); } catch { return; } // the rest is created fresh, under a checked parent
+    const last = i === segs.length - 1;
+    if (st.isSymbolicLink() || (last ? !st.isFile() : !st.isDirectory())) throw new Refused("symlink", `${segs.slice(0, i + 1).join("/")} is a link or not a ${last ? "file" : "directory"}; compile --self never writes through one`);
+    const real = realpathSync(at);
+    if (!fold(real).startsWith(fold(root) + sep)) throw new Refused("symlink", `${segs.slice(0, i + 1).join("/")} resolves outside the arc checkout`);
+  }
+}
+
 /** Write (or with check, compare) the self-render. Returns { lines, findings }. */
 export function selfRender(tree, { check = false } = {}) {
+  // The writer is for an arc checkout only: --source pointed anywhere else would plant three directories there
+  // (attack 8707a5c L9). The brain, the matrix and the command source are what make a tree arc's.
+  if (!check) for (const f of ["AGENTS.md", "engine/harnesses.yaml", ".claude/commands"]) {
+    if (!existsSync(join(tree, f))) throw new Refused("not-arc", `${tree} has no ${f}, so it is not an arc checkout; compile --self writes only into one`);
+  }
   const plan = selfPlan(tree);
   const lines = [];
   let findings = 0;
@@ -93,6 +119,7 @@ export function selfRender(tree, { check = false } = {}) {
     return { lines, findings };
   }
   let wrote = 0;
+  for (const [path] of plan) writable(tree, path);
   for (const [path, { text }] of plan) {
     const abs = join(tree, path);
     if (existsSync(abs) && norm(readFileSync(abs, "utf8")) === norm(text)) continue;

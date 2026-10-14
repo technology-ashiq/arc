@@ -20,7 +20,7 @@
  */
 
 import { spawn, spawnSync, execFileSync } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -240,7 +240,8 @@ function killTree(child) {
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore", windowsHide: true });
   } else {
-    try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { /* gone */ } }
+    try { process.kill(-child.pid, "SIGKILL"); } catch { /* not a group leader, or gone */ }
+    try { process.kill(child.pid, "SIGKILL"); } catch { /* gone */ }
   }
 }
 
@@ -250,9 +251,10 @@ function killTree(child) {
 // every spawn leaves `<transcript>.pid` until the tree is verifiably gone, so the next run reaps an orphan before it
 // spends anything.
 
-// pid -> { ppid, cmd } on Windows, read once per call; null when the listing itself fails.
+// pid -> { ppid, cmd } on Windows, read once per call; null when the listing itself fails. A command line is folded
+// onto one line, so a line break inside one can never forge a row of its own (attack 8707a5c B8).
 function winProcs() {
-  const ps = "Get-CimInstance Win32_Process | ForEach-Object { [string]$_.ProcessId + ' ' + [string]$_.ParentProcessId + ' ' + [string]$_.CommandLine }";
+  const ps = "Get-CimInstance Win32_Process | ForEach-Object { [string]$_.ProcessId + ' ' + [string]$_.ParentProcessId + ' ' + ([string]$_.CommandLine -replace '[\\r\\n]+', ' ') }";
   const r = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", ps], { encoding: "utf8", windowsHide: true, maxBuffer: 64 * 1024 * 1024 });
   if (r.error || r.status !== 0) return null;
   const out = new Map();
@@ -263,10 +265,21 @@ function winProcs() {
   return out;
 }
 
-/** Every pid in the tree under ROOT (root included). POSIX kills by group, so the root stands for the group. */
+// pid -> { ppid, pgid, stat, cmd } on POSIX; null when ps fails. `-A` with `-o` works on Linux and macOS alike.
+function posixProcs() {
+  const r = spawnSync("ps", ["-A", "-o", "pid=,ppid=,pgid=,stat=,args="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.error || r.status !== 0) return null;
+  const out = new Map();
+  for (const line of String(r.stdout).split("\n")) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s?(.*)$/.exec(line);
+    if (m) out.set(Number(m[1]), { ppid: Number(m[2]), pgid: Number(m[3]), stat: m[4], cmd: m[5] });
+  }
+  return out;
+}
+
+/** Every pid in the tree under ROOT (root included), walked by parent pid on both platforms. */
 function treePids(root, listing) {
-  if (process.platform !== "win32") return [root];
-  const procs = listing ?? winProcs();
+  const procs = listing ?? (process.platform === "win32" ? winProcs() : posixProcs());
   if (!procs) return [root];
   const seen = new Set([root]);
   for (let grew = true; grew;) {
@@ -276,7 +289,13 @@ function treePids(root, listing) {
   return [...seen];
 }
 
+// A POSIX group is alive while any member is not a zombie: the wrapper never reaps its child while it polls
+// synchronously, so a killed leader lingers as Z and kill(-pgid, 0) would still answer (attack 8707a5c B6).
 const alive = (pid, group = false) => {
+  if (process.platform !== "win32") {
+    const procs = posixProcs();
+    if (procs) return [...procs].some(([p, x]) => (group ? x.pgid === pid : p === pid) && !x.stat.startsWith("Z"));
+  }
   try { process.kill(group ? -pid : pid, 0); return true; } catch (e) { return e.code === "EPERM"; }
 };
 
@@ -291,16 +310,26 @@ function survivors(pids, group) {
   return left;
 }
 
+/** The pid's command line now, or null. */
 function commandLine(pid) {
   if (process.platform === "win32") return winProcs()?.get(pid)?.cmd ?? null;
-  const r = spawnSync("ps", ["-o", "args=", "-p", String(pid)], { encoding: "utf8" });
-  return r.status === 0 ? String(r.stdout).trim() : null;
+  return posixProcs()?.get(pid)?.cmd ?? null;
+}
+
+/** The record a run keeps while it lives: its own pid, its leader, and every process seen under it with its command line. */
+export function writePidfile(path, rec) {
+  // Atomic: a wrapper killed mid-write leaves the old file or the new one, never half of one (attack 8707a5c B9).
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(rec)}\n`);
+  renameSync(tmp, path);
 }
 
 /**
- * Reap what a killed wrapper left behind: every `*.jsonl.pid` under the ledger names the leader of a run whose
- * wrapper never confirmed its tree gone. A live pid whose command line names opencode is killed (tree or group) and
- * verified; a pid that is gone, or now belongs to something else, is only cleared. A survivor refuses the run.
+ * Reap what a killed wrapper left behind. Every `*.jsonl.pid` under the ledger was written by a run that has not yet
+ * confirmed its tree gone. A pidfile whose WRAPPER is still alive is a run in progress, never touched (two runs can
+ * share a ledger: attack 8707a5c B1). Otherwise each recorded pid whose command line is unchanged is killed (tree on
+ * Windows, group on POSIX) and verified gone; a pid that is gone or now runs something else (reuse, or a pid planted
+ * in a committed file: B2) is only cleared. A survivor, or a record that cannot be read, refuses the run by name.
  */
 export function reapStale(ledger) {
   const found = [];
@@ -318,26 +347,18 @@ export function reapStale(ledger) {
   for (const f of found.sort()) {
     let rec;
     try { rec = JSON.parse(readFileSync(f, "utf8")); } catch { rec = null; }
-    const leader = rec && Number.isInteger(rec.pid) && rec.pid > 0 ? rec.pid : null;
-    let live = [];
-    if (process.platform === "win32") {
-      // On Windows the wrapper's death takes its direct children (libuv's job), and what survives is a detached
-      // descendant whose parent is gone, so the leader cannot lead to it: every pid seen in the tree is recorded
-      // with its command line, and one is killed only while that command line is unchanged (pid reuse).
-      const procs = winProcs();
-      if (!procs) throw new Refusal("STALE-RUN", `${f} names a run whose processes cannot be listed; check by hand before any new run`);
-      const tree = Array.isArray(rec?.tree) ? rec.tree : [];
-      live = tree.filter((t) => t && Number.isInteger(t.pid) && procs.get(t.pid)?.cmd === t.cmd && typeof t.cmd === "string" && t.cmd !== "").map((t) => t.pid);
-      for (const pid of live) killTree({ pid });
-      const left = survivors(live, false);
-      if (left.length) throw new Refusal("STALE-RUN", `${f} names a live OpenCode tree that survived a kill: pid ${left.join(", ")}; end it by hand before any new run`);
-    } else if (leader !== null && alive(leader, true) && /opencode/i.test(commandLine(leader) ?? "")) {
-      live = [leader];
-      killTree({ pid: leader });
-      const left = survivors(live, true);
-      if (left.length) throw new Refusal("STALE-RUN", `${f} names a live OpenCode group that survived a kill: pid ${left.join(", ")}; end it by hand before any new run`);
-    }
-    lines.push(live.length ? `reaped: pid=${leader} tree=${live.length} from ${posix(f)}` : `cleared: ${posix(f)} (no live process of that run)`);
+    const ok = rec && typeof rec === "object" && Number.isInteger(rec.pid) && rec.pid > 0 && Number.isInteger(rec.wrapper) && rec.wrapper > 0
+      && typeof rec.wrapperCmd === "string" && Array.isArray(rec.tree);
+    if (!ok) throw new Refusal("STALE-RUN", `${f} is not a readable run record; read it, end what it names by hand, then delete it`);
+    if (rec.wrapper !== process.pid && commandLine(rec.wrapper) === rec.wrapperCmd) { lines.push(`skipped: ${posix(f)} (its wrapper pid ${rec.wrapper} is still running)`); continue; }
+    const tree = rec.tree.filter((t) => t && Number.isInteger(t.pid) && t.pid > 0 && typeof t.cmd === "string" && t.cmd !== "");
+    const group = process.platform !== "win32";
+    const live = tree.filter((t) => commandLine(t.pid) === t.cmd).map((t) => t.pid);
+    for (const pid of live) killTree({ pid });
+    const left = survivors(live, false);
+    if (left.length) throw new Refusal("STALE-RUN", `${f} names a live OpenCode process that survived a kill: pid ${left.join(", ")}; end it by hand before any new run`);
+    if (group && live.includes(rec.pid) && survivors([rec.pid], true).length) throw new Refusal("STALE-RUN", `${f}: the process group ${rec.pid} survived a kill; end it by hand before any new run`);
+    lines.push(live.length ? `reaped: pid=${rec.pid} tree=${live.length} from ${posix(f)}` : `cleared: ${posix(f)} (no live process of that run)`);
     unlinkSync(f);
   }
   return lines;
@@ -387,15 +408,32 @@ export function exportedSpend(text, id) {
  * Returns the agent name, or null for a command with no fence (no allowed-tools in its source).
  */
 export function commandFence(cwd, command) {
-  const file = join(cwd, ".opencode", "commands", `${command}.md`);
-  if (!existsSync(file)) return null;
-  const text = readFileSync(file, "utf8").replace(/\r/g, "");
-  const front = /^---\n([\s\S]*?)\n---\n/.exec(text);
-  const m = front && /^agent:\s*(\S+)\s*$/m.exec(front[1]);
-  if (!m) return null;
+  const rendered = join(cwd, ".opencode", "commands", `${command}.md`);
+  const fenceFile = join(cwd, ".opencode", "agents", `${command}-fence.md`);
+  const source = join(cwd, ".claude", "commands", `${command}.md`);
+  const front = (file) => {
+    const text = readFileSync(file, "utf8").replace(/\r/g, "");
+    const m = /^---\n([\s\S]*?)\n---\n/.exec(text);
+    return m ? m[1] : null;
+  };
+  // A source with allowed-tools, or a fence file on disk, means this command has a fence: a missing or stale render
+  // is refused by name, never run under the default agent.
+  const fenced = existsSync(fenceFile) || (existsSync(source) && /^allowed-tools:/m.test(front(source) ?? ""));
+  if (!existsSync(rendered)) {
+    if (fenced) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md is missing while the command has a fence: render it (node bin/arc.mjs compile --self)`);
+    return null;
+  }
+  const head = front(rendered);
+  const m = head && /^agent:\s*(\S+)\s*$/m.exec(head);
+  if (!m) {
+    if (fenced) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md names no agent while the command has a fence: the render is stale or edited`);
+    return null;
+  }
   const agent = m[1].replace(/^["']|["']$/g, "");
   if (agent !== `${command}-fence`) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md names agent \`${agent}\`, not its own fence ${command}-fence`);
-  if (!existsSync(join(cwd, ".opencode", "agents", `${agent}.md`))) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md names the fence ${agent}, and .opencode/agents/${agent}.md is missing: the run would be unfenced`);
+  if (!existsSync(fenceFile)) throw new Refusal("NO-FENCE", `.opencode/commands/${command}.md names the fence ${agent}, and .opencode/agents/${agent}.md is missing: the run would be unfenced`);
+  const fh = front(fenceFile) ?? "";
+  if (!/^mode:\s*all\s*$/m.test(fh) || !/^ {2}"\*":\s*deny\s*$/m.test(fh)) throw new Refusal("NO-FENCE", `.opencode/agents/${agent}.md is not a session fence (needs mode: all and "*": deny): a stale render binds only a subagent`);
   return agent;
 }
 
@@ -503,7 +541,7 @@ export async function run(o) {
       for (const k of kids) charge(k);
     } catch (e) { unpriced++; out(`sweep: COST-UNREADABLE ${e.message}`); }
   };
-  let child = null, finalised = false, interrupted = null, stopSnap = () => {};
+  let child = null, finalised = false, interrupted = null, stopSnap = () => {}, seenPids = () => [];
   const stop = (v) => { if (verdict === null) { verdict = v; if (child) killTree(child); } };
   const finalise = (code) => {
     if (finalised) return verdict;
@@ -513,9 +551,11 @@ export async function run(o) {
     if (child) {
       // The tree is read while its leader lives; a leader that already exited has no tree left to walk.
       const leading = child.exitCode === null && child.signalCode === null;
-      const tree = leading ? treePids(child.pid) : [child.pid];
+      const tree = new Set([...(leading ? treePids(child.pid) : [child.pid]), ...seenPids()]);
+      for (const pid of tree) if (pid !== child.pid) killTree({ pid });
       killTree(child); // a leader that exited may have left its group behind (stragglers keep spending)
-      left = survivors(tree, process.platform !== "win32");
+      left = survivors([...tree], false);
+      if (!left.length && process.platform !== "win32") left = survivors([child.pid], true);
     }
     // A killed run never streams the finished task events, so its subagents' spend is read from the parent's own
     // export, found by title when no event named the session (attack 7c30208 B1).
@@ -559,19 +599,21 @@ export async function run(o) {
     const l = launch(bin, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true });
     child = spawn(l.cmd, l.args, l.opts);
     const seen = new Map();
+    const wrapperCmd = commandLine(process.pid) ?? "";
     const record = () => {
       if (!child.pid) return;
-      if (process.platform === "win32" && child.exitCode === null && child.signalCode === null) {
-        const procs = winProcs();
+      if (child.exitCode === null && child.signalCode === null) {
+        const procs = process.platform === "win32" ? winProcs() : posixProcs();
         if (procs) for (const pid of treePids(child.pid, procs)) if (!seen.has(pid) && procs.get(pid)?.cmd) seen.set(pid, procs.get(pid).cmd);
       }
-      try { writeFileSync(`${transcript}.pid`, `${JSON.stringify({ pid: child.pid, started, tree: [...seen].map(([pid, cmd]) => ({ pid, cmd })) })}\n`); } catch (e) { ioFailed ??= e; }
+      try { writePidfile(`${transcript}.pid`, { pid: child.pid, wrapper: process.pid, wrapperCmd, started, tree: [...seen].map(([pid, cmd]) => ({ pid, cmd })) }); } catch (e) { ioFailed ??= e; }
     };
     record();
     // A wrapper that dies leaves this file behind; the tree in it is what the next run reaps.
-    const snap = process.platform === "win32" ? [setTimeout(record, 1000), setInterval(record, 3000)] : [];
+    const snap = [setTimeout(record, 1000), setInterval(record, 3000)];
     for (const t of snap) t.unref();
     stopSnap = () => { clearTimeout(snap[0]); clearInterval(snap[1]); };
+    seenPids = () => [...seen.keys()];
     let buf = "";
     const onLine = (line) => {
       if (line === "") return;

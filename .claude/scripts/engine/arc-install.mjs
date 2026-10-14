@@ -38,9 +38,15 @@ export const TARGETS = Object.freeze({ "claude-code": claudeCode, codex, opencod
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 // The commit the files came from, as the registry stamps it: an override for tests, else git, else "unknown".
-function sourceCommit(tree) {
+export function sourceCommit(tree) {
   if (process.env.ARC_REGISTRY_COMMIT) return process.env.ARC_REGISTRY_COMMIT;
   try { return execFileSync("git", ["-C", tree, "rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return "unknown"; }
+}
+
+// The tag that names exactly that commit, or null (ADR-2025: an untagged install says so, never a guess).
+export function sourceTag(tree) {
+  if (process.env.ARC_REGISTRY_COMMIT) return process.env.ARC_REGISTRY_TAG || null;
+  try { return execFileSync("git", ["-C", tree, "describe", "--tags", "--exact-match", "--match", "v[0-9]*", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null; } catch { return null; }
 }
 
 export function main(argv) {
@@ -112,7 +118,7 @@ export function main(argv) {
     if (dir && typeof mod.finishPlan === "function") p = mod.finishPlan(p, tree, dir);
     const prior = dir ? readManifest(dir, mod.MANIFEST_PATH) : null;
     // Two targets in one project would overwrite one record with the other (attack d32e714 B4).
-    if (prior && prior.manifest.target !== opt.target) throw new Refused("other-target", `${dir} already holds a \`${prior.manifest.target}\` install in ${prior.rel}; one record names one target`);
+    if (prior && (prior.manifest.targets.length !== 1 || prior.manifest.targets[0] !== opt.target)) throw new Refused("other-target", `${dir} already holds a \`${prior.manifest.target}\` install in ${prior.rel}; one record names one target`);
     const pre = dir ? preflight(p.ops, dir, prior?.manifest) : { conflicts: [], dirs: [] };
     if (opt.dryRun) {
       if (!opt.quiet) for (const o of p.ops) console.log(`${o.kind === "mkdir" ? "mkdir" : o.kind} ${o.path}`);
@@ -126,7 +132,7 @@ export function main(argv) {
       return 1;
     }
     const degraded = p.degraded.map((d) => `${d.cell} (${d.kind}) — ${d.why}`);
-    const record = manifestRecord(opt.target, p.ops, degraded, pre.conflicts, sourceCommit(tree));
+    const record = manifestRecord(opt.target, p.ops, degraded, pre.conflicts, { tag: sourceTag(tree), commit: sourceCommit(tree), hooksPathSet: prior?.manifest.hooks_path_set === true });
     const text = mod.MANIFEST_PATH === ".arc-install.json" ? `${JSON.stringify(record, null, 2)}\n` : mod.manifestText(tree, record);
     const manifestOp = { kind: "write", path: mod.MANIFEST_PATH, text, sha: sha(Buffer.from(text)) };
     try {

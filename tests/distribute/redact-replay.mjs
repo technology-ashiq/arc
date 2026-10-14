@@ -30,6 +30,8 @@ const cases = [
   ["control", { harness: "opencode", summary: "db", url: dsn }],
   // A DSN split at its colon across two fields is rebuilt by the scanner's adjacency joins, quote rule or not.
   ["control-split", { a: split[0], b: split[1] }],
+  // A password holding a quote reaches the canonical text escaped (\"), and is still a credential (attack 8707a5c B5).
+  ["control-quote", { harness: "opencode", summary: "db", url: ["postgres", "://", "arc", ":", "ab", String.fromCharCode(34), "cdef12", AT, "db.internal"].join("") }],
 ];
 for (const [name, payload] of cases) {
   const event = envelope(payload);

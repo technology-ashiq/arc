@@ -109,11 +109,13 @@ probe() {
   local tools; tools=$(sed -n 's/^allowed-tools: //p' "$f")
   [ -n "$tools" ] || { echo "no allowed-tools line"; false; }
   if printf '%s' "$tools" | grep -qF 'Bash(vercel:*)'; then echo "the whole vercel CLI is granted again (debt row 23)"; false; fi
-  printf '%s' "$tools" | grep -qF 'Bash(vercel --prod), Bash(vercel --prod --yes), Bash(git ls-files --error-unmatch:*)' || { echo "fence: $tools"; false; }
+  printf '%s' "$tools" | grep -qF 'Bash(vercel --prod), Bash(git ls-files --error-unmatch:*)' || { echo "fence: $tools"; false; }
   grep -qF 'that git tracks' "$f" && grep -qF 'git ls-files --error-unmatch .vercel/project.json' "$f" || { echo "no tracked-target check"; false; }
   grep -qF 'deploy: <file> exists but is not tracked by git — not a declared target' "$f" || { echo "no named untracked-target line"; false; }
   # The rendered fence is what binds an OpenCode session: it allows exactly the two deploy forms and no other vercel.
-  grep -qxF '    "vercel --prod": allow' "$g" && grep -qxF '    "vercel --prod --yes": allow' "$g" || { echo "rendered fence: $(cat "$g")"; false; }
-  [ "$(grep -c '"vercel' "$g")" -eq 2 ] || { echo "rendered fence grants another vercel form: $(grep '"vercel' "$g")"; false; }
+  # --yes is never granted: it is what lets vercel create a project from an untracked, unlinked tree (attack 8707a5c B3).
+  if printf '%s' "$tools" | grep -qF -- '--yes'; then echo "the fence grants --yes"; false; fi
+  grep -qxF '    "vercel --prod": allow' "$g" || { echo "rendered fence: $(cat "$g")"; false; }
+  [ "$(grep -c '"vercel' "$g")" -eq 1 ] || { echo "rendered fence grants another vercel form: $(grep '"vercel' "$g")"; false; }
   grep -qxF 'mode: all' "$g" || { echo "the fence is not launchable as the session's own agent (debt row 22)"; false; }
 }

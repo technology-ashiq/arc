@@ -33,7 +33,7 @@ listing() { (cd "$1" && find . -type f ! -path './.codex/*' ! -path './.opencode
 @test "distribute-self-render: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-self-render: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 8 ] || { echo "declared $declared, expected 8"; false; }
+  [ "$declared" -eq 9 ] || { echo "declared $declared, expected 9"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -93,14 +93,24 @@ listing() { (cd "$1" && find . -type f ! -path './.codex/*' ! -path './.opencode
   [ "$(count '^reversed \.agents/skills/s/SKILL\.md skills-only$')" -eq 1 ] || { echo "$output"; false; }
 }
 
+@test "distribute-self-render: a rendered path that climbs out of its root is refused" {
+  run --separate-stderr node "$ARC_ROOT/tests/distribute/self-render-probe.mjs" escape
+  [ "$(count '^RAN self-render-probe$')" -eq 1 ] || { echo "probe never ran: $output $stderr"; false; }
+  [ "$status" -eq 1 ] || { echo "status $status: $output"; false; }
+  [ "$(count '^refused \[path-owner\] codex renders "\.codex/\.\./AGENTS\.md", not a plain path ')" -eq 1 ] || { echo "$output"; false; }
+}
+
 @test "distribute-self-render: init into arc itself stays refused for every target" {
-  local t
+  local t before
+  before=$(cd "$ARC_ROOT" && git status --porcelain)
   for t in claude-code codex opencode skills-only; do
     run --separate-stderr node "$(ARC)" init --target "$t" --dir "$(native "$ARC_ROOT")" --dry-run
     [ "$(count "^plan: $t ")" -eq 1 ] || { echo "$t: installer never planned: $output $stderr"; false; }
     [ "$(count '^refused \[inside-source\] ')" -eq 1 ] || { echo "$t: not refused: $output"; false; }
     [ "$status" -ne 0 ] || { echo "$t: exit 0"; false; }
   done
+  # A guard that refused after writing would still print the refusal; the tree must be exactly as it was (L10).
+  [ "$(cd "$ARC_ROOT" && git status --porcelain)" = "$before" ] || { echo "a refused init changed the arc tree"; false; }
 }
 
 @test "distribute-self-render: --check is refused without --self and --self refuses install flags" {

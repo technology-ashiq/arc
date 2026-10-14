@@ -19,6 +19,6 @@ load 'test_helper'
   [ "$status" -eq 0 ] && printf '%s\n' "$output" | tr -d '\r' | grep -qx 'RAN redact-replay' || { echo "replay never finished: $output $stderr"; false; }
   local got; got=$(printf '%s\n' "$output" | tr -d '\r' | grep -v '^RAN ')
   local want
-  want=$(printf '%s\n' 'landed clean' 'bare-https clean' 'team-https clean' 'pr-url clean' 'control hit connection-string-password' 'control-split hit connection-string-password')
+  want=$(printf '%s\n' 'landed clean' 'bare-https clean' 'team-https clean' 'pr-url clean' 'control hit connection-string-password' 'control-split hit connection-string-password' 'control-quote hit connection-string-password')
   [ "$got" = "$want" ] || { printf 'got:\n%s\nwant:\n%s\n' "$got" "$want"; false; }
 }
