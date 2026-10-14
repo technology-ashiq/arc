@@ -190,7 +190,7 @@ switch (scenario) {
     proj().envs = [{ id: "env_owner", key: "NEXT_PUBLIC_SUPABASE_URL", target: ["preview"], value: "https://preview.example.com" }];
     out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
     out.targets = proj().envs.filter((e) => e.key === "NEXT_PUBLIC_SUPABASE_URL").map((e) => e.target.join("+")).join(" ");
-    out.ids = state.auth.filter((r) => r.kind === "vercel-env").every((r) => /:env_d+$/.test(r.id));
+    out.ids = state.auth.filter((r) => r.kind === "vercel-env").every((r) => /:env_[0-9]{6}$/.test(r.id)) && state.auth.some((r) => r.kind === "vercel-env");
     break;
   }
   case "smtp-rotate": {
