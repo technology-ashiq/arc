@@ -17,7 +17,7 @@ depends-on: —
 
 - **Phases 11, 12 and 13 BUILT on the branch** (not closed: each closes on green CI via `/arc-phase-done`). Phase 11 attacked
   (round 1 at e2dc399: logic 0, boundary 4 -- all fixed); Phase 12 attacked (3e5fc9e: logic 9, boundary 5 -- 4 fixed, 10
-  rejected, below); Phase 13 attack next, then ONE push and a per-job CI read.
+  rejected, below); Phase 13 attacked (2f050f5: logic 11, boundary 3 -- 2 fixed, 12 rejected). Next: ONE push and a per-job CI read.
 - Branch `feat/engine-c9-metered-runs` in worktree `arc-engine-2`; **not merged yet** — one merge at the cycle end, then
   Phase 14 runs from the main clone.
 
@@ -36,6 +36,12 @@ Kill checkpoint at 1.25 days: Phase 12 not done → scope cut (claude-code's str
 
 ## Done log
 
+- 2026-10-14 — **Phase 13 attack (2f050f5) reconciled.** Fixed: B2 (an explicit spend null is unproven to the cap whatever
+  the class), B3 (spend-trace stat inside the guard). REJECTED: L1, L3, L4, L5 the spend is trusted unvalidated —
+  already-covered · L7 a sub-cent spend rounds to 0 — unsupported · L11 generic-api without the opt-in leaves a USD cap
+  unprovable — non-actionable · L6 a cap currency no chain driver reports in passes load — non-actionable · B1
+  read(null) throws — unsupported · L2 a CLI over-reports a failed session — unsupported · L8, L9, L10 —
+  already-covered.
 - 2026-10-14 — **Phase 12 attack (3e5fc9e) reconciled.** Fixed: B2/B3 (a paid session whose envelope was lost now reads
   not-reported, never unmetered), B5 (spend-trace flag/path checks). REJECTED: L1, L2, L3, L5, L9 drivers pass the raw
   figure on unchecked — already-covered · L4 cost read only from the result event — already-covered · L6/B4 the

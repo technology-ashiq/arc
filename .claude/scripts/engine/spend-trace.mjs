@@ -51,7 +51,10 @@ async function main(argv) {
   if (at >= 0 && (named === undefined || named.startsWith("--"))) { console.error("spend-trace: --spine needs a path"); return 2; }
   // One spine per trace: a second --spine would be silently ignored, typo and all (attack 3e5fc9e B5).
   if (argv.filter((a) => a === "--spine").length > 1) { console.error("spend-trace: --spine given twice"); return 2; }
-  if (named !== undefined && !(existsSync(named) && statSync(named).isDirectory())) { console.error(`spend-trace: no spine directory at ${named}`); return 2; }
+  let isDir = false;
+  // A path that vanishes or refuses a stat between the two calls is a usage error too, never a stack trace (B3).
+  try { isDir = named !== undefined && existsSync(named) && statSync(named).isDirectory(); } catch { isDir = false; }
+  if (named !== undefined && !isDir) { console.error(`spend-trace: no spine directory at ${named}`); return 2; }
   const { query, spineRoot } = await import("../hq/spine.mjs");
   // The SPINE root, resolved the way the emitter resolves it (ARC_SPINE_ROOT, else the repo's own, refusing a linked
   // worktree whose state dir is an empty copy) -- never the cwd, which made a worktree trace read nothing (B2).

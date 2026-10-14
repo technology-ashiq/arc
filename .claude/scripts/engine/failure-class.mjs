@@ -246,9 +246,12 @@ export function termsCheck(terms, hops, ctx) {
     // figure is 0: the class says no model produced anything. A figure that was PRESENT but unreadable is unproven
     // even on an answer-less attempt (attack 27dcf39 B5), and so is a figure in ANOTHER currency: comparing it needs a
     // rate the spine does not have (ADR-1003).
+    // An EXPLICIT `spend: null` is a driver saying a session started and its figure was lost: unproven whatever the
+    // class, or a killed paid session would count as free (attack 2f050f5 B2). Only an attempt with no spend key at all
+    // -- nothing ran, or a driver that never meters -- takes the answer-less 0.
     const unproven = hops.find((h) => (isSpend(h.spend)
       ? h.spend.currency !== cap.currency
-      : (!ANSWERLESS.has(h.class) || (h.cost && h.cost.inr_invalid))));
+      : (Object.prototype.hasOwnProperty.call(h, "spend") || !ANSWERLESS.has(h.class) || (h.cost && h.cost.inr_invalid))));
     const sum = sumSpend(hops.map((h) => (isSpend(h.spend) && h.spend.currency === cap.currency ? h.spend : null)));
     const spent = { amount: sum ? sum.amount : 0, currency: cap.currency };
     if (unproven) {

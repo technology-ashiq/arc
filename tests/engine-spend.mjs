@@ -450,8 +450,9 @@ try {
     check("K: spend in another currency than the cap is MAX_COST_UNPROVEN, never converted", other.ok === false && other.refusal?.code === "MAX_COST_UNPROVEN" && /reported its spend in USD/.test(other.why), JSON.stringify(other));
     const silent = FC.termsCheck(terms(1000), [h("model-invalid", null)], ctx);
     check("K: an answered attempt that reported nothing is MAX_COST_UNPROVEN (F3)", silent.ok === false && silent.refusal?.code === "MAX_COST_UNPROVEN", JSON.stringify(silent));
-    check("K: an answer-less attempt with no figure is 0, and nextHop carries the typed refusal out",
-      FC.termsCheck(terms(1), [h("transport", null)], ctx).ok === true
+    check("K: an answer-less attempt with NO spend key is 0, but an explicit null (a started session lost its figure) is unproven, and nextHop carries the typed refusal out",
+      FC.termsCheck(terms(1), [h("transport")], ctx).ok === true
+      && FC.termsCheck(terms(1), [h("transport", null)], ctx).refusal?.code === "MAX_COST_UNPROVEN"
       && FC.nextHop({ remaining: ["codex"], terms: terms(1) }, [h("transport", C.spendOf(0.05, "USD"))], { ...ctx, familyOf: () => "x" }).refusal?.code === "MAX_COST_REACHED");
 
     const { parseYamlSubset } = await import(pathToFileURL(join(REPO, ".claude/scripts/engine/yaml-subset.mjs")).href);
