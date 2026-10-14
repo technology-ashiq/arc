@@ -1466,7 +1466,8 @@
     "map": {
       "ops": "ops",
       "trader": "trader",
-      "chat-mcp": "chat-mcp"
+      "chat-mcp": "chat-mcp",
+      "arc-sandbox": "ventures"
     }
   },
   "ci": {
