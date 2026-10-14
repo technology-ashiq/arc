@@ -137,3 +137,5 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **Teardown named a variable by key, not by the id launch made**, B3 (913d01d) — *every teardown step: does it name the resource launch created, or anything with that name?*
 - **"Did I push" inferred from two head reads** — commitFiles now says it, B4 (913d01d) — *every inferred fact a callee already knows*
 - **A worker with no hard exit could hold the runner to the slot timeout**, B5; **a state re-read could throw on an unreadable file**, B6; **--again's precondition was checked outside the lock**, B13 (913d01d)
+- **A process exit code was read as the answer after the answer was saved** — Windows libuv abort after the save; the runner now trusts the cleared-then-saved last_verify, B1 (5ce0104) — *every child result: is the result the file it wrote, or how it died?*
+- **--again keyed on the gate string only** — an owner-approval slot is refused too, B3 (5ce0104)

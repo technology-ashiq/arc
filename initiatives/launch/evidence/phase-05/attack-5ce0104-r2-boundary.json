@@ -1,0 +1,122 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/worker.mjs:~83 (verify mode setTimeout process.exit)",
+      "breaking_input": "A verify whose last_verify is saved, then a provider keep-alive socket stays open past 10s on a slow Windows teardown; the unref'd timer fires process.exit(ok?0:1) while the socket is mid-close, the same condition that raised 0xC0000409 in libuv.",
+      "why": "The fix reintroduces the exact hard exit it removed, only delayed. When the loop is kept alive by the closing socket, the timer fires and aborts node, and the runner reads a crash as no answer although last_verify was saved. The grace is also a magic 10s, not tied to the slot timeout.",
+      "fix": "On the fallback path call process.exit only after the socket is destroyed (close the global undici dispatcher first), and have the runner read saved last_verify when the exit code is a crash status such as 0xC0000409 instead of treating it as no answer.",
+      "twin_of": "A killed verify left the previous run's `last_verify`, which the log then printed as this run's reason"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:~89 (scaffold branch, in-attempt verify)",
+      "breaking_input": "Scaffold branch: loadState(a.stateDir, a.venture) is called without the onFallback/lock the runner uses; the scaffold's own save() writes may still be in flight or the file may hold a prior attempt's resources. cur exists but slotRow(cur, a.slot).resources lacks the just-reported ones (save is debounced or slot row not yet flushed), so `now` is an older list and not null.",
+      "why": "The fallback applies only when cur is null. A readable but stale state yields stale resources and verify fails with 'state records 0', so the retry makes a second test order, which is the defect being fixed. Resources in ctx.resources reported by this scaffold are dropped instead of merged.",
+      "fix": "Verify on the union of state resources and the scaffold's own reported resources (ctx.resources plus what save() just wrote), deduplicated by kind and id.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:129-133 (--again gate check)",
+      "breaking_input": "slot.gate is checked as `slot.gate && slot.gate !== \"none\"`, but a slot with `approval: true` and `gate: none` (sensitive action asking for an approval) or a slot whose gate field is absent in the registry yet whose adapter requests a sensitive action via ctx.approval, run with --again.",
+      "why": "The refusal keys on the registry gate string only. A slot that crosses an owner gate through the approval flag, or release-like slots whose gate is set by the adapter, re-runs with the old approval reused or re-asked, which the comment says must never happen.",
+      "fix": "Also refuse when slot.approval is truthy, and refuse when the previous attempt recorded any approval id.",
+      "twin_of": "Gate check-then-emit ran outside the lock, so two applies made two requests and state kept the one the owner did not approve"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs publicEnv (onProd / anywhere split)",
+      "breaking_input": "Key present for preview only: onProd lacks it, anywhere has it, so POST target is [\"production\"]. But a key present for target [\"development\"] only, or present as a non-plain/sensitive type with an empty target list, is also in anywhere; a key set on a custom environment id. Vercel then answers 400 ENV_ALREADY_EXISTS for a shared-target conflict, and the throw happens after the Supabase PATCH ran.",
+      "why": "Existence is computed from target membership but the create can still collide on any overlapping target, and a throw here leaves the Supabase config patched with no vercel-env recorded for earlier keys. The earlier B1 reordering moved publicEnv before the PATCH, but placement of the first key then a failure on the second still leaves a half-made slot.",
+      "fix": "Compute the target set per key as production minus existing targets, treat ENV_ALREADY_EXISTS as keep, and report each resource immediately after its own POST (already done) while making the second key's failure non-fatal to earlier ones.",
+      "twin_of": "Existence checked on one target set, the write covered another"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs teardown delete-vercel-env",
+      "breaking_input": "Resource id is now `${pid}:${key}:${envId}` but the teardown step still carries only resource: r.id with action name delete-vercel-env; no adapter-side run-time check of the env's current id or value is added. Old state rows with the two-part id `${pid}:${key}` from before this change are still in state files and are not distinguishable.",
+      "why": "The step relies on whoever executes it to split the id. A legacy two-part id deletes by key and removes the owner's recreated variable. Nothing re-checks at run time that the variable behind the env id is still launch's.",
+      "fix": "Reject ids lacking a third segment at plan time, and make the executor read the variable by env id and skip when the id is gone or the key differs.",
+      "twin_of": "A teardown step deleted a file by path, whoever had taken it over since"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs scaffold (rebuild condition)",
+      "breaking_input": "env.placed is a count of keys placed this run, and pushedOut.pushed is true only when this call created a commit. A commit that landed but whose Vercel build started before the second env value was POSTed (publicEnv runs before commitFiles, so fine) fails the other way: env values placed on a previous attempt that failed after placing but before the commit, then the re-run places 0 and pushes nothing.",
+      "why": "On that re-run placed is 0, so no rebuild is requested, yet the live build predates the values. NEXT_PUBLIC values are baked at build, so /auth/confirm stays 500 until someone pushes.",
+      "fix": "Rebuild when any vercel-env resource exists whose creation postdates the latest production deployment, not only when this run placed one.",
+      "twin_of": "\"Did I push\" inferred from two head reads"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs FILES (users.src lines)",
+      "breaking_input": "The first docker run writes users.src through `>` and fails (function missing); `2>/dev/null` hides why; the `|| \\` fallback also fails for a non-missing reason such as a network error. Also the restore step `< users.src` reads a file that exists but may be empty or half-written when the first command died after truncation.",
+      "why": "No `test -s users.src` follows, so an empty ids file with exit 0 passes and the restore loads zero users; the discarded stderr hides the cause of a real failure.",
+      "fix": "Add `test -f users.src` after the fallback, keep stderr in a log file, and fall back only on the specific missing-function error.",
+      "twin_of": "shell-string rule: 2>/dev/null on a command whose failure matters"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/backup/pg-dump.mjs SCRATCH",
+      "breaking_input": "SCRATCH holds four single quotes inside a statement that rides in a double-quoted argument inside a single-quoted `sh -c '...'` in a generated workflow `run: |` block.",
+      "why": "The repo rule bans apostrophes in an embedded program; it works only through argument passing, and no test parses the generated run block with a shell. Any later edit adding a `$` or a backtick breaks the drill silently.",
+      "fix": "Write the SQL to a committed .sql file in the drill workflow's repo and pass it with -f; add a shell syntax check over the generated block.",
+      "twin_of": "A program embedded in a shell string carries no apostrophes and no single quotes"
+    },
+    {
+      "id": "B9",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs probe (fromCache restart, liveHsts)",
+      "breaking_input": "Cached failing answer triggers a startNew scan; the loop still caps at 9 iterations of 30s waits, so cached read plus DNS, IN_PROGRESS polls and the liveHsts GET can exceed the 300 s slot timeout; liveHsts also reruns every iteration while any endpoint is blind, and uses redirect: manual with no status check.",
+      "why": "The worst case grows beyond the slot window and the lock's stale window; a 301 to a non-HSTS host reads as 'no HSTS' and fails a healthy site.",
+      "fix": "Derive the deadline from the slot timeout, memoize liveHsts per probe, and follow or classify a 3xx before reading the header.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    },
+    {
+      "id": "B10",
+      "severity": "medium",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs vc() and supabase-auth.mjs vc()",
+      "breaking_input": "Vercel answers a 3xx on /v9/projects/<name> and ctx.fetch follows the redirect carrying the Authorization bearer header to another host; neither call sets redirect: manual. The PageSpeed key also rides in the query string of a URL ctx.fetch may replay across a redirect.",
+      "why": "Allowlist is checked once on the first URL; the credential travels with any redirect.",
+      "fix": "Pass redirect: \"manual\" on every authenticated call and treat any 3xx as an error.",
+      "twin_of": "The Razorpay calls carrying the Basic key pair followed redirects"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs probe (PAGESPEED_API_KEY)",
+      "breaking_input": "PAGESPEED_API_KEY of `x&url=https://evil.example` or one with CR/LF is appended via q.append, and a fetch TypeError for a bad header or URL can quote the URL including key=.",
+      "why": "No shape check on the key unlike the other env keys; the ADR claims no log carries it, pinned only on the happy path.",
+      "fix": "Validate /^[A-Za-z0-9_-]{20,60}$/ before use and scrub URLs from every error.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs probe (res.text())",
+      "breaking_input": "A homepage that streams slowly or is hundreds of MB: await res.text() buffers all of it before slice(0, 500000).",
+      "why": "The cap is applied to the result, not the read, and the earlier body.cancel() was dropped on the success path.",
+      "fix": "Read through res.body.getReader() with a byte cap and cancel at the limit.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs scaffold (parents check)",
+      "breaking_input": "Probe branch whose head has parents [base] only when it sits directly on main; after main advances by a merge commit, or the branch has two launch commits, parents.includes(base) is false, so a force-move runs while a PR is open.",
+      "why": "Only the head's immediate parent is tested; a rate-limited PUT after the force-move leaves a branch with no probe commit that the re-run reads as at-main.",
+      "fix": "Use the compare API to decide behind/ahead and force-move only when the branch's single commit is launch's.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign"
+    }
+  ]
+}
