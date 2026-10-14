@@ -88,3 +88,17 @@ across drivers. Both sides share one driver, so that comparison is not in this e
 price table is maintained, ADR-0069 b5). The proposal's cost axis therefore compares TOKENS, and
 the ₹30 is a reservation bound, never a reported spend. The provider-side guarantee is the
 OpenRouter key's own limit.
+
+## Amendment 2 (2026-10-14): back to `claude-code`, because `generic-api` cannot pose the class
+
+Amendment 1 reached the provider and measured nothing. `commit-msg-draft` is agentic: it stages
+and commits in the fixture repo and returns the commit's `sha`. `generic-api` is a chat completion
+with no tools, and the repo state never enters its prompt. The champion run (receipt
+`01M4VPYVEFDDTQTY9QMP38T3BY`) scored 16.7%, with every answer `{"commits": []}`. That was the model
+correctly reporting that it had committed nothing. Spend was about $0.001.
+
+**Decision (owner, 2026-10-14):** the real event returns to the original pair on `claude-code`,
+champion `sonnet` and candidate `haiku`, under the ceilings already in `ceilings.json` (₹270 bound).
+It runs after ADR-0915, which fixes the two faults the first `claude-code` attempt exposed: the
+contract was never shown, and the owner's setup was loaded. The `generic-api` ceiling rows stay.
+They are bounds for a non-agentic class, and a row nobody uses refuses nothing.

@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:179",
+      "breaking_input": "Run `arc-bench` from the arc checkout, where the project's own SessionStart hook prints a `Branch:` line. Isolation passes `--setting-sources project,local`, so project settings and hooks still load, and so does a gitignored `settings.local.json` on the owner's machine. The injected `Branch: feat/...` context is the suspected source of sonnet's invented `branch` key (per ADR-0915).",
+      "why": "Isolation drops only user-level settings. Project and local hooks still run, and `.local` is machine-specific. ADR-0915 itself names the session-start hook as the likeliest cause, yet that hook can live at project level. The score can still differ by machine and checkout, and the fault the change targets may remain.",
+      "fix": "Run the benched CLI from a neutral empty cwd, or pass `--setting-sources` with an empty value, or add a settings override that disables hooks. Add a test with a project-level hook and assert its output is absent from the prompt.",
+      "twin_of": null
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:720",
+      "breaking_input": "arc-run dies on an uncaught exception. stderr is `file:///x.mjs:12\\n  throw e;\\n  ^\\n\\nError: ENOENT spawn\\n    at ...\\n\\nNode.js v22.1.0`. After the indented lines are filtered out, `lines.pop()` returns `Node.js v22.1.0`.",
+      "why": "Dropping every line that starts with whitespace, then taking the last line, selects a runtime trailer for a crash. This is the same wrong-last-line defect the change fixes, in a different stderr shape. The NOT SCORED reason becomes useless.",
+      "fix": "For a non-contract failure, prefer the first line matching `^\\w*Error\\b` or `^arc-run:`, or the first non-indented line after the blank gap. Skip `^Node\\.js v`.",
+      "twin_of": null
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:719",
+      "breaking_input": "arc-run stderr is `arc-run: STOPPED. budget ceiling reached (₹270)` or `arc-run: STOPPED. policy refused driver`, with no contract line.",
+      "why": "The filter `^arc-run: STOPPED\\.` treats every STOPPED line as bookkeeping, but it is the actual reason for non-schema stops. The reason falls back to a stale earlier line or `arc-run exited 1`, so a budget or policy stop is reported as some other fault.",
+      "fix": "Only drop STOPPED lines that contain `tier-change PROPOSAL`. Keep any other STOPPED line as a candidate reason.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:941",
+      "breaking_input": "Bench a class with `--driver codex` or `--driver hermes`. `ARC_DRIVER_ISOLATE=1` is set, but only claude-code reads it.",
+      "why": "The comment and ADR say a score never measures the owner's hooks and plugins. Codex and hermes silently ignore the flag, so isolation holds for one driver only, with no warning and no receipt field recording whether isolation applied.",
+      "fix": "Have non-claude drivers either honour the flag or fail closed when it is set. Record `isolated: true|false` in the attempt record.",
+      "twin_of": null
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:721",
+      "breaking_input": "A driver or model echoes into stderr a line such as `x failed the contract (fine)`, or the child prints a multi-megabyte single line.",
+      "why": "`failureLine` pops the last line matching `/failed the contract/` from the whole of stderr. That text can be driver or model controlled, so it can spoof the contract failure. The returned line is unbounded in length and goes straight into the scorecard.",
+      "fix": "Anchor the match to `^arc-run: output failed the contract`, and truncate the returned line to about 300 characters.",
+      "twin_of": null
+    }
+  ]
+}

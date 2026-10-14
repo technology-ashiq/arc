@@ -40,6 +40,17 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## CHANGE (2026-10-14): back to `claude-code`, after ADR-0915 (ADR-0914 Amendment 2)
+
+The `generic-api` champion run measured a model with no tools and no repo: 16.7%, every answer
+`{"commits": []}`, about $0.001 spent. The first `claude-code` sonnet attempts failed the contract
+on an invented `branch` key. The contract had never been shown, and the CLI had loaded the owner's
+hooks and plugins. ADR-0915 fixes both. The real event is now `sonnet` (champion) vs `haiku`
+(candidate) on `claude-code` under the ₹270 ceilings, run after this branch's fixes are on the main
+clone. Two in-lane defects the run exposed are fixed and pinned in the same PR: a NOT SCORED reason
+that reported a router note, and a trial run that filed route escalations. The extra exit criterion:
+**the champion's captures show the contract in the prompt and no `branch` key.**
+
 ## CHANGE (2026-10-13): the real-event pair moves to `generic-api` (ADR-0914 Amendment 1)
 
 The owner named the pair and the cap. Champion `deepseek/deepseek-v4-flash-0731`, candidate

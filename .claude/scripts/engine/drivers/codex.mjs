@@ -12,7 +12,7 @@
 import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
+import { canonicalDoc, contractLines, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
 import { render as renderCodex } from "../adapters/codex.mjs";
 
 const CLI = process.env.ARC_CODEX_CLI || "codex";
@@ -51,6 +51,7 @@ await runDriver("codex", async ({ processName, input }) => {
     "INPUT (JSON):",
     JSON.stringify(input),
     "",
+    ...contractLines(read.doc),
     "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 
