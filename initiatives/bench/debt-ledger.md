@@ -15,6 +15,10 @@ One row per finding that was not fixed in its PR, with the reason and the trigge
 | 9 | attack 680e889 r2 logic L3 to L15 (medium, accepted) | a model can expire the reflog after committing and resetting back | accepted: the fingerprint is a tripwire for the 2026-10-14 accident, not a boundary against a model hiding its tracks; containment is the driver running in the work root (ADR-0916) | a benched process is ever run with a model treated as adversarial |
 | 10 | attack 680e889 r2 boundary B6 (low) | a missing work root is reported as a missing CLI | accepted: arc-run refuses a missing or non-directory `--work-root` before any driver starts | a driver is spawned other than through arc-run |
 | 11 | attack 680e889 r2 boundary B8 (low) | an unreadable read reports the command, not only the failure | partly closed: the reason now carries the git command, its exit status and its first stderr line | — |
+| 12 | attack 461984d r1 boundary B3 (medium, accepted in part) | a sibling session's write to a shared config section other than `branch.<name>` and `remote.<name>` (`submodule.*`, `filter.lfs.*`, `core.*`) still stops a run | accepted: that direction is a false STOP, never a false pass, and costs only what the run spent so far; the two sections sibling sessions write routinely are excluded | a run is stopped by a sibling's config write again |
+| 13 | attack 461984d r1 boundary B5 (low) | `config --local` reads the shared `.git/config`, never a worktree's own `config.worktree` | accepted: `extensions.worktreeConfig` is off in arc's clones | worktree config is turned on in the owner's clones |
+| 14 | attack 0cf219e r2 boundary B1 (low) | a model that rewrites `remote.origin.url` in the arc checkout is not seen by the fingerprint | accepted: a remote rewrite moves no file, ref or HEAD in this checkout, and the run never pushes; the sibling-write false stop it avoids is the measured failure | a benched process ever pushes |
+| 15 | attack 0cf219e r2 boundary B2 (low) | on a detached HEAD no branch section is in the digest | accepted: bench runs from the main clone on `main`; a detached checkout has no section of its own | bench is ever run from a detached checkout |
 
 Rejected (ADR-0067 taxonomy): a59752e L1 and ca7ba9a L1 (an indented contract line; arc-run prints
 both at column 0), a59752e L3 and ca7ba9a L5 (control characters in `--trial-model`; `MODEL_RE`
@@ -31,3 +35,5 @@ Rejected, attack 680e889 r2: L2 (git objects are content-addressed, so a ref wit
 points at the same content). Fixed in the same round: L1 (local config is in the fingerprint), B1
 (dirty files by content), B2 and B3 (null only on "not a git repository"; fallbacks only on exit 1),
 B4 (scoped to the worktree), B5 (a contaminated attempt writes no capture), B7 (no optional locks).
+
+Rejected, attack 461984d r1: L3 and B6 (a detached HEAD has no branch section of its own to keep), L4 and L7 (git refuses to check out one branch in two worktrees, so no sibling owns this worktree's section), L6 (removing this worktree's own section changes the digest; nothing collapses to empty unnoticed). Fixed in the same round: L1, L2 and B2 (the subsection is matched exactly), B1 (section-level `branch.*` keys count again), L5 and B4 (`config -z`, one entry per key), B3 in part (`remote.<name>.*` excluded too).

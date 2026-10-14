@@ -378,6 +378,24 @@ function eventsOn(spine) {
   gitIn(f, "branch", "made-by-another-worktree");
   gitIn(f, "stash", "list");
   check("a tag or a branch another session makes does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  // 2026-10-14: a sibling worktree's `checkout -b <name> origin/main` wrote branch.<name>.* into the
+  // shared config, and the tripwire stopped a paid run on it.
+  gitIn(f, "config", "branch.made-by-another-worktree.remote", "origin");
+  gitIn(f, "config", "branch.made-by-another-worktree.merge", "refs/heads/main");
+  check("another branch's tracking config, which a sibling worktree writes, does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  const own = gitIn(f, "symbolic-ref", "--short", "HEAD").stdout.trim();
+  gitIn(f, "config", `branch.${own}.remote`, "elsewhere");
+  check("this worktree's own branch config still moves it", checkoutFingerprint(f).digest !== fp0.digest);
+  gitIn(f, "config", "--unset", `branch.${own}.remote`);
+  check("and unsetting it again restores it", checkoutFingerprint(f).digest === fp0.digest);
+  // attack 461984d: the match is exact, a multi-line value is one entry, remote.* is shared too.
+  gitIn(f, "config", `branch.${own}.0.remote`, "a sibling branch whose name extends this one");
+  gitIn(f, "config", "branch.made-by-another-worktree.description", "line one\nline two");
+  gitIn(f, "config", "remote.upstream.url", "https://example.invalid/upstream.git");
+  check("a sibling branch whose name extends this one, a multi-line value and a remote do not move it", checkoutFingerprint(f).digest === fp0.digest);
+  gitIn(f, "config", "branch.autoSetupMerge", "always");
+  check("a section-level branch key still moves it", checkoutFingerprint(f).digest !== fp0.digest);
+  gitIn(f, "config", "--unset", "branch.autoSetupMerge");
   // attack a522a4e and 680e889: each of these left HEAD and its branch looking untouched.
   const fp1 = checkoutFingerprint(f);
   writeFileSync(join(f, "a.txt"), "changed", "utf8");
@@ -398,6 +416,11 @@ function eventsOn(spine) {
     `head ${fp4.head === fp3.head ? "restored" : "differs"}`);
   check("checkoutMovedSince agrees, and names the move", checkoutMovedSince(f, fp3).moved === true && checkoutMovedSince(f, fp4).moved === false);
   check("a directory with no git has no fingerprint", checkoutFingerprint(dir("no-git")) === null);
+  // The one-process HEAD read falls back to the two probes on an unborn HEAD (PR 426 speed fix).
+  const u = dir("unborn");
+  gitIn(u, "init", "-q");
+  const fpu = checkoutFingerprint(u);
+  check("an unborn repo still has a fingerprint, through the fallback probes", Boolean(fpu) && fpu.head === "(unborn)" && /^refs\/heads\//.test(fpu.branch), JSON.stringify(fpu));
 }
 
 rmSync(scratch, { recursive: true, force: true });
