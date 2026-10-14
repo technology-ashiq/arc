@@ -68,3 +68,15 @@ jobs:
     cadence: daily@07:30
     enabled: true
     catchup: skip
+
+  # The weekly radar over every project arc is installed in (distribute REQ-19, ADR-2026). Daily cadence, because the
+  # grammar has no weekly form; the script acts once every seven days and keeps its last day in instance state.
+  - name: distribute-radar
+    type: script
+    entry: .claude/scripts/hq/jobs/distribute-radar.mjs
+    budget:
+      min: 10
+    policy_kind: process:distribute-radar
+    cadence: daily@07:45
+    enabled: true
+    catchup: skip
