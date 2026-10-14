@@ -24,6 +24,10 @@ REQ-18 validated. Owed, by PLAN's rule that whatever is unproven is recorded owe
 (the launch lane answers `evidence/phase-08/launch-prompt.md`, A-17) and REQ-19's seal run (the owner applies
 `owner-apply-radar-policy.mjs`, and `~/.arc-private/consumers.json` does not exist yet because no consumer has been
 installed by `arc init`; the radar runs once from the main clone after both).
+REQ-19 validated 2026-10-15: the owner applied the radar policy (PR #429, `77840115`), a trial project became the
+first `arc init` consumer, and the radar ran once from the main clone: `metric.observed` 01M4Y4B7XPWXSFVC7NRFSYP62C,
+1 of 1 behind, no path in the payload, nothing written in the consumer (`evidence/post-merge/req19-radar-seal.md`). REQ-15's
+slot clause is still owed.
 
 ## Verification plan
 
