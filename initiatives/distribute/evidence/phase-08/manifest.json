@@ -1,0 +1,72 @@
+{
+  "phase": "08",
+  "commit": "b478b7438fce77c61a40eb105bdf58bde61fb5c3",
+  "short": "b478b743",
+  "generated": "2026-10-14T14:34:27Z",
+  "files": [
+    {
+      "name": "attack-0eb78f6-r2-boundary.json",
+      "sha256": "52cd60b922f98963adfefe14b90ebe6c6c54c66c053efc6b28ed65c5bc79acef"
+    },
+    {
+      "name": "attack-0eb78f6-r2-logic.json",
+      "sha256": "7fbfc7c67b459e4916aa5b5365b95725db145e0b5a54b3e6f20309b163d92e5b"
+    },
+    {
+      "name": "attack-8707a5c-r1-boundary.json",
+      "sha256": "2977b4c7cbb8b0a610f196cabe8b36362605102e19b14f9bede0bd3e83bab47e"
+    },
+    {
+      "name": "attack-8707a5c-r1-logic.json",
+      "sha256": "03a20826b799e2c5c5af309ba8dfdaf28ec6a47eef67e3c499e4e2b71fc90c5b"
+    },
+    {
+      "name": "ci-38566913612-p08-suites.txt",
+      "sha256": "bde58a4bed504228b684193429c44ead66a39e6db90b523a4adaca19bb4362dc"
+    },
+    {
+      "name": "codex-skills.md",
+      "sha256": "469ba2379fe943a4ac85de2da881d74587388eeb6e32736ea51ffdb0a4f2a6c8"
+    },
+    {
+      "name": "kill.md",
+      "sha256": "9164c02c87b6c0d427f6160ade81f51586a8c90c98a7c98ab1518b06df1f3f0d"
+    },
+    {
+      "name": "launch-prompt.md",
+      "sha256": "43da444650728916d084e8ab01531bad5f96a1311e30985a1f0c1b0c97745297"
+    },
+    {
+      "name": "probe.md",
+      "sha256": "78f71f7a132ec592c282ef5e3c2eb729221d91d91b3e0efdec09b98c668f2eed"
+    },
+    {
+      "name": "redact-replay.md",
+      "sha256": "62c97f26b9776a0e2eb18ce44a15053d510ed6451a2edbb7411c3efbf2621692"
+    },
+    {
+      "name": "sweep.md",
+      "sha256": "6190345d5e292d2e73762132661f4a02a1528685ccc80086f38feb58ebd40ee1"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "bde58a4bed504228b684193429c44ead66a39e6db90b523a4adaca19bb4362dc"
+    },
+    {
+      "name": "transcripts/kill-arc-resume.jsonl",
+      "sha256": "524c2f385331303de71ee8a576e8cc821b24455549c8d779e380f548fb32b6ba"
+    },
+    {
+      "name": "transcripts/kill-arc-resume.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/probe-fence.jsonl",
+      "sha256": "0a549dea1644f8aee8c8af11ce42c7b134763241b723e1e64c2e7b954c1c0931"
+    },
+    {
+      "name": "transcripts/probe-fence.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

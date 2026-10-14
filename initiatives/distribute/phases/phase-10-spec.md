@@ -15,9 +15,15 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-15, REQ-18, REQ-19 bats green on all 3 CI legs per job
-- [ ] attack pass (`/arc-attack`, max 2 rounds), findings fixed or ledgered
-- [ ] retro + seal; tracker updated
+- [x] REQ-15, REQ-18, REQ-19 bats green on all 3 CI legs per job
+- [x] attack pass (`/arc-attack`, max 2 rounds), findings fixed or ledgered
+- [x] retro + seal; tracker updated
+
+Closed 2026-10-14 from the main clone after PR #419 merged (`b478b743`, CI 19/19 on head `f1fb1594`, run 38566913612).
+REQ-18 validated. Owed, by PLAN's rule that whatever is unproven is recorded owed: REQ-15's launch `core` slot clause
+(the launch lane answers `evidence/phase-08/launch-prompt.md`, A-17) and REQ-19's seal run (the owner applies
+`owner-apply-radar-policy.mjs`, and `~/.arc-private/consumers.json` does not exist yet because no consumer has been
+installed by `arc init`; the radar runs once from the main clone after both).
 
 ## Verification plan
 

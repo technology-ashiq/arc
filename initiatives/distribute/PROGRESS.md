@@ -1,10 +1,10 @@
 # PROGRESS.md — distribute Cycle 3 "zero-step access and the lifecycle"
 
-status: LIVE
+status: IDLE
 cycle: arc-distribute (Cycle 3, opened 2026-10-14)
-phase: 10
+phase: 10 (cycle closed)
 appetite: 4d
-burn: 2.25d
+burn: 2.5d
 blocked-on: —
 depends-on: —
 
@@ -20,9 +20,9 @@ merged once at cycle end; each phase closes from the main clone after that merge
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 1 | — | ✅ |
-| 08 | Self-render + kill check + debt 22-24 (REQ-14) | 1d | 🔨 built, attack r1+r2 done |
-| 09 | `outdated` + `upgrade` + manifest v2 + `version-lint` (REQ-16, 17) | 1d | 🔨 built |
-| 10 | `uninstall` + `init` default-all + registry + launch slot + radar; retro + seal (REQ-15, 18, 19) | 1d | 🔨 built |
+| 08 | Self-render + kill check + debt 22-24 (REQ-14) | 1d | ✅ |
+| 09 | `outdated` + `upgrade` + manifest v2 + `version-lint` (REQ-16, 17) | 1d | ✅ |
+| 10 | `uninstall` + `init` default-all + registry + launch slot + radar; retro + seal (REQ-15, 18, 19) | 1d | ✅ |
 
 ## Done-log
 
@@ -69,11 +69,39 @@ merged once at cycle end; each phase closes from the main clone after that merge
   behind`, upgraded to v2 with its owner file untouched (`evidence/phase-09/demo.md`); a venture born with every harness,
   watched, then uninstalled to its own files (`evidence/phase-10/demo.md`).
 
-**Appetite burn:** ~2.25 of 3 planned days used (4-day cap): ~56%. 50% tripwire: REQ-16 arms green on CI is read on `e08d759f`. Kill checkpoint answered YES; 50% tripwire at day 2.
+- **Phase 08 closed 2026-10-14** (`/arc-phase-done 08 --lane distribute`, from the main clone): REQ-14 validated. Built
+  on `feat/distribute-c3`, merged once at cycle end as PR #419 (`b478b743`), CI 19/19 on head `f1fb1594` (run
+  38566913612; the merged tree equals the head). `distribute-self-render` 9, `distribute-redact-replay` 2 and
+  `distribute-opencode-session` 18 ran `ok` on all 5 legs that carry them, 0 `not ok`, 0 skipped
+  (`evidence/phase-08/ci-38566913612-p08-suites.txt`). **Seal kill re-check: YES** on a fresh clone of merged `main`
+  (`evidence/phase-10/kill-seal.md`, $0.0076): 21 read-only calls, 3 fence denials, no tracked change. Receipts
+  `phase.closed` 01M4XDT77MW2VC3208MJQ5Z2VX, `approval.requested` 01M4XDT8NMFZBYWZKXTHF5VYYT. Actual ~1d vs 1d.
+  amendments: 0 · reopened: n.
+- **Phase 09 closed 2026-10-14**: REQ-16 and REQ-17 validated. `distribute-lifecycle` 11 ran `ok` on 5 legs, among them
+  `version-lint passes the committed tree and fails each drift` (`evidence/phase-09/ci-38566913612-p09-suites.txt`);
+  the real v1 consumer read `11 commits behind` and upgraded (`demo.md`). `v0.2.0` is cut as an annotated tag on
+  `b478b743` and pushed; `version-lint` in the main clone now reads `tags: 1 read; v0.2.0 has its section`. Receipts
+  01M4XDTA64KCW2G4GTEM06B9RC / 01M4XDTBC0TPYA2N5KF97186TC. Actual ~0.5d vs 1d. amendments: 0 · reopened: n.
+- **Phase 10 closed 2026-10-14**: REQ-18 validated; `distribute-p10` 7 ran `ok` on 5 legs, the escape-link mutant BUILT
+  on every leg (a junction on Windows). **Owed, as PLAN's spend/tripwire rule records unproven work:** REQ-15's launch
+  `core` slot clause (the launch lane answers `evidence/phase-08/launch-prompt.md`, A-17; `init` alone stands) and
+  REQ-19's seal run (the owner applies `owner-apply-radar-policy.mjs`; no `consumers.json` exists yet because no
+  project was installed by `arc init`). Both stay `active`. Receipts 01M4XDTCE1MMPSAF5X7SAXXWHQ /
+  01M4XDTDCRVF26Y4E78PNZW5A6. Actual ~1d vs 1d. amendments: 0 · reopened: n. Debt row 34 (cycle ledger scope) filed
+  at the seal.
+
+**Appetite burn:** ~2.5 of 3 planned days used (4-day cap): ~63%. The 50% tripwire held (REQ-16's arms green on CI). Live spend $0.0551 of $0.15.
 
 ---
 
 ## Now
 
-**Current position: Cycle 3 kickoff written 2026-10-14 on `feat/distribute-c3`; the owner pre-approved building in chat.**
-**Next step:** push P08 + P09 once, read CI per job (50% tripwire = REQ-16 arms green), fix what CI finds, then Phase 10.
+**Current position: Cycle 3 SEALED 2026-10-14 (retro: `docs/retro-log.md`, HISTORY C25); lane IDLE.** arc ships as
+`v0.2.0`. A clone of arc opens in OpenCode or Codex with its commands and no install step. `arc outdated` and `arc upgrade`
+tell a project the truth and move only arc's files, `arc uninstall` removes exactly the manifest's files, and `arc init`
+places every harness at once. REQ-14, 16, 17 and 18 are validated; REQ-15 (slot clause) and REQ-19 (seal run) are owed.
+**Next step:** none in this lane until the owed items land or a new `/arc-kickoff --lane distribute`. Owner items: the
+radar one-liner (`cd <arc checkout> && node .claude/scripts/engine/owner-apply-radar-policy.mjs && git add hq.policy.yaml
+hq.jobs.yaml processes/distribute-radar.process.yaml docs/wiki && git commit -m "feat(distribute): birth the
+distribute-radar job (REQ-19, ADR-2026)"`), the paste of `evidence/phase-08/launch-prompt.md` into the launch session,
+the kickoff stamp 01M4VPX5FTYQ2BHFHQA4NJZ676 and the three move-on stamps above.
