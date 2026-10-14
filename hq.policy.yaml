@@ -193,6 +193,19 @@ kinds:
 
   # launch REQ-10 (ADR-1750): the weekly watch shells out to arc-launch verify --public-only, which asks the venture's
   # public endpoints (network) and writes the board's last_verify and the watch stamp under .claude/state/.
+  # distribute REQ-19 (ADR-2026): the weekly radar reads the consumer registry and each project's manifest, writes only
+  # its stamp under .claude/state/ and one receipt, and calls no network and no model.
+  "process:distribute-radar":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/distribute/**", ".claude/state/hq/**"] }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
   "process:launch-watch":
     e2: []
     read: { level: L3 }

@@ -234,6 +234,7 @@
           "build-in-public-draft",
           "commit-msg-draft",
           "day-close-roll",
+          "distribute-radar",
           "kickoff-plan",
           "launch-watch",
           "narrative-verify",
@@ -258,7 +259,7 @@
           "0200"
         ]
       },
-      "itemCount": 21
+      "itemCount": 22
     },
     {
       "id": "model-policy",
@@ -364,10 +365,11 @@
         "jobs": [
           "brief-materialize",
           "day-close-roll",
+          "distribute-radar",
           "launch-watch"
         ]
       },
-      "itemCount": 11
+      "itemCount": 12
     },
     {
       "id": "memory",
@@ -1386,7 +1388,8 @@
     "jobs": {
       "brief-materialize": "scheduler",
       "day-close-roll": "scheduler",
-      "launch-watch": "scheduler"
+      "launch-watch": "scheduler",
+      "distribute-radar": "scheduler"
     },
     "ventures": {
       "lexos": "ventures"

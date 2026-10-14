@@ -837,7 +837,8 @@
       "develop-proof": "develop",
       "adr-record": "strategy",
       "face-ask": "ask-arc",
-      "launch-watch": "engine-room"
+      "launch-watch": "engine-room",
+      "distribute-radar": "engine-room"
     }
   },
   "gates": {
@@ -1408,7 +1409,8 @@
     "map": {
       "brief-materialize": "scheduler",
       "day-close-roll": "scheduler",
-      "launch-watch": "scheduler"
+      "launch-watch": "scheduler",
+      "distribute-radar": "scheduler"
     }
   },
   "ventures": {
