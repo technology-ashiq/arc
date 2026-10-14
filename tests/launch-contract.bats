@@ -1083,6 +1083,13 @@ arm() {
   [[ "$(j 'o.env')" == "NEXT_PUBLIC_SUPABASE_URL=https://mine.example.com NEXT_PUBLIC_SUPABASE_ANON_KEY=true"* ]] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: auth adds production beside a preview-only value, reports env ids, and re-sends its own SMTP key (attack 913d01d B1-B3)" {
+  arm login public-env-preview
+  [ "$(j 'o.auth.ok + " " + o.targets + " " + o.ids')" = "true preview production true" ] || { echo "$DONE"; false; }
+  arm login smtp-rotate
+  [ "$(j 'o.again.ok + " " + o.rotated')" = "true true" ] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: the auth probe reads a minted token at the top level and in properties" {
   arm login thread
   [ "$(j 'o.authVerify.ok')" = "true" ] || { echo "$DONE"; false; }

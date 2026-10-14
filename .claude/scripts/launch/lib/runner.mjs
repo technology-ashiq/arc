@@ -358,6 +358,8 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       let s = loadState(P.stateDir, slug, { onFallback: log }) || emptyState(profile);
       const prev = slotRow(s, slot.id);
       if (prev.state === "verified" && !opts.again) { log(`${slot.id}: verified -- no-op (receipt ${prev.receipt})`); return EXIT.OK; }
+      // Re-checked under the lock: the slot may have left verified since apply() read it (attack 913d01d B13).
+      if (opts.again && prev.state !== "verified") { log(`${slot.id} is ${prev.state}; --again re-applies a verified slot only`); return EXIT.REFUSED; }
       // An attempt left `applying` belonged to a runner that died holding the lock: it never wrote its receipt, so
       // the attempt is closed here, as failed, before a new one starts -- every attempt ends with exactly one receipt.
       if (prev.state === "applying" && prev.attempt && !prev.receipt) {

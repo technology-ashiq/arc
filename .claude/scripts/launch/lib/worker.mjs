@@ -79,12 +79,17 @@ if (a.mode === "verify") {
   // No process.exit here: on Windows, exiting while a provider's keep-alive socket is closing aborts node in libuv
   // (0xC0000409), and the runner read the crash as no answer though last_verify was saved. The loop drains instead.
   process.exitCode = ok ? 0 : 1;
+  // A handle that never closes must not hold the runner to the slot timeout (attack 913d01d B5): unref'd, this fires only
+  // while something else still keeps the loop alive.
+  setTimeout(() => process.exit(ok ? 0 : 1), 10000).unref();
 } else try {
   const out = await mod.scaffold(ctx);
   save({ state: "applied", files: (out && out.files) || [], queued: ctx.queued });
   // The in-attempt verify sees what this scaffold just reported: the ctx was built before it ran, so verify on that
   // snapshot read zero resources, failed, and the retry made a second test order (arc-sandbox payment-test, ADR-1760).
-  const now = slotRow(loadState(a.stateDir, a.venture), a.slot).resources || [];
+  // An unreadable state file at this moment falls back to the scaffold's own snapshot, never a TypeError (attack 913d01d B6).
+  const cur = loadState(a.stateDir, a.venture);
+  const now = cur ? slotRow(cur, a.slot).resources || [] : ctx.resources;
   const v = await mod.verify(Object.freeze({ ...ctx, resources: [...now] }));
   clearTimeout(timer);
   if (v && v.ok === true && typeof v.answerer === "string" && v.answerer) {

@@ -46,7 +46,7 @@ const deployed = {
 }[scenario];
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const vercel = makeVercel({ github });
-const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz", freeTierMail: scenario.startsWith("free-tier") || scenario.startsWith("stock-template") });
+const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz", freeTierMail: scenario.startsWith("free-tier") || scenario.startsWith("stock-template") || scenario === "smtp-rotate" });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: (i, o) => supabase.fetch(i, o).catch(() => vercel.fetch(i, o)) });
 const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail", serverEnv, linkShape: scenario === "nested-link" ? "nested" : "flat", ...(deployed ? { deployed } : {}) });
 const rz = makeRazorpay({ keyId: RZ_ID, keySecret: RZ_SECRET, alsoAccept: [[OTHER_ID, OTHER_SECRET]] });
@@ -182,6 +182,22 @@ switch (scenario) {
     supabase.store[0].auth = { site_url: "http://localhost:3000", mailer_templates_magic_link_content: scenario === "stock-template" ? real : real.replace("Sign in<", "Enter<") };
     out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
     out.landsOnConfirm = String(supabase.store[0].auth.mailer_templates_magic_link_content).includes("/auth/confirm?token_hash=");
+    break;
+  }
+  case "public-env-preview": {
+    // A preview-only value of one name: launch adds production alone, never collides on preview (attack 913d01d B1).
+    const proj = () => [...vercel.store.values()][0];
+    proj().envs = [{ id: "env_owner", key: "NEXT_PUBLIC_SUPABASE_URL", target: ["preview"], value: "https://preview.example.com" }];
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.targets = proj().envs.filter((e) => e.key === "NEXT_PUBLIC_SUPABASE_URL").map((e) => e.target.join("+")).join(" ");
+    out.ids = state.auth.filter((r) => r.kind === "vercel-env").every((r) => /:env_d+$/.test(r.id));
+    break;
+  }
+  case "smtp-rotate": {
+    // launch's own Resend SMTP is re-sent on a later apply, so a rotated key reaches Supabase (attack 913d01d B2).
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    out.again = await attempt(() => A.auth.mod.scaffold(ctxFor("auth", [], { env: { ...ENV, RESEND_API_KEY: "re_rotatedResendKey0123456789" } })));
+    out.rotated = supabase.store[0].auth.smtp_pass === "re_rotatedResendKey0123456789";
     break;
   }
   case "public-env":

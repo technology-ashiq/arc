@@ -60,7 +60,7 @@ const hasLine = (msg, line) => typeof msg === "string" && msg.split("\n").some((
 
 // Commits FILES (owned: exact bytes and this slot's trailer decide) plus SHARED (paths several slots extend, such as
 // .env.example, written as given) in one commit on one head; the local copy is written after the ref update lands.
-async function commitFiles(ctx, full, FILES, SHARED, message) {
+async function commitFiles(ctx, full, FILES, SHARED, message, out = {}) {
   const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
   const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
   if (!SHA.test(head)) throw new Error(`github returned no main head for ${full}`);
@@ -96,6 +96,7 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   }
   if (!Object.keys(changed).length) {
     if (!SHA.test(mine)) throw new Error(`github named no commit of launch's for the files in ${full}`);
+    out.pushed = false;
     return mine;
   }
   const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
@@ -113,6 +114,7 @@ async function commitFiles(ctx, full, FILES, SHARED, message) {
   if (!SHA.test(sha)) throw new Error(`github returned no commit for ${full}`);
   await gh(ctx, "PATCH", `/repos/${full}/git/refs/heads/main`, { sha, force: false });
   for (const [path, text] of Object.entries(changed)) ctx.write(path, text);
+  out.pushed = true;
   return sha;
 }
 
@@ -322,16 +324,22 @@ async function publicEnv(ctx, full, ref) {
     throw refuse("FOREIGN_PROJECT", `vercel project ${name} is not linked to ${full}; auth does not set its env`);
   const pid = String(p.body.id);
   const env = await vc(ctx, "GET", `/v10/projects/${encodeURIComponent(pid)}/env`);
-  const have = new Set(list(env.body && env.body.envs).filter((e) => (Array.isArray(e.target) ? e.target : [e.target]).includes("production")).map((e) => e.key));
+  const targets = (e) => (Array.isArray(e.target) ? e.target : [e.target]);
+  const rows = list(env.body && env.body.envs).filter((e) => typeof e.key === "string");
+  const onProd = new Set(rows.filter((e) => targets(e).includes("production")).map((e) => e.key));
+  const anywhere = new Set(rows.map((e) => e.key));
   const keys = list((await sb(ctx, "GET", `/projects/${ref}/api-keys`)).body);
   const anon = (keys.find((x) => x.name === "anon" && typeof x.api_key === "string") || {}).api_key;
   if (!anon) throw refuse("NO_ANON_KEY", "supabase returned no anon key for the project");
   const want = { NEXT_PUBLIC_SUPABASE_URL: `https://${ref}.supabase.co`, NEXT_PUBLIC_SUPABASE_ANON_KEY: anon };
   let placed = 0;
   for (const [key, value] of Object.entries(want)) {
-    if (have.has(key)) continue;
-    await vc(ctx, "POST", `/v10/projects/${encodeURIComponent(pid)}/env`, { key, value, type: "plain", target: ["production", "preview"] });
-    ctx.report({ kind: "vercel-env", id: `${pid}:${key}` });
+    if (onProd.has(key)) continue;
+    const made = await vc(ctx, "POST", `/v10/projects/${encodeURIComponent(pid)}/env`, { key, value, type: "plain", target: anywhere.has(key) ? ["production"] : ["production", "preview"] });
+    const c = made.body && (made.body.created || made.body);
+    const envId = c && typeof c.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(c.id) ? c.id : "";
+    if (!envId) throw new Error(`vercel created ${key} without naming its id; teardown could not delete it alone`);
+    ctx.report({ kind: "vercel-env", id: `${pid}:${key}:${envId}` });
     placed++;
   }
   return { pid, org, name, placed };
@@ -342,7 +350,9 @@ async function publicEnv(ctx, full, ref) {
 // (ADR-1756). The key rides only in the PATCH body; the config API never answers it back.
 function resendSmtp(ctx, conf, domain) {
   const host = typeof conf.smtp_host === "string" ? conf.smtp_host.trim() : "";
-  if (host) return {};
+  // launch's own settings are re-sent every apply, so a rotated RESEND_API_KEY reaches Supabase (attack 913d01d B2);
+  // any other host is the owner's and kept.
+  if (host && !(host === "smtp.resend.com" && conf.smtp_user === "resend")) return {};
   const sent = list(ctx.upstream && ctx.upstream["email-transactional"]).some((r) => r.kind === "resend-domain" || r.kind === "resend-domain-found");
   if (!sent) throw refuse("UPSTREAM_MISSING", "the project sends with Supabase's own mailer and email-transactional reported no Resend domain to send through");
   const key = String(ctx.env.RESEND_API_KEY || "").trim();
@@ -363,21 +373,22 @@ export async function scaffold(ctx) {
   // template the owner wrote is kept when it already lands on /auth/confirm, refused when it does not.
   const allow = String(conf.uri_allow_list || "").split(",").map((x) => x.trim()).filter(Boolean);
   if (!allow.includes(`${site}/**`)) allow.push(`${site}/**`);
+  // The Vercel side first: a project linked elsewhere refuses before the Supabase config is touched (attack 913d01d B1).
+  const env = await publicEnv(ctx, full, ref);
   const tpl = typeof conf.mailer_templates_magic_link_content === "string" ? conf.mailer_templates_magic_link_content : "";
   // Stock is an EMPTY template or Supabase's own stock text, byte for byte up to whitespace: any other text is the owner's,
   // kept if it lands on /auth/confirm, else refused (attack 6a5c24e B2 -- "contains ConfirmationURL" could not tell
   // Supabase's from an owner's own). A new project's API answers that stock text, not empty (arc-sandbox, 2026-10-14).
   const stock = !tpl.trim() || SUPABASE_STOCK.has(squash(tpl));
   if (!stock && !tpl.includes("/auth/confirm?token_hash={{ .TokenHash }}")) throw refuse("TEMPLATE_FOREIGN", "the project's magic-link email is the owner's own and does not land on /auth/confirm; launch does not rewrite it");
-  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { ...resendSmtp(ctx, conf, domain), mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}) };
+  const patch = { site_url: site, uri_allow_list: allow.join(","), ...(stock ? { mailer_subjects_magic_link: "Your login link", mailer_templates_magic_link_content: TEMPLATE } : {}), ...(stock || squash(tpl) === squash(TEMPLATE) ? resendSmtp(ctx, conf, domain) : {}) };
   await sb(ctx, "PATCH", `/projects/${ref}/config/auth`, patch);
   // What it was, so the exit plan can put it back.
   // Recorded once, from the first apply: a re-run sees launch's own site URL and must not record it as "what it was"
   // (attack 6a5c24e B3) -- the earlier record is the one the exit plan restores.
   if (!ctx.resources.some((r) => r.kind === "auth-config")) ctx.report({ kind: "auth-config", id: `${ref}:site_url=${site}:was=${say(now || "(none)", 80)}` });
   // .env.example is shared (ADR-1729): this slot adds its names, never a value, and never removes a line.
-  const env = await publicEnv(ctx, full, ref);
-  const before = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
+  const pushedOut = {};
   const sha = await commitFiles(ctx, full, FILES, {
     // `export NAME=` names the same variable; added lines keep the file's own line ending (twin of attack b1844e0 B4).
     ".env.example": (text) => {
@@ -387,10 +398,9 @@ export async function scaffold(ctx) {
       const add = ENV_NAMES.filter((n) => !have.has(n)).map((n) => `${n}=`);
       return add.length ? `${text}${text && !text.endsWith("\n") ? eol : ""}${add.join(eol)}${eol}` : text;
     },
-  }, "auth: magic-link login, session cookie, logout (ADR-1734)");
+  }, "auth: magic-link login, session cookie, logout (ADR-1734)", pushedOut);
   // A new commit builds with the placed values; with none, the live build predates them and is rebuilt from main.
-  const pushed = before.body && before.body.object && String(before.body.object.sha) !== sha;
-  if (env.placed && !pushed) await vc(ctx, "POST", "/v13/deployments", { name: env.name, project: env.pid, target: "production", gitSource: { type: "github", org: env.org, repo: env.name, ref: "main" } });
+  if (env.placed && !pushedOut.pushed) await vc(ctx, "POST", "/v13/deployments", { name: env.name, project: env.pid, target: "production", gitSource: { type: "github", org: env.org, repo: env.name, ref: "main" } });
   ctx.report({ kind: "auth-routes", id: `${full}:${sha}` });
   ctx.report({ kind: "venture-repo", id: full });
   ctx.report({ kind: "supabase-ref", id: ref });
@@ -436,6 +446,7 @@ export async function teardown(ctx) {
   // The site URL goes back to what the first apply found, if it still points at launch's (re-checked at run time).
   const cfg = ctx.resources.find((r) => r.kind === "auth-config");
   if (cfg) steps.push({ action: "restore-site-url-if-unchanged", resource: cfg.id });
+  // By the env id launch created, never by key: a variable the owner set later under the same name stays (attack 913d01d B3).
   for (const r of ctx.resources.filter((x) => x.kind === "vercel-env")) steps.push({ action: "delete-vercel-env", resource: r.id });
   return { steps: steps.map((s, i) => ({ order: i + 1, ...s })) };
 }

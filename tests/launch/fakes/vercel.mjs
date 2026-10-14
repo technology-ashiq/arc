@@ -58,8 +58,9 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
       if (!proj) return err(404, "not_found", "Project not found");
       proj.envs = proj.envs || [];
       if (proj.envs.some((e) => e.key === body.key)) return err(400, "ENV_ALREADY_EXISTS", "A variable with the name already exists");
-      proj.envs.push({ key: body.key, target: body.target, value: body.value });
-      return json(201, { created: { key: body.key, target: body.target } });
+      const envId = id("env");
+      proj.envs.push({ id: envId, key: body.key, target: body.target, value: body.value });
+      return json(201, { created: { id: envId, key: body.key, target: body.target } });
     }
     if (method === "POST" && p === "/v13/deployments") {
       const proj = byIdOrName(body.project);
