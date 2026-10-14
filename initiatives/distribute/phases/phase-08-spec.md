@@ -23,15 +23,15 @@ Order is the kill question first (kickoff attack B4): items 1-4 land and push, i
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `distribute-self-render.bats` and the new arms of `distribute-opencode-session.bats` / `distribute-ship-nodeploy.bats` green on all 3 CI legs per job (`ci-digest` on the pushed head)
-- [ ] self-render outputs committed; `compile --self --check` exit 0 on CI
-- [ ] shared-surface sweep recorded (`evidence/phase-08/sweep.md`)
-- [ ] A-15 static check recorded (`evidence/phase-08/codex-skills.md`)
-- [ ] fence probe transcript shows the top-level session denied (A-14), spend ≤ $0.02
-- [ ] **kill checkpoint answered** in PROGRESS: YES (clone lists + runs `/arc-resume`, no tracked change after) or NO + reason → cycle STOPs
-- [ ] debt rows 22, 23, 24 marked closed (or 24 `not-reproduced`) in `debt-ledger.md` with the fixture named
-- [ ] attack pass (`/arc-attack`, max 2 rounds) on the phase commit, findings fixed or ledgered; fixed-defects rows added
-- [ ] tracker updated (PROGRESS row + done-log); the phase close itself runs from the main clone after the cycle's merge
+- [x] `distribute-self-render.bats` and the new arms of `distribute-opencode-session.bats` / `distribute-ship-nodeploy.bats` green on all 3 CI legs per job (`ci-digest` on the pushed head)
+- [x] self-render outputs committed; `compile --self --check` exit 0 on CI
+- [x] shared-surface sweep recorded (`evidence/phase-08/sweep.md`)
+- [x] A-15 static check recorded (`evidence/phase-08/codex-skills.md`)
+- [x] fence probe transcript shows the top-level session denied (A-14), spend ≤ $0.02
+- [x] **kill checkpoint answered** in PROGRESS: YES (clone lists + runs `/arc-resume`, no tracked change after) or NO + reason → cycle STOPs
+- [x] debt rows 22, 23, 24 marked closed (or 24 `not-reproduced`) in `debt-ledger.md` with the fixture named
+- [x] attack pass (`/arc-attack`, max 2 rounds) on the phase commit, findings fixed or ledgered; fixed-defects rows added
+- [x] tracker updated (PROGRESS row + done-log); the phase close itself runs from the main clone after the cycle's merge
 
 ## Verification plan
 
