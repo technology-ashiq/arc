@@ -12,6 +12,9 @@ One row per finding that was not fixed in its PR, with the reason and the trigge
 | 6 | attack a522a4e r1 logic L5 (low) | the checkout fingerprint hashes ref names and objects, not annotated-tag messages | accepted: a re-annotated tag gets a new object id, which is in the hash | a tag is ever moved without its object changing |
 | 7 | attack a522a4e r1 logic L8, boundary B8 (low) | MUTANT C makes a branch through `-C ROOT`, not a commit through a wrong cwd | partly closed: the probe now checks a commit on the current branch and a commit reset back; the cwd path itself is pinned in `engine-driver-contract.bats` | a new driver spawns a CLI |
 | 8 | attack a522a4e r1 boundary B7 (low) | the ADR-0916 driver test's control run writes a marker into the checkout under test | accepted: it is removed on every path, and the control has to land in arc to prove the check can tell | the suite runs in parallel inside one checkout |
+| 9 | attack 680e889 r2 logic L3 to L15 (medium, accepted) | a model can expire the reflog after committing and resetting back | accepted: the fingerprint is a tripwire for the 2026-10-14 accident, not a boundary against a model hiding its tracks; containment is the driver running in the work root (ADR-0916) | a benched process is ever run with a model treated as adversarial |
+| 10 | attack 680e889 r2 boundary B6 (low) | a missing work root is reported as a missing CLI | accepted: arc-run refuses a missing or non-directory `--work-root` before any driver starts | a driver is spawned other than through arc-run |
+| 11 | attack 680e889 r2 boundary B8 (low) | an unreadable read reports the command, not only the failure | partly closed: the reason now carries the git command, its exit status and its first stderr line | — |
 
 Rejected (ADR-0067 taxonomy): a59752e L1 and ca7ba9a L1 (an indented contract line; arc-run prints
 both at column 0), a59752e L3 and ca7ba9a L5 (control characters in `--trial-model`; `MODEL_RE`
@@ -23,3 +26,8 @@ Rejected, attack a522a4e r1: L2 (two nulls equal means no git repo at either rea
 to move), B2 (`git()` already drops GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_COMMON_DIR and the
 global config before it runs), B6 (the `.sh` wrappers `cd` only inside a subshell to find their own
 directory; no other driver spawns a CLI), and L7, L9 to L15 (repeats of L6, fixed with it).
+
+Rejected, attack 680e889 r2: L2 (git objects are content-addressed, so a ref with the same object id
+points at the same content). Fixed in the same round: L1 (local config is in the fingerprint), B1
+(dirty files by content), B2 and B3 (null only on "not a git repository"; fallbacks only on exit 1),
+B4 (scoped to the worktree), B5 (a contaminated attempt writes no capture), B7 (no optional locks).

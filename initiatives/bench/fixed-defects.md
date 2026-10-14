@@ -26,3 +26,7 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   run and a broken baseline matched a broken later read. Any "compare before and after" check with
   a catch-all fallback has this twin. Fix: retry once, then report "could not be checked" as its own
   outcome.
+- **A guard scoped wider than what it guards** (2026-10-14, 680e889 B4). The checkout fingerprint
+  hashed every branch, tag and worktree of the shared repository, so any sibling session's commit
+  or fetch would have voided a paid run. Any "nothing changed" check over shared state has this
+  twin. Fix: scope it to what the run could have touched.

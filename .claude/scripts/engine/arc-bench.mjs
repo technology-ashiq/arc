@@ -1488,42 +1488,58 @@ export function routerSha(root) {
 }
 
 /**
- * WHAT THE ARC CHECKOUT HOLDS: HEAD, the branch it names, every ref except remote-tracking ones (so
- * local branches, tags, the stash and notes), the HEAD reflog, the worktree list, and the tracked
- * files' status. A benched attempt works in its materialized fixture repo and must leave all of it
- * exactly as it was (ADR-0916). On 2026-10-14 a driver ran the CLI inside arc instead, and sonnet --
- * holding Bash -- created a branch and committed into the owner's checkout once per attempt while
- * the run kept scoring. The router SHA could not see it, because nothing touched the router.
+ * WHAT THIS CHECKOUT HOLDS: HEAD, the branch it names, this worktree's HEAD reflog, the content of
+ * every tracked file that differs from HEAD, and the repository's local config. A benched attempt
+ * works in its materialized fixture repo and must leave all of it exactly as it was (ADR-0916). On
+ * 2026-10-14 a driver ran the CLI inside arc instead, and sonnet -- holding Bash -- ran
+ * `checkout -b` and committed into the owner's checkout once per attempt while the run kept
+ * scoring. The router SHA could not see it, because nothing touched the router.
  *
- * The REFLOG is in it so a model that commits and then resets back is still caught (attack a522a4e
- * L3, L6): the state looks untouched, the log does not. Remote-tracking refs are left out, so another
- * session's fetch is not a violation; untracked files are left out, because bench writes its
- * captures into the tree. Not covered: a branch made and deleted again without HEAD ever moving,
- * and `git config` writes.
+ * SCOPED TO THIS WORKTREE, not the repository (attack 680e889 B4). The owner runs parallel sessions
+ * in sibling worktrees that share refs/heads, tags, the stash and the worktree list; any of those in
+ * the digest would void a paid run whenever another lane committed or fetched. The reflog is here
+ * so a model that commits and resets back is still caught (a522a4e L3, L6), and file CONTENT, not a
+ * status code, so an edit to an already-dirty file is seen (680e889 B1).
  *
- * Returns null when root is not a git repository at all (two nulls compare equal: no refs to move),
- * and { unreadable } when it is one and a read failed. A failed read is never folded into the
- * digest as a constant string (attack a522a4e L1, B3): that compares a sentinel as if it were state.
+ * A TRIPWIRE FOR AN ACCIDENT, not a boundary against a model hiding its tracks: containment is the
+ * driver running in the work root. Not covered: a branch made without HEAD moving, a reflog
+ * expired after the fact, and anything outside this worktree.
+ *
+ * Returns null only when git says this is not a repository; { unreadable } for every other failed
+ * read. A fallback applies only on the exit status the probe documents, never to any error
+ * (a522a4e L1, 680e889 B2, B3).
  */
+function gitRead(root, args) {
+  const r = spawnSync("git", [...GIT_NEUTRAL, ...args], {
+    cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+    // A read must not take index.lock out from under the owner's own git command (680e889 B7).
+    env: { ...gitEnv(root), GIT_OPTIONAL_LOCKS: "0" },
+  });
+  return { status: r.error ? null : r.status, stdout: r.stdout ?? "", stderr: String(r.stderr || (r.error && r.error.message) || "") };
+}
+
 export function checkoutFingerprint(root) {
-  try { git(root, ["rev-parse", "--git-dir"]); } catch { return null; }
-  const read = (args, fallback) => {
-    try { return git(root, args); }
-    catch (e) {
-      if (fallback !== undefined) return fallback;
-      throw e;
-    }
-  };
+  const fail = (args, r) => { throw new Error(`git ${args[0]} ${r.status === null ? "could not run" : `exited ${r.status}`}: ${r.stderr.trim().split("\n")[0] || "no message"}`); };
+  const must = (args) => { const r = gitRead(root, args); if (r.status !== 0) fail(args, r); return r.stdout; };
+  // `-q` probes exit 1 for "no such ref" and nothing else; any other status is a failure.
+  const probe = (args, onOne) => { const r = gitRead(root, args); if (r.status === 0) return r.stdout.trim(); if (r.status === 1) return onOne; fail(args, r); };
+  const inside = gitRead(root, ["rev-parse", "--is-inside-work-tree"]);
+  if (inside.status !== 0 && /not a git repository/i.test(inside.stderr)) return null;
   try {
-    // An unborn HEAD (no commit yet) and a detached one are states, not failures.
-    const head = read(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)").trim();
-    const branch = read(["symbolic-ref", "-q", "HEAD"], "(detached)").trim();
-    const refs = read(["for-each-ref", "--format=%(refname) %(objectname)"])
-      .split("\n").filter((l) => l && !l.startsWith("refs/remotes/")).join("\n");
-    const reflog = head === "(unborn)" ? "" : read(["reflog", "show", "--format=%H %gs", "HEAD"], "");
-    const worktrees = read(["worktree", "list", "--porcelain"]);
-    const tracked = read(["status", "--porcelain=v1", "--untracked-files=no"]);
-    const digest = createHash("sha256").update([head, branch, refs, reflog, worktrees, tracked].join("|\n|"), "utf8").digest("hex");
+    if (inside.status !== 0) fail(["rev-parse"], inside);
+    const head = probe(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)");
+    const branch = probe(["symbolic-ref", "-q", "HEAD"], "(detached)");
+    const reflog = head === "(unborn)" ? "" : must(["reflog", "show", "--format=%H %gs", "HEAD"]);
+    const top = must(["rev-parse", "--show-toplevel"]).trim();
+    const dirty = head === "(unborn)" ? [] : must(["diff", "--name-only", "-z", "HEAD"]).split("\0").filter(Boolean).sort();
+    const content = dirty.map((p) => {
+      let bytes;
+      try { bytes = readFileSync(join(top, p)); } catch { return `${p} (absent)`; }
+      return `${p} ${createHash("sha256").update(bytes).digest("hex")}`;
+    }).join("\n");
+    // `config --local` exits 1 when there is no local config file at all; that is a state.
+    const config = probe(["config", "--local", "--list"], "");
+    const digest = createHash("sha256").update([head, branch, reflog, content, config].join("|\n|"), "utf8").digest("hex");
     return { head, branch, digest };
   } catch (e) {
     return { unreadable: String(e.message).split("\n")[0] };
@@ -1803,7 +1819,9 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
           ? { scored: true, schema: r.schema, output: r.output }
           : { scored: false, schema: r.schema ?? null, verdict: r.verdict, why: r.why };
         records.push(record);
-        if (capture) {
+        // An attempt that moved the arc checkout answered about arc, not its fixture: its capture is not
+        // evidence, so it is never written where a replay would score it (attack 680e889 B5).
+        if (capture && !ck.moved) {
           const dir = join(capture, cov.taskClass, fx.id);
           mkdirSync(dir, { recursive: true });
           writeFileSync(join(dir, `${k}.json`), canonicalJson(record), "utf8");

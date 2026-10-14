@@ -136,9 +136,10 @@ S_STATUS() { cat "$BATS_FILE_TMPDIR/seal.status"; }
   [[ "$(S)" == *"ok and its three attempts all ran"* ]]
   [[ "$(S)" == *"ok an untracked file, which is what a capture is, does not move it"* ]]
   [[ "$(S)" == *"ok a remote-tracking ref, which another session's fetch writes, does not move it"* ]]
-  [[ "$(S)" == *"ok a new tag moves it"* ]]
+  [[ "$(S)" == *"ok a tag or a branch another session makes does not move it"* ]]
   [[ "$(S)" == *"ok an edit to a tracked file moves it"* ]]
-  [[ "$(S)" == *"ok a stash moves it, though refs/stash is not a branch or a tag"* ]]
+  [[ "$(S)" == *"ok a second edit to an already-dirty file moves it again, by content"* ]]
+  [[ "$(S)" == *"ok a local config write moves it"* ]]
   [[ "$(S)" == *"ok a commit on the current branch moves it"* ]]
   [[ "$(S)" == *"ok a commit reset back to where it was still moves it, through the reflog"* ]]
 }

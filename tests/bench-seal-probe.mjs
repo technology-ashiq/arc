@@ -333,7 +333,7 @@ function eventsOn(spine) {
   const src = readFileSync(mockPath, "utf8");
   check("MUTANT C anchor is present in the mock driver", src.includes(anchor));
   writeFileSync(mockPath, src.replace(anchor, anchor +
-    "\n(await import(\"node:child_process\")).spawnSync(\"git\", [\"-C\", ROOT, \"branch\", \"escaped-\" + process.pid]);"), "utf8");
+    "\n(await import(\"node:child_process\")).spawnSync(\"git\", [\"-C\", ROOT, \"checkout\", \"-q\", \"-b\", \"escaped-\" + process.pid]);"), "utf8");
   // Committed, so the mutation itself is not what moves the checkout.
   gitIn(d, "commit", "-q", "-am", "mutant");
   const before = branches(d).length;
@@ -355,6 +355,7 @@ function eventsOn(spine) {
   check("a clean git sandbox reports no moved checkout", !/ARC CHECKOUT MOVED/.test(rc.stderr), rc.stderr.slice(0, 200));
   check("and its three attempts all ran", eventsOn(join(scratch, "escape-control-spine")).filter((e) => e.kind === "run.completed" && e.process !== "bench@0.1.0").length === 3);
 
+  // MUTANT C runs checkout -b, what sonnet did on 2026-10-14: HEAD and its branch move with it.
   // What the fingerprint counts, one fact at a time, on a small repo of its own.
   const f = dir("fingerprint");
   gitIn(f, "init", "-q");
@@ -370,16 +371,22 @@ function eventsOn(spine) {
   check("an untracked file, which is what a capture is, does not move it", checkoutFingerprint(f).digest === fp0.digest);
   gitIn(f, "update-ref", "refs/remotes/origin/main", "HEAD");
   check("a remote-tracking ref, which another session's fetch writes, does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  // SCOPED TO THIS WORKTREE (attack 680e889 B4): what sibling worktrees and fetches share is not in it.
   gitIn(f, "tag", "t1");
-  check("a new tag moves it", checkoutFingerprint(f).digest !== fp0.digest);
-  // attack a522a4e: each of these left HEAD, the branch and refs/heads looking untouched before.
+  gitIn(f, "branch", "made-by-another-worktree");
+  gitIn(f, "stash", "list");
+  check("a tag or a branch another session makes does not move it", checkoutFingerprint(f).digest === fp0.digest);
+  // attack a522a4e and 680e889: each of these left HEAD and its branch looking untouched.
   const fp1 = checkoutFingerprint(f);
   writeFileSync(join(f, "a.txt"), "changed", "utf8");
-  check("an edit to a tracked file moves it", checkoutFingerprint(f).digest !== fp1.digest);
-  gitIn(f, "stash", "push", "-q");
   const fp2 = checkoutFingerprint(f);
-  check("a stash moves it, though refs/stash is not a branch or a tag", fp2.digest !== fp1.digest && !fp2.unreadable, JSON.stringify(fp2));
-  gitIn(f, "stash", "drop", "-q");
+  check("an edit to a tracked file moves it", fp2.digest !== fp1.digest);
+  writeFileSync(join(f, "a.txt"), "changed again", "utf8");
+  check("a second edit to an already-dirty file moves it again, by content", checkoutFingerprint(f).digest !== fp2.digest);
+  gitIn(f, "checkout", "-q", "--", "a.txt");
+  gitIn(f, "config", "core.hooksPath", "elsewhere");
+  check("a local config write moves it", checkoutFingerprint(f).digest !== fp1.digest);
+  gitIn(f, "config", "--unset", "core.hooksPath");
   const fp3 = checkoutFingerprint(f);
   gitIn(f, "commit", "-q", "--allow-empty", "-m", "on the current branch");
   check("a commit on the current branch moves it", checkoutFingerprint(f).digest !== fp3.digest);

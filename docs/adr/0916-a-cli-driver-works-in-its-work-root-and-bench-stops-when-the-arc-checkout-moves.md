@@ -38,16 +38,21 @@ directory. ADR-0915's isolation note ("for bench that is the materialized fixtur
   live in arc. `hermes` runs in a container and `generic-api` has no tools, so neither has a cwd
   that matters.
 - **Bench fingerprints the arc checkout and checks it after every attempt, and once more at the
-  end.** The fingerprint is HEAD, the branch HEAD names, every ref except remote-tracking ones
-  (local branches, tags, the stash, notes), the HEAD reflog, the worktree list, and the tracked
-  files’ status. The reflog is there so a model that commits and resets back is still caught.
-  Remote-tracking refs are left out, so another session’s fetch is not a violation, and untracked
-  files are left out, because bench writes its captures into the tree. The first attempt that moves
-  it stops the run: no further attempt is admitted, the remaining fixtures are recorded as
-  unselected with the reason, and the run exits partial, saying the run is not evidence. A read
-  that fails twice stops the run the same way, as “could not be checked”, rather than comparing a
-  sentinel string as if it were state. Not covered: a branch made and deleted without HEAD ever
-  moving, and `git config` writes.
+  end.** The fingerprint is HEAD, the branch HEAD names, this worktree's HEAD reflog, the content
+  of every tracked file that differs from HEAD, and the local config. It is scoped to the
+  worktree, not the repository: the owner runs parallel sessions in sibling worktrees that share
+  branches, tags, the stash and the worktree list, and any of those in the digest would void a
+  paid run whenever another lane committed or fetched. The reflog catches a model that commits and
+  resets back; file content, not a status code, catches an edit to an already-dirty file.
+  Untracked files are left out, because bench writes its captures into the tree. The first attempt
+  that moves it stops the run: its capture is not written, no further attempt is admitted, the
+  remaining fixtures are recorded as unselected with the reason, and the run exits partial, saying
+  it is not evidence. A read that fails twice stops the run the same way, as "could not be
+  checked", rather than comparing a sentinel string as if it were state. Reads run with
+  `GIT_OPTIONAL_LOCKS=0`, so the check never takes the owner's index lock.
+- **The fingerprint is a tripwire for an accident, not a boundary against a model hiding its
+  tracks.** Containment is the driver running in the work root. Not covered: a branch made
+  without HEAD moving, a reflog expired after the fact, and anything outside this worktree.
 - **The work root is resolved to an absolute path** in both drivers, so a relative value cannot
   mean one directory to the spawn and another to a later read.
 - **Two tests pin it.** `engine-driver-contract.bats` runs both drivers through arc-run with
