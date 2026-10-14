@@ -16,9 +16,8 @@
 import { execFileSync, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
+import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, SessionSpend, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
-import { SessionSpend } from "./session-spend.mjs";
 
 // A session that STARTED may have spent, however it ended. Its figure rides the failure (`arcCost`) when the envelope
 // survived, and when it did not -- cut by a cap, killed before its result, unparseable -- the driver still says it

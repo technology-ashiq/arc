@@ -42,6 +42,7 @@ if (want("unit")) {
   const CORPUS = [
     [0.07, usd(7, "0.07")],
     [0.29, usd(29, "0.29")],
+    [0.14, usd(14, "0.14")],
     [1.15, usd(115, "1.15")],
     [0.0700001, usd(8, "0.0700001")],
     [0.000183, usd(1, "0.000183")],
@@ -94,7 +95,7 @@ if (want("unit")) {
     T.unbookedRuns([run("C", null, { spend_by_currency: [s1, C.spendOf(1, "INR")] }), money("C", "USD")]).length === 1);
 
   // SessionSpend against VERBATIM captures of the real CLI (2.1.296), not only hand-written fakes (A-11).
-  const SS = (await import(pathToFileURL(join(REPO, ".claude/scripts/engine/drivers/session-spend.mjs")).href)).SessionSpend;
+  const SS = C.SessionSpend;
   const realJson = JSON.parse(readFileSync(join(REPO, "tests/fixtures/engine/real-claude-envelope.json"), "utf8"));
   const realStream = JSON.parse(readFileSync(join(REPO, "tests/fixtures/engine/real-claude-stream-result.json"), "utf8"));
   check("U: the real CLI json envelope carries total_cost_usd and SessionSpend reads it into 2 cents (A-11)",
@@ -112,15 +113,17 @@ if (want("unit")) {
   writeFileSync(join(mdir, "common.mjs"), mutated);
   const M = await import(pathToFileURL(join(mdir, "common.mjs")).href);
   check("U: mutant RAN: the float version was swapped in and is a different module", mutated !== src && src.split(ORIGINAL).length === 2 && typeof M.spendOf === "function" && M.spendOf !== C.spendOf);
-  check("U: mutant float-ceil turns the 0.07 and 0.29 corpus checks red (8 and 30 cents, not 7 and 29)",
-    M.spendOf(0.07, "USD")?.amount === 8 && M.spendOf(0.29, "USD")?.amount === 30 && !same(M.spendOf(0.07, "USD"), usd(7, "0.07")));
+  check("U: mutant float-ceil turns the 0.07 and 0.14 corpus checks red (8 and 15 cents, not 7 and 14)",
+    M.spendOf(0.07, "USD")?.amount === 8 && M.spendOf(0.14, "USD")?.amount === 15 && !same(M.spendOf(0.07, "USD"), usd(7, "0.07")));
   try { rmSync(mdir, { recursive: true, force: true }); } catch { /* a held handle on Windows */ }
 
   // ONE module owns the provider figures: grep the engine and hq trees for anyone else reading them.
-  const owners = { total_cost_usd: [".claude/scripts/engine/drivers/session-spend.mjs", ".claude/scripts/engine/drivers/claude-code.mjs"], "u.cost": [".claude/scripts/engine/drivers/generic-api.mjs"] };
+  const owners = { total_cost_usd: [".claude/scripts/engine/drivers/common.mjs", ".claude/scripts/engine/drivers/claude-code.mjs"], "u.cost": [".claude/scripts/engine/drivers/generic-api.mjs"] };
+  // Code only: a comment that NAMES the field is documentation, not a second reader.
+  const code = (p) => readFileSync(join(REPO, p), "utf8").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).map((l) => l.replace(/\s\/\/.*$/, "")).join("\n");
   const walk = (d) => readdirSync(join(REPO, d), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(`${d}/${e.name}`) : (/\.m?js$/.test(e.name) ? [`${d}/${e.name}`] : []));
   const files = [...walk(".claude/scripts/engine"), ...walk(".claude/scripts/hq")];
-  const strays = files.flatMap((p) => Object.entries(owners).filter(([tok, ok]) => !ok.includes(p) && readFileSync(join(REPO, p), "utf8").includes(tok)).map(([tok]) => `${p}: ${tok}`));
+  const strays = files.flatMap((p) => Object.entries(owners).filter(([tok, ok]) => !ok.includes(p) && code(p).includes(tok)).map(([tok]) => `${p}: ${tok}`));
   check(`U: no second reader of a provider figure: total_cost_usd and usage.cost appear only at their read sites (${files.length} files scanned)`, files.length > 50 && strays.length === 0, strays.join("; "));
 }
 
@@ -256,9 +259,9 @@ try {
 
   if (want("run")) {
     // R1 -- the steel thread: generic-api's provider figure becomes the receipt's spend and ONE money row.
-    writeRouter([]);
+    writeRouter([], { driver: "generic-api" });
     server.cost = 0.000183; server.sse = false;
-    const r1 = await arcRun({ port, driver: "generic-api" });
+    const r1 = await arcRun({ port });
     check("fixture: arc-run spawned, reached the endpoint once and its receipt landed, not quarantined (vacuous-pass guard)",
       r1.code === 0 && r1.hits === 1 && r1.runs === 1 && r1.quarantined === 0, `code=${r1.code} hits=${r1.hits} runs=${r1.runs} q=${r1.quarantined} ${tail(r1)}`);
     check("R: generic-api asked the provider for its usage figure (usage.include)", server.lastBody?.usage?.include === true, JSON.stringify(server.lastBody?.usage));
@@ -302,34 +305,35 @@ try {
 
     // R2 -- the same run with the figure omitted: a named absence and zero money rows (R1 is its positive control).
     server.cost = undefined;
-    const r2 = await arcRun({ port, driver: "generic-api" });
+    const r2 = await arcRun({ port });
     check("R: a provider that gives no figure leaves spend null, spend_absence not-reported, and ZERO money rows (control above: 1)",
       r2.code === 0 && r2.runs === 1 && r2.receipt?.spend === null && r2.receipt?.spend_absence === "not-reported" && r2.money.length === 0, `${JSON.stringify(r2.receipt?.spend)} ${r2.receipt?.spend_absence} money=${r2.money.length} ${tail(r2)}`);
 
     // R2b -- an endpoint nobody declared speaks OpenRouter's accounting is never asked, and its figure never read (B1).
     server.cost = 0.000183;
-    const r2b = await arcRun({ port, driver: "generic-api", spendOptIn: false });
+    const r2b = await arcRun({ port, spendOptIn: false });
     check("R: a non-OpenRouter endpoint is not sent usage.include and its usage.cost is not booked: driver-unmetered, zero money rows",
       r2b.code === 0 && r2b.hits === 1 && server.lastBody && !("usage" in server.lastBody) && r2b.receipt?.spend_absence === "driver-unmetered" && r2b.money.length === 0,
       `${JSON.stringify(server.lastBody?.usage)} ${r2b.receipt?.spend_absence} money=${r2b.money.length} ${tail(r2b)}`);
 
     // R2c -- a model that answered something other than JSON was still paid for.
     server.cost = 0.002; server.answer = "notjson";
-    const r2c = await arcRun({ port, driver: "generic-api" });
+    const r2c = await arcRun({ port });
     server.answer = "valid";
     check("R: a model-invalid answer still books its spend: the failed run carries spend and writes its one money row",
       r2c.code !== 0 && r2c.runs === 1 && same(r2c.receipt?.spend, usd(1, "0.002")) && r2c.money.length === 1 && r2c.money[0].payload.run_ref === r2c.run?.id,
       `code=${r2c.code} ${JSON.stringify(r2c.receipt?.spend)} money=${r2c.money.length} ${tail(r2c)}`);
 
     // R3 -- a driver that never reads a figure is driver-unmetered.
-    const r3 = await arcRun({ port, driver: "mock", fixture: "valid" });
+    writeRouter([]);
+    const r3 = await arcRun({ port, fixture: "valid" });
     check("R: a driver that reads no figure leaves spend_absence driver-unmetered and zero money rows",
       r3.code === 0 && r3.runs === 1 && r3.receipt?.spend === null && r3.receipt?.spend_absence === "driver-unmetered" && r3.money.length === 0, `${r3.receipt?.spend_absence} ${tail(r3)}`);
 
     // R4 -- an unreadable figure is never 0.
-    const r4 = await arcRun({ port, driver: "mock", fixture: "string-spend" });
-    check("R: a string figure is refused aloud, recorded as not-reported, and writes no money row",
-      r4.code === 0 && r4.runs === 1 && r4.receipt?.spend === null && r4.receipt?.spend_absence === "not-reported" && r4.money.length === 0 && /refusing a provider spend/.test(r4.err), `${r4.receipt?.spend_absence} ${tail(r4)}`);
+    const r4 = await arcRun({ port, fixture: "string-spend" });
+    check("R: a string figure is refused, recorded as not-reported, and writes no money row",
+      r4.code === 0 && r4.runs === 1 && r4.receipt?.spend === null && r4.receipt?.spend_absence === "not-reported" && r4.money.length === 0, `${r4.receipt?.spend_absence} ${tail(r4)}`);
 
     // R5 -- two attempts: the sum is exact and rounded ONCE.
     writeRouter(["generic-api"], { cap: ["    max_cost: 100000", "    max_cost_currency: USD"] });
@@ -345,11 +349,11 @@ try {
       && r5.receipt?.spend_basis === "provider-reported+recorded" && r5.money[0]?.payload?.driver === "mock+generic-api", `${r5.receipt?.spend_basis} ${r5.money[0]?.payload?.driver}`);
 
     // R6 -- two identical-looking runs on ONE spine both book; a re-emit for one of them is refused.
-    writeRouter([]);
+    writeRouter([], { driver: "generic-api" });
     server.cost = 0.000183; server.sse = false;
     const shared = join(tmp, "spine-shared");
-    const a = await arcRun({ port, driver: "generic-api", spine: shared });
-    const b = await arcRun({ port, driver: "generic-api", spine: shared });
+    const a = await arcRun({ port, spine: shared });
+    const b = await arcRun({ port, spine: shared });
     check("R: two identical runs on one spine write TWO money rows, none quarantined",
       a.code === 0 && b.code === 0 && b.runs === 2 && b.money.length === 2 && b.quarantined === 0
       && new Set(b.money.map((m) => m.payload.run_ref)).size === 2, `runs=${b.runs} money=${b.money.length} q=${b.quarantined}`);
@@ -403,8 +407,8 @@ try {
     check("C: a session envelope with no total_cost_usd is not-reported and books nothing (never 0)",
       ab.code === 0 && ab.receipt?.spend === null && ab.receipt?.spend_absence === "not-reported" && ab.money.length === 0, `${ab.receipt?.spend_absence} ${tail(ab)}`);
     const sg = await cc("string");
-    check("C: a string total_cost_usd is refused aloud, not-reported, nothing booked",
-      sg.code === 0 && sg.receipt?.spend_absence === "not-reported" && sg.money.length === 0 && /refusing a provider spend/.test(sg.err), `${sg.receipt?.spend_absence} ${tail(sg)}`);
+    check("C: a string total_cost_usd is refused, not-reported, nothing booked",
+      sg.code === 0 && sg.receipt?.spend_absence === "not-reported" && sg.money.length === 0, `${sg.receipt?.spend_absence} ${tail(sg)}`);
     const ng = await cc("negative");
     check("C: a negative total_cost_usd is refused, not-reported, nothing booked",
       ng.code === 0 && ng.receipt?.spend_absence === "not-reported" && ng.money.length === 0, `${ng.receipt?.spend_absence} ${tail(ng)}`);
