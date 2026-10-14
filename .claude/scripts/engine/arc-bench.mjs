@@ -1496,8 +1496,8 @@ export function routerSha(root) {
  * scoring. The router SHA could not see it, because nothing touched the router.
  *
  * SCOPED TO THIS WORKTREE, not the repository (attack 680e889 B4). The owner runs parallel sessions
- * in sibling worktrees that share refs/heads, tags, the stash and the worktree list; any of those in
- * the digest would void a paid run whenever another lane committed or fetched. The reflog is here
+ * in sibling worktrees that share refs/heads, tags, the stash, the worktree list and the other
+ * branches' config sections; any of those in the digest would void a paid run whenever another lane committed or fetched. The reflog is here
  * so a model that commits and resets back is still caught (a522a4e L3, L6), and file CONTENT, not a
  * status code, so an edit to an already-dirty file is seen (680e889 B1).
  *
@@ -1518,19 +1518,45 @@ function gitRead(root, args) {
   return { status: r.error ? null : r.status, stdout: r.stdout ?? "", stderr: String(r.stderr || (r.error && r.error.message) || "") };
 }
 
+// THREE git processes per check, not seven. Bench checks after every attempt, a mock run over every
+// class is ~28 attempts, and a git process costs 0.1-0.4 s to start on Windows: seven per check put the
+// face's bench.run-model flow past its 30 s CDP timeout on Windows CI (PR 426, shard 1/12). Where the
+// toplevel and git dir are does not change during a run, so they are read once per root; the HEAD
+// reflog is read as the file git keeps it in.
+const checkoutPlaces = new Map();
+
 export function checkoutFingerprint(root) {
   const fail = (args, r) => { throw new Error(`git ${args[0]} ${r.status === null ? "could not run" : `exited ${r.status}`}: ${r.stderr.trim().split("\n")[0] || "no message"}`); };
   const must = (args) => { const r = gitRead(root, args); if (r.status !== 0) fail(args, r); return r.stdout; };
   // `-q` probes exit 1 for "no such ref" and nothing else; any other status is a failure.
   const probe = (args, onOne) => { const r = gitRead(root, args); if (r.status === 0) return r.stdout.trim(); if (r.status === 1) return onOne; fail(args, r); };
-  const inside = gitRead(root, ["rev-parse", "--is-inside-work-tree"]);
-  if (inside.status !== 0 && /not a git repository/i.test(inside.stderr)) return null;
+  let places = checkoutPlaces.get(root);
+  if (!places) {
+    const where = gitRead(root, ["rev-parse", "--is-inside-work-tree", "--show-toplevel", "--absolute-git-dir"]);
+    if (where.status !== 0 && /not a git repository/i.test(where.stderr)) return null;
+    if (where.status !== 0) return { unreadable: `git rev-parse exited ${where.status ?? "(could not run)"}: ${where.stderr.trim().split("\n")[0] || "no message"}` };
+    const [, top, gitDir] = where.stdout.split("\n").map((s) => s.trim());
+    if (!top || !gitDir) return { unreadable: "git rev-parse named no toplevel or git dir" };
+    places = { top, gitDir };
+    checkoutPlaces.set(root, places);
+  }
+  const { top, gitDir } = places;
   try {
-    if (inside.status !== 0) fail(["rev-parse"], inside);
-    const head = probe(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)");
-    const branch = probe(["symbolic-ref", "-q", "HEAD"], "(detached)");
-    const reflog = head === "(unborn)" ? "" : must(["reflog", "show", "--format=%H %gs", "HEAD"]);
-    const top = must(["rev-parse", "--show-toplevel"]).trim();
+    // HEAD and the ref it names in one process; an unborn or failing HEAD falls back to the two
+    // probes, whose exit statuses are documented.
+    let head, branch;
+    const both = gitRead(root, ["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"]);
+    const lines = both.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (both.status === 0 && lines.length === 2 && /^[0-9a-f]{40,64}$/.test(lines[0])) {
+      head = lines[0];
+      branch = lines[1].startsWith("refs/") ? lines[1] : "(detached)";
+    } else {
+      head = probe(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)");
+      branch = probe(["symbolic-ref", "-q", "HEAD"], "(detached)");
+    }
+    // A missing reflog is a state (an unborn HEAD, or logging turned off); any other read error is not.
+    let reflog = "";
+    try { reflog = readFileSync(join(gitDir, "logs", "HEAD"), "utf8"); } catch (e) { if (e.code !== "ENOENT") throw e; }
     const dirty = head === "(unborn)" ? [] : must(["diff", "--name-only", "-z", "HEAD"]).split("\0").filter(Boolean).sort();
     const content = dirty.map((p) => {
       let bytes;
@@ -1538,7 +1564,20 @@ export function checkoutFingerprint(root) {
       return `${p} ${createHash("sha256").update(bytes).digest("hex")}`;
     }).join("\n");
     // `config --local` exits 1 when there is no local config file at all; that is a state.
-    const config = probe(["config", "--local", "--list"], "");
+    // That file is shared by every worktree: another session's `checkout -b` writes its own
+    // branch.<name>.remote/merge here, and on 2026-10-14 that alone voided a paid run. Dropped:
+    // every branch.<name>.* section but this worktree's own, and remote.<name>.*, which sibling
+    // sessions write as routinely. A section-level key such as branch.autosetupmerge still counts
+    // (attack 461984d B1), and so does every other line, so a sibling write elsewhere stops a run
+    // rather than passing one. The subsection is matched exactly, never as a prefix: `v1` is not
+    // `v1.0` (L1, B2). `-z` keeps a multi-line value one entry (L5, B4).
+    const own = branch.startsWith("refs/heads/") ? branch.slice(11) : null;
+    const shared = (key) => {
+      const m = /^(branch|remote)\.(.+)\.[^.]+$/.exec(key);
+      return Boolean(m) && !(m[1] === "branch" && m[2] === own);
+    };
+    const config = probe(["config", "--local", "--list", "-z"], "").split("\0").filter(Boolean)
+      .filter((entry) => !shared(entry.split("\n")[0])).join("\0");
     const digest = createHash("sha256").update([head, branch, reflog, content, config].join("|\n|"), "utf8").digest("hex");
     return { head, branch, digest };
   } catch (e) {
