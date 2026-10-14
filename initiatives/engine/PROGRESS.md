@@ -1,10 +1,10 @@
 # PROGRESS.md — Cycle 9 · arc-engine "Metered Runs"
 
-status: LIVE
+status: IDLE
 cycle: arc-engine (Cycle 9, opened 2026-10-14)
-phase: 11
+phase: 14 (cycle closed)
 appetite: 2.5d
-burn: 0.25d
+burn: 1.5d
 blocked-on: —
 depends-on: —
 
@@ -15,26 +15,43 @@ depends-on: —
 
 ## Now
 
-- **Phases 11, 12 and 13 BUILT on the branch** (not closed: each closes on green CI via `/arc-phase-done`). Phase 11 attacked
-  (round 1 at e2dc399: logic 0, boundary 4 -- all fixed); Phase 12 attacked (3e5fc9e: logic 9, boundary 5 -- 4 fixed, 10
-  rejected, below); Phase 13 attacked (2f050f5: logic 11, boundary 3 -- 2 fixed, 12 rejected). Next: ONE push and a per-job CI read.
-- Branch `feat/engine-c9-metered-runs` in worktree `arc-engine-2`; **not merged yet** — one merge at the cycle end, then
-  Phase 14 runs from the main clone.
+- **CYCLE 9 CLOSED 2026-10-14** -- 4/4 phases, 4/4 REQ validated (REQ-12..15), merged as PR #423 (`1fedd504`).
+- Next: the owner's phase stamps (approval ids in the done-log), then a cycle retro if he wants one. The lane is IDLE.
 
 ## Phase table
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — **parked, shipped in Cycle 6** | — | ✅ done 2026-08-03 |
-| 11 | Steel thread for metered runs — `spendOf`, sidecar `spend`, generic-api `usage.cost`, `run.completed.spend`, one `cost.incurred` per metered run (REQ-13) | 0.75 day | ⬜ next |
-| 12 | Every production driver reports spend — claude-code `SessionSpend`, hostile corpus, float mutant (REQ-12) | 0.75 day | ⬜ planned |
-| 13 | The cap bites — metering flip, live caps with currency, typed refusal, load faults (REQ-14) | 0.75 day | ⬜ planned |
-| 14 | Money room live — merge, real main-clone dispatches, `/api/pnl` through the door (REQ-15) | 0.25 day | ⬜ planned |
+| 11 | Steel thread for metered runs — `spendOf`, sidecar `spend`, generic-api `usage.cost`, `run.completed.spend`, one `cost.incurred` per metered run (REQ-13) | 0.75 day | ✅ done 2026-10-14 |
+| 12 | Every production driver reports spend — claude-code `SessionSpend`, hostile corpus, float mutant (REQ-12) | 0.75 day | ✅ done 2026-10-14 |
+| 13 | The cap bites — metering flip, live caps with currency, typed refusal, load faults (REQ-14) | 0.75 day | ✅ done 2026-10-14 |
+| 14 | Money room live — merge, real main-clone dispatches, `/api/pnl` through the door (REQ-15) | 0.25 day | ✅ done 2026-10-14 |
 
-**Appetite burn: 0.25 of 2.5 days planned (3 cap) — set 2026-10-14: the kickoff, one session.** Phases allocate 2.5.
+**Appetite burn: 1.5 of 2.5 days planned (3 cap) -- CYCLE CLOSED 2026-10-14, all four phases inside the cap.** One long day including three CI rounds and two merges of other lanes' work onto the branch.
 Kill checkpoint at 1.25 days: Phase 12 not done → scope cut (claude-code's stream path stays `not-reported`).
 
 ## Done log
+
+- 2026-10-14 -- **PHASES 11, 12, 13 AND 14 CLOSED. CYCLE 9 CLOSED. 4/4 phases, 4/4 REQ validated (REQ-12..15 = REQ-A..D).**
+  `amendments: 0` · `reopened: n` (each phase). **Actual vs appetite: 1.5 of 2.5 days planned (3 cap).**
+  - **CI 19/19, read per job**, run 38549208594 at `fb808a70` = the squash-merged tree `1fedd504` (PR #423). The spend
+    suite runs 101 checks in four sections on every leg; 8 fixture files migrated for the metering flip.
+  - **REQ-D live:** two real main-clone dispatches -- claude-code 13 USD cents (notional, subscription) and generic-api via
+    openrouter.ai 1 USD cent (billed) -- each one cost.incurred, served by /api/pnl through the door, traced by run_ref,
+    spend-trace 0 unbooked over 433 runs. Evidence: `evidence/phase-14/`.
+  - **CI round 1 (38489875382) was red for three reasons, all fixed in da151269:** propose.mjs edited a row's driver as
+    one line while max_cost had become valid only for its chain (every driver proposal and retire produced an unloadable
+    router -- now `followMoneyTerm`); `drivers/session-spend.mjs` tripped the runDriver BYPASS gate (SessionSpend moved into
+    common.mjs); four test bugs of my own (0.29 is not a float trap; the grep read comments; generic-api run unrouted had
+    no model; a driver warning is not on arc-run's stderr on success).
+  - **Two other lanes merged onto the branch mid-flight** (launch #410, bench #424 on the same claude-code driver);
+    generated files regenerated on the merged tree, never hand-merged.
+  - **Receipts (main clone):** phase.closed 11 `01M4X207PWJBSTWGASN7HWSB1C` · 12 `01M4X20HRDKKZQENW1TA8HCR3Q` · 13
+    `01M4X20S9J75FTGGR56JAHZHNJ` · 14 `01M4X20XX433TGRHE0Q7TPDPVY`. **Owner stamps owed** (approval.requested, gate phase-done):
+    11 `01M4X20BF2EDH6BKEW3FRW0BAH` · 12 `01M4X20Q6P3H37X6FN50DR3XJ6` · 13 `01M4X20VSYT7860GMM32C4Y0YS` · 14 `01M4X20ZMEBVESR2NZAQYCR5PB`.
+  - Assumptions: A-11 held (real CLI capture), A-12 held (OpenRouter usage.cost live), A-13 held (fixture), A-14 held
+    (main-clone dispatches landed in events/).
 
 - 2026-10-14 — **Phase 13 attack (2f050f5) reconciled.** Fixed: B2 (an explicit spend null is unproven to the cap whatever
   the class), B3 (spend-trace stat inside the guard). REJECTED: L1, L3, L4, L5 the spend is trusted unvalidated —
