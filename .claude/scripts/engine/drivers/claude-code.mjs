@@ -15,9 +15,19 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { statSync } from "node:fs";
+import { resolve } from "node:path";
 
-import { canonicalDoc, parseModelJson, pinnedModel, runDriver, seatPersona, settle } from "./common.mjs";
+import { canonicalDoc, contractLines, parseModelJson, pinnedModel, runDriver, seatPersona, SessionSpend, settle } from "./common.mjs";
 import { dispatchToolArgs, progressLine } from "../adapters/claude-code.mjs";
+
+// A session that STARTED may have spent, however it ended. Its figure rides the failure (`arcCost`) when the envelope
+// survived, and when it did not -- cut by a cap, killed before its result, unparseable -- the driver still says it
+// looked and found none (`not-reported`), which is unproven to the cap, never free (ADR-0229; attack 3e5fc9e B2, B3).
+// Only a CLI that never launched (cliMissing) leaves no spend key at all.
+const withSpend = (err, envelope) => {
+  err.arcCost = { spend: SessionSpend.read(envelope), source: "measured" };
+  return err;
+};
 
 /**
  * PROGRESS MODE (face Phase 06 slice 03c). arc-run sets ARC_DRIVER_PROGRESS=1 when it streams a session for the face's
@@ -86,12 +96,12 @@ function runStreaming(args, prompt) {
       for (const s of [child.stdout, child.stderr]) { try { s.destroy(); } catch { /* already closed */ } }
       if (buf) onLine(buf);
       const tail = errTail ? ` (${errTail.split("\n").filter(Boolean).pop()})` : "";
-      if (overflow) return rejectP(new Error(`claude CLI failed: ${overflow}`));
+      if (overflow) return rejectP(withSpend(new Error(`claude CLI failed: ${overflow}`), result));
       // A non-zero exit, a signal, or a result the CLI marks as an error is a failed run -- as execFileSync made it on
       // the json path -- never an answer to parse (B2).
-      if (exited && (exited.code !== 0 || exited.signal)) return rejectP(new Error(`claude CLI failed: exit ${exited.code ?? "none"}${exited.signal ? ` (${exited.signal})` : ""}${tail}`));
-      if (!result) return rejectP(new Error(`claude CLI failed: no result event${tail}`));
-      if (result.is_error === true) return rejectP(new Error(`claude CLI failed: the result is an error (${String(result.subtype ?? "error").slice(0, 60)})`));
+      if (exited && (exited.code !== 0 || exited.signal)) return rejectP(withSpend(new Error(`claude CLI failed: exit ${exited.code ?? "none"}${exited.signal ? ` (${exited.signal})` : ""}${tail}`), result));
+      if (!result) return rejectP(withSpend(new Error(`claude CLI failed: no result event${tail}`), null));
+      if (result.is_error === true) return rejectP(withSpend(new Error(`claude CLI failed: the result is an error (${String(result.subtype ?? "error").slice(0, 60)})`), result));
       resolveP(result);
     };
     function onLine(line) {
@@ -134,7 +144,11 @@ const CLI = process.env.ARC_CLAUDE_CLI || "claude";
 // MACHINERY root instead (ADR-0220 splits them; ADR-0223 records why it matters): the policy gate
 // validates the file at policyRoot(), so a driver building its prompt and its tool grant from a
 // file at $ARC_ROOT is validating one read and using another.
-const WORK_ROOT = process.env.ARC_ROOT || process.cwd();
+// ARC_WORK_ROOT, NEVER ARC_ROOT: arc-run keeps ARC_ROOT pointed at arc (its machinery) and hands the work root
+// down as ARC_WORK_ROOT plus the cwd it spawns this driver in. Reading ARC_ROOT here ran a benched CLI, holding
+// Bash, inside the arc checkout, and it committed there (2026-10-14, ADR-0916).
+// Resolved, so a relative value cannot mean one directory to the spawn and another to a later read (attack a522a4e B5).
+const WORK_ROOT = resolve(process.env.ARC_WORK_ROOT || process.cwd());
 
 await runDriver("claude-code", async ({ processName, input }) => {
   // ONE READER for the canonical document (canonicalDoc). This body used to open the file itself,
@@ -162,6 +176,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
     "INPUT (JSON):",
     JSON.stringify(input),
     "",
+    ...contractLines(doc),
     "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 
@@ -172,6 +187,10 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // The tier reaches the model here, or the run is unpinned and the receipt says so.
   const model = pinnedModel();
   if (model) args.push("--model", model);
+  // A BENCHED RUN DOES NOT LOAD THE OWNER'S OWN SETUP (ADR-0915). Without this the CLI read the
+  // user-level settings -- their hooks, plugins and MCP servers -- so a score measured the owner's
+  // machine as much as the model. Project and local settings still load; auth is untouched.
+  if (process.env.ARC_DRIVER_ISOLATE === "1") args.push("--setting-sources", "project,local", "--strict-mcp-config");
 
   let raw, envelope;
   if (process.env.ARC_DRIVER_PROGRESS === "1") {
@@ -184,23 +203,32 @@ await runDriver("claude-code", async ({ processName, input }) => {
     } catch (e) {
       const err = new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
       // Not installed is structural; every other failure stays undeclared (unknown), never guessed (ADR-0228).
-      if (cliMissing(e)) err.arcFailureClass = "provider-unavailable";
-      throw err;
+      // A CLI that never launched spent nothing and says nothing about spend.
+      if (cliMissing(e)) { err.arcFailureClass = "provider-unavailable"; throw err; }
+      // A CLI that exits non-zero after a session still printed its envelope, and that envelope says what it spent.
+      let failed = null;
+      try { failed = JSON.parse(String(e.stdout ?? "")); } catch { failed = null; }
+      throw withSpend(err, failed);
     }
     envelope = parseModelJson(raw, "the claude CLI envelope");
   }
 
-  const text = typeof envelope.result === "string" ? envelope.result : raw;
-  const output = parseModelJson(text, "the claude CLI result");
-
   const u = envelope.usage || {};
+  // Read at SESSION END, before the answer is judged: an answer that is not JSON was still paid for.
+  const cost = {
+    tokensIn: Number.isFinite(u.input_tokens) ? u.input_tokens : undefined,
+    tokensOut: Number.isFinite(u.output_tokens) ? u.output_tokens : undefined,
+    spend: SessionSpend.read(envelope),
+    source: "measured",
+  };
+  const text = typeof envelope.result === "string" ? envelope.result : raw;
+  let output;
+  try { output = parseModelJson(text, "the claude CLI result"); }
+  catch (err) { err.arcCost = cost; throw err; }
+
   return {
     output,
-    cost: {
-      tokensIn: Number.isFinite(u.input_tokens) ? u.input_tokens : undefined,
-      tokensOut: Number.isFinite(u.output_tokens) ? u.output_tokens : undefined,
-      source: "measured",
-    },
+    cost,
     model: pinnedModel() ?? "unpinned",
   };
 }, {
@@ -208,7 +236,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.3.0",
+  version: () => "claude-code@1.4.0",
 });
 
 settle();

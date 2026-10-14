@@ -1,0 +1,95 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "kickoff-gates.mjs:newCycle",
+      "breaking_input": "A lane's PROGRESS.md has `cycle: arc-portfolio (Cycle 5, opened 2026-10-14)` on the working tree, base has `cycle: arc-portfolio (Cycle 5, opened 2026-10-14, amended)` — same Cycle N token but different prose.",
+      "why": "cycleIdentity extracts the `Cycle <N>` token and folds only when the token is absent. A mid-cycle edit that keeps the same `Cycle N` (e.g. a date amendment, typo fix) yields identity \"cycle 5\" on both sides, so the detector says `same` and the gate never runs. The ADR-0076 revisit trigger describes exactly this case, but the code as written treats any same-token difference as non-new.",
+      "fix": "Compare the full folded `cycle:` value as well as the token; only when both the token and the rest-of-text are identical should it be `same`.",
+      "twin_of": ""
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "kickoff-gates.mjs:kernelFreeze",
+      "breaking_input": "A ruling whose `what` is `kernel freeze: no kickoff; launch (note), growth are exempt` — an Oxford comma present as `, and` inside an item, e.g. `launch, and growth are exempt` where the comma before `and` creates an empty split.",
+      "why": "parseRuling splits on `;` then splits each exempt clause on `,` after replacing `, and ` with `,`. A clause like `launch, and growth are exempt` becomes `launch,, growth`, and the empty string item returns `{ error: \"an empty item in the exempt list\" }` — even though the prose is a legal British-style list. This fails closed and refuses every lane, a false positive that stops legitimate kickoffs. The fixture test only uses `Launch,  growth, and memory` which avoids the empty-item trap.",
+      "fix": "Filter out empty items after splitting, or replace `\\s*,\\s*and\\s+` with `,` before splitting.",
+      "twin_of": ""
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "kickoff-gates.mjs:overflow-countsTowardLift",
+      "breaking_input": "A `revenue.received` payload with `\"amount\": 1` and `\"currency\": \"USD\"` but also `\"test\": false` and `\"livemode\": true` where `p.test` is a string `\"false\"` (not boolean) — e.g. JSON `{\"test\":\"false\",\"rehearsal\":false,\"amount\":1,\"currency\":\"USD\"}`.",
+      "why": "The checks `p.rehearsal === true || p.test === true || p.fixture === true || p.livemode === false` only catch exact boolean `true`/`false`. A string `\"false\"` (common in sloppy emitters) passes, so a fake receipt counts toward the freeze lift. The count is the only lift path besides reject/supersedes, so an attacker can forge a revenue receipt that silently lifts the freeze.",
+      "fix": "Treat any truthy value (including non-empty string, `\"true\"`, JSON-boolean true), and also reject any marker present with a non-boolean value; strictly require booleans.",
+      "twin_of": ""
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "kickoff-gates.mjs:kernelFreeze",
+      "breaking_input": "A spine where a later owner-ruling carries `supersedes: <r.id>` but also has `payload.gate` not equal to `owner-ruling` — e.g. `supersedes` set on a `decision.recorded` or an `approval.requested` with a different gate.",
+      "why": "foldRulings treats any event with `e.supersedes === r.id` and `e.kind === \"approval.requested\"` and `payload.gate === \"owner-ruling\"` as superseding. But the `supersedes` check only requires the kind and gate match; it does not require the superseding event to be a later `ts`. A malicious or accidental earlier event (same day, earlier ts) with the same id can supersede a ruling before it was made, silently lifting a freeze.",
+      "fix": "Require the superseding event's `ts` to be strictly later than the ruling's `ts` (and after any decisions).",
+      "twin_of": ""
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "kickoff-gates.mjs:newCycle",
+      "breaking_input": "A PROGRESS.md with header `status: LIVE` and `cycle: arc-x (Cycle 2)` at the base, and on the working tree a header `cycle: arc-x (Cycle 2 extra)` — a mid-cycle edit that appends a word, keeping the token.",
+      "why": "cycleIdentity folds only when there is no `Cycle N` token; when the token exists it returns just `cycle N`, discarding the rest. So `(Cycle 2 extra)` and `(Cycle 2)` both become `cycle 2` and are treated as `same`. The ADR says \"a typo fix or an opened-date amendment keeps the token, so it never reads as a new cycle\" — but that means a real new cycle that happens to reuse the same token (e.g. \"Cycle 2\" reappears after an IDLE gap) is also treated as not-new, blind to the actual change.",
+      "fix": "Do not collapse when the surrounding text changes; only ignore changes that are purely within the token. Compare the full cycle string after normalizing whitespace, and treat a token match as same only when the rest is also unchanged.",
+      "twin_of": ""
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "kickoff-gates.mjs:parseRuling",
+      "breaking_input": "A ruling `what` like `kernel freeze: no kickoff; launch (note with a parenthesis) are exempt` — a note containing parentheses.",
+      "why": "NOTE_ITEM regex `^([a-z][a-z0-9-]*)[ \\t]*\\(([^()]+)\\)$` forbids nested parentheses. A legitimate note like `launch (after the 2026-10-01 (retro) review)` fails to parse and fails closed, refusing every lane. The real ruling uses `engine (metered runs only)`, but a future note with an em-dash or punctuation inside is fine; a nested paren is not. This is a fail-closed false positive that a typo'd note can trigger.",
+      "fix": "Relax the note to allow any non-newline content (e.g. `\\((.+)\\)$` with a greedy match), while still requiring the lane prefix.",
+      "twin_of": ""
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "kickoff-lint.mjs:argv loop",
+      "breaking_input": "`kickoff-lint --base --lane memory` (a bare `--base` with the next token being another flag).",
+      "why": "The loop sets `baseRef = argv[i + 1] ?? \"\"` and splices both; if the next token is `--lane`, baseRef becomes `--lane` and the `--lane` flag is swallowed, so `memory` lands in positionals and is read as the repo root, causing a crash or wrong-repo judgment. The code only errors when baseRef is exactly empty; a ref that is actually a flag is accepted. Running from inside a repo it would silently use `--lane` as the base ref, which likely fails to resolve and produces a `WARN [new-cycle-unknown]`, skipping the gates entirely.",
+      "fix": "Reject `--base` when its value is empty OR starts with `--`, and do not treat the following token as the base if it is another known flag.",
+      "twin_of": ""
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "kickoff-gates.mjs:newCycle",
+      "breaking_input": "A lane whose PROGRESS.md is unreadable in the worktree (e.g. permission denied or a symlink loop).",
+      "why": "The `catch` returns `{ state: \"not-live\", reason: ... }`, and the caller only runs the gates on `state === \"new\"`. An unreadable PROGRESS is treated as `not-live` and the freeze/debt gates never run — a silent skip, not a WARN. The ADR's fail-closed philosophy requires that an unreadable tracker be a WARN at least, not an unjudged pass.",
+      "fix": "Distinguish an unreadable file from a non-LIVE status; return `unknown` (or a new state) and have the caller emit a WARN.",
+      "twin_of": ""
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "kickoff-gates.mjs:countsTowardLift",
+      "breaking_input": "A `revenue.received` payload with `\"amount\": 1`, `\"currency\": \"USD\"`, but no `rehearsal`/`test`/`fixture`/`livemode` fields at all, and a `kind` of `\"revenue.received\"` produced by a test harness writing to the shared spine.",
+      "why": "The function only rejects when the marker is exactly `true` or `livemode === false`; a receipt that omits all markers counts as real money. The ADR and phase spec say a receipt that \"marks itself as a rehearsal, test or fixture\" never counts, but an unmarked receipt from any emitter counts. Since the spine is shared instance state and any script can append, a fixture or rehearsal receipt that forgets the marker silently lifts the freeze.",
+      "fix": "Reject any revenue.received that does not carry an explicit `livemode: true` plus absence of all marker fields; fail closed on missing/unknown shapes.",
+      "twin_of": ""
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "kickoff-gates.mjs:kernelFreeze",
+      "breaking_input": "A spine day file that contains a malformed JSON line (e.g. a partial write or a non-JSON comment).",
+      "why": "`scanAll` presumably returns an error in `unreadable` — but that only covers unreadable day files (I/O errors). A day file that opens but has a malformed line may throw inside `scanAll` and propagate, crashing the whole lint rather than producing a FAIL with the day/code. The caller expects `{ events, unreadable }`; a throw aborts kickoff-lint without the mandated FAIL message, and on CI this means the gate silently doesn't run (the process crashes, exit non-zero, but with an unhelpful error and no `[kernel-freeze]` line).",
+      "fix": "Wrap `scanAll` in try/catch in kernelFreeze and convert any throw into a `fail` finding listing the file/code.",
+      "twin_of": ""
+    }
+  ]
+}

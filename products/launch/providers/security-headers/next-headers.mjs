@@ -112,9 +112,11 @@ async function oursAtHead(ctx, full, FILES) {
 }
 // ---- end of the shared block
 
-// security-headers slot as Next config headers (ADR-1704, ADR-1742). Commits one `next.config.mjs` whose `headers()`
-// sets the six response headers on every route; the venture build serves them. verify reads them from the live
-// response (never from the file) and asks Mozilla's HTTP Observatory for a grade, which must be A or A+. An Observatory
+// security-headers slot as Next config headers (ADR-1704, ADR-1742, ADR-1754). Commits `next.config.mjs`, whose
+// `headers()` sets five response headers on every route, and `middleware.js`, which sets the CSP with a fresh nonce per
+// request so script-src needs no 'unsafe-inline' (Next applies the nonce to its own scripts on a dynamic page). verify
+// reads them from the live response (never from the file), checks every script the page serves carries that request's
+// nonce, and asks Mozilla's HTTP Observatory for a grade, which must be A or A+. An Observatory
 // that is rate-limited, errors or is unreachable is UNSCANNED(reason) -- never verified.
 const OBSERVATORY = "https://observatory-api.mdn.mozilla.net/api/v2/scan";
 const D = ["de", "fault"].join("");
@@ -122,9 +124,11 @@ const EXPORT_D = `export ${D}`;
 // The fallback directive of CSP, assembled for the same reason as EXPORT_D (ADR-1703 bans the word in launch logic).
 const SRC_SELF = `${D}-src 'self'`;
 // Razorpay checkout loads its script and frame from these origins (checkout-portal, ADR-1738); Supabase is the data API.
+// NONCE is replaced per request by the middleware; 'strict-dynamic' lets a nonced script load what it needs.
+const NONCE = "{NONCE}";
 const CSP = [
   SRC_SELF,
-  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
+  `script-src 'self' 'nonce-${NONCE}' 'strict-dynamic' https://checkout.razorpay.com`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
@@ -137,7 +141,6 @@ const CSP = [
 ].join("; ");
 const HEADERS = [
   ["Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload"],
-  ["Content-Security-Policy", CSP],
   ["X-Content-Type-Options", "nosniff"],
   ["X-Frame-Options", "DENY"],
   ["Referrer-Policy", "strict-origin-when-cross-origin"],
@@ -153,6 +156,29 @@ const FILES = {
     "  async headers() {",
     "    return [{ source: \"/:path*\", headers }];",
     "  },",
+    "};",
+    "",
+  ].join("\n"),
+  "middleware.js": [
+    "// Content-Security-Policy with a fresh nonce per request (arc launch, security-headers slot, ADR-1754). Next reads the",
+    "// nonce from the request's CSP and puts it on its own scripts, so script-src carries no 'unsafe-inline'.",
+    "import { NextResponse } from \"next/server\";",
+    "",
+    `const POLICY = ${JSON.stringify(CSP)};`,
+    "",
+    "export function middleware(request) {",
+    "  const nonce = btoa(crypto.randomUUID());",
+    `  const csp = POLICY.split(${JSON.stringify(NONCE)}).join(nonce);`,
+    "  const headers = new Headers(request.headers);",
+    "  headers.set(\"x-nonce\", nonce);",
+    "  headers.set(\"content-security-policy\", csp);",
+    "  const res = NextResponse.next({ request: { headers } });",
+    "  res.headers.set(\"content-security-policy\", csp);",
+    "  return res;",
+    "}",
+    "",
+    "export const config = {",
+    "  matcher: [{ source: \"/((?!_next/static|_next/image|favicon.ico).*)\", missing: [{ type: \"header\", key: \"next-router-prefetch\" }, { type: \"header\", key: \"purpose\", value: \"prefetch\" }] }],",
     "};",
     "",
   ].join("\n"),
@@ -176,7 +202,7 @@ export function envContract() {
 export async function scaffold(ctx) {
   const full = repoOf(ctx);
   domainOf(ctx);
-  const sha = await commitFiles(ctx, full, FILES, {}, "security-headers: six response headers on every route (ADR-1742)");
+  const sha = await commitFiles(ctx, full, FILES, {}, "security-headers: response headers and a per-request CSP nonce on every route (ADR-1742, ADR-1754)");
   ctx.report({ kind: "headers-config", id: `${full}:${sha}` });
   return { files: Object.keys(FILES), resources: [{ kind: "headers-config", id: `${full}:${sha}` }], notes: [] };
 }
@@ -191,6 +217,8 @@ function missing(h) {
   if (age < 31536000 || !hsts.includes("includesubdomains")) out.push("strict-transport-security (max-age of a year or more, includeSubDomains)");
   const csp = get("content-security-policy").split(";").map((d) => d.trim());
   for (const d of [SRC_SELF, "frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'"]) if (!csp.includes(d)) out.push(`content-security-policy ${d}`);
+  const script = (csp.find((d) => d.startsWith("script-src ")) || "").split(/\s+/);
+  if (!script.some((t) => /^'nonce-[a-z0-9+/=_-]{16,}'$/.test(t)) || script.includes("'unsafe-inline'")) out.push("content-security-policy script-src with a nonce and no 'unsafe-inline'");
   if (get("x-content-type-options") !== "nosniff") out.push("x-content-type-options nosniff");
   if (!PRIVATE_REFERRER.has(get("referrer-policy"))) out.push("referrer-policy (a private policy)");
   if (get("x-frame-options") !== "deny") out.push("x-frame-options DENY");
@@ -209,11 +237,24 @@ async function probe(ctx) {
     if (e && e.code) throw e;
     return { ok: false, reason: `https://${domain}/ did not answer (${say(e && e.name, 30) || "transport error"})` };
   }
-  // Status and headers are all this probe reads: the body is released at once (edfe42c B6).
-  if (res.body) await res.body.cancel().catch(() => {});
-  if (res.status !== 200) return { ok: false, reason: `https://${domain}/ answered ${res.status}, not 200` };
+  if (res.status !== 200) {
+    if (res.body) await res.body.cancel().catch(() => {});
+    return { ok: false, reason: `https://${domain}/ answered ${res.status}, not 200` };
+  }
   const gap = missing(res.headers);
-  if (gap.length) return { ok: false, reason: `the live response lacks ${gap.join(", ")}` };
+  if (gap.length) {
+    if (res.body) await res.body.cancel().catch(() => {});
+    return { ok: false, reason: `the live response lacks ${gap.join(", ")}` };
+  }
+  // A nonce the page's scripts do not carry blocks the app's own JavaScript: a statically rendered page has none, so
+  // the header alone is not the proof. Every script tag must carry this response's nonce, and there must be one.
+  const nonce = (String(res.headers.get("content-security-policy") || "").match(/'nonce-([A-Za-z0-9+/=_-]+)'/) || [])[1];
+  let html = "";
+  try { html = (await res.text()).slice(0, 500000); } catch { html = ""; }
+  const tags = html.match(/<script\b[^>]*>/gi) || [];
+  const bare = tags.filter((t) => !(t.match(/\snonce="([^"]*)"/i) || [])[1] || (t.match(/\snonce="([^"]*)"/i) || [])[1] !== nonce);
+  if (!tags.length) return { ok: false, reason: `https://${domain}/ served no script tag to check the nonce on` };
+  if (bare.length) return { ok: false, reason: `${bare.length} of ${tags.length} script tags lack this response's CSP nonce (is the page statically rendered?)` };
   // The grade is Mozilla's, asked fresh on every verify.
   let scan;
   try {
@@ -227,7 +268,7 @@ async function probe(ctx) {
   if (scan.status === 429) return { ok: false, reason: "UNSCANNED(observatory rate-limited)" };
   if (!scan.ok || !body || typeof body.grade !== "string") return { ok: false, reason: `UNSCANNED(observatory answered ${scan.status}${body && typeof body.error === "string" ? `: ${say(body.error, 80)}` : ""})` };
   if (!GRADES.has(body.grade)) return { ok: false, reason: `observatory grades ${domain} ${say(body.grade, 4)} (score ${say(body.score, 4)}), not A or A+` };
-  return { ok: true, answerer: `${domain} + observatory-api.mdn.mozilla.net`, evidence: { grade: body.grade, score: body.score, headers: HEADERS.length } };
+  return { ok: true, answerer: `${domain} + observatory-api.mdn.mozilla.net`, evidence: { grade: body.grade, score: body.score, headers: HEADERS.length + 1, nonced_scripts: tags.length } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

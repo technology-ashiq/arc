@@ -72,6 +72,20 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$status" -eq 0 ]
 }
 
+@test "REQ-04: a trial-model contract failure stops without proposing a tier change" {
+  # Bench real event 2026-10-14: trial failures filed route escalations in the owner inbox.
+  ARC_DRIVER_FAKE="$(FAKE badschema)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --trial-model haiku --root "$ARC_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"retrying once on the same tier"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"a trial proposes no tier change"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"PROPOSAL was recorded"* ]] || { echo "$output"; false; }
+  # the run itself is still on the spine, and no escalation is
+  run grep -rl '"reason":"schema"' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ] || { echo "no run receipt"; false; }
+  run grep -rl "engine-escalation" "$ARC_SPINE_ROOT/events"
+  [ "$status" -ne 0 ]
+}
+
 @test "REQ-04: fault_hint separates a driver fault from a process fault" {
   # The process is self-consistent (its eval fixture satisfies its own schema), so a bad
   # driver answer must be blamed on the DRIVER.
@@ -215,7 +229,7 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   mkdir -p "$d/processes" "$d/engine" "$d/.claude"
   cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
   cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$d/processes/"
-  printf 'version: 1\ntiers:\n  - balanced-workhorse\nclasses:\n  something-else:\n    tier: balanced-workhorse\n    driver: claude-code\n    max_attempts: 2\n    max_wall_ms: 3600000\n    max_cost: unmetered\n' > "$d/engine/router.yaml"
+  printf 'version: 1\ntiers:\n  - balanced-workhorse\nclasses:\n  something-else:\n    tier: balanced-workhorse\n    driver: claude-code\n    max_attempts: 2\n    max_wall_ms: 3600000\n    max_cost: 1000\n    max_cost_currency: USD\n' > "$d/engine/router.yaml"
   run node "$(RUN)" --process commit-msg-draft --driver auto --dry-run --root "$d"
   [ "$status" -eq 1 ]
   [[ "$output" == *"no route for task class"* ]]
@@ -333,6 +347,50 @@ FAKE_CLI() { echo "$ARC_ROOT/tests/fixtures/engine/fake-claude-stream.mjs"; }
 # Does $1 hold a LINE that begins with $2? Anchored by a leading newline, in bash: grep -F would read a
 # newline inside its pattern as two patterns, one of them empty, and match everything.
 has_line() { [[ $'\n'"$1" == *$'\n'"$2"* ]]; }
+
+@test "ADR-0915: the prompt carries the output contract, and an isolated run skips user settings" {
+  local argv="$BATS_TEST_TMPDIR/iso.argv" prompt="$BATS_TEST_TMPDIR/iso.prompt"
+  # The fake answers in stream-json, so this non-stream run fails to parse; the argv and the prompt are
+  # written before that, and they are what is asserted. The run failing is not the point here.
+  ARC_DRIVER_ISOLATE=1 ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_ARGV_FILE="$argv" FAKE_CLAUDE_PROMPT_FILE="$prompt" FAKE_CLAUDE_PAUSE_MS=1 \
+    run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ -s "$argv" ] || { echo "the CLI was never reached: $output"; false; }
+  [ -s "$prompt" ] || { echo "no prompt reached the CLI: $output"; false; }
+  grep -q '"--setting-sources","project,local"' "$argv" || { echo "not isolated: $(cat "$argv")"; false; }
+  grep -q '"--strict-mcp-config"' "$argv" || { echo "MCP not isolated: $(cat "$argv")"; false; }
+  grep -q '^OUTPUT CONTRACT (JSON Schema):$' "$prompt" || { echo "no contract: $(cat "$prompt")"; false; }
+  grep -q '"required":\["commits"\]' "$prompt" || { echo "the contract is not the process schema: $(cat "$prompt")"; false; }
+  # CONTROL: without the flag the CLI gets no isolation, so the grep above was not matching something always there.
+  rm -f "$argv"
+  ARC_CLAUDE_CLI="$(FAKE_CLI)" FAKE_CLAUDE_ARGV_FILE="$argv" FAKE_CLAUDE_PAUSE_MS=1 \
+    run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ -s "$argv" ] || { echo "control never reached the CLI: $output"; false; }
+  ! grep -q -- '--setting-sources' "$argv" || { echo "isolated without being asked: $(cat "$argv")"; false; }
+}
+
+@test "ADR-0916: claude-code and codex run their CLI in the work root, never in the arc checkout" {
+  # 2026-10-14: both drivers read ARC_ROOT, which arc-run keeps pointed at arc, so a benched model holding Bash
+  # committed into the owner's checkout. The work root arrives as ARC_WORK_ROOT plus the driver's cwd.
+  local wr mark="arc-0916-cwd-$$"
+  wr="$(mktemp -d)"
+  git -C "$wr" init -q
+  export FAKE_CLAUDE_TOUCH="$mark" FAKE_CLAUDE_PAUSE_MS=1 ARC_CLAUDE_CLI="$(FAKE_CLI)"
+  run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT" --work-root "$wr"
+  if [ -f "$ARC_ROOT/$mark" ]; then rm -f "$ARC_ROOT/$mark"; echo "claude-code ran its CLI inside arc: $output"; false; fi
+  [ -f "$wr/$mark" ] || { echo "claude-code never ran its CLI in the work root: $output"; false; }
+  # codex has no fake CLI, so node stands in: node runs the script named exec from ITS cwd, and only the work
+  # root holds one. The run then fails to parse, which is not the point; the mark is.
+  printf '%s\n' 'require("fs").writeFileSync("codex-cwd.mark", "x");' > "$wr/exec"
+  ARC_CODEX_CLI=node run node "$(RUN)" --process commit-msg-draft --driver codex --root "$ARC_ROOT" --work-root "$wr"
+  rm -f "$ARC_ROOT/codex-cwd.mark"
+  [ -f "$wr/codex-cwd.mark" ] || { echo "codex never ran its CLI in the work root: $output"; false; }
+  # CONTROL: with no --work-root the work root IS arc, so the same fake marks arc. The checks above were not
+  # passing because the fake never writes anything.
+  run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
+  [ -f "$ARC_ROOT/$mark" ] || { echo "control: the fake marked nothing: $output"; false; }
+  rm -f "$ARC_ROOT/$mark"
+  unset FAKE_CLAUDE_TOUCH FAKE_CLAUDE_PAUSE_MS ARC_CLAUDE_CLI
+}
 
 @test "stream mode: progress and live lines name each step, withhold secrets, and never forge the receipt line" {
   run node "$ARC_ROOT/tests/engine-progress-line-probe.mjs"

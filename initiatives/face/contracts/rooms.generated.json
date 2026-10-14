@@ -792,7 +792,8 @@
         "lints": [
           "arc-bytediff",
           "face-coverage",
-          "product-lint"
+          "product-lint",
+          "version-lint"
         ],
         "concepts": [
           "face: section",
@@ -818,7 +819,7 @@
           "skill:support-reply"
         ]
       },
-      "itemCount": 38
+      "itemCount": 39
     },
     {
       "id": "factory",
@@ -1112,9 +1113,12 @@
         ],
         "ventures": [
           "lexos"
+        ],
+        "plannedRooms": [
+          "arc-sandbox"
         ]
       },
-      "itemCount": 5
+      "itemCount": 6
     },
     {
       "id": "law",
@@ -1390,7 +1394,8 @@
     "plannedRooms": {
       "ops": "ops",
       "trader": "trader",
-      "chat-mcp": "chat-mcp"
+      "chat-mcp": "chat-mcp",
+      "arc-sandbox": "ventures"
     },
     "ci": {
       "workflow:ci": "review-ship",

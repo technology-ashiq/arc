@@ -43,6 +43,12 @@ rules:
     tool_time: "none (fragment census 2026-10-07)"
     commit_time: "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code"
     merge_time: "tests/engine-compile.bats::the post-flip gate is a DIFFERENT comparison, and it is the hand-edit detector"
+  - id: action-stale-self-render
+    source: "action:stale-self-render"
+    class: blocking
+    tool_time: "none: a source edit is legitimate; only merging it without the regenerated outputs is not (ADR-2023)"
+    commit_time: "node bin/arc.mjs compile --self --check"
+    merge_time: "tests/distribute-self-render.bats::distribute-self-render: the committed outputs match a fresh render of this tree"
   - id: action-failing-tests
     source: "action:failing-tests"
     class: blocking
@@ -171,3 +177,23 @@ rules:
     commit_time: "n/a"
     merge_time: "n/a: warn-mode gate"
     advisory_reason: "declared warn in arc.gates.yaml, so it never blocked at any level"
+  # ---- portfolio Cycle 5 (ADR-0077, ADR-0078, ADR-0079) -----------------------------------------
+  - id: action-kickoff-kernel-lane
+    source: "action:kickoff-kernel-lane"
+    class: advisory
+    tool_time: "any harness: kickoff-lint [kernel-freeze] at /arc-kickoff step 8, reading the owner ruling off the canonical spine"
+    commit_time: "n/a: the spine is instance state, not in the commit"
+    merge_time: "n/a: CI has no spine, so the ruling cannot be read there"
+    advisory_reason: "the freeze is an owner ruling on the spine (ADR-0077); CI never holds the spine, so the gate is a refusal at the kickoff moment and a named WARN [kernel-freeze-unread] everywhere else"
+  - id: action-kickoff-over-debt
+    source: "action:kickoff-over-debt"
+    class: blocking
+    tool_time: "any harness: kickoff-lint [debt-budget] at /arc-kickoff step 8"
+    commit_time: "n/a: the new-cycle test needs the base ref, which a commit hook does not fetch"
+    merge_time: "tests/portfolio-debt-budget.bats::debt: no lane on this PR opens a cycle over its debt budget (the merge-time gate)"
+  - id: action-board-stale-field
+    source: "action:board-stale-field"
+    class: blocking
+    tool_time: "none: stale is derived by the lane-stale job, so nothing types it in a session"
+    commit_time: "n/a"
+    merge_time: "tests/portfolio-lane-stale.bats::board-lint --strict: the committed board carries no hand-written stale field (the merge-time gate)"

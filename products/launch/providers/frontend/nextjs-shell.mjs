@@ -1,8 +1,11 @@
 // frontend slot: the Next shell (ADR-1704, ADR-1726, ADR-1730). Commits a minimal App Router shell to main in ONE commit
 // through the Git Data API; release has already lifted the production hold, so that push is a production build. verify
 // is the first proof the venture serves: the live domain answers 200 with this shell, and PageSpeed Insights scores all
-// four Lighthouse categories at 90 or better. A PageSpeed quota or error answer is UNSCANNED(reason).
+// four Lighthouse categories at 90 or better, asked with the owner's PageSpeed key (ADR-1753). A PageSpeed quota or error
+// answer is UNSCANNED(reason). Before the commit it sets the Vercel project's framework to Next.js: hosting created it with
+// none, so the pre-app commits built READY as static sites (ADR-1755).
 const GITHUB = "https://api.github.com";
+const VERCEL = "https://api.vercel.com";
 const PAGESPEED = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 const MARK = "arc-launch";
 const CATS = { performance: "PERFORMANCE", accessibility: "ACCESSIBILITY", "best-practices": "BEST_PRACTICES", seo: "SEO" };
@@ -23,10 +26,14 @@ const jsx = (s) => String(s).replace(/[&<>{}"']/g, (c) => `&#${c.charCodeAt(0)};
 function files(brand) {
   return {
     // The one dependency manifest of Phase 01 (ADR-1733): later slots add files and never edit this one.
+    // Pins clear `npm audit --audit-level=high` (ADR-1759): drizzle-orm 0.45.2+ (GHSA-gpj5-g38j-94v9), and postcss forced
+    // to 8.5.23 because next 15.5.27 pins 8.4.31 exactly (GHSA-qx2v-qp2m-jg93 and three source-map reads).
     "package.json": `${JSON.stringify({ name: "venture", private: true, type: "module", scripts: { dev: "next dev", build: "next build", start: "next start", test: "node --test" },
-      dependencies: { next: "15.5.4", react: "19.1.1", "react-dom": "19.1.1", zod: "3.25.76", "drizzle-orm": "0.44.5", "@supabase/supabase-js": "2.57.4", "@supabase/ssr": "0.7.0" } }, null, 2)}\n`,
+      dependencies: { next: "15.5.27", react: "19.1.9", "react-dom": "19.1.9", zod: "3.25.76", "drizzle-orm": "0.45.4", "@supabase/supabase-js": "2.57.4", "@supabase/ssr": "0.7.0" }, overrides: { postcss: "8.5.23" } }, null, 2)}\n`,
     "app/layout.js": [
       `export const metadata = { title: ${JSON.stringify(brand)}, description: ${JSON.stringify(`${brand} -- coming soon.`)}, generator: ${JSON.stringify(MARK)} };`,
+      "// Rendered per request: Next puts security-headers' CSP nonce on its scripts only on a dynamic page (ADR-1754).",
+      "export const dynamic = \"force-dynamic\";",
       "",
       `${EXPORT_D} function RootLayout({ children }) {`,
       "  return (",
@@ -76,6 +83,37 @@ async function gh(ctx, method, path, body, allow) {
   throw new Error(`github ${method} ${path.split("?")[0]} -> ${res.status}${msg}`);
 }
 
+// The Vercel project hosting created, found by the repo's name and held to its GitHub link.
+async function vc(ctx, method, path, body, allow) {
+  const t = String(ctx.env.VERCEL_TOKEN || "").trim();
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(t)) throw refuse("BAD_TOKEN", "VERCEL_TOKEN is not a token shape; its value is not printed");
+  let res;
+  try {
+    res = await ctx.fetch(`${VERCEL}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${t}`, "content-type": "application/json", "user-agent": "arc-launch" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    if (e && e.code) throw e;
+    throw new Error(`vercel ${method} ${path.split("?")[0]} -> transport error (${say(e && e.name, 30) || "unknown"})`);
+  }
+  let json = null;
+  try { json = await res.json(); } catch { json = null; }
+  if (res.ok || (allow || []).includes(res.status)) return { status: res.status, body: json };
+  const msg = json && json.error && typeof json.error.message === "string" ? `: ${say(json.error.message)}` : "";
+  throw new Error(`vercel ${method} ${path.split("?")[0]} -> ${res.status}${msg}`);
+}
+async function nextPreset(ctx, full) {
+  const name = full.split("/")[1];
+  const p = await vc(ctx, "GET", `/v9/projects/${encodeURIComponent(name)}`, undefined, [404]);
+  if (p.status === 404) throw refuse("UPSTREAM_MISSING", `no vercel project named ${name}; hosting creates it`);
+  const link = p.body && p.body.link && typeof p.body.link === "object" ? p.body.link : null;
+  if (!link || link.type !== "github" || `${link.org}/${link.repo}`.toLowerCase() !== full.toLowerCase())
+    throw refuse("FOREIGN_PROJECT", `vercel project ${name} is not linked to ${full}; frontend does not change it`);
+  if (p.body.framework !== "nextjs") await vc(ctx, "PATCH", `/v9/projects/${encodeURIComponent(String(p.body.id))}`, { framework: "nextjs" });
+}
+
 function repo(ctx) {
   const all = list(ctx.upstream && ctx.upstream.repo).filter((r) => r.kind === "github-repo");
   if (all.length !== 1) throw refuse("UPSTREAM_MISSING", `repo reported ${all.length} github-repo resources; frontend needs exactly one`);
@@ -95,7 +133,7 @@ const decode = (b) => (b && b.type === "file" && b.encoding === "base64" && type
 const utf8 = (bin) => new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 
 export function envContract() {
-  return ["GITHUB_TOKEN"];
+  return ["GITHUB_TOKEN", "VERCEL_TOKEN", "PAGESPEED_API_KEY"];
 }
 
 export async function scaffold(ctx) {
@@ -139,6 +177,8 @@ export async function scaffold(ctx) {
     return { files: Object.keys(want), resources: [{ kind: "frontend-shell", id: `${full}:${mine}` }], notes: [] };
   }
 
+  // The preset first: the push below starts the production build, and Vercel builds it with the preset it holds then.
+  await nextPreset(ctx, full);
   const base = await gh(ctx, "GET", `/repos/${full}/git/commits/${head}`);
   const baseTree = base.body && base.body.tree ? String(base.body.tree.sha) : "";
   if (!SHA.test(baseTree)) throw new Error(`github returned no tree for ${full}@${head.slice(0, 7)}`);
@@ -191,6 +231,10 @@ async function probe(ctx) {
 
   const q = new URLSearchParams({ url, strategy: "mobile" });
   for (const c of Object.values(CATS)) q.append("category", c);
+  // Keyless calls share one Google-wide daily quota that is spent before most runs start (ADR-1753); the key rides
+  // only in this query, never in an answer.
+  const key = String((ctx.env && ctx.env.PAGESPEED_API_KEY) || "").trim();
+  if (key) q.append("key", key);
   let r;
   try { r = await ctx.fetch(`${PAGESPEED}?${q}`, { method: "GET", headers: { "user-agent": "arc-launch" } }); } catch (e) { if (e && e.code) throw e; return unscanned("pagespeed unreachable"); }
   if (r.status === 429) return unscanned("pagespeed quota (429)");

@@ -889,6 +889,7 @@
       "board-lint": "board",
       "ownership-lint": "board",
       "product-lint": "toolbelt",
+      "version-lint": "toolbelt",
       "council-lint": "council-chamber",
       "design-lint": "design-studio",
       "design-gate": "design-studio",
@@ -1465,7 +1466,8 @@
     "map": {
       "ops": "ops",
       "trader": "trader",
-      "chat-mcp": "chat-mcp"
+      "chat-mcp": "chat-mcp",
+      "arc-sandbox": "ventures"
     }
   },
   "ci": {

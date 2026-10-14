@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (87)
+## Scripts (88)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -230,6 +230,7 @@ None declared.
 - [`.claude/scripts/hq/jobs-lint.mjs`](../../../.claude/scripts/hq/jobs-lint.mjs)
 - [`.claude/scripts/hq/jobs/brief-materialize.mjs`](../../../.claude/scripts/hq/jobs/brief-materialize.mjs)
 - [`.claude/scripts/hq/jobs/day-close-roll.mjs`](../../../.claude/scripts/hq/jobs/day-close-roll.mjs)
+- [`.claude/scripts/hq/jobs/lane-stale.mjs`](../../../.claude/scripts/hq/jobs/lane-stale.mjs)
 - [`.claude/scripts/hq/ledger-ingest.mjs`](../../../.claude/scripts/hq/ledger-ingest.mjs)
 - [`.claude/scripts/hq/lib/approval-fold.mjs`](../../../.claude/scripts/hq/lib/approval-fold.mjs)
 - [`.claude/scripts/hq/lib/canonical.mjs`](../../../.claude/scripts/hq/lib/canonical.mjs)

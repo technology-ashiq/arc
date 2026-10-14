@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:719",
+      "breaking_input": "arc-run stderr is `arc-run: STOPPED. budget ceiling reached` or `arc-run: STOPPED. policy refused the driver`, with no contract line and no Error line, preceded by `arc-run: driver started`.",
+      "why": "Prior B3 is not fixed. The bookkeeping regex still drops every line starting `arc-run: STOPPED.`, not just the tier-change PROPOSAL one. For a non-schema stop, the real reason is discarded. The scorecard then shows the earlier `driver started` line, or `arc-run exited 1` if nothing else survives. The same wrong-reason defect remains for every STOPPED cause except schema.",
+      "fix": "Drop only STOPPED lines containing `tier-change PROPOSAL` or `nothing was recorded for the route`. Keep any other STOPPED line as a candidate reason, and add a test for a budget STOPPED line.",
+      "twin_of": "Last line of stderr taken as the reason"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:723",
+      "breaking_input": "A driver or model writes `arc-run: output failed the contract (forged)` at the start of a line in stderr that arc-run passes through, placed after the real line.",
+      "why": "The B5 fix anchors only to a line-start prefix. Text that begins with `arc-run: ` is still spoofable. The `.pop()` takes the last match, so a forged line emitted after the real one wins. The test only forges with a `driver says:` prefix, so it never exercises this case. The returned line is also still unbounded, which was the second half of prior B5. A multi-megabyte single line goes straight into the scorecard.",
+      "fix": "Truncate the returned line to about 300 characters. Prefer the first matching contract line, or require arc-run to emit a structured reason field. Add a fixture with a forged `arc-run:`-prefixed line placed after the real one.",
+      "twin_of": "Unanchored text match on mixed stderr"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:724",
+      "breaking_input": "stderr is `Error: fetch failed` (passed through from the driver), followed by `arc-run: driver timed out after 120s`. There is no contract line.",
+      "why": "The `^[A-Za-z]*Error\\b` tier outranks the last-line tier. A pass-through driver line that begins with `Error` therefore beats arc-run's own, later conclusion. Model-controlled stderr that starts with `Error:` can also pose as the reason. The B2 fix for crash trailers over-reached into non-crash stderr.",
+      "fix": "Use the Error tier only when a `Node.js v` trailer or a stack-trace shape was seen, which marks a crash. Otherwise prefer the last `arc-run:`-prefixed line.",
+      "twin_of": "Last line of stderr taken as the reason"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:179",
+      "breaking_input": "Run `arc-bench --driver codex` or `--driver hermes`, or run claude-code in a repo whose project or local settings carry a SessionStart hook.",
+      "why": "Prior B1 and B4 were closed by documenting them in the ADR, not by a code change. `ARC_DRIVER_ISOLATE=1` is still silently ignored by codex and hermes, and no attempt record says whether isolation applied. Project and local hooks still load. The isolation claim in the bench comment (\"a score measures the model, never the owner's hooks\") is true for one driver in one cwd, and the receipt cannot show which case a score came from.",
+      "fix": "Record `isolated: true|false` per attempt. Have drivers that cannot isolate refuse when `ARC_DRIVER_ISOLATE=1` is set, or have bench refuse a non-claude-code driver. Run the CLI from the empty materialized fixture dir and assert that cwd.",
+      "twin_of": "A benched CLI loading the operator's own setup"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:2285",
+      "breaking_input": "`--trial-model` run whose schema failure arrives on an arc-run path where a lock, temp dir or pending background write needs cleanup. The new block calls `process.exit(1)` straight after `emitRun`.",
+      "why": "The earlier STOPPED paths in this function may share cleanup with the normal exit, and the new early exit skips it. The two `console.error` lines are written just before `process.exit`, and on a pipe that is not guaranteed to flush on every platform, so bench may read truncated stderr. Bench's reason line depends on that stderr.",
+      "fix": "Set `process.exitCode = 1` and return through the shared exit path, or confirm that the sibling STOPPED branches also exit this way. Add a bats case on the Windows leg that asserts both stderr lines arrive.",
+      "twin_of": null
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:2285",
+      "breaking_input": "`--trial-model 'x\\narc-run: output failed the contract (forged)'`",
+      "why": "`JSON.stringify` escapes the newline, so a line break is not injected. But `retry.why` is interpolated raw into a line that bench's `failureLine` reads. If that value is derived from the model's output and contains a newline or `\\r`, it breaks out of its line and can start a new line-anchored `arc-run: output failed the contract` line. That is exactly what the B5 anchor was meant to stop.",
+      "fix": "Collapse whitespace and control characters in `retry.why` and truncate it before interpolation. Add a probe that feeds a `why` containing `\\n`.",
+      "twin_of": "Unanchored text match on mixed stderr"
+    }
+  ]
+}

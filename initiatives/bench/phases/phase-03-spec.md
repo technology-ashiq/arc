@@ -40,6 +40,26 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## CHANGE (2026-10-14, later): the benched CLI ran inside arc (ADR-0916)
+
+The re-run after ADR-0915 passed the contract, and then its commit subjects named bench's own
+evidence files. `claude-code` and `codex` spawned their CLI in `ARC_ROOT`, which is arc, not in the
+work root, so sonnet committed into the owner's main clone once per attempt. Both drivers now take
+`ARC_WORK_ROOT`, and bench stops a run at the first attempt that moves the arc checkout. The
+partial runs `champion-sonnet` and `champion-sonnet2` are void. The extra exit criterion: **the
+champion run leaves the arc checkout's HEAD, branch and local refs exactly as they were.**
+
+## CHANGE (2026-10-14): back to `claude-code`, after ADR-0915 (ADR-0914 Amendment 2)
+
+The `generic-api` champion run measured a model with no tools and no repo: 16.7%, every answer
+`{"commits": []}`, about $0.001 spent. The first `claude-code` sonnet attempts failed the contract
+on an invented `branch` key. The contract had never been shown, and the CLI had loaded the owner's
+hooks and plugins. ADR-0915 fixes both. The real event is now `sonnet` (champion) vs `haiku`
+(candidate) on `claude-code` under the ₹270 ceilings, run after this branch's fixes are on the main
+clone. Two in-lane defects the run exposed are fixed and pinned in the same PR: a NOT SCORED reason
+that reported a router note, and a trial run that filed route escalations. The extra exit criterion:
+**the champion's captures show the contract in the prompt and no `branch` key.**
+
 ## CHANGE (2026-10-13): the real-event pair moves to `generic-api` (ADR-0914 Amendment 1)
 
 The owner named the pair and the cap. Champion `deepseek/deepseek-v4-flash-0731`, candidate

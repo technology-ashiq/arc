@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:28",
+      "breaking_input": "Stream path: the CLI is killed or exits before any result event, so `result` is null and `withSpend(new Error('claude CLI failed: no result event'), null)` runs. The json path does the same when stdout is not parseable and `failed` is null.",
+      "why": "`withSpend` now calls `SessionSpend.read(envelope)` unconditionally, and the old `envelope && typeof envelope === 'object'` guard is gone. `session-spend.mjs` is not in the diff, so nothing here shows that `read(null)` returns `not-reported`. If it dereferences `envelope.total_cost_usd`, it throws. On the stream path that throw happens inside the child 'close' settle handler, before `rejectP` is called, so the promise never settles and the run hangs until the outer deadline. This is the same shape as the pattern 'A sidecar write before die() with no guard'.",
+      "fix": "Keep the guard in `withSpend`: pass `envelope && typeof envelope === 'object' ? envelope : null`, and make `SessionSpend.read` total over null, a string and an array. Add a fixture where the stream ends with no result event.",
+      "twin_of": "A sidecar write before die() with no guard"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/failure-class.mjs:250",
+      "breaking_input": "claude-code starts a paid session, then is killed by the watchdog, its output cap, or a signal. The failure carries `arcCost` with `spend: null` (not-reported) and its class is transport or another ANSWERLESS class. The row has `max_cost: 100` and `fallback: [generic-api]`.",
+      "why": "The new driver comment and the fixed-defects entry say a lost envelope must read as 'unproven to a cap, never free'. `termsCheck` only marks `unproven` when `!isSpend(h.spend)` and (`!ANSWERLESS.has(h.class)` or `inr_invalid`). A killed paid session in an answer-less class therefore counts as 0 and the next hop starts. The unit test 'an answer-less attempt with no figure is 0' pins this. The B2/B3 fix reaches the receipt but not the cap, so the cap can be overshot by exactly the sessions the fix was written for.",
+      "fix": "Have the driver mark a started session that reported nothing (for example `spend_absence: 'not-reported'` on the hop), and have `termsCheck` treat that marker as unproven regardless of class. Reserve the answer-less zero for hops where no session ever launched.",
+      "twin_of": "A paid session read as unmetered when its envelope was lost"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/spend-trace.mjs:54",
+      "breaking_input": "`node spend-trace.mjs --spine <path>` where the path exists but is unreadable (EACCES on Windows), or is deleted between `existsSync` and `statSync`.",
+      "why": "`statSync` runs after `existsSync` and is not wrapped in a try. A permission error or a race throws an uncaught exception, so the process exits 1 with a stack trace instead of the documented usage exit 2. An exit-1 failure can be misread as a finding by a caller that switches on exit codes. The prior-round fix for B5 asked for exactly this wrap.",
+      "fix": "Replace the pair with `try { ok = statSync(named).isDirectory() } catch { ok = false }`, and wrap the later `query` call so any throw exits 2.",
+      "twin_of": "A repeated or non-directory path flag accepted"
+    }
+  ]
+}

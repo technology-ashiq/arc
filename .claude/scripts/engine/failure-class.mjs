@@ -11,6 +11,8 @@
  * so the same recorded hops always produce the same decision (invariant c: replay-deterministic).
  */
 
+import { isSpend, sumSpend } from "./drivers/common.mjs";
+
 export const FAILURE_CLASSES = Object.freeze([
   "transport",
   "provider-unavailable",
@@ -108,10 +110,14 @@ export function familyOf(driver, model) {
   return "unknown";
 }
 
-// Drivers that report spend (`inr`, integer paise) in their cost sidecar. Only these can be held to a
-// numeric `max_cost`; a chain with none of them must say `unmetered` (ADR-0228 item 6). A driver joins
-// this table in the reviewed diff that makes it report `inr` -- never by assumption.
-export const METERING_DRIVERS = Object.freeze(new Set(["mock"]));
+// Drivers that report spend in their cost sidecar. Only these can be held to a numeric `max_cost`; a chain with none
+// of them must say `unmetered` (ADR-0228 item 6). A driver joins this table in the reviewed diff that makes it report
+// spend -- never by assumption: `claude-code` (the CLI's session `total_cost_usd`, pinned by a real capture) and
+// `generic-api` (OpenRouter's `usage.cost`) joined in engine Cycle 9 (ADR-0231). `codex` and `hermes` report none.
+export const METERING_DRIVERS = Object.freeze(new Set(["mock", "claude-code", "generic-api"]));
+
+// The currencies a cap may be written in: ADR-1013's two, the same ones `spendOf` turns a figure into.
+const CAP_CURRENCIES = new Set(["INR", "USD"]);
 
 // A hop is not started with less than this left on the RUN's clock: a driver that timed out at the
 // run's edge and declared `transport` would otherwise start a hop that is killed at once.
@@ -148,12 +154,18 @@ export function chainTermFaults(at, row) {
   const chain = [row.driver, ...(Array.isArray(row.fallback) ? row.fallback : [])].map((d) => String(d ?? "").trim());
   const meters = chain.some((d) => METERING_DRIVERS.has(d));
   const c = row.max_cost;
+  const cur = row.max_cost_currency;
   if (c === "unmetered") {
-    if (meters) out.push(`${at} \`max_cost\` is unmetered, but its chain holds a driver that reports spend (${chain.filter((d) => METERING_DRIVERS.has(d)).join(", ")}) — give a cap in paise (ADR-0228)`);
+    if (meters) out.push(`${at} \`max_cost\` is unmetered, but its chain holds a driver that reports spend (${chain.filter((d) => METERING_DRIVERS.has(d)).join(", ")}) — give a cap in minor units and its \`max_cost_currency\` (ADR-0228, ADR-0231)`);
+    // A currency on a row that caps nothing reads as a cap that is not there.
+    if (cur !== undefined) out.push(`${at} \`max_cost_currency\` is set on an unmetered row — there is no cap for it to name (ADR-0231)`);
   } else {
     const f = intFault("max_cost", 0);
-    if (f) out.push(`${at} \`max_cost\` ${f} — integer paise, or \`unmetered\` (ADR-0228)`);
-    else if (!meters) out.push(`${at} \`max_cost\` is ${c} paise, but no driver in its chain (${chain.join(", ")}) reports spend, so nothing could ever be measured against it — write \`unmetered\` (ADR-0228)`);
+    if (f) out.push(`${at} \`max_cost\` ${f} — integer minor units, or \`unmetered\` (ADR-0228)`);
+    else if (!meters) out.push(`${at} \`max_cost\` is ${c}, but no driver in its chain (${chain.join(", ")}) reports spend, so nothing could ever be measured against it — write \`unmetered\` (ADR-0228)`);
+    // A number with no currency is a figure nobody can compare. Absent, empty, lowercase: refused, never defaulted.
+    if (cur === undefined) out.push(`${at} \`max_cost_currency\` is absent — a numeric cap names its currency, INR or USD (ADR-0231)`);
+    else if (typeof cur !== "string" || !CAP_CURRENCIES.has(cur)) out.push(`${at} \`max_cost_currency\` is ${JSON.stringify(cur)}, not INR or USD (ADR-0231)`);
   }
   return out;
 }
@@ -165,7 +177,7 @@ export function chainTermFaults(at, row) {
  * @param {{ driver: string, class: string, ms?: number, cost?: { inr?: number } | null }[]} hops  every attempt so far, in order
  * @param {{ elapsedMs: number, runRemainingMs?: number, familyOf: (driver: string) => string }} ctx
  * @returns {{ hop: true, to: string, index: number, timeoutMs?: number }
- *         | { hop: false, why: string, byTerms: boolean, noFamily?: boolean }}
+ *         | { hop: false, why: string, byTerms: boolean, noFamily?: boolean, refusal?: object }}
  */
 export function nextHop(chain, hops, ctx) {
   const last = hops[hops.length - 1];
@@ -195,7 +207,7 @@ export function nextHop(chain, hops, ctx) {
   }
 
   const tc = termsCheck(chain.terms, hops, ctx);
-  if (!tc.ok) return { hop: false, why: tc.why, byTerms: true };
+  if (!tc.ok) return { hop: false, why: tc.why, byTerms: true, ...(tc.refusal ? { refusal: tc.refusal } : {}) };
   return { hop: true, to: String(chain.remaining[index] ?? "").trim(), index, ...(tc.timeoutMs !== undefined ? { timeoutMs: tc.timeoutMs } : {}) };
 }
 
@@ -203,10 +215,10 @@ export function nextHop(chain, hops, ctx) {
  * May ONE more attempt start under the chain's terms and the run's clock? Shared by a fallback hop and
  * by ADR-0204's same-tier retry, because `max_attempts` counts every attempt and a retry that skipped
  * this check would be the one place the terms did not bind (the twin this lane keeps recording).
- * @param {{ max_attempts?: number, max_wall_ms?: number, max_cost?: number | string } | undefined} terms
+ * @param {{ max_attempts?: number, max_wall_ms?: number, max_cost?: number | string, max_cost_currency?: string } | undefined} terms
  * @param {{ driver: string, class: string | null, cost?: { inr?: number } | null }[]} hops
  * @param {{ elapsedMs: number, runRemainingMs?: number }} ctx
- * @returns {{ ok: true, timeoutMs?: number } | { ok: false, why: string }}
+ * @returns {{ ok: true, timeoutMs?: number } | { ok: false, why: string, refusal?: { code: string, spent: object, cap: object } }}
  */
 export function termsCheck(terms, hops, ctx) {
   // The RUN's own clock. Too little left is a budget stop, not a hop that starts and is killed at once.
@@ -225,16 +237,31 @@ export function termsCheck(terms, hops, ctx) {
     return { ok: false, why: `the chain allows ${t.max_wall_ms} ms and ${ctx.elapsedMs} have passed, leaving under the ${MIN_HOP_MS} ms a hop needs` };
   }
   if (isTerm(t.max_cost)) {
-    // F3. An attempt that served an answer and reported no spend leaves the total UNPROVEN, and an
-    // unproven total is never assumed to be under the cap (ADR-0069 b5: absent is never estimated).
-    // An answer-less attempt's absent figure is 0: the class says no model produced anything.
-    // A figure that was PRESENT but not a non-negative integer is unproven even on an answer-less attempt:
-    // it is a report of spend nobody can read, never a 0 (attack 27dcf39 B5).
-    const measured = (h) => h.cost && Number.isInteger(h.cost.inr) && h.cost.inr >= 0;
-    const unmeasured = hops.find((h) => !measured(h) && (!ANSWERLESS.has(h.class) || (h.cost && h.cost.inr_invalid)));
-    if (unmeasured) return { ok: false, why: `the spend so far is unproven (${unmeasured.driver} answered and reported no spend) against max_cost ${t.max_cost}` };
-    const spent = hops.reduce((s, h) => s + (measured(h) ? h.cost.inr : 0), 0);
-    if (spent >= t.max_cost) return { ok: false, why: `${spent} paise spent against max_cost ${t.max_cost}` };
+    // THE MONEY TERM (ADR-0231). The cap is minor units of `max_cost_currency`, and the spend it is compared with is
+    // the run's spend in THAT currency summed by `sumSpend` -- the one rounding the receipt and the money row use, so
+    // the refusal's `spent` is the `cost.incurred.amount` the same run writes (never a sum of per-attempt ceilings).
+    const cap = { amount: t.max_cost, currency: t.max_cost_currency };
+    // F3. An attempt that served an answer and reported no spend leaves the total UNPROVEN, and an unproven total is
+    // never assumed to be under the cap (ADR-0069 b5: absent is never estimated). An answer-less attempt's absent
+    // figure is 0: the class says no model produced anything. A figure that was PRESENT but unreadable is unproven
+    // even on an answer-less attempt (attack 27dcf39 B5), and so is a figure in ANOTHER currency: comparing it needs a
+    // rate the spine does not have (ADR-1003).
+    // An EXPLICIT `spend: null` is a driver saying a session started and its figure was lost: unproven whatever the
+    // class, or a killed paid session would count as free (attack 2f050f5 B2). Only an attempt with no spend key at all
+    // -- nothing ran, or a driver that never meters -- takes the answer-less 0.
+    const unproven = hops.find((h) => (isSpend(h.spend)
+      ? h.spend.currency !== cap.currency
+      : (Object.prototype.hasOwnProperty.call(h, "spend") || !ANSWERLESS.has(h.class) || (h.cost && h.cost.inr_invalid))));
+    const sum = sumSpend(hops.map((h) => (isSpend(h.spend) && h.spend.currency === cap.currency ? h.spend : null)));
+    const spent = { amount: sum ? sum.amount : 0, currency: cap.currency };
+    if (unproven) {
+      const what = isSpend(unproven.spend) ? `reported its spend in ${unproven.spend.currency}` : "answered and reported no spend";
+      return { ok: false, why: `the spend so far is unproven (${unproven.driver} ${what}) against max_cost ${cap.amount} ${cap.currency}`,
+        refusal: { code: "MAX_COST_UNPROVEN", spent, cap } };
+    }
+    if (spent.amount >= cap.amount) {
+      return { ok: false, why: `${spent.amount} ${cap.currency} minor units spent against max_cost ${cap.amount}`, refusal: { code: "MAX_COST_REACHED", spent, cap } };
+    }
   }
 
   const caps = [ctx.runRemainingMs, isTerm(t.max_wall_ms) ? t.max_wall_ms - ctx.elapsedMs : undefined].filter((v) => v !== undefined);

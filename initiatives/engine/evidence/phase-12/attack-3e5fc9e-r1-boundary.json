@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-run.mjs:1297",
+      "breaking_input": "Emit of run.completed fails (spine unwritable, --strict rejection). The new line calls emitSpend(money.groups, \"\") with an empty run_ref, so cost.incurred rows are written naming no run.",
+      "why": "With no receipt written, the money row has an empty run_ref. spend-trace only checks run.completed rows, so the orphan money row is never traced. It is booked spend attached to no run, and the idempotency key built from run_ref and currency (cost.incurred|<run_ref>|USD) collides across every failed-emit run, so the second failure is deduped away as DUP_IDEM and its spend is lost silently. The diff also uses `money` in a scope not shown to be in emitRun.",
+      "fix": "On a failed run.completed emit, do not emit cost.incurred with an empty run_ref. Either skip it and print the unbooked figure loudly, or key the row on a fresh run id and mark it orphaned. Add a fixture where the emit fails.",
+      "twin_of": "A sidecar write before die() with no guard"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:196",
+      "breaking_input": "The CLI exits non-zero. execFileSync's e.stdout is a Buffer unless an encoding was set, and stdout may be huge or truncated by maxBuffer. A truncated or multi-line stream is parsed with a single JSON.parse.",
+      "why": "If stdout is truncated by maxBuffer (ENOBUFS), JSON.parse fails, failed is null, and the paid session is silently read as free. In the stream-json case on the json path the document may hold more than one line. The spend is dropped without a mark, the same class as 'spend dropped when the answer is judged bad'. A cap that cut the output also isn't named.",
+      "fix": "When the failure is ENOBUFS or the parse fails, record spend_absence as not-reported on the failure explicitly (arcCost with value undefined) so it reads as unproven, and try the last non-empty line.",
+      "twin_of": "Bytes dropped silently past a cap"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:100",
+      "breaking_input": "Stream path: the CLI is killed by the watchdog or the run deadline after a result event was printed, so exited.signal is set; `result` is the already-parsed final event carrying total_cost_usd, or null if the kill came before it.",
+      "why": "withSpend attaches spend to the failure whenever the envelope has the field. A result event that arrived but was truncated mid-line is not parsed, so the spend is dropped. A kill before the result event loses the spend of a session that did spend, and a deadline kill reads as free. The overflow branch right above returns with no withSpend even when result exists.",
+      "fix": "Apply withSpend to the overflow rejection too, and on kill without a result mark the failure as spend-unknown rather than leaving the field off.",
+      "twin_of": "Spend dropped when the answer is judged bad"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/drivers/generic-api.mjs:24",
+      "breaking_input": "ARC_LLM_ENDPOINT=https://openrouter.ai.evil.example/v1 or https://evil.example/?x=openrouter.ai",
+      "why": "The regex tests hostname with (^|\\.)openrouter\\.ai$ and so rejects both of these, but ARC_LLM_SPEND=openrouter is a free opt-in that is read at any value of the endpoint, including a local proxy that reports usage.cost in other units. It then books that figure as measured USD. The owner declaration is unvalidated beyond a string compare and is read once at import, so a stale env value changes accounting for a different endpoint.",
+      "fix": "Record the opt-in basis on the receipt (declared versus host-matched) so a declared gateway's figure is labelled, and require ARC_LLM_ENDPOINT to be set when the opt-in is used.",
+      "twin_of": "A provider-specific request field sent to any endpoint"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/spend-trace.mjs:44",
+      "breaking_input": "node spend-trace.mjs --json --spine (the flag last), or `--spine=/path` (equals form)",
+      "why": "`--spine=/path` starts with `--` and is not in the allow-list, so it exits 2 as unknown, which is fine. But `--spine` as the last argument gives named undefined and is caught. A repeated `--spine a --spine b` uses only the first, and the second path b is never validated, so a typo there is silently ignored. Also existsSync accepts a plain file as a spine, which query then reads as a directory with an uncaught error rather than exit 2.",
+      "fix": "Reject a repeated --spine, and require the path to be a directory (statSync(...).isDirectory()) before querying; wrap query in try so an exception exits 2.",
+      "twin_of": "A flag taken as a path"
+    }
+  ]
+}

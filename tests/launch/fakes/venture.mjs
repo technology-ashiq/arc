@@ -17,7 +17,7 @@ import { pathToFileURL } from "node:url";
 
 const DB_STUB = "export async function supabase() { return globalThis.__launchVentureDb; }\n";
 
-export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false, reportsFail = false, serverEnv = {}, deployed = (path, text) => text } = {}) {
+export function makeVenture({ github, supabase, live, full, domain, siteUrlNeeded = true, leakCrossTenant = false, ignorePlan = false, reportsFail = false, serverEnv = {}, deployed = (path, text) => text, linkShape = "flat" } = {}) {
   const inner = live.fetch;
   const users = new Map(); // email -> { id, email }
   const links = new Map(); // hash -> email
@@ -91,7 +91,9 @@ export function makeVenture({ github, supabase, live, full, domain, siteUrlNeede
         if (!users.has(body.email)) return json(404, { msg: "User not found" });
         const hash = id("pkce_");
         links.set(hash, body.email);
-        return json(200, { properties: { hashed_token: hash, verification_type: "magiclink" } });
+        // GoTrue today answers the token at the top level beside the user; older builds nested it in `properties`.
+        const tok = { hashed_token: hash, verification_type: "magiclink" };
+        return json(200, linkShape === "nested" ? { properties: tok } : { id: users.get(body.email).id, email: body.email, ...tok });
       }
       return json(404, { msg: "not modelled" });
     }

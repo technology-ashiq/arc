@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:spineDirFor (ARC_SPINE_ROOT)",
+      "breaking_input": "ARC_SPINE_ROOT=relative/path with kickoff-lint run from two different cwds against the same root",
+      "why": "resolve(named) is anchored to cwd, not the linted root, so the same lint reads two different spines depending on where it was launched. A relative path pointing at a non-existent dir silently becomes the 'no spine' WARN and skips the freeze. Prior finding B7 was rejected as a duplicate of spine-io.mjs, but this gate judges a root passed as an argument, so it is the cwd-vs-linted-repo class.",
+      "fix": "Resolve a relative ARC_SPINE_ROOT against root, or reject non-absolute values with a FAIL.",
+      "twin_of": "(d) the wrong repo or spine"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/kickoff-lint.mjs:40-52 (--base parsing)",
+      "breaking_input": "node kickoff-lint.mjs --lane x --base main --base=origin/main",
+      "why": "baseSeen counts occurrences but a repeated identical value is also refused, while a flag value of '--base=' (empty after =) gives baseRef '' and exits 5 correctly. However the loop runs over argv BEFORE any '--' handling, so a free-text positional or --text value equal to '--base' is consumed as the flag and its value eaten. A goal sentence argument containing the token --base is mis-consumed, the same class as the documented '--lane' free text rule.",
+      "fix": "Stop scanning at '--text <value>' (skip its value) and at '--', or move --base parsing into parseLaneArgs so --text consumption is shared.",
+      "twin_of": "(b) flag values"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:newCycle (git rev-parse / ls-tree failure paths)",
+      "breaking_input": "Shallow CI checkout where origin/main resolves but the tree lacks the lane's directory history, or git missing from PATH",
+      "why": "git() uses stdio ignore for stderr and a 30s timeout; an ETIMEDOUT or ENOENT on git in the rev-parse step is reported as 'base ref does not resolve', which is misleading, and in the ls-tree step as 'could not list'. Both are WARN-only, so on a CI leg where git hangs once the freeze and debt gates silently do not run and the build is green. The merge-time twin is a WARN that nothing converts to a failure outside the one bats case.",
+      "fix": "Distinguish ENOENT/ETIMEDOUT from exit 1/128 in the message, and have CI mode (CI env set) treat state unknown as FAIL for debt-budget.",
+      "twin_of": "(i) one null for two failures"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:BASE_REF_RE",
+      "breaking_input": "--base 'HEAD@{1}:initiatives/x/PROGRESS.md' is rejected, but --base 'main^{tree}' or 'a..b' passes the grammar",
+      "why": "The grammar admits ':'-free refs only, yet allows '..', '^', '~', '{}' freely. `${base}^{commit}` with base 'a..b' makes rev-parse --verify fail (ok), but base 'main@{upstream}' resolves to a different ref than the user thinks; and ref 'HEAD~999999' errors become 'does not resolve'. More important: `git show ${base}:${rel}` is built from the raw base rather than from the resolved SHA, so a ref that moves (fetch between rev-parse and show) gives two different bases.",
+      "fix": "Resolve base to a full SHA once via rev-parse and use that SHA in ls-tree and show.",
+      "twin_of": "(h) a value handed to git as an argument"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:trackerRel / debtBudget",
+      "breaking_input": "laneRes.tracker resolving outside root (a symlinked initiatives/<lane> or a '..' form)",
+      "why": "trackerRel returns a relative path that can start with '../' when the tracker is not under root; it is then used as a git tree path (git show base:../x fails -> 'unknown') and in join(root, base, 'debt-ledger.md') reading a file outside the linted repo. There is no check that the result stays inside root.",
+      "fix": "Refuse a rel that starts with '..' or is absolute after relative(), as state unknown with a named reason.",
+      "twin_of": "(m) tracker paths in two forms"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/plan/kickoff-gates.mjs:spineDirFor",
+      "breaking_input": "Linted root is a bare repository's linked worktree, or git worktree list prints a main entry flagged 'prunable' / on an unmounted drive",
+      "why": "The first worktree block is trusted as the main clone. If the first path no longer exists (moved or deleted main clone, common after the orca worktree layout is reorganised) the result is the 'no spine' WARN, skipping the freeze with only a WARN. Windows paths with spaces are fine, but a path containing a newline-free trailing whitespace is trimmed, altering the path.",
+      "fix": "If the first worktree's directory is missing, return an error (FAIL) rather than a null dir. Do not trim the path; strip only the line terminator.",
+      "twin_of": "(j) the main worktree is not dirname(git common dir)"
+    }
+  ]
+}

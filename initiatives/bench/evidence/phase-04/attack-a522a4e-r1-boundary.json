@@ -1,0 +1,70 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:checkoutFingerprint",
+      "breaking_input": "A benched model runs `git add -A && git commit` or `git reset --soft`/`git checkout -b` in arc. Branch creation is caught, but a commit on the CURRENT branch changes HEAD and the branch ref (caught). However: `git stash push -u` in arc (refs/stash is not in refs/heads or refs/tags), `git update-ref refs/notes/...`, `git worktree add`, edits to tracked files, `git config` writes, or `git checkout -- .` over the owner's uncommitted changes (the repo here has a modified docs/session-log.md).",
+      "why": "The fingerprint covers only HEAD, the symbolic ref, local branches and tags. The owner's working tree, index, stash and notes are not fingerprinted, so a model that rewrites tracked files or drops the owner's uncommitted work does not stop the run. The ADR claims the arc checkout is protected, but only refs are.",
+      "fix": "Add `git status --porcelain=v1 -z` (excluding the bench capture dirs), `refs/stash` and `refs/notes` to the fingerprint, or compare `git for-each-ref` over all refs except refs/remotes."
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:checkoutFingerprint (git helper)",
+      "breaking_input": "The arc checkout is a linked worktree (as it is here, arc-bench-2) and the model runs its git commands in the main clone's repository or in another worktree sharing refs/heads; or GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE are present in the environment inherited by the git() helper.",
+      "why": "`git(root, ...)` is a wrapper whose spawn semantics are not visible in the diff. If it inherits an exported GIT_DIR (set when bench runs from a git hook), the fingerprint reads a different repo than `root`, so it never moves. Both the before and after values would read the same wrong repo, which is a silent false pass.",
+      "fix": "Spawn git with GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE and GIT_COMMON_DIR removed from the env, and pass `-C root`. Assert that `rev-parse --show-toplevel` equals root."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:checkoutFingerprint",
+      "breaking_input": "A transient git failure on the post-attempt call: an index.lock held by another session, or a ref being packed during `git gc`. rev-parse succeeds before but the `for-each-ref` call throws, so refs becomes the literal \"(unreadable)\".",
+      "why": "A transient failure produces a digest that differs from the baseline, so a healthy run is voided as 'moved'. The inverse also holds: if the BEFORE read fails, refs is \"(unreadable)\", and a later successful read always mismatches. If HEAD fails after, the digest is null and the run is voided with a misleading 'no repo' message. The error path conflates unreadable with moved.",
+      "fix": "Retry once, and report fingerprint-unreadable as a distinct failure rather than comparing sentinels as if they were state."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:~1750 (per-attempt check) and the `break` after a moved checkout",
+      "breaking_input": "The attempt moves the checkout and the run `break`s out of the attempt loop. The code after the loop (post-call reconciliation) and the remaining classes/fixtures are skipped via `continue`, but only for fixtures after the current one. In-flight siblings are not covered: a driver that spawned a detached background `git commit` (e.g. `sh -c 'sleep 30; git commit' &`) outlives the attempt.",
+      "why": "The fingerprint is taken once at attempt end, so a detached child that moves refs after the check lands after the run has finished or while the next group's budget is spent. The final provenance reads only `checkoutMoved`, set by the earlier checks, and there is no final fingerprint comparison after the loop, unlike routerSha, which is re-read at the end (`shaAfter`).",
+      "fix": "Re-run checkoutFingerprint once more after all attempts, immediately before building provenance, and set checkout_unchanged from that as well."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:137 and drivers/codex.mjs:23",
+      "breaking_input": "ARC_WORK_ROOT is set to a relative path, or to a POSIX-style path (/c/Users/...) handed through MSYS bash on Windows, or the variable is empty. `process.env.ARC_WORK_ROOT || process.cwd()` treats empty as unset, which is fine, but a relative value resolves against the driver's cwd at each use.",
+      "why": "The driver previously used ARC_ROOT, which is guaranteed absolute. A relative or MSYS-translated ARC_WORK_ROOT passes through unnormalised, so the CLI's cwd and the prompt and tool-grant reads can diverge ('validate one read, use another'). On the driver launched via the .sh wrapper under MSYS, the path form can differ from the native form that spawn needs.",
+      "fix": "Normalise with path.resolve and fail closed if the result is not an existing directory. Assert that WORK_ROOT equals the process cwd that arc-run spawned."
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:137, drivers/codex.mjs:23 (twin: spawned in ARC_ROOT)",
+      "breaking_input": "Any other driver or helper that still reads ARC_ROOT as 'where the work happens': e.g. drivers/common.mjs, claude-code.sh and codex.sh wrappers, or the policy/tool-grant file readers that join paths onto ARC_ROOT. The diff does not show them being audited.",
+      "why": "The defect pattern 'A CLI driver spawned in ARC_ROOT, not the work root' says to check every other file. Only two literals changed. The .sh wrappers sit next to the .mjs drivers (and their hashes are in the sync manifest), and nothing in the diff shows they `cd` to ARC_ROOT or are exempt. If a wrapper cd's to $ARC_ROOT before exec, the cwd is arc again regardless of this fix.",
+      "fix": "grep every ARC_ROOT use in drivers/* and the wrappers. Add a test that asserts the actual cwd of the spawned CLI for each CLI driver launched through its .sh entry point.",
+      "twin_of": "A CLI driver spawned in ARC_ROOT, not the work root"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/engine-driver-contract.bats (ADR-0916 test)",
+      "breaking_input": "The test marks files in `$ARC_ROOT` and in `$wr` with `rm -f` cleanup placed after the assertions. On a failing assertion, `false` exits the test before cleanup, leaving `$ARC_ROOT/arc-0916-cwd-$$` and `$ARC_ROOT/codex-cwd.mark` inside the checkout, and the `unset` at the end never runs, leaking FAKE_CLAUDE_* into later tests.",
+      "why": "Stray untracked files are written into the repo under test, and the env leak can alter later tests' behaviour. This is the 'attacker probes write artifacts into the repo' pattern. The codex half also relies on node resolving a script literally named `exec` in cwd, which is fragile: a different node argv ordering makes the mark never appear and fails for the wrong reason.",
+      "fix": "Use teardown() to remove the marks and unset the env, and point the control run at a scratch work root instead of ARC_ROOT."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/bench-seal-probe.mjs MUTANT C",
+      "breaking_input": "The mutant is anchored on the exact string `const ROOT = process.env.ARC_ROOT || process.cwd();` in mock.mjs, and it only attacks the mock driver through ARC_ROOT. A future edit to that line breaks the anchor (it is checked), but the mutant never exercises the real escape path, a CLI spawned in the wrong cwd.",
+      "why": "The mutant creates a branch via an explicit `-C ROOT`, so it proves the fingerprint detects a branch. It does not prove that a model's relative `git commit` in its cwd is caught. A real escape through cwd, with HEAD and the current branch moving instead of a new branch, is not exercised. A fingerprint that only noticed branch-list changes would pass this test.",
+      "fix": "Add a second mutant that makes a commit on the current branch via the process cwd, and assert on the HEAD change."
+    }
+  ]
+}

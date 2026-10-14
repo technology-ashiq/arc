@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/jobs/lane-stale.mjs:main (state write) and raise()",
+      "breaking_input": "Run the job when ARC_PORTFOLIO_STATE_DIR is unset but the job is invoked from a different checkout than the spine; or run it twice concurrently (arc-jobs overlap, manual run plus scheduled run).",
+      "why": "The state file is written via a fixed `lane-stale.json.tmp` name with no lock. Two concurrent runs write the same .tmp and then rename; on Windows renameSync onto an existing/open file can throw EPERM/EBUSY and crash the job after the state write but before any raise. Also the episode check (raisedEpisodes) is read-then-emit with no lock, so two concurrent runs both see 'not raised' and both emit; the second gets DUP_IDEM which is handled, but only after quarantine noise (defect pattern r).",
+      "fix": "Use a unique tmp name (pid+random), catch rename errors, and take the spine lock or tolerate DUP_IDEM without the quarantine line.",
+      "twin_of": "(r) a duplicate the emitter must quarantine"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/jobs/lane-stale.mjs:REPO and spineRoot()",
+      "breaking_input": "Job run from a linked worktree: REPO is the worktree, readLanes reads the worktree's initiatives/, but spineRoot() may resolve elsewhere; ARC_EVENT is the worktree's arc-event.mjs which refuses to emit from a worktree.",
+      "why": "Lane statuses come from the script's own checkout while the spine and the emitter come from other resolution rules, so the job validates one tree and writes to another. A stale checkout (main clone not pulled) judges lanes by old PROGRESS headers. Every raise fails with the worktree refusal, tally.failed, and exit 1, while the state file was already written claiming staleness.",
+      "fix": "Resolve lanes and emitter from the same root as the spine (main clone), or refuse to run from a linked worktree before writing state.",
+      "twin_of": "(d) the wrong repo or spine"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/jobs/lane-stale.mjs:raise (spawnSync)",
+      "breaking_input": "arc-event emit times out at 60000 ms or git/node is killed (r.status null, r.error ETIMEDOUT), or stderr contains the text DUP_IDEM inside an unrelated message (e.g. a payload echo).",
+      "why": "A timeout yields status null with empty stderr and is reported as 'arc-event exited null' (failure, correct), but the DUP_IDEM regex is matched against all of stderr, so any error message that merely mentions DUP_IDEM (including a secret-scan rejection echoing the payload) is classified 'already' and the lane is silently never raised. One classification for two failures.",
+      "fix": "Match DUP_IDEM only against the emitter's structured first line or exit code, and check r.error/r.signal separately.",
+      "twin_of": "(q) one message for two failures, again"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/owner-apply-lane-stale.mjs:policy/jobs write",
+      "breaking_input": "hq.policy.yaml writes succeed, then writeFileSync of hq.jobs.yaml or the stub throws (EACCES, file locked by an editor on Windows, disk full).",
+      "why": "The three files are claimed to land together but are written sequentially with no rollback and no try/catch. A throw after the policy write leaves the policy subject without its job row or stub, and the uncaught exception exits non-zero with a stack trace; a rerun then reports 'already holds' for the policy and continues, so it recovers, but a partial write of the policy file itself (non-atomic writeFileSync) can leave a truncated deny-floor file.",
+      "fix": "Write each file to a temp and rename, wrap in try/catch with a named message, and preflight that all three targets are writable before the first write.",
+      "twin_of": "(i) one null for two failures"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/owner-apply-lane-stale.mjs:jobs.replace(/(\\r?\\n)*$/, je)",
+      "breaking_input": "hq.jobs.yaml with mixed line endings (CRLF in part, LF in the rest) or ending in trailing whitespace lines containing spaces.",
+      "why": "eolOf picks CRLF if any CRLF exists, then inEol rewrites the appended ROW only; existing LF lines stay LF, producing a mixed-EOL file. The policy path replaces BLOCK with inEol(...) but the anchor match `policy.includes(inEol(ANCHOR, pe))` fails when the anchor line itself is LF in a mixed file, so the apply reports the anchor missing (rc 2) on a file that does contain it.",
+      "fix": "Normalise the match with a regex tolerant of \\r?\\n, and insert using the anchor's own line ending.",
+      "twin_of": "(a) markdown-contract parsing"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/board-lint.sh:--strict awk (cell loop)",
+      "breaking_input": "A table row whose cell contains an escaped pipe, e.g. `| lane | note \\| stale: yes |`, or a row where the stale field sits in the first or last cell: `stale: true | alpha | ...` without a leading pipe is not a row, but `|stale: true|` single-cell rows.",
+      "why": "The loop runs `for (i = 2; i < n; i++)` over split on `|`, skipping cell[1] (before first pipe, correct) and cell[n]. A row with no trailing pipe (`| alpha | LIVE | stale: yes`) makes the last real cell cell[n], which is excluded, so a hand-written stale field in the last cell of an unterminated row evades the FAIL. Markdown tables commonly omit the trailing pipe.",
+      "fix": "Treat cell[n] as a real cell when the line does not end with `|` (after trimming), i.e. iterate to n when the last field is non-empty.",
+      "twin_of": "(a) markdown-contract parsing"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/board-lint.sh:--strict awk (header rows counter)",
+      "breaking_input": "A board table preceded by a blank-line-separated second table with no intervening non-table line, or a header row whose `stale` cell is inside bold/italics with whitespace, e.g. `| **Stale** |` after clean() lowercases; fine, but a table whose first line is a separator or a 3rd-row header when rows reset.",
+      "why": "rows resets only on a non-pipe line. Two tables separated by a blank line reset (blank is non-pipe), ok; but a HTML-comment-only line or fence line between them also resets, while a table whose header is itself inside an HTML comment closing mid-line leaves rows off by one so a header row is judged as data (rows>2 rule) and a data row as header, shifting which rule applies.",
+      "fix": "Detect the separator row (---) explicitly to define header/data instead of counting lines.",
+      "twin_of": "(a) markdown-contract parsing"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:laneStale (join(dirname(ctx.root), \"portfolio\", \"lane-stale.json\"))",
+      "breaking_input": "ctx.root pointing at a spine root supplied via ARC_SPINE_ROOT (e.g. a fixture or a different tree) while the job wrote to ARC_PORTFOLIO_STATE_DIR or the repo's .claude/state/portfolio.",
+      "why": "The reader derives the state dir from the spine root's parent while the writer derives it from the script's REPO or an env override; the two paths disagree whenever ARC_SPINE_ROOT or ARC_PORTFOLIO_STATE_DIR is set, so the dash shows stale: null ('fresh/unknown') for lanes the job derived stale, and reads a different tree's file if the parent dir holds another portfolio dir. Also no insideRepo check unlike PORTFOLIO.md, so a symlinked lane-stale.json is served from outside the tree.",
+      "fix": "Share one resolver for the state dir between writer and reader, and apply the insideRepo check to the state file.",
+      "twin_of": "(d) the wrong repo or spine"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/jobs/lane-stale.mjs:main (printf with literal newline in string)",
+      "breaking_input": "Run the job with an unknown argument on a Windows checkout where the source file is saved with CRLF line endings.",
+      "why": "The diff shows string literals broken across lines (`unknown argument ...\\n` rendered as a raw newline inside a template string), meaning the message and the dry-run row embed a literal newline from the source file's EOL. Under CRLF checkout the emitted line ends in \\r\\n, and the dry-run tab-separated rows get a \\r, which breaks the bats string comparisons and any consumer parsing the output on the windows leg only.",
+      "fix": "Use explicit \\n escapes in the strings, as the other lines in the file do.",
+      "twin_of": "(g) vacuous tests"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/core/board-lint.sh:--strict output loop",
+      "breaking_input": "A stale hit on a board line whose text contains a backslash or percent sequence, e.g. `stale: 100%s`.",
+      "why": "The hit text is passed through `printf '%s\\n' \"$_STALE\" | while read` with -r, which is safe, but the FAIL line is then printed with the format string containing the path and the hit as arguments, fine; however the pipe into `while` runs in a subshell and `exit 1` follows regardless, so the exit is correct. The real hole is that the awk output uses the cleaned lowercase cell, so the FAIL message loses the original text and can print an empty cell when clean() strips everything (e.g. `| ** stale: ** |` is fine, but a `_` -only prefix changes the reported value).",
+      "fix": "Report the original cell text and line number, not the cleaned form.",
+      "twin_of": ""
+    }
+  ]
+}

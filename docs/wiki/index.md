@@ -15,30 +15,30 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **152** | **34** |
 
-Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 478 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 431 of 501 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
 | Product | Version | Requires | Commands | Agents | Scripts |
 |---|---|---|---|---|---|
 | [absorb](products/absorb.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 8 |
-| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 41 |
+| [core](products/core.md) | 1.0.0 | — | 5 | 2 | 43 |
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 20 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
 | [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 8 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
-| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 48 |
+| [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 53 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 87 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 88 |
 | [launch](products/launch.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 15 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
 | [memory](products/memory.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [org](products/org.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 16 |
-| [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 3 |
+| [plan](products/plan.md) | 1.0.0 | [core](products/core.md) | 5 | 5 | 4 |
 | [qa](products/qa.md) | 1.0.0 | [core](products/core.md) | 3 | 2 | 0 |
 | [review](products/review.md) | 1.0.0 | [core](products/core.md) | 4 | 2 | 22 |
 
@@ -51,9 +51,9 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 | [design](lanes/design.md) | IDLE | arc-design v2 (Cycle 16, sealed 2026-10-07) |
 | [develop](lanes/develop.md) | IDLE | arc-develop (Cycle 6, closed 2026-08-03) |
 | [discover](lanes/discover.md) | IDLE | arc-discover (Cycle 1, sealed 2026-10-07) |
-| [distribute](lanes/distribute.md) | IDLE | arc-distribute (Cycle 2, opened 2026-10-13) |
+| [distribute](lanes/distribute.md) | IDLE | arc-distribute (Cycle 3, opened 2026-10-14) |
 | [docs](lanes/docs.md) | IDLE | arc-docs (Cycle 17, opened 2026-09-25, closed 2026-09-26) |
-| [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 8, opened 2026-10-07) |
+| [engine](lanes/engine.md) | IDLE | arc-engine (Cycle 9, opened 2026-10-14) |
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
 | [face](lanes/face.md) | LIVE | arc-face v2 (Cycle 16, opened 2026-09-16) |
 | [growth](lanes/growth.md) | LIVE | arc-growth (Cycle 14, opened 2026-08-12) |
@@ -65,7 +65,7 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 | [model-policy](lanes/model-policy.md) | IDLE | model-policy v2 (opened 2026-10-05, closed 2026-10-06) |
 | [org](lanes/org.md) | IDLE | arc-org (Cycle 20, opened 2026-10-05) |
 | [policy](lanes/policy.md) | IDLE | arc-policy cycle 2 (opened 2026-10-07) |
-| [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) |
+| [portfolio](lanes/portfolio.md) | IDLE | arc-portfolio (Cycle 5, opened 2026-10-14) |
 | [scheduler](lanes/scheduler.md) | IDLE | arc-scheduler (Cycle 12, sealed 2026-10-07) |
 
 ## Processes
@@ -92,16 +92,16 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 
 | Band | ADRs | Headers missing a field |
 |---|---|---|
-| [0000–0099](adr/0000.md) | 75 | 62 |
+| [0000–0099](adr/0000.md) | 79 | 62 |
 | [0100–0199](adr/0100.md) | 12 | 0 |
-| [0200–0299](adr/0200.md) | 29 | 2 |
+| [0200–0299](adr/0200.md) | 32 | 2 |
 | [0300–0399](adr/0300.md) | 12 | 0 |
 | [0400–0499](adr/0400.md) | 19 | 0 |
 | [0500–0599](adr/0500.md) | 12 | 0 |
 | [0600–0699](adr/0600.md) | 7 | 0 |
 | [0700–0799](adr/0700.md) | 10 | 0 |
 | [0800–0899](adr/0800.md) | 9 | 0 |
-| [0900–0999](adr/0900.md) | 15 | 0 |
+| [0900–0999](adr/0900.md) | 17 | 0 |
 | [1000–1099](adr/1000.md) | 19 | 0 |
 | [1100–1199](adr/1100.md) | 21 | 0 |
 | [1200–1299](adr/1200.md) | 16 | 0 |
@@ -109,10 +109,10 @@ Narrative debt: **118 of 152** pages have no narrative yet. ADR headers: 408 of 
 | [1400–1499](adr/1400.md) | 23 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
 | [1600–1699](adr/1600.md) | 31 | 0 |
-| [1700–1799](adr/1700.md) | 52 | 0 |
+| [1700–1799](adr/1700.md) | 61 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
 | [1900–1999](adr/1900.md) | 17 | 0 |
-| [2000–2099](adr/2000.md) | 23 | 0 |
+| [2000–2099](adr/2000.md) | 28 | 0 |
 
 ## Commands
 

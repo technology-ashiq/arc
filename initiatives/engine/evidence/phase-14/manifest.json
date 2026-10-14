@@ -1,0 +1,20 @@
+{
+  "phase": "14",
+  "commit": "1fedd504715a045b5dc0885ad5412534e66fc79d",
+  "short": "1fedd504",
+  "generated": "2026-10-14T11:14:26Z",
+  "files": [
+    {
+      "name": "ci-results.md",
+      "sha256": "33965383badac4fa33c2774a103696d3284916e4805efe0955ebf45ffef2ac45"
+    },
+    {
+      "name": "door-api-pnl.json",
+      "sha256": "d64d3c4ddc8ad3ca554b58a8c15ecaa7befaf0807f42ec55075e194ff3c04c00"
+    },
+    {
+      "name": "spend-trace.json",
+      "sha256": "c97e32a2af20b38ad80c0485e5359bba35c72cd71effe471bf47b0f350ad4a54"
+    }
+  ]
+}

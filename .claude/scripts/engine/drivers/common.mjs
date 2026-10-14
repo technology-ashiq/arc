@@ -41,13 +41,140 @@ export function parseBudget(s) {
   return out;
 }
 
+// Minor-unit exponents, the two currencies ADR-1013 scopes. A provider in any other currency is not metered.
+const MINOR_EXPONENT = Object.freeze({ INR: 2, USD: 2 });
+// ADR-1012's sanity ceiling, the same one `writeCost` and the ledger validator apply.
+const MAX_MINOR = 1e12;
+
+/**
+ * A provider's spend figure as money (ADR-0229): `{ amount, currency, provider_amount }`, or `null` when there is no
+ * figure. THE ONLY PLACE A PROVIDER'S NUMBER BECOMES MONEY; every driver and arc-run go through it, never around it.
+ *
+ * DECIMAL-STRING ARITHMETIC, NEVER `x * 100`: `0.07 * 100` is `7.000000000000001`, whose ceiling is 8. The number is
+ * rendered by `String()` -- the shortest form that round-trips, which is what the provider's JSON said -- and read as
+ * digits. The minor-unit part is the first `exponent` fractional digits, plus one if any later digit is non-zero:
+ * rounded UP, so a real spend under one cent is 1, never a recorded 0.
+ *
+ * ABSENT IS NOT ZERO (ADR-0069 b5). Anything but a finite non-negative number -- `undefined`, `null`, a string even if
+ * numeric, `NaN`, a negative -- is no figure. A provider that says `0` (a free model) is a measured 0.
+ * @param {unknown} value  the provider's figure, in major units of `currency`
+ * @param {unknown} currency  ISO-4217 code
+ * @returns {{ amount: number, currency: string, provider_amount: string } | null}
+ */
+export function spendOf(value, currency) {
+  if (!isCurrency(currency)) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+  const m = /^(\d+)(?:\.(\d+))?(?:e([+-]\d+))?$/.exec(String(value));
+  if (!m) return null;
+  const digits = `${m[1]}${m[2] ?? ""}`;
+  // Where the decimal point sits within `digits`, after the exponent moves it.
+  const point = m[1].length + Number(m[3] ?? 0);
+  const at = (i) => (i >= 0 && i < digits.length ? digits[i] : "0");
+  let intPart = "";
+  for (let i = 0; i < point; i += 1) intPart += at(i);
+  let fracPart = "";
+  for (let i = Math.max(0, point); i < digits.length; i += 1) fracPart += digits[i];
+  // A negative point (1e-7) puts zeros between the point and the first digit.
+  if (point < 0) fracPart = "0".repeat(-point) + fracPart;
+  return moneyOf(plainDecimal(intPart, fracPart), currency);
+}
+
+/**
+ * The run's spend in one currency: the EXACT sum of its attempts' `provider_amount`, rounded up ONCE (ADR-0230).
+ * `ceil(a) + ceil(b)` is not `ceil(a + b)`, so summing per-attempt amounts would make the cap, the receipt and the
+ * money row read three different numbers. Every one of them comes from here. Returns `null` for no figures, and
+ * throws on two currencies: adding them needs a rate the spine does not have (ADR-1003).
+ * @param {unknown[]} spends  sidecar `spend` values; anything that is not `isSpend` is skipped
+ * @returns {{ amount: number, currency: string, provider_amount: string } | null}
+ */
+export function sumSpend(spends) {
+  const real = (Array.isArray(spends) ? spends : []).filter(isSpend);
+  if (!real.length) return null;
+  const currency = real[0].currency;
+  if (real.some((s) => s.currency !== currency)) throw new Error(`spend in ${[...new Set(real.map((s) => s.currency))].join(" and ")} cannot be added without a rate (ADR-1003)`);
+  const scale = Math.max(...real.map((s) => (s.provider_amount.split(".")[1] ?? "").length));
+  const total = real.reduce((t, s) => {
+    const [i, f = ""] = s.provider_amount.split(".");
+    return t + BigInt(i + f.padEnd(scale, "0"));
+  }, 0n).toString().padStart(scale + 1, "0");
+  return moneyOf(plainDecimal(total.slice(0, total.length - scale), total.slice(total.length - scale)), currency);
+}
+
+const isCurrency = (c) => typeof c === "string" && Object.prototype.hasOwnProperty.call(MINOR_EXPONENT, c);
+
+/** `"007", "1200"` -> `"7.12"`: leading integer zeros and trailing fractional zeros dropped. */
+function plainDecimal(intPart, fracPart) {
+  const i = intPart.replace(/^0+(?=\d)/, "") || "0";
+  const f = fracPart.replace(/0+$/, "");
+  return f ? `${i}.${f}` : i;
+}
+
+/** A plain decimal string as money: the first `exponent` fractional digits, plus one if anything after is non-zero. */
+function moneyOf(decimal, currency) {
+  const [i, f = ""] = decimal.split(".");
+  const e = MINOR_EXPONENT[currency];
+  let minor = BigInt(i + f.slice(0, e).padEnd(e, "0"));
+  if (/[1-9]/.test(f.slice(e))) minor += 1n;
+  if (minor > BigInt(MAX_MINOR)) return null;
+  return { amount: Number(minor), currency, provider_amount: decimal };
+}
+
+// WHOSE figure a driver's spend is (ADR-0230). The `claude` CLI's `total_cost_usd` is the harness's own number -- on a
+// subscription login a notional list price, not an invoice -- and a reader must be able to tell it from a provider's
+// bill. A driver not named here has no basis to claim, so it reads `unstated` rather than borrowing one.
+const SPEND_BASIS = Object.freeze({ "claude-code": "harness-reported", "generic-api": "provider-reported", mock: "recorded" });
+
+/** @param {string} driver */
+export function spendBasis(driver) {
+  return Object.prototype.hasOwnProperty.call(SPEND_BASIS, driver) ? SPEND_BASIS[driver] : "unstated";
+}
+
+/**
+ * SessionSpend -- what a `claude` CLI session spent, read at session end (ADR-0229, engine Cycle 9).
+ *
+ * THE INTERFACE: `read(envelope)` returns the raw provider figure as `{ value, currency }` for `writeCost`'s `spend`,
+ * where `spendOf` alone turns it into money. It never parses, rounds or defaults: a missing field is `value:
+ * undefined`, which `writeCost` records as `not-reported`, never 0.
+ *
+ * REAL: the CLI's own usage surface -- the result envelope's `total_cost_usd`, the same object on both paths: the
+ * `--output-format json` document and the stream's final `{"type":"result"}` event. Pinned against verbatim captures
+ * of CLI 2.1.296 in `tests/fixtures/engine/real-claude-*.json`. On a subscription login the figure is the harness's
+ * notional list price, not an invoice (`basis: harness-reported`, ADR-0230).
+ *
+ * FAKE: the fake CLIs under `tests/fixtures/engine/` print envelopes with the field present, absent and malformed;
+ * the driver reads them through this same function, so fake and real share one code path.
+ */
+export const SessionSpend = Object.freeze({
+  /** @param {unknown} envelope  the CLI's result envelope, or anything at all */
+  read(envelope) {
+    const value = envelope && typeof envelope === "object" && !Array.isArray(envelope) ? envelope.total_cost_usd : undefined;
+    return { value, currency: "USD" };
+  },
+});
+
+/** Whether a value already has the exact shape `spendOf` returns. A shape check, not a second parse. */
+export function isSpend(s) {
+  return !!s && typeof s === "object" && !Array.isArray(s)
+    && Number.isSafeInteger(s.amount) && s.amount >= 0 && s.amount <= MAX_MINOR
+    && isCurrency(s.currency)
+    && typeof s.provider_amount === "string" && s.provider_amount.length <= 64
+    && /^(0|[1-9]\d*)(\.\d*[1-9])?$/.test(s.provider_amount)
+    // The amount must BE the provider figure rounded up, or a sidecar could carry a figure and an amount that disagree
+    // and each reader would believe a different one (the twin this lane records).
+    && moneyOf(s.provider_amount, s.currency)?.amount === s.amount;
+}
+
 /**
  * Write the cost sidecar. Money is INTEGER MINOR UNITS (paise) because floats do not sum
  * exactly and the spine's brief sums money. An unavailable field is OMITTED, never zeroed:
  * ADR-0069 block (b)(5) -- recorded, estimated and fabricated are three different things and
  * only the first may enter a receipt.
+ *
+ * `spend` is the provider's RAW figure, `{ value, currency }`, and becomes money here through `spendOf` and nowhere
+ * else (ADR-0229). A legacy `inr` (paise, `mock` recordings) is the same fact already in minor units, so it is carried
+ * as an INR spend when no provider figure was given.
  */
-export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) {
+export function writeCost({ tokensIn, tokensOut, inr, spend, source, model, runtime }) {
   const path = process.env.ARC_DRIVER_COST_FILE;
   if (!path) return;
   const cost = {};
@@ -66,9 +193,27 @@ export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) 
   else if (inr !== undefined && inr !== null) {
     process.stderr.write(`arc-driver: WARN refusing a cost of ${JSON.stringify(inr)} — spend must be a non-negative integer in paise; reported as absent\n`);
   }
+  // THE SPEND (ADR-0229). Three states, and the sidecar keeps all three apart: a figure; `spend: null`, which is the
+  // driver saying it LOOKED and the provider gave none (`not-reported` on the receipt); and no key at all, a driver
+  // that never reads one (`driver-unmetered`). A figure present but unreadable is the second state, said loudly.
+  let figure;
+  if (spend !== undefined) {
+    const raw = spend && typeof spend === "object" ? spend.value : undefined;
+    figure = spend && typeof spend === "object" ? spendOf(raw, spend.currency) : null;
+    if (!figure && raw !== undefined && raw !== null) {
+      process.stderr.write(`arc-driver: WARN refusing a provider spend of ${JSON.stringify(raw)?.slice(0, 80)} — not a non-negative number in a metered currency; reported as not-reported\n`);
+    }
+  } else if (cost.inr !== undefined && (source || "measured") === "measured") {
+    // A legacy paise figure is already money: carried as an INR spend so every reader has one shape to read. Only a
+    // MEASURED one: a `manual` or `estimated` figure (bench's recordings) is not a spend, and becoming a money row
+    // stamped `measured` is exactly the relabelling ADR-0069 b5 forbids.
+    figure = moneyOf(plainDecimal(String(Math.floor(cost.inr / 100)), String(cost.inr % 100).padStart(2, "0")), "INR");
+  }
+  if (figure) cost.spend = figure;
   // `source` is mandatory whenever ANY figure is present -- a number whose provenance is
   // unstated is the thing MP-F exists to prevent.
   if (Object.keys(cost).length) cost.source = source || "measured";
+  if (spend !== undefined && !figure) cost.spend = null;
   // THE SIDECAR IS THE ONLY CHANNEL A DRIVER HAS BACK TO arc-run, so what-actually-ran rides
   // here too (ADR-0221). `produce()` returning a `model` key looked like that channel and was
   // not: the caller below destructures `{ output, cost }` and drops everything else, so
@@ -185,6 +330,21 @@ export function seatPersona() {
   if (!f) return null;
   const text = readFileSync(f, "utf8").trim();
   return text ? `${text}\n\n---\nTHE PROCESS YOU ARE SEATED IN:\n` : null;
+}
+
+/**
+ * The output contract as prompt lines, placed after the input and before the closing instruction
+ * (ADR-0915). Every driver asked for "ONE JSON document matching this process's output contract"
+ * and none ever showed the contract, so a model guessed the shape: bench's real event saw sonnet
+ * add `branch` to every answer and fail `additionalProperties: false`. A process with no `output`
+ * block yields no lines, leaving its prompt as it was.
+ * @param {{ output?: unknown } | null | undefined} doc
+ * @returns {string[]}
+ */
+export function contractLines(doc) {
+  const out = doc && doc.output;
+  if (!out || typeof out !== "object") return [];
+  return ["OUTPUT CONTRACT (JSON Schema):", JSON.stringify(out), ""];
 }
 
 /** Load a recorded response for the fake path, or null when running for real. */

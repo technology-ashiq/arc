@@ -168,14 +168,14 @@ WARN-first: a check that reports a problem but does not stop the work, until it 
 git worktree: a second working copy of the same repository, so two sessions do not step on each other.
 ```
 
-*Cycle 4 · arc-portfolio "The Conductor"*
+*portfolio Cycle 5 "the board that notices"*
 
 ## At a glance
 
 | | |
 |---|---|
 | Status | IDLE |
-| Cycle | arc-portfolio (Cycle 4, closed 2026-08-02) |
+| Cycle | arc-portfolio (Cycle 5, opened 2026-10-14) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -185,9 +185,16 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/portfolio/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/portfolio/PROGRESS.md)
 
-## Decisions (0)
+## Decisions (4)
 
-No ADR names this lane first in its `Product:` line.
+ADRs whose `Product:` line names this lane first.
+
+| ADR | Decision | Status | Date |
+|---|---|---|---|
+| [`0076`](../../../docs/adr/0076-a-new-cycle-is-a-changed-cycle-header-against-the-base-ref.md) | A "new cycle" is a lane whose PROGRESS `cycle:` header differs from the base ref's | accepted | 2026-10-14 |
+| [`0077`](../../../docs/adr/0077-the-kernel-freeze-is-folded-from-the-owner-ruling-on-the-spine.md) | The kernel freeze is folded from the owner ruling on the spine, never hardcoded | accepted | 2026-10-14 |
+| [`0078`](../../../docs/adr/0078-a-debt-heavy-lane-budgets-a-debt-phase-naming-its-rows.md) | A lane with more than 20 open debt rows opens its next cycle with a named debt phase | accepted | 2026-10-14 |
+| [`0079`](../../../docs/adr/0079-lane-stale-is-derived-by-a-daily-job-and-never-written-on-the-board.md) | `stale` is derived by a daily job from the spine and is never written in PORTFOLIO.md | accepted | 2026-10-14 |
 
 ## Source
 

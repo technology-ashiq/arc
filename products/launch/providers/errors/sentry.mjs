@@ -123,7 +123,9 @@ const ROUTE = "app/api/arc-error-probe/route.js";
 const DSN_SHAPE = /^https:\/\/[0-9a-f]{32}@o[0-9]{1,20}\.ingest(?:\.[a-z]{2,3})?\.sentry\.io\/[0-9]{1,20}$/;
 const SLUG = /^[a-z0-9][a-z0-9_-]{0,49}$/;
 
-const sentry = (ctx, method, path, allow) => call(ctx, `${SENTRY}${path}`, { authorization: `Bearer ${tokenOf(ctx, "SENTRY_AUTH_TOKEN", /^(?:sntrys_[A-Za-z0-9+/=_-]{20,400}|[0-9a-f]{64})$/)}` }, method, undefined, allow, `sentry ${path.split("?")[0]}`);
+// sntryu_ is a personal token, the only kind that reads projects and issues; an org token (sntrys_) is CI-scoped and
+// the first real run found the shape refusing the one token that works.
+const sentry = (ctx, method, path, allow) => call(ctx, `${SENTRY}${path}`, { authorization: `Bearer ${tokenOf(ctx, "SENTRY_AUTH_TOKEN", /^(?:sntry[su]_[A-Za-z0-9+/=_-]{20,400}|[0-9a-f]{64})$/)}` }, method, undefined, allow, `sentry ${path.split("?")[0]}`);
 
 function routeFor(dsn) {
   return [

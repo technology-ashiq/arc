@@ -1,0 +1,32 @@
+CI run 38566913612 @ f1fb1594 (PR #419 head, merged as b478b743): 19/19 jobs green
+P08 suites: distribute-self-render distribute-redact-replay distribute-opencode-session
+count = legs on which the test printed its line (5 legs: ubuntu 18/20/22, one windows shard, one macos shard)
+      5 ok distribute-self-render: a flipped byte, a deleted file and a planted extra are each named
+      5 ok distribute-self-render: a rendered path that climbs out of its root is refused
+      5 ok distribute-self-render: --check is refused without --self and --self refuses install flags
+      5 ok distribute-self-render: every test in the file is registered
+      5 ok distribute-self-render: init into arc itself stays refused for every target
+      5 ok distribute-self-render: skills-only owns a shared skill in either render order
+      5 ok distribute-self-render: the committed outputs match a fresh render of this tree
+      5 ok distribute-self-render: the writer restores the outputs and touches nothing else
+      5 ok distribute-self-render: two targets claiming one path are refused by name
+      5 ok distribute-redact-replay: deploy and PR URLs are clean and both credential controls still hit
+      5 ok distribute-redact-replay: every test in the file is registered
+      5 ok distribute-opencode-session: a clean run writes the proof header, every event verbatim, and spent last
+      5 ok distribute-opencode-session: a command naming a missing fence is refused NO-FENCE before spend
+      5 ok distribute-opencode-session: a command with a rendered fence runs the whole session as that fence
+      5 ok distribute-opencode-session: a killed run finds its session by title and charges the subagents it never streamed
+      5 ok distribute-opencode-session: a stall is killed at the wall clock, tree and all, and exits 5
+      5 ok distribute-opencode-session: a subagent export that fails makes the run COST-UNREADABLE, never a pass
+      5 ok distribute-opencode-session: a subagent export with no step-finish is COST-UNREADABLE, never a free run
+      5 ok distribute-opencode-session: a subagent's spend is read from its export, nested tasks included, and counts toward the cap
+      5 ok distribute-opencode-session: a transcript inside a repo is stamped as that repo-relative evidence path
+      5 ok distribute-opencode-session: a wrapper killed mid-run leaves its pidfile, and the next run reaps the orphan before spending
+      5 ok distribute-opencode-session: every test in the file is registered
+      5 ok distribute-opencode-session: only step-finish cost is spend, and a numeric string is read as its number
+      5 ok distribute-opencode-session: OpenCode exiting non-zero is CHILD-FAILED (exit 1) with its spend kept
+      5 ok distribute-opencode-session: refusals happen before spend, invoke nothing and write no transcript
+      5 ok distribute-opencode-session: spend reaching the cap kills the whole tree and exits 3
+      5 ok distribute-opencode-session: steps with no cost are COST-UNREADABLE (exit 4), never a capped pass
+      5 ok distribute-opencode-session: the child gets the exact argv, no shell, and the message byte-identical
+      5 ok distribute-opencode-session: the child is told its harness, model, transcript and the canonical spine

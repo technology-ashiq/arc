@@ -78,18 +78,23 @@ tiers:
 #                 tighter than today's longest real budget (arc-attack runs 30 min per surface);
 #                 calibrate it per class from the `hops[].ms` the receipts now carry, in a
 #                 reviewed diff -- never guessed downward.
-#   max_cost      integer paise, or `unmetered`. Every row here is `unmetered` because NO production
-#                 driver reports spend (claude-code and generic-api write tokens only, codex writes
-#                 none, hermes reports none by design), and a paise figure on such a chain would be a
-#                 cap nothing can ever be measured against. A driver that starts reporting `inr`
-#                 joins METERING_DRIVERS in failure-class.mjs, and its rows then carry a number.
+#   max_cost      integer minor units of `max_cost_currency` (INR or USD), or `unmetered` (ADR-0231).
+#                 claude-code (the CLI's session `total_cost_usd`) and generic-api (OpenRouter's
+#                 `usage.cost`) report spend since engine Cycle 9, so every row whose chain holds one
+#                 carries a USD cap; codex and hermes report none, so a chain of only them stays
+#                 `unmetered`. The cap refuses the NEXT attempt (a hop or the ADR-0204 retry) once the
+#                 run's spend reaches it -- it is not a per-attempt ceiling, so one long attempt can
+#                 overshoot, and the receipt then says so. On a claude subscription the figure is the
+#                 harness's notional list price, so these caps guard notional dollars, not an invoice.
 classes:
   commit-msg-draft:
     tier: balanced-workhorse
     driver: claude-code
     max_attempts: 4
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a one-line draft; a session past $0.50 has gone wrong, and three drivers could each spend it (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 50
+    max_cost_currency: USD
     fallback:
       - codex
       - generic-api
@@ -101,7 +106,9 @@ classes:
     driver: claude-code
     max_attempts: 3
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a diff review reads the whole diff; $3 is several real high-judgment sessions (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 300
+    max_cost_currency: USD
     fallback:
       - codex
 
@@ -110,7 +117,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a kickoff reads widely; $5 covers a long planning session (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 500
+    max_cost_currency: USD
     fallback: []
 
   # ===========================================================================================
@@ -237,7 +246,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # one question from the face; $1 is many answers (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 100
+    max_cost_currency: USD
     fallback: []
 
   # ADR-0226. The BOUNDARY-surface attacker only. Tier is balanced-workhorse because ADR-0069's
@@ -257,7 +268,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # an attack reads a PR diff for up to 30 minutes; $5 covers the longest seen (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 500
+    max_cost_currency: USD
     fallback: []
 
   # Phase 06 slice 03b (face lane). This row decides no new tier: it is the Chair's seat, which
@@ -271,7 +284,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a council runs many seats in one session; $10 is its largest real run (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 1000
+    max_cost_currency: USD
     fallback: []
 
   # Phase 06 slice 04 (face lane, memory ring). One lesson becomes one retro-log row against the log's fixed
@@ -283,7 +298,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a short structured write; $0.50 is generous (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 50
+    max_cost_currency: USD
     fallback: []
 
   # Phase 06 slice 04 (face lane, memory ring). Choosing a rule's home and writing it in that file's style is
@@ -295,7 +312,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a short judged write; $1 is generous (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 100
+    max_cost_currency: USD
     fallback: []
 
   # Phase 06 (face lane, develop ring). Proving a slice cites evidence CI and the lane already recorded against the
@@ -307,7 +326,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # a proof reads a phase diff; $3 covers it (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 300
+    max_cost_currency: USD
     fallback: []
 
   # Phase 06 (face lane, strategy ring). Writing one owner decision into an ADR's fixed sections is production against
@@ -318,7 +339,9 @@ classes:
     driver: claude-code
     max_attempts: 2
     max_wall_ms: 3600000
-    max_cost: unmetered
+    # one ADR draft; $1 is generous (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 100
+    max_cost_currency: USD
     fallback: []
 
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
@@ -329,5 +352,7 @@ default:
   driver: claude-code
   max_attempts: 2
   max_wall_ms: 3600000
-  max_cost: unmetered
+  # an unrouted class gets a middling guard: $2 (USD cents; notional for claude-code, ADR-0231)
+  max_cost: 200
+  max_cost_currency: USD
   fallback: []
