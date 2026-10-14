@@ -16,10 +16,10 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-16 and REQ-17 bats green on all 3 CI legs per job (`ci-digest` on the pushed head) — **50% tripwire: REQ-16's arms green**
-- [ ] `version-lint` passes the committed tree and FAILs each mutant (VERSION ahead of CHANGELOG, out-of-order sections, missing tagged section)
-- [ ] attack pass (`/arc-attack`, max 2 rounds), findings fixed or ledgered; fixed-defects rows added
-- [ ] tracker updated (PROGRESS row + done-log)
+- [x] REQ-16 and REQ-17 bats green on all 3 CI legs per job (`ci-digest` on the pushed head) — **50% tripwire: REQ-16's arms green**
+- [x] `version-lint` passes the committed tree and FAILs each mutant (VERSION ahead of CHANGELOG, out-of-order sections, missing tagged section)
+- [x] attack pass (`/arc-attack`, max 2 rounds), findings fixed or ledgered; fixed-defects rows added
+- [x] tracker updated (PROGRESS row + done-log)
 
 ## Verification plan
 

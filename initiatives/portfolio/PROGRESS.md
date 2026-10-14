@@ -60,7 +60,8 @@ depends-on: —
   `action-kickoff-kernel-lane` (advisory), `action-kickoff-over-debt` and `action-board-stale-field` (blocking, each
   with its merge-time bats line); `gate-parity` 0 gaps; PORTFOLIO.md's table headers and separators byte-identical to
   `4741c770`; WARN registry still nine (the new class is a FAIL under `--strict`); wiki `--check` green; two-surface
-  attack ran twice (the spec said one round; the cap is two). Retro in `docs/retro-log.md`, HISTORY C25.
+  attack ran twice (the spec said one round; the cap is two). Retro in `docs/retro-log.md`, HISTORY C26 (renumbered from C25 at merge: distribute Cycle 3 took
+  C25 on main first; `evidence/phase-07/close.md` keeps C25 because its bundle is hashed).
   Metrics: `amendments: 0` · `reopened: n`.
 
 ## Now
