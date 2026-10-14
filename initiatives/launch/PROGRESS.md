@@ -73,39 +73,43 @@ keys. Next checkpoint: 100% (day 18) → cut or kill, never extend.
 
 ## Now
 
-**Current position:** Phases 00–03 closed. Phase 04 is built on fakes (ADR-1748..1751). Its real half is next.
-On `arc-sandbox`, 31 slots are verified live and three are named ABSENT:
+**Current position:** Phases 00–03 closed; their `phase.closed` receipts are on the spine (2026-10-15). Phase 04's real
+half is done except the owner's vetting stamp. On `arc-sandbox`, 32 slots are verified live and three are named ABSENT:
 - `domain` and `payment-live`: behind their gates.
 - `legal-pages`: the renderer is not ready.
 
-`verify --all` from the main clone exits 0 (31/31).
+Phase 04, live (2026-10-15):
+1. **REQ-08 (neon).** The first vet was refused because the owner's only Neon org was Vercel-managed. With a key from
+   his own org, the second was refused by Postgres 16 (`permission denied to set role "launch_anon"`). After the fix
+   (the migration grants the role to its owner), it verified: receipt 01M4Y295RKMHSHBS52T7DE9Q08, owner 1 row,
+   `launch_anon` 0. The run used a private state copy; arc-sandbox stays on Supabase. The fix is PR #432, which changes
+   the adapter only; the row's `vetted` flip joins it after the stamp. A-06 never fired.
+2. **`arc-harnesses` (ADR-1763, distribute REQ-15).** A new core wiring slot: `arc init` into the venture tree,
+   verified by `arc doctor --dir`. Verified on the first real run: receipt 01M4YA96HKTWZNWSMYDQMCVKYS, 673 placed,
+   0 missing, 0 unmanaged-conflict, four harnesses. The catalog now derives 86 slots / 34 core.
+3. **REQ-05 and REQ-09.** The scout record holds 33 of 37 rows with digests that match their adapters. One
+   approval.requested is on the spine for the owner: `01M4YAHP98TJ22E49S7WQGXAWE`, which supersedes `01M4Y85V…`.
+4. **REQ-10.** The `launch-watch` row has been on main since PR #408. Its first run through `arc-jobs run launch-watch`
+   (2026-10-15) exited 0: 4 public slots verified, 27 `skipped(env)`, 0 raised.
+5. **The adapters changed by the attack fixes were re-applied.** The backup drill was re-written and ran green on
+   venture CI. Receipts: backup 01M4YCVCREN06T9Y60SW17DBRJ, restore-drill 01M4YCWQXY50FKYAHPMGVTD4R5.
 
-**Next step:** Phase 04's real half. Three items:
-1. **REQ-08.** One real `database` verify through `neon`, on a free-tier project. Then neon reaches `vetted` in a PR
-   that changes exactly the registry and its adapter. The first vet run (2026-10-14, private state copy, receipt
-   01M4XC8MM4Y0NYBYFZ28H4SQTE) was refused by Neon: `404 action restricted; organization is managed by Vercel`. The
-   owner's only Neon org came from the Vercel integration, and Neon creates no projects there through its API. Nothing
-   was created. A-06 has not fired yet: a key from a Neon org Vercel does not manage unblocks it.
-2. **REQ-05 and REQ-09.** Vet the 31 providers that ran live. One consolidated scout record and one approval.requested
-   go to the owner from the main clone. After his stamp, every row carries `status: vetted`, `vetted_by`, `scout` and
-   its `digest`.
-3. **REQ-10.** The `launch-watch` job row is an owner apply (deny-floor).
-
-Then Phase 05: `verify --all`, the evidence bundle, and REQ-12 recorded as OPEN-at-first-venture, then `/arc-retro`.
+**Next step:** after the vetting stamp, every vetted row gets `status: vetted`, `vetted_by`, `scout` and `digest`.
+Neon's flip goes in #432 and the rest in #425. Then Phase 05: `verify --all`, the evidence bundles, REQ-12 recorded as
+OPEN-at-first-venture, `/arc-retro`. Owner ruling (2026-10-14): one merge, at the end of the cycle.
 
 **Owed (gaps found live):**
-- `release`: its state row carries the ERROR evidence of its first receipt. Its `last_verify` answers READY, but `apply`
-  no-ops a verified slot, so a re-receipt path is owed.
+- `release`: its state row carries the ERROR evidence of its first receipt, while its live verify answers READY.
+  `apply --again` refuses a gated slot by design (gate-2), so re-receipting it needs a fresh gate-2 approval. That is a
+  Cycle 2 path, not a v1 cut.
 - `backup`: should provision its own pooler role and `SUPABASE_DB_URL` (done by hand on arc-sandbox).
 - `secrets`: should place the runtime keys itself (done by the agent from the private env file).
 - `security-headers`: should wait for the live build, as frontend does.
 
 **Owner actions:**
-- Run `node .claude/scripts/launch/owner-apply-watch-policy.mjs` in the main clone, which writes `hq.policy.yaml` and
-  `hq.jobs.yaml`, then commit both.
-- In console.neon.tech, create a new organization (free, not through Vercel) and an org API key. Put it as
-  `NEON_API_KEY` in the private env file.
-- Stamp the provider-vetting approval when it lands in arc-inbox.
-- Stamp the phase-done approvals for 01–03.
+- Stamp the provider vetting: `node .claude/scripts/hq/arc-inbox.mjs approve 01M4YAHP98TJ22E49S7WQGXAWE --reason ...`
+  from the main clone.
+- Stamp the phase-done approvals: 01 `01M4Y7WM3CBKFXKQNT3FP6QS1V`, 02 `01M4Y7WXRK37QY6QS6NKE26SAS`, 03
+  `01M4Y7X28QG2WCQZXGQZ5ZFWHN`.
 - Earlier stamps in arc-inbox: kickoff `01M40ZHP72PYVBJT17R7A4WZ3W`, owner rulings `01M41MH9JG9VEN5G085T56CNHH` and
   `01M41MHA25TV1WXYHHGM59ND5V`.
