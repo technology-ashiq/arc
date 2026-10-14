@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1497-1508",
+      "breaking_input": "A benched model runs `git config user.name attacker` or `git config core.hooksPath /tmp/hook` in the arc checkout. The fingerprint reads HEAD, branch, refs, reflog, worktrees and tracked status, but never `git config --local --list`. The config change is invisible to every component, so the digest is unchanged and the run continues spending attempts even though the checkout's behavior (hooks, identity, filters) changed.",
+      "why": "The ADR explicitly lists `git config` writes as 'not covered', and the fingerprint has no config component. A model that changes the arc checkout's local config has moved the checkout in a way that affects later attempts' behavior, but the guard reports checkout_unchanged=true. This is a logic gap between the stated invariant ('must leave all of it exactly as it was') and what is measured.",
+      "fix": "Include `git config --local --list` (or a hash of it) in the fingerprint, or explicitly widen the guard to treat config writes as a move."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1500",
+      "breaking_input": "A benched model runs `git update-ref refs/notes/commits <sha>` or `git notes add -m x` in arc. `for-each-ref` with no pattern lists refs/notes, so a new note ref changes the digest — detected. But if the model deletes an existing note ref and recreates it with the same objectname, the ref list is identical and the digest is unchanged, even though the note content (a separate object) changed. Similarly, `git replace` writes refs/replace, which is not in refs/heads or refs/tags but is listed by for-each-ref, so a replace ref change is detected; however a replace that points to the same object id but whose replaced object content changed is not.",
+      "why": "The fingerprint hashes ref names and object ids, not the objects they point to. A note or replace that swaps content while keeping the same ref name and object id (e.g., by rewriting the underlying object) leaves the digest identical. The guard's claim to detect 'every ref except remote-tracking ones' is true only for ref names and ids, not for the state they denote.",
+      "fix": "Include the reflog of each ref, or hash the object contents (e.g., `git cat-file -p` for each ref), or at least document that only ref name/object id changes are detected."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1501",
+      "breaking_input": "A benched model runs `git reflog expire --expire=now --all` in arc, then commits and resets back. The reflog is part of the fingerprint, so expiring it after a commit hides the commit. The model can commit into arc, then run `git reflog expire --all` to wipe the evidence, and the digest matches the baseline. The guard's reflog check is defeated by the very command that manages reflogs.",
+      "why": "The fingerprint reads the HEAD reflog, but a model with Bash can truncate or expire that reflog. The ADR's intent is to catch 'a model that commits and then resets back', but resetting back plus expiring the reflog leaves no trace. The guard is bypassable by a model that knows the fingerprint includes the reflog.",
+      "fix": "Take the fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    }
+  ]
+}

@@ -208,6 +208,7 @@ flowchart TB
 | 0913 | Reproducibility is replay-determinism with honest variance | accepted |
 | 0914 | The real-event candidate is a second model under the proven driver (Am. 1 2026-10-13: `generic-api`; Am. 2 2026-10-14: back to `claude-code`) | accepted |
 | 0915 | A benched model sees the contract, and not the owner's setup | accepted |
+| 0916 | A CLI driver works in its work root, and bench stops when the arc checkout moves | accepted |
 
 ## Non-negotiables
 
