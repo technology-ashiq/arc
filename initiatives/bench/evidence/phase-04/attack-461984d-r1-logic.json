@@ -1,0 +1,63 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1541",
+      "breaking_input": "A sibling worktree checks out a branch named with a prefix that matches this worktree's branch name, e.g. this worktree's branch is 'feature' and sibling creates 'feature-x' via `git -C sibling checkout -b feature-x origin/main`, writing `branch.feature-x.remote` and `branch.feature-x.merge`.",
+      "why": "The filter keeps every line starting with `branch.${branch.slice(11)}.` — for branch 'refs/heads/feature', that prefix is 'branch.feature.', which matches 'branch.feature-x.'. The sibling's config line for 'feature-x' survives the filter and voids the run. The fix only excluded exact-name branches, not prefixes.",
+      "fix": "Match the section boundary: require the config key to start with `branch.<name>.` AND be followed by a dot-terminated key, e.g. split on '.' and compare the second field exactly, or use a regex that requires the next character to be '.' after the branch name, not any character."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1541",
+      "breaking_input": "A sibling worktree runs `git config --local branch..remote origin` (branch name empty) or a branch name containing a dot, e.g. `checkout -b v1.0` writes `branch.v1.0.remote` and `branch.v1.0.merge`.",
+      "why": "If own is `refs/heads/v1`, the filter keeps lines starting with `branch.v1.`, including `branch.v1.0.remote` from a sibling 'v1.0' branch. The prefix matching is too broad for branch names that are prefixes of another, and peculiar branch names (empty, dots) could bypass or wrongly include.",
+      "fix": "Parse the config output structurally: split each line into key=value, take the key up to the first dot after 'branch.', and compare that exact segment to the own branch name."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1546",
+      "breaking_input": "The `branch` variable comes from a `symbolic-ref` that could be a symbolic ref not under `refs/heads/` (e.g. detached worktree returns 'refs/heads/...'? Actually if HEAD is detached, branch may be 'HEAD' or absent; when branch does not start with 'refs/heads/', `own` is null and the filter drops ALL lines starting with 'branch.').",
+      "why": "If a worktree is in detached HEAD state (or `symbolic-ref` fails), branch does not start with `refs/heads/`, so `own` is null. Then the filter removes every `branch.` config line, including `branch.<thisworktree>.` which legitimately reflects state the run could have changed. This weakens the guard: a model could mutate its own branch config and the fingerprint would not move.",
+      "fix": "When branch is not under refs/heads/, either fail closed (include all branch lines) or derive the branch name from the worktree's own HEAD ref differently; do not silently drop all branch sections."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1544-1547",
+      "breaking_input": "A sibling worktree writes a non-branch config line that is not filtered, but the bug is that the own-branch filter is applied on config lines that may have leading whitespace or CRLF, or lines like 'branch.foo.section' where the section itself is multiline (git config --list prints them as single lines). The real issue is hierarchical: if a sibling writes `branch.<own>.remote` — same name as the worktree's own branch — the filter keeps it, and that is correct per the intent. However, a sibling could write a config for `branch.<own>.` that is not remote/merge (e.g. `branch.<own>.description`), which is still kept and counted. That's not necessarily wrong, but the ADR claims only this worktree's branch section is kept; the code keeps all keys under the own branch name, which could be broad.",
+      "why": "The filter keeps entire `branch.<own>.` section, including the sibling's accidental write to the same branch name. A sibling could `git config branch.<same>.description` and void the run. More subtly, the code filters after splitting on newline but does not trim; a CRLF line from Windows would not start with 'branch.' and would be dropped, making the fingerprint miss legitimate config changes.",
+      "fix": "Trim each config line and ensure exactly the branch's remote/merge keys are compared, or state in the ADR that the whole own section counts; the real risk is the prefix collision already reported.",
+      "twin_of": "The same over-wide scope, one layer down: the shared config file"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1544-1547",
+      "breaking_input": "A sibling writes a config line with a leading tab or spaces, e.g. via `git config --local branch.foo.remote \" origin\"` (the value contains a space but the key does not; however a multiline value could produce a continuation line starting with a space). Git's config --list may emit continuation lines for multi-line values, which start with a space and would be dropped by the filter, meaning a change in a sibling's branch value (multi-line) would not be seen.",
+      "why": "git config --list can split multi-line values across output lines, with continuation lines starting with a space. The filter `.filter((l) => !l.startsWith(\"branch.\") || ...)` drops those continuation lines, because they don't start with 'branch.', so any change to a multi-line config value (for any key, including own branch) is invisible to the fingerprint.",
+      "fix": "Join continuation lines back before filtering, or hash the raw bytes of the config output and then apply the exclusion to the full value, not line-wise."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1544-1546",
+      "breaking_input": "A sibling worktree deletes the shared config file entirely (or runs `git config --local --remove-section branch.other`), causing `git config --local --list` to exit 1 with no output. The probe returns \"\" and the filter produces an empty string, same as if no config existed. If previously the fingerprint had config content, the mutation to an empty config (deleting file) moves the digest, but the attack is that a sibling could delete only the OTHER branch sections, which is fine. The real hole: the code does not distinguish between 'no local config file' and 'config file present but all lines dropped by the filter' — a sibling could delete this worktree's own branch section (e.g. `git config --local --remove-section branch.current`) and the filtered result becomes empty, but HEAD and reflog unchanged; the digest changes to match a state where the branch config never existed, which is a move. That is intended. The true issue is if branch starts with refs/heads/, own set, and sibling writes a config key `branch.<own>` without a trailing dot (e.g. `branch.feature` — invalid key names might be possible), the filter keeps it, but that's unlikely.",
+      "why": "The fix is logically sound for exact-name exclusion; the primary risk is the prefix match already flagged. There is a secondary risk that `own` is constructed from `branch.slice(11)`, and if the branch name contains a dot (e.g. 'v1.0'), the prefix `branch.v1.` will also match `branch.v1.other`, giving the same prefix collision.",
+      "fix": "Use a regex that matches the full branch name as a component: `/^branch\\.(<exact>)\\./` but with the branch name quoted via a function that escapes dots, or compare the exact key after splitting on the first dot.",
+      "twin_of": "The same over-wide scope, one layer down: the shared config file"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1546",
+      "breaking_input": "A sibling worktree runs `git config --local branch.<own>.remote` with the same branch name as this worktree (they share the worktree? No, sibling worktrees cannot share a branch name simultaneously if they are checked out; but they can both have a branch named 'main'? Actually each worktree has its own HEAD; they could both be on 'main'. A sibling could write `branch.main.remote` which is the same prefix as this worktree's own 'main'. The filter keeps it, which is intended because it is this worktree's branch too — but a sibling's write to that section moves the fingerprint, exactly what this fix was supposed to prevent.",
+      "why": "The fix assumes each branch section is unique to one worktree, but two worktrees can be on the same branch name (e.g., both on 'main' with different local commits). A sibling on the same branch name can write `branch.main.remote` and void the run, because the filter keeps that line as 'own'. The ADR says 'only this worktree's branch section is kept', but there is no way to distinguish which worktree owns a branch section.",
+      "fix": "In addition to branch name, include a worktree-unique marker, e.g. the worktree's gitdir path, but that is not in config; alternatively, record the hash of the config before the run (including sibling writes) and only compare the delta that could be caused by the run — which is impossible. The real fix is to exclude all `branch.*` sections from the digest and rely on HEAD/reflog/content, but that would allow a model to change its branch config without detection."
+    }
+  ]
+}

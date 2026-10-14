@@ -30,3 +30,15 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   hashed every branch, tag and worktree of the shared repository, so any sibling session's commit
   or fetch would have voided a paid run. Any "nothing changed" check over shared state has this
   twin. Fix: scope it to what the run could have touched.
+- **The same over-wide scope, one layer down: the shared config file** (2026-10-14, the first
+  champion re-run after #424). `git config --local` reads the one config file every worktree
+  shares, and `checkout -b X origin/main` in a sibling worktree writes `branch.X.remote/merge`
+  there. The tripwire stopped a paid run two attempts in, on the building session's own branch.
+  Fix: drop other branches' `branch.<name>.*` and every `remote.<name>.*`, matched exactly by
+  subsection, read with `-z`; section-level keys and every other line still count.
+  Twin: any per-worktree check that reads a repository-wide file.
+- **A per-attempt check priced as if a process were free** (2026-10-14, PR 426 CI). The checkout
+  fingerprint spawned seven git processes after every attempt; at 0.1-0.4 s per process on
+  Windows, a ~28-attempt mock run pushed the face's `bench.run-model` flow past its 30 s CDP
+  timeout on one Windows shard. Fix: three processes per check, the toplevel and git dir cached
+  per root, the HEAD reflog read as a file. Twin: any check added inside a per-attempt loop.
