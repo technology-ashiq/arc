@@ -234,4 +234,4 @@ function main(argv) {
   return usage(2);
 }
 
-Promise.resolve(main(process.argv.slice(2))).then((c) => { process.exitCode = c; });
+Promise.resolve(main(process.argv.slice(2))).then((c) => { process.exitCode = c; }, (e) => { console.error(`arc: ${e && e.message}`); process.exitCode = 2; });

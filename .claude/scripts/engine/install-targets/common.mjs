@@ -77,6 +77,7 @@ export function readManifest(dir, only) {
  */
 function normalize(m, rel) {
   const bad = (why) => { throw new Refused("bad-manifest", `${rel}: ${why}`); };
+  for (const p of Object.keys(m.files)) if (p === "" || p.includes("\u0000")) bad("a file path is empty or holds a NUL");
   // A commit or tag goes into git's argv: only a full hex id (or "unknown") and a vX.Y.Z tag are ever accepted
   // (attack 0eb78f6 B6).
   const commitOk = (c) => c === "unknown" || (typeof c === "string" && /^[0-9a-f]{40}$/.test(c));

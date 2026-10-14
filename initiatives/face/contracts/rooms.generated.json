@@ -792,7 +792,8 @@
         "lints": [
           "arc-bytediff",
           "face-coverage",
-          "product-lint"
+          "product-lint",
+          "version-lint"
         ],
         "concepts": [
           "face: section",
@@ -818,7 +819,7 @@
           "skill:support-reply"
         ]
       },
-      "itemCount": 38
+      "itemCount": 39
     },
     {
       "id": "factory",

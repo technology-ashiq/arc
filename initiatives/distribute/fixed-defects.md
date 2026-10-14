@@ -135,3 +135,8 @@ and lane finds are appended under their PR.
 - **(dm) a manifest value passed to git as given.** Validate a commit as 40 hex and a tag as vX.Y.Z before any git argv sees it (B6, B13).
 - **(dn) a record rewritten before its removals land.** A removal that fails puts its path back in the record; never drop a path from the manifest while the file is still on disk (B7).
 - **(do) a second gate beside an existing one.** `version-gate.sh` already ran in CI; extend it to call the fuller lint, scoped to the tree whose contract it is, rather than add a parallel step (P09 build).
+- **(dp) a read-modify-write of a shared file with no lock.** Two writers that each read, add and rename lose one entry; take an exclusive `wx` lock around the whole cycle, and never write a shared list through a link (attack cc5f385 B3, B4).
+- **(dq) an inherited GIT_* environment.** A hook context points GIT_DIR, GIT_INDEX_FILE and the object dirs elsewhere; every internal git call strips all GIT_* first (B7).
+- **(dr) --force that destroys the owner's edit.** A forced removal of a modified file copies it to `.arc-install-backup/` first, as upgrade does (B8).
+- **(ds) a job that shells to `bash` by name.** From PowerShell `bash` may be WSL's; call the node entry with `process.execPath`, bound every spawn with a timeout, and catch the main promise (B9, B10, B11).
+- **(dt) a date parsed in the caller's locale.** Force `LC_ALL=C` on any `ps` whose output is parsed (B13).

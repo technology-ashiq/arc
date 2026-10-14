@@ -50,7 +50,8 @@ async function main() {
     value: r.counts.behind, unit_count: r.counts.consumers,
     window_start: start, window_end: now, source_id: `radar-${today}`,
   };
-  const e = spawnSync("bash", [join(REPO, ".claude", "scripts", "hq", "arc-event.sh"), "emit", "metric.observed", "--payload", JSON.stringify(payload)], { cwd: REPO, encoding: "utf8", windowsHide: true });
+  // node, not bash: from PowerShell, `bash` on PATH can be WSL's and run nothing of this checkout.
+  const e = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", "hq", "arc-event.mjs"), "emit", "metric.observed", "--payload", JSON.stringify(payload)], { cwd: REPO, encoding: "utf8", windowsHide: true, timeout: 120_000 });
   if (e.status !== 0) { process.stdout.write(`distribute-radar: emit failed (exit ${e.status}): ${(e.stderr || "").trim().split("\n").pop()}\n`); return 1; }
   process.stdout.write(`distribute-radar: metric.observed ${(e.stdout || "").trim().split("\n").pop()} · ${r.counts.behind} of ${r.counts.consumers} behind · ${r.counts.unmeasurable} unmeasurable · ${r.counts.missing ?? 0} missing\n`);
   mkdirSync(STATE_DIR, { recursive: true });
@@ -58,4 +59,4 @@ async function main() {
   return 0;
 }
 
-main().then((c) => { process.exitCode = c; });
+main().then((c) => { process.exitCode = c; }, (e) => { process.stdout.write(`distribute-radar: failed -- ${e && e.message}\n`); process.exitCode = 1; });

@@ -269,7 +269,8 @@ function winProcs() {
 
 // pid -> { ppid, pgid, stat, cmd } on POSIX; null when ps fails. `-A` with `-o` works on Linux and macOS alike.
 function posixProcs() {
-  const r = spawnSync("ps", ["-A", "-o", "pid=,ppid=,pgid=,stat=,lstart=,args="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  // C locale: lstart is parsed as an English date, and another LC_TIME would make every row unparseable (cc5f385 B13).
+  const r = spawnSync("ps", ["-A", "-o", "pid=,ppid=,pgid=,stat=,lstart=,args="], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: { ...process.env, LC_ALL: "C", LANG: "C" } });
   if (r.error || r.status !== 0) return null;
   const out = new Map();
   for (const line of String(r.stdout).split("\n")) {

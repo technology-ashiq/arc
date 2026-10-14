@@ -26,7 +26,7 @@ export function lint(root) {
   const lines = [];
   let fails = 0;
   const fail = (m) => { lines.push(`FAIL ${m}`); fails++; };
-  const read = (f) => (existsSync(join(root, f)) ? readFileSync(join(root, f), "utf8").replace(/\r/g, "") : null);
+  const read = (f) => { try { return readFileSync(join(root, f), "utf8").replace(/\r/g, ""); } catch { return null; } };
   const version = read("VERSION");
   const pkg = read("package.json");
   const log = read("CHANGELOG.md");
@@ -36,7 +36,7 @@ export function lint(root) {
   let pv = null;
   try { pv = JSON.parse(pkg).version; } catch { fail("package.json does not parse"); }
   if (pv !== null && pv !== v) fail(`package.json version ${pv} is not VERSION ${v}`);
-  const heads = log.split("\n").filter((l) => /^## /.test(l));
+  const heads = log.split("\n").filter((l) => /^## /.test(l)).map((l) => l.trimEnd());
   if (heads[0] !== "## [Unreleased]") fail(`CHANGELOG.md: [Unreleased] is not the first section (found ${JSON.stringify(heads[0] ?? "none")})`);
   const versions = [];
   for (const h of heads.slice(heads[0] === "## [Unreleased]" ? 1 : 0)) {

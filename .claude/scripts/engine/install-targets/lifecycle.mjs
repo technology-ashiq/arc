@@ -18,14 +18,18 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { dirname, isAbsolute, join, sep } from "node:path";
+import { randomBytes } from "node:crypto";
 
 import { MANIFEST, Refused, apply, preflight, readManifest, sha, manifestRecord } from "./common.mjs";
 
 const git = (tree, args) => {
-  const r = spawnSync("git", ["-C", tree, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync("git", ["-C", tree, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024, timeout: 60_000, env: cleanEnv() });
   return { status: r.error ? -1 : r.status, out: (r.stdout || "").trim() };
 };
+// A caller's GIT_* (a hook context sets GIT_DIR, GIT_INDEX_FILE, GIT_OBJECT_DIRECTORY ...) would point every call here at
+// another repository or index; none of them is ever inherited (attack cc5f385 B7).
+const cleanEnv = (extra = {}) => { const e = { ...process.env }; for (const k of Object.keys(e)) if (/^GIT_/i.test(k)) delete e[k]; return { ...e, ...extra }; };
 const short = (c) => (typeof c === "string" && /^[0-9a-f]{7,40}$/.test(c) ? c.slice(0, 8) : String(c));
 const fold = (p) => (process.platform === "win32" || process.platform === "darwin" ? p.toLowerCase() : p);
 
@@ -95,7 +99,7 @@ export function changelogRange(text, fromTag, toTag) {
   // A move to an OLDER tag crosses the same sections backwards: they are listed, and their BREAKING lines still stop
   // it (attack 0eb78f6 B12).
   if (from && to && cmp(from, to) > 0) { notes.push(`changelog: rolling back over the sections after ${toTag}`); [from, to] = [to, from]; }
-  if (fromTag && !secs.some((s) => s.version === String(fromTag).replace(/^v/, ""))) notes.push(`changelog: no section for ${fromTag}`);
+  for (const t of [fromTag, toTag]) if (t && !secs.some((s) => s.version === String(t).replace(/^v/, ""))) notes.push(`changelog: no section for ${t}`);
   const pick = secs.filter((s) => {
     if (s.version === "Unreleased") return toTag === null;
     const v = semver(s.version);
@@ -165,11 +169,12 @@ function archiveTree(tree, tag) {
   const out = mkdtempSync(join(tmpdir(), "arc-upgrade-"));
   const dest = join(out, "tree");
   mkdirSync(dest);
-  const env = { ...process.env, GIT_INDEX_FILE: join(out, "index") };
-  for (const k of ["GIT_DIR", "GIT_WORK_TREE"]) delete env[k];
+  const env = cleanEnv({ GIT_INDEX_FILE: join(out, "index") });
   const gitDir = git(tree, ["rev-parse", "--absolute-git-dir"]).out;
   const step = (args) => spawnSync("git", ["--git-dir", gitDir, ...args], { cwd: out, env, stdio: "ignore" }).status === 0;
-  if (!gitDir || !step(["read-tree", `${tag}^{tree}`]) || !step(["--work-tree", dest, "checkout-index", "-a", "-f"]) || !existsSync(join(dest, "engine"))) {
+  // The extract is a render source: a tag whose tree makes `engine` a link would render from outside it (cc5f385 L6).
+  const realDir = (p) => { try { const st = lstatSync(p); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; } };
+  if (!gitDir || !step(["read-tree", `${tag}^{tree}`]) || !step(["--work-tree", dest, "checkout-index", "-a", "-f"]) || !realDir(join(dest, "engine")) || !realDir(join(dest, ".claude"))) {
     rmSync(out, { recursive: true, force: true });
     throw new Refused("archive", `extracting ${tag} failed`);
   }
@@ -302,25 +307,50 @@ export function readRegistry() {
   if (!existsSync(r.file)) return { state: "none", consumers: [], path: r.file };
   let j;
   try { j = JSON.parse(readFileSync(r.file, "utf8")); } catch (e) { return { state: "corrupt", consumers: [], path: r.file, why: e.message }; }
-  if (!j || j.version !== 1 || !Array.isArray(j.consumers) || j.consumers.some((c) => !c || typeof c.path !== "string")) return { state: "corrupt", consumers: [], path: r.file, why: "not a version-1 consumer list" };
+  if (!j || j.version !== 1 || !Array.isArray(j.consumers) || j.consumers.some((c) => !c || typeof c.path !== "string" || !isAbsolute(c.path) || c.path.includes("\u0000"))) return { state: "corrupt", consumers: [], path: r.file, why: "not a version-1 consumer list" };
   return { state: "ok", consumers: j.consumers, path: r.file };
 }
 
 function writeRegistry(consumers) {
   const r = registryPath();
   mkdirSync(r.dir, { recursive: true });
-  // temp + rename: two inits never leave half a file, and the reader sees the old list or the new one.
-  const tmp = `${r.file}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify({ version: 1, consumers }, null, 2)}\n`);
+  // temp + rename: the reader sees the old list or the new one. wx + a random name: a planted temp is never written through.
+  const tmp = `${r.file}.${randomBytes(6).toString("hex")}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify({ version: 1, consumers }, null, 2)}\n`, { flag: "wx" });
   renameSync(tmp, r.file);
+}
+
+// The registry directory and file are the owner's own: a link at either would send the list somewhere else
+// (attack cc5f385 B4, L4, L10).
+function registryLinked(r) {
+  for (const p of [r.dir, r.file]) { try { if (lstatSync(p).isSymbolicLink()) return p; } catch { /* absent */ } }
+  return null;
+}
+
+// One writer at a time: an exclusive lock file around read-modify-write, so two inits never lose each other's entry
+// (attack cc5f385 B3). A lock older than 30 s is a dead writer's and is taken over.
+function withLock(r, fn) {
+  const lock = `${r.file}.lock`;
+  for (let i = 0; i < 100; i++) {
+    try { writeFileSync(lock, String(process.pid), { flag: "wx" }); break; } catch (e) {
+      if (e.code !== "EEXIST") throw e;
+      try { if (Date.now() - lstatSync(lock).mtimeMs > 30_000) rmSync(lock, { force: true }); } catch { /* gone */ }
+      spawnSync(process.execPath, ["-e", "setTimeout(()=>{},100)"], { stdio: "ignore" });
+      if (i === 99) throw new Error("the registry stayed locked for 10 s");
+    }
+  }
+  try { return fn(); } finally { rmSync(lock, { force: true }); }
 }
 
 /** Add or drop a project. Returns one line saying what happened; never throws on the registry's account. */
 export function register(dir, add) {
   const r = registryPath();
   if (!r.door && !existsSync(r.dir)) return `registry: skipped (no ${r.dir}; create it to have the radar watch this project)`;
+  const linked = registryLinked(r);
+  if (linked) return `registry: skipped (${linked} is a link; the registry is never written through one)`;
   const real = (() => { try { return realpathSync(dir); } catch { return dir; } })();
-  for (let attempt = 0; attempt < 3; attempt++) {
+  try { mkdirSync(r.dir, { recursive: true }); } catch (e) { return `registry: skipped (${e.code || e.message})`; }
+  try { return withLock(r, () => {
     const cur = readRegistry();
     if (cur.state === "corrupt") {
       // Moved aside, never overwritten: the owner's list is theirs to recover (attack A5 at kickoff).
@@ -329,13 +359,9 @@ export function register(dir, add) {
     }
     const others = cur.consumers.filter((c) => fold(c.path) !== fold(real));
     const next = add ? [...others, { path: real, added: new Date().toISOString().slice(0, 10) }] : others;
-    try { writeRegistry(next.sort((a, b) => (a.path < b.path ? -1 : 1))); } catch (e) { return `registry: skipped (${e.code || e.message})`; }
-    // A second init writing at the same moment can win the rename; re-read and retry until this change holds.
-    const after = readRegistry();
-    const holds = after.state === "ok" && after.consumers.some((c) => fold(c.path) === fold(real)) === add;
-    if (holds) return `registry: ${add ? "registered" : "removed"} ${real}`;
-  }
-  return "registry: skipped (another arc init kept rewriting the list; run this one again)";
+    writeRegistry(next.sort((a, b) => (a.path < b.path ? -1 : 1)));
+    return `registry: ${add ? "registered" : "removed"} ${real}`;
+  }); } catch (e) { return `registry: skipped (${e.code || e.message})`; }
 }
 
 /** `arc outdated --all`: one line per registered project; never writes inside one. */
@@ -396,6 +422,7 @@ export function uninstall(dir, { force = false, hooksPath = ".claude/templates/g
   const lines = [];
   let removed = 0, kept = 0;
   const dirs = new Set();
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   for (const p of Object.keys(m.files).sort()) {
     if (p === found.rel) continue;
     const abs = safePath(dir, p);
@@ -403,7 +430,14 @@ export function uninstall(dir, { force = false, hooksPath = ".claude/templates/g
     try { st = lstatSync(abs); } catch { st = null; }
     if (!st) { lines.push(`gone ${p}`); continue; }
     if (!st.isFile()) { lines.push(`kept (not a file) ${p}`); kept++; continue; }
-    if (sha(readFileSync(abs)) !== m.files[p] && !force) { lines.push(`kept (modified) ${p}`); kept++; continue; }
+    const modified = sha(readFileSync(abs)) !== m.files[p];
+    if (modified && !force) { lines.push(`kept (modified) ${p}`); kept++; continue; }
+    if (modified) {
+      // --force removes the owner's edit only after copying it out, as upgrade does (attack cc5f385 B8).
+      const to = join(dir, ".arc-install-backup", stamp, ...p.split("/"));
+      try { mkdirSync(dirname(to), { recursive: true }); writeFileSync(to, readFileSync(abs), { flag: "wx" }); lines.push(`backed-up ${p} (modified; --force)`); }
+      catch (e) { lines.push(`kept (backup failed) ${p}: ${e.code || e.message}`); kept++; continue; }
+    }
     try { rmSync(abs, { force: true }); } catch (e) { lines.push(`kept (locked) ${p}: ${e.code || e.message}`); kept++; continue; }
     removed++;
     for (let d = dirname(p); d !== "."; d = dirname(d)) dirs.add(d);
