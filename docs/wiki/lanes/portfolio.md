@@ -174,7 +174,7 @@ git worktree: a second working copy of the same repository, so two sessions do n
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-portfolio (Cycle 5, opened 2026-10-14) |
 | Product | — |
 
