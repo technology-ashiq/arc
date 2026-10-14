@@ -25,7 +25,7 @@ if (kase === "faults") {
   const { routerFaults } = await import("../.claude/scripts/engine/router-row.mjs");
   const { parseYamlSubset } = await import("../.claude/scripts/engine/yaml-subset.mjs");
   // ADR-0228: every row carries its chain terms, so the counts below measure the profile rule and nothing else.
-  const TERMS = { max_attempts: 3, max_wall_ms: 3600000, max_cost: "unmetered" };
+  const TERMS = { max_attempts: 3, max_wall_ms: 3600000, max_cost: 1000, max_cost_currency: "USD" };
   const row = (extra) => ({ classes: { c: { tier: "t", driver: "generic-api", fallback: [], ...TERMS, ...extra } } });
   const cases = {
     BAD_GRAMMAR: row({ profile: "has space" }),
@@ -88,10 +88,12 @@ function writeRouter({ pin, driver = "generic-api", fallback = [], profile }) {
     `    driver: ${driver}`,
     ...(fallback.length ? ["    fallback:", ...fallback.map((f) => `      - ${f}`)] : ["    fallback: []"]),
     ...(profile !== undefined ? [`    profile: ${profile}`] : []),
-    // ADR-0228 chain terms; mock is the one metering driver, so a chain holding it carries paise.
+    // ADR-0228 chain terms; a chain holding a metering driver carries a cap with its currency (ADR-0231).
     `    max_attempts: ${fallback.length + 2}`,
     "    max_wall_ms: 3600000",
-    `    max_cost: ${[driver, ...fallback].includes("mock") ? 100000 : "unmetered"}`,
+    ...([driver, ...fallback].includes("mock") ? ["    max_cost: 100000", "    max_cost_currency: INR"]
+      : [driver, ...fallback].some((d) => ["claude-code", "generic-api"].includes(d)) ? ["    max_cost: 1000", "    max_cost_currency: USD"]
+      : ["    max_cost: unmetered"]),
     "",
   ];
   writeFileSync(join(fixtureRoot, "engine", "router.yaml"), lines.join("\n"));

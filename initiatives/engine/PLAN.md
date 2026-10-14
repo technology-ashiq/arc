@@ -1,184 +1,204 @@
-# PLAN.md — arc `engine` · Cycle 8: "Governed Fallback"
+# PLAN.md — arc `engine` · Cycle 9: "Metered Runs"
 
-> Cycle 7 ("The Hired Hands") closed on 2026-08-24 with 6/6 phases and 8/8 REQs validated, and is archived at
-> `archive/PLAN-cycle7-2026-10-07.md` / `archive/PROGRESS-cycle7-2026-10-07.md`. Cycle 6 stays archived beside it.
+> Cycle 8 ("Governed Fallback") closed on 2026-10-07 with 2/2 phases and 4/4 REQs validated, and is archived at
+> `archive/PLAN-cycle8-2026-10-14.md` / `archive/PROGRESS-cycle8-2026-10-14.md`. Cycles 6 and 7 stay archived beside it.
 >
-> Design source (frozen, not editable here): `docs/strategy/plans/PLAN-engine-process-layer.md` **§ Amendment 1
-> (v2.1), decision ENG-H**, routed by `/arc-change --lane engine` on 2026-10-07. That file is the decision record;
-> **this** file is the buildable cycle cut from it. Attack findings mutate this plan, never the source.
+> **The record this builds on:** ADR-0228 (ENG-H) made every router row declare `max_cost` and refused a number on a
+> chain no driver meters — so every live row is `max_cost: unmetered`, because no production driver reports spend.
+> The money term exists, is enforced, and binds nothing live. This cycle makes it bind.
 >
-> **ADR band:** engine holds 0200–0299. `0228` was swept free on 2026-10-07 across every `origin/*` branch and every
-> sibling worktree; this cycle claims **0228** only. REQ numbers continue from the design source (REQ-08 onward), and
-> phase numbers continue from Cycle 7 (09 onward); phase 00 stays the parked Cycle 6 steel thread.
+> **ADR band:** engine holds 0200–0299. `0229`–`0231` were swept free on 2026-10-14 across every `origin/*` branch,
+> every sibling worktree and the one open PR (#410, launch); this cycle claims **0229–0231**. REQ labels **A–D are the
+> owner's locked labels**; their numbered rows continue Cycle 8's (REQ-12 onward). Phases continue from 11.
 
 ## Goal
 
-Every model fallback arc-run takes has a stated, receipted reason, and no fallback re-sends a prompt for a failure no
-other model would fix or spends past its route's own terms — so the owner pays for a second model only when a second
-model could actually help.
+Every production run reports what it spent, in the provider's own money, as one ledger row the Money room shows —
+and a router row's `max_cost` refuses every attempt after the run's spend reaches it, so spend can overshoot the cap by
+at most one attempt's cost, and the receipt says when it did.
 
 ## Current state
 
-Surveyed in-session against `main` @ `9864ee29` (2026-10-07), every line verified in the source:
+Surveyed in-session against `main` @ `4741c770` (2026-10-14), every line verified in the source:
 
 - **Stack:** zero-dep Node ESM + bash wrappers; bats + node probes; CI on three OS legs, sharded.
-- **Conventions:** comments say why; every gate has a negative control; drivers are one `produce()` behind `runDriver`.
-- **Entry points:** `.claude/scripts/engine/arc-run.mjs` (2165 lines). `attempt()` (~L1823) sorts a result into
-  `budget | harness | policy | driver | schema | ok`. The fallback `while` (~L2025) runs on `verdict === "driver"`
-  alone, and `driver` is every non-zero exit that is not 2 and not a policy denial. Each hop is re-validated by
-  `validateDriverSelection` (ADR-0225) and re-pinned by `routeFor(driver)` under the routed tier.
-- **Schema faults** take ADR-0204's ladder (~L2073): one same-driver retry, then an `approval.requested` proposal and
-  `reason: schema`. They never hop today.
-- **Driver contract:** `drivers/common.mjs` — exit map `{OK:0, DRIVER_FAIL:1, BUDGET_DECLINED:2}` (ADR-0219);
-  `writeCost` is the only driver→arc-run channel and already carries non-cost facts (`model`, `runtime`, ADR-0221);
-  a thrown error may request exit 2 via `e.arcExit` and nothing else.
-- **Drivers' failure knowledge:** `generic-api` retries 429/5xx and per-attempt timeouts internally, then throws one
-  `transport failed after N attempt(s)` string. `claude-code` and `codex` throw `claude CLI failed: ...` /
-  `codex CLI failed: ...` carrying only the error's first line.
-  `hermes` maps its capped key's 403 and its deadline to BUDGET_DECLINED. `mock` replays recordings and can carry
-  `__cost`, but no failure.
-- **Router:** `engine/router.yaml` — 11 class rows plus `default:`; two carry a non-empty chain (`commit-msg-draft`:
-  claude-code → codex → generic-api; `review-diff`: claude-code → codex). `router-row.mjs` `rowFaults`/`routerFaults`
-  validate at load and report every fault. No row carries an attempt, wall or money term.
-- **Receipt:** `run.completed`'s payload is free-form in `hq/lib/validate.mjs` (no closed shape), so new payload fields
-  need no validator change. 23 non-engine scripts read the kind; `arc-bench` reads `payload.reason` (schema | driver |
-  budget | policy).
-- **Blast radius counted:** 14 test files write router fixtures (about 40 `classes:` blocks; heaviest:
-  `engine-router-row.bats` 9, `engine-model-profile-probe.mjs` 7, four face suites 2–4 each); 24 test files copy the
-  real router and inherit its edit.
-- **Do-not-touch:** the exit map, the spine's closed kind set, any tier, `independent-family-verifier`, the hire row's
-  four terms.
+- **Conventions:** comments say why; every gate has a negative control; money is integer minor units; drivers are one `produce()` behind `runDriver`.
+- **Entry points:** `.claude/scripts/engine/arc-run.mjs` (2334 lines), `drivers/common.mjs` (`writeCost`), `failure-class.mjs` (`termsCheck`), `router-row.mjs`, `engine/router.yaml`.
+- **Drivers:** `.claude/scripts/engine/drivers/` — `claude-code`, `codex`, `generic-api`, `hermes`, `mock`, all one
+  `produce()` behind `runDriver` (`common.mjs`). **There is no `openrouter` driver**: `generic-api` is the
+  OpenRouter-shaped endpoint driver (`ARC_LLM_KEY_NAME` → `OPENROUTER_API_KEY`), and `hermes` is the agent runtime
+  that reaches openrouter.ai.
+- **Spend today:** `writeCost({tokensIn, tokensOut, inr, ...})` is the only driver→arc-run channel; `inr` is integer
+  paise and only `mock` (`__cost`) ever fills it. `claude-code` returns tokens from `envelope.usage` and drops the
+  envelope's `total_cost_usd`; `generic-api` returns tokens from `usage` and, by a comment, no money ("no inr figure:
+  this endpoint does not return one"); `hermes` refuses its runtime's cost as an estimate (REQ-05) and its
+  `--usage-file` is a vendor no-op on the pinned image.
+- **arc-run:** `attempt()` (~L1913) records `hops[].cost.inr`; `inrSpent` sums INR for `--budget inr=`; `costArgs` puts
+  `inr_estimate` on the envelope `cost`; `emitEvent` (~L1168) is the one emit path; `run.completed` has no money field
+  and the run writes no `cost.incurred`.
+- **Cap today:** `failure-class.mjs` `METERING_DRIVERS = {mock}`; `chainTermFaults` faults a number on an unmetered
+  chain and `unmetered` on a metered one; `termsCheck` refuses a hop at `spent >= max_cost` (paise) and on an unproven
+  total (F3). `engine/router.yaml`: 11 class rows + `default:`, every one `max_cost: unmetered`; 10 rows + `default`
+  run `claude-code`, one `hermes`; `commit-msg-draft` chains `claude-code → codex → generic-api`.
+- **Ledger:** `cost.incurred` is a company kind (ADR-1001); `assertCostIncurred` requires integer minor units with an
+  ISO currency (ADR-1012) and leaves the schema open; readers: `costs.mjs`/`pnl.mjs` (Money room, per currency, never
+  converted, `money.mjs` pins INR + USD exponents), `org/lib/attribution.mjs`, `policy/spend.mjs` (settlement half of
+  a reservation, keyed by `reservation_ref`).
+- **Do-not-touch:** the exit map (ADR-0219), `failure-class.mjs`'s six classes, the spine's closed kind set, any tier,
+  any driver's existence.
 
 ## Success requirements
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-08 | A fallback is taken only for a failure another model could fix | Every failed attempt is assigned exactly one of the six `FailureClass` values by `failure-class.mjs`, and arc-run's loop consults only `nextHop`. Fixtures on `drivers/mock` (first driver) and `generic-api` against a local server (second driver, its hit count is the counter): **(a)** a `transport` declaration with run time left reaches the second driver (count 1); the same prompt answering invalid JSON reaches a different-family driver once and stops with the proposal receipt, total attempts 2 — never 3 — with the proposal's `attempts` taken from the real count; **(b)** a `policy-refusal` leaves the count at **0**; **(d)** an exit 1 declaring nothing is `unknown` and the count stays 0. Every stop fixture's positive control is the SAME root with only the declared class changed to `transport` (count 1). **Five mutants of `failure-class.mjs`, each turning a NAMED check red:** m1 everything hops · m2 `budget` hops · m3 `transport` stops · m4 `model-invalid` hops within one family · m5 a declaration on exit 0 or 2 overrides the observed class | 09 | validated |
-| REQ-09 | The ledger can price every fallback | `run.completed` carries `failure_class` and `hops[]` — one entry per attempt with `driver`, `tier`, `class`, `ms` and `cost` when measured — on success and failure paths alike, with **zero new event kinds** and the existing `reason` values unchanged. Fixture reads the receipt off a fixture spine (`events/`, not `_quarantine/`) and asserts every hop's `tier` equals the routed tier | 09 | validated |
-| REQ-10 | No chain spends past its own terms | Every class row and `default:` declares `max_attempts`, `max_wall_ms` and `max_cost` (integer paise, or `unmetered` — required when no driver in the chain meters spend, refused when one does, ADR-0228 item 6); each of absent, `null`, empty, negative, non-integer is a router LOAD fault (hostile fixture per term). **(c)** A hop that would exceed any term is refused before its driver starts — the second driver's count stays 0, with the positive control at 1 — the receipt reads `failure_class: budget`, and `nextHop` over the same recorded hops returns the identical decision twice. **(e)** A check over the REAL `engine/router.yaml` asserts every row with a non-empty chain is `unmetered` exactly when its chain holds no metering driver, so a promise nothing can measure cannot be written | 10 | validated |
-| REQ-11 | Each real driver says what kind of failure it had, or honestly says it cannot | `generic-api`, against a local server: connect error, a per-attempt timeout and other 5xx → `transport`; 503 and a 429 whose body names no quota/credit/key limit → `provider-unavailable`; 402, and a 403 or 429 whose body names credit, quota or a key limit → `budget` (exit 2, the shape `hermes` already maps, ADR-0213); an HTTP 200 whose answer is not JSON → `model-invalid`; every other 4xx (401, 400, 404) → `unknown`. Each pair asserts the second driver's count: 1 for hop classes, 0 otherwise. `claude-code` and `codex` declare `provider-unavailable` for a CLI that is not installed (spawn ENOENT), proven with a missing binary path; everything else of theirs stays `unknown` and the PLAN says so. `hermes` keeps BUDGET_DECLINED (→ `budget`). `mock` replays any class through the `__failure` recording key (`{class, message, exit}`) defined in phase-09-spec; any other `__`-prefixed key in a recording is a load error, never a silent no-op | 10 | validated |
+| REQ-12 · **REQ-A spend reported** | Every production driver that can know what a run cost says so, and one that cannot says nothing | `claude-code` reads session spend at session end through a `SessionSpend` interface (real: the CLI result envelope's `total_cost_usd`, json and stream paths; fake: the fake CLI fixtures) ; `generic-api` reads the provider's `usage.cost` (requesting it with `usage: {include: true}`); both through ONE `spendOf()` in `common.mjs` per ADR-0229 (decimal-string ceil, `provider_amount` kept). `run.completed` carries `spend: {amount, currency, provider_amount}` in integer minor units per ADR-1012, or `spend: null` + `spend_absence`. **Hostile corpus, each a named assertion:** absent, `null`, `"0.01"` string, negative, `NaN`/`Infinity`, `1e-7`, `0.07` (ceil must be 7, not 8), `0.0700001` (→ 8), past 1e12 → absent, never `0`; a provider `0` → measured `0`. `hermes` stays unmetered and the PLAN says why | 12 | active |
+| REQ-13 · **REQ-B cost.incurred** | The ledger holds one money row per metered run, and an unmetered run is visibly unmetered | A metered run on a fixture spine writes exactly **one** `cost.incurred` (`kind` is ADR-1001's, zero new kinds) through arc-run's `emitEvent`, landed in `events/` not `_quarantine/`, with `run_ref` = its `run.completed` id, `venture: arc`, `source: measured`, no `reservation_ref`; `policy/spend.mjs` does not fold it as a settlement (fixture). An unmetered run writes **zero** (`spend_absence: driver-unmetered` / `not-reported` on its `run.completed`). Re-emitting for the same (`run_ref`, `currency`) is refused, never a second row; two identical-looking runs in a row write two rows; a two-currency run writes two rows. ONE rounding per run per currency: `amount` is the ceiling of the exact decimal sum of the attempts' `provider_amount`, and two attempts at `0.004` + `0.004` give `cost.incurred.amount == run.completed.spend.amount == 1`. `basis` names whose figure it is (`harness-reported` for claude-code, `provider-reported` for generic-api). `unbookedRuns(events)` (a `run.completed` with non-null `spend` and no `cost.incurred` by `run_ref`) returns 1 on a fixture spine missing the money row, 0 on the clean one. Positive control: the same run with a reported figure writes 1 | 11 | active |
+| REQ-14 · **REQ-C the cap bites** | No attempt starts once the run's spend has reached its row's cap, and the receipt says so; one attempt can overshoot, and `run.completed` records `spent` > `cap` when it did | `claude-code` + `generic-api` join `METERING_DRIVERS`; every live router row whose chain holds one carries numeric `max_cost` + `max_cost_currency: USD`, reasons beside them (ADR-0231). Through the real arc-run with `generic-api` against a local server whose first answer reports spend ≥ the cap: the next attempt (hop AND schema retry) is refused before its driver starts — second driver's hit count **0**, positive control (spend under the cap) **1** — and `run.completed` reads `failure_class: budget` + `refusal.code: MAX_COST_REACHED` with `spent` and `cap`. A row with numeric `max_cost` and no metering driver, and one with no `max_cost_currency`, are router LOAD faults (hostile fixture each). `refusal.spent.amount` equals the `cost.incurred.amount` the same run writes. The same refusal is asserted through the real arc-run with the fake `claude-code` CLI on the json path (first attempt reports `total_cost_usd` ≥ cap → the next driver's hit counter 0, positive control 1); a streamed `claude-code` run that reports nothing produces `MAX_COST_UNPROVEN`, never a silent pass. `claude-code` joins the table only if Phase 12's real capture carried `total_cost_usd` | 13 | active |
+| REQ-15 · **REQ-D Money room** | The owner sees what engine runs cost in the Money room | By the cycle close, `/api/pnl` read **through the door** (the face's HTTP route, not a direct module call) on the **live** main-clone spine serves cost lines > 0 whose `cost.incurred` events were written by real arc-run dispatches — each traced to its `run.completed` by `run_ref`; nothing hand-planted, no `arc-event emit cost.incurred` by hand | 14 | active |
 
 ## Appetite
 
-**3 days** (working days), the ceiling the design-source amendment set for this capability. Owner instruction for
-this cycle (2026-10-07): finish every phase without waiting, tests run on CI only, ask only when truly blocked.
+**2.5 days** planned, **3 days** cap (working days). Owner instruction for this cycle (2026-10-14): build every phase
+without waiting, push freely, tests on CI only and checked regularly, ask only when truly blocked, merge once at the
+end after every phase is complete.
 
 **Tier:** S
 
-**Kill criteria:** at 50% appetite burnt (1.5 days), if Phase 09 isn't done → mandatory scope-cut conversation; the
-pre-decided cut is REQ-11's `claude-code`/`codex` declarations (they stay `unknown`, which is safe: no hop). At 100% →
-cut or kill, never extend silently.
+**Kill criteria:** at 50% appetite burnt (1.25 days), if Phase 12 isn't done → mandatory scope-cut conversation; the
+pre-decided cut is REQ-12's stream-path reading for `claude-code`; if taken, `claude-code` is metered on the json path
+only, and any live row whose first attempt streams keeps `max_cost: unmetered`, recorded in the router reasons. At 3 days → cut or kill, never extend silently.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-  caller([Caller: face door, arc-attack, bench, scheduler])
+  caller([Caller: face door, arc-attack, scheduler, bench])
   subgraph engine [System: arc engine]
-    run[Container: arc-run]
-    fc[Component: failure-class.mjs\nFailureClass + nextHop]
-    rr[Component: router-row.mjs\nchain terms at load]
+    run[Container: arc-run\nhops + spend + refusal]
+    fc[Component: failure-class.mjs\nMETERING_DRIVERS + termsCheck]
+    rr[Component: router-row.mjs\nmax_cost + currency at load]
     router[(Config: engine/router.yaml)]
-    drivers[Container: drivers/*\nexit 0/1/2 + cost sidecar failure_class]
+    common[Component: drivers/common.mjs\nspendOf - ADR-0229]
+    cc[Container: drivers/claude-code\nSessionSpend: total_cost_usd]
+    ga[Container: drivers/generic-api\nusage.cost]
   end
-  spine[(External: spine events/ run.completed)]
+  provider[(External: claude CLI / OpenRouter endpoint)]
+  spine[(External: spine events/\nrun.completed + cost.incurred)]
+  door([Face door: /api/pnl -> Money room])
   caller --> run
   run --> rr --> router
-  run --> drivers
-  drivers -- sidecar --> run
-  run -- hops so far --> fc
-  fc -- hop or stop --> run
-  run -- failure_class + hops --> spine
+  run --> cc & ga
+  cc & ga --> provider
+  cc & ga -- spendOf --> common -- sidecar spend --> run
+  run -- hops + spend --> fc -- hop / refuse --> run
+  run -- run.completed then one cost.incurred --> spine
+  spine --> door
 ```
 
 ## Key decisions (ADR index)
 
 | # | Decision | Status |
 |---|---|---|
-| 0228 | ENG-H — fallback is governed by a failure classifier and a per-chain budget; forks F1–F4 resolved inside | accepted |
+| 0229 | Spend is the provider's own figure, in its own currency, rounded UP to the minor unit; exact figure kept (one-way) | accepted |
+| 0230 | One `cost.incurred` per metered run, written by arc-run after `run.completed`; unmetered is a named absence | accepted |
+| 0231 | A metered row's `max_cost` carries `max_cost_currency`; a reached cap is a typed `MAX_COST_REACHED` refusal | accepted |
 
-Inherited and unchanged, cited where they bind: ADR-0219 (the driver exit map stays 0/1/2), ADR-0204 (the schema
-ladder ends in a proposal receipt — ADR-0228 F1 says when the cross-family hop replaces rung 1), ADR-0225 (every hop
-is validated like any other driver selection), ADR-0227 (the schema subset's one nullable pair, out-of-cycle,
-untouched by this cycle).
+Inherited and unchanged, cited where they bind: ADR-0228 (the six classes, `nextHop`, `termsCheck`, F3 — untouched
+in substance; only the money comparison learns currency), ADR-0219 (exit map), ADR-1001 (money only on the spine),
+ADR-1012 (integer minor units — ADR-0229 applies its revisit trigger without amending it), ADR-1013 (INR + USD),
+ADR-0069 b5 (absent is never estimated).
 
 ## Non-negotiables
 
-- ENG-D's driver exit map stays `0` ok, `1` driver-fail, `2` budget-declined; the failure class travels in the cost sidecar and this cycle adds no exit code (ADR-0219, ADR-0228).
-- Zero new event kinds; `run.completed` gains payload fields only, its `reason` values are unchanged, and every emit is VERIFIED to have landed in `events/` and not in `_quarantine/`.
-- No component changes a model tier at run time; a hop keeps the routed tier, and every routing change is a reviewed `router.yaml` diff citing ADR-0069.
-- One module owns the class set and the hop decision; no second copy of the rule exists in arc-run, bench, the face or a driver ("validate one read, compare another" is this lane's recorded twin).
-- Every gate ships with a negative control that actually runs and proves the check can fail; the classifier-drop mutant is invariant (d)'s negative control, and a probe asserts it RAN before asserting what it printed.
-- An unavailable cost, duration or class stays absent or `unknown` — never estimated, never inferred from a stderr guess (ADR-0069 b5).
-- Every gate and parser this cycle ships gets the two-surface adversarial pass (`/arc-attack`: logic and boundary) before its PR merges, carrying this lane's fixed-defect list (`initiatives/engine/fixed-defects.md`).
-- Tests run on CI only, read per job; nothing is reported done on local evidence.
-- Before editing a shared root organ — `engine/router.yaml`, `docs/adr/`, `tests/`, `.github/` — run `git log origin/main --oneline -5 -- PATH`, and at a merge take the STRONGER version.
-- A program embedded in a shell string carries no apostrophes, no single quotes, and — inside double quotes — no backtick and no dollar sign; such a program goes in its own file.
+- **Null never becomes 0.** An absent, unreadable or wrong-typed provider figure is absent on every surface — sidecar,
+  `hops[]`, `run.completed`, money row — and a measured 0 is distinguishable from it everywhere (ADR-0069 b5).
+- Money is integer minor units by decimal-string arithmetic; no float is ever multiplied into a money field, and no
+  rate converts one currency into another (ADR-1012, ADR-1003, ADR-0229).
+- Zero new event kinds; `cost.incurred` is ADR-1001's kind; `run.completed` gains payload fields only and its `reason`
+  values are unchanged; every emit is VERIFIED in `events/`, not `_quarantine/`.
+- **No new driver, no model work (no tier, pin, profile or `models:` change), no change to `failure-class.mjs`'s six
+  classes.** `METERING_DRIVERS` and the money comparison in `termsCheck` are the only edits to that file.
+- One module owns spend parsing (`spendOf` in `common.mjs`) and one owns the cap decision (`termsCheck`); no second
+  copy in arc-run, a driver, bench or the face ("validate one read, compare another" is this lane's recorded twin).
+- Every gate ships with a negative control that actually runs; a probe asserts it RAN before asserting what it printed.
+- Every phase gets the two-surface `/arc-attack` (logic + boundary) carrying `initiatives/engine/fixed-defects.md`,
+  one round on the local commit before the push, at most two rounds per PR.
+- Tests run on CI only, read per job with `ci-digest`; nothing is reported done on local evidence.
+- Before editing a shared root organ — `engine/router.yaml`, `docs/adr/`, `tests/`, `.github/` — run
+  `git log origin/main --oneline -5 -- PATH`, and at a merge take the STRONGER version.
+- A program embedded in a shell string carries no apostrophes, no single quotes, and — inside double quotes — no
+  backtick and no dollar sign; such a program goes in its own file.
 
 ## No-gos (explicitly out of scope)
 
-- **Adding a provider or a driver.**
-- **Auto-switching** of any kind (ADR-0069 b1).
-- **Changing any tier**, or filling `independent-family-verifier`.
-- **A new spine kind or a new driver exit code.**
-- **Estimating cost** for a driver that does not report it, to make `max_cost` usable.
-- **A ledger reader or dashboard for fallback prices** — the receipt makes them derivable; deriving them is the ledger lane's work.
+- **A new driver** (an `openrouter` driver included — `generic-api` is that driver), **any model/tier/pin work**,
+  **any change to the six failure classes**.
+- **Converting** USD to INR, or making `--budget inr=` bind a USD figure — `inr=` keeps binding INR spend only.
+- **Estimating** spend for a driver that does not report it (`codex`, `hermes`), or from tokens × a price table.
+- **A new event kind**, or a per-attempt `cost.incurred`.
+- **New Money room UI.** The room's existing cost lines render USD already; this cycle feeds them.
+- **Back-filling** `cost.incurred` for runs that happened before the cycle.
 
 ## Rabbit holes
 
-- **Regex-classifying CLI stderr.** `claude-code` and `codex` emit free-text failures; guessing a class from words is the "probe classifies the exit code" trap in another form (retro-log 2026-08-17#2). Detour: declare only what the driver observes structurally (spawn ENOENT, its own timeout); everything else is `unknown`.
-- **Per-family pricing tables.** `max_cost` compares measured paise only.
-- **Rewriting the fallback loop's ADR-0225 validation.** It stays exactly as is; `nextHop` decides WHETHER to hop, ADR-0225 decides WHETHER THE TARGET IS ALLOWED.
+- **Price tables.** Deriving spend from tokens × a rate "for the drivers that don't report" is the estimate ADR-0069
+  b5 forbids; detour: those drivers stay unmetered and their rows stay `unmetered`.
+- **Float money.** `Math.ceil(x * 100)` is wrong for `0.07`; detour: `spendOf` parses `String(x)` as digits, with the
+  exponent form handled, and the corpus pins `0.07 → 7`.
+- **Subscription vs invoiced spend:** `total_cost_usd` under a subscription login is the harness's notional list-price
+  figure. Every `cost.incurred` therefore carries `basis: harness-reported` for `claude-code` (`provider-reported` for
+  `generic-api`), the Money room line's `label` includes it (≤ 64 chars, no control characters — `costs.mjs` nulls a
+  longer label), router reasons on `claude-code` rows call their cap a guard on notional dollars, and Phase 14's
+  evidence states billed vs notional. Chasing the invoice is the ledger's reconciliation job (A-11).
 
 ## Assumptions ledger
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| A-08: each driver can tell transport from model failure from what it observes structurally | a driver's transport failures and bad answers reach it as the same signal → that driver declares `unknown`, so every chain through it stops hopping; recorded per driver in REQ-11, never papered over with a stderr regex — **FIRED 2026-10-07** for `claude-code` and `codex`: every CLI failure past launch reaches them as one free-text line, so both declare only a CLI that cannot start and everything else is `unknown`. The response was the one this row pre-decided (REQ-11, ADR-0228 item 2): `commit-msg-draft` and `review-diff` do not hop on those failures, recorded in `evidence/phase-10/ci-results.md`. Load-bearing for nothing else. | 10 |
-| A-09: the driver's own sidecar write survives its failure path | a driver exit 1 whose `failure_class` sidecar is missing because the process died before `writeCost` ran → arc-run reads `unknown` (safe), and the fixture that expected `transport` goes red, naming the driver | 09 |
-| A-10: making every class row carry three terms breaks no other lane's tests beyond the 14 counted fixture writers | CI goes red in a suite outside the 14 named files on a router load fault → the count was wrong; the fixture is fixed in this cycle and the miss recorded | 10 |
+| A-11: the `claude` CLI's `total_cost_usd` is the harness's own reported session spend and is present in both the `--output-format json` envelope and the stream `result` event | a real dispatch's envelope has no `total_cost_usd` (renamed field / CLI version) → `claude-code` reports `not-reported` and its fallback stops (safe); recorded with the CLI version, and the reader is fixed in-cycle against the real shape | 12 |
+| A-12: an OpenRouter-shaped endpoint returns `usage.cost` (USD credits) when asked with `usage: {include: true}`, on the streamed last chunk too | the owner's gateway (or a LiteLLM endpoint) omits it → `generic-api` reports `not-reported`; the fixture server pins both shapes, and the live run in Phase 14 reads which one the real gateway gave | 11 |
+| A-13: `policy/spend.mjs` folds only a `cost.incurred` carrying `reservation_ref`, so an engine money row is never read as a settlement | a fixture spine with one engine `cost.incurred` changes `spend.mjs`'s fold output → stop, and route the shape question to the policy lane before Phase 11 closes | 11 |
+| A-14: real arc-run dispatches from the main clone after the final merge will write live `cost.incurred` rows (nothing emits from a worktree) | the main-clone dispatch refuses or writes to `_quarantine/` → REQ-15 stays open and the cycle does not close on it | 14 |
 
 ## External dependencies
 
-None new. The drivers and their providers are Cycle 6/7's dependencies, unchanged; every fixture runs on
-`drivers/mock`, the existing fake CLI (`tests/fixtures/engine/fail-claude-cli.mjs` family) and a local HTTP endpoint.
-
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| OpenRouter-shaped endpoint (existing) | `drivers/generic-api` | local `node:http` server in the test | the owner's gateway, unchanged | `tests/engine-failure-class.mjs` asserts the declared class per status, against the local server only |
+| `claude` CLI session spend | `SessionSpend.read(envelope)` in `drivers/claude-code.mjs` → provider figure or absent | `tests/fixtures/engine/fail-claude-cli.mjs` / `fake-claude-stream.mjs` emitting `total_cost_usd` (and omitting it) | the installed `claude` CLI, `-p --output-format json` | `tests/engine-spend.mjs` asserts the read for present, absent, string, negative, stream `result` event |
+| OpenRouter-shaped endpoint `usage.cost` | `generic-api`'s envelope parse → `spendOf(usage.cost, "USD")` | local `node:http` server in the test, SSE and non-SSE, with and without `cost` | the owner's gateway, unchanged | same file, against the local server only |
 
 ## Pre-mortem (Klein)
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | **The twin (REQ-08, ADR-0228 item 1).** The class rule gets written twice — once in arc-run's verdict arms, once in `nextHop` — and they disagree on one shape (this lane's three recorded "validate one read, compare another" fixes) | **Mitigated:** `attempt()` returns a class computed by `failure-class.mjs`, the loop asks `nextHop`, and a test asserts arc-run contains no hop condition of its own beyond the call |
-| 2 | **Budget exhaustion triggers the fallback it multiplies** (retro-log 2026-08-03#4; Phase 09, ADR-0228 item 5) — a per-attempt timeout and the run deadline get conflated, so `budget` hops or `transport` stops | **Mitigated:** two fixtures, one per side of the line, with the run deadline as an explicit input; the timeout arm keeps `budget` |
-| 3 | **Vacuous invariant fixtures (REQ-08, REQ-10):** "the second driver was never reached" asserted by the absence of its output, which is also what a broken fixture produces | **Mitigated:** a counter file the second driver writes, plus a positive control where the counter reads 1 (retro-log 2026-08-17#1) |
-| 4 | **The chain terms fault every fixture router at once (Phase 10, REQ-10)** and CI reds across face and bench suites for a reason unrelated to their subject | **Mitigated:** the 14 writers are counted and edited in the same PR; A-10 names the trigger if the count is wrong |
-| 5 | **No production driver meters spend, so `max_cost` binds nothing live (REQ-10, REQ-11, ADR-0228 item 6 and F3)** — a paise figure on `commit-msg-draft` or `review-diff` would read as a cap while no measurement could ever reach it, and a strict F3 would make every chain hop-less because a failed attempt writes no cost | **Mitigated and made visible:** `unmetered` is the required, honest value for a chain with no metering driver and is printed on the receipt; REQ-10(e) checks the real router; F3 counts an answer-less `transport`/`provider-unavailable` attempt as 0 rather than unproven. `unknown` stopping a chain stays an accepted, receipted property (A-08) |
+| 1 | **Float money (REQ-12, ADR-0229).** `ceil(0.07*100)` = 8; or `String(1e-7)` = `"1e-7"` parsed as 1 cent of nothing / as 1e-7 dollars dropped | **Mitigated:** one decimal-string `spendOf`, a corpus with `0.07`, `1e-7`, `1.5e-3`, `0.0700001`, and a mutant (`Math.ceil(x*100)`) that must turn a named check red |
+| 2 | **The twin (REQ-12/13/14).** Spend parsed once in `spendOf` and re-read in arc-run's `costArgs`, `termsCheck` or the money emit with a different rule (this lane's recorded "validate one read, compare another") | **Mitigated:** arc-run reads only the sidecar's already-parsed `spend`; a test asserts no `total_cost_usd` / `usage.cost` / `* 100` appears outside `common.mjs` and the two driver read sites |
+| 3 | **A vacuous cap fixture (REQ-14):** "the second driver never ran" asserted by its missing output, which a broken fixture also produces | **Mitigated:** the local server's hit counter, with a positive control at 1 (retro-log 2026-08-17#1) |
+| 4 | **Notional dollars read as bills (REQ-12/14/15).** The Money room shows `claude-code` spend the owner never paid, and a cap refuses a fallback on it | **Mitigated:** `basis` on the payload and in the label, router reasons naming "notional", Phase 14 evidence states billed vs notional; fixture migration for the metering flip is a counted Phase 13 step |
+| 5 | **REQ-15 cannot close inside the worktree** — the live spine is the main clone's, written only after the merge | **Accepted and scheduled:** Phase 14 runs after the final merge, from the main clone, and reads `/api/pnl` through the door; the cycle does not close until it does (A-14) |
 
 ## Phases (risk-ordered)
 
-| Phase | Capability | Appetite | Status |
-|---|---|---|---|
-| 00 | Steel thread — **parked, shipped in Cycle 6** (canonical process layer, `arc-run`, driver contract, `router.yaml`) | — | ✅ done 2026-08-03 |
-| 09 | Steel thread for ENG-H: `failure-class.mjs` + `nextHop`, arc-run's loop routed through it, the sidecar `failure_class`, `mock` replaying classes, the hop record on `run.completed`, invariants (a)(b)(d) + the classifier-drop mutant | 1.25 days | ✅ done 2026-10-07 |
-| 10 | Chain terms: three required terms at router load (all fixture routers migrated), refuse-before-spend + replay determinism (invariant c), real drivers declare their classes, two-surface attack, close | 1.25 days | ✅ done 2026-10-07 |
+| Phase | Capability | Appetite | Depends on | Status |
+|---|---|---|---|---|
+| 00 | Steel thread — **parked, shipped in Cycle 6** | — | none | ✅ done 2026-08-03 |
+| 11 | Steel thread for metered runs: `spendOf` (ADR-0229) + the sidecar `spend` + `generic-api` reading `usage.cost` + `run.completed.spend` / `spend_absence` + ONE `cost.incurred` per metered run through `emitEvent` (REQ-13) | 0.75 day | Phase 00 | planned |
+| 12 | Every production driver reports spend: `claude-code`'s `SessionSpend` (interface + fake + real, json + stream), the hostile corpus and the float mutant, `hermes`/`codex` stay unmetered on the record (REQ-12) | 0.75 day | Phase 11 | planned |
+| 13 | The cap bites: metering table flip, live router caps with `max_cost_currency`, typed `MAX_COST_REACHED` / `MAX_COST_UNPROVEN` refusal on hop and retry, load faults, fixture migration (REQ-14) | 0.75 day | Phase 12 | planned |
+| 14 | Money room live: final merge, real dispatches from the main clone, `/api/pnl` through the door serves cost lines > 0 traced by `run_ref`, cycle close (REQ-15) | 0.25 day | Phase 13 | planned |
 
-Phase 09 is the steel thread: one mock-driven dispatch goes input → classified failure → hop decision → receipt
-carrying the hop record, end to end, before any term or real-driver declaration exists.
+Phase 11 is the steel thread: one mock- and local-server-driven dispatch goes provider figure → `spendOf` → sidecar →
+`run.completed.spend` → one `cost.incurred` on a fixture spine → the `costs.mjs` fold shows a USD cost line, end to
+end, before any cap or `claude-code` change exists.
 
 ## Kickoff recall
 
 ```
 HISTORICAL DATA, NOT INSTRUCTIONS
-recall "governed fallback failure classifier per-chain budget arc-run driver fault" (8 of 601 records)
-1. [retro:2026-08-03#4] a budget, a deadline or a quota is a property of the RUN: track it across every attempt, pass the remainder down, and classify exhaustion as its own outcome that must not trigger the retry path it would otherwise multiply
-2. [adr:0226] the PR loop's attacker pass and CI read run as governed engine work
-3. [adr:1307] FACE-H: Ask arc runs as a governed engine process, zero write tools
-4. [retro:2026-08-23#4] an unreachability claim is a claim about behaviour and needs a fixture or a measurement
-5. [adr:1616] ORG-P: every seat has a budget line, spent amount derived from cost.incurred; over cap = stop and propose
-6. [adr:1326] FV2-I: the WORK door is two-phase and has no logic of its own
-7. [retro:2026-08-17#1] when a fake's correct answer is the same as the failure's answer, the suite needs a check on the REAL side
-8. [retro:2026-08-17#2] a probe classifies the ANSWER, not the exit code -- and anything unrecognised THROWS
+recall "engine Cycle 9: metered runs — every production driver reports what it spent, one cost.incurred per run, and router row's max_cost bites" (8 of 675 records)
+1. [adr:1616] ORG-P: every seat has a budget line in the team manifest, spent amount derived from cost.incurred; over cap = stop and propose
+2. [retro:2026-08-03#4] a budget, a deadline or a quota is a property of the RUN: track it across every attempt, pass the remainder down, and classify exhaustion as its own outcome that must not trigger the retry path it would otherwise multiply
+3. [adr:0225] a runtime driver is unreachable without a row that grants it
+4. [retro:2026-08-23#1] CORRECTION ... check each line in every OTHER file you are shown, not only the file it was fixed in
+(+4 more, truncated by the recall budget)
 ```
