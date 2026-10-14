@@ -147,3 +147,5 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **The drill's user list fell back on any failure, stderr discarded**, L8/B4 (d8f943a)
 - **A branch judged stale by its head's parent**, now GitHub's compare, moved only when every commit past main is launch's, L9 (d8f943a)
 - **"Newest digest" taken from list order** — restore-drill now hashes the drill file on main and requires backup to have written it, L11 (d8f943a); **the in-attempt verify dropped what an older state read lacked**, now the union, B3
+- **The drill's fallback matched any "launch_ops ... does not exist" line**, now psql's exact words as fixed strings, B5; **any line reached COPY**, now whole uuid lines only, B6 (22bbc54)
+- **--again keyed on `approval === true` only** — a "true" string or a slot with sensitive actions is refused too, B7 (22bbc54) — *every boolean read from config: in any spelling*

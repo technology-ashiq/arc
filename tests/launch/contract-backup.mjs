@@ -62,7 +62,9 @@ switch (scenario) {
       secretOnly: wf.includes("${{ secrets.SUPABASE_DB_URL }}") && !/postgres(ql)?:\/\/[^@\s]*:[^@\s]*@(?!localhost)/.test(wf),
       tabs: wf.includes("\t"),
       // The user list falls back only on the reader being absent; nothing hides a psql error (attack d8f943a L8).
-      usersGuarded: wf.includes("grep -qE 'launch_ops.*does not exist' users.err") && !wf.includes("2>/dev/null"),
+      // Only uuid lines reach COPY (attack 22bbc54 B6).
+      usersGuarded: wf.includes("grep -qF -e 'function launch_ops.user_ids() does not exist'") && !wf.includes("2>/dev/null")
+        && wf.includes("from stdin\" < users.ids") && !wf.includes("< users.src"),
     };
     out.verify = await backup.verify(bCtx());
     out.rScaffold = (await attempt(() => restore.scaffold(rCtx()))).ok;

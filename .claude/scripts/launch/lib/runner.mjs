@@ -131,7 +131,10 @@ export async function apply(opts, log = console.log) {
     if (opts.again && row.state !== "verified") throw new LaunchError("REFUSED", `${slot.id} is ${row.state}; --again re-applies a verified slot only (a plain apply runs this one)`);
     if (opts.again && slot.gate && slot.gate !== "none") throw new LaunchError("REFUSED", `${slot.id} sits behind ${slot.gate}; --again never re-runs a gated slot`);
     // An owner approval is a gate too (attack 5ce0104 B3).
-    if (opts.again && slot.approval === true) throw new LaunchError("REFUSED", `${slot.id} needs the owner's approval; --again never re-runs it`);
+    // A flag that reads true in any spelling, or a sensitive action the slot asks the owner for, counts the same
+    // (attack 22bbc54 B7).
+    const asksOwner = slot.approval === true || String(slot.approval).toLowerCase() === "true" || (Array.isArray(slot.sensitive_actions) && slot.sensitive_actions.length > 0);
+    if (opts.again && asksOwner) throw new LaunchError("REFUSED", `${slot.id} needs the owner's approval; --again never re-runs it`);
     if (row.state === "verified" && !opts.again) {
       log(`${slot.id}: verified -- no-op (receipt ${row.receipt})`);
       return EXIT.OK;
