@@ -1490,3 +1490,33 @@ arm() {
   arm wiring not-wiring
   [ "$(j 'o.code')" = "ARC_PROBE_REFUSED" ] || { echo "$DONE"; false; }
 }
+
+# REQ-03 / Phase 01 DoD: each Phase 01 adapter's real verify, recorded on arc-sandbox and redacted, replays through the
+# adapter's own code. A request the recording does not hold is answered 599 and named, so drift fails here.
+@test "launch-contract: every Phase 01 adapter's recorded real verify replays through its real code (REQ-03)" {
+  local s n=0
+  [ "$(ls "$ARC_ROOT"/tests/launch/replay/recorded/*.json | wc -l | tr -d ' ')" -eq 16 ] || { ls "$ARC_ROOT"/tests/launch/replay/recorded; false; }
+  for s in repo ci environments hosting dns tls secrets release frontend backend database orm email-transactional auth authz tenancy; do
+    run node "$ARC_ROOT/tests/launch/replay/replay.mjs" "$s"
+    [[ "$output" == "RAN $s"* ]] || { echo "$s never ran: $output"; false; }
+    DONE="$(printf '%s\n' "$output" | sed -n 's/^DONE //p')"
+    [ "$(j 'o.ok && o.recordedOk && o.used > 0 && o.unmatched.length === 0')" = "true" ] || { echo "$s: $DONE"; false; }
+    n=$((n + 1))
+  done
+  [ "$n" -eq 16 ]
+}
+
+# The redaction pass over the recordings, with its negative control: a planted live token, a real-shaped project ref and
+# an address must each FAIL the same scan that passes the committed files.
+@test "launch-contract: the replay recordings carry no token, project ref, session cookie or address, and a planted one fails the scan" {
+  run node "$ARC_ROOT/tests/launch/replay/scan.mjs"
+  [[ "$output" == "RAN scan"* ]] || { echo "the scan never ran: $output"; false; }
+  [ "$status" -eq 0 ] && [[ "$output" == *"scan: files=16 findings=0"* ]] || { echo "$output"; false; }
+  local d="$BATS_TEST_TMPDIR/planted"
+  mkdir -p "$d"
+  cp "$ARC_ROOT/tests/launch/replay/recorded/repo.json" "$d/"
+  node -e 'const fs=require("fs");const p=process.argv[1];const t=["sbp","_","Q8vLm2Rk7TzWc4Hn9JpYe3Ux"].join("");fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("arc-sandbox",t+" qwertyuiopasdfghjklz.supabase.co someone@example.org"))' "$d/repo.json"
+  run node "$ARC_ROOT/tests/launch/replay/scan.mjs" "$d"
+  [ "$status" -eq 1 ] || { echo "a planted leak passed: $output"; false; }
+  [[ "$output" == *"a sbp_ token that is not masked"* && "$output" == *"a Supabase project ref"* && "$output" == *"an e-mail address"* ]] || { echo "$output"; false; }
+}

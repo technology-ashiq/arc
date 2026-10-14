@@ -1,7 +1,8 @@
 // One attempt of one slot, run as a child of the runner so the slot timeout is a real kill (ADR-1718).
 // It persists every reported resource BEFORE the adapter continues, so whatever kills this process, the record of
 // what exists outlives it. Exit: 0 verified · 1 failed (reason in state) · 5 a sensitive action awaits the owner.
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
@@ -31,6 +32,10 @@ const fail = (reason, flags = {}) => {
 // swapped after the check is never the code that runs (attack 3b48ed1 B5).
 const source = normalizeAdapter(readFileSync(a.adapterPath, "utf8"));
 if (row.digest && digestOf(source) !== row.digest) fail("refused:DIGEST_DRIFT adapter changed between the check and the run");
+
+// Read before the scrub below removes it: a verify run may record every exchange its probe makes, raw, into a directory
+// the operator names (outside any repo). A redaction pass turns it into the replay fixture CI runs (REQ-03).
+const recordDir = a.mode === "verify" ? String(process.env.ARC_LAUNCH_RECORD || "") : "";
 
 // The adapter sees only the keys its row declares, never the rest of the environment (other providers' tokens),
 // even through module top-level code -- the scrub happens before the import (attack 3b48ed1 B2).
@@ -71,9 +76,27 @@ const ctx = makeCtx({
 // verify-only: ask the outside world again about a slot already applied; never scaffold, never change its state --
 // the answer is recorded beside it as last_verify, so drift is visible without un-doing the board (LAU-P).
 if (a.mode === "verify") {
+  // Every answer ctx.fetch receives, in order, with the inputs verify ran on: the probe is replayed from exactly these.
+  const exchanges = [];
+  if (recordDir) {
+    const real = globalThis.fetch;
+    globalThis.fetch = async (u, init = {}) => {
+      const res = await real(u, init);
+      let body = "";
+      try { body = await res.clone().text(); } catch { body = ""; }
+      const headers = {};
+      for (const [k, val] of res.headers) if (k !== "set-cookie") headers[k] = val;
+      exchanges.push({ method: String(init.method || "GET"), url: String(u), status: res.status, headers, setCookie: typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [], body });
+      return res;
+    };
+  }
   let v;
   try { v = await mod.verify(ctx); } catch (e) { v = { ok: false, reason: e.code ? `refused:${e.code}` : `error:${e.message}` }; }
   clearTimeout(timer);
+  if (recordDir) {
+    mkdirSync(recordDir, { recursive: true });
+    writeFileSync(join(recordDir, `${a.slot}.json`), JSON.stringify({ slot: a.slot, provider: row.id, recorded_at: new Date().toISOString(), profile, resources: prior.resources, upstream, env_keys: keys, exchanges, answer: v }, null, 1));
+  }
   const ok = !!(v && v.ok === true && typeof v.answerer === "string" && v.answerer);
   save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : (v && v.reason) || "verify:no answerer named" } });
   // No process.exit here: on Windows, exiting while a provider's keep-alive socket is closing aborts node in libuv
