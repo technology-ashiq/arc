@@ -189,7 +189,7 @@ diff: the list of exactly what changed between two versions of the files.
 
 None declared.
 
-## Scripts (49)
+## Scripts (53)
 
 - [`.claude/scripts/engine/adapters/claude-code.mjs`](../../../.claude/scripts/engine/adapters/claude-code.mjs)
 - [`.claude/scripts/engine/adapters/codex.mjs`](../../../.claude/scripts/engine/adapters/codex.mjs)
@@ -226,11 +226,14 @@ None declared.
 - [`.claude/scripts/engine/install-targets/claude-code.mjs`](../../../.claude/scripts/engine/install-targets/claude-code.mjs)
 - [`.claude/scripts/engine/install-targets/codex.mjs`](../../../.claude/scripts/engine/install-targets/codex.mjs)
 - [`.claude/scripts/engine/install-targets/common.mjs`](../../../.claude/scripts/engine/install-targets/common.mjs)
+- [`.claude/scripts/engine/install-targets/lifecycle.mjs`](../../../.claude/scripts/engine/install-targets/lifecycle.mjs)
 - [`.claude/scripts/engine/install-targets/opencode.mjs`](../../../.claude/scripts/engine/install-targets/opencode.mjs)
 - [`.claude/scripts/engine/install-targets/rendered.mjs`](../../../.claude/scripts/engine/install-targets/rendered.mjs)
+- [`.claude/scripts/engine/install-targets/self-render.mjs`](../../../.claude/scripts/engine/install-targets/self-render.mjs)
 - [`.claude/scripts/engine/install-targets/skills-only.mjs`](../../../.claude/scripts/engine/install-targets/skills-only.mjs)
 - [`.claude/scripts/engine/narrative-verify.mjs`](../../../.claude/scripts/engine/narrative-verify.mjs)
 - [`.claude/scripts/engine/opencode-session.mjs`](../../../.claude/scripts/engine/opencode-session.mjs)
+- [`.claude/scripts/engine/owner-apply-radar-policy.mjs`](../../../.claude/scripts/engine/owner-apply-radar-policy.mjs)
 - [`.claude/scripts/engine/process-lint.mjs`](../../../.claude/scripts/engine/process-lint.mjs)
 - [`.claude/scripts/engine/propose.mjs`](../../../.claude/scripts/engine/propose.mjs)
 - [`.claude/scripts/engine/role-seat.mjs`](../../../.claude/scripts/engine/role-seat.mjs)
@@ -240,6 +243,7 @@ None declared.
 - [`.claude/scripts/engine/spend-trace.mjs`](../../../.claude/scripts/engine/spend-trace.mjs)
 - [`.claude/scripts/engine/type-tagged-hash.mjs`](../../../.claude/scripts/engine/type-tagged-hash.mjs)
 - [`.claude/scripts/engine/yaml-subset.mjs`](../../../.claude/scripts/engine/yaml-subset.mjs)
+- [`.claude/scripts/hq/jobs/distribute-radar.mjs`](../../../.claude/scripts/hq/jobs/distribute-radar.mjs)
 
 ## Source
 

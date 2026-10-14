@@ -85,7 +85,9 @@ export function renderSourceFiles(unit) {
     front.push(`agent: ${fence}`);
     const agentFront = [
       `description: ${JSON.stringify(`The tool fence of /${unit.stem}; runs only through that command.`)}`,
-      "mode: subagent",
+      // `all`, not `subagent`: the wrapper launches the session AS this agent, so the top-level session is fenced
+      // too; a subagent-only fence left the parent its own tools (ADR-2027, debt row 22).
+      "mode: all",
       "hidden: true",
       ...permission(unit.fields["allowed-tools"], "deny"),
     ];

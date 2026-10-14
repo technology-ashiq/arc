@@ -1,0 +1,140 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:finalise (tree = treePids + seenPids; killTree per pid; survivors)",
+      "breaking_input": "A 20-minute Windows run whose tree spawns hundreds of short-lived git, node and bash children. record() adds each to `seen` every 3 s. Windows recycles pids quickly. At finalise, a recorded pid now belongs to an unrelated process, such as the owner's editor or shell.",
+      "why": "The pid-identity guard (cz) was added only to reapStale. finalise kills every pid in seenPids() with `taskkill /T /F` and never compares its command line to the recorded one. That kills an unrelated process and its whole tree. survivors() has the same flaw in reverse: a recycled pid reads as a survivor and produces a false exit 7 KILL-INCOMPLETE.",
+      "fix": "Store {pid, cmd} in `seen`. In finalise, kill and judge only pids whose current command line equals the recorded one, as reapStale does.",
+      "twin_of": "(cz) a pid trusted by number"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (wrapperCmd = commandLine(process.pid) ?? \"\") and reapStale live-wrapper skip",
+      "breaking_input": "winProcs() or posixProcs() fails or returns null for the wrapper itself (powershell is slow or blocked, or ps is missing), so wrapperCmd is recorded as \"\". A second wrapper then starts against the same ledger.",
+      "why": "The skip test is `commandLine(rec.wrapper) === rec.wrapperCmd`. A live wrapper yields a non-empty string or null, and neither equals \"\", so the live run is treated as dead. Its OpenCode tree is killed and its pidfile deleted. This reopens the parallel-wrapper hole from the earlier B1 finding.",
+      "fix": "If wrapperCmd cannot be read, record a start-time or lock token instead. In reapStale, treat an unconfirmable wrapper identity that is still alive as live, and skip the pidfile.",
+      "twin_of": "(cy) a reaper that cannot tell a dead run from a live one"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:finalise (left.length path) and record()",
+      "breaking_input": "A grandchild is spawned within the last 3 s before the wrapper exits, then survives the kill. The snapshot timers are stopped by stopSnap() and the run exits 7.",
+      "why": "The pidfile is kept for the next run's reap, but it holds only the last periodic snapshot. The survivors named in the `kill: survivor pid=` lines are not in it. The next run's reapStale cannot find them and clears nothing, so the orphan keeps spending.",
+      "fix": "Before returning 7, write the pidfile with the full finalise tree and the survivor list, with their command lines.",
+      "twin_of": "(cu) a kill that trusts its own caller to survive"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:commandFence",
+      "breaking_input": "(a) A committed `.opencode/agents/arc-ship-fence.md` containing `mode: all` and `\"*\": deny`, followed by a `bash` rule that allows `*`. (b) A stale fence from before the narrowing, still granting the whole vercel CLI.",
+      "why": "The check is two line regexes: `mode: all` and a `\"*\": deny` line. It never compares the fence with the command's current allowed-tools. A wider or older fence passes, and the session runs under it. Only CI's --self --check catches that, and the wrapper runs from clones that did not pass it.",
+      "fix": "Render the command's fence from the source in memory and require byte equality with the file on disk. Otherwise refuse NO-FENCE.",
+      "twin_of": "(db) a fence check that trusts the command file"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/lifecycle.mjs:archiveTree (spawnSync(\"tar\", [\"-xf\", tar, \"-C\", dest]))",
+      "breaking_input": "Windows with Git for Windows' usr/bin ahead of System32 on PATH, so GNU tar is used. The tar path is `C:\\Users\\...\\arc-upgrade-XXXX\\src.tar` and the destination is `C:\\...\\tree`.",
+      "why": "GNU tar reads `C:` as a remote host in `host:file`. The extract fails with a resolve error, `upgrade --to <tag>` exits 1 `archive`, and the fixture breaks on the Windows leg. Extraction with a drive-letter absolute path is not portable.",
+      "fix": "Run tar with cwd set to the temp dir and relative names. Or add `--force-local` when tar is GNU. Or skip tar and use `git archive --format=tar` piped to node. Or `git --work-tree=<dest> checkout <tag> -- .` against a throwaway index.",
+      "twin_of": "(aw) a POSIX path to native node from a shell script"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/common.mjs:normalize and lifecycle.mjs:outdated/upgrade git calls",
+      "breaking_input": "A consumer manifest with version 2 and `\"commit\": \"--stdin\"`, or a value shaped like another git option. A crafted tag containing newlines or an option is also stored from ARC_REGISTRY_TAG.",
+      "why": "`commit` and `tag` are accepted as any string and passed into git argv with no `--` separator and no hex check: `cat-file -e ${m.commit}^{commit}`, `merge-base --is-ancestor`, `rev-list --count ${m.commit}..`, `rev-parse ${at}^{commit}`. A hostile repo's manifest steers git options when the owner runs `outdated`.",
+      "fix": "In normalize, accept `commit` only as /^[0-9a-f]{40}$/ or the literal \"unknown\", and `tag` only as /^v\\d+\\.\\d+\\.\\d+$/. Pass the ref after `--end-of-options` or `--verify`.",
+      "twin_of": "(bj) a flag-shaped value handed on as a path"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/install-targets/lifecycle.mjs:upgrade (removes after apply())",
+      "breaking_input": "A path the new render drops is open or read-only on Windows (AV scan, editor lock). apply() has already committed the new manifest, then `rmSync(safePath(dir,p),{force:true})` throws EPERM.",
+      "why": "Removal runs outside the transaction, after the manifest is rewritten without the dropped paths. On failure the file stays on disk, no manifest names it, and uninstall or upgrade can never remove it. The exception escapes upgrade as an uncaught stack and the project is left in a half-upgraded state.",
+      "fix": "Keep the dropped paths in the new manifest until they are actually removed. Or do the removals inside apply(). Wrap rmSync, report `kept (locked)`, and keep the entry.",
+      "twin_of": "(ar) one failed restore ends the rollback"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/self-render.mjs:selfRender --check (existsSync/readFileSync on planned paths)",
+      "breaking_input": "`.opencode/commands/arc-resume.md` replaced by a symlink to a file with identical bytes. Alternatively a directory is created at a planned file path.",
+      "why": "The check reads through the link, finds no difference, and onDisk skips the path because it is in the plan. A committed symlink therefore passes `--self --check`. A directory at a planned path makes readFileSync throw EISDIR as an uncaught stack instead of a named finding. The writer's writable() lstat guard is not applied in check mode.",
+      "fix": "lstat every planned path in check mode. Report `[extra] (link)` or `[differs]` for a non-regular file, and catch fs errors into findings.",
+      "twin_of": "(ak) the walk base is followed"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".githooks/pre-commit:10 (node bin/arc.mjs compile --self --check)",
+      "breaking_input": "A partial commit: `git add .claude/commands/x.md` while the regenerated `.opencode/commands/x.md` is modified but unstaged.",
+      "why": "The hook renders and compares the working tree, not the index. It passes, and the commit carries a stale render with its source. The mismatch surfaces only in CI.",
+      "fix": "Check the staged blobs, or fail when a path under the three roots has unstaged changes (`git diff --quiet -- .codex .opencode .agents`).",
+      "twin_of": "(l) ignore-check by grep"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/lifecycle.mjs:upgrade (to === null: target = arcPosition(tree))",
+      "breaking_input": "`arc upgrade` run from an arc checkout with uncommitted edits to `.claude/commands/*.md`.",
+      "why": "The render comes from the working tree but the manifest records HEAD's commit. `outdated` then reports `up to date` for files that match no commit, and the CHANGELOG range is computed against the wrong baseline.",
+      "fix": "Refuse a dirty checkout without an explicit flag, or record `commit: unknown` and `dirty: true`.",
+      "twin_of": "(bl) one file checked, two used"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:writePidfile (renameSync over an existing file) with reapStale readFileSync",
+      "breaking_input": "Windows: a second wrapper's reapStale reads A's `.pid` at the instant A's record() renames the temp file over it.",
+      "why": "Rename over a file with an open handle fails with EPERM or EBUSY. record() catches it with `ioFailed ??= e`, which can abort the live run, though the two wrappers are in different processes.",
+      "fix": "Retry the rename a few times on EPERM or EBUSY. Or make reapStale read without holding the handle open, and do not treat a pidfile write failure as an I/O failure of the run.",
+      "twin_of": "(as) a predictable temp name is written through"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/lifecycle.mjs:changelogRange and upgrade --to",
+      "breaking_input": "`arc upgrade --to v0.1.0` on a project installed at v0.3.0 whose range contains a BREAKING entry.",
+      "why": "changelogRange selects sections strictly newer than `from` and up to `to`. For a downgrade `from > to`, so the selected set is empty and no BREAKING check runs. The downgrade proceeds without `--confirm` while writing older files over newer ones.",
+      "fix": "When cmp(to, from) < 0, treat the move as a downgrade. Require `--confirm` and print the BREAKING lines of the reverse range.",
+      "twin_of": "(ad) a range where a ref belongs"
+    },
+    {
+      "id": "B13",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-install.mjs:sourceTag (ARC_REGISTRY_TAG)",
+      "breaking_input": "`ARC_REGISTRY_COMMIT=<sha>` is left in the environment, together with an arbitrary ARC_REGISTRY_TAG value.",
+      "why": "A new test door is honoured in production, with no semver check. The record then holds a tag and commit that name a release the files never came from, and `outdated` and `upgrade` trust them.",
+      "fix": "Validate the tag as ^v\\d+\\.\\d+\\.\\d+$. Honour the override only under a named test flag, and list it in the script header.",
+      "twin_of": "(ce) a test door honoured in production"
+    },
+    {
+      "id": "B14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/self-render.mjs:selfPlanFrom (duplicate detection by exact string)",
+      "breaking_input": "Two skills named `Review` and `review` under .claude/skills, rendering `.agents/skills/Review/SKILL.md` and `.agents/skills/review/SKILL.md`.",
+      "why": "Duplicates are keyed on the exact spelling. On Windows and macOS (case-insensitive) the writer overwrites one with the other and --check flaps forever. A fresh clone loses one skill.",
+      "fix": "Key the owner rule and duplicate detection on fold(path). Refuse two paths that fold equal with different spelling.",
+      "twin_of": "(am) case-folded on one side only"
+    },
+    {
+      "id": "B15",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/lifecycle.mjs:upgrade (removal loop, rmdirSync up to \".\")",
+      "breaking_input": "A project that has an empty `.github/` or `.agents/` directory of its own, where the last managed file under it is removed.",
+      "why": "The loop rmdirs every empty ancestor of a removed path, not only directories the install created. It deletes the owner's pre-existing empty directories, which the manifest never named.",
+      "fix": "Record created directories in the manifest, as the mkdir ops do, and remove only those.",
+      "twin_of": "(ax) --force destroys the project's file"
+    }
+  ]
+}

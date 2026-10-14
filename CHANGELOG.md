@@ -27,7 +27,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   gitignored); agent-browser marked SHIPPED; Playwright MCP note resolved to
   keep-as-fallback.
 
-## [0.2.0] — unreleased
+## [0.2.0] - 2026-10-14
+
+### Added
+- **Zero-step access (distribute Cycle 3, ADR-2023).** `arc compile --self` renders `.codex/`, `.opencode/` and
+  `.agents/skills/` into arc itself as committed outputs; a fresh clone opened in OpenCode lists and runs the arc
+  commands with no install step. CI fails on a stale render (`distribute-self-render.bats`).
+- **The lifecycle (ADR-2024, ADR-2025).** `arc outdated` (tag@commit both sides, commits behind, the CHANGELOG range)
+  and `arc upgrade [--to vX.Y.Z] [--confirm] [--force]` (re-render, back up local edits, refuse a BREAKING range).
+  Install records are version 2 (`targets`, `tag`, `commit`, per-file target); version 1 records are still read.
+- `version-lint.mjs`, called by the existing version gate.
+
+### Changed
+- An OpenCode session runs as its command's fence (`mode: all`), so the top-level session is fenced too; a missing
+  or stale fence refuses the run `NO-FENCE` (ADR-2027).
+- `arc-ship` deploys only to a target git tracks, and its fence grants `vercel --prod` alone.
+- The wrapper records each run's process tree and reaps an orphaned one before the next run spends; a survivor ends
+  the run `KILL-INCOMPLETE`.
+
+### Fixed
+- The spine redactor quarantined any `ship.done` whose URL was a bare host (`https://x.vercel.app`): the URL ran into
+  the next JSON field and read as a password.
+
 
 Baseline for the arc v2 "world-best" upgrade. See `PLAN.md` for the initiative and
 `phases/` for per-phase specs. 0.1.x = the pre-initiative arc template.

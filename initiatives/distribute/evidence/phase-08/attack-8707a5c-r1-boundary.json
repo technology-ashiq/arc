@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/opencode-session.mjs:run (reapStale call) and reapStale",
+      "breaking_input": "Two wrappers run in parallel against the same ledger dir (two sessions, or a parallel attacker). Run A is mid-flight, so A.jsonl.pid exists with a live leader whose command line names opencode. Run B starts and calls reapStale(ledger).",
+      "why": "reapStale treats every *.jsonl.pid under the ledger as an orphan. It never checks whether the wrapper that wrote the file is still alive (no wrapper pid or lock is recorded). B kills A's live OpenCode tree and unlinks A's pidfile. A then exits with a child failure or a bogus verdict, and its spend accounting is lost.",
+      "fix": "Record the wrapper's own pid and start time in the pidfile and reap only when that wrapper is dead. Alternatively hold an exclusive lock for the run's lifetime and skip any pidfile whose lock is held.",
+      "twin_of": "(bq) a child that outlives its verdict"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:reapStale POSIX branch",
+      "breaking_input": "A stale or committed X.jsonl.pid contains {\"pid\":<N>}. N is now the group leader of the user's own interactive `opencode` TUI, through pid reuse or a pid chosen by a hostile PR that commits the file under a ledger directory.",
+      "why": "The only guard is alive(-N) plus /opencode/i on the leader's args. The record's `started` field is never compared with the process start time, and nothing ties the file to this checkout. killTree then kills an unrelated process group. On Windows the cmd-equality check is stronger. POSIX has no equivalent.",
+      "fix": "Record and verify the leader's start time (e.g. ps -o lstart= or /proc starttime) plus the wrapper pid. Refuse to kill when they do not match, and clear the file only.",
+      "twin_of": "(cu) a kill that trusts its own caller to survive"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": ".claude/commands/arc-ship.md:3 (allowed-tools) and step 4",
+      "breaking_input": "An untracked worktree has no .vercel/project.json. The model ignores the prose in step 4 and runs `vercel --prod --yes`, which is exactly the P07 run 5c behaviour.",
+      "why": "The fence allows `vercel --prod --yes` unconditionally. The tracked-target rule is an instruction to the model and is not enforced by the fence. A non-interactive vercel run with --yes in an unlinked directory creates and links a new project and deploys it to production. That is the hole debt row 23 claimed to close.",
+      "fix": "Do not grant `--yes` at all. Grant only `vercel --prod` and have a hook or script refuse it unless `git ls-files --error-unmatch` passes. The bats test should assert that `--yes` is absent from the fence.",
+      "twin_of": "(ch) a wildcard fence on a publishing command"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:commandFence",
+      "breaking_input": "(a) A rendered .opencode/commands/arc-ship.md whose `agent:` line was removed, or whose front matter is malformed. (b) An existing fence file left from the old render with `mode: subagent`.",
+      "why": "(a) `!m` returns null, so the run proceeds unfenced and the header only says fence=none. The ADR promises NO-FENCE when the command has allowed-tools, but the wrapper cannot see that and fails open. (b) Only the fence file's existence is checked. `--agent x-fence` on a subagent-mode agent makes OpenCode fall back to its default agent, which has the parent's own tools. That is the row-22 hole again, from a stale install.",
+      "fix": "Parse the fence file and require `mode: all` and a deny-all permission block. Refuse NO-FENCE when a sibling .opencode/agents/<command>-fence.md exists but the command names none.",
+      "twin_of": "(ct) a fence that binds a subagent while the parent keeps its tools"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/redact.mjs:88 (connection-string-password)",
+      "breaking_input": "A payload holding a DSN whose password contains a double quote, e.g. user `arc` and password `ab\"cdef12` (canonical JSON writes it as ab\\\"cdef12) at host db.internal.",
+      "why": "The claim that a credential inside a JSON string never holds a raw quote is false. An escaped quote is `\\\"`, which still contains the `\"` character. The password class now excludes `\"`, so the match breaks at the escaped quote and the secret passes the scan. The rule also scans non-JSON text such as diffs and shell, where a raw quote in a password is normal.",
+      "fix": "Allow `\\\\\"` as a unit inside the classes (e.g. `(?:\\\\\"|[^\\s:/@\"]){6,64}`) and keep excluding a bare unescaped quote. Add a fixture with an escaped quote in the password.",
+      "twin_of": "(cv) a secret pattern whose character class crosses JSON structure"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/opencode-session.mjs:survivors/finalise",
+      "breaking_input": "On POSIX, finalise runs while the leader is still alive (interrupted path, or SIGTERM to the wrapper). killTree signals the group, then survivors() polls with spawnSync sleeps.",
+      "why": "The spawnSync loop blocks the event loop, so Node never reaps the killed leader. A zombie leader still answers kill(-pgid,0), so survivors reports it for the full 5 s and the run exits 7 KILL-INCOMPLETE with a false survivor pid. The real verdict (6, or 3/5) is masked.",
+      "fix": "Treat a zombie as gone. Poll asynchronously so the loop can reap, or check `ps -o stat=` for Z. Alternatively wait on the child's exit event before judging survivors.",
+      "twin_of": "(bw) \"the leader exited\" read as \"the tree is gone\""
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/install-targets/self-render.mjs:selfRender (writer)",
+      "breaking_input": "`.agents` (or `.codex`) is a symlink or junction to a directory outside the checkout, or a planned output path already exists as a directory.",
+      "why": "existsSync, mkdirSync and writeFileSync all follow the link. `compile --self` writes rendered files outside the tree, while --check's lstat walk only flags the link as [extra]. A directory sitting at a planned file path makes readFileSync throw EISDIR as an uncaught stack and not as a Refused.",
+      "fix": "lstat every root and every parent before writing and refuse any link by name. Catch fs errors and convert them to Refused.",
+      "twin_of": "(ak) the walk base is followed"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:winProcs",
+      "breaking_input": "A process in the tree has a CommandLine containing a newline followed by `4242 <pid-in-tree> x`.",
+      "why": "Output is split by line and matched with ^(\\d+) (\\d+). A command-line continuation line parses as a forged process entry with an attacker-chosen pid, ppid and cmd. It is added to the recorded tree, can make survivors() report a bogus survivor (exit 7), and can overwrite a real entry's cmd for the reap's command-line check.",
+      "fix": "Emit one record per process in an unambiguous encoding (JSON via ConvertTo-Json, or base64 of the command line) and parse that.",
+      "twin_of": "(p) escapes in data"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/opencode-session.mjs:record and reapStale",
+      "breaking_input": "The wrapper is SIGKILLed between creating the pidfile and finishing the write, or the disk fills. The file is empty or truncated.",
+      "why": "The file is written in place with writeFileSync, which is not atomic. reapStale reads the damaged file as rec=null, treats it as 'no live process of that run', reports `cleared` and unlinks it. A live orphan is silently left running and spending.",
+      "fix": "Write to a temp name and rename. Treat an unparseable pidfile as STALE-RUN refusal, not as cleared.",
+      "twin_of": "(bp) a ledger read as zero"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".githooks/pre-commit:10",
+      "breaking_input": "A consumer repo that adopted arc's .githooks (core.hooksPath=.githooks) and has no bin/arc.mjs.",
+      "why": "The hook now runs `node bin/arc.mjs compile --self --check` unconditionally. Where bin/arc.mjs does not exist it fails with MODULE_NOT_FOUND, blocking every commit. Where it exists but the cwd is not arc's tree, the check runs against the wrong source.",
+      "fix": "Guard the line with `[ -f bin/arc.mjs ] &&` and an arc-checkout marker, or resolve the script from the hooks directory.",
+      "twin_of": "(bg) a hooks path set for someone else's repo"
+    }
+  ]
+}

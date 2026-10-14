@@ -28,7 +28,7 @@ setup() {
     export ARC_OPENCODE_BIN="$T/opencode"
   fi
   export FAKE_OC_MARKER="$(native "$T/invoked")" FAKE_OC_ARGV="$(native "$T/argv.json")" FAKE_OC_ENV="$(native "$T/env.json")"
-  unset FAKE_OC_MODE FAKE_OC_COST FAKE_OC_GRANDCHILD FAKE_OC_GRANDCHILD_MS FAKE_OC_CHILD_COST FAKE_OC_EXPORT
+  unset FAKE_OC_MODE FAKE_OC_COST FAKE_OC_GRANDCHILD FAKE_OC_GRANDCHILD_DETACH FAKE_OC_GRANDCHILD_MS FAKE_OC_CHILD_COST FAKE_OC_EXPORT
 }
 
 # wrap CAP TIMEOUT TRANSCRIPT-NAME [extra flags...] -- runs the wrapper with the owner model and the ledger in $T.
@@ -42,7 +42,7 @@ wrap() {
 @test "distribute-opencode-session: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "distribute-opencode-session: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 15 ] || { echo "declared $declared, expected 15"; false; }
+  [ "$declared" -eq 18 ] || { echo "declared $declared, expected 18"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -249,4 +249,88 @@ wrap() {
   wrap 0.30 30 emptytask.jsonl
   [ -s "$T/invoked" ] || { echo "the fake never ran: $output $stderr"; false; }
   [ "$status" -eq 4 ] && grep -q '^subagent: ses_fakeEmpty COST-UNREADABLE .*holds no step-finish$' "$T/repo/ev/transcripts/emptytask.jsonl" || { echo "status $status"; cat "$T/repo/ev/transcripts/emptytask.jsonl"; false; }
+}
+
+# A rendered command and, unless told otherwise, its fence agent, in the session repo (ADR-2027, debt row 22).
+fence_files() {
+  mkdir -p "$T/repo/.opencode/commands" "$T/repo/.opencode/agents"
+  printf -- '---\ndescription: "c"\nagent: arc-commit-fence\n---\n\nbody\n' > "$T/repo/.opencode/commands/arc-commit.md"
+  [ "${1:-}" = "no-agent" ] || printf -- '---\ndescription: "f"\nmode: %s\nhidden: true\npermission:\n  "*": deny\n---\n\nfence\n' "${2:-all}" > "$T/repo/.opencode/agents/arc-commit-fence.md"
+  [ -s "$T/repo/.opencode/commands/arc-commit.md" ] || { echo "fence fixture empty"; return 1; }
+}
+
+@test "distribute-opencode-session: a command with a rendered fence runs the whole session as that fence" {
+  fence_files || false
+  wrap 0.10 30 fenced.jsonl
+  [ -s "$T/invoked" ] && [ -s "$T/argv.json" ] || { echo "the fake never ran: $output $stderr"; false; }
+  [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
+  run node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).join(" "))' "$(native "$T/argv.json")"
+  printf '%s' "$output" | grep -qE -- '--command arc-commit --agent arc-commit-fence -m ' || { echo "argv: $output"; false; }
+  head -1 "$T/repo/ev/transcripts/fenced.jsonl" | tr -d '\r' | grep -qE ' fence=arc-commit-fence$' || { head -1 "$T/repo/ev/transcripts/fenced.jsonl"; false; }
+  [ ! -e "$T/repo/ev/transcripts/fenced.jsonl.pid" ] || { echo "a clean run left its pidfile"; false; }
+}
+
+@test "distribute-opencode-session: a command naming a missing fence is refused NO-FENCE before spend" {
+  fence_files no-agent || false
+  wrap 0.10 30 nofence.jsonl
+  [ "$status" -eq 2 ] || { echo "status $status: $output $stderr"; false; }
+  printf '%s\n' "$stderr" | tr -d '\r' | grep -qE '^opencode-session: REFUSED NO-FENCE: .*arc-commit-fence.*missing' || { echo "$stderr"; false; }
+  [ ! -e "$T/invoked" ] || { echo "the fake ran although the fence was missing"; false; }
+  # A stale render (a subagent-only fence) is refused too: it would bind a task, never the session (attack 8707a5c B4).
+  fence_files agent subagent || false
+  wrap 0.10 30 stale.jsonl
+  [ "$status" -eq 2 ] && printf '%s
+' "$stderr" | tr -d '
+' | grep -qE '^opencode-session: REFUSED NO-FENCE: .*not a session fence' || { echo "stale: status $status: $stderr"; false; }
+  [ ! -e "$T/invoked" ] || { echo "the fake ran under a stale fence"; false; }
+  # A command whose source has allowed-tools and whose render is gone is refused, never run unfenced (L1).
+  mkdir -p "$T/repo/.claude/commands" && printf -- '---
+description: c
+allowed-tools: Bash(git status)
+---
+body
+' > "$T/repo/.claude/commands/arc-commit.md"
+  rm -f "$T/repo/.opencode/commands/arc-commit.md" "$T/repo/.opencode/agents/arc-commit-fence.md"
+  wrap 0.10 30 norender.jsonl
+  [ "$status" -eq 2 ] && printf '%s
+' "$stderr" | tr -d '
+' | grep -qE '^opencode-session: REFUSED NO-FENCE: .*missing while the command has a fence' || { echo "no render: status $status: $stderr"; false; }
+  [ ! -e "$T/invoked" ] || { echo "the fake ran with no render"; false; }
+  rm -rf "$T/repo/.claude"
+  # Positive control in the same repo: with the fence in place the same command runs.
+  fence_files || false
+  wrap 0.10 30 nofence-control.jsonl
+  [ "$status" -eq 0 ] && [ -s "$T/invoked" ] || { echo "control: status $status: $stderr"; false; }
+}
+
+@test "distribute-opencode-session: a wrapper killed mid-run leaves its pidfile, and the next run reaps the orphan before spending" {
+  # Detached on every OS (its own session on POSIX), so neither the job nor a group kill can reach it: only the
+  # recorded tree can (attack 8707a5c L5, L12).
+  export FAKE_OC_MODE=stall FAKE_OC_GRANDCHILD="$(native "$T/grandchild")" FAKE_OC_GRANDCHILD_MS=60000 FAKE_OC_GRANDCHILD_DETACH=1
+  node "$WRAP" --cap-usd 0.10 --timeout-s 120 --model openrouter/deepseek/deepseek-v4-flash-0731 --command arc-commit \
+    --cwd "$(native "$T/repo")" --transcript "$(native "$T/repo/ev/transcripts/orphan.jsonl")" --ledger-dir "$(native "$T/repo/ev")" \
+    -- "commit it" > "$T/w1.out" 2>&1 &
+  local wpid=$! i
+  # Windows records the tree as it grows (the wrapper's death takes only its direct children); wait for all three.
+  local want='writeFileSync'
+  for i in $(seq 1 100); do [ -s "$T/invoked" ] && grep -qE "$want" "$T/repo/ev/transcripts/orphan.jsonl.pid" 2>/dev/null && break; sleep 0.2; done
+  [ -s "$T/invoked" ] && [ -s "$T/repo/ev/transcripts/orphan.jsonl.pid" ] || { kill -9 "$wpid" 2>/dev/null; echo "the first run never spawned: $(cat "$T/w1.out")"; false; }
+  # The wrapper dies the way P07 run 5b's did: no signal handler runs, so killTree never runs.
+  kill -9 "$wpid"; wait "$wpid" 2>/dev/null || true
+  [ -s "$T/repo/ev/transcripts/orphan.jsonl.pid" ] || { echo "the pidfile went with the wrapper"; false; }
+  local gpid
+  gpid=$(node -e 'const t=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).tree.find((x)=>x.cmd.includes("writeFileSync"));process.stdout.write(t?String(t.pid):"")' "$(native "$T/repo/ev/transcripts/orphan.jsonl.pid")")
+  [ -n "$gpid" ] || { echo "the record never named the grandchild"; false; }
+  node -e 'process.kill(Number(process.argv[1]),0)' "$gpid" || { echo "the grandchild was already gone before the reap: the control proves nothing"; false; }
+  rm -f "$T/invoked"
+  unset FAKE_OC_GRANDCHILD FAKE_OC_GRANDCHILD_DETACH
+  export FAKE_OC_MODE=ok
+  wrap 0.10 30 after.jsonl
+  [ -s "$T/invoked" ] || { echo "the second run never spawned: $output $stderr"; false; }
+  [ "$status" -eq 0 ] || { echo "status $status: $output $stderr"; false; }
+  printf '%s\n' "$stderr" | tr -d '\r' | grep -qE '^opencode-session: reaped: pid=[0-9]+ tree=[0-9]+ from .*orphan\.jsonl\.pid$' || { echo "no reap line: $stderr"; false; }
+  [ ! -e "$T/repo/ev/transcripts/orphan.jsonl.pid" ] || { echo "the stale pidfile was not cleared"; false; }
+  run node -e 'try{process.kill(Number(process.argv[1]),0);process.stdout.write("alive")}catch(e){process.stdout.write(e.code)}' "$gpid"
+  [ "$output" = "ESRCH" ] || { echo "the orphaned grandchild $gpid outlived the reap ($output) and could keep spending"; node -e 'try{process.kill(Number(process.argv[1]),9)}catch{}' "$gpid"; false; }
+  [ ! -e "$T/grandchild" ] || { echo "the grandchild wrote its marker"; false; }
 }
