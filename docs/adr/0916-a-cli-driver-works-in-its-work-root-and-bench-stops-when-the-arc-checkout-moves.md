@@ -37,13 +37,19 @@ directory. ADR-0915's isolation note ("for bench that is the materialized fixtur
   machinery root, as ADR-0220 intended. `mock` keeps reading `ARC_ROOT`, correctly: its recordings
   live in arc. `hermes` runs in a container and `generic-api` has no tools, so neither has a cwd
   that matters.
-- **Bench fingerprints the arc checkout and checks it after every attempt.** The fingerprint is
-  HEAD, the branch HEAD names, and every local branch and tag. Remote-tracking refs are left out,
-  so another session's fetch is not a violation, and untracked files are left out, because bench
-  writes its captures into the tree. The first attempt that moves it stops the run: no further
-  attempt is admitted, the remaining fixtures are recorded as unselected with the reason, and the
-  run exits partial, saying the run is not evidence. It is checked per attempt, not once at the
-  end, because each attempt that writes into arc is paid for and will do it again.
+- **Bench fingerprints the arc checkout and checks it after every attempt, and once more at the
+  end.** The fingerprint is HEAD, the branch HEAD names, every ref except remote-tracking ones
+  (local branches, tags, the stash, notes), the HEAD reflog, the worktree list, and the tracked
+  files’ status. The reflog is there so a model that commits and resets back is still caught.
+  Remote-tracking refs are left out, so another session’s fetch is not a violation, and untracked
+  files are left out, because bench writes its captures into the tree. The first attempt that moves
+  it stops the run: no further attempt is admitted, the remaining fixtures are recorded as
+  unselected with the reason, and the run exits partial, saying the run is not evidence. A read
+  that fails twice stops the run the same way, as “could not be checked”, rather than comparing a
+  sentinel string as if it were state. Not covered: a branch made and deleted without HEAD ever
+  moving, and `git config` writes.
+- **The work root is resolved to an absolute path** in both drivers, so a relative value cannot
+  mean one directory to the spawn and another to a later read.
 - **Two tests pin it.** `engine-driver-contract.bats` runs both drivers through arc-run with
   `--work-root` and checks that the CLI ran there and not in arc, with a control run where it does
   land in arc. `bench-seal-probe.mjs` adds MUTANT C, a mock driver that makes a branch in

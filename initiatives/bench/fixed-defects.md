@@ -21,3 +21,8 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   read `ARC_ROOT`, so the benched model committed into arc. Any reader of `ARC_ROOT` that means
   "where the work happens" has this twin. Fix: read `ARC_WORK_ROOT`, and bench checks the arc
   checkout after every attempt.
+- **A failed read folded into a comparison as a constant** (2026-10-14, a522a4e L1/B3). A git read
+  that threw became the string `(unreadable)` inside a digest, so a transient lock voided a clean
+  run and a broken baseline matched a broken later read. Any "compare before and after" check with
+  a catch-all fallback has this twin. Fix: retry once, then report "could not be checked" as its own
+  outcome.

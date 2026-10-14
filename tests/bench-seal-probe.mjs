@@ -23,7 +23,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { EXIT, admitGroup, canonicalJson, checkoutFingerprint, newBudgetState } from "../.claude/scripts/engine/arc-bench.mjs";
+import { EXIT, admitGroup, canonicalJson, checkoutFingerprint, checkoutMovedSince, newBudgetState } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -372,6 +372,22 @@ function eventsOn(spine) {
   check("a remote-tracking ref, which another session's fetch writes, does not move it", checkoutFingerprint(f).digest === fp0.digest);
   gitIn(f, "tag", "t1");
   check("a new tag moves it", checkoutFingerprint(f).digest !== fp0.digest);
+  // attack a522a4e: each of these left HEAD, the branch and refs/heads looking untouched before.
+  const fp1 = checkoutFingerprint(f);
+  writeFileSync(join(f, "a.txt"), "changed", "utf8");
+  check("an edit to a tracked file moves it", checkoutFingerprint(f).digest !== fp1.digest);
+  gitIn(f, "stash", "push", "-q");
+  const fp2 = checkoutFingerprint(f);
+  check("a stash moves it, though refs/stash is not a branch or a tag", fp2.digest !== fp1.digest && !fp2.unreadable, JSON.stringify(fp2));
+  gitIn(f, "stash", "drop", "-q");
+  const fp3 = checkoutFingerprint(f);
+  gitIn(f, "commit", "-q", "--allow-empty", "-m", "on the current branch");
+  check("a commit on the current branch moves it", checkoutFingerprint(f).digest !== fp3.digest);
+  gitIn(f, "reset", "-q", "--hard", "HEAD~1");
+  const fp4 = checkoutFingerprint(f);
+  check("a commit reset back to where it was still moves it, through the reflog", fp4.head === fp3.head && fp4.digest !== fp3.digest,
+    `head ${fp4.head === fp3.head ? "restored" : "differs"}`);
+  check("checkoutMovedSince agrees, and names the move", checkoutMovedSince(f, fp3).moved === true && checkoutMovedSince(f, fp4).moved === false);
   check("a directory with no git has no fingerprint", checkoutFingerprint(dir("no-git")) === null);
 }
 
