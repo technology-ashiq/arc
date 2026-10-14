@@ -171,7 +171,8 @@ function archiveTree(tree, tag) {
   mkdirSync(dest);
   const env = cleanEnv({ GIT_INDEX_FILE: join(out, "index") });
   const gitDir = git(tree, ["rev-parse", "--absolute-git-dir"]).out;
-  const step = (args) => spawnSync("git", ["--git-dir", gitDir, ...args], { cwd: out, env, stdio: "ignore" }).status === 0;
+  // LF on every OS: a runner's core.autocrlf would write CRLF, which the YAML reader refuses (CI, windows leg).
+  const step = (args) => spawnSync("git", ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "--git-dir", gitDir, ...args], { cwd: out, env, stdio: "ignore" }).status === 0;
   // The extract is a render source: a tag whose tree makes `engine` a link would render from outside it (cc5f385 L6).
   const realDir = (p) => { try { const st = lstatSync(p); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; } };
   if (!gitDir || !step(["read-tree", `${tag}^{tree}`]) || !step(["--work-tree", dest, "checkout-index", "-a", "-f"]) || !realDir(join(dest, "engine")) || !realDir(join(dest, ".claude"))) {

@@ -133,7 +133,7 @@ probe() { run --separate-stderr node "$(P)" "$1" "$(native "$D")" "$(native "$S"
   [ "$(sha_of "$D/.arc-install.json")" = "$m0" ] || { echo "the refused upgrade wrote the manifest"; false; }
   probe upgrade --confirm
   ran 0 || false
-  [ "$status" -eq 0 ] && [ "$(count '(confirmed)$')" -eq 1 ] || { echo "confirm: status $status: $output"; false; }
+  [ "$status" -eq 0 ] && [ "$(count '\(confirmed\)$')" -eq 1 ] || { echo "confirm: status $status: $output"; false; }
 }
 
 @test "distribute-lifecycle: --to a tag renders that tag and records it; a tag not fetched is exit 6" {

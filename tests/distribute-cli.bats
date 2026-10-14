@@ -81,10 +81,11 @@ gitrepo() {
   [ "$(count '^hooks: left as core\.hooksPath=\.husky; the project chose its own')" -eq 1 ] || { echo "$output"; false; }
 }
 
-@test "distribute-cli: a bad verb or a missing target is a usage error, exit 2" {
+@test "distribute-cli: a bad verb or an unknown target is a usage error, exit 2" {
   run --separate-stderr node "$(ARC)" frobnicate
   [ "$status" -eq 2 ] && [[ "$stderr" == *"unknown command frobnicate"* ]] || { echo "verb: $status $stderr"; false; }
-  run --separate-stderr node "$(ARC)" init --dir "$BATS_TEST_TMPDIR"
+  # No --target means every harness since Cycle 3 (ADR-2024); an unknown one is still a usage error.
+  run --separate-stderr node "$(ARC)" init --target gemini --dir "$BATS_TEST_TMPDIR"
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--target must be one of claude-code, codex, opencode, skills-only"* ]] || { echo "target: $status $stderr"; false; }
   run --separate-stderr node "$(ARC)" init --target --dir x
   [ "$status" -eq 2 ] && [[ "$stderr" == *"--target needs a value"* ]] || { echo "value: $status $stderr"; false; }
