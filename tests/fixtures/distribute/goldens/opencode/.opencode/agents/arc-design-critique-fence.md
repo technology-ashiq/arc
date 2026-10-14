@@ -3,13 +3,13 @@ description: "The tool fence of /arc-design-critique; runs only through that com
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   "glob": allow
   "grep": allow
   "read": allow
   "task": allow
   bash:
-    "*": ask
+    "*": deny
     "bash .claude/scripts/core/review-ledger.sh": allow
     "bash .claude/scripts/core/review-ledger.sh *": allow
     "bash .claude/scripts/design/design-critique.sh": allow

@@ -1,0 +1,100 @@
+{
+  "phase": "07",
+  "commit": "7598708a275937fb5833cca301bea1cffe094f33",
+  "short": "7598708a",
+  "generated": "2026-10-13T16:36:05Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "02916ef37aa5930fb7357c7ea643e4efffb3ceefd43e216d659762a800cc4ccc"
+    },
+    {
+      "name": "run.md",
+      "sha256": "b67bfbfaf9ad65fc8071dd4f0350d800a173c3787f144d02f29ec68a1cb32894"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "b67bfbfaf9ad65fc8071dd4f0350d800a173c3787f144d02f29ec68a1cb32894"
+    },
+    {
+      "name": "transcripts/1-arc-commit.jsonl",
+      "sha256": "9f025b9f1cc0e3265b2d50eee2e539016ff0004066d079599e863952a5619092"
+    },
+    {
+      "name": "transcripts/1-arc-commit.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/2-arc-review.jsonl",
+      "sha256": "e9f7b3399017b55e3bf0d05f400ad2ce359895d4dc72c38fd05096ed5e06c6ab"
+    },
+    {
+      "name": "transcripts/2-arc-review.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/2b-arc-review.jsonl",
+      "sha256": "cb8d640a15368a732fcf257033ecdcb56d010c19b00cc3ecaf9aaf18ddeb9fdd"
+    },
+    {
+      "name": "transcripts/2b-arc-review.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/2c-arc-review.jsonl",
+      "sha256": "8d5a7444f2dea6287c6200620c5d8df9a04f24525194a685c03f69ae80af9318"
+    },
+    {
+      "name": "transcripts/2c-arc-review.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/3-arc-commit.jsonl",
+      "sha256": "f6f2f173233206b6b70d495d74a75a8c6f5987dcf0f7ea464db1ec06ba115064"
+    },
+    {
+      "name": "transcripts/3-arc-commit.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/4-negatives.jsonl",
+      "sha256": "4c85482b06508ae464dde487d32c9d28d819518d98b43071490f2ef51b25207a"
+    },
+    {
+      "name": "transcripts/4-negatives.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/4b-negatives.jsonl",
+      "sha256": "f3996d311da1791d6ea25632329f70c97f60308a720171e2f68135f7968d0def"
+    },
+    {
+      "name": "transcripts/4b-negatives.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/5-arc-ship.jsonl",
+      "sha256": "c717d25de936610c4ed4d71955f8d63be71d56ae69042aba08ac410a9ddf9e61"
+    },
+    {
+      "name": "transcripts/5-arc-ship.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/5b-arc-ship.jsonl",
+      "sha256": "c65fc935329c2a6dfcc954986477903bab1a53229dcbd0bfd870067934fc2b84"
+    },
+    {
+      "name": "transcripts/5b-arc-ship.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "transcripts/5c-arc-ship.jsonl",
+      "sha256": "55734a7e7a2b7518fa67e68b81e41597d2c8d8b2ea9c684379bea686663c5f1f"
+    },
+    {
+      "name": "transcripts/5c-arc-ship.jsonl.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

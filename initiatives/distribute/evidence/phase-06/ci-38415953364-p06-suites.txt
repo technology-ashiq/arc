@@ -1,0 +1,11 @@
+CI run 38415953364 @ e5fd6f32 (PR #412 head, merged as eb8065ec): 19/19 jobs green
+P06 suite: distribute-ship-nodeploy (8 tests), x5 legs
+count = legs on which the test printed this line (5 legs: ubuntu 18/20/22, one windows shard, one macos shard)
+      5 ok distribute-ship-nodeploy: a gh failure mid-wait is retried, and three in a row end the wait
+      5 ok distribute-ship-nodeploy: a SHA mismatch returns at once, never retried
+      5 ok distribute-ship-nodeploy: arc-ship deploys only to a declared target, ships to a PR otherwise, and nothing else calls npm test
+      5 ok distribute-ship-nodeploy: every test in the file is registered
+      5 ok distribute-ship-nodeploy: no run for the head is NO-RUN (exit 6) with the PR state, and a run that never settles is TIMEOUT (exit 3)
+      5 ok distribute-ship-nodeploy: package.json carries lint and test, and no script that makes npm prepare a git install
+      5 ok distribute-ship-nodeploy: the CLI refuses --timeout-min without --wait, out of range, and a repeated flag
+      5 ok distribute-ship-nodeploy: --wait returns the first settled verdict after re-reading a pending one

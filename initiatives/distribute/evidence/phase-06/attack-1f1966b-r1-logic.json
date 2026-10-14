@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/review/ci-digest.mjs:229",
+      "breaking_input": "Run `npm test` in a repo where the branch has no CI run and no PR, and the GitHub API is slow or a pr view call takes >5 minutes due to network latency.",
+      "why": "In waitFor, the PR check (`gh pr view`) is invoked inside the loop only when `out.noRun && elapsed >= noRunMs`. Between the NO_RUN read and the actual elapsed check (which happens after the read), the elapsed time is recomputed, but the PR lookup could itself take longer than the remaining timeout. More critically, if `ARC_CI_WAIT_NORUN_MS` is set to a value smaller than the poll time (e.g., 1ms via env), the loop will call `gh pr view` immediately, and if that call hangs it blocks forever, never returning TIMEOUT. The logic assumes gh calls are fast and non-blocking relative to the timeout.",
+      "fix": "Move the elapsed/TIMEOUT check before the PR lookup, and consider running the gh lookup with its own timeout or asynchronously.",
+      "twin_of": "(r) the machine decides the answer"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:194-197",
+      "breaking_input": "Run `ci-digest.mjs --timeout-min 20 --sha abc` where the `--sha` value is actually a numeric-looking string like `123` (not a valid SHA).",
+      "why": "The check `p.opts.timeoutMin !== 20 && !p.opts.wait` uses the default timeout (20) as a sentinel. If a user passes `--timeout-min 20` without `--wait`, the code silently accepts it and never warns, because the timeout equals the default. This makes the validation inconsistent and lets a user believe the flag is effective when it isn't. The `--sha` value is not validated for format; a malformed sha is passed to git.",
+      "fix": "Track whether `--timeout-min` was explicitly provided (e.g., a boolean `hasTimeoutMin`), and validate `--sha` against a SHA-1 pattern.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:217-220",
+      "breaking_input": "Set env `ARC_CI_WAIT_POLL_MS=0` and run `--wait`. Then the loop sleep(0) yields, but if the digest `once()` never returns a non-3 code and `noRun` is false, it spins with zero sleep, potentially consuming 100% CPU until timeout. More directly, set `ARC_CI_WAIT_NORUN_MS=1` and `ARC_CI_WAIT_POLL_MS=60000`; the loop calls `once()` every 60s, but the first NO_RUN read already has elapsed=0 < 1, so it sleeps 60s, then the second read has elapsed=60s >= 1, triggering the PR lookup. That's fine, but if `noRun` is true and the elapsed check is `>=`, a 0 noRunMs immediately triggers a PR lookup on the very first read, which is a behavior change.",
+      "why": "The env durations are parsed with `/^[0-9]{1,9}$/`, allowing `0` as a valid value. A NO_RUN_MS of 0 causes `elapsed >= noRunMs` to be true immediately, so a single pending read without a run triggers an immediate PR lookup even if the commit was just pushed and the run hasn't had time to start. This defeats the intended grace period.",
+      "fix": "Reject 0 for NORUN and MIN durations, or require a minimum like 1000ms.",
+      "twin_of": "(i) missing vs empty"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:215-216",
+      "breaking_input": "Run with `ARC_CI_WAIT_MIN_MS=2000000000` (9 digits, within the regex) and `--wait --timeout-min 1`. The env override forces the timeout to ~23 days, so an attacker who controls the env (e.g., in CI where env is untrusted) can make the wait loop hang for days.",
+      "why": "The env override `ARC_CI_WAIT_MIN_MS` is accepted without a cap, overriding the CLI's 180-minute limit. This allows an unbounded wait, violating the intent that `--timeout-min` limits the total wait. The `envMs` function only checks the numeric shape, not an upper bound.",
+      "fix": "Cap the env override to e.g. 180 minutes, or reject values larger than the CLI max.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:143-149",
+      "breaking_input": "Run `ci-digest.mjs --wait --tail 5 --tail 10`. The code only checks for duplicates via a `seen` set, but does not special-case `--wait` as a flag that shouldn't consume a value; however, it does correctly detect `--wait` twice. But run `--tail 5 --tail=10` — the `--tail=10` form is rejected by the first `includes(\"=\")` check, so that's fine. The issue is `--timeout-min 0` is rejected, but `--timeout-min 001` is accepted as 1 due to `/^[1-9][0-9]{0,2}$/` which allows leading zeros — the regex doesn't allow `001` because it must start with [1-9], so that's fine, but `--timeout-min 20` (the default) is accepted as a value, and if combined with `--wait` it's fine. The real gap: the `seen` set includes `--wait` as a token, so `--wait --wait` is rejected, but `--wait` and its value are not distinguished for `--tail`: `--tail 5 --tail 10` is rejected because `5` and `10` aren't same, but `--tail 5 --tail 5` would be accepted (the duplicates are on the values, not the flags).",
+      "why": "The duplicate check only looks at the raw argument strings, so `--tail 5 --tail 10` passes because `5` != `10`. A user can pass the same flag twice with different values, and the later value silently wins, which could mask misconfiguration. The check should track flag names, not values, or reject any repeated flag regardless of value.",
+      "fix": "Track a set of flag names (e.g., `--sha`, `--tail`, etc.) and reject any flag given twice, independent of its value.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/commands/arc-ship.md:15-17",
+      "breaking_input": "Run arc-ship in a repo that has a `.vercel/project.json` but no `vercel.json` — the command deploys. But if the repo has a directory named `vercel.json` (not a file), the existence check passes (a directory exists), and the flow tries to deploy, but vercel fails. Conversely, if the repo has a broken symlink `vercel.json` pointing to a nonexistent file, the `[ -e ]` test fails even though the repo advertises a deploy target, so it skips deploy and creates a PR — surprising.",
+      "why": "The documentation uses `exists`/`[ -e ]` semantics which treat a directory as existing and a broken symlink as not existing. This can lead to a deploy attempt against a non-file (or skipping a declared target). The decision is based on the filesystem name, not on whether the target is actually a usable config file.",
+      "fix": "Use `[ -f vercel.json ] || [ -f .vercel/project.json ]` to require regular files.",
+      "twin_of": "(x) \"an executable exists\" read as \"the tool ran\""
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:194-197",
+      "breaking_input": "Run `ci-digest.mjs --wait --timeout-min 5 --timeout-min 20`. The duplicate check sees `5` and `20` as different values, so it's allowed; the second `--timeout-min 20` silently overwrites the first. A user who typo'd two different timeouts gets the last one with no warning.",
+      "why": "As noted, the duplicate check only catches identical argument strings. When a flag takes a value, the value itself is added to `seen`, so two different values are not caught as duplicates.",
+      "fix": "Record flag names (e.g., '--timeout-min') in a separate set and reject any repeated flag name.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:222-224",
+      "breaking_input": "In `waitFor`, when the digest returns a settled code (0,1,4,etc.), the code returns `{...out, lines: [...out.lines, \"ci-digest: settled after N read(s)\"]}`. If `out.lines` is very long (e.g., tail=200 with many failed jobs), the extra line is appended, but the function returns a new object. However, the `reads` counter counts only the calls to `once()`, which is correct. The problem is the `settled after` line is added to the `lines` array, but the original `out` object may have been mutated by the caller (e.g., the digest function returns the same `lines` array reference each time). The probe's `play` function filters lines starting with 'ci-digest: settled', so that's fine, but a real caller that inspects `lines` might see a change in the array identity, not a problem.",
+      "why": "This is likely benign; the real risk is that the `settled after` message leaks into the output that the calling script sees, which could be parsed by a downstream consumer expecting only CI log lines. The probe filters it, but production `npm test` output will include it, potentially confusing any tool that reads the output.",
+      "fix": "Consider writing the settled message to stderr or a separate field rather than mixing it into the log lines.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:223",
+      "breaking_input": "In the NO-RUN branch, the code calls `gh([\"pr\", \"view\", \"--json\", \"isDraft,mergeable,state\"])`, but the result is not checked for being a valid JSON. If gh returns an error message on stdout (e.g., due to a misconfigured repo), `safeLine(pr)` will sanitize it, but the raw JSON is embedded in the output. The `safeLine` function (not shown) presumably strips newlines, but if the JSON contains a `\"` or `}` it could break the output format of the `NO-RUN:` line.",
+      "why": "The gh output is interpolated into a log line without proper quoting or structure. A malicious or malformed gh response could inject control characters or break the line format, potentially confusing automated parsers that rely on the `last=` field in tests or CI.",
+      "fix": "Parse the gh JSON and extract just the needed fields (isDraft, mergeable, state) and render them in a fixed format.",
+      "twin_of": "(p) escapes in data"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "package.json:13",
+      "breaking_input": "Run `npm test` in a repository where the `ARC_CI_WAIT_*` env vars are set to large values (e.g., ARC_CI_WAIT_MIN_MS=86400000). This makes the CI wait loop run for a full day before timing out, blocking the ship flow indefinitely.",
+      "why": "The npm test script is `node .claude/scripts/review/ci-digest.mjs --wait`. Any local environment variable can override the CLI timeout, and there's no guard to ensure the env override stays within reasonable bounds. If a developer accidentally leaves ARC_CI_WAIT_MIN_MS set to a huge value, `npm test` will hang far beyond the intended 20-minute default.",
+      "fix": "In package.json, consider passing `--timeout-min 20` explicitly and rejecting env overrides that exceed a max, or document that env overrides are for testing only.",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:206-207",
+      "breaking_input": "In the main function, when `--wait` is used and the digest returns `out.code === 6`, the function returns 6. But the `waitFor` function returns `{code:6, lines:...}` and the calling code in `main` simply returns `out.code`. However, the `out.lines` are never printed to stdout/stderr in the wait path — `main` does `if (out.code === 3) { … }` logic (the diff shows only the invocation change, not the output printing of lines). Need to check: the original code printed `out.lines`? In the diff, after `let out;`, the original flow presumably prints lines before returning. With `--wait`, `once()` returns an object and `waitFor` returns a new object with appended lines. But if the original `main` doesn't print `out.lines` when code is 3 or 6, the new NO-RUN and TIMEOUT messages are lost, and the user only sees the exit code without the reason.",
+      "why": "The diff shows that `main` now calls `waitFor` which returns an object, but the downstream code that handles `out` (printing lines, etc.) is not shown. If the output printing only happens for certain codes (e.g., the original `out.lines` printed only when code !== 0), the appended diagnostics might not be printed, making NO-RUN reason invisible.",
+      "fix": "Ensure the wait path prints the returned lines (including NO-RUN and TIMEOUT messages) to stderr or stdout.",
+      "twin_of": "(b) exit after async I/O"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/review/ci-digest.mjs:138-148",
+      "breaking_input": "The `--timeout-min` flag accepts values like `180`, but the maximum is 180 minutes. In the wait loop, `limit` is computed from `envMs('ARC_CI_WAIT_MIN_MS', timeoutMin * 60_000)`. If `timeoutMin` is 180, `timeoutMin * 60_000` is 10,800,000, which fits in a number, but if a user passes `--timeout-min 180` and also sets `ARC_CI_WAIT_MIN_MS=999999999` (9 digits), the limit is huge. That's already covered. The real issue is that `--timeout-min` is not validated to be an integer when read via `Number(v)`, but the regex `/^[1-9][0-9]{0,2}$/` ensures it's 1-3 digits, so that's fine. The `--tail` flag accepts any non-empty string, including `--tail foo`, which is then passed to `digest` as a number-context (likely `tail` compared with `>`), causing a type mismatch.",
+      "why": "The `--tail` value is not validated to be a number. Passing `--tail abc` leads to a runtime error or NaN comparisons in the digest function, but the error message would be cryptic. This is a robustness gap.",
+      "fix": "Validate `--tail` as an integer in a reasonable range (e.g., 1-200).",
+      "twin_of": "(c) flag values"
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/review/ci-digest.mjs:225-227",
+      "breaking_input": "When `waitFor` returns a TIMEOUT (code 3), the check `out.code !== 3` at the start of the loop means settled code 3 (from a genuine pending after timeout) is not distinguished from a `noRun` that also yields code 3. The function's `out.noRun` flag is only used in the NO-RUN branch, but on timeout it returns `{code:3, ...}` without `noRun:true`, so the caller cannot tell whether the timeout was due to a missing run or jobs still running. The `--wait` semantics says `3 pending (no run yet, or jobs still running; with --wait, TIMEOUT)`, but the code conflates both into exit 3. If a user wants to treat NO-RUN differently from TIMEOUT, they can't — exit 6 is only for NO-RUN after noRunMs, but a timeout before noRunMs (e.g., if the run is slow and noRun is false because a run exists but never returns) gives exit 3, not 6.",
+      "why": "The exit-code contract in the docstring says `6 NO-RUN (--wait only)` but the actual behavior can give 3 for a no-run that never becomes a run if the run appears as a pending job (noRun false) that never settles, or if the run is created but hangs. This makes it ambiguous for automation to distinguish.",
+      "fix": "On timeout, set `noRun:true` if the last read had `noRun:true`, otherwise leave false, and possibly add a distinct exit code for timeout vs still-running.",
+      "twin_of": "(ap) one failure, two exit codes"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/commands/arc-ship.md:13-14",
+      "breaking_input": "The flow says: if the repo has no deploy target AND `gh pr view` finds no open PR, create a PR with `gh pr create --fill`. After creating the PR, `npm run test` (step 3) will now read CI for that new PR. However, the step ordering: step 3 runs `npm run test` BEFORE step 4's PR creation. So on the first run, there is no PR, no CI run, and `npm test` returns NO-RUN (exit 6), which stops the flow — the PR is never created because step 3 fails first.",
+      "why": "The command instructions place `npm run test` (step 3) before the PR creation (step 4). In a repo with no deploy target and no PR, `npm test` will fail with NO-RUN or TIMEOUT before the PR is created, so the flow stops and never reaches the PR creation step. The instruction says 'If the repo has no deploy target (step 4) and gh pr view finds no open PR, first run gh pr create --fill', but that logic is nested inside step 3's description, not a separate step. The practical effect is that a fresh branch with no deploy target blocks at test.",
+      "fix": "Reorder: create the PR before running `npm test` when no deploy target and no PR exists, or make `npm test` tolerate NO-RUN when a PR is about to be created.",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "tests/distribute/ci-wait-probe.mjs:25",
+      "breaking_input": "The probe's `play` function uses `script[Math.min(reads, script.length - 1)]`, so if a scenario has a script with length 2 (e.g., [PENDING, RED]) and the loop reads more than 2 times, it keeps returning the last element. For `no-run`, the script is `[NO_RUN]` length 1, so it always returns NO_RUN. That's correct. But the `never-settles` case uses `[PENDING]` length 1, and `waitFor` with timeoutMin=3 yields a TIMEOUT after 3 minutes of fake time, which the test expects reads=4, sleeps=3. The fake clock increments by poll=60000 each sleep, so after 3 sleeps t=180000, which is `>= limit` (180000). That's correct. The issue is that the probe doesn't test the case where `noRun` is false and the run eventually appears as a green run after a NO_RUN read — `run-appears-in-time` covers that. But the probe's fake `gh` function counts prViews only for `pr view`; the NO-RUN branch for `case no-run` expects prviews=1, which is correct. However, the probe's `gh` function throws for any other args, so if `waitFor` ever calls gh with different args in a new code path, the probe fails — that's good testing, but the probe is not a production bug.",
+      "why": "This is a test weakness: the probe doesn't verify that when `out.code !== 3` on the first read (e.g., a RED result), it returns immediately without sleeps, which the `mismatch-at-once` test covers. It also doesn't test the case where `noRun` is true but the elapsed never reaches noRunMs because the timeout happens first — that would return 3 (TIMEOUT) without a PR lookup. That path is untested and could hide that the NO-RUN branch is only reached when noRunMs <= limit, which is true in default (5min vs 20min) but could be violated if env overrides make limit < noRunMs.",
+      "fix": "Add a test scenario where `ARC_CI_WAIT_MIN_MS` is set lower than `ARC_CI_WAIT_NORUN_MS` to verify TIMEOUT is returned before NO-RUN.",
+      "twin_of": "(u) a mutant that exercises one probe of several"
+    }
+  ]
+}

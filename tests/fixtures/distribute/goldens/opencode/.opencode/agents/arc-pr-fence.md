@@ -3,9 +3,9 @@ description: "The tool fence of /arc-pr; runs only through that command."
 mode: subagent
 hidden: true
 permission:
-  "*": ask
+  "*": deny
   bash:
-    "*": ask
+    "*": deny
     "gh pr": allow
     "gh pr *": allow
     "git diff": allow

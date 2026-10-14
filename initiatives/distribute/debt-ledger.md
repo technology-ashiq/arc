@@ -126,3 +126,49 @@ REJECTED: L15 the runbook names the script form -- by design (the script form wo
 
 Attack 45490ca round 2 (P04): logic 0 findings; boundary B1, B2 fixed as (bk), (bl).
 | 14 | B3-B5 (attack 45490ca, low): realpath vs git's own case and 8.3 forms on Windows, no timeout on the dispatcher's children, inherited GIT_* variables | `bin/arc.mjs` | each fails closed (hooks not wired, named) or needs a hostile environment; two rounds are spent | a Windows user sees "not its root" at their real root, a hung doctor, or a GIT_DIR-set CI | normalise both sides through `git rev-parse --show-toplevel` run in each path; add a timeout; clear GIT_* in git() |
+
+Attack f58fb31 round 1 (Cycle 2 P05): boundary B1-B9 and logic L1-L5, L10, L11, L14, L15 fixed as (bo)-(bt); the dirty-scan gap (bu) was found by the smoke, not the attack.
+
+| 15 | B10 (attack f58fb31, low): `ARC_HARNESS` set for the whole wrapped session makes every emit in it stamped or refused, not only the loop's three kinds | accepted: that is the point of ADR-2020 -- every receipt a wrapped session makes came from that harness | a wrapped session needs to emit a receipt on behalf of another harness |
+
+```
+REJECTED: L3 the timeout timer starts after the version check -- already-covered
+REJECTED: L6 a tiny cap breaches before the header is written -- already-covered
+REJECTED: L7 a stderr flood blocks the cap check -- unsupported
+REJECTED: L8 a final unterminated line is never processed -- already-covered
+REJECTED: L9 a non-string payload.harness passes the stamp -- already-covered
+REJECTED: L12 --prior-spent-usd double-counts the ledger -- unsupported
+REJECTED: L13 a symlink race on the transcript path -- already-covered
+```
+(L3: `version()` has its own 10 s spawn timeout; L6: events are buffered until the session id and the header is always the first line written, including on a kill; L7: stderr goes to a file with one synchronous write per chunk between stdout chunks, which a flood slows but cannot stop; L8: the remainder of `buf` is passed to `onLine` after close; L9: any value not equal to `ARC_HARNESS` is `HARNESS_MISMATCH`; L12: the flag is spend outside the ledger, added by design (ADR-2019); L13: `wx` is O_CREAT|O_EXCL, which fails on any existing path, a dangling link included.)
+
+Attack 5823248 round 2 (Cycle 2 P05): logic 0 findings; boundary B1-B9 and B12 fixed as (bv)-(cc). Round cap reached (2).
+
+| 16 | B10 (attack 5823248, low): a `.cmd` launch passes the whole line through `cmd.exe /c`, which truncates past 8,191 characters | accepted: the real messages are one paragraph; the transcript's argv line shows the message as sent | a wrapped run's message passes 4,000 characters |
+| 17 | B11 (attack 5823248, low): the header carries absolute cwd and spine paths, home directory included, into a committed transcript | accepted: the same `C:/Users/<name>` form is already in 83 files on main and is not owner PII (row 1 rejections, B9) | the repository's PII rule names a username or home path |
+
+Attack 1f1966b round 1 (Cycle 2 P06): boundary B1-B6 and logic L1-L4, L13, L14 fixed as (ce)-(ch).
+
+| 18 | B7 (attack 1f1966b, low): the npm-test caller check uses `git grep`, so an untracked caller passes locally | accepted: CI is the gate and sees tracked files only, which is what ships | a caller is found that is generated at CI time |
+| 19 | B8 / L6 (attack 1f1966b, low): "a declared deploy target" is prose the model evaluates, so a stale local `.vercel/project.json` would deploy | accepted: `vercel --prod` still runs behind the pre-deploy guard, which re-checks tests | a consumer reports a deploy from a stale `.vercel/` |
+
+```
+REJECTED: L5 / L7 a repeated --tail with different values passes -- unsupported
+REJECTED: L8 the settled-after line reaches the caller -- non-actionable
+REJECTED: L9 the PR state is interpolated raw -- already-covered
+REJECTED: L11 main mishandles the object waitFor returns -- non-actionable
+REJECTED: L12 --tail is not validated as a number -- already-covered
+REJECTED: L15 the probe never checks a first-read red -- already-covered
+```
+(L5/L7: the flag token itself is the duplicate key, so the second `--tail` is refused whatever its value; L9: the PR line goes through `safeLine`; L12: `--tail` must match `^[1-9][0-9]{0,2}$` and be at most 200; L15: `settles-red` returns code 1 after one sleep, and `mismatch-at-once` after none.)
+
+Attack 7c30208 round 2 (Cycle 2 P06 + ADR-2022): logic L1 and boundary B1, B3-B6 fixed as (cl)-(cp). Round cap reached (2).
+
+| 20 | B2 (attack 7c30208, medium): `charge()` runs `opencode export` synchronously inside the stdout handler, up to 60 s per subagent | accepted: the cap check runs right after the charge, and a blocked loop only delays reading events the child keeps writing to a pipe; the timeout timer is the second ceiling | a wrapped run with more than five subagent tasks |
+| 21 | B7 / B8 (attack 7c30208, low): the npm-test caller check covers hooks, CI and tests but not `.claude/scripts` and docs prose; the step-3 prose could still be read loosely by a model | accepted: script callers are listed by the PR's `git grep`, and the fence permits no command outside the step's own list | a script under `.claude/scripts` calls `npm test` |
+
+P07 live run (2026-10-13), observed, not an attack finding:
+
+| 22 | the deny fence binds only the hidden `NAME-fence` subagent; the top-level OpenCode session (the default agent) keeps its own bash and read tools. In P07 run 5 the subagent stopped at a stale render's `npm run build`, and the parent carried on: it ran `ls`, `find`, `git log`, read `ci.yml`, then `gh pr create --fill` and `npm run test` itself | accepted for REQ-03: every refusal REQ-03 counts is a git hook or a merge-time gate (branch-guard, secret-diff-scan, arc-compile), none of which the parent can skip; the model still cannot push (the operator did) | a wrapped run whose parent does something its command's fence denies, or the next cycle that claims a fence as a guarantee; then route a primary-agent permission block through `/arc-change` (ADR-2022) |
+| 23 | the `arc-ship` fence grants `Bash(vercel:*)`, so the model can create the deploy target the "declared target" check then trusts; and a wrapper kill on Windows did not reach the OpenCode child. In P07 the killed run 5b's child linked a new Vercel project `wt-oc-req03` (`.vercel/project.json` in the session worktree), and run 5c deployed it to production | open, not accepted: the deploy was cleaned up (local link removed, the Vercel project deletion is the owner's) and REQ-03's `ship.done` names that deploy, not PR #416 | next cycle, before any wrapped ship: narrow the fence to `Bash(vercel --prod)`, count a target only when `vercel.json` or `.vercel/project.json` is tracked by git, and make the wrapper's kill take the whole tree on Windows with a pinned fixture |
+| 24 | the redactor's `connection-string-password` rule (`.claude/scripts/hq/lib/redact.mjs:85`) refused run 5c's first `ship.done` emit as SECRET (quarantine stub 2026-10-13 16:50:50); the stub keeps no payload, so the matched text cannot be replayed, and a plain `https://` URL does not match the rule alone, so the likely trigger is a match spanning JSON fields | accepted: the re-emit landed 25 s later and no receipt was lost; changing a shared redaction rule is a core-lane change routed through /arc-change | a receipt carrying a PR or deploy URL is quarantined again, or any emit whose payload holds no credential lands in `_quarantine` |
