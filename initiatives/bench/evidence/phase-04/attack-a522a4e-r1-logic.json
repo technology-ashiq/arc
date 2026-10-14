@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1495",
+      "breaking_input": "A repository where `git rev-parse --verify -q HEAD` succeeds but `git symbolic-ref -q HEAD` fails with a non-zero exit status (e.g., a detached HEAD with a corrupt or missing HEAD symref), causing `branch` to be set to '(detached)' — but then `git for-each-ref` also fails, setting refs to '(unreadable)'. The resulting fingerprint digest is computed from these constant strings, so two different broken states (e.g., one where HEAD is a valid commit and one where it is not) can produce identical digests.",
+      "why": "The `catch` blocks treat a git failure as a constant string, but the digest still includes `head` which is read successfully. If `for-each-ref` fails (e.g., due to a transient filesystem error or a corrupted refs directory), the fingerprint becomes `head|(detached)|(unreadable)` — the same for any HEAD value. A malicious or buggy attempt could corrupt the refs directory (e.g., by deleting `.git/refs/heads`) to make `for-each-ref` fail, and the fingerprint would not change even though the checkout is effectively broken. The guard then fails to detect that the arc checkout was moved.",
+      "fix": "On any git failure, return `null` (or treat the whole fingerprint as unreadable and force a mismatch) rather than substituting constant strings. Also, include the exit status or a sentinel that distinguishes a failed read from a successful one with an empty result."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where `checkoutBefore` is `null` (the arc checkout is not a git repository at the start) and then, during an attempt, a git repository is created inside the arc directory (e.g., the model runs `git init` in the arc root). `checkoutNow` becomes a non-null fingerprint, so `moved` is true and the run stops — correctly. But if the arc checkout is a git repo at start and an attempt deletes `.git` entirely (e.g., `rm -rf .git`), `checkoutNow` becomes `null`, and `moved` is true — also correct. However, if both `checkoutBefore` and `checkoutNow` are `null` (e.g., the arc directory is not a git repo, and an attempt creates a git repo but the fingerprint read fails again because the new repo has no HEAD yet), the guard does not detect the change.",
+      "why": "The comparison `(checkoutBefore?.digest ?? null) !== (checkoutNow?.digest ?? null)` treats two nulls as equal. If the arc checkout transitions from 'no git' to 'a git repo with no commits' (where `rev-parse HEAD` fails), both fingerprints are null, and the guard misses that the checkout moved. A model could `git init` in arc, create an empty repo, and the run would continue spending attempts.",
+      "fix": "Compare the entire fingerprint object (including whether it is null) rather than only the digest, and treat a transition from null to non-null (or vice versa) as a movement even if the new fingerprint is also null."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new local branch but then deletes it (or moves HEAD back) before the fingerprint is taken. The fingerprint is computed after the attempt, so a transient change during the attempt is not detected. The guard only sees the state after the attempt, not whether the checkout was ever moved during it.",
+      "why": "The comment says 'an attempt that wrote into arc will do it again on the next one', but if the model rolls back its changes (e.g., `git branch -D` and `git reset --hard`), the fingerprint after the attempt matches the before state, and the run continues. The model could still have committed into arc (e.g., creating a commit on a temporary branch and then deleting it), and the run would not stop. The guard only catches persistent changes, not transient ones. This is a logic gap: the check is after the attempt, not during it.",
+      "fix": "Take a fingerprint both before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1756",
+      "breaking_input": "A run where the arc checkout is a git repo with a `HEAD` that is a symbolic ref to a branch, and an attempt changes the branch name (e.g., `git branch -m old new`) but keeps the same commit. The fingerprint includes `branch` (the symbolic ref name) and `head` (the commit), so a rename would change the digest — detected. But if an attempt switches to a different branch with the same commit (e.g., `git checkout -b new same-commit`), the branch name changes and the digest changes — detected. However, if an attempt creates a new branch with the same name as an existing tag (e.g., `git branch refs/tags/foo`), the fingerprint includes tags and heads, but the format `%(refname) %(objectname)` would list both, and the digest would change — detected. The gap is when an attempt moves a tag to a different commit but the tag name and objectname are the same as before? That cannot happen. The real gap: the fingerprint does not include the reflog, so a commit that is later reset (with the branch name unchanged) is not detected.",
+      "why": "The fingerprint captures the current state, not the history. If an attempt commits to a branch and then resets the branch back to the original commit, the branch name and HEAD are unchanged, and the digest is unchanged. The model could have committed into arc and then hidden the evidence by resetting. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Include the reflog or a hash of the reflog in the fingerprint, or take a fingerprint before and after each attempt and also record any changes to the reflog. Alternatively, use a filesystem watcher to detect any writes to `.git` during the attempt."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1756",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new tag that points to the same commit as an existing tag, but with a different name. The fingerprint includes tags, so the digest changes — detected. But if an attempt creates a new branch that points to the same commit as an existing branch, the digest changes — detected. The gap is when an attempt modifies an existing tag's message (e.g., `git tag -a -m 'new message'`) but keeps the same commit. The `for-each-ref` format `%(refname) %(objectname)` does not include the tag message, so the digest does not change. A model could annotate a tag in arc without moving the checkout.",
+      "why": "The fingerprint only hashes ref names and object names, not tag messages or other tag metadata. An attempt that re-annotates a tag (e.g., to leave a marker) would not be detected. The guard is meant to detect any movement of the arc checkout, and a tag message change is a movement of that tag's state.",
+      "fix": "Include tag metadata (e.g., `%(contents)`) in the fingerprint, or at least document that only ref name/objectname changes are detected."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1756",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1753",
+      "breaking_input": "A run where the arc checkout is a git repo and an attempt creates a new branch and commits, but the fingerprint is taken after the attempt and the model also deletes the branch and resets HEAD. The fingerprint matches the before state, so the guard does not stop the run. The model can commit into arc and then clean up, and the run continues, spending more attempts.",
+      "why": "The check is after the attempt, not during it. The comment says 'an attempt that wrote into arc will do it again on the next one', but a model that cleans up after itself will not do it again, and the run continues. The guard is bypassable by a model that knows the fingerprint is taken after the attempt.",
+      "fix": "Take a fingerprint before and after each attempt, and also consider any changes to the reflog or a more fine-grained check (e.g., comparing the full ref list including reflogs) to detect transient writes. At minimum, document that only persistent changes are caught."
+    }
+  ]
+}

@@ -16,3 +16,17 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
   carry has this twin.
 - **A benched CLI loading the operator's own setup** (2026-10-14, ADR-0915). `claude -p` read
   user hooks, plugins and MCP servers. Any spawned CLI that reads user-level config has this twin.
+- **A CLI driver spawned in ARC_ROOT, not the work root** (2026-10-14, ADR-0916). arc-run keeps
+  `ARC_ROOT` pointed at arc and passes the work root as `ARC_WORK_ROOT` plus the cwd; two drivers
+  read `ARC_ROOT`, so the benched model committed into arc. Any reader of `ARC_ROOT` that means
+  "where the work happens" has this twin. Fix: read `ARC_WORK_ROOT`, and bench checks the arc
+  checkout after every attempt.
+- **A failed read folded into a comparison as a constant** (2026-10-14, a522a4e L1/B3). A git read
+  that threw became the string `(unreadable)` inside a digest, so a transient lock voided a clean
+  run and a broken baseline matched a broken later read. Any "compare before and after" check with
+  a catch-all fallback has this twin. Fix: retry once, then report "could not be checked" as its own
+  outcome.
+- **A guard scoped wider than what it guards** (2026-10-14, 680e889 B4). The checkout fingerprint
+  hashed every branch, tag and worktree of the shared repository, so any sibling session's commit
+  or fetch would have voided a paid run. Any "nothing changed" check over shared state has this
+  twin. Fix: scope it to what the run could have touched.

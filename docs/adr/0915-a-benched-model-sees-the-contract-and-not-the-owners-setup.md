@@ -63,3 +63,10 @@ this way today, so the claim is made for `claude-code` alone.
 **Not proven by this ADR:** that isolation removes every user-level input. `~/.claude/CLAUDE.md`
 loading under `--setting-sources` is the CLI's behaviour, and the CLI is not arc's code. The re-run's
 captures are the evidence: an answer free of `branch` with the contract in the prompt.
+
+## Correction (2026-10-14, ADR-0916)
+
+The isolation note above says project settings come from the materialized fixture repo. They did
+not: `claude-code` spawned its CLI in `ARC_ROOT`, which is arc, so arc's project hooks loaded and
+the model worked inside the arc checkout. ADR-0916 moves the CLI to the work root, which makes the
+note true from that merge on.

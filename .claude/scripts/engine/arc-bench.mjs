@@ -1487,6 +1487,78 @@ export function routerSha(root) {
   return existsSync(p) ? createHash("sha256").update(readFileSync(p)).digest("hex") : null;
 }
 
+/**
+ * WHAT THIS CHECKOUT HOLDS: HEAD, the branch it names, this worktree's HEAD reflog, the content of
+ * every tracked file that differs from HEAD, and the repository's local config. A benched attempt
+ * works in its materialized fixture repo and must leave all of it exactly as it was (ADR-0916). On
+ * 2026-10-14 a driver ran the CLI inside arc instead, and sonnet -- holding Bash -- ran
+ * `checkout -b` and committed into the owner's checkout once per attempt while the run kept
+ * scoring. The router SHA could not see it, because nothing touched the router.
+ *
+ * SCOPED TO THIS WORKTREE, not the repository (attack 680e889 B4). The owner runs parallel sessions
+ * in sibling worktrees that share refs/heads, tags, the stash and the worktree list; any of those in
+ * the digest would void a paid run whenever another lane committed or fetched. The reflog is here
+ * so a model that commits and resets back is still caught (a522a4e L3, L6), and file CONTENT, not a
+ * status code, so an edit to an already-dirty file is seen (680e889 B1).
+ *
+ * A TRIPWIRE FOR AN ACCIDENT, not a boundary against a model hiding its tracks: containment is the
+ * driver running in the work root. Not covered: a branch made without HEAD moving, a reflog
+ * expired after the fact, and anything outside this worktree.
+ *
+ * Returns null only when git says this is not a repository; { unreadable } for every other failed
+ * read. A fallback applies only on the exit status the probe documents, never to any error
+ * (a522a4e L1, 680e889 B2, B3).
+ */
+function gitRead(root, args) {
+  const r = spawnSync("git", [...GIT_NEUTRAL, ...args], {
+    cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+    // A read must not take index.lock out from under the owner's own git command (680e889 B7).
+    env: { ...gitEnv(root), GIT_OPTIONAL_LOCKS: "0" },
+  });
+  return { status: r.error ? null : r.status, stdout: r.stdout ?? "", stderr: String(r.stderr || (r.error && r.error.message) || "") };
+}
+
+export function checkoutFingerprint(root) {
+  const fail = (args, r) => { throw new Error(`git ${args[0]} ${r.status === null ? "could not run" : `exited ${r.status}`}: ${r.stderr.trim().split("\n")[0] || "no message"}`); };
+  const must = (args) => { const r = gitRead(root, args); if (r.status !== 0) fail(args, r); return r.stdout; };
+  // `-q` probes exit 1 for "no such ref" and nothing else; any other status is a failure.
+  const probe = (args, onOne) => { const r = gitRead(root, args); if (r.status === 0) return r.stdout.trim(); if (r.status === 1) return onOne; fail(args, r); };
+  const inside = gitRead(root, ["rev-parse", "--is-inside-work-tree"]);
+  if (inside.status !== 0 && /not a git repository/i.test(inside.stderr)) return null;
+  try {
+    if (inside.status !== 0) fail(["rev-parse"], inside);
+    const head = probe(["rev-parse", "--verify", "-q", "HEAD"], "(unborn)");
+    const branch = probe(["symbolic-ref", "-q", "HEAD"], "(detached)");
+    const reflog = head === "(unborn)" ? "" : must(["reflog", "show", "--format=%H %gs", "HEAD"]);
+    const top = must(["rev-parse", "--show-toplevel"]).trim();
+    const dirty = head === "(unborn)" ? [] : must(["diff", "--name-only", "-z", "HEAD"]).split("\0").filter(Boolean).sort();
+    const content = dirty.map((p) => {
+      let bytes;
+      try { bytes = readFileSync(join(top, p)); } catch { return `${p} (absent)`; }
+      return `${p} ${createHash("sha256").update(bytes).digest("hex")}`;
+    }).join("\n");
+    // `config --local` exits 1 when there is no local config file at all; that is a state.
+    const config = probe(["config", "--local", "--list"], "");
+    const digest = createHash("sha256").update([head, branch, reflog, content, config].join("|\n|"), "utf8").digest("hex");
+    return { head, branch, digest };
+  } catch (e) {
+    return { unreadable: String(e.message).split("\n")[0] };
+  }
+}
+
+/**
+ * Has the checkout moved since `before`? A failed read is retried once, because an index.lock held
+ * for a moment by another process is not a moved checkout. A read that fails twice stops the run all
+ * the same: containment that cannot be checked is not known to hold.
+ */
+export function checkoutMovedSince(root, before) {
+  let now = checkoutFingerprint(root);
+  if (now && now.unreadable) now = checkoutFingerprint(root);
+  if (now && now.unreadable) return { moved: true, now, why: `the arc checkout could not be read (${now.unreadable})` };
+  const moved = (before?.digest ?? null) !== (now?.digest ?? null);
+  return { moved, now, why: moved ? "the arc checkout moved" : null };
+}
+
 /** The SHA of a fixture's input, for the provenance tuple (ADR-0913). */
 function inputSha(input) {
   return createHash("sha256").update(canonicalString(input ?? {}), "utf8").digest("hex");
@@ -1613,6 +1685,14 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
   const worstCase = worstCaseFor(ceilings, driver, appliedModel);
   const identity = driverIdentity(root, driver);
   const shaBefore = routerSha(root);
+  let checkoutBefore = checkoutFingerprint(root);
+  if (checkoutBefore && checkoutBefore.unreadable) checkoutBefore = checkoutFingerprint(root);
+  // Set by the first attempt after which the arc checkout no longer matches; nothing runs after it.
+  // A checkout that cannot be read at the start stops the run before any spend: there is no
+  // baseline to hold an attempt to.
+  let checkoutMoved = checkoutBefore && checkoutBefore.unreadable
+    ? { after: "the start of the run", why: `the arc checkout could not be read (${checkoutBefore.unreadable})`, before: null, now: null }
+    : null;
 
   const classes = [];
   const packRevisions = {};
@@ -1660,6 +1740,12 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
       if (!fx.id) { entry.unselected.push({ file: fx.file, reason: "declares no repo_state -- the case cannot be posed" }); continue; }
       entry.selected += 1;
       if (dryRun) { entry.fixtures.push({ id: fx.id, dry_run: true }); continue; }
+
+      if (checkoutMoved) {
+        partial = true;
+        entry.unselected.push({ file: fx.file, reason: `${checkoutMoved.why ?? "the arc checkout moved"} after ${checkoutMoved.after}, so the run stopped spending (ADR-0916)` });
+        continue;
+      }
 
       if (state.exhausted) {
         partial = true;
@@ -1721,6 +1807,9 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
         if (r.receiptsSeen === 0) {
           invocationViolations.push({ task_class: cov.taskClass, fixture: fx.id, k, why: "the attempt left no arc-run receipt -- it did not go through arc-run (M1)" });
         }
+        // CHECKED AFTER EVERY ATTEMPT, not once at the end: an attempt that wrote into arc will do
+        // it again on the next one, and each one is paid for.
+        const ck = checkoutMovedSince(root, checkoutBefore);
 
         // THE CAPTURE RECORD, not the bare output. It carries the schema verdict and the failure
         // reason as well, because neither is derivable from output bytes -- and a replay that
@@ -1730,10 +1819,22 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
           ? { scored: true, schema: r.schema, output: r.output }
           : { scored: false, schema: r.schema ?? null, verdict: r.verdict, why: r.why };
         records.push(record);
-        if (capture) {
+        // An attempt that moved the arc checkout answered about arc, not its fixture: its capture is not
+        // evidence, so it is never written where a replay would score it (attack 680e889 B5).
+        if (capture && !ck.moved) {
           const dir = join(capture, cov.taskClass, fx.id);
           mkdirSync(dir, { recursive: true });
           writeFileSync(join(dir, `${k}.json`), canonicalJson(record), "utf8");
+        }
+        if (ck.moved) {
+          partial = true;
+          checkoutMoved = {
+            after: `${cov.taskClass}/${fx.id} attempt ${k}`,
+            why: ck.why,
+            before: checkoutBefore ? { head: checkoutBefore.head, branch: checkoutBefore.branch } : null,
+            now: ck.now && !ck.now.unreadable ? { head: ck.now.head, branch: ck.now.branch } : null,
+          };
+          break;
         }
       }
 
@@ -1772,6 +1873,20 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
   }
 
   const shaAfter = routerSha(root);
+  // ONCE MORE AT THE END (attack a522a4e B4): a child an attempt left running can move the checkout
+  // after that attempt's own check, and the last attempt has no next one to catch it.
+  if (!checkoutMoved && attempts > 0) {
+    const last = checkoutMovedSince(root, checkoutBefore);
+    if (last.moved) {
+      partial = true;
+      checkoutMoved = {
+        after: "the last attempt",
+        why: last.why,
+        before: checkoutBefore ? { head: checkoutBefore.head, branch: checkoutBefore.branch } : null,
+        now: last.now && !last.now.unreadable ? { head: last.now.head, branch: last.now.branch } : null,
+      };
+    }
+  }
 
   return {
     // Computed HERE, inside the error boundary and before anything is written, rather than in
@@ -1816,6 +1931,9 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
       // applied. The model seam closed the model half of this and not this half.
       router_sha_at_read: shaBefore,
       router_unchanged: shaBefore === shaAfter,
+      // ADR-0916: did any attempt move the arc checkout (HEAD, its branch, a local branch or tag)?
+      checkout_unchanged: !checkoutMoved,
+      ...(checkoutMoved ? { checkout_moved: checkoutMoved } : {}),
       // The non-deterministic half, deliberately kept OUT of the scorecard.
       metrics: Object.fromEntries([...metrics.entries()].map(([k, v]) => [k, {
         cost_inr: v.cost_inr,
@@ -2994,6 +3112,14 @@ function main() {
   // is on the record rather than only on a terminal that has since scrolled away.
   if (!report.provenance.router_unchanged) {
     console.error("arc-bench: the router SHA CHANGED across this run -- propose-only was violated and this run is not evidence of anything");
+    process.exit(EXIT.PARTIAL);
+  }
+  if (report.provenance.checkout_unchanged === false) {
+    const m = report.provenance.checkout_moved ?? {};
+    console.error(/could not be read/.test(m.why ?? "")
+      ? `arc-bench: the ARC CHECKOUT COULD NOT BE CHECKED after ${m.after ?? "an attempt"} -- ${m.why}; containment is not known to hold, so this run is not evidence (ADR-0916)`
+      : `arc-bench: the ARC CHECKOUT MOVED after ${m.after ?? "an attempt"} -- an attempt worked inside arc instead of its fixture repo, and this run is not evidence of anything (ADR-0916)`);
+    console.error(`           before: ${m.before ? `${m.before.branch} ${m.before.head}` : "(no repo)"} · now: ${m.now ? `${m.now.branch} ${m.now.head}` : "(no repo)"}`);
     process.exit(EXIT.PARTIAL);
   }
   const viol = report.provenance.invocation_violations ?? [];
