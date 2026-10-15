@@ -44,3 +44,14 @@ could say so. Bench shipped 1 kind reused and 0 production emissions, and says s
 Per the retro rule: the follow-up strengthens the **owning process's** eval pack, not bench.
 `review-diff` and `kickoff-plan` ship **one** fixture each and read `NO PROPOSAL` by construction.
 That is the gate working, and it is engine's pack to arm, not bench's.
+
+## 2026-10-15: row 1 FIRED on the real event
+
+Row 1 above was NOT EVALUABLE at this close because no second model was reachable. The real event
+(`../phase-03/README.md`) has now run two models through the same five fixtures:
+`claude-code/sonnet` and `claude-code/haiku` both scored **90/90**, `[6/6 6/6 6/6]` on every
+fixture. That is the trigger verbatim, so the row is **FIRED**: these fixtures separate good output
+from bad but not one model from another, and the haiku proposal was decided on cost alone. The
+follow-up is the owning process's (`commit-msg-draft`): harder fixtures whose assertions a weaker
+model can miss, such as a multi-concern diff that must be split, or a breaking change that must
+carry its `!`. Bench needs no change for it.

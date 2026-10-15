@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "a2bdbf593f8e37054a8435657e8865933bda0a7a",
+        "subject": "refactor: replace legacyTotal with total helper"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

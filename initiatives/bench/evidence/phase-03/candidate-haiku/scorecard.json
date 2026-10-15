@@ -1,0 +1,471 @@
+{
+  "classes": [
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "adr-record",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 2,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (2 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "attack-diff",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "build-in-public-draft",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 90,
+        "rate": 1,
+        "total": 90
+      },
+      "declared": 6,
+      "eligible": true,
+      "fixtures": [
+        {
+          "assertions": {
+            "passed": 18,
+            "rate": 1,
+            "total": 18
+          },
+          "attempts": [
+            {
+              "failed": [],
+              "k": 0,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 1,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 2,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            }
+          ],
+          "id": "single-file-fix",
+          "input_sha": "33b08da6a8488fe0e24dff51263f3e1f3ae1583b1bcaecc8dd3793ed62d3fd53",
+          "spread": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "n": 3
+          }
+        },
+        {
+          "assertions": {
+            "passed": 18,
+            "rate": 1,
+            "total": 18
+          },
+          "attempts": [
+            {
+              "failed": [],
+              "k": 0,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 1,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 2,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            }
+          ],
+          "id": "new-feature-file",
+          "input_sha": "33b08da6a8488fe0e24dff51263f3e1f3ae1583b1bcaecc8dd3793ed62d3fd53",
+          "spread": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "n": 3
+          }
+        },
+        {
+          "assertions": {
+            "passed": 18,
+            "rate": 1,
+            "total": 18
+          },
+          "attempts": [
+            {
+              "failed": [],
+              "k": 0,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 1,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 2,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            }
+          ],
+          "id": "docs-only",
+          "input_sha": "33b08da6a8488fe0e24dff51263f3e1f3ae1583b1bcaecc8dd3793ed62d3fd53",
+          "spread": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "n": 3
+          }
+        },
+        {
+          "assertions": {
+            "passed": 18,
+            "rate": 1,
+            "total": 18
+          },
+          "attempts": [
+            {
+              "failed": [],
+              "k": 0,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 1,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 2,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            }
+          ],
+          "id": "multi-file-refactor",
+          "input_sha": "33b08da6a8488fe0e24dff51263f3e1f3ae1583b1bcaecc8dd3793ed62d3fd53",
+          "spread": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "n": 3
+          }
+        },
+        {
+          "assertions": {
+            "passed": 18,
+            "rate": 1,
+            "total": 18
+          },
+          "attempts": [
+            {
+              "failed": [],
+              "k": 0,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 1,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            },
+            {
+              "failed": [],
+              "k": 2,
+              "passed": 6,
+              "rate": 1,
+              "schema": true,
+              "scored": true,
+              "total": 6
+            }
+          ],
+          "id": "delete-and-add",
+          "input_sha": "33b08da6a8488fe0e24dff51263f3e1f3ae1583b1bcaecc8dd3793ed62d3fd53",
+          "spread": {
+            "max": 1,
+            "median": 1,
+            "min": 1,
+            "n": 3
+          }
+        }
+      ],
+      "reason": null,
+      "schema": {
+        "evaluated": 15,
+        "passed": 15,
+        "rate": 1
+      },
+      "selected": 5,
+      "spread": {
+        "max": 1,
+        "median": 1,
+        "min": 1,
+        "n": 5
+      },
+      "task_class": "commit-msg-draft",
+      "unselected": [
+        {
+          "file": "tests/fixtures/engine/evals/commit-msg-draft/basic.json",
+          "reason": "declares no repo_state -- the case cannot be posed"
+        }
+      ]
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "council-convene",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "develop-proof",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "face-ask",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "kickoff-plan",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "lesson-log",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "narrative-verify",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "review-diff",
+      "unselected": []
+    },
+    {
+      "assertions": {
+        "passed": 0,
+        "rate": null,
+        "total": 0
+      },
+      "declared": 1,
+      "eligible": false,
+      "fixtures": [],
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "schema": {
+        "evaluated": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "selected": 0,
+      "task_class": "rule-promote",
+      "unselected": []
+    }
+  ],
+  "eval_pack_revisions": {
+    "commit-msg-draft": "1.0.0"
+  },
+  "normalizer_version": "1.1.0",
+  "process_versions": {
+    "commit-msg-draft": "1.0.0"
+  }
+}
