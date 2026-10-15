@@ -1,8 +1,8 @@
 # PROGRESS.md — launch v1 "the venture factory"
 
-status: LIVE
+status: IDLE
 cycle: arc-launch (Cycle 1, opened 2026-10-03)
-phase: 05
+phase: 05 (cycle closed)
 appetite: 18d
 burn: 13d
 blocked-on: —
@@ -20,7 +20,7 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 | 02 | Money, test mode | 3d | ✅ 2026-10-14 |
 | 03 | Trust + data minimum | 2d | ✅ 2026-10-14 |
 | 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | ✅ 2026-10-15 |
-| 05 | Close | 1d | ⏳ next |
+| 05 | Close | 1d | ✅ 2026-10-15 |
 
 ## Done-log
 
@@ -75,6 +75,19 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
   - `arc-harnesses` (ADR-1763, distribute REQ-15) verified on its first real run: 673 placed, 0 missing.
   CI on #425 green per job (run 38675000566). 2 days vs 2d (the real half; the fakes half shipped in #404).
   amendments: 2 (ADR-1763, ADR-1764) · reopened: n.
+- **Phase 05 ✅ 2026-10-15 — Cycle 1 closed.** REQ-05 and REQ-12 validated.
+  - REQ-05, met with two named exceptions (ADR-1764): from the main clone after the merge (#425 → `ca72f1f9`, with
+    neon's #432 squashed into it as `ff11d142`), `verify --all` is 32/32, exit 0. The first main run read 31/32
+    because Mozilla Observatory answered 500 for `security-headers`; the slot passed on retry and the whole run was
+    repeated. The board is 34/34 core verified or a named ABSENT. `launch-coverage` reads 33 vetted and 2/34 core
+    slots with zero vetted providers, exactly `domain` and `legal-pages`.
+  - REQ-12: recorded **OPEN-at-first-venture**. No `revenue.received` exists for a launch-scaffolded venture; the
+    rehearsal's money is `revenue.simulated` and nets to 0.
+  - Retro done on #425 (5 lessons, scoreboard row, HISTORY C27). Bundles 01–05 written and verified.
+  - Found at the merge: the lint self-test's baseline copied the registry without the adapters, so every vetted
+    row made it refuse before testing a mutant. Fixed on #425 (`b1003d1a`).
+  CI per job on #425's merged head: run 38715698472, 19/19 success; 268 launch tests. 0 days vs 1d.
+  amendments: 0 · reopened: n.
 
 **Appetite burn:** 13 of 18 days (calendar, 2026-10-03..15; 72%). Both checkpoints fired late: day 7.5 (Phase 01 not
 closed) and the day-12 tripwire (Phase 02 not closed). The scope-cut conversation was held as ADR-1762: nothing is cut,
@@ -83,17 +96,16 @@ keys. Next checkpoint: 100% (day 18) → cut or kill, never extend.
 
 ## Now
 
-**Current position:** Phases 00–04 closed. The owner stamped all four approvals on 2026-10-15 (phases 01–03 and
-the provider vetting). 33 providers are vetted (32 on #425, `neon` on #432); `launch-coverage` reads 2/34 core
-slots with zero vetted providers, exactly the two named exceptions of ADR-1764 (`domain`, `legal-pages`).
+**Current position:** Cycle 1 closed 2026-10-15, 6/6 phases. The lane is IDLE. `arc-sandbox` answers on
+`sandbox.automemory.ai` with 32 slots verified live, and 33 providers are vetted. Spine: phase.closed 05
+`01M4ZJSW064ENA1YAJGHEEMC6Z`.
 
-Phase 05 so far (evidence in `evidence/phase-05/`): the board is 34/34 core verified or a named ABSENT;
-`verify --all` from the branch is 31/32, and `passport` passes from main's runner; bundles for 01–04 are written and
-verified; REQ-12 is recorded OPEN-at-first-venture; the Cycle 2 prompt is checked.
+**Next step:** Cycle 2, through `/arc-kickoff --lane launch`, when the owner opens it. It carries:
+- the Owed list below;
+- the two named exceptions of ADR-1764;
+- REQ-12, which a first real venture answers.
 
-**Next step:** merge #432 and #425 (owner ruling 2026-10-14: one merge, at the end), then from the main clone:
-`verify --all` exit 0, the Phase 05 bundle, `/arc-retro --lane launch`, close Phase 05, and send distribute the
-merge SHA for REQ-15.
+Distribute is sent the #425 merge SHA `ca72f1f9` for its REQ-15.
 
 **Owed (gaps found live):**
 - `release`: its state row carries the ERROR evidence of its first receipt, while its live verify answers READY.
@@ -104,4 +116,4 @@ merge SHA for REQ-15.
 - `security-headers`: should wait for the live build, as frontend does.
 
 **Owner actions:**
-- Stamp the Phase 04 approval `01M4Z29774RP3Q0C75HG4CF18D` (`arc-inbox approve <id> --reason ...` from the main clone).
+- Stamp the Phase 05 approval `01M4ZJSZ3M1NT2BA6QJ2FEJKMP` (`arc-inbox approve <id> --reason ...` from the main clone).

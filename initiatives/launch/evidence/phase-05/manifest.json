@@ -1,0 +1,80 @@
+{
+  "phase": "05",
+  "commit": "ca72f1f94b0b8c47661c3827c4ebcad5839cc5f7",
+  "short": "ca72f1f9",
+  "generated": "2026-10-15T10:52:26Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "e42966b9aeec9f84b1d74d5cde35100693d3c8499b164cf75e699e9f9e74e6ec"
+    },
+    {
+      "name": "attack-1dc6035-r2-boundary.json",
+      "sha256": "7da5e451564a93f66592d90daf0871bcda0d39b44fdd3f25051c45ff30883fe3"
+    },
+    {
+      "name": "attack-1dc6035-r2-logic.json",
+      "sha256": "86e71a6e1add0064570eb42754c855ec617222933391742a4f63a1c87b822e0d"
+    },
+    {
+      "name": "attack-22bbc54-r2-boundary.json",
+      "sha256": "26c66a3e7f6fcafaa5d86925d0cc8ec03cd15c77b3d24e85ce64a265c495191a"
+    },
+    {
+      "name": "attack-22bbc54-r2-logic.json",
+      "sha256": "f221f1f85dc9748fee6cc9719ecec468ed995dcb9e122634ae97da1b2b00a58d"
+    },
+    {
+      "name": "attack-5ce0104-r2-boundary.json",
+      "sha256": "25959eafca1eacbe316e3def93f9c8a9ec0dd1714f00b23dfc1b9fc230063b27"
+    },
+    {
+      "name": "attack-913d01d-r1-boundary.json",
+      "sha256": "714055d369f07fadc485adf1d6e4eb77e94a69b6b540fc23b767d226ff613a50"
+    },
+    {
+      "name": "attack-9eaf4f1-r1-boundary.json",
+      "sha256": "ca83a99de7140266b3380bf6174dde479d09dd5c34e75cfe0ab7f665bcd9b88d"
+    },
+    {
+      "name": "attack-9eaf4f1-r1-logic.json",
+      "sha256": "cc45a521f989c355b07d52efd26d66df45ea8fd541e39ff2122cf8a234069ed7"
+    },
+    {
+      "name": "attack-d8f943a-r1-boundary.json",
+      "sha256": "a221b5d222470f0095a40d17d1fb9bba9530b74471feb21184361f3c53d2ac2b"
+    },
+    {
+      "name": "attack-d8f943a-r1-logic.json",
+      "sha256": "75faa0aee561c6e60b4c4cb313c7e74c471c0e3875b5c2760c883e13357553a8"
+    },
+    {
+      "name": "board.md",
+      "sha256": "171d755116862a03ec764903fa98a8270a3f9ae91baaf12dfe46c79812f5349b"
+    },
+    {
+      "name": "coverage.txt",
+      "sha256": "a7a514f7f79dea2c118507be880ba81205be1188733c37bd8594d4f0cffe92b1"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "068ec2768146f60af0639921a09e5880ae5be4aa0a67ee83ef8432be8157232d"
+    },
+    {
+      "name": "verify-all-main.txt",
+      "sha256": "72653db605b00e4c2b35de8adc5fb13b428253074ea9ff250d580b0d72effc95"
+    },
+    {
+      "name": "verify-all.txt",
+      "sha256": "602b23c122456c0a765b540f66bc11545da7368bd1188a3554b6a27e6d4964a8"
+    },
+    {
+      "name": "verify-passport-main.txt",
+      "sha256": "0f8aa17409193b00a75f71f2caa1c469921546818a6210eb6aa075e9a9294342"
+    },
+    {
+      "name": "vet-ready.md",
+      "sha256": "06ea12a8f3156ff7b44865b25843a2720df5605f69a7103d92215a84c3b4e793"
+    }
+  ]
+}

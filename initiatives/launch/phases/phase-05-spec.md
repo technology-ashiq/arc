@@ -11,8 +11,8 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-05 and REQ-12 acceptance met
-- [ ] cycle closed via `/arc-phase-done 05`
+- [x] REQ-05 and REQ-12 acceptance met
+- [x] cycle closed via `/arc-phase-done 05`
 
 ## Verification plan
 
