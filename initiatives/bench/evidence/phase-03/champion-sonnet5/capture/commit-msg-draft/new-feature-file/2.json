@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "65ced39",
+        "subject": "feat: add median helper"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

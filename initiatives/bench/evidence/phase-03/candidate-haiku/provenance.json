@@ -1,0 +1,91 @@
+{
+  "attempts": 15,
+  "bench": "bench@0.1.0",
+  "budget": {
+    "ceiling_overruns": [],
+    "committed_inr": 90,
+    "k": 3,
+    "min_remaining": 83.6471,
+    "process_cap_inr": 200,
+    "reconciliations": [
+      {
+        "delta": 0,
+        "fixture": "single-file-fix",
+        "measured_attempts": 0,
+        "measured_inr": null,
+        "partial_measurement": false,
+        "reserved_inr": 18,
+        "task_class": "commit-msg-draft"
+      },
+      {
+        "delta": 0,
+        "fixture": "new-feature-file",
+        "measured_attempts": 0,
+        "measured_inr": null,
+        "partial_measurement": false,
+        "reserved_inr": 18,
+        "task_class": "commit-msg-draft"
+      },
+      {
+        "delta": 0,
+        "fixture": "docs-only",
+        "measured_attempts": 0,
+        "measured_inr": null,
+        "partial_measurement": false,
+        "reserved_inr": 18,
+        "task_class": "commit-msg-draft"
+      },
+      {
+        "delta": 0,
+        "fixture": "multi-file-refactor",
+        "measured_attempts": 0,
+        "measured_inr": null,
+        "partial_measurement": false,
+        "reserved_inr": 18,
+        "task_class": "commit-msg-draft"
+      },
+      {
+        "delta": 0,
+        "fixture": "delete-and-add",
+        "measured_attempts": 0,
+        "measured_inr": null,
+        "partial_measurement": false,
+        "reserved_inr": 18,
+        "task_class": "commit-msg-draft"
+      }
+    ],
+    "run_cap_inr": 90
+  },
+  "checkout_unchanged": true,
+  "fingerprint": {
+    "model_id": "haiku",
+    "model_requested": "haiku"
+  },
+  "invocation_violations": [],
+  "metrics": {
+    "commit-msg-draft": {
+      "cost_inr": null,
+      "cost_source": "measured",
+      "n": 15,
+      "p95_ms": 53701,
+      "spend": {
+        "amount": 15,
+        "basis": "harness-reported",
+        "currency": "USD"
+      },
+      "tokens_total": 16967
+    }
+  },
+  "model_applied": "haiku",
+  "model_source": "trial",
+  "router_sha_at_read": "ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52",
+  "router_unchanged": true,
+  "subject": {
+    "ceiling_file": "initiatives/bench/ceilings.json",
+    "ceiling_key": "claude-code/haiku",
+    "ceilings_as_of": "2026-10-13",
+    "driver": "claude-code",
+    "driver_version": "claude-code@1.5.0",
+    "router_sha": "ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52"
+  }
+}

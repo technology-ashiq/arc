@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "8e26b0e226a9549e37250e496c2e52b0a5647176",
+        "subject": "feat: add median helper for numeric arrays"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

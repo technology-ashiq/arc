@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "6da6861",
+        "subject": "refactor: extract sum helper shared by mean and total"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

@@ -5,7 +5,7 @@ cycle: arc-bench (Cycle 13, opened 2026-08-12)
 phase: 04
 appetite: 8d
 burn: 7.25d
-blocked-on: —
+blocked-on: owner — router-merge verdict on approval 01M4Z0AAPCQETTQX1S3C2JJXF4 (arc-inbox, main clone)
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -21,7 +21,7 @@ depends-on: —
 | 00 | The road + steel thread — `drivers/mock`, `version` verb, assertion schema, fixture-repo harness, `commit-msg-draft` armed to 5, one fixture end to end | 3.0d | ✅ done 2026-08-13 |
 | 01 | Bench core — full run, K=3 sequential, K-group admission control, provenance, total encoder, replay proof | 1.5d | ✅ done 2026-08-13 |
 | 02 | Router proposal — three artifacts, gates-first eligibility, `NO PROPOSAL` with reason, `approval.requested` | 0.75d | ✅ done 2026-08-13 |
-| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ⚠️ guard done · real event PENDING (unblocked 2026-08-14) |
+| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ⚠️ guard done · real event RUN 2026-10-15 (sonnet vs haiku, PROPOSE haiku on cost) · verdict owed: owner stamp |
 | 04 | Seal + retro — two mutants, two adversarial surfaces, redaction sweep, runbook, production count from the spine | 1.0d | ✅ done 2026-08-13 |
 
 Phases sum to **7.25d**; the remaining **0.75d is named reserve, not unallocated scope**.
@@ -33,6 +33,14 @@ Phases sum to **7.25d**; the remaining **0.75d is named reserve, not unallocated
 kickoff, not at 6pm on day 8).
 
 ## Done-log
+
+- **2026-10-15 — Phase 03's real event RUN; its verdict is the owner's.** Four fixes merged first:
+  #420 (ADR-0915: the output contract is shown and owner hooks are not loaded), #424 and #426
+  (ADR-0916: the CLI works in the fixture repo, and the run stops at the first attempt that moves
+  the arc checkout, sibling worktrees excepted), #433 (ADR-0917: a prose answer is `model-invalid`, a same-driver candidate is a tier
+  line, spend is compared like for like). Champion `01M4YZFY785H9433R0QEVQMHFD`, candidate
+  `01M4Z0ABRVJ8V06S67FNFH1F31`, approval `01M4Z0AAPCQETTQX1S3C2JJXF4`. Production count read off
+  the spine: **6**. Guard NEXT-CHECK moved to **2026-11-02**.
 
 - **2026-08-13 — Phases 01, 02 and 04 CLOSED; Phase 03 half-closed.** `786a378` green **per JOB**
   on CI run `31680704721`, head SHA confirmed equal to the local HEAD.
@@ -145,6 +153,21 @@ lane to be born`. It was stale — `memory` holds 0700–0709 and `scheduler` ho
 in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **0900**.
 
 ## Now
+
+**2026-10-15 (later): the real event RAN end to end, and the only step left is the owner's
+verdict.** After #433 merged (`9cc0f48f`), both runs went from the main clone, no git write from
+this session during either. Champion `claude-code/sonnet` and candidate `claude-code/haiku` each
+scored 90/90 with schema 15/15. Haiku spent 15 notional US cents to sonnet's 83, so bench filed
+`PROPOSE claude-code/haiku (decided on cost)`. The router diff is the one tier line
+`balanced-workhorse` → `cheap-scan`, and `approval.requested 01M4Z0AAPCQETTQX1S3C2JJXF4`
+(gate `router-merge`) is on the spine between the two `run.completed` receipts. HEAD and branch held
+both times. Two sibling sessions wrote branches into the shared `.git` meanwhile, and the evidence
+names both. **PLAN Assumption #1 FIRED**: identical pass-rates on all five fixtures, so they do not
+tell these two models apart and the proposal rests on cost. The follow-up belongs to
+`commit-msg-draft`'s own eval pack. Evidence: `evidence/phase-03/README.md`. NEXT (owner):
+`cd E:/Work_Hub/01_Automemory/arc && node .claude/scripts/hq/arc-inbox.mjs approve|reject
+01M4Z0AAPCQETTQX1S3C2JJXF4 --reason "..."`. Both outcomes close Phase 03. Then the row flips ✅
+and the lane seals IDLE in one small PR, and an approval's router line lands as its own ADR-0069 PR.
 
 **2026-10-15: the first clean champion run held containment and exposed three gaps between it and a
 verdict (ADR-0917).** `champion-sonnet4` ran from the main clone after #426. HEAD, branch, refs and
@@ -291,11 +314,11 @@ spine — could not be closed.
 
 ## The monthly guard
 
-**NEXT-CHECK: 2026-09-01** (the first working day of September 2026). Owner-started, from the main
+**NEXT-CHECK: 2026-11-02** (the first working day of November 2026; the 2026-09-01 check was never run, because the real event it guards was still blocked). Owner-started, from the main
 clone — never a worktree. The command and how to read its report are in
 `docs/runbooks/bench.md` § *The monthly drift guard*.
 
 Absence is never inferred from nobody having looked: the count that answers it is
 `cat .claude/state/hq/events/*.jsonl | grep -c '"process":"bench@0.1.0"'`, run in the main clone.
-At close it read **0**.
+At close it read **0**. On 2026-10-15, after the real event, it read **6** (2 on 2026-10-14, 4 on 2026-10-15).
 

@@ -1,0 +1,463 @@
+{
+  "candidate": {
+    "ceiling_file": "initiatives/bench/ceilings.json",
+    "ceiling_key": "claude-code/haiku",
+    "ceilings_as_of": "2026-10-13",
+    "driver": "claude-code",
+    "driver_version": "claude-code@1.5.0",
+    "router_sha": "ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52"
+  },
+  "champion": {
+    "ceiling_file": "initiatives/bench/ceilings.json",
+    "ceiling_key": "claude-code/sonnet",
+    "ceilings_as_of": "2026-10-13",
+    "driver": "claude-code",
+    "driver_version": "claude-code@1.5.0",
+    "router_sha": "ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52"
+  },
+  "classes": [
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "adr-record"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (2 of 5 fixtures)",
+      "task_class": "attack-diff"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "build-in-public-draft"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 90,
+          "rate": 1,
+          "total": 90
+        },
+        "cost_inr": null,
+        "p95_ms": 53701,
+        "schema": {
+          "evaluated": 15,
+          "passed": 15,
+          "rate": 1
+        },
+        "spend": {
+          "amount": 15,
+          "basis": "harness-reported",
+          "currency": "USD"
+        }
+      },
+      "champion": {
+        "assertions": {
+          "passed": 90,
+          "rate": 1,
+          "total": 90
+        },
+        "cost_inr": null,
+        "p95_ms": 160109,
+        "schema": {
+          "evaluated": 15,
+          "passed": 15,
+          "rate": 1
+        },
+        "spend": {
+          "amount": 83,
+          "basis": "harness-reported",
+          "currency": "USD"
+        }
+      },
+      "decided_by": "cost",
+      "eligible": true,
+      "gate_failed": null,
+      "reason": null,
+      "task_class": "commit-msg-draft"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "council-convene"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "develop-proof"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "face-ask"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "kickoff-plan"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "lesson-log"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "narrative-verify"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "review-diff"
+    },
+    {
+      "candidate": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "champion": {
+        "assertions": {
+          "passed": 0,
+          "rate": null,
+          "total": 0
+        },
+        "cost_inr": null,
+        "p95_ms": null,
+        "schema": {
+          "evaluated": 0,
+          "passed": 0,
+          "rate": null
+        },
+        "spend": null
+      },
+      "eligible": false,
+      "gate_failed": "coverage",
+      "reason": "NO PROPOSAL - evidence insufficient (1 of 5 fixtures)",
+      "task_class": "rule-promote"
+    }
+  ],
+  "normalizer_version": "1.1.0",
+  "router_sha_at_read": "ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52"
+}

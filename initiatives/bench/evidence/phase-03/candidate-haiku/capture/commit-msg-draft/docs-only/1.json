@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "500c8c8393f5e92e31817477b4af8b00359f50c6",
+        "subject": "docs: document total() usage in README"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

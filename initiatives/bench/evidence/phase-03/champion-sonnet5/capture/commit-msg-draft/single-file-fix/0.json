@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "f546419",
+        "subject": "fix: return 0 from total() for non-array input"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}
