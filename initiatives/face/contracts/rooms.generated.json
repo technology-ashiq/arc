@@ -234,7 +234,9 @@
           "build-in-public-draft",
           "commit-msg-draft",
           "day-close-roll",
+          "distribute-radar",
           "kickoff-plan",
+          "lane-stale",
           "launch-watch",
           "narrative-verify",
           "review-diff"
@@ -258,7 +260,7 @@
           "0200"
         ]
       },
-      "itemCount": 21
+      "itemCount": 23
     },
     {
       "id": "model-policy",
@@ -364,10 +366,12 @@
         "jobs": [
           "brief-materialize",
           "day-close-roll",
+          "distribute-radar",
+          "lane-stale",
           "launch-watch"
         ]
       },
-      "itemCount": 11
+      "itemCount": 13
     },
     {
       "id": "memory",
@@ -1386,7 +1390,9 @@
     "jobs": {
       "brief-materialize": "scheduler",
       "day-close-roll": "scheduler",
-      "launch-watch": "scheduler"
+      "launch-watch": "scheduler",
+      "distribute-radar": "scheduler",
+      "lane-stale": "scheduler"
     },
     "ventures": {
       "lexos": "ventures"

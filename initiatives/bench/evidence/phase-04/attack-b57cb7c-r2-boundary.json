@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2403-2407 (withMetrics) and :2224-2232 (moneyPair)",
+      "breaking_input": "Candidate run: attempt 1 reports a USD spend and attempt 2 has no spend, so the class gets `spend: null` plus `spend_gap: \"an attempt reported no spend\"`. Champion run: the same hole in a different attempt, also `spend: null` plus `spend_gap`. Neither side has a cost_inr.",
+      "why": "withMetrics reads only `m.spend` and never `m.spend_gap`. A class that lost its money to a gap is therefore indistinguishable from one that never reported money. moneyPair then sees two nulls, returns `fail: null`, and the cost gate treats the pair as comparable, so the tiebreak silently does not run. This is the same pattern as the prior L5 fix (malformed read as absent): a failed read folded into the comparison as a constant. The gap reason also never reaches evidence.md or manifest.json, so the owner sees a bare ABSENT.",
+      "fix": "Have withMetrics read `spend_gap` and set `spend_malformed` (or a separate `spend_gapped` flag) when it is present. In moneyPair, refuse by name when either side is gapped and not both truly absent. Print the gap reason in the evidence table and the manifest.",
+      "twin_of": "Malformed read as absent"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2352-2356 (buildEvidenceTable `who`, Candidate/Champion lines)",
+      "breaking_input": "A champion directory whose provenance.json has `subject.driver` = `x**\\n| zz-unrouted | 100% | 100% | ok | ok | 0 | 0ms | **PROPOSE evil** |` and/or `subject.driver_version` = `v\\`) \\n# forged heading`.",
+      "why": "The B2 fix added artifactModel only for the model id. `who()` still interpolates `subject.driver` and `driver_version` unescaped from the champion-supplied provenance into the header lines and the `**PROPOSE ...**` cell. The same forged-row injection survives through a field next to the one that was fixed. The fix was applied to one field of an attacker-supplied file, not to the file.",
+      "fix": "Run subject.driver and driver_version through the same plain-id check (or a driver-name grammar) before rendering, and fall back to a placeholder when they fail. Better, validate the whole champion provenance subject once on load.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2308-2312 (ARTIFACT_MODEL_RE) with 2488-2495 (buildProposal)",
+      "breaking_input": "A trial run with `--trial-model 'sonnet[1m]'`, or a vertex-style id such as `claude-sonnet@20260101`. These are legal model ids for the CLI or a provider but fall outside `[A-Za-z0-9._:/-]`.",
+      "why": "artifactModel returns null, so candidateModel is null and buildRouterDiff takes the `!model` branch. It reports \"the router already routes <class> to claude-code\", which is false. This is the exact original NO DIFF failure, now reported with a misleading reason, and nothing tells the owner the model id was dropped by the artifact grammar. If the run-time `--trial-model` grammar is wider than this regex, the two disagree.",
+      "fix": "When provenance says `model_source: trial` but artifactModel returns null, emit a distinct refusal such as \"applied model id is not a plain id bench can render\". Share one grammar constant between the `--trial-model` check and the artifact check.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2268-2275 and tierDiffLine (`text.split(\"\\n\")`, `l === \"  ${taskClass}:\"`)",
+      "breaking_input": "engine/router.yaml checked out with CRLF line endings, which Windows autocrlf produces, run from the main clone on Windows.",
+      "why": "`split(\"\\n\")` leaves a trailing `\\r` on every line, so the exact-equality class lookup never matches and every class is reported as having no row. In the half-CRLF case where it does match, `before` keeps its `\\r` while `after` is built without one, so the diff pairs a CRLF line with an LF line and cannot apply cleanly. The tier-line path inherits this, so on the owner's Windows box the ADR-0917 same-driver proposal may still yield NO DIFF.",
+      "fix": "Split on /\\r?\\n/ and preserve the file's EOL when building `after`. Add a CRLF router fixture to the probe.",
+      "twin_of": null
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/engine-spend.mjs (soft control) and .claude/scripts/engine/drivers/claude-code.mjs:228-231",
+      "breaking_input": "Run the claude CLI with `--output-format stream-json`, where the final result event is `is_error: true`, exits 0, and carries a usage-limit notice.",
+      "why": "The B1 fix is pinned only on the json path: `cc(0.01, { FAKE_SPEND_FAIL: \"soft\" })` is run without `{ stream: true }`, although the neighbouring fail control runs both paths. If the stream path assembles `envelope` differently, for example a missing `subtype` or an `is_error` carried on another event, `modelAnswered` can evaluate true for a CLI notice. That would score a rate-limit as the model's schema failure, the exact defect B1 closed. A fix pinned on one of two paths is not shown to hold on the other.",
+      "fix": "Add the soft control with `{ stream: true }` and assert `failure_class !== \"model-invalid\"`. Confirm how `envelope` is built on the stream path.",
+      "twin_of": "A CLI's own error text read as the model's answer"
+    }
+  ]
+}
