@@ -63,8 +63,24 @@ switch (scenario) {
     out.verify = await adapter.verify(ctxFor());
     break;
   }
+  case "owner-under-ours":
+  case "two-of-ours": {
+    // The branch holds more than launch's one commit and main moved: it is force-moved only when every commit past main
+    // is launch's; an owner commit under launch's head refuses (attack d8f943a L9).
+    await adapter.scaffold(ctxFor());
+    const line = repo().branches["arc/preview-check"];
+    const ours = line[line.length - 1];
+    if (scenario === "owner-under-ours") line.push({ sha: "d".repeat(40), message: "owner work", files: {} });
+    line.push({ sha: "e".repeat(40), message: ours.message, files: {} });
+    repo().commits.push({ sha: "f".repeat(40), message: "frontend: app", files: { "package.json": "blob" } });
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
+    const after = repo().branches["arc/preview-check"];
+    out.branchBase = after[0].sha === "f".repeat(40);
+    out.branchCommits = after.length;
+    break;
+  }
   case "foreign-branch":
-    repo().branches = { "arc/preview-check": [repo().commits[0], { sha: "b".repeat(40), message: "owner work", files: {} }] };
+    repo().branches ={ "arc/preview-check": [repo().commits[0], { sha: "b".repeat(40), message: "owner work", files: {} }] };
     out.scaffold = await attempt(() => adapter.scaffold(ctxFor()));
     out.prs = (repo().pulls || []).length;
     break;

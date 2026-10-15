@@ -38,7 +38,8 @@ process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const state = { hosting: [], release: [], frontend: [], repo: [{ kind: "github-repo", id: FULL }] };
 // Joined at run time so no diff carries a key-shaped literal: the attack scanner stops on one (fixture, never a real key).
 const PS_KEY = ["AIza", "FixturePageSpeedKey0123456789abcdef"].join("");
-const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", PAGESPEED_API_KEY: PS_KEY };
+// bad-ps-key: a value that would smuggle a second url into the query; it is refused before any call (attack d8f943a L5).
+const ENV = { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", PAGESPEED_API_KEY: scenario === "bad-ps-key" ? `${PS_KEY}&url=https://evil.example` : PS_KEY };
 // A fresh ctx per call, as the runner builds one per attempt; `approvals` stands in for the owner's gate-2 decision.
 const ctxFor = (slot, { row, upstream, approvals = [] }) => makeCtx({
   profile: { slug: "arc-sandbox", brand: { name: "arc sandbox", domain: DOMAIN } }, board: {}, slot: { id: slot }, row,
@@ -84,9 +85,12 @@ switch (scenario) {
   }
   case "low-score":
   case "quota":
+  case "bad-ps-key":
     await release.mod.scaffold(R(["deploy-prod-first"]));
     await frontend.mod.scaffold(F());
     out.frontendVerify = await frontend.mod.verify(F());
+    out.psCalls = live.keys.length;
+    out.psKeyLeaked = JSON.stringify(out.frontendVerify).includes(PS_KEY);
     break;
   case "owner-code":
     // The owner already wrote app/page.js: the shell is not committed over it.

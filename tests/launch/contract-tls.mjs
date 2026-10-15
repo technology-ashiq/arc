@@ -30,6 +30,8 @@ const opts = {
   "scanner-refused": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: "max-age=63072000" },
   "scanner-refused-no-live": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: null },
   "scanner-refused-zero": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: "max-age=0" },
+  "redirect-same-host": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: "max-age=63072000", liveRedirect: { status: 308, location: "/home" } },
+  "redirect-elsewhere": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false, http: 403 }], liveHsts: "max-age=63072000", liveRedirect: { status: 301, location: "https://www.other.example/" } },
   "no-hsts-live-has": { endpoints: [{ ipAddress: "76.76.21.21", grade: "A", hsts: false }], liveHsts: "max-age=63072000" },
 }[scenario] || {};
 const fake = makeSslLabs(opts);

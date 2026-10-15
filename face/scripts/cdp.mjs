@@ -248,16 +248,19 @@ export class CdpSession {
     });
   }
 
-  send(method, params = {}, sessionId) {
+  // `timeoutMs` widens one call past the session default: an awaited Runtime.evaluate that drives a whole op carries its
+  // own in-page cap, and the 30 s transport default used to fire first and hide it (bench.run-model, Windows CI 2026-10-14).
+  send(method, params = {}, sessionId, { timeoutMs } = {}) {
     if (this.closed) return Promise.reject(new Error(`CDP ${method}: session is closed`));
     const id = ++this.nextId;
     const msg = { id, method, params };
     if (sessionId) msg.sessionId = sessionId;
+    const limit = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : this.callTimeoutMs;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`CDP ${method} timed out after ${this.callTimeoutMs} ms`));
-      }, this.callTimeoutMs);
+        reject(new Error(`CDP ${method} timed out after ${limit} ms`));
+      }, limit);
       this.pending.set(id, { resolve, reject, method, timer });
       try { this.ws.send(JSON.stringify(msg)); } catch (e) { clearTimeout(timer); this.pending.delete(id); reject(e); }
     });
@@ -441,7 +444,7 @@ export async function openPage(session) {
   return {
     targetId,
     sessionId,
-    send: (method, params) => session.send(method, params, sessionId),
+    send: (method, params, opts) => session.send(method, params, sessionId, opts),
     on: (method, handler) => session.on(method, (params, sid) => { if (sid === sessionId) handler(params); }),
   };
 }

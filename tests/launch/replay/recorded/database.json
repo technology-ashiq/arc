@@ -1,0 +1,209 @@
+{
+ "slot": "database",
+ "provider": "supabase",
+ "recorded_at": "2026-10-14T10:49:55.524Z",
+ "profile": {
+  "slug": "arc-sandbox",
+  "type": "saas-b2b",
+  "region": "in",
+  "payment_model": "gateway",
+  "tenancy": "multi",
+  "ai": false,
+  "honesty_class": "rehearsal",
+  "ci_protection": "absent-plan",
+  "compliance": [
+   "dpdp",
+   "gst"
+  ],
+  "brand": {
+   "name": "arc sandbox",
+   "domain": "sandbox.automemory.ai"
+  },
+  "repository": "technology-ashiq/arc-sandbox",
+  "kill_lines": {
+   "days_without_revenue": 90,
+   "traffic_floor_monthly": 100
+  }
+ },
+ "resources": [
+  {
+   "kind": "supabase-project",
+   "id": "fixtureref0000000001",
+   "tag": "arc-sandbox@database@supabase"
+  },
+  {
+   "kind": "db-probe-table",
+   "id": "fixtureref0000000001:public.launch_probe",
+   "tag": "arc-sandbox@database@supabase"
+  }
+ ],
+ "upstream": {
+  "secrets": [
+   {
+    "kind": "github-file",
+    "id": "technology-ashiq/arc-sandbox:.env.example@5ec6f6d5e47cc64e0ca63c64232fc673be9adb9d",
+    "tag": "arc-sandbox@secrets@vercel-env-store"
+   },
+   {
+    "kind": "env-contract",
+    "id": "technology-ashiq/arc-sandbox:.env.example",
+    "tag": "arc-sandbox@secrets@vercel-env-store"
+   }
+  ]
+ },
+ "env_keys": [
+  "SUPABASE_ACCESS_TOKEN"
+ ],
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://api.supabase.com/v1/projects",
+   "status": 200,
+   "headers": {
+    "access-control-allow-credentials": "true",
+    "access-control-expose-headers": "x-connection-encrypted,x-forwarded-for,user-agent,CF-Connecting-IP,Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a60517dd969de0-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:49:52 GMT",
+    "etag": "W/\"476-DiItml4KXr+taBWcB7fI96TI/Zc\"",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin",
+    "x-gotrue-id": "00000000-0000-4000-8000-000000000001",
+    "x-powered-by": "Express",
+    "x-ratelimit-limit": "120",
+    "x-ratelimit-remaining": "119",
+    "x-ratelimit-reset": "60"
+   },
+   "setCookie": [
+    "__cf_bm=MqpMs23xJTlDCbGwSri3PBminchpGjMcd.7CNfeUxAE-1791974992.6131678-1.0.1.1-h6qXKRete9glXiUcX9tOJhSHbBI9lLlssbS0Ye.oqKl.oFBr7bfjW7H.LsTEDFKIn0z6R28cbrBj8Tm8j19m3ZM1b_mlZHUB0ZNCK25JDPw6g2APJ7M0vvH7_4K.1Mte; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.com; Expires=Wed, 14 Oct 2026 11:19:52 GMT"
+   ],
+   "body": "[{\"id\":\"fixtureref0000000001\",\"ref\":\"fixtureref0000000001\",\"organization_id\":\"fixtureorg1000000000\",\"organization_slug\":\"fixtureorg1000000000\",\"name\":\"arc-sandbox\",\"region\":\"ap-south-1\",\"created_at\":\"2026-10-12T18:23:47.550959Z\",\"status\":\"ACTIVE_HEALTHY\",\"database\":{\"host\":\"db.fixtureref0000000001.supabase.co\",\"version\":\"17.11.0.003\",\"postgres_engine\":\"17\",\"release_channel\":\"ga\"}}]"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.supabase.com/v1/projects/fixtureref0000000001",
+   "status": 200,
+   "headers": {
+    "access-control-allow-credentials": "true",
+    "access-control-expose-headers": "x-connection-encrypted,x-forwarded-for,user-agent,CF-Connecting-IP,Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a60518f9db9de0-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:49:52 GMT",
+    "etag": "W/\"17e-gg64H2k3hpqWf/vJ0LMvaRY2kdo\"",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin",
+    "x-gotrue-id": "00000000-0000-4000-8000-000000000001",
+    "x-powered-by": "Express",
+    "x-ratelimit-limit": "120",
+    "x-ratelimit-remaining": "119",
+    "x-ratelimit-reset": "60"
+   },
+   "setCookie": [
+    "__cf_bm=.0w8DiEU8C08DhsHECD99NY.bhOn1d2MIDqBtx.QuFg-1791974992.7995691-1.0.1.1-0aQa_NIPy1NOtFtGSbp3wvbIIwD5aiLZNTiG7UZQZxDdl5GZltEq2g1u4lvophyv_ui1LpHb40JgkYKtHCCp8_8BS2BUvqg38JKrHIafP1KKDjo0YfhEDYXft44lJy99; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.com; Expires=Wed, 14 Oct 2026 11:19:52 GMT"
+   ],
+   "body": "{\"id\":\"fixtureref0000000001\",\"ref\":\"fixtureref0000000001\",\"organization_id\":\"fixtureorg1000000000\",\"organization_slug\":\"fixtureorg1000000000\",\"name\":\"arc-sandbox\",\"region\":\"ap-south-1\",\"created_at\":\"2026-10-12T18:23:47.550959Z\",\"status\":\"ACTIVE_HEALTHY\",\"database\":{\"host\":\"db.fixtureref0000000001.supabase.co\",\"version\":\"17.11.0.003\",\"postgres_engine\":\"17\",\"release_channel\":\"ga\"}}"
+  },
+  {
+   "method": "POST",
+   "url": "https://api.supabase.com/v1/projects/fixtureref0000000001/database/query",
+   "status": 201,
+   "headers": {
+    "access-control-allow-credentials": "true",
+    "access-control-expose-headers": "x-connection-encrypted,x-forwarded-for,user-agent,CF-Connecting-IP,Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset",
+    "cache-control": "no-cache",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a60519dca19de0-MAA",
+    "connection": "keep-alive",
+    "content-type": "application/json",
+    "date": "Wed, 14 Oct 2026 10:49:53 GMT",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin",
+    "x-gotrue-id": "00000000-0000-4000-8000-000000000001",
+    "x-powered-by": "Express",
+    "x-ratelimit-limit": "120",
+    "x-ratelimit-remaining": "119",
+    "x-ratelimit-reset": "60"
+   },
+   "setCookie": [
+    "__cf_bm=9jQJMwaQTP0i7oHwOBfo0jw0b3FIluqaNZyOWXLahjk-1791974992.9341748-1.0.1.1-aQZcJvfJHweZ59.kKVLGv76qclB7SGvl2KVzUpwDraDL_XEjESgIHdX82AcpfmXcftc0lMSIxlj4IB_Hj_CKb_EHF89_bB0HAsP6Fl0cjyk28Xk3VR7jBDngcgebydTT; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.com; Expires=Wed, 14 Oct 2026 11:19:53 GMT"
+   ],
+   "body": "[{\"n\":1}]"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.supabase.com/v1/projects/fixtureref0000000001/api-keys",
+   "status": 200,
+   "headers": {
+    "access-control-allow-credentials": "true",
+    "access-control-expose-headers": "x-connection-encrypted,x-forwarded-for,user-agent,CF-Connecting-IP,Retry-After,X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a6051f1c83fe6e-MAA",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:49:53 GMT",
+    "etag": "W/\"60e-ABlwWbrFQVh4OE571qxql7LPqYc\"",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Origin",
+    "x-gotrue-id": "00000000-0000-4000-8000-000000000001",
+    "x-powered-by": "Express",
+    "x-ratelimit-limit": "120",
+    "x-ratelimit-remaining": "119",
+    "x-ratelimit-reset": "60"
+   },
+   "setCookie": [
+    "__cf_bm=QCvT7WVjZdTnzPtSEUn9tgMdGNbpF03OiFTib3kQsm0-1791974993.772562-1.0.1.1-tv3kfw3qIapfNKZ9A4KStYQN4rUNq4M7Q1ZrBEGZwfTcKOZGTeZ9H3F.wshU_UAa6nNhW.qijwp0OFwuRu0RMqpS.Z7Hax_FjOySekJP_NNoRaj9tu85uEhFWUiHQJUn; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.com; Expires=Wed, 14 Oct 2026 11:19:53 GMT"
+   ],
+   "body": "[{\"api_key\":\"eyJxaXaxXxXXXxX0XxXxXxX0aXX0XxxXXXX0.axXxa0XxXxXxaXXxXxXxXXXxXxXxXxX0Xx0xaXXxa0xxax00XxXxaXX0axxxXxxxax0xXXX0XxXxa00xXXXxXXXxXxX0XXX0Xxx0XxaxXxX0aXX0XxXxXxXxXXXxX00.x0xX0XX0XXXx0X00axax0xXxXxXX0xXXXXXxxXXxax0\",\"id\":\"anon\",\"type\":\"legacy\",\"prefix\":\"j9gY3\",\"name\":\"anon\",\"description\":\"Legacy anon API key\",\"hash\":\"MnDoDoZk6eEH2Q1I0iuWGkNkKYbVmaZ8-4UO34BT4Ns\"},{\"api_key\":\"eyJxaXaxXxXXXxX0XxXxXxX0aXX0XxxXXXX0.axXxa0XxXxXxaXXxXxXxXXXxXxXxXxX0Xx0xaXXxa0xxax00XxXxaXX0axxxXxxxax0xXXX0XxXxaxXxX0Xaax0xXXXxXxxxaXX0XXa0XXxxXXXxXxxxXXxxXxxxXXX0XXX0XXX0aX.XxXxX-XxxxX-0-xX0xXX00x00xXx00X0Xx0-x_Xxa0X\",\"id\":\"service_role\",\"type\":\"legacy\",\"prefix\":\"QqDuR\",\"name\":\"service_role\",\"description\":\"Legacy service_role API key\",\"hash\":\"8ZwkfWaugl27rDnFE2ERCRBEV1lyNDN4Dr3F0xtBFWQ\"},{\"api_key\":\"sb_publishable_xa00xXXXxxxxXxxaXaXXXX_0xaaX0Xx\",\"id\":\"00000000-0000-4000-8000-000000000002\",\"type\":\"publishable\",\"prefix\":\"sb_publishable_he36w\",\"name\":\"default\",\"description\":null,\"hash\":\"u38YNwnV8XZgg-ux49UxqA5_vKrIosqPqGWEyumjvo0\",\"secret_jwt_template\":null,\"inserted_at\":\"2026-10-12T18:23:47.599129+00:00\",\"updated_at\":\"2026-10-12T18:23:47.599129+00:00\"},{\"api_key\":\"sb_secret_J3C3Y··························\",\"id\":\"00000000-0000-4000-8000-000000000003\",\"type\":\"secret\",\"prefix\":\"sb_secret_J3C3Y\",\"name\":\"default\",\"description\":null,\"hash\":\"IhsrBwtv6yQvskNURhrRcR4hxmJy_JVJG3bEACuG9bw\",\"secret_jwt_template\":{\"role\":\"service_role\"},\"inserted_at\":\"2026-10-12T18:23:47.599129+00:00\",\"updated_at\":\"2026-10-12T18:23:47.599129+00:00\"}]"
+  },
+  {
+   "method": "GET",
+   "url": "https://fixtureref0000000001.supabase.co/rest/v1/launch_probe?select=id",
+   "status": 200,
+   "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4a60522fb9d0577-MAA",
+    "connection": "keep-alive",
+    "content-length": "2",
+    "content-location": "/launch_probe?select=id",
+    "content-profile": "public",
+    "content-range": "*/*",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:49:55 GMT",
+    "sb-gateway-version": "2",
+    "sb-jwt-alg": "HS256",
+    "sb-jwt-iss": "supabase",
+    "sb-project-ref": "fixtureref0000000001",
+    "sb-request-id": "00000000-0000-4000-8000-000000000004",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-upstream-service-time": "389"
+   },
+   "setCookie": [
+    "__cf_bm=VrDaef.mhDfQKxJcMoy_IZBezrs2dZw7hz0Ns5MpXgE-1791974994.3952851-1.0.1.1-0CCZR6QyJMZD4O4B8mpNS51otreGAzK0X7EpVguz91nbzt2rGeLooNd0EibjprraI8Jr3QYaNgWiUG2foVqoDIhDvWRuYtbT6cG2YpDYCeILGLAAC4faQANAgESlstOu; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Wed, 14 Oct 2026 11:19:55 GMT"
+   ],
+   "body": "[]"
+  }
+ ],
+ "answer": {
+  "ok": true,
+  "answerer": "api.supabase.com + fixtureref0000000001.supabase.co"
+ }
+}

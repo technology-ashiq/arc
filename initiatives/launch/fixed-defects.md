@@ -139,3 +139,16 @@ Format: **defect** — where it was fixed — *the pattern to check elsewhere*.
 - **A worker with no hard exit could hold the runner to the slot timeout**, B5; **a state re-read could throw on an unreadable file**, B6; **--again's precondition was checked outside the lock**, B13 (913d01d)
 - **A process exit code was read as the answer after the answer was saved** — Windows libuv abort after the save; the runner now trusts the cleared-then-saved last_verify, B1 (5ce0104) — *every child result: is the result the file it wrote, or how it died?*
 - **--again keyed on the gate string only** — an owner-approval slot is refused too, B3 (5ce0104)
+- **A saved ok was trusted after any exit** — now only exit 0 or the Windows libuv abort (0xC0000409); a signal or exit 7 fails, B1 (d8f943a) — *every child result: which deaths are forgiven, by name?*
+- **launch's SMTP block judged by host+user**, L1; **env targets guessed from "exists somewhere"**, L2; **rebuild keyed on this run placing, not the live build's age**, L3 (d8f943a) — *ownership by record, timing by the provider's own clock*
+- **A PageSpeed key with no shape check** reached the query and could ride an error message, L5/B6 (d8f943a) — *every env value: shape-checked before use, cut from every error*
+- **Script nonces matched by one double-quote regex** — tags now read by attribute grammar, comments out, read capped while streaming, L6/B9 (d8f943a)
+- **HSTS read off a redirect's own headers**, L7; **TLS polls past the slot**, B7 (d8f943a)
+- **The drill's user list fell back on any failure, stderr discarded**, L8/B4 (d8f943a)
+- **A branch judged stale by its head's parent**, now GitHub's compare, moved only when every commit past main is launch's, L9 (d8f943a)
+- **"Newest digest" taken from list order** — restore-drill now hashes the drill file on main and requires backup to have written it, L11 (d8f943a); **the in-attempt verify dropped what an older state read lacked**, now the union, B3
+- **The drill's fallback matched any "launch_ops ... does not exist" line**, now psql's exact words as fixed strings, B5; **any line reached COPY**, now whole uuid lines only, B6 (22bbc54)
+- **--again keyed on `approval === true` only** — a "true" string or a slot with sensitive actions is refused too, B7 (22bbc54) — *every boolean read from config: in any spelling*
+- **A raw record could be written inside a git work tree**, B1; **its URLs kept a `key` value**, B2; **a failed request went unrecorded**, B3; **a record write error lost the probe's answer**, B4 (9eaf4f1) -- *every artifact holding live secrets: where may it land, and what may it hold?*
+- **The replay clock never moved**, so a deadline loop could spin, B5; **a secret's escaped forms escaped masking**, B7; **an empty scan directory passed**, B8; **a secret inside a longer one was half-replaced**, L12 (9eaf4f1)
+- **The git-tree check read the lexical path**, now every ancestor's real path too, B1; **raw URLs kept userinfo and secret-named query values**, B3; **the recorder read a body unbounded**, B4; **a non-JSON listing passed unfiltered**, B7 (1dc6035)

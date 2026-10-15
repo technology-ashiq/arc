@@ -25,6 +25,8 @@ const opts = {
   "csp-dropped": { serve: (src) => src.split("res.headers.set(\"content-security-policy\", csp);").join("") },
   "unsafe-inline": { serve: (src) => src.split("'strict-dynamic'").join("'unsafe-inline'").split("'nonce-{NONCE}' ").join("") },
   "static": { rendering: "static" },
+  "single-quoted": { rendering: "single-quoted" },
+  "decoy": { rendering: "decoy" },
   "host-hsts": { hostHeaders: { "Strict-Transport-Security": "max-age=63072000" } },
   "grade-b": { observatory: { status: 200, grade: "B", score: 75 } },
   "rate-limited": { observatory: { status: 429 } },
@@ -65,6 +67,8 @@ switch (scenario) {
   case "csp-dropped":
   case "unsafe-inline":
   case "static":
+  case "single-quoted":
+  case "decoy":
   case "host-hsts":
   case "grade-b":
   case "rate-limited":

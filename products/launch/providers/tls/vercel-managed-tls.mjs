@@ -65,12 +65,20 @@ const unscanned = (why) => ({ ok: false, reason: `UNSCANNED(${say(why, 100)})` }
 // inside the slot's 300 s timeout. Every endpoint (each IP the name resolves to) must grade A or better with HSTS.
 // A cached answer may pass but never fail: it can predate the app (arc-sandbox's first run read "no HSTS" from a scan
 // of the pre-frontend 404 while the live site sent HSTS), so a failing cached answer starts one fresh scan (ADR-1753).
+const POLL_BUDGET_MS = 240000;
+
 async function probe(ctx) {
   const domain = domainOf(ctx);
   let url = `${SSLLABS}/analyze?host=${encodeURIComponent(domain)}&publish=off&fromCache=on&maxAge=24&all=done`;
   let last = "scan not started";
   let cached = true;
+  // The polls fit a fixed budget well inside the slot's 300 s, however long each answer took (attack d8f943a B7): a poll
+  // whose wait would cross it is not started. The venture's own HSTS answer is asked once per probe.
+  const start = Date.now();
+  let liveAnswer = null;
+  const liveOnce = async () => (liveAnswer === null ? (liveAnswer = await liveHsts(ctx, domain)) : liveAnswer);
   for (let i = 0; i < 9; i++) {
+    if (i && Date.now() - start + 30000 > POLL_BUDGET_MS) { last = `${last}; poll budget spent`; break; }
     if (i) await wait(30000, ctx.signal);
     const r = await ctx.fetch(url, { method: "GET", headers: { "user-agent": "arc-launch" } }).then(
       async (res) => { let b = null; try { b = await res.json(); } catch { b = null; } return { status: res.status, body: b }; },
@@ -93,7 +101,7 @@ async function probe(ctx) {
     // that reading is blind, not "absent", and the header is read from the venture itself instead (ADR-1753).
     const hsts = (e) => !!(e.details && e.details.hstsPolicy && e.details.hstsPolicy.status === "present");
     const blind = (e) => { const s = Number(e.details && e.details.httpStatusCode); return !(s >= 200 && s < 400); };
-    const live = eps.some((e) => !hsts(e) && blind(e)) ? await liveHsts(ctx, domain) : false;
+    const live = eps.some((e) => !hsts(e) && blind(e)) ? await liveOnce() : false;
     const bad = eps.filter((e) => !GOOD.has(e.grade) || !(hsts(e) || (blind(e) && live)));
     if (bad.length && fromCache) {
       url = `${SSLLABS}/analyze?host=${encodeURIComponent(domain)}&publish=off&startNew=on&all=done`;
@@ -108,15 +116,27 @@ async function probe(ctx) {
   return unscanned(last);
 }
 
-// The venture's own answer to a browser-shaped GET: HSTS present with a positive max-age. Any failure is "no".
+// The venture's own answer to a browser-shaped GET: HSTS present with a positive max-age. A redirect that carries the
+// header counts (a browser keeps HSTS from any https answer); one that does not is followed only within https://domain,
+// at most three hops, and an answer that is neither 2xx nor 3xx is "no" (attack d8f943a L7). Any failure is "no".
 async function liveHsts(ctx, domain) {
-  let res;
-  try { res = await ctx.fetch(`https://${domain}/`, { method: "GET", redirect: "manual", headers: { "user-agent": "arc-launch" } }); } catch (e) {
-    if (e && e.code) throw e;
-    return false;
+  let url = `https://${domain}/`;
+  for (let hop = 0; hop < 4; hop++) {
+    let res;
+    try { res = await ctx.fetch(url, { method: "GET", redirect: "manual", headers: { "user-agent": "arc-launch" } }); } catch (e) {
+      if (e && e.code) throw e;
+      return false;
+    }
+    if (res.body) await res.body.cancel().catch(() => {});
+    const m = String((res.headers && res.headers.get("strict-transport-security")) || "").match(/(?:^|;)\s*max-age\s*=\s*"?(\d+)"?\s*(?:;|$)/i);
+    if (res.status >= 200 && res.status < 400 && m && Number(m[1]) > 0) return true;
+    if (!(res.status >= 300 && res.status < 400)) return false;
+    let next;
+    try { next = new URL(String(res.headers.get("location") || ""), url); } catch { return false; }
+    if (next.protocol !== "https:" || next.hostname !== domain) return false;
+    url = next.href;
   }
-  const m = String((res.headers && res.headers.get("strict-transport-security")) || "").match(/(?:^|;)\s*max-age\s*=\s*"?(\d+)"?\s*(?:;|$)/i);
-  return !!m && Number(m[1]) > 0;
+  return false;
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

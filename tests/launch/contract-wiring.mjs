@@ -21,14 +21,14 @@ const rows = loadRegistry();
 const slots = loadCatalog();
 const PROFILE = (slug) => ({ slug, type: "saas-b2b", region: "in", payment_model: "gateway", tenancy: "multi", honesty_class: "rehearsal",
   brand: { name: slug, domain: "sandbox.automemory.ai" }, repository: `technology-ashiq/${slug}`, kill_lines: { days_without_revenue: 90, traffic_floor_monthly: 100 } });
-const run = async (slotId, providerId, { slug = "arc-sandbox", upstream = {}, resources = [] } = {}) => {
+const run = async (slotId, providerId, { slug = "arc-sandbox", upstream = {}, resources = [], root = null } = {}) => {
   const row = rows.find((r) => r.id === providerId);
   const slot = slots.find((s) => s.id === slotId);
   const mod = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
   const state = [...resources];
   const ctx = () => makeCtx({ profile: PROFILE(slug), board: {}, slot, row, root: STATE, resources: state, upstream, tag: `${slug}@${slotId}@${providerId}`, attempt: 1,
     signal: undefined, env: {}, report: (r) => { if (!state.some((x) => x.kind === r.kind && x.id === r.id)) state.push(r); },
-    arcProbe: makeArcProbe({ venture: slug, profile: PROFILE(slug), catalog: PATHS.catalog, stateDir: STATE }) });
+    arcProbe: makeArcProbe({ venture: slug, profile: PROFILE(slug), catalog: PATHS.catalog, stateDir: STATE, root }) });
   let scaffold;
   try { scaffold = { ok: true, kinds: (await mod.scaffold(ctx())).resources.map((r) => r.kind) }; } catch (e) { scaffold = { ok: false, code: e.code || null }; }
   return { scaffold, verify: await mod.verify(ctx()) };
@@ -60,6 +60,32 @@ switch (scenario) {
     s = setSlot(s, "dns", { state: "verified", provider: "cloudflare-dns", resources: [{ kind: "dns-record", id: "rec_fixture01" }] });
     saveState(STATE, s);
     out.result = await run("teardown-plan", "teardown-render");
+    break;
+  }
+  case "harnesses": {
+    // The REAL bin/arc.mjs init into a temp venture tree, with HOME moved so no consumers.json outside the temp dirs is
+    // touched. Every arm asserts on arc's own doctor, never on the adapter's report.
+    const HOME = mkdtempSync(join(tmpdir(), "launch-wiring-home-"));
+    const VENTURE = mkdtempSync(join(tmpdir(), "launch-wiring-venture-"));
+    process.on("exit", () => { rmSync(HOME, { recursive: true, force: true }); rmSync(VENTURE, { recursive: true, force: true }); });
+    process.env.HOME = HOME;
+    process.env.USERPROFILE = HOME;
+    const REPO = { repo: [{ kind: "github-repo", id: "technology-ashiq/arc-sandbox" }] };
+    out.noRepo = await run("arc-harnesses", "arc-checkout", { root: VENTURE });
+    out.before = out.noRepo.verify;
+    out.first = await run("arc-harnesses", "arc-checkout", { root: VENTURE, upstream: REPO });
+    const { writeFileSync, readdirSync } = await import("node:fs");
+    out.manifest = readdirSync(VENTURE).includes(".arc-install.json");
+    // Resume: a clean install is not installed twice, and the doctor still answers clean.
+    out.again = await run("arc-harnesses", "arc-checkout", { root: VENTURE, upstream: REPO });
+    // Drift: one placed file edited by hand is an unmanaged-conflict, and verify says so.
+    const { doctor } = await import("../../.claude/scripts/engine/install-targets/common.mjs");
+    const placed = Object.keys(JSON.parse((await import("node:fs")).readFileSync(join(VENTURE, ".arc-install.json"), "utf8")).files)[0];
+    writeFileSync(join(VENTURE, placed), "edited by hand\n");
+    out.drifted = (await run("arc-harnesses", "arc-checkout", { root: VENTURE, upstream: REPO })).verify;
+    out.doctorConflicts = doctor(VENTURE).counts["unmanaged-conflict"];
+    // A probe with no venture root refuses rather than reading arc's own tree.
+    out.noRoot = (await run("arc-harnesses", "arc-checkout", { upstream: REPO })).verify;
     break;
   }
   case "not-wiring": {

@@ -304,7 +304,8 @@ export async function runFlows(opts, log = (line) => process.stdout.write(line +
         const expect = flowExpect(op);
         const arg = { id: op.id, fields, input, humanRun: op.humanRun === true, frozen: FROZEN, capMs: 180000, expect, refusal: REFUSALS[op.id] || "" };
         const errorsBefore = errors.length;
-        const r = await page.send("Runtime.evaluate", { expression: `(${pageFlow.toString()})(${JSON.stringify(arg)})`, awaitPromise: true, returnByValue: true });
+        // The transport waits out the flow's own cap plus a margin, so a slow op fails with the page's step, not a CDP timeout.
+        const r = await page.send("Runtime.evaluate", { expression: `(${pageFlow.toString()})(${JSON.stringify(arg)})`, awaitPromise: true, returnByValue: true }, { timeoutMs: arg.capMs + 15000 });
         const res = r.result && r.result.value ? r.result.value : { ok: false, step: "the page returned nothing" };
         if (!res.ok) { failed.push(op.id); log(`flow: FAIL ${op.id} -- ${oneLine(redactSecrets(res.step + (res.text ? ` :: ${res.text}` : ""), [opts.token]))}`); continue; }
         if (expect === "refusal") {

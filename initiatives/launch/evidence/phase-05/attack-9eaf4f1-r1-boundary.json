@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/worker.mjs:79-99",
+      "breaking_input": "ARC_LAUNCH_RECORD set to a relative path, or to a path inside the arc repo or the venture root (e.g. `.`, `tests/launch/replay/recorded`). The worker writes raw, unredacted exchanges (tokens in headers, session cookies, magic-link bodies, owner data) there.",
+      "why": "The ADR says the directory is outside any repo, but nothing checks it. The raw record sits in a tree that can be staged and pushed to the public arc repo, and a relative path resolves against the worker cwd. This is the same class as `--venture-root .` pointing a write boundary at arc's public repo.",
+      "fix": "Resolve the path with realpath, refuse it when it is relative or inside the arc root, the venture root or any git worktree (`git rev-parse` run in that dir), and create the files with mode 0600.",
+      "twin_of": "`--venture-root .` pointed ctx.write at arc's public repo -> every user-supplied directory that becomes a write boundary"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/worker.mjs:84-88",
+      "breaking_input": "The recorder wraps globalThis.fetch and captures `init` headers? No: it stores the response headers, the URL and the body. A request URL carrying a credential in its query (PageSpeed `?key=`, `?token=`, `?code=`) is written verbatim. An error response that echoes the request Authorization is also written.",
+      "why": "The raw record keeps `url: String(u)` unredacted. If redact.mjs is run without the env file containing that key, or the key is a different value, the key survives into the fixtures. The scan only catches the AIza shape. Nothing catches other keys in query strings, such as a Resend or Cloudflare value.",
+      "fix": "Strip the query values of key, token, code and apikey at record time, and have redact.mjs and scan.mjs refuse any URL query value outside an allowlist.",
+      "twin_of": "A PageSpeed key with no shape check -> every env value: shape-checked before use, cut from every error"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:80-91",
+      "breaking_input": "A verify probe whose fetch rejects (DNS failure, abort from the slot timeout, TLS error), or a fetch that follows a redirect.",
+      "why": "`await real(u, init)` throws before `exchanges.push`, so a failed request is never recorded. The replay then answers that request with 599 and names it as unmatched, or the probe takes a different path than in the real run. Redirects are followed inside real fetch, so only the final hop is recorded under the original URL. The replay therefore tests a different request sequence than the one that ran. Separately, `res.clone().text()` buffers the whole body unbounded, so a large or streaming response defeats any bounded read the probe applies.",
+      "fix": "Record in a try/catch and push a `{url, method, error}` exchange on rejection. Record the redirect chain, or pass `redirect: \"manual\"` as ctx.fetch does. Bound the body read.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing -> every bounded read: bound the READ, not the result"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:93-98",
+      "breaking_input": "The slot timeout fires (clearTimeout happens after, and the abort kills the probe), or the process is killed between verify finishing and writeFileSync. Also a recordDir on a read-only or full disk, or a path where mkdirSync throws.",
+      "why": "mkdirSync/writeFileSync run outside any try/catch before `save({last_verify})`. A recording error throws out of the worker, so the slot's last_verify is never saved and the process dies with an uncaught exception. Verify state is lost because of an optional debug feature. The write is also not atomic, so a kill leaves a truncated JSON file that redact then reads with a raw SyntaxError.",
+      "fix": "Wrap the record write in try/catch and warn without throwing, write to a temp file and rename it, and save last_verify first.",
+      "twin_of": "A process exit code was read as the answer after the answer was saved -> every child result: is the result the file it wrote, or how it died?"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "tests/launch/replay/replay.mjs:29-39",
+      "breaking_input": "An adapter that calls `setTimeout` for a timeout guard or a poll, or that measures elapsed time with Date.now across a wait.",
+      "why": "The replay forces every setTimeout to 0 ms and freezes Date. A poll loop such as `while (Date.now() < deadline)` never advances, so it spins forever and hangs CI (no exit, no kill). A timeout guard fires immediately and aborts a healthy probe. The class replaces `new Date(x)` args only when none are given, but `Date.parse` and `Date.UTC` stay real. The worker's own `ctx.signal` is `undefined`, so the abort-before-sleep path is never exercised.",
+      "fix": "Advance the fake clock on each setTimeout call and bound the loops with a per-slot deadline in the bats `run` (a `timeout` wrapper).",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll -> every wait, retry or poll loop in an adapter or the runner"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:75-82",
+      "breaking_input": "A recording whose first-seen exchange bodies contain a JSON number, null or text body. `scrub(b)` is applied to a parsed non-object such as `null` or a string, and `JSON.stringify(scrub(null))` returns \"null\". Also a body that is the empty string with `x.url` relative, where `new URL(x.url)` throws a raw TypeError.",
+      "why": "A recorded failed exchange or a non-URL string url crashes the pass without a refusal message. More important: a body that fails JSON.parse is `continue`d, so the PII_DROP/PERSON scrub and the listing filters are skipped entirely for it. An HTML body or a JSON body with a BOM or trailing text keeps the owner's other projects and domains. The text rules in RULES are the only defence for it, and they do not cover project names or domains of other ventures.",
+      "fix": "Treat an unparseable body that matches a listing path as a refusal, strip a BOM before parsing, and make the leak gate also check the names of every non-venture project and domain seen in the raw file.",
+      "twin_of": "A filter that skips on parse failure -> every parse that falls through to the unredacted path"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:101-116",
+      "breaking_input": "A raw secret value of 8 characters or more that is also a substring of a harmless word, e.g. an env value `production` or `localhost`, or a value with regex-special/escape characters such as a quote or backslash that appears JSON-escaped in the serialised record.",
+      "why": "Secrets are replaced with `s.split(v).join(...)` on the JSON-stringified text. A value containing `\"`, `\\` or a newline appears escaped in `s`, so the raw value never matches and survives, and the leak gate (`s.includes(v)`) uses the same unescaped value and passes. A value of `production` rewrites every unrelated occurrence of the word. The `.replace(/^[\"']|[\"']$/g, \"\")` strip also leaves a trailing inline comment (`KEY=abc # note`) in the value, so it never matches. Values under 8 characters are ignored, which includes short passwords.",
+      "fix": "Compare against `JSON.stringify(v).slice(1,-1)` as well as the raw value, strip inline comments, and fail the pass on a secret of 6 characters or fewer instead of silently skipping it.",
+      "twin_of": "Blanking comments before strings -> every scanner that treats a token inside a string as code"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": "tests/launch/replay/scan.mjs:12-33",
+      "breaking_input": "A recording file that is in the recorded directory but not named `*.json` (e.g. `repo.json.bak`, `repo.JSON`), or a dir that holds 0 json files, or a subdirectory.",
+      "why": "`readdirSync(dir).filter(f => f.endsWith(\".json\"))` skips everything else, and with 0 files the scan prints `files=0 findings=0` and exits 0. The bats test only checks the string `files=16`, so a case-variant file in the committed directory goes unscanned while still being committed. Also a bare `gmail.com` address check exists only in redact, not in scan. The negative control swaps `arc-sandbox` in repo.json, so it proves the scan reads that single file only.",
+      "fix": "Scan every entry in the directory regardless of extension and fail on a non-file or an unexpected name, and exit 1 when the file count is not the expected count.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/launch/replay/replay.mjs:43-60",
+      "breaking_input": "A probe that makes the same request twice and expects two different answers, with the exchanges recorded in an order that differs from the order the replay matches. Or a request body that differs (a POST SQL statement) with the same method and URL, such as a Management API `/database/query`.",
+      "why": "Matching is by method and URL only, taking the first unused exchange. For the Supabase `POST /v1/projects/<ref>/database/query` every query shares one URL, so the replay answers query B with query A's recorded answer. A changed SQL statement still passes replay, and the 599 drift check never fires. The assertion `used > 0 && unmatched.length === 0` therefore does not detect a probe that changed its request bodies.",
+      "fix": "Include a digest of the request body in the match key, or at least record and compare it, and require `used === exchanges.length`.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran -> every vacuous replay"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/launch-contract.bats:1493-1500",
+      "breaking_input": "Windows checkout where `$ARC_ROOT` is a POSIX path handed to native node, or a recorded JSON committed with CRLF.",
+      "why": "The test passes `\"$ARC_ROOT/tests/launch/replay/replay.mjs\"` to native node as a path, with `$ARC_ROOT` a POSIX-style path on Git Bash (`/c/Users/...`). The memory note says this turns the windows leg red. The pattern `[[ \"$output\" == \"RAN $s\"* ]]` also fails if node prints a warning to stderr first, because `run` merges stderr into output. The bats `ls ... | wc -l` count assertion is satisfied by 16 files of any name, so 16 wrong slot names pass the count and the loop catches only some of them.",
+      "fix": "cd to the root and pass relative paths, as the lane's own rule states, and capture stdout separately from stderr.",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes when a helper's output is eval'd or globbed -> every helper whose output bats evals or globs"
+    }
+  ]
+}

@@ -125,10 +125,16 @@ const MAX_AGE_MS = 8 * 24 * 3600 * 1000;
 
 // Upstream: backup's reported workflow names the venture repo, and its drill digest is the only file this slot trusts a
 // run of (ADR-1746, b6ffd12 B5). Validated here, never trusted.
-function digestOf(ctx) {
-  // The NEWEST digest: backup reports one per drill file it has written, oldest first, and only the last is on main.
-  const d = String((list(ctx.upstream && ctx.upstream.backup).filter((r) => r.kind === "drill-digest").pop() || {}).id || "");
-  if (!/^[0-9a-f]{64}$/.test(d)) throw refuse("UPSTREAM_MISSING", "backup reported no drill digest");
+// The digest of the drill file on main NOW, which must be one backup wrote: list order is never trusted to name the newest
+// (attack d8f943a L11) -- a re-reported older digest keeps its first place in the list.
+async function digestOf(ctx, full) {
+  const known = new Set(list(ctx.upstream && ctx.upstream.backup).filter((r) => r.kind === "drill-digest").map((r) => String(r.id)).filter((d) => /^[0-9a-f]{64}$/.test(d)));
+  if (!known.size) throw refuse("UPSTREAM_MISSING", "backup reported no drill digest");
+  const cur = await gh(ctx, "GET", `/repos/${full}/contents/.github/workflows/${WORKFLOW_FILE}`, undefined, [404]);
+  const b = cur.body;
+  if (cur.status === 404 || !b || typeof b.content !== "string") throw refuse("UPSTREAM_MISSING", `${full} has no ${WORKFLOW_FILE} on main`);
+  const d = sha256(utf8(b.content));
+  if (!known.has(d)) throw refuse("FOREIGN_DRILL", `the ${WORKFLOW_FILE} on main is not a drill file backup wrote`);
   return d;
 }
 
@@ -146,7 +152,7 @@ export function envContract() {
 
 export async function scaffold(ctx) {
   const full = repoOf(ctx);
-  digestOf(ctx);
+  await digestOf(ctx, full);
   ctx.report({ kind: "restore-source", id: `${full}:.github/workflows/${WORKFLOW_FILE}#restore` });
   return { files: [], resources: [{ kind: "restore-source", id: `${full}:.github/workflows/${WORKFLOW_FILE}#restore` }], notes: [] };
 }
@@ -180,7 +186,7 @@ async function drill(ctx, full, digest) {
 
 async function probe(ctx) {
   const full = repoOf(ctx);
-  const d = await drill(ctx, full, digestOf(ctx));
+  const d = await drill(ctx, full, await digestOf(ctx, full));
   if (d.reason) return { ok: false, reason: d.reason };
   if (d.restore !== "success") return { ok: false, reason: `drill run ${d.run}: restore ${say(d.restore, 20)} -- no restore with equal row counts` };
   return { ok: true, answerer: "api.github.com", evidence: { repo: full, run: d.run, step: STEP_RESTORE, rule: "every table's row count equal, at least one table" } };
