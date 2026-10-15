@@ -57,7 +57,7 @@ Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 436 of 
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
 | [face](lanes/face.md) | LIVE | arc-face v2 (Cycle 16, opened 2026-09-16) |
 | [growth](lanes/growth.md) | LIVE | arc-growth (Cycle 14, opened 2026-08-12) |
-| [launch](lanes/launch.md) | LIVE | arc-launch (Cycle 1, opened 2026-10-03) |
+| [launch](lanes/launch.md) | IDLE | arc-launch (Cycle 1, opened 2026-10-03) |
 | [leads](lanes/leads.md) | LIVE | arc-leads (Cycle 8, opened 2026-08-04) |
 | [ledger](lanes/ledger.md) | IDLE | arc-ledger (opened 2026-08-12, closed 2026-08-13) |
 | [legal](lanes/legal.md) | IDLE | arc-legal (Cycle 14, sealed 2026-10-07) |

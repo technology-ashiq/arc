@@ -11,7 +11,7 @@
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-launch (Cycle 1, opened 2026-10-03) |
 | Product | [launch](../products/launch.md) |
 

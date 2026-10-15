@@ -1,0 +1,10 @@
+launch-coverage: 86 slots (34 core · 35 required · 17 optional)
+launch-coverage: 37 provider rows (3 candidate · 33 vetted · 0 retired · 1 blocked)
+launch-coverage: core slots with a row 34/34 · core slots with zero vetted providers 2/34
+launch-coverage: slot dirs holding adapters 33
+launch-coverage: 86 slots (34 core · 35 required · 17 optional)
+launch-coverage: 37 provider rows (3 candidate · 33 vetted · 0 retired · 1 blocked)
+launch-coverage: core slots with a row 34/34 · core slots with zero vetted providers 2/34
+launch-coverage: slot dirs holding adapters 33
+launch-coverage: FAIL -- core slots with zero vetted providers: domain, legal-pages
+exit=1
