@@ -281,7 +281,7 @@ providers:
     last_verified: 2026-10-14
   - id: neon
     slot: database
-    status: candidate
+    status: vetted
     fits:
       - saas-b2b
       - saas-b2c
@@ -295,11 +295,11 @@ providers:
     credentials:
       scope: "project create and SQL over HTTP on the venture project; RLS proved through a no-bypass role (ADR-1721)"
     adapter: providers/database/neon.mjs
-    digest: null
+    digest: 414c62424fe252ac5aee7c3a4077eb593088e1037760e377d34b4311c20e02b0
     approved_by: ashiq
-    vetted_by: null
-    scout: null
-    last_verified: null
+    vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
+    scout: initiatives/launch/evidence/phase-04/provider-scout.md
+    last_verified: 2026-10-15
   - id: drizzle
     slot: orm
     status: vetted
