@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:~563 (--day refusal) and ~580 (stray positional refusal)",
+      "breaking_input": "`node face-dogfood.mjs --day 2026-02-30 2>&1 | cat` on the Windows CI leg, or `node face-dogfood.mjs --days 1 2026-10-13 2>&1 | cat`. Both write to stderr and then call `process.exit(2)` straight away.",
+      "why": "The earlier boundary round flagged this as B3, and the fix only restructured the positional logic. The `process.exit()` calls stayed, and the stray-positional refusal added one more of the same. Exiting right behind a pending pipe write is the known Windows libuv teardown race, so the named refusal can be truncated. The new bats arms assert on that message (`face-dogfood:`, `named twice`), so they can flake.",
+      "fix": "Set `process.exitCode = 2` and return through a single exit path with no further work. Alternatively, write with `fs.writeSync(2, ...)` before exiting.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows -> set `process.exitCode` and let the loop drain."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:dogfoodVerdict op loop and readSpineDecisions `ids`",
+      "breaking_input": "A journal line `{work:true,phase:\"apply\",ok:true,receipt:<ULID of ANY non-decision event on the same day>}`. Examples are a stamp or approval event, a run.completed event, or any other kind emitted that day. It satisfies `ev.kind !== \"decision.recorded\"` and counts as a face op.",
+      "why": "The identity fix is only partial. It rejects exactly one kind, a decision, and accepts every other event on that day. Nothing checks that the event was a work-door apply, or that its payload op matches the journalled `op`. `ids` also stores only the last event per id, so a duplicated id silently overwrites an earlier one. The op clause can still be satisfied by quoting an unrelated receipt.",
+      "fix": "Record `{kind, day, op/process}` per id. Count an op only when the kind is the work door's apply kind and the payload op equals the journal's `op`. Add a mutant arm that quotes a non-decision, non-apply event id.",
+      "twin_of": "Membership where identity was needed -> Match the event to this run: written after the ask began, by this model."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-dogfood.mjs:dogfoodVerdict `used` dedupe branch",
+      "breaking_input": "The same real op line written twice to the journal, for example by a retry, with a valid on-spine receipt both times. The second copy goes to `opsUnproven`.",
+      "why": "A receipt the spine does hold is reported as \"claim a receipt the spine does not hold -- the face said it wrote something that is not there\". That reason is false, and it fails the named window. The selftest arm even pins `met === false` for this case. A harmless duplicate line therefore blocks the owner's day with a message that sends them looking for a forged receipt.",
+      "fix": "Count a duplicate of an already-proven receipt separately. Either ignore it or report it as a duplicate in its own reason. Do not file it under unproven.",
+      "twin_of": "Refusals under the wrong name -> a refusal names its real cause."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-dogfood.mjs:positionals filter (`!a.startsWith(\"-\")`) vs refuseUnknownFlags",
+      "breaking_input": "`face-dogfood.mjs -day` or `face-dogfood.mjs -d --json`, a single-dash near-miss with no date after it. `-day` is not a positional because it starts with `-`. `refuseUnknownFlags` only sees `--` arguments, so the token is dropped silently and the unwindowed all-history verdict runs.",
+      "why": "The caller believes a window was applied, but the run judges all history. The positional guard only catches the case where a date follows the near-miss flag. The unknown-flag guard has no single-dash coverage.",
+      "fix": "Refuse any argument that starts with `-` and is not a known `--flag`, by name, with exit 2.",
+      "twin_of": "No unknown-flag guard; near-miss flags fell through to the worst default -> every CLI refuses an unknown flag by name with exit 2."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/face-dogfood.mjs:selftest `finally { rmSync(jdir, ...) }`",
+      "breaking_input": "The temp journal directory is held open on Windows (AV scan or indexer), so `rmSync` throws EBUSY or EPERM. `force: true` does not suppress that error.",
+      "why": "The throw escapes `finally` and skips the arms still to run. The `RAN:` line and the PASS/FAIL summary are never printed. The bats suite then reads a crash with no `RAN` line rather than a clean result. RAN is also printed before the summary line, not as the last statement before the exit code.",
+      "fix": "Wrap the cleanup in try/catch and WARN with the path. Pass `maxRetries` to `rmSync`. Print `RAN` immediately before the return.",
+      "twin_of": "A cleanup in `finally` that can throw past the RAN line -> Check: cleanup is wrapped and WARNs; the RAN line is always reached."
+    }
+  ]
+}

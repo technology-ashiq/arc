@@ -256,9 +256,63 @@ load 'test_helper'
              "four days does not pass as five" \
              "nine decisions in one day is still one day" \
              "an empty journal is NOT met, and does not throw" \
-             "a torn journal line makes the count a floor"; do
+             "a torn journal line makes the count a floor" \
+             "all history still fails on an old outside decision" \
+             "two named clean days with an op each are MET" \
+             "and the outside count across ALL history is still reported" \
+             "an outside decision on a named day fails the window" \
+             "a named day with no face op fails the window" \
+             "an op whose receipt the spine lacks does not count" \
+             "a spine without ids proves no op, never every op" \
+             "a named day with no face decision fails the window" \
+             "one named day does not pass a two-day floor" \
+             "a day named twice is still one day" \
+             "an op outside the window does not count for a named day" \
+             "a decision id quoted as an op receipt does not count" \
+             "an op receipt from another day does not count" \
+             "one receipt journalled twice is one op" \
+             "a same-day event of another kind does not count as the op" \
+             "an op the registry does not know does not count" \
+             "no registry given proves no op, never every op" \
+             "a row that names a process holds the receipt to it" \
+             "a journal line that is not an object is torn, not a crash" \
+             "and only a ULID receipt is read as an op" \
+             "--day refuses a non-date" \
+             "--day refuses an impossible date" \
+             "--day refuses a future day" \
+             "--day refuses a repeat" \
+             "--day accepts today in IST"; do
     [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
   done
+  # The PASS count must equal the RAN count the selftest derives from its own registered arms,
+  # and that count has a floor, so a dropped arm is visible either way.
+  local arms ran; arms=$(printf '%s\n' "$output" | grep -c "PASS$")
+  ran=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9][0-9]*\) arms$/\1/p')
+  [ -n "$ran" ] && [ "$arms" -eq "$ran" ] || { echo "PASS=$arms RAN=$ran: $output"; false; }
+  [ "$ran" -ge 38 ] || { echo "only $ran arms registered: $output"; false; }
+}
+
+@test "face-dogfood --day refuses a day it cannot honour, before reading anything" {
+  # A named day is the claim the Phase 08 window checks; a typo must be a named refusal
+  # (exit 2), never a NOT MET that sends someone looking at the owner's day.
+  for bad in "2026-02-30" "14-10-2026" "2999-01-01"; do
+    run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day "$bad" --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+    [ "$status" -eq 2 ] || { echo "--day $bad: expected exit 2, got $status: $output"; false; }
+    [[ "$output" == *"--day $bad"* ]] || { echo "$output"; false; }
+  done
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day 2026-10-01 --day 2026-10-01 --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ] && [[ "$output" == *"named twice"* ]] || { echo "$output"; false; }
+  # A forgotten --day, a second positional and the equals form are refused, never read as a repo.
+  for args in "--days 1 2026-10-13" "repo-a repo-b" "--day=2026-10-13"; do
+    # shellcheck disable=SC2086
+    run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" $args --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+    [ "$status" -eq 2 ] || { echo "$args: expected exit 2, got $status: $output"; false; }
+    [[ "$output" != *"about this READ"* ]] || { echo "$args reached the read: $output"; false; }
+    [[ "$output" == *"face-dogfood:"* ]] || { echo "$args: no named refusal: $output"; false; }
+  done
+  # Control: a usable day gets past the guard to the input check, which fails on the read.
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --day 2026-10-01 --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ] && [[ "$output" == *"about this READ"* ]] || { echo "$output"; false; }
 }
 
 @test "face-dogfood fails CLOSED when it cannot find its inputs, and says which" {
