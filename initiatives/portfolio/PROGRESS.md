@@ -69,10 +69,9 @@ depends-on: —
 **Position: Cycle 5 SEALED 2026-10-14** — 4/4 phases closed, REQ-06..09 validated, 1 of 3 days. Merged once as
 PR #422.
 
-**Owed (not the agent's to do):** the owner runs `node .claude/scripts/core/owner-apply-lane-stale.mjs` from the
-main clone, then `node .claude/scripts/hq/jobs-lint.mjs`, then commits `hq.jobs.yaml hq.policy.yaml
-processes/lane-stale.process.yaml`; the kickoff stamp `01M4VQTVA4BXAAP06A3FC5H1S8` and the phase move-on stamps are
-the owner's (`arc-inbox approve`).
+**Owed: nothing.** 2026-10-15: the owner apply landed as PR #431 (`lane-stale` daily@08:00, face rooms engine-room/scheduler);
+the first real run from the main clone raised bench, growth and leads (3 `incident.raised`, idempotent on re-run, 0
+quarantined); `phase.closed` 04-07 emitted; the kickoff stamp and the four move-on stamps are approved.
 
 **Next portfolio cycle** starts by `/arc-kickoff --lane portfolio`; debt ledger rows 1–6 are its candidates.
 
