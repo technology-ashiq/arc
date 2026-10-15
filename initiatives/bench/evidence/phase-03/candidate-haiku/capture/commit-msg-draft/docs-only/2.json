@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "c7736ba",
+        "subject": "docs: document total() usage in README"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

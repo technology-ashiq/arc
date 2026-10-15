@@ -40,6 +40,23 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## STATUS (2026-10-15): every DoD item but the verdict is met, and the verdict is the owner's
+
+Evidence: `initiatives/bench/evidence/phase-03/README.md`.
+
+- **REQ-05 preflight:** recorded before the run, in ADR-0914 Amendment 2 and the CHANGE below.
+- **REACHED:** 15 per-attempt `run.completed` receipts carry `model: haiku`, measured tokens and a
+  provider amount. Debt row 20 notes that the model field is the CLI selector, not a dated id.
+- **One real model benched, then the proposal:** `PROPOSE claude-code/haiku (decided on cost)`,
+  `approval.requested 01M4Z0AAPCQETTQX1S3C2JJXF4`, read back off the main clone's spine.
+- **Human verdict:** OWED. `arc-inbox approve|reject 01M4Z0AAPCQETTQX1S3C2JJXF4 --reason ...` from
+  the main clone. No agent may press it.
+- **NEXT-CHECK:** 2026-11-02, written into PROGRESS.
+- **Tests:** green on CI, read per JOB, for #420, #424, #426 and #433.
+
+PLAN Assumption #1 fired. The follow-up is the owning process's eval pack, not bench
+(`evidence/phase-04/assumptions-at-close.md`).
+
 ## CHANGE (2026-10-14, later): the benched CLI ran inside arc (ADR-0916)
 
 The re-run after ADR-0915 passed the contract, and then its commit subjects named bench's own

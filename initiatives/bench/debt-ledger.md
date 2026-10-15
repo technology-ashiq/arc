@@ -23,6 +23,7 @@ One row per finding that was not fixed in its PR, with the reason and the trigge
 | 17 | ADR-0917 (self-recorded) | `tests/shard-timings.json` still weights `bench-proposal.bats` at 41 s after one more mock run was added to its probe | accepted: one mock K=3 run is seconds; the table is re-measured as a named step, never by guess | the next shard re-measure pass |
 | 18 | attack ab2d484 r1 boundary B3 (low) | the tier-line scan stopped at a blank line inside a class block | FIXED in round 2 (attack b57cb7c L1): both scans skip blank and comment lines | -- |
 | 19 | attack b57cb7c r2 boundary B5 (low) | the exit-0 error-envelope control is pinned on the json path only, not the stream path | accepted: both paths reach the same `modelAnswered` test over the same envelope object; bench runs the json path | bench runs claude-code with progress streaming |
+| 20 | Phase 03 real event (self-recorded) | a `claude-code` receipt carries the CLI's model selector (`haiku`, `sonnet`), not the dated model id the CLI resolved it to, so two runs a model release apart look like the same subject | accepted: REQ-05's REACHED proof is the measured token count and the provider amount, both present on every attempt; the selector is what the router pins | a router line pins a dated id, or a drift report must tell two releases of one selector apart |
 
 Rejected (ADR-0067 taxonomy): a59752e L1 and ca7ba9a L1 (an indented contract line; arc-run prints
 both at column 0), a59752e L3 and ca7ba9a L5 (control characters in `--trial-model`; `MODEL_RE`

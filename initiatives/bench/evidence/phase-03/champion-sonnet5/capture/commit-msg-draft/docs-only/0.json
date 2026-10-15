@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "b84e6f8",
+        "subject": "docs: add usage section to README"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

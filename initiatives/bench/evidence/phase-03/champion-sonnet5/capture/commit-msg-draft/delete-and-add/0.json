@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "e353fbf",
+        "subject": "refactor: replace legacyTotal with reduce-based total"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

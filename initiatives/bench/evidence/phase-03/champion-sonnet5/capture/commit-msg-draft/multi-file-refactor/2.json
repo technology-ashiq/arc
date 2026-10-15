@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "fd2e93d",
+        "subject": "refactor: extract shared sum helper"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

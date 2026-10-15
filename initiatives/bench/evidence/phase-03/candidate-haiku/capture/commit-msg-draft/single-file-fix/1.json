@@ -1,0 +1,12 @@
+{
+  "output": {
+    "commits": [
+      {
+        "sha": "a4ba64397853b098642058b8dda3cc9ae596b990",
+        "subject": "fix: guard total() against non-array input"
+      }
+    ]
+  },
+  "schema": true,
+  "scored": true
+}

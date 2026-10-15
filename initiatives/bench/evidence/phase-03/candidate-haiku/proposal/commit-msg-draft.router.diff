@@ -1,0 +1,11 @@
+--- a/engine/router.yaml	ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52
++++ b/engine/router.yaml	ec88a286aa40b387c4a3798639d3115bfaef357841cc2b28c2603877bc8faa52
+@@ -88,7 +88,7 @@
+ #                 harness's notional list price, so these caps guard notional dollars, not an invoice.
+ classes:
+   commit-msg-draft:
+-    tier: balanced-workhorse
++    tier: cheap-scan
+     driver: claude-code
+     max_attempts: 4
+     max_wall_ms: 3600000
