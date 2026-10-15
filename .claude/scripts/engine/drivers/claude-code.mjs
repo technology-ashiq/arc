@@ -222,9 +222,18 @@ await runDriver("claude-code", async ({ processName, input }) => {
     source: "measured",
   };
   const text = typeof envelope.result === "string" ? envelope.result : raw;
+  // An answer that is not JSON is still the MODEL's answer, so it is `model-invalid` (ADR-0228), as generic-api has
+  // said since that ADR. Left undeclared it read `unknown`, and bench counted a model that answered in prose as a
+  // harness fault and refused to compare against it (ADR-0917). The ENVELOPE failing to parse stays undeclared:
+  // that is the CLI, not the model. So is an ERROR envelope that exits 0 -- a usage limit, an overload notice, an empty
+  // result -- whose text is the CLI's, never an answer (attack ab2d484 B1): only a non-empty result from a session
+  // that reports success is the model's.
+  const modelAnswered = envelope.is_error !== true
+    && (envelope.subtype === undefined || envelope.subtype === "success")
+    && typeof envelope.result === "string" && envelope.result.trim() !== "";
   let output;
   try { output = parseModelJson(text, "the claude CLI result"); }
-  catch (err) { err.arcCost = cost; throw err; }
+  catch (err) { if (modelAnswered) err.arcFailureClass = "model-invalid"; err.arcCost = cost; throw err; }
 
   return {
     output,
@@ -236,7 +245,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
   // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
   // shelling out to `claude --version` would make an offline provenance field depend on a
   // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
-  version: () => "claude-code@1.4.0",
+  version: () => "claude-code@1.5.0",
 });
 
 settle();

@@ -146,6 +146,17 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
+**2026-10-15: the first clean champion run held containment and exposed three gaps between it and a
+verdict (ADR-0917).** `champion-sonnet4` ran from the main clone after #426. HEAD, branch, refs and
+config were unchanged, and sonnet scored 84 of 84 on 14 of 15 attempts at 82 notional cents. The
+remaining attempt was a prose answer. The driver did not declare it `model-invalid` (generic-api's
+ADR-0228 twin), so bench read it as a harness fault and the completeness gate would refuse the champion.
+Beyond that, a same-driver candidate produced NO DIFF and so no approval, and claude-code's spend
+(`payload.spend`, USD) was never read. All three are fixed on `feat/bench-p03-proposal-path`. NEXT:
+merge, re-run the champion (its capture still says `driver`), run the haiku candidate with
+`--propose --champion`, read the chain off the spine, then the owner's verdict. Appetite stays 7.25 of
+8d; this is Phase 03's own remaining scope.
+
 **2026-10-14 (later): #420 merged, and the re-run found a third harness fault: the CLI ran inside
 arc (ADR-0916).** The contract fix held: every captured answer passed the schema, with no
 `branch` key. But `claude-code` spawned its CLI in `ARC_ROOT` (arc), not the fixture repo, so

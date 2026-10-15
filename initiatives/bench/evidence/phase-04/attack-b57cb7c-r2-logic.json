@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2331-2333 (tierDiffLine model lookup)",
+      "breaking_input": "router.yaml where a class has no `tier:` line, but the model parameter is provided; tierDiffLine scans a class block and misses the tier because there is an empty line before it, reporting 'declares no tier line'.",
+      "why": "The scan `while /^\\s{4}/.test(lines[i])` stops at any line that doesn't start with 4 spaces, including a blank line or a comment at column 0, so a same-driver candidate that would otherwise produce a tier diff is refused with NO DIFF. This is the exact original failure of ADR-0917 (the reason the change exists), and the debt ledger records it as known (debt 18) but leaves it un-fixed.",
+      "fix": "Skip blank lines and lines that are comments (matching `^\\s*#`) while scanning the class block; end only at a line with 2-space indentation that is not a class child. Also handle a `driver:` line followed by blank before `tier:`.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2229-2232 (moneyPair)",
+      "breaking_input": "A candidate with `cost_inr` present and a champion with `cost_inr` absent, but both sides have a well-formed, same-currency, same-basis `spend`. The code immediately returns 'not comparable' because INR is one-sided, even though the spend pair is directly comparable.",
+      "why": "A candidate can force the cost gate to fail (a denial of the verdict) by injecting a fabricated `cost_inr: 0` only on its side, even when the true spend figures are comparable. This is a regression: it can block a proposal the owner should see, and the INR branch takes precedence over a more trustworthy like-for-like comparison.",
+      "fix": "When INR is one-sided but spend exists on both sides with the same currency and basis, prefer the spend comparison; only fail on INR one-sidedness when spend is absent or not comparable.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1046-1049 (modelInvalid)",
+      "breaking_input": "A receipt whose `payload.failure_class` is `'model-invalid'` but whose `payload` also contains a valid `output` object (the driver mis-set the class, or a malicious spine appended it).",
+      "why": "The code trusts the receipt's `failure_class` string entirely and marks any such receipt as a schema failure (`schema:false`, `verdict:schema`), even when the receipt also carries a successful output. An attacker who can append to the spine (the ADR says the spine is 'a file anyone can append to') can turn an otherwise scoreable schema pass into a failure, or conversely can force a champion's contract rate down to fail gate 1. There is no cross-check that the output is actually non-JSON or absent.",
+      "fix": "Only treat a receipt as `model-invalid` when the receipt's own output is absent and there is a non-empty `message` indicating a parse failure; otherwise leave the failure undeclared.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1881 (money fold)",
+      "breaking_input": "An attempt times out (ETIMEDOUT) and returns a `spend` (because the CLI had already booked a cost); that attempt is folded into the class's `latencies.money`. If all K attempts time out but each has a small spend, the class is not marked `gap` and its spend is compared on cost.",
+      "why": "The all-or-nothing semantics of `foldSpend` is intended to make a class's money ABSENT when any attempt lacked spend. But a timed-out attempt does have a spend (the CLI charged for a partial session), so the class sums over attempts that never produced an answer, making a non-answer look like a real cost. This can let a candidate that never answers appear cheaper and win the cost gate.",
+      "fix": "Only fold spend from attempts that reached an answer (i.e., after the schema/verdict is resolved); for a timeout or driver-failure attempt, treat it as a gap, not a zero-cost figure.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2280-2287 (tierDiffLine pins)",
+      "breaking_input": "`model_applied` is an empty string `\"\"` from a provenance file. `artifactModel` rejects it (returns null), so `buildRouterDiff` takes the `!model` branch and returns 'already routes'. But if a provenance file has `model_source:'trial'` and `model_applied:' '` (a single space), `ARTIFACT_MODEL_RE` rejects it too. However, a model id like `'haiku '` with a trailing space is rejected by the regex, so it is dropped — that's safe. The risk is that the tier lookup uses `pins(current)` and `pins(t)` with exact string equality, but the YAML subset parser may normalize `tier: \"balanced-workhorse\"` to `balanced-workhorse` (tested), yet the `current` variable is read from the parsed object, not from the regex line, so a quoted tier works. No obvious exploit here; skip.",
+      "why": "Not a confirmed hole; skip.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2403-2406 (withMetrics)",
+      "breaking_input": "A class's `m.spend` is a numeric value, e.g., `82` (a number, not an object). `classSpend` returns null because it's not an object; `spendMalformed` is set to true. But in `buildProposal`'s `manifest.json`, the code writes `spend: r.candidate.spend ?? null` — that write happens even when `spend_malformed:true` is set. The manifest then has `spend:null` and `spend_malformed:true`, which is fine. However, in the evidence table `cost` column, `moneyPair` sees `spend_malformed` and fails the whole comparison, which is correct. The real issue is that `classSpend` rejects a `spend` that is a plain number, but the provenance file might legitimately store `spend` as a number (the ADR says it's `{amount,currency,basis}`, so no). Not exploitable.",
+      "why": "Not a new hole; skip.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2227-2239 (moneyPair)",
+      "breaking_input": "candidate and champion both have `cost_inr` equal (say 5) but one has `spend_gap` set and the other doesn't. The code compares on INR and can decide the cost tie, ignoring that one side's INR figure is absent (gapped) — actually both INR are present, so it compares them and may still pass a cost gate even though one side's spend is gapped. The prior L1 pointed at this and the fix wasn't applied.",
+      "why": "The `spend_malformed` check happens first, but a `spend_gap` (not malformed) does not cause INR to be refused. A candidate can have a spend gap (no reliable money) but still claim a INR cost and pass the cost gate on INR.",
+      "fix": "If either side has a `spend_gap` (or `spend_malformed`), do not use INR for comparison unless both sides also have a well-formed spend; otherwise flag as not comparable.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1046-1049 (modelInvalid)",
+      "breaking_input": "A receipt with `payload.failure_class = 'model-invalid'` but the payload also has `output` as a non-null value (e.g., the driver erroneously set the class). The code will set `schema:false` and `verdict:'schema'`, even though an output exists.",
+      "why": "Already covered in L3; same root — no cross-validation.",
+      "fix": "Same as L3.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2211-2223 (moneyPair preamble)",
+      "breaking_input": "candidate has `spend_malformed:true` and champion has a well-formed spend. The code returns 'not comparable' and fails the cost gate, which is correct. However, the same `spend_malformed` flag is only set in `withMetrics` for the champion's provenance; a candidate's spend is from `runBench` metrics and is always well-formed (via `foldSpend`). No asymmetry.",
+      "why": "Not a hole.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2271-2290 (tierDiffLine)",
+      "breaking_input": "A class whose `driver:` line is the same as the candidate driver, and `model` is provided, but the class has a `tier:` line that is indented with a tab or fewer than 4 spaces (e.g., `\ttier: balanced-workhorse`). The scan for `/^\\s{4}tier:/` requires exactly 4 spaces, so a tab-indented tier is missed, reporting 'declares no tier line' and refusing the diff.",
+      "why": "YAML allows tabs for indentation? Actually YAML forbids tabs for indentation, so this would be invalid YAML. However, the drift guard's debt ledger mentions a blank-line inside class block; a tab-indented line would be a parse issue. Not exploitable if YAML parser rejects it.",
+      "fix": "Use the YAML parser to find the tier line, not a regex that requires exactly 4 spaces.",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2434-2437 (buildEvidenceTable `who`)",
+      "breaking_input": "A provenance file that has `model_source:'trial'` and `model_applied` a valid plain id like `'haiku'` but also contains characters like a backslash `\\` or a quote that pass the `ARTIFACT_MODEL_RE` (e.g., `'foo\\n'` is rejected because `\\n` isn't allowed, but `'foo\\bar'` contains a backslash which is allowed by the regex `[A-Za-z0-9._:/-]`? The regex allows `/` and `-` and `:`, but not backslash. So backslash is rejected. The allowed set includes `:`, `/`, `.`, `_`, `-`, alphanumerics. A string like `'a:b'` is allowed; when interpolated into a markdown header, it's fine. However, `'haiku|'` is rejected. So the table is safe.",
+      "why": "Already covered by the prior B2 that was fixed; the regex is tight enough.",
+      "fix": "None needed.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2333-2340 (tierDiffLine)",
+      "breaking_input": "`current` is read from the parsed YAML (`parsed.value?.classes?.[taskClass]?.tier`), but the class could be a mapping where `tier` is a number (e.g., `tier: 1`). The code checks `typeof current !== \"string\"` and refuses, which is safe.",
+      "why": "Not a hole.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2224 (moneyPair)",
+      "breaking_input": "candidate has `cost_inr: 0` and champion has `cost_inr: null`, but both have a comparable spend (same currency/basis). The code fails on one-sided INR instead of using spend, allowing a candidate to force non-comparability.",
+      "why": "Same as L2; duplicate.",
+      "fix": "Same as L2.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1882 (latencies.money fold)",
+      "breaking_input": "An attempt that ends with `status !== 0` and `reason==='driver'` but has a well-formed `spend` (because the CLI booked a cost before failing) is folded into the class sum. The class does not get a gap, even though the attempt never answered.",
+      "why": "Same as L4 — a failed attempt's spend should not count as a complete answer.",
+      "fix": "Only fold spend from attempts that reached an answer or at least a schema verdict; treat driver failures as gaps.",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:1889-1890 (metrics accumulation)",
+      "breaking_input": "In a class, an attempt's `spend` can be `null` because `receiptSpend` returned null (e.g., a malformed or absent spend). `foldSpend` sets the gap. That's correct. But if the attempt's `spend` is `undefined` (because the `r` object lacks the `spend` key entirely, e.g., from an older code path or a mock driver), then `r.spend ?? null` turns it into null, so a gap is set. That's safe. No new hole.",
+      "why": "Not a hole.",
+      "fix": "None.",
+      "twin_of": null
+    }
+  ]
+}

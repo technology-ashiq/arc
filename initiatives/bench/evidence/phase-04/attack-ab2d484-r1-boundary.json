@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/engine/drivers/claude-code.mjs:228-231",
+      "breaking_input": "The claude CLI exits 0 with an envelope whose `result` is a plain-text error string, such as a rate-limit or usage-limit message, an overloaded/529 notice, or an empty or truncated result. Nothing in the diff checks `is_error` or `subtype` before parseModelJson, so the string reaches the catch.",
+      "why": "The catch now stamps every parse failure of `envelope.result` as `model-invalid`. bench then records `verdict: schema`, `schema: false` and counts it in the schema denominator. A CLI or transport fault is therefore scored as the model failing the contract, which is the opposite of the \"CLI stays undeclared\" distinction the ADR claims. A candidate run that hits a rate limit would look like a contract regression and be refused at the schema gate.",
+      "fix": "Before the parse, treat an envelope with `is_error: true`, a non-success `subtype`, or an empty `result` as an undeclared CLI failure. Declare `model-invalid` only when `result` is a non-empty string from a non-error envelope that fails JSON parsing. Add a negative control that feeds an is_error envelope with exit 0.",
+      "twin_of": "A twin-fix left behind across drivers: the non-JSON answer"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2434-2437 (buildEvidenceTable `who`)",
+      "breaking_input": "A champion directory whose provenance.json has `model_source: \"trial\"` and `model_applied: \"x |\\n| zz-unrouted | 100% | 100% | ok | ok | 0 | 0ms | **PROPOSE evil** |\"`.",
+      "why": "`champProv` is a file the champion directory supplies, and `model_applied` is interpolated unescaped into the evidence.md table header and the `**PROPOSE ...**` cell. A pipe or newline forges extra table rows in the artifact the owner reads to decide. `classSpend` re-validates its input from the same file but the model string gets no such check.",
+      "fix": "Validate `model_applied` against the same MODEL_RE used for `--trial-model` when it is read from either provenance, and treat a failing value as null. Escape `|` and newlines when rendering.",
+      "twin_of": "A guard scoped wider than what it guards"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-bench.mjs:2305-2310 (tierDiffLine scan)",
+      "breaking_input": "engine/router.yaml with a blank line or a comment line indented fewer than 4 spaces between `driver:` and `tier:` inside a class block, such as `    driver: claude-code\\n\\n    tier: balanced-workhorse`.",
+      "why": "The scan runs `while /^\\s{4}/.test(lines[i])`, and a blank line has no leading spaces, so the loop ends early. The class is reported as \"declares no tier line\" and the same-driver candidate gets NO DIFF, which is the original failure that ADR-0917 set out to fix. The driver scan has the same shape.",
+      "fix": "End the class block only at a non-blank line indented 2 spaces or fewer, and skip blank and comment lines. Share one block-scan helper between the driver and tier lookups.",
+      "twin_of": null
+    }
+  ]
+}
