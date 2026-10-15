@@ -1,0 +1,13 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:~210 (dogfoodVerdict op clause)",
+      "breaking_input": "--day 2026-10-13 with a journal op line {work:true,phase:'apply',ok:true,op:'today.capture-idea',receipt:'<any event id on the spine whose kind is not decision.recorded but whose day is 2026-10-13>'} where that spine event was NOT written by a face op (e.g. a note.logged event from any process).",
+      "why": "The map `ids` stores kind and day but never checks that the event kind is the work-door apply kind, nor that the event's payload op matches the journalled op. Any non-decision event on the same day satisfies the op clause. The fixed-defect check says 'same day, the right kind, each receipt counted once' but the code only checks kind !== 'decision.recorded' — any other kind passes, including note.logged events the work door never wrote. This is the twin of the 'Membership where identity was needed' pattern: it matches by exclusion of one kind rather than by identity of the apply kind.",
+      "fix": "Require ev.kind to be the exact work-door apply kind (e.g. 'work.apply.recorded' or whatever the door writes), and optionally that the event payload.op equals the journalled o.op."
+    }
+  ]
+}

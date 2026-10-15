@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs:readJournal (the `e && e.work === true ...` guard and the next line `if (e.path !== \"/api/decide\" ...`)",
+      "breaking_input": "A journal file containing the single line `null` (valid JSON). The new `e &&` guard shows the author considered a null `e`, but the next statement dereferences `e.path` unguarded.",
+      "why": "JSON.parse('null') succeeds, so the catch/torn path is skipped and `null.path` throws a TypeError out of readJournal. The run dies with a stack instead of exit 2 or a counted torn line. This is the twin of 'a JSON line that is not an object is torn, in every engine'. The same applies to an array or a number if a later line adds property writes.",
+      "fix": "After JSON.parse, `if (e === null || typeof e !== \"object\" || Array.isArray(e)) { torn++; continue; }` before any property read.",
+      "twin_of": "A spine line that parses to a non-object (`null`) was kept as an event -> a JSON line that is not an object is torn, in every engine."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs: dogfoodVerdict op clause (`spine.ids.has(o.receipt)`) and readSpineDecisions `ids`",
+      "breaking_input": "Journal line `{work:true,phase:\"apply\",ok:true,receipt:\"<id of any decision.recorded event>\"}` on day D. Or the same real op receipt repeated on two journal lines. Or day D's journal line citing a receipt id that lives on a different day's spine file.",
+      "why": "`ids` holds every event id from the whole spine, with no kind, day or process check, and there is no one-receipt-one-op dedupe. The op clause is satisfied by any existing id, including the decision receipt the same day already produced. A day with no real op therefore reads as MET. This is the 'journal claims, spine proves' rule, applied to membership instead of identity.",
+      "fix": "Index spine events by id to {kind, day, process}. Require the receipt's kind to be the work-door op kind, its day to equal the journal day, and its payload op to equal journal `op`. Count each receipt id once.",
+      "twin_of": "Membership where identity was needed -> Match the event to this run: written after the ask began, by this model."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs: opsUnproven reason string (`${o.receipt} (${o.day})`)",
+      "breaking_input": "A journal op line with `receipt` set to the string \"X\\n  - REQ-10 MET: 2 of 2 days\\u001b[2K\". The line is ok:true, apply and work, so it is kept. The spine does not hold it, so it is printed raw into the reason list.",
+      "why": "The receipt is free text from a local file. It is interpolated unquoted and uncapped into a terminal line and into `--json` reasons. A newline forges a verdict-looking line and an ESC sequence reaches the owner's terminal. The receipt is never checked against the ULID grammar.",
+      "fix": "Accept a receipt only if it matches the ULID grammar. Otherwise count it as torn. Print any value from data via JSON.stringify with a length cap.",
+      "twin_of": "Ids from rows printed without the grammar check refs got -> Check: every id placed in a label or ref passes one ULID test."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-dogfood.mjs: positional resolution (`const repo = argv.find((a, i) => !a.startsWith(\"-\") && !consumed.has(i))`)",
+      "breaking_input": "`face-dogfood.mjs --day 2026-10-13 2026-10-14 --journal J --spine S --days 1`, where the second date is a forgotten `--day`. A second variant is `-day 2026-10-13`, a single-dash near-miss.",
+      "why": "The extra positional is silently taken as the repo root. With `--journal` and `--spine` given, repo is never used, so only one day is judged and `--days 1` can read MET for a claim of two days. The single-dash form: `-day` starts with '-', so it is not a positional. refuseUnknownFlags (as described, 'unrecognised `--` argument') does not see it, so it is dropped silently. Its value becomes the repo root and the run is unwindowed, judging all history while the owner believes the window was applied. The change from `startsWith(\"--\")` to `startsWith(\"-\")` made single-dash tokens invisible to both the flag guard and the positional picker.",
+      "fix": "Refuse any argument starting with `-` that is not a known flag. Refuse a second positional by name when the first is not the repo.",
+      "twin_of": "Repeated flags were last-wins and an empty value resolved to the cwd -> the flag rules above apply to positionals too."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face-l3.bats: `[ \"$arms\" -ge 29 ]`",
+      "breaking_input": "Delete the whole named-window block from selftest, or drop a dozen arms. Any 29 passing arms, including the old ones plus unrelated ones, still clear the floor.",
+      "why": "A hand-kept floor that is not derived from what the selftest registers. The new arms are listed by name, but the dayRefusal arms (non-date, impossible date, repeat, IST today) are not in the name list. Removing them keeps the count at or above 29 if any other arms exist.",
+      "fix": "Print `RAN: N` from the selftest, derived from the arm count, and assert N equals that printed number. Add the dayRefusal arm names to the loop.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}
