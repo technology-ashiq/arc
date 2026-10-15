@@ -300,3 +300,14 @@ Opens the day Cycle 1's retro closes. Not trigger-gated except C2-02.
 | C2-03 | Template #2: `content-site` derived view, proven on arc's own site config |
 | C2-04 | `teardown --apply` behind approval gates; `migrateFrom()` if a live venture asks |
 | C2-05 | Face Launch room from `planned` to live; `apply` through the two-phase WORK door |
+
+**Checked against Cycle 1 at its close (2026-10-15).** The live runs on `arc-sandbox` add these items to the Cycle 2
+kickoff; none is a Cycle 1 cut:
+- `backup` provisions its own pooler role and `SUPABASE_DB_URL`; `secrets` places the runtime keys itself (both were
+  done by hand on the rehearsal).
+- A gate-aware re-receipt for a gated slot (`release` keeps its first receipt's ERROR evidence; `apply --again`
+  refuses gate 2 by design).
+- `security-headers` waits for the live build, as `frontend` does.
+- The two zero-vetted core rows of ADR-1764: `legal-pages` once the renderer ships, `domain` at the first real
+  venture's gate-1 crossing.
+- The C2-01 count is 35 `required` slots over a 34-slot core (ADR-1763 added `arc-harnesses`).
