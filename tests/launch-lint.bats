@@ -75,7 +75,7 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
 @test "launch-coverage: --require-core-vetted fails while any core slot has zero vetted providers" {
   run node "$(COV)" --require-core-vetted
   [ "$status" -eq 1 ] || { echo "$output"; false; }
-  [[ "$output" == *"FAIL -- core slots with zero vetted providers: "*"dns"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"FAIL -- core slots with zero vetted providers: domain, legal-pages"* ]] || { echo "$output"; false; }
 }
 
 @test "launch-lint: the adapter scanner refuses minified imports, world-reaching built-ins and ambient globals (B2, B3)" {

@@ -23,14 +23,20 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
-@test "launch-cli: plan on the real registry REFUSES every arc-sandbox core slot and names candidates, never a fallback" {
+@test "launch-cli: plan on the real registry recommends only vetted rows and REFUSES the rest by name, never a fallback (ADR-1764)" {
   run node "$(L)" new --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   run node "$(L)" plan --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"dns: REFUSED -- no vetted provider for dns · candidates: cloudflare-dns (candidate)"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"payment-test: REFUSED"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
-  [[ "$output" != *"recommended"* ]] || { echo "a candidate was recommended: $output"; false; }
+  # The owner vetted 32 rows (decision.recorded 01M4YYNSS3H8N5A5HWAG77BM3J); domain and legal-pages hold only candidates.
+  [[ "$output" == *"dns: recommended cloudflare-dns -- why: FIT-1 type saas-b2b"*"status vetted"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"payment-test: recommended razorpay"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-registrar (candidate)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"legal-pages: REFUSED -- no vetted provider for legal-pages · candidates: arc-legal (candidate)"* ]] || { echo "$output"; false; }
+  # A candidate is never the pick: no line recommends a row whose status is not vetted.
+  [ "$(printf '%s
+' "$output" | grep -c ': recommended .*status vetted')" -eq "$(printf '%s
+' "$output" | grep -c ': recommended ')" ] || { echo "$output"; false; }
   [[ "$output" == *"arc-sandbox: 86 slots · "*" REFUSED (no vetted provider)"* ]] || { echo "$output"; false; }
 }
 

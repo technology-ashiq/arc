@@ -11,8 +11,8 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-08, REQ-09, REQ-10 acceptance met
-- [ ] tracker updated
+- [x] REQ-08, REQ-09, REQ-10 acceptance met
+- [x] tracker updated
 
 ## Verification plan
 

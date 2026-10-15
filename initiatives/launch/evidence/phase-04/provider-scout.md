@@ -50,3 +50,10 @@ Providers that ran live: **33** of 37 rows. Not here, and not vetted by this rec
 | face-planned | face-room | `providers/face-room/face-planned.mjs` | `d0bc27f403d2d519c6ae42421e87f9839eb00b1ac445df0d8f415eefa8a7153a` | 01M4VTAQTJC473NTQ6R7BRCC6R | arc face contract | 2026-10-14 |
 | arc-checkout | arc-harnesses | `providers/arc-harnesses/arc-checkout.mjs` | `4079cef9e4b42075f0aa9f5d715cf23af5fab8b6d64e261353cedea692db29e1` | 01M4YA96HKTWZNWSMYDQMCVKYS | arc doctor --dir (673 placed, 20 degraded, 0 missing, 0 unmanaged-conflict; claude-code, codex, opencode, skills-only) | 2026-10-15 |
 | teardown-render | teardown-plan | `providers/teardown-plan/teardown-render.mjs` | `7621eb3fe644842cfd1c2e86c58d0ff2563e1ef6f85142e1b4d781a8736cc55e` | 01M4RZ5PY3R29VCKK95K4DNE79 | arc teardown render | 2026-10-14 |
+
+## Decision
+
+The owner approved this record on 2026-10-15: decision.recorded `01M4YYNSS3H8N5A5HWAG77BM3J` decides
+approval.requested `01M4YAHP98TJ22E49S7WQGXAWE`. Every digest above was recomputed against its adapter at the flip
+and matched. 32 rows flip to `vetted` on PR #425; `neon` flips on PR #432, whose changed-file list is its row and its
+adapter only (REQ-08).

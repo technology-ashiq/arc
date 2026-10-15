@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-launch (Cycle 1, opened 2026-10-03)
-phase: 04
+phase: 05
 appetite: 18d
-burn: 12d
+burn: 13d
 blocked-on: —
 depends-on: —
 
@@ -19,8 +19,8 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
 | 01 | Steel thread on `arc-sandbox` (day-3 kill inside) | 5d | ✅ 2026-10-14 |
 | 02 | Money, test mode | 3d | ✅ 2026-10-14 |
 | 03 | Trust + data minimum | 2d | ✅ 2026-10-14 |
-| 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | ⏳ next |
-| 05 | Close | 1d | ⏳ |
+| 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | ✅ 2026-10-15 |
+| 05 | Close | 1d | ⏳ next |
 
 ## Done-log
 
@@ -65,38 +65,35 @@ ADR century 1700–1799; ADR-1700..1724 written at kickoff.
   - dependency-scan: green on the venture CI after the shell pins (ADR-1759).
   - migration-rollback: down migration on CI.
   legal-pages is a named ABSENT (renderer not ready). 1 day vs 2d. amendments: 2 (ADR-1758, ADR-1759) · reopened: n.
+- **Phase 04 ✅ 2026-10-15** — REQ-08, REQ-09, REQ-10 validated.
+  - REQ-08: `plan` derives every pick with its fit-rule ids or prints REFUSED. `neon` verified live on the owner's own
+    org (receipt 01M4Y295RKMHSHBS52T7DE9Q08, owner 1 row, `launch_anon` 0) and is vetted in PR #432, whose file list
+    is its row and its adapter only.
+  - REQ-09: the trust fixtures run on CI against every real adapter (`trust-all`). The vetting stamp
+    (decision.recorded 01M4YYNSS3H8N5A5HWAG77BM3J) pinned 33 digests, each recomputed at the flip.
+  - REQ-10: passport, ledger-source, face-room and teardown-plan verified; the `launch-watch` job's first run exited 0.
+  - `arc-harnesses` (ADR-1763, distribute REQ-15) verified on its first real run: 673 placed, 0 missing.
+  CI on #425 green per job (run 38675000566). 2 days vs 2d (the real half; the fakes half shipped in #404).
+  amendments: 2 (ADR-1763, ADR-1764) · reopened: n.
 
-**Appetite burn:** 12 of 18 days (calendar, 2026-10-03..14; 67%). Both checkpoints fired late: day 7.5 (Phase 01 not
+**Appetite burn:** 13 of 18 days (calendar, 2026-10-03..15; 72%). Both checkpoints fired late: day 7.5 (Phase 01 not
 closed) and the day-12 tripwire (Phase 02 not closed). The scope-cut conversation was held as ADR-1762: nothing is cut,
 because every cut-order item but REQ-08's second provider is already verified live. The overrun was the wait for owner
 keys. Next checkpoint: 100% (day 18) → cut or kill, never extend.
 
 ## Now
 
-**Current position:** Phases 00–03 closed; their `phase.closed` receipts are on the spine (2026-10-15). Phase 04's real
-half is done except the owner's vetting stamp. On `arc-sandbox`, 32 slots are verified live and three are named ABSENT:
-- `domain` and `payment-live`: behind their gates.
-- `legal-pages`: the renderer is not ready.
+**Current position:** Phases 00–04 closed. The owner stamped all four approvals on 2026-10-15 (phases 01–03 and
+the provider vetting). 33 providers are vetted (32 on #425, `neon` on #432); `launch-coverage` reads 2/34 core
+slots with zero vetted providers, exactly the two named exceptions of ADR-1764 (`domain`, `legal-pages`).
 
-Phase 04, live (2026-10-15):
-1. **REQ-08 (neon).** The first vet was refused because the owner's only Neon org was Vercel-managed. With a key from
-   his own org, the second was refused by Postgres 16 (`permission denied to set role "launch_anon"`). After the fix
-   (the migration grants the role to its owner), it verified: receipt 01M4Y295RKMHSHBS52T7DE9Q08, owner 1 row,
-   `launch_anon` 0. The run used a private state copy; arc-sandbox stays on Supabase. The fix is PR #432, which changes
-   the adapter only; the row's `vetted` flip joins it after the stamp. A-06 never fired.
-2. **`arc-harnesses` (ADR-1763, distribute REQ-15).** A new core wiring slot: `arc init` into the venture tree,
-   verified by `arc doctor --dir`. Verified on the first real run: receipt 01M4YA96HKTWZNWSMYDQMCVKYS, 673 placed,
-   0 missing, 0 unmanaged-conflict, four harnesses. The catalog now derives 86 slots / 34 core.
-3. **REQ-05 and REQ-09.** The scout record holds 33 of 37 rows with digests that match their adapters. One
-   approval.requested is on the spine for the owner: `01M4YAHP98TJ22E49S7WQGXAWE`, which supersedes `01M4Y85V…`.
-4. **REQ-10.** The `launch-watch` row has been on main since PR #408. Its first run through `arc-jobs run launch-watch`
-   (2026-10-15) exited 0: 4 public slots verified, 27 `skipped(env)`, 0 raised.
-5. **The adapters changed by the attack fixes were re-applied.** The backup drill was re-written and ran green on
-   venture CI. Receipts: backup 01M4YCVCREN06T9Y60SW17DBRJ, restore-drill 01M4YCWQXY50FKYAHPMGVTD4R5.
+Phase 05 so far (evidence in `evidence/phase-05/`): the board is 34/34 core verified or a named ABSENT;
+`verify --all` from the branch is 31/32, and `passport` passes from main's runner; bundles for 01–04 are written and
+verified; REQ-12 is recorded OPEN-at-first-venture; the Cycle 2 prompt is checked.
 
-**Next step:** after the vetting stamp, every vetted row gets `status: vetted`, `vetted_by`, `scout` and `digest`.
-Neon's flip goes in #432 and the rest in #425. Then Phase 05: `verify --all`, the evidence bundles, REQ-12 recorded as
-OPEN-at-first-venture, `/arc-retro`. Owner ruling (2026-10-14): one merge, at the end of the cycle.
+**Next step:** merge #432 and #425 (owner ruling 2026-10-14: one merge, at the end), then from the main clone:
+`verify --all` exit 0, the Phase 05 bundle, `/arc-retro --lane launch`, close Phase 05, and send distribute the
+merge SHA for REQ-15.
 
 **Owed (gaps found live):**
 - `release`: its state row carries the ERROR evidence of its first receipt, while its live verify answers READY.
@@ -107,9 +104,4 @@ OPEN-at-first-venture, `/arc-retro`. Owner ruling (2026-10-14): one merge, at th
 - `security-headers`: should wait for the live build, as frontend does.
 
 **Owner actions:**
-- Stamp the provider vetting: `node .claude/scripts/hq/arc-inbox.mjs approve 01M4YAHP98TJ22E49S7WQGXAWE --reason ...`
-  from the main clone.
-- Stamp the phase-done approvals: 01 `01M4Y7WM3CBKFXKQNT3FP6QS1V`, 02 `01M4Y7WXRK37QY6QS6NKE26SAS`, 03
-  `01M4Y7X28QG2WCQZXGQZ5ZFWHN`.
-- Earlier stamps in arc-inbox: kickoff `01M40ZHP72PYVBJT17R7A4WZ3W`, owner rulings `01M41MH9JG9VEN5G085T56CNHH` and
-  `01M41MHA25TV1WXYHHGM59ND5V`.
+- Stamp the Phase 04 approval `01M4Z29774RP3Q0C75HG4CF18D` (`arc-inbox approve <id> --reason ...` from the main clone).
