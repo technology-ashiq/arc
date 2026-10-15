@@ -1,0 +1,152 @@
+{
+  "phase": "01",
+  "commit": "359790f8773555501d6126c578ded7387d94126b",
+  "short": "359790f8",
+  "generated": "2026-10-15T01:54:44Z",
+  "files": [
+    {
+      "name": "attack-0109a8d-r1-boundary.json",
+      "sha256": "52ef397a329d323b731d1afb26cff6b2d1878f09dbe4047faa446e1af1a57e2d"
+    },
+    {
+      "name": "attack-0109a8d-r1-logic.json",
+      "sha256": "2d4ad05352d52c717c34767da90fb780b3809fc47a7e0cd375fd3215c4686e95"
+    },
+    {
+      "name": "attack-07bcb38-r2-boundary.json",
+      "sha256": "ea0c95017c90b429f6b0a649418fc6d60c9d2927c3b74566a6b5dd3578552458"
+    },
+    {
+      "name": "attack-1406e29-r1-boundary.json",
+      "sha256": "07f426fb9dcd0cb095badcaac4d342024a9a49c8e1a789ce255f0a18eef38edd"
+    },
+    {
+      "name": "attack-1406e29-r1-logic.json",
+      "sha256": "3b7a6f2208c0b96709cd606104a4c12d129a58886b627502e977a80939578709"
+    },
+    {
+      "name": "attack-14d5374-r1-boundary.json",
+      "sha256": "55473c713777981f9d0c2e11d636c9b04ccce18e02827658ac1e1cdfe89dc437"
+    },
+    {
+      "name": "attack-21d7acb-r2-boundary.json",
+      "sha256": "bcf710de2b634da2355b987e0754b1c8e500734165161c14b52e1057cf1ab334"
+    },
+    {
+      "name": "attack-2b16424-r2-boundary.json",
+      "sha256": "558fa42a4be80e8f9b3d15e6739e6172642469f2be496b91b4a99ce2b3ae7297"
+    },
+    {
+      "name": "attack-2b16424-r2-logic.json",
+      "sha256": "57eba003b5be16435d155a3a07c2343fd68002a54957a5ad6759e7700f8ae8c1"
+    },
+    {
+      "name": "attack-3a6350b-r2-boundary.json",
+      "sha256": "2e634d4bf9e80df392ad0083f4206c498341aefcfb927cdcd6967cf92e730021"
+    },
+    {
+      "name": "attack-3a6350b-r2-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-3f04230-r1-boundary.json",
+      "sha256": "1ea67602be4ead6d5a86d38a68d0b60b2eb46176b61dabb4a988fad5847c9e3d"
+    },
+    {
+      "name": "attack-3f04230-r1-logic.json",
+      "sha256": "dc571f1ac9d20b378e5be00c2110004b9a8403fc07c995d295cebfb2f0d267bd"
+    },
+    {
+      "name": "attack-405007a-r1-boundary.json",
+      "sha256": "adc2cad380a25109ca8255e3b03c8de667b29ac81dd19905bb0cf036c38eb110"
+    },
+    {
+      "name": "attack-53e3c6c-r1-boundary.json",
+      "sha256": "2f7d6f65e186316cef43f1387c02504a014bc6cea7b5609548c6fa657a66461c"
+    },
+    {
+      "name": "attack-53e3c6c-r1-logic.json",
+      "sha256": "82f45f72caf793894fbdb6925a93bb28ce377c6e45f6bf3ea27e636e678464e6"
+    },
+    {
+      "name": "attack-5e06edf-r1-boundary.json",
+      "sha256": "8c6f6a3ea3e1d50a6ada485e65d324563ab730ee9e2deed19371d297b8c3df2d"
+    },
+    {
+      "name": "attack-6a5c24e-r2-boundary.json",
+      "sha256": "9d62b7b5a922cd66a6cfa9f1fda262e995dfbc8d37b23299fab0256e25fc0349"
+    },
+    {
+      "name": "attack-74c7f5a-r1-boundary.json",
+      "sha256": "d6a7624858ca1cb4266a098c1cd1a5487c6960a768bbcc085c555cd2758c7d9b"
+    },
+    {
+      "name": "attack-7722041-r1-boundary.json",
+      "sha256": "a142c9fb3a13ffd1e3c76108ac010f51340aa59a9a1a768b8d2fc191733d5ee0"
+    },
+    {
+      "name": "attack-8a0ae88-r2-boundary.json",
+      "sha256": "628f8ff57fab48491de031336a324de7f9c2ea7c9d2bf97793706117fb26f88c"
+    },
+    {
+      "name": "attack-8a7fb7f-r2-boundary.json",
+      "sha256": "258824c4a9acecc83bc4829a0d3ba00731f275f68a64ed0851c8596850f8b203"
+    },
+    {
+      "name": "attack-8a7fb7f-r2-logic.json",
+      "sha256": "3ee7d7059b0362865a385c51f8d1da354d1e737e0d67ea43a2b62a389179f34c"
+    },
+    {
+      "name": "attack-aadcd0c-r1-boundary.json",
+      "sha256": "59e3c880608e90422532745622b0dc510bf7babb42d155ddc4f4a59970115681"
+    },
+    {
+      "name": "attack-aadcd0c-r1-logic.json",
+      "sha256": "859a722f0ea75fb160e97d53fa67fdcf4bf0e7ace830fc5616b822785d10833c"
+    },
+    {
+      "name": "attack-cc949ef-r1-boundary.json",
+      "sha256": "72799a0e87f9842122fe18e71833727c8e201d2d95dbc0d0843acf86a8022886"
+    },
+    {
+      "name": "attack-d931e53-r2-boundary.json",
+      "sha256": "72bfb9816bdb2b4cb96d2abf2217922a07a531e028162f832745bd6df7981011"
+    },
+    {
+      "name": "attack-dispositions.md",
+      "sha256": "c954944f1858b3a6e302c56c85913699b16b65af6c34615a5232cca176a037c0"
+    },
+    {
+      "name": "attack-e37494d-r1-boundary.json",
+      "sha256": "82e25a472814a7906feef835641427d994d5a0c02f9222b0519f60f84f9b3423"
+    },
+    {
+      "name": "attack-e37494d-r1-logic.json",
+      "sha256": "3afe1018a4815b3f0c97ab74781d89a2e8ea3938d6cc77d855d347da41dcccfe"
+    },
+    {
+      "name": "attack-faccecd-r1-boundary.json",
+      "sha256": "d1e71ff0135887026aef1b1ffb81faf49edbc567f407940d82f3fc4186eceb6f"
+    },
+    {
+      "name": "attack-faccecd-r1-logic.json",
+      "sha256": "46d86598e9510d886c9e58bfe4ea447b28084369041b0bcd321e01dc266d53bd"
+    },
+    {
+      "name": "attack-fb3a494-r2-boundary.json",
+      "sha256": "9aa987015344815d4946188c7ff79ff10fae8be222666581beabc1a5d4dc0742"
+    },
+    {
+      "name": "live-transcript.txt",
+      "sha256": "b11e1e494d21a8ce84824259f3391f5173a784b35a79808a16dcc4659dba9791"
+    },
+    {
+      "name": "real-run.md",
+      "sha256": "2d7bcc8429398ad0f8a5fb8e1d1a488f9a070e5ecdb55a8579e15623b57e473a"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "e30299a44e83b1004e40f59105b29298b7145f31c09ce36fcdfdfe66b3a02442"
+    }
+  ]
+}

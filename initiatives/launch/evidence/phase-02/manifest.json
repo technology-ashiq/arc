@@ -1,0 +1,72 @@
+{
+  "phase": "02",
+  "commit": "359790f8773555501d6126c578ded7387d94126b",
+  "short": "359790f8",
+  "generated": "2026-10-15T01:56:36Z",
+  "files": [
+    {
+      "name": "attack-1cb6b9a-r1-boundary.json",
+      "sha256": "0a0fb57bd7df325e5e6eb847299ddfd4ebcedaa987b2885d9c67cb8d5a4a1a5c"
+    },
+    {
+      "name": "attack-1cb6b9a-r1-logic.json",
+      "sha256": "afb05555e3a36a82c69ea97536b3c3df5521f1e06dacff5e3e4574a40d36249a"
+    },
+    {
+      "name": "attack-55c5065-r1-boundary.json",
+      "sha256": "42470938c3e6fec00b96f5e2aed914136c3c90af3c537879033eb337f82a9f71"
+    },
+    {
+      "name": "attack-55c5065-r1-logic.json",
+      "sha256": "c50d138f785cc25df3cd2f773791ce0da8952e362b6c7a0e63b597097c75168a"
+    },
+    {
+      "name": "attack-a1d4452-r2-boundary.json",
+      "sha256": "5ad94ca2585ed0dc6dd2d7b5819ae4626f5a17b43e5f2a98e9dee01076393048"
+    },
+    {
+      "name": "attack-a1d4452-r2-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-a9a2ec2-r2-boundary.json",
+      "sha256": "386ca71d4ff165c52560496d52cf2347d44d4528af5c751f913b44bf2c29766b"
+    },
+    {
+      "name": "attack-b1844e0-r1-boundary.json",
+      "sha256": "938b6c0bd4d545ad237ac927785b0ed82d4139349dbafb2f3a304eda15cad52a"
+    },
+    {
+      "name": "attack-b1844e0-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-d1dc8eb-r1-boundary.json",
+      "sha256": "4a82e9abfba9fe479e74c2bc850094a4ee23e56a08ddcd6b1be577e039f6f982"
+    },
+    {
+      "name": "attack-d1dc8eb-r1-logic.json",
+      "sha256": "01a4d5700cb94cb8735034a13606992e48ad5678865df7e998cd06750a43aebf"
+    },
+    {
+      "name": "attack-da7f2e0-r2-boundary.json",
+      "sha256": "aa42850264747e6a02b0539864dd1b20d45452bd30b1d87122c678e20a1038e1"
+    },
+    {
+      "name": "attack-da7f2e0-r2-logic.json",
+      "sha256": "1a8590d581123303f6a9eef9656f4615d03de1d519507f13e274ba8fa4fdc54f"
+    },
+    {
+      "name": "attack-dispositions.md",
+      "sha256": "bff70d5b07296c312d8747b55f18c7d72d12df778648d3a5a77c2819bed59d24"
+    },
+    {
+      "name": "real-run.md",
+      "sha256": "2a17c605d607107d6c775e38f187252a8d7c277b70895be681dae197142e0b55"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "e30299a44e83b1004e40f59105b29298b7145f31c09ce36fcdfdfe66b3a02442"
+    }
+  ]
+}
