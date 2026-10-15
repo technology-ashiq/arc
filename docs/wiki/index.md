@@ -7,15 +7,15 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 |---|---|---|
 | [Products](#products) | 20 | 17 |
 | [Lanes](#lanes) | 21 | 17 |
-| [Processes](#processes) | 16 | 0 |
+| [Processes](#processes) | 17 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 21 | 0 |
 | [Commands](#commands) | 29 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **153** | **34** |
+| **Total** | **154** | **34** |
 
-Narrative debt: **119 of 153** pages have no narrative yet. ADR headers: 432 of 502 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 432 of 502 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -83,6 +83,7 @@ Narrative debt: **119 of 153** pages have no narrative yet. ADR headers: 432 of 
 | [distribute-radar](processes/distribute-radar.md) | 1.0.0 | Report weekly how far every project arc is installed in is behind arc, without writing to any of them. |
 | [face-ask](processes/face-ask.md) | 1.0.0 | Answer the owner's question in the face: about arc from arc's own record with citations, or a general question from the owner's chosen model, always saying which. |
 | [kickoff-plan](processes/kickoff-plan.md) | 1.0.0 | Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated. |
+| [lane-stale](processes/lane-stale.md) | 1.0.0 | Derive stale for every LIVE lane no receipt has named in 14 days and raise it to needs-you. |
 | [launch-watch](processes/launch-watch.md) | 1.0.0 | Re-verify every launched venture's public slots weekly and raise a regression to needs-you. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
 | [narrative-verify](processes/narrative-verify.md) | 1.0.0 | Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block. |

@@ -838,7 +838,8 @@
       "adr-record": "strategy",
       "face-ask": "ask-arc",
       "launch-watch": "engine-room",
-      "distribute-radar": "engine-room"
+      "distribute-radar": "engine-room",
+      "lane-stale": "engine-room"
     }
   },
   "gates": {
@@ -1410,7 +1411,8 @@
       "brief-materialize": "scheduler",
       "day-close-roll": "scheduler",
       "launch-watch": "scheduler",
-      "distribute-radar": "scheduler"
+      "distribute-radar": "scheduler",
+      "lane-stale": "scheduler"
     }
   },
   "ventures": {

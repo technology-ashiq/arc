@@ -25,6 +25,8 @@ setup() {
   # distribute-radar likewise: its week stamp, and an empty registry of its own -- a runner has none (exit 1),
   # and a dev box would otherwise read the owner's real consumers.
   export ARC_RADAR_STATE_DIR="$BATS_TEST_TMPDIR/radar-state"
+  # lane-stale likewise: its derivation lands here, not under the clone's .claude/state/portfolio.
+  export ARC_PORTFOLIO_STATE_DIR="$BATS_TEST_TMPDIR/portfolio-state"
   export ARC_PRIVATE_DIR="$BATS_TEST_TMPDIR/arc-private"; mkdir -p "$ARC_PRIVATE_DIR"
   printf '{"version":1,"consumers":[]}\n' > "$ARC_PRIVATE_DIR/consumers.json"
   # Every enabled job in the COMMITTED schedule. A lane that adds a job must not have to edit
