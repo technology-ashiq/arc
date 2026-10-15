@@ -346,6 +346,13 @@ const REV = { candidateRevision: "1.0.0", championRevision: "1.0.0" };
   const holed = foldSpend(acc, null);
   check("one attempt with no spend makes the class's money ABSENT and says why, never a partial sum",
     holed.spend === null && /reported no spend/.test(holed.gap) && foldSpend(holed, usd(9)).spend === null);
+  // PR 433 CI: every attempt with NO spend is no money claim at all -- absent, never a gap. A gap refused every mock proposal.
+  let noSpend = foldSpend({ spend: null, gap: null }, null);
+  noSpend = foldSpend(noSpend, null);
+  check("a class where NO attempt reported spend is plain ABSENT, not a gap",
+    noSpend.spend === null && noSpend.gap === null, JSON.stringify(noSpend));
+  check("but money arriving after an attempt that had none is a gap, in either order",
+    foldSpend(noSpend, usd(4)).spend === null && /reported no spend/.test(foldSpend(noSpend, usd(4)).gap || ""));
   const mixed = foldSpend(acc, usd(3, "provider-reported"));
   check("a mixed basis makes it ABSENT too", mixed.spend === null && /mixed spend/.test(mixed.gap), JSON.stringify(mixed));
 

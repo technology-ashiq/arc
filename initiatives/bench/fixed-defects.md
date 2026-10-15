@@ -73,3 +73,7 @@ Each line is a hole that was found and fixed. An attacker checks every OTHER fil
 - **A gap read as an absence** (2026-10-15, attack b57cb7c B1), the same shape as ab2d484 L5 one field
   over: `spend_gap` never reached the gate, so two gapped sides were "comparable". Fix: carried and refused
   by name.
+- **"No claim" read as "a partial claim"** (2026-10-15, PR 433 CI, macOS shard 1). `foldSpend` made the
+  first attempt without spend a gap even when no attempt had any, so every mock run read `spend_gap` and
+  gate 5 refused the mock proposal: no diff, no approval. Fix: a gap needs both kinds of attempt; all-absent
+  is ABSENT. Twin: every all-or-nothing fold whose "nothing" and "some missing" share one branch.

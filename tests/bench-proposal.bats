@@ -137,6 +137,7 @@ PROP_STATUS() { cat "$BATS_FILE_TMPDIR/prop.status"; }
   [[ "$(PROP)" == *"ok one attempt with no spend makes the class's money ABSENT and says why, never a partial sum"* ]]
   [[ "$(PROP)" == *"ok a MALFORMED spend on both sides is not comparable, never two absences that pass"* ]]
   [[ "$(PROP)" == *"ok a spend lost to a gap on both sides is not comparable, and the reason is named"* ]]
+  [[ "$(PROP)" == *"ok a class where NO attempt reported spend is plain ABSENT, not a gap"* ]]
   [[ "$(PROP)" == *"ok the model-invalid run RAN and wrote a scorecard"* ]]
   [[ "$(PROP)" == *"ok ADR-0917: a model-invalid attempt is a SCHEMA failure the model earned, not a driver fault"* ]]
   [[ "$(PROP)" == *"ok and the undeclared failure beside it stays unscoreable -- the control"* ]]

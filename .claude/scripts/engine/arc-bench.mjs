@@ -928,12 +928,19 @@ export function classSpend(v) {
  */
 export function foldSpend(acc, spend) {
   if (acc.gap) return acc;
-  if (!spend) return { spend: null, gap: "an attempt reported no spend" };
-  if (!acc.spend) return { spend: { ...spend }, gap: null };
-  if (acc.spend.currency !== spend.currency || acc.spend.basis !== spend.basis) {
-    return { spend: null, gap: `mixed spend (${acc.spend.currency}/${acc.spend.basis} and ${spend.currency}/${spend.basis})` };
+  // A GAP NEEDS BOTH KINDS OF ATTEMPT. A class where NO attempt reported money makes no money claim at all, which is
+  // plain ABSENT -- the mock driver, every offline run. Calling that a gap refused every mock proposal at gate 5
+  // (PR 433 CI, macOS shard 1). Only "some did, some did not" is a sum over part of the attempts.
+  const missing = acc.missing ?? 0;
+  if (!spend) {
+    return acc.spend ? { spend: null, gap: "an attempt reported no spend", missing: missing + 1 } : { spend: null, gap: null, missing: missing + 1 };
   }
-  return { spend: { ...acc.spend, amount: acc.spend.amount + spend.amount }, gap: null };
+  if (missing > 0) return { spend: null, gap: "an attempt reported no spend", missing };
+  if (!acc.spend) return { spend: { ...spend }, gap: null, missing: 0 };
+  if (acc.spend.currency !== spend.currency || acc.spend.basis !== spend.basis) {
+    return { spend: null, gap: `mixed spend (${acc.spend.currency}/${acc.spend.basis} and ${spend.currency}/${spend.basis})`, missing };
+  }
+  return { spend: { ...acc.spend, amount: acc.spend.amount + spend.amount }, gap: null, missing: 0 };
 }
 
 export function runAttempt(root, { processName, fixture, driver, trialModel, budget, timeoutMs }) {
