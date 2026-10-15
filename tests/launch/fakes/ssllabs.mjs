@@ -6,7 +6,8 @@
 //   stale         what a READY answer returns until a startNew=on scan is asked for (an old cached scan); null = none
 //   endpoints[].http  the HTTP status SSL Labs' own request got (default 200); 403 = the host refused the scanner
 //   liveHsts      the venture's own strict-transport-security header, or null for none
-export function makeSslLabs({ pendingPolls = 0, endpoints = [{ ipAddress: "76.76.21.21", grade: "A+", hsts: true }], status = 200, misconfigured = false, stale = null, liveHsts = null, vercelToken = "vercel_fixture_token_0123456789" } = {}) {
+//   liveRedirect  the venture's "/" answers this redirect (no HSTS on it) and serves liveHsts at the target
+export function makeSslLabs({ pendingPolls = 0, endpoints = [{ ipAddress: "76.76.21.21", grade: "A+", hsts: true }], status = 200, misconfigured = false, stale = null, liveHsts = null, liveRedirect = null, vercelToken = "vercel_fixture_token_0123456789" } = {}) {
   const calls = [];
   let left = pendingPolls;
   let fresh = !stale;
@@ -18,6 +19,8 @@ export function makeSslLabs({ pendingPolls = 0, endpoints = [{ ipAddress: "76.76
       if ((init.headers || {}).authorization !== `Bearer ${vercelToken}`) return json(403, { error: { code: "forbidden", message: "Not authorized" } });
       return json(200, { misconfigured, recommendedCNAME: [], configuredBy: misconfigured ? null : "CNAME" });
     }
+    if (url.hostname === "sandbox.automemory.ai" && liveRedirect && url.pathname === "/")
+      return new Response(null, { status: liveRedirect.status, headers: { location: liveRedirect.location } });
     if (url.hostname === "sandbox.automemory.ai")
       return new Response("<html></html>", { status: 200, headers: liveHsts ? { "strict-transport-security": liveHsts } : {} });
     if (url.hostname !== "api.ssllabs.com") throw new Error(`fake ssllabs: unexpected host ${url.hostname}`);

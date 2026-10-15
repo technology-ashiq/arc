@@ -99,8 +99,15 @@ export async function scaffold(ctx) {
     // The preview must build main's CURRENT code: a probe commit sitting on an older main previews an app the venture
     // no longer has (the first real run built an empty repo and failed). Move the branch to main, then lay the probe
     // file on top again; a kill between the two lands in the at-main case above (ADR-1752).
-    const parents = list(head.body && head.body.parents).map((x) => String(x && x.sha));
-    if (!parents.includes(base)) {
+    // Behind or ahead is GitHub's compare, not the head's parent: the branch is moved only when it is not exactly one
+    // commit on main's head, and only when every commit it holds past main is launch's (attack d8f943a L9).
+    const cmp = await gh(ctx, "GET", `/repos/${full}/compare/${base}...${encodeURIComponent(BRANCH)}`);
+    const behind = Number(cmp.body && cmp.body.behind_by);
+    const ahead = list(cmp.body && cmp.body.commits);
+    if (!Number.isInteger(behind)) throw new Error(`github answered no compare for ${full} ${BRANCH}`);
+    if (behind > 0 || ahead.length !== 1) {
+      if (!ahead.every((c) => isOurs(ctx, c.commit && c.commit.message)))
+        throw refuse("FOREIGN_BRANCH", `${full} ${BRANCH} holds a commit launch did not make; it is not force-moved`);
       await gh(ctx, "PATCH", `/repos/${full}/git/refs/heads/${BRANCH}`, { sha: base, force: true });
       await gh(ctx, "PUT", `/repos/${full}/contents/${FILE}`, { message: `environments: preview check (ADR-1728)\n\n${trailer(ctx)}`, content: b64(BODY), branch: BRANCH });
     }

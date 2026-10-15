@@ -46,7 +46,7 @@ const deployed = {
 }[scenario];
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const vercel = makeVercel({ github });
-const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz", freeTierMail: scenario.startsWith("free-tier") || scenario.startsWith("stock-template") || scenario === "smtp-rotate" });
+const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz", freeTierMail: scenario.startsWith("free-tier") || scenario.startsWith("stock-template") || scenario.startsWith("smtp-") });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: (i, o) => supabase.fetch(i, o).catch(() => vercel.fetch(i, o)) });
 const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail", serverEnv, linkShape: scenario === "nested-link" ? "nested" : "flat", ...(deployed ? { deployed } : {}) });
 const rz = makeRazorpay({ keyId: RZ_ID, keySecret: RZ_SECRET, alsoAccept: [[OTHER_ID, OTHER_SECRET]] });
@@ -196,8 +196,41 @@ switch (scenario) {
   case "smtp-rotate": {
     // launch's own Resend SMTP is re-sent on a later apply, so a rotated key reaches Supabase (attack 913d01d B2).
     await A.auth.mod.scaffold(ctxFor("auth"));
+    // A field of launch's block edited since: the block launch recorded is still launch's (attack d8f943a L1).
+    supabase.store[0].auth.smtp_user = "resend2";
     out.again = await attempt(() => A.auth.mod.scaffold(ctxFor("auth", [], { env: { ...ENV, RESEND_API_KEY: "re_rotatedResendKey0123456789" } })));
     out.rotated = supabase.store[0].auth.smtp_pass === "re_rotatedResendKey0123456789";
+    out.recorded = state.auth.filter((r) => r.kind === "auth-smtp").length;
+    break;
+  }
+  case "smtp-owner-resend": {
+    // The owner set Resend themselves (another sender): host and user match launch's, but the block is not launch's.
+    supabase.store[0].auth = { site_url: "http://localhost:3000", smtp_host: "smtp.resend.com", smtp_user: "resend", smtp_pass: "owner-pass", smtp_admin_email: "hello@owner.example" };
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.kept = supabase.store[0].auth.smtp_pass === "owner-pass" && supabase.store[0].auth.smtp_admin_email === "hello@owner.example";
+    out.recorded = state.auth.filter((r) => r.kind === "auth-smtp").length;
+    break;
+  }
+  case "public-env-dev": {
+    // A development-only value of one name: launch posts production and preview, and collides on neither (attack d8f943a L2).
+    const proj = () => [...vercel.store.values()][0];
+    proj().envs = [{ id: "env_owner", key: "NEXT_PUBLIC_SUPABASE_URL", target: ["development"], value: "http://localhost:54321" }];
+    out.auth = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.targets = proj().envs.filter((e) => e.key === "NEXT_PUBLIC_SUPABASE_URL").map((e) => e.target.join("+")).join(" ");
+    break;
+  }
+  case "stale-build": {
+    // Values changed after the live build (a killed attempt, or the owner) with nothing left to push: a re-run rebuilds
+    // once, and a re-run after that rebuild does not (attack d8f943a L3).
+    const proj = () => [...vercel.store.values()][0];
+    await A.auth.mod.scaffold(ctxFor("auth"));
+    out.before = proj().rebuilds || 0;
+    const later = Math.max(...repo().commits.map((c) => c.at || 0)) + 500;
+    for (const e of proj().envs) e.updatedAt = later;
+    out.again = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.after = proj().rebuilds || 0;
+    out.third = await attempt(() => A.auth.mod.scaffold(ctxFor("auth")));
+    out.afterThird = proj().rebuilds || 0;
     break;
   }
   case "public-env":

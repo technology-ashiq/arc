@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "tests/launch/replay/redact.mjs:66-69",
+      "breaking_input": "raw recording where the venture's Supabase ref appears in a field that is not `resources` or `upstream` (e.g. inside the answer or a header), and no resource/upstream id matches /^[a-z0-9]{20}$/",
+      "why": "ventureRefs is built only from rec.resources and rec.upstream ids. If the ref never appears there (e.g. the probe reads it from a response header or a nested field), the script exits 1 with 'no recording names the venture's Supabase ref' and refuses to redact at all. A legitimate recording would be rejected, blocking the whole gate.",
+      "fix": "Collect the ref from every string in the recording that matches the shape and is followed by `.supabase.co`, or require the operator to pass it explicitly."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "tests/launch/replay/redact.mjs:47",
+      "breaking_input": "a resource id like `fixtureid0000000001` (20 chars, starts with 'fixtureid') already in the raw recording",
+      "why": "The rule for generic 20-char ids uses `(?!fixture)` to avoid re-masking fixture values, but the raw recording could legitimately contain a real id that happens to start with 'fixture' (e.g. a provider's id prefix). That id would never be masked, and the gate would write it out as-is.",
+      "fix": "Drop the negative lookahead; mask every 20-char id, then let the stable map unify it with the fixture replacement."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "tests/launch/replay/scan.mjs:28",
+      "breaking_input": "a recording containing `fixtureorg0000000000000000001` (a 20-char id that matches /^fixture...0+[0-9]+$/) but is not a placeholder the redactor actually produced",
+      "why": "The scan accepts any id matching /^fixture(ref|org|id)0*[0-9]+$/. An attacker (or a malformed fixture) could plant a real id shaped like that and the scan would pass it, defeating the redaction gate.",
+      "fix": "Compare against the exact placeholder set the redactor emits, or verify the id equals the fixture ref or a numbered placeholder with a fixed length."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:29",
+      "breaking_input": "a private env value that is exactly 8 characters and contains only characters that `mask` maps to themselves (e.g. `abcdefgh`)",
+      "why": "mask() maps [a-f] to 'a', [g-z] to 'x', [A-Z] to 'X', [0-9] to '0'. A value like `abcdefgh` becomes `aaaaaaax` — still a valid secret shape. The gate then checks `s.includes(v)` where v is the original, which is gone, so it passes. The masked value is a fixed, guessable string, but the scan's MASKED regex accepts it because it only contains 'a','x','X','0'. A real secret of that shape would be leaked as a constant.",
+      "fix": "Make mask() inject a per-value random salt or keep a counter so masked values are not universally identical, and have the gate check the masked form too."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:36",
+      "breaking_input": "a JWT whose header is `eyJ` followed by exactly 6 chars and a dot, e.g. `eyJaaaaaa.bbbbbb.cccccc`",
+      "why": "The JWT regex requires `[A-Za-z0-9_-]{6,}` after `eyJ`, so a 6-char segment is matched. But the scan's JWT check uses `eyJ([A-Za-z0-9_-]{6,}\\....)` and then tests MASKED on the captured group. The redactor masks the whole match with keep=3, so the captured group becomes all 'a'/'x'/'X'/'0' and passes. That's fine, but the redactor's `mask` with keep=3 leaves the first 3 chars of the payload unmasked — for a JWT the first 3 chars of the payload are part of the secret. The scan only checks the captured group after `eyJ`, which is the first 6+ chars of the payload — the first 3 are unmasked and not checked. A real JWT's payload beginning `abc` would survive as `eyJabc...`.",
+      "fix": "Mask the entire JWT (keep=0) and have the scan reject any JWT whose payload is not fully masked."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:42",
+      "breaking_input": "a session cookie value `base64-` followed by 8 chars that are all in the MASKED set, e.g. `base64-aaaaaaax`",
+      "why": "The `base64-` rule masks with keep=7, so the first 7 chars after `base64-` are kept. The scan's base64 check tests MASKED on the captured group after `base64-`; if those 7 chars are all maskable, the scan passes even though they are original. A real cookie whose first 7 chars are `aaaaaaa` would survive.",
+      "fix": "Mask the whole value after `base64-` (keep=0) and require the scan to see no original characters."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:44",
+      "breaking_input": "a login token value that is exactly 8 characters and all in the MASKED set, e.g. `aaaaaaax`",
+      "why": "The token rules mask with keep=0 for the value, but the scan's `hashed_token` check tests MASKED on the captured value. A value like `aaaaaaax` passes MASKED, so a real token of that shape would be accepted as masked even though it is original.",
+      "fix": "Make the scan require the token to be a placeholder (e.g. starts with 'x' or a fixed pattern), not merely composed of maskable characters."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:35",
+      "breaking_input": "a provider token prefix like `sbp_` followed by 8 chars that are all maskable, e.g. `sbp_aaaaaaax`",
+      "why": "The token rule keeps the prefix (e.g. `sbp_`) and masks the rest. The scan checks MASKED on the captured rest. If the rest is `aaaaaaax`, it passes, but that is the original. A real token with that shape leaks.",
+      "fix": "Same as L7: require a token placeholder that cannot be confused with a real token's random alphabet."
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:49",
+      "breaking_input": "a 32-hex id that is all zeros followed by a number, e.g. `0000000000000000000000000000abc`",
+      "why": "The 32-hex rule masks to `String(next).padStart(32,'0')`, which is all zeros then a number. The scan accepts any 32-hex id matching /^0+[0-9]+$/. A real 32-hex id that happens to be `000...001` (all zeros then a digit) would pass the scan as a placeholder.",
+      "fix": "Make the placeholder a fixed non-hex pattern (e.g. `fixturehex32...`) and have the scan require that exact pattern."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:45",
+      "breaking_input": "an e-mail address `owner@example.invalid` already present in the raw recording",
+      "why": "The address rule replaces every non-sandbox address with `owner@example.invalid`. If a real address is exactly that placeholder, it is not replaced (the regex matches it and replaces it with the same string), and the scan accepts it as the placeholder. A real address that equals the placeholder would leak.",
+      "fix": "Use a placeholder that cannot be a real address (e.g. `owner@invalid.local` with a TLD that is reserved and unlikely) or check that the address was changed."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:36",
+      "breaking_input": "a JWT that appears in a URL query string, e.g. `?token=eyJ...`",
+      "why": "The JWT rule matches anywhere, but the scan's JWT check only looks for `eyJ` followed by dots. If the JWT is URL-encoded (e.g. `%2E` for dots), it won't match the redactor's regex and won't be masked, but the scan also won't match it, so it passes. A real JWT in a query parameter with encoded dots would leak.",
+      "fix": "Decode URL-encoded bodies before scanning, or add rules for encoded JWTs."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:33",
+      "breaking_input": "a secret value from the env file that is a substring of another secret value",
+      "why": "The `stable` map replaces secrets by splitting on the exact value. If one secret is a prefix of another, the shorter one is replaced first, and the longer one may then be partially replaced, leaving a fragment. The gate checks `s.includes(v)` for each original, so a fragment that doesn't equal the full value passes.",
+      "fix": "Sort secrets by length descending and replace longest first."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:56",
+      "breaking_input": "a person record where the key is `name` but the object does not have `login` or `username` and the parent key is not in PERSON, yet the name is the owner's",
+      "why": "The `name` rule only masks when `PERSON.has(key)` or `login`/`username` exists. A GitHub user object nested under a key like `assignee` or `requested_reviewer` (not in PERSON) with no `login` field would keep the real name. The scan does not check names at all except the `ashiq` regex, so a different owner name would leak.",
+      "fix": "Extend PERSON to cover all person-like keys, or mask any `name` that is not a known safe value."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:53",
+      "breaking_input": "a Supabase org id that is 20 chars but contains uppercase letters",
+      "why": "The org id rule only matches `[a-z0-9]{20}`. Supabase org ids are lowercase hex, but if a real id had an uppercase letter (e.g. a different provider), it would not be masked, and the scan's org id check also only matches lowercase, so it passes.",
+      "fix": "Use a case-insensitive pattern and normalize."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:31",
+      "breaking_input": "a value in the env file that is exactly 8 characters and is a substring of a longer secret",
+      "why": "The `secrets` filter drops values shorter than 8. A short secret like `abc12345` (8 chars) is kept, but if it is a substring of a longer secret, the longer one's replacement may leave the short one intact, and the gate would then flag it. That is a false positive, not a leak, but it would refuse a clean recording.",
+      "fix": "When replacing secrets, first replace the longest, and when checking leaks, only check the original list, not substrings."
+    }
+  ]
+}

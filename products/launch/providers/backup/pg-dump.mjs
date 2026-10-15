@@ -173,13 +173,21 @@ const FILES = {
     "          sha256sum dump.pgc > dump.sha256",
     `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.src`,
     "          test -s counts.src",
-    `          docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS}\" > users.src 2>/dev/null || \\`,
+    // The owner-made reader first; only ITS absence falls back to auth.users. Any other failure stops the drill with
+    // psql's own error, never a quiet empty user list (attack d8f943a L8, B4).
+    `          if ! docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS}\" > users.src 2> users.err; then`,
+    // psql's exact words for the reader being absent, matched as fixed strings (attack 22bbc54 B5).
+    `            grep -qF -e 'function launch_ops.user_ids() does not exist' -e 'schema "launch_ops" does not exist' users.err || { cat users.err; exit 1; }`,
     `            docker run --rm -e U=\"$SUPABASE_DB_URL\" ${PG} sh -c 'psql \"$U\" -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${USERS_DIRECT}\" > users.src`,
+    `          fi`,
+    // Only whole uuid lines reach COPY; any other non-empty line stops the drill (attack 22bbc54 B6). No users is real.
+    `          grep -E '^[0-9a-f-]{36}$' users.src > users.ids || true`,
+    `          [ "$(grep -c . users.src || true)" = "$(wc -l < users.ids | tr -d ' ')" ] || { echo "users.src holds a line that is not a user id"; exit 1; }`,
     `      - name: ${STEP_RESTORE}`,
     "        run: |",
     "          sha256sum -c dump.sha256",
     `          docker run --rm --network host ${PG} sh -c 'psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c \"$0\"' \"${SCRATCH}\"`,
-    `          docker run --rm -i --network host ${PG} psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c \"copy auth.users (id) from stdin\" < users.src`,
+    `          docker run --rm -i --network host ${PG} psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c \"copy auth.users (id) from stdin\" < users.ids`,
     `          docker run --rm --network host -v \"$PWD:/w\" ${PG} pg_restore --no-owner --no-privileges -h localhost -U postgres -d postgres /w/dump.pgc`,
     `          docker run --rm --network host ${PG} sh -c 'psql -h localhost -U postgres -d postgres -At -v ON_ERROR_STOP=1 -c \"$0\"' \"${COUNTS}\" > counts.dst`,
     "          test -s counts.dst",
@@ -187,7 +195,7 @@ const FILES = {
     "          echo \"restored $(wc -l < counts.dst) tables, every row count equal\"",
     "      - name: remove the dump",
     "        if: always()",
-    "        run: rm -f dump.pgc users.src",
+    "        run: rm -f dump.pgc users.src users.err users.ids",
     "",
   ].join("\n"),
 };

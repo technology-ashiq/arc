@@ -4,6 +4,8 @@
 //   passport  `venture-register --dry-run` for the venture's kill lines: exit code and digest line
 //   face      where the face contract seats the venture: the ventures room, a planned room, or nowhere
 //   teardown  the ordered exit rendered from the board, with every recorded resource id
+//   harnesses        arc's own install doctor on the venture's working tree: counts and the harnesses placed (ADR-1763)
+//   harness-install  `bin/arc.mjs init --dir <venture root>`, every harness, never --force; its exit and last line
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -11,13 +13,38 @@ import { ROOT, loadCatalog } from "./catalog.mjs";
 import { loadState } from "./state.mjs";
 import { teardownPlan } from "./board.mjs";
 import { scanAll, spineRoot } from "../../hq/spine.mjs";
+import { Refused, doctor, targetDir } from "../../engine/install-targets/common.mjs";
 
 const VENTURE_REGISTER = join(ROOT, ".claude", "scripts", "hq", "venture-register.mjs");
+const ARC_CLI = join(ROOT, "bin", "arc.mjs");
 const CONTRACT = join(ROOT, "initiatives", "face", "contracts", "expected-set.json");
 const refusal = (code, message) => Object.assign(new Error(message), { code });
 
-export function makeArcProbe({ venture, profile, catalog, stateDir }) {
+// The venture root is the runner's --venture-root, never a value from the venture's own files.
+function ventureDir(root) {
+  if (typeof root !== "string" || root === "" || root.startsWith("-")) throw refusal("NO_VENTURE_ROOT", "the runner gave no venture root");
+  return root;
+}
+
+export function makeArcProbe({ venture, profile, catalog, stateDir, root = null }) {
   return async function arcProbe(question) {
+    if (question === "harnesses") {
+      try {
+        const d = doctor(targetDir(ventureDir(root)));
+        const head = String(d.lines[0] || "");
+        const m = head.match(/^doctor: (\S+) install/);
+        return { installed: true, counts: { ...d.counts }, targets: m ? m[1].split("+").filter(Boolean).sort() : [], summary: String(d.lines[d.lines.length - 1] || "") };
+      } catch (e) {
+        if (!(e instanceof Refused)) throw e;
+        return { installed: false, reason: e.reason, summary: `doctor: ${e.message}` };
+      }
+    }
+    if (question === "harness-install") {
+      const r = spawnSync(process.execPath, [ARC_CLI, "init", "--dir", ventureDir(root)],
+        { cwd: ROOT, encoding: "utf8", timeout: 240000, killSignal: "SIGKILL", windowsHide: true, maxBuffer: 32 * 1024 * 1024 });
+      const lines = `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter(Boolean);
+      return { exit: r.status, conflicts: lines.filter((l) => l.startsWith("unmanaged-conflict ")).length, last: lines.slice(-1)[0] || null };
+    }
     if (question === "ledger") {
       const { events, torn, unreadable } = scanAll(spineRoot());
       if (torn.length || unreadable.length) throw refusal("SPINE_UNREADABLE", "the spine has a torn or unreadable day");
@@ -50,6 +77,6 @@ export function makeArcProbe({ venture, profile, catalog, stateDir }) {
       const lines = teardownPlan(loadCatalog(catalog), state, profile);
       return { lines, resources: lines.filter((l) => /^ {3}4\.\d+ /.test(l)).length };
     }
-    throw refusal("ARC_PROBE_UNKNOWN", `arc answers ledger, passport, face or teardown, not ${question}`);
+    throw refusal("ARC_PROBE_UNKNOWN", `arc answers ledger, passport, face, teardown, harnesses or harness-install, not ${question}`);
   };
 }

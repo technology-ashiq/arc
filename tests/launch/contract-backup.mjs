@@ -61,6 +61,10 @@ switch (scenario) {
       diff: wf.includes("diff counts.src counts.dst"),
       secretOnly: wf.includes("${{ secrets.SUPABASE_DB_URL }}") && !/postgres(ql)?:\/\/[^@\s]*:[^@\s]*@(?!localhost)/.test(wf),
       tabs: wf.includes("\t"),
+      // The user list falls back only on the reader being absent; nothing hides a psql error (attack d8f943a L8).
+      // Only uuid lines reach COPY (attack 22bbc54 B6).
+      usersGuarded: wf.includes("grep -qF -e 'function launch_ops.user_ids() does not exist'") && !wf.includes("2>/dev/null")
+        && wf.includes("from stdin\" < users.ids") && !wf.includes("< users.src"),
     };
     out.verify = await backup.verify(bCtx());
     out.rScaffold = (await attempt(() => restore.scaffold(rCtx()))).ok;
@@ -70,9 +74,12 @@ switch (scenario) {
     break;
   }
   case "digest-moved":
-    // backup wrote an earlier drill file before this one: its digest is still in the slot, oldest first.
-    bState.push({ kind: "drill-digest", id: "0".repeat(64) });
+  case "digest-reordered":
+    // backup wrote an earlier drill file: its digest is still in the slot, before this one or (re-reported) after it.
+    // restore-drill reads the file on main, never the list order (attack d8f943a L11).
+    if (scenario === "digest-moved") bState.push({ kind: "drill-digest", id: "0".repeat(64) });
     await backup.scaffold(bCtx());
+    if (scenario === "digest-reordered") bState.push({ kind: "drill-digest", id: "0".repeat(64) });
     await restore.scaffold(rCtx());
     out.rVerify = await restore.verify(rCtx());
     break;

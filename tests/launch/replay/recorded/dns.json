@@ -1,0 +1,109 @@
+{
+ "slot": "dns",
+ "provider": "cloudflare-dns",
+ "recorded_at": "2026-10-14T10:48:44.514Z",
+ "profile": {
+  "slug": "arc-sandbox",
+  "type": "saas-b2b",
+  "region": "in",
+  "payment_model": "gateway",
+  "tenancy": "multi",
+  "ai": false,
+  "honesty_class": "rehearsal",
+  "ci_protection": "absent-plan",
+  "compliance": [
+   "dpdp",
+   "gst"
+  ],
+  "brand": {
+   "name": "arc sandbox",
+   "domain": "sandbox.automemory.ai"
+  },
+  "repository": "technology-ashiq/arc-sandbox",
+  "kill_lines": {
+   "days_without_revenue": 90,
+   "traffic_floor_monthly": 100
+  }
+ },
+ "resources": [
+  {
+   "kind": "dns-record",
+   "id": "00000000000000000000000000000001/00000000000000000000000000000002",
+   "tag": "arc-sandbox@dns@cloudflare-dns"
+  }
+ ],
+ "upstream": {
+  "domain": [],
+  "hosting": [
+   {
+    "kind": "vercel-project",
+    "id": "prj_Fixture100000000000000000000",
+    "tag": "arc-sandbox@hosting@vercel"
+   },
+   {
+    "kind": "github-file",
+    "id": "technology-ashiq/arc-sandbox:vercel.json",
+    "tag": "arc-sandbox@hosting@vercel"
+   },
+   {
+    "kind": "vercel-domain",
+    "id": "prj_Fixture100000000000000000000:sandbox.automemory.ai",
+    "tag": "arc-sandbox@hosting@vercel"
+   },
+   {
+    "kind": "dns-target",
+    "id": "2e3ab0b5e090ae5c.vercel-dns-017.com",
+    "tag": "arc-sandbox@hosting@vercel"
+   }
+  ]
+ },
+ "env_keys": [
+  "CLOUDFLARE_API_TOKEN"
+ ],
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://dns.google/resolve?name=sandbox.automemory.ai&type=CNAME",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+    "cache-control": "private, max-age=300",
+    "content-encoding": "gzip",
+    "content-type": "application/json; charset=UTF-8",
+    "date": "Wed, 14 Oct 2026 10:48:43 GMT",
+    "expires": "Wed, 14 Oct 2026 10:48:43 GMT",
+    "server": "HTTP server (unknown)",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"sandbox.automemory.ai.\",\"type\":5}],\"Answer\":[{\"name\":\"sandbox.automemory.ai.\",\"type\":5,\"TTL\":300,\"data\":\"2e3ab0b5e090ae5c.vercel-dns-017.com.\"}],\"Comment\":\"Response from 173.245.58.195.\"}"
+  },
+  {
+   "method": "GET",
+   "url": "https://cloudflare-dns.com/dns-query?name=sandbox.automemory.ai&type=CNAME",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-ray": "a4a6036bae37ecb9-DEL",
+    "connection": "keep-alive",
+    "content-length": "229",
+    "content-type": "application/dns-json",
+    "date": "Wed, 14 Oct 2026 10:48:44 GMT",
+    "server": "cloudflare",
+    "x-content-type-options": "nosniff"
+   },
+   "setCookie": [],
+   "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"sandbox.automemory.ai\",\"type\":5}],\"Answer\":[{\"name\":\"sandbox.automemory.ai\",\"type\":5,\"TTL\":300,\"data\":\"2e3ab0b5e090ae5c.vercel-dns-017.com.\"}]}"
+  }
+ ],
+ "answer": {
+  "ok": true,
+  "answerer": "dns.google + cloudflare-dns.com"
+ }
+}

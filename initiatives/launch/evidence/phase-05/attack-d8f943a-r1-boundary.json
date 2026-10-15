@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/runner.mjs:349 (probeOne good)",
+      "breaking_input": "A verify worker is killed by the slot timeout or a signal (r.signal set, r.error null on some platforms) after an earlier run's last_verify was cleared. Or the worker is SIGKILLed mid-save so last_verify holds ok:true from a partial write. Conversely a worker that saved ok:true, then crashed with exit 1 for a real reason (adapter threw after save).",
+      "why": "good no longer checks r.status at all. timedOut is read only from r.error.code === ETIMEDOUT; on Windows a SIGKILLed child can come back as plain exit 1 with no error code (see the defect pattern on SIGKILL), so a timeout-killed worker that already saved ok:true reads as a pass. The exit code and signal are dropped from the decision entirely, so any crash after save is accepted.",
+      "fix": "Accept a crash status only for the specific known Windows abort codes (3221226505 / 0xC0000409) when last_verify.ok is true, and keep requiring status 0 or signal null otherwise; treat r.signal as failure.",
+      "twin_of": "Windows reports a SIGKILLed child as plain exit 1, so a reason built from the exit code named the wrong cause"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:79-84 (verify-mode exit)",
+      "breaking_input": "Provider keeps a handle open (keep-alive socket in undici pool) for up to the 10s unref'd timer window while the closing socket is mid-teardown on Windows.",
+      "why": "The unref'd setTimeout calls process.exit while the loop is still held by the same socket whose close triggered 0xC0000409. The hard exit is only delayed, not removed, so the crash still occurs on slow teardown; the runner now masks it via B1's relaxed check rather than the worker being fixed.",
+      "fix": "Destroy the global undici dispatcher (or close the provider's agents) before setting exitCode, and drop the timer fallback or make it process.abort-free via a forced child kill from the parent.",
+      "twin_of": "A worker with no hard exit could hold the runner to the slot timeout"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:88-92 (fresh resources re-read)",
+      "breaking_input": "loadState reads the state file while the runner or another process holds it mid-write (non-atomic write on Windows), returning a parsed-but-stale or truncated object whose slot row has an older resources list.",
+      "why": "The null fallback covers only an unreadable file. A readable but older state yields now = stale list, so verify fails with the same 'state records 0' and the retry creates a second test order, the defect being fixed. ctx.resources (this scaffold's own reports) is discarded whenever cur is non-null.",
+      "fix": "Verify on the union of ctx.resources and state resources, deduplicated by kind and id.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs FILES (users.src lines)",
+      "breaking_input": "launch_ops.user_ids() is missing; the first docker run truncates users.src via > and fails, 2>/dev/null hides why, and the fallback also fails (network, auth) or the first one succeeds with an empty set.",
+      "why": "No test -s users.src follows and the first command's stderr is discarded, so an unreadable-source failure that the || chain swallows can leave an empty ids file with exit 0 and the restore loads zero users. Also a failure of the first command for a reason other than a missing function silently reroutes to a direct auth.users read.",
+      "fix": "Keep stderr in a log, fall back only on a missing-function error, and add test -f users.src after the chain.",
+      "twin_of": "shell-string rule: 2>/dev/null on a command whose failure matters"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/auth/supabase-auth.mjs publicEnv / vc",
+      "breaking_input": "Vercel answers a 3xx for /v9/projects/<name> or the env POST; the Authorization bearer header and the Supabase anon key in the body travel on a followed redirect.",
+      "why": "vc/call send a credential header with no redirect: manual, and the allowlist is checked once on the first URL. The new frontend vc and the PageSpeed GET carrying key= in the query repeat it.",
+      "fix": "Pass redirect: manual on every authenticated call and treat any 3xx as an error; do not put the PageSpeed key in a URL that may be replayed.",
+      "twin_of": "The Razorpay calls carrying the Basic key pair followed redirects"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs probe (PAGESPEED_API_KEY)",
+      "breaking_input": "PAGESPEED_API_KEY of the form 'x&url=https://evil.example' or one containing CR/LF; fetch throws a TypeError whose message quotes the URL including key=.",
+      "why": "No shape check, unlike the other env keys, and the caught error is swallowed to a fixed string only on the transport path; envContract-required value is appended raw via q.append.",
+      "fix": "Validate against /^[A-Za-z0-9_-]{20,60}$/ before use and scrub URLs from every thrown message.",
+      "twin_of": "A token with a CR reached a fetch header, and fetch's TypeError quotes the header -- secret included"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs probe (fromCache restart, liveHsts)",
+      "breaking_input": "A failing cached answer restarts the scan; 9 iterations of 30 s waits plus a liveHsts GET every iteration while any endpoint is blind exceed the 300 s slot timeout and the stale-lock window.",
+      "why": "The worst case grows past the lock window; liveHsts uses redirect: manual with no status check so a 301 to a non-HSTS host reads as no HSTS and fails a healthy site.",
+      "fix": "Derive the deadline from the slot timeout, memoize liveHsts per probe, and classify 3xx before reading the header.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs scaffold (parents.includes(base))",
+      "breaking_input": "Probe branch whose single launch commit sits on main's previous head after main advanced by a merge commit, or a branch with two commits; also a PR open on the branch while the force-move runs, then a rate-limited PUT.",
+      "why": "Only the immediate parent is tested, so a force-move can run on a branch with an open PR and a failed PUT leaves a branch at main's head that the re-run reads as the at-main case with no probe commit.",
+      "fix": "Use the compare API to decide ahead/behind and force-move only when the branch holds exactly launch's one commit.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs probe (res.text())",
+      "breaking_input": "A homepage streaming hundreds of MB or very slowly: await res.text() buffers it all before slice(0, 500000).",
+      "why": "The cap bounds the result, not the read, and the body is no longer cancelled on the success path.",
+      "fix": "Read via res.body.getReader() with a byte cap and cancel at the limit.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing"
+    }
+  ]
+}

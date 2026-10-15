@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:349-357 (probeOne exitOk)",
+      "breaking_input": "On win32 a verify worker whose adapter threw or hung after last_verify ok was saved dies with exit 3221226505 for a real reason (a genuine native abort/stack buffer overrun in a provider's code), not the keep-alive socket drain.",
+      "why": "The forgiveness is keyed on the exit code alone. 0xC0000409 is the generic STATUS_STACK_BUFFER_OVERRUN code, so any fast-fail crash after the save passes as verified. The worker's own 10s fallback process.exit can also end in that abort, so the forgiven set cannot tell the known libuv case from other crashes.",
+      "fix": "Have the worker write a marker (for example last_verify.exit_clean_at) as its last act before draining, and forgive 0xC0000409 only when the marker is present. Otherwise fail.",
+      "twin_of": "A saved ok was trusted after any exit -> every child result: which deaths are forgiven, by name?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:80-85 (verify mode drain)",
+      "breaking_input": "A provider's undici keep-alive socket or a pending timer keeps the loop alive past 10s. The unref'd setTimeout then calls process.exit(0|1) while the socket is mid-close, which is the same hard exit that raised 0xC0000409.",
+      "why": "The hard exit was only delayed, not removed. On a slow teardown the crash returns, and the runner now silently forgives it on win32. A real hang is also hidden: the worker exits 0 with something still pending.",
+      "fix": "Destroy the global undici dispatcher (await getGlobalDispatcher().close()) before setting exitCode, and have the fallback timer exit through a path that does not race a closing socket.",
+      "twin_of": "A worker with no hard exit could hold the runner to the slot timeout"
+    },
+    {
+      "id": "B3",
+      "severity": "high",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:vc / publicEnv (Authorization bearer on Vercel API)",
+      "breaking_input": "Vercel answers a 3xx on /v9/projects/<name>, /v10/.../env or /v13/deployments. The shared call() helper is not shown with redirect: \"manual\" for these calls, so the bearer token and the Supabase anon key in the POST body travel on the followed redirect.",
+      "why": "ctx.fetch checks the allowlist on the first URL only. The new vc in supabase-auth.mjs repeats the credential-carrying call that the lane's twin rule names, and ADR-1757 adds a body carrying the anon key. D42 claims every authenticated call already sends redirect: manual, but that claim is not visible in the diff for this vc.",
+      "fix": "Pass redirect: \"manual\" explicitly in vc, treat any 3xx as an error, and pin it with a fake that answers 307.",
+      "twin_of": "The Razorpay calls carrying the Basic key pair followed redirects"
+    },
+    {
+      "id": "B4",
+      "severity": "high",
+      "where": "products/launch/providers/frontend/nextjs-shell.mjs:vc (new, ctx.fetch with Bearer VERCEL_TOKEN)",
+      "breaking_input": "vc calls ctx.fetch(`${VERCEL}${path}`, { method, headers: { authorization } }) with no redirect: \"manual\". A 307 from api.vercel.com to a host outside the allowlist carries the Authorization header.",
+      "why": "This is a fresh authenticated caller written beside call()-based ones. It copies the happy path of the last writer and not its guards (no redirect handling, no 3xx rejection). The PATCH of framework is a write to a Vercel project.",
+      "fix": "Add redirect: \"manual\" and fail on any status 300-399. Share one helper with the auth adapter instead of restating it.",
+      "twin_of": "The Razorpay calls carrying the Basic key pair followed redirects"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs FILES (users.src fallback)",
+      "breaking_input": "launch_ops.user_ids() exists but fails with a permission error whose text contains 'launch_ops' and 'does not exist', for example: relation \"launch_ops.something\" does not exist from a function body. Or users.err holds a connection error that names the schema.",
+      "why": "The guard greps 'launch_ops.*does not exist', which matches any error line holding both phrases, not only the missing function. A different failure then silently falls back to reading auth.users directly with a role that may have different rights. The first psql's `>` also truncates users.src, and a fallback that produces an empty result with exit 0 is not caught (D39 B7 accepts this).",
+      "fix": "Match psql's exact missing-function text (function launch_ops.user_ids() does not exist), and add `test -s users.src || { echo 'no user ids'; exit 1; }` unless the project is known to have none.",
+      "twin_of": "The drill's user list fell back on any failure, stderr discarded"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs FILES (restore step: copy auth.users from stdin)",
+      "breaking_input": "users.src holds a line with a trailing carriage return or a blank line (a Windows-built runner is not used, but psql -At on a null id prints an empty line). The restore runs `docker run -i ... -c \"copy auth.users (id) from stdin\" < users.src`.",
+      "why": "A COPY text-format read of a stray empty line fails on a uuid column. The pipeline also reads users.src from the workflow cwd while the preceding steps run each docker with --rm and no -v mount for it. Nothing asserts the file was non-empty or well formed before the restore.",
+      "fix": "Filter the file with grep -E '^[0-9a-f-]{36}$' into a clean file, fail if the count differs from the input line count, and copy from the clean file.",
+      "twin_of": "A multi-statement SQL request ended with `commit`, whose empty answer is what the endpoint returns -> every fake: does it model the provider's answer shape?"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:129-135 (--again preconditions vs slot.approval)",
+      "breaking_input": "A slot with slot.approval === \"true\" as a YAML string, or a slot whose approval flag is absent but whose adapter requests a sensitive action through ctx.approval at run time (release asks for deploy-prod-first). `apply release --again` while row.state is verified.",
+      "why": "The refusal tests slot.gate !== \"none\" and slot.approval === true by strict equality, so a string or a missing field passes through. The registry value is never type-asserted, and the adapter-level approval request is not visible to this check, so a gated action can be re-run without a fresh owner decision.",
+      "fix": "Refuse when the slot's previous attempt recorded any approval id, and coerce the registry flag with a validated boolean type check at load.",
+      "twin_of": "A quoted YAML list item holding `: ` was parsed as a one-key mapping -> every YAML field the code reads as a string: assert its type, not its presence"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:366-371 (runAttempt --again for a crashed re-apply)",
+      "breaking_input": "`apply probe --again` starts, the runner dies holding the lock after the state moved to applying with no receipt. The next plain `apply` closes the attempt as failed and re-runs.",
+      "why": "The failed closure overwrites the verified row's evidence and receipt for a slot whose provider resources were fine before the crash, so a crashed --again downgrades a live, verified slot to failed and a plain apply then re-scaffolds it. D42 L4 keeps this on purpose, but it means --again is not safe against a kill.",
+      "fix": "Snapshot the verified row before the --again attempt and restore it when the attempt closes without a receipt, or mark the row as re-applying instead of applying.",
+      "twin_of": "A runner killed while holding the lock left its attempt with no receipt, so \"every attempt ends with exactly one receipt\" held only for workers"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs:readCapped",
+      "breaking_input": "A response whose body is one chunk of 50 MB, or a stream of tiny chunks that never reach the byte cap but arrive one per second.",
+      "why": "The cap is checked between reads, so a single large chunk is fully decoded into text before the slice. The loop has no deadline of its own, so a slow trickle holds the probe to the slot timeout. Bytes are counted but the decoded text can be larger than the byte count when invalid sequences expand to replacement characters.",
+      "fix": "Slice each chunk to the remaining byte budget before decoding, and race each reader.read() against ctx.signal.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "products/launch/providers/tls/vercel-managed-tls.mjs:probe (POLL_BUDGET_MS and the first iteration)",
+      "breaking_input": "The first ctx.fetch to SSL Labs takes 100 s and the cached answer fails, so a startNew scan begins. Each later iteration does wait(30000) then a fetch that can itself take tens of seconds.",
+      "why": "The budget check adds only the next 30 s wait to elapsed time, not the fetch that follows it. A slow fetch after the wait can cross 240 s and reach the 300 s slot timeout plus the lock's stale window. liveOnce also runs inside the loop with no budget check.",
+      "fix": "Compute the deadline once from the slot timeout, pass a per-request abort timer to each fetch, and skip liveOnce when less than its own timeout remains.",
+      "twin_of": "A provider wait longer than the runner's stale-lock window let a second apply break the lock mid-create"
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": "products/launch/providers/environments/vercel-environments.mjs scaffold (force-move then PUT)",
+      "breaking_input": "The PATCH force-move to main succeeds and the PUT of the probe file then fails with a 403 secondary rate limit, while a PR is open on arc/preview-check.",
+      "why": "The PR head is now main's head with no change, so GitHub closes or empties the PR. The re-run reads the branch as at-main and takes the killed-after-branch path, but the PR it needs to find is by then a closed or merged-looking one, and the lookup of the standing PR is open-only in an earlier fix.",
+      "fix": "Create the probe commit on a temporary ref first and move the branch to it in one force-PATCH, so the branch never sits empty.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "products/launch/providers/auth/supabase-auth.mjs:publicEnv (ctx.report after each POST)",
+      "breaking_input": "The first env POST succeeds and is reported, the second POST returns 5xx. The attempt throws after the Supabase side was not yet patched (publicEnv runs first), then a re-run lists envs again.",
+      "why": "The reported vercel-env id records the env id, but a kill between the POST answering and ctx.report leaves a variable on Vercel that no resource names. The re-run then sees it as present on production and treats it as the owner's, so teardown never deletes it.",
+      "fix": "Record intent before the POST (a pending resource keyed by pid:key) and adopt a variable found with that key and launch's value on the re-run.",
+      "twin_of": "A fix refused launch's own half-made resource as foreign -> every refuse-the-unrecorded guard: can launch itself leave an unrecorded resource?"
+    }
+  ]
+}

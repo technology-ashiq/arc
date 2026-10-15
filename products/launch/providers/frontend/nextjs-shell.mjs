@@ -233,10 +233,16 @@ async function probe(ctx) {
   for (const c of Object.values(CATS)) q.append("category", c);
   // Keyless calls share one Google-wide daily quota that is spent before most runs start (ADR-1753); the key rides
   // only in this query, never in an answer.
+  // Shape-checked like every other key, so a value carrying "&url=" or a line break never reaches the query (attack d8f943a L5).
   const key = String((ctx.env && ctx.env.PAGESPEED_API_KEY) || "").trim();
+  if (key && !/^[A-Za-z0-9_-]{20,60}$/.test(key)) return { ok: false, reason: "PAGESPEED_API_KEY is not a key shape; its value is not printed" };
   if (key) q.append("key", key);
   let r;
-  try { r = await ctx.fetch(`${PAGESPEED}?${q}`, { method: "GET", headers: { "user-agent": "arc-launch" } }); } catch (e) { if (e && e.code) throw e; return unscanned("pagespeed unreachable"); }
+  try { r = await ctx.fetch(`${PAGESPEED}?${q}`, { method: "GET", headers: { "user-agent": "arc-launch" } }); } catch (e) {
+    // A coded refusal names the URL it refused: the key is cut from it before it travels up (attack d8f943a B6).
+    if (e && e.code) { if (key && typeof e.message === "string") e.message = e.message.split(key).join("<key>"); throw e; }
+    return unscanned("pagespeed unreachable");
+  }
   if (r.status === 429) return unscanned("pagespeed quota (429)");
   let j = null;
   try { j = await r.json(); } catch { j = null; }

@@ -146,6 +146,9 @@ const must = (t, a, b) => { if (!t.includes(a)) throw new Error(`mutant edit tar
 
 function baseline(dir) {
   const providersDir = join(dir, "providers");
+  // The real registry carries vetted rows, so their adapters come too: without them the baseline holds a
+  // row-without-adapter finding for every vetted row and no mutant can be told apart from it.
+  cpSync(PATHS.providersDir, providersDir, { recursive: true });
   mkdirSync(join(providersDir, "dns"), { recursive: true });
   const catalog = join(dir, "launch.slots.yaml");
   const registry = join(dir, "launch.providers.yaml");

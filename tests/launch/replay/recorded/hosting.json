@@ -1,0 +1,154 @@
+{
+ "slot": "hosting",
+ "provider": "vercel",
+ "recorded_at": "2026-10-14T10:48:36.983Z",
+ "profile": {
+  "slug": "arc-sandbox",
+  "type": "saas-b2b",
+  "region": "in",
+  "payment_model": "gateway",
+  "tenancy": "multi",
+  "ai": false,
+  "honesty_class": "rehearsal",
+  "ci_protection": "absent-plan",
+  "compliance": [
+   "dpdp",
+   "gst"
+  ],
+  "brand": {
+   "name": "arc sandbox",
+   "domain": "sandbox.automemory.ai"
+  },
+  "repository": "technology-ashiq/arc-sandbox",
+  "kill_lines": {
+   "days_without_revenue": 90,
+   "traffic_floor_monthly": 100
+  }
+ },
+ "resources": [
+  {
+   "kind": "vercel-project",
+   "id": "prj_Fixture100000000000000000000",
+   "tag": "arc-sandbox@hosting@vercel"
+  },
+  {
+   "kind": "github-file",
+   "id": "technology-ashiq/arc-sandbox:vercel.json",
+   "tag": "arc-sandbox@hosting@vercel"
+  },
+  {
+   "kind": "vercel-domain",
+   "id": "prj_Fixture100000000000000000000:sandbox.automemory.ai",
+   "tag": "arc-sandbox@hosting@vercel"
+  },
+  {
+   "kind": "dns-target",
+   "id": "2e3ab0b5e090ae5c.vercel-dns-017.com",
+   "tag": "arc-sandbox@hosting@vercel"
+  }
+ ],
+ "upstream": {
+  "repo": [
+   {
+    "kind": "github-repo",
+    "id": "technology-ashiq/arc-sandbox",
+    "tag": "arc-sandbox@repo@github"
+   }
+  ]
+ },
+ "env_keys": [
+  "VERCEL_TOKEN",
+  "GITHUB_TOKEN"
+ ],
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://api.vercel.com/v9/projects/arc-sandbox",
+   "status": 200,
+   "headers": {
+    "access-control-allow-headers": "Authorization, Accept, Content-Type",
+    "access-control-allow-methods": "OPTIONS, GET, POST, PUT, PATCH, DELETE",
+    "access-control-allow-origin": "*",
+    "cache-control": "private, max-age=0, must-revalidate",
+    "content-encoding": "br",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:48:34 GMT",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-ratelimit-limit": "300",
+    "x-ratelimit-remaining": "299",
+    "x-ratelimit-reset": "1791974975",
+    "x-vercel-id": "sfo1::r8dzl-1791974914493-033951c4c6a7"
+   },
+   "setCookie": [],
+   "body": "{\"accountId\":\"team_Fixture10000000000000000\",\"creator\":{\"type\":\"user\",\"user\":{\"id\":\"3oAA5TFeCfEOs4DGzsZemFnR\"},\"via\":null},\"alias\":[],\"speedInsights\":{\"id\":\"MmKWuNlSrDvy4YxyaKJbmgJIYMi\",\"hasData\":false},\"autoExposeSystemEnvs\":true,\"autoAssignCustomDomains\":true,\"autoAssignCustomDomainsUpdatedBy\":\"system\",\"buildCommand\":null,\"createdAt\":1791838394941,\"crons\":{\"enabledAt\":1791869641444,\"disabledAt\":null,\"updatedAt\":1791933704341,\"deploymentId\":\"dpl_Fixture100000000000000000000\",\"definitions\":[]},\"deploymentExpiration\":{\"expirationDays\":30,\"expirationDaysProduction\":30,\"expirationDaysCanceled\":30,\"expirationDaysErrored\":30,\"deploymentsToKeep\":10},\"devCommand\":null,\"directoryListing\":false,\"env\":[{\"type\":\"plain\",\"value\":\"https://fixtureref0000000001.supabase.co\",\"target\":[\"production\",\"preview\"],\"configurationId\":null,\"id\":\"VMb9PeGGthwVYNtI\",\"key\":\"NEXT_PUBLIC_SUPABASE_URL\",\"createdAt\":1791930062900,\"updatedAt\":1791930062900,\"createdBy\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"updatedBy\":null},{\"type\":\"plain\",\"value\":\"eyJxaXaxXxXXXxX0XxXxXxX0aXX0XxxXXXX0.axXxa0XxXxXxaXXxXxXxXXXxXxXxXxX0Xx0xaXXxa0xxax00XxXxaXX0axxxXxxxax0xXXX0XxXxa00xXXXxXXXxXxX0XXX0Xxx0XxaxXxX0aXX0XxXxXxXxXXXxX00.x0xX0XX0XXXx0X00axax0xXxXxXX0xXXXXXxxXXxax0\",\"target\":[\"production\",\"preview\"],\"configurationId\":null,\"id\":\"JivL7jFlRUpQdTl8\",\"key\":\"NEXT_PUBLIC_SUPABASE_ANON_KEY\",\"createdAt\":1791930063668,\"updatedAt\":1791930063668,\"createdBy\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"updatedBy\":null},{\"type\":\"sensitive\",\"value\":\"\",\"target\":[\"production\",\"preview\"],\"configurationId\":null,\"visibility\":\"secret\",\"id\":\"ImxFfZzWGw4yPntc\",\"key\":\"RAZORPAY_KEY_ID\",\"createdAt\":1791932393619,\"updatedAt\":1791932393619,\"createdBy\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"updatedBy\":null},{\"type\":\"sensitive\",\"value\":\"\",\"target\":[\"production\",\"preview\"],\"configurationId\":null,\"visibility\":\"secret\",\"id\":\"eQOs9EOQH4nrBqOz\",\"key\":\"RAZORPAY_KEY_SECRET\",\"createdAt\":1791932393911,\"updatedAt\":1791932393911,\"createdBy\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"updatedBy\":null},{\"type\":\"sensitive\",\"value\":\"\",\"target\":[\"production\",\"preview\"],\"configurationId\":null,\"visibility\":\"secret\",\"id\":\"wnkuxsETZxfL4gFc\",\"key\":\"RAZORPAY_WEBHOOK_SECRET\",\"createdAt\":1791932632417,\"updatedAt\":1791932632417,\"createdBy\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"updatedBy\":null},{\"type\":\"sensitive\",\"value\":\"\",\"target\":[\"production\",\"preview\"],\"configurationId\":null,\"visibility\":\"secret\",\"id\":\"X20HFeL1WJ7nXt0D\",\"key\":\"SUPABASE_SERVICE_ROLE_KEY\",\"createdAt\":1791932632737,\"updatedAt\":1791932632737,\"createdBy\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"updatedBy\":null}],\"framework\":\"nextjs\",\"gitForkProtection\":true,\"gitLFS\":false,\"id\":\"prj_Fixture100000000000000000000\",\"installCommand\":null,\"lastRollbackTarget\":null,\"lastAliasRequest\":null,\"name\":\"arc-sandbox\",\"nodeVersion\":\"24.x\",\"outputDirectory\":null,\"sandbox\":{\"failoverRegions\":[],\"region\":\"iad1\"},\"productionDeploymentsFastLane\":true,\"defaultResourceConfig\":{\"fluid\":true,\"functionDefaultRegions\":[\"iad1\"],\"functionDefaultTimeout\":300,\"functionDefaultMemoryType\":\"standard\",\"functionZeroConfigFailover\":false,\"elasticConcurrencyEnabled\":false},\"resourceConfig\":{\"fluid\":true,\"functionDefaultRegions\":[\"iad1\"],\"buildMachineType\":\"basic\",\"buildMachineSelection\":\"fixed\"},\"rootDirectory\":null,\"serverlessFunctionRegion\":\"iad1\",\"sourceFilesOutsideRootDirectory\":true,\"enableAffectedProjectsDeployments\":true,\"ssoProtection\":{\"deploymentType\":\"all_except_custom_domains\"},\"updatedAt\":1791933704341,\"live\":false,\"enableExternalRewriteCaching\":true,\"gitComments\":{\"onCommit\":false,\"onPullRequest\":true},\"gitProviderOptions\":{\"createDeployments\":\"enabled\"},\"webAnalytics\":{\"id\":\"ekExcvMegPaNWJhq008X4Cfy0\"},\"oidcTokenConfig\":{\"enabled\":true,\"issuerMode\":\"team\"},\"hasDeployments\":true,\"link\":{\"type\":\"github\",\"repo\":\"arc-sandbox\",\"repoId\":1407837311,\"org\":\"technology-ashiq\",\"repoOwnerId\":58063350,\"gitCredentialId\":\"cred_d92c0b3f0a59bc3f64ba010acb242047a7710d8c\",\"productionBranch\":\"main\",\"createdAt\":1791838394699,\"updatedAt\":1791838394699,\"deployHooks\":[]},\"latestDeployments\":[{\"alias\":[\"sandbox.automemory.ai\",\"arc-sandbox.vercel.app\",\"arc-sandbox-automemorys-projects.vercel.app\",\"arc-sandbox-git-main-automemorys-projects.vercel.app\"],\"aliasAssigned\":1791933704313,\"aliasError\":null,\"automaticAliases\":[\"arc-sandbox-automemorys-projects.vercel.app\",\"arc-sandbox-git-main-automemorys-projects.vercel.app\"],\"builds\":[],\"createdAt\":1791933648583,\"createdIn\":\"sfo1\",\"creator\":{\"uid\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"email\":\"owner@example.invalid\",\"username\":\"owner\",\"githubLogin\":\"technology-ashiq\"},\"deploymentHostname\":\"arc-sandbox-mx5qki08a-automemorys-projects\",\"forced\":false,\"id\":\"dpl_Fixture100000000000000000000\",\"meta\":{\"githubCommitAuthorName\":\"owner\",\"githubCommitAuthorEmail\":\"owner@example.invalid\",\"githubCommitMessage\":\"migration-rollback: paired up/down migration and the rollback test (ADR-1744)\\n\\nArc-Launch-Tag: arc-sandbox@migration-rollback@drizzle-down\",\"githubCommitOrg\":\"technology-ashiq\",\"githubCommitRef\":\"main\",\"githubCommitRepo\":\"arc-sandbox\",\"githubCommitSha\":\"d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"githubDeployment\":\"1\",\"githubOrg\":\"technology-ashiq\",\"githubRepo\":\"arc-sandbox\",\"githubRepoOwnerType\":\"User\",\"githubCommitRepoId\":\"1407837311\",\"githubRepoId\":\"1407837311\",\"githubRepoVisibility\":\"private\",\"githubHost\":\"github.com\",\"githubCommitAuthorLogin\":\"technology-ashiq\",\"githubCommitVerification\":\"unverified\",\"repoPushedAt\":\"1791933646000\",\"branchAlias\":\"arc-sandbox-git-main-automemorys-projects.vercel.app\",\"lambdaRuntimeStats\":\"{\\\"nodejs\\\":4}\"},\"name\":\"arc-sandbox\",\"plan\":\"hobby\",\"private\":true,\"readyState\":\"READY\",\"readySubstate\":\"PROMOTED\",\"target\":\"production\",\"teamId\":\"team_Fixture10000000000000000\",\"type\":\"LAMBDAS\",\"url\":\"arc-sandbox-mx5qki08a-automemorys-projects.vercel.app\",\"userId\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"withCache\":false,\"buildingAt\":1791933650173,\"readyAt\":1791933704045,\"previewCommentsEnabled\":true,\"oidcTokenClaims\":{\"sub\":\"owner:automemorys-projects:project:arc-sandbox:environment:production\",\"iss\":\"https://oidc.vercel.com/automemorys-projects\",\"scope\":\"owner:automemorys-projects:project:arc-sandbox:environment:production\",\"aud\":\"https://vercel.com/automemorys-projects\",\"owner\":\"automemorys-projects\",\"owner_id\":\"team_Fixture10000000000000000\",\"project\":\"arc-sandbox\",\"project_id\":\"prj_Fixture100000000000000000000\",\"environment\":\"production\",\"plan\":\"hobby\"}},{\"alias\":[\"sandbox.automemory.ai\",\"arc-sandbox.vercel.app\",\"arc-sandbox-automemorys-projects.vercel.app\",\"arc-sandbox-git-main-automemorys-projects.vercel.app\"],\"aliasAssigned\":1791933290918,\"aliasError\":null,\"automaticAliases\":[\"arc-sandbox-automemorys-projects.vercel.app\",\"arc-sandbox-git-main-automemorys-projects.vercel.app\"],\"builds\":[],\"createdAt\":1791933155272,\"createdIn\":\"sfo1\",\"creator\":{\"uid\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"email\":\"owner@example.invalid\",\"username\":\"owner\",\"githubLogin\":\"technology-ashiq\"},\"deploymentHostname\":\"arc-sandbox-mlr8oiw67-automemorys-projects\",\"forced\":false,\"id\":\"dpl_Fixture200000000000000000000\",\"meta\":{\"githubCommitAuthorName\":\"owner\",\"githubCommitAuthorEmail\":\"owner@example.invalid\",\"githubCommitMessage\":\"frontend: the Next shell (ADR-1730)\\n\\nArc-Launch-Tag: arc-sandbox@frontend@nextjs-shell\",\"githubCommitOrg\":\"technology-ashiq\",\"githubCommitRef\":\"main\",\"githubCommitRepo\":\"arc-sandbox\",\"githubCommitSha\":\"3b0c3026e21c7d3f7dfffc19723ee984dbfffdd1\",\"githubDeployment\":\"1\",\"githubOrg\":\"technology-ashiq\",\"githubRepo\":\"arc-sandbox\",\"githubRepoOwnerType\":\"User\",\"githubCommitRepoId\":\"1407837311\",\"githubRepoId\":\"1407837311\",\"githubRepoVisibility\":\"private\",\"githubHost\":\"github.com\",\"githubCommitAuthorLogin\":\"technology-ashiq\",\"githubCommitVerification\":\"unverified\",\"repoPushedAt\":\"1791933153000\",\"branchAlias\":\"arc-sandbox-git-main-automemorys-projects.vercel.app\",\"lambdaRuntimeStats\":\"{\\\"nodejs\\\":4}\"},\"name\":\"arc-sandbox\",\"plan\":\"hobby\",\"private\":true,\"readyState\":\"READY\",\"readySubstate\":\"PROMOTED\",\"target\":\"production\",\"teamId\":\"team_Fixture10000000000000000\",\"type\":\"LAMBDAS\",\"url\":\"arc-sandbox-mlr8oiw67-automemorys-projects.vercel.app\",\"userId\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"withCache\":false,\"buildingAt\":1791933157185,\"readyAt\":1791933290678,\"previewCommentsEnabled\":true,\"oidcTokenClaims\":{\"sub\":\"owner:automemorys-projects:project:arc-sandbox:environment:production\",\"iss\":\"https://oidc.vercel.com/automemorys-projects\",\"scope\":\"owner:automemorys-projects:project:arc-sandbox:environment:production\",\"aud\":\"https://vercel.com/automemorys-projects\",\"owner\":\"automemorys-projects\",\"owner_id\":\"team_Fixture10000000000000000\",\"project\":\"arc-sandbox\",\"project_id\":\"prj_Fixture100000000000000000000\",\"environment\":\"production\",\"plan\":\"hobby\"}}],\"targets\":{\"production\":{\"alias\":[\"sandbox.automemory.ai\",\"arc-sandbox.vercel.app\",\"arc-sandbox-automemorys-projects.vercel.app\",\"arc-sandbox-git-main-automemorys-projects.vercel.app\"],\"aliasAssigned\":1791933704313,\"aliasError\":null,\"automaticAliases\":[\"arc-sandbox-automemorys-projects.vercel.app\",\"arc-sandbox-git-main-automemorys-projects.vercel.app\"],\"builds\":[],\"createdAt\":1791933648583,\"createdIn\":\"sfo1\",\"creator\":{\"uid\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"email\":\"owner@example.invalid\",\"username\":\"owner\",\"githubLogin\":\"technology-ashiq\"},\"deploymentHostname\":\"arc-sandbox-mx5qki08a-automemorys-projects\",\"forced\":false,\"id\":\"dpl_Fixture100000000000000000000\",\"meta\":{\"githubCommitAuthorName\":\"owner\",\"githubCommitAuthorEmail\":\"owner@example.invalid\",\"githubCommitMessage\":\"migration-rollback: paired up/down migration and the rollback test (ADR-1744)\\n\\nArc-Launch-Tag: arc-sandbox@migration-rollback@drizzle-down\",\"githubCommitOrg\":\"technology-ashiq\",\"githubCommitRef\":\"main\",\"githubCommitRepo\":\"arc-sandbox\",\"githubCommitSha\":\"d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"githubDeployment\":\"1\",\"githubOrg\":\"technology-ashiq\",\"githubRepo\":\"arc-sandbox\",\"githubRepoOwnerType\":\"User\",\"githubCommitRepoId\":\"1407837311\",\"githubRepoId\":\"1407837311\",\"githubRepoVisibility\":\"private\",\"githubHost\":\"github.com\",\"githubCommitAuthorLogin\":\"technology-ashiq\",\"githubCommitVerification\":\"unverified\",\"repoPushedAt\":\"1791933646000\",\"branchAlias\":\"arc-sandbox-git-main-automemorys-projects.vercel.app\",\"lambdaRuntimeStats\":\"{\\\"nodejs\\\":4}\"},\"name\":\"arc-sandbox\",\"plan\":\"hobby\",\"private\":true,\"readyState\":\"READY\",\"readySubstate\":\"PROMOTED\",\"target\":\"production\",\"teamId\":\"team_Fixture10000000000000000\",\"type\":\"LAMBDAS\",\"url\":\"arc-sandbox-mx5qki08a-automemorys-projects.vercel.app\",\"userId\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"withCache\":false,\"buildingAt\":1791933650173,\"readyAt\":1791933704045,\"previewCommentsEnabled\":true,\"oidcTokenClaims\":{\"sub\":\"owner:automemorys-projects:project:arc-sandbox:environment:production\",\"iss\":\"https://oidc.vercel.com/automemorys-projects\",\"scope\":\"owner:automemorys-projects:project:arc-sandbox:environment:production\",\"aud\":\"https://vercel.com/automemorys-projects\",\"owner\":\"automemorys-projects\",\"owner_id\":\"team_Fixture10000000000000000\",\"project\":\"arc-sandbox\",\"project_id\":\"prj_Fixture100000000000000000000\",\"environment\":\"production\",\"plan\":\"hobby\"}},\"preview\":{\"alias\":[\"arc-sandbox-git-arc-preview-check-automemorys-projects.vercel.app\"],\"aliasAssigned\":1791924305626,\"aliasError\":null,\"automaticAliases\":[\"arc-sandbox-git-arc-preview-check-automemorys-projects.vercel.app\"],\"builds\":[],\"createdAt\":1791924150821,\"createdIn\":\"sfo1\",\"creator\":{\"uid\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"email\":\"owner@example.invalid\",\"username\":\"owner\",\"githubLogin\":\"technology-ashiq\"},\"deploymentHostname\":\"arc-sandbox-4ie0tdfjq-automemorys-projects\",\"forced\":false,\"id\":\"dpl_Fixture300000000000000000000\",\"meta\":{\"githubCommitAuthorName\":\"owner\",\"githubCommitAuthorEmail\":\"owner@example.invalid\",\"githubCommitMessage\":\"environments: preview check (ADR-1728)\\n\\nArc-Launch-Tag: arc-sandbox@environments@vercel-environments\",\"githubCommitOrg\":\"technology-ashiq\",\"githubCommitRef\":\"arc/preview-check\",\"githubCommitRepo\":\"arc-sandbox\",\"githubCommitSha\":\"1db51f92a9f3444fcc70a754ef1f5be4b7d59518\",\"githubDeployment\":\"1\",\"githubOrg\":\"technology-ashiq\",\"githubRepo\":\"arc-sandbox\",\"githubRepoOwnerType\":\"User\",\"githubCommitRepoId\":\"1407837311\",\"githubRepoId\":\"1407837311\",\"githubRepoVisibility\":\"private\",\"githubHost\":\"github.com\",\"githubCommitAuthorLogin\":\"technology-ashiq\",\"githubPrId\":\"1\",\"githubCommitVerification\":\"unverified\",\"repoPushedAt\":\"1791924148000\",\"branchAlias\":\"arc-sandbox-git-arc-preview-check-automemorys-projects.vercel.app\",\"lambdaRuntimeStats\":\"{\\\"nodejs\\\":4}\"},\"name\":\"arc-sandbox\",\"plan\":\"hobby\",\"private\":true,\"readyState\":\"READY\",\"readySubstate\":\"STAGED\",\"target\":null,\"teamId\":\"team_Fixture10000000000000000\",\"type\":\"LAMBDAS\",\"url\":\"arc-sandbox-4ie0tdfjq-automemorys-projects.vercel.app\",\"userId\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"withCache\":false,\"buildingAt\":1791924246435,\"readyAt\":1791924305415,\"previewCommentsEnabled\":true,\"oidcTokenClaims\":{\"sub\":\"owner:automemorys-projects:project:arc-sandbox:environment:preview\",\"iss\":\"https://oidc.vercel.com/automemorys-projects\",\"scope\":\"owner:automemorys-projects:project:arc-sandbox:environment:preview\",\"aud\":\"https://vercel.com/automemorys-projects\",\"owner\":\"automemorys-projects\",\"owner_id\":\"team_Fixture10000000000000000\",\"project\":\"arc-sandbox\",\"project_id\":\"prj_Fixture100000000000000000000\",\"environment\":\"preview\",\"plan\":\"hobby\"}}},\"features\":{\"webAnalytics\":false},\"protectedSourcemaps\":true,\"avatar\":null}"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/commits?path=vercel.json&sha=main&per_page=100",
+   "status": 200,
+   "headers": {
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+    "cache-control": "private, max-age=60, s-maxage=60",
+    "content-encoding": "gzip",
+    "content-security-policy": "default-src 'none'",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:48:35 GMT",
+    "etag": "W/\"0effbab70af4a981b8545029fafb77b48785564d1a5a5a86854dc3b38a88f639\"",
+    "last-modified": "Tue, 13 Oct 2026 05:12:29 GMT",
+    "referrer-policy": "origin-when-cross-origin, strict-origin-when-cross-origin",
+    "server": "github.com",
+    "strict-transport-security": "max-age=31536000; includeSubdomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "Accept, Authorization, Cookie, X-GitHub-OTP,Accept-Encoding, Accept, X-Requested-With",
+    "x-accepted-oauth-scopes": "",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "deny",
+    "x-github-api-version-selected": "2022-11-28",
+    "x-github-edge-region": "centralindia",
+    "x-github-media-type": "github.v3; format=json",
+    "x-github-request-id": "6E43:1147ED:C4789:11C898:6ACF5E03",
+    "x-oauth-client-id": "fixtureid10000000000",
+    "x-oauth-scopes": "gist, read:org, repo, workflow",
+    "x-ratelimit-limit": "5000",
+    "x-ratelimit-remaining": "4842",
+    "x-ratelimit-reset": "1791977790",
+    "x-ratelimit-resource": "core",
+    "x-ratelimit-used": "158",
+    "x-xss-protection": "0"
+   },
+   "setCookie": [],
+   "body": "[{\"sha\":\"0e8fbee5e85039b3d1b058ed49aeee1a3fdc6416\",\"node_id\":\"C_kwDOU-nkf9oAKDBlOGZiZWU1ZTg1MDM5YjNkMWIwNThlZDQ5YWVlZTFhM2ZkYzY0MTY\",\"commit\":{\"author\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T05:12:29Z\"},\"committer\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-13T05:12:29Z\"},\"message\":\"release: lift the production hold, gate 2 decided (ADR-1730)\\n\\nArc-Launch-Tag: arc-sandbox@release@arc-ship-release\",\"tree\":{\"sha\":\"e6a63bb6c37068690200e8d9d79d3cfbd14974f6\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/trees/e6a63bb6c37068690200e8d9d79d3cfbd14974f6\"},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits/0e8fbee5e85039b3d1b058ed49aeee1a3fdc6416\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/0e8fbee5e85039b3d1b058ed49aeee1a3fdc6416\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/0e8fbee5e85039b3d1b058ed49aeee1a3fdc6416\",\"comments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/0e8fbee5e85039b3d1b058ed49aeee1a3fdc6416/comments\",\"author\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[{\"sha\":\"70553cba9f656a5deb8e7ef750c28b89a21219c0\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/70553cba9f656a5deb8e7ef750c28b89a21219c0\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/70553cba9f656a5deb8e7ef750c28b89a21219c0\"}]},{\"sha\":\"5583b6403be4a7809d7cc0cb622d9e1dd1503a8f\",\"node_id\":\"C_kwDOU-nkf9oAKDU1ODNiNjQwM2JlNGE3ODA5ZDdjYzBjYjYyMmQ5ZTFkZDE1MDNhOGY\",\"commit\":{\"author\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-12T20:53:16Z\"},\"committer\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"date\":\"2026-10-12T20:53:16Z\"},\"message\":\"hosting: hold production until gate 2 (ADR-1727)\\n\\nArc-Launch-Tag: arc-sandbox@hosting@vercel\",\"tree\":{\"sha\":\"5500e4bd1e22d9b28c4da96f3c29d988ccd5d73d\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/trees/5500e4bd1e22d9b28c4da96f3c29d988ccd5d73d\"},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/git/commits/5583b6403be4a7809d7cc0cb622d9e1dd1503a8f\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/5583b6403be4a7809d7cc0cb622d9e1dd1503a8f\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/5583b6403be4a7809d7cc0cb622d9e1dd1503a8f\",\"comments_url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/5583b6403be4a7809d7cc0cb622d9e1dd1503a8f/comments\",\"author\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"technology-ashiq\",\"id\":58063350,\"node_id\":\"MDQ6VXNlcjU4MDYzMzUw\",\"url\":\"https://api.github.com/users/technology-ashiq\",\"html_url\":\"https://github.com/technology-ashiq\",\"followers_url\":\"https://api.github.com/users/technology-ashiq/followers\",\"following_url\":\"https://api.github.com/users/technology-ashiq/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/technology-ashiq/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/technology-ashiq/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/technology-ashiq/subscriptions\",\"organizations_url\":\"https://api.github.com/users/technology-ashiq/orgs\",\"repos_url\":\"https://api.github.com/users/technology-ashiq/repos\",\"events_url\":\"https://api.github.com/users/technology-ashiq/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/technology-ashiq/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[{\"sha\":\"376cf8def88cd55f47a23d1da46a8922b132b40b\",\"url\":\"https://api.github.com/repos/technology-ashiq/arc-sandbox/commits/376cf8def88cd55f47a23d1da46a8922b132b40b\",\"html_url\":\"https://github.com/technology-ashiq/arc-sandbox/commit/376cf8def88cd55f47a23d1da46a8922b132b40b\"}]}]"
+  },
+  {
+   "method": "GET",
+   "url": "https://api.vercel.com/v6/deployments?projectId=prj_Fixture100000000000000000000&sha=5583b6403be4a7809d7cc0cb622d9e1dd1503a8f&limit=20",
+   "status": 200,
+   "headers": {
+    "access-control-allow-headers": "Authorization, Accept, Content-Type",
+    "access-control-allow-methods": "OPTIONS, GET, POST, PUT, PATCH, DELETE",
+    "access-control-allow-origin": "*",
+    "cache-control": "private, max-age=0",
+    "content-encoding": "br",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Wed, 14 Oct 2026 10:48:36 GMT",
+    "etag": "W/\"bo5IXO+6PQXHcZgUju3SMg==\"",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-ratelimit-limit": "1000",
+    "x-ratelimit-remaining": "999",
+    "x-ratelimit-reset": "1791974977",
+    "x-vercel-id": "sfo1::ng98r-1791974916379-70797a1ee489"
+   },
+   "setCookie": [],
+   "body": "{\"deployments\":[{\"uid\":\"dpl_Fixture400000000000000000000\",\"name\":\"arc-sandbox\",\"projectId\":\"prj_Fixture100000000000000000000\",\"url\":\"arc-sandbox-i5yehivh7-automemorys-projects.vercel.app\",\"created\":1791838399193,\"source\":\"git\",\"state\":\"CANCELED\",\"readyState\":\"CANCELED\",\"type\":\"LAMBDAS\",\"creator\":{\"uid\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"email\":\"owner@example.invalid\",\"username\":\"owner\",\"githubLogin\":\"technology-ashiq\"},\"inspectorUrl\":\"https://vercel.com/automemorys-projects/arc-sandbox/HdjouEBX8s7q2NxQeeHXJSVomFkz\",\"attribution\":{\"commitMeta\":{\"name\":\"owner\",\"email\":\"owner@example.invalid\",\"isVerified\":false},\"gitUser\":{\"id\":58063350,\"login\":\"technology-ashiq\",\"type\":\"user\",\"provider\":\"github\"},\"vercelUser\":{\"id\":\"3oAA5TFeCfEOs4DGzsZemFnR\",\"username\":\"owner\",\"teamRoles\":[\"OWNER\"]}},\"meta\":{\"githubCommitAuthorName\":\"owner\",\"githubCommitAuthorEmail\":\"owner@example.invalid\",\"githubCommitMessage\":\"hosting: hold production until gate 2 (ADR-1727)\\n\\nArc-Launch-Tag: arc-sandbox@hosting@vercel\",\"githubCommitOrg\":\"technology-ashiq\",\"githubCommitRef\":\"main\",\"githubCommitRepo\":\"arc-sandbox\",\"githubCommitSha\":\"5583b6403be4a7809d7cc0cb622d9e1dd1503a8f\",\"githubDeployment\":\"1\",\"githubOrg\":\"technology-ashiq\",\"githubRepo\":\"arc-sandbox\",\"githubRepoOwnerType\":\"User\",\"githubCommitRepoId\":\"1407837311\",\"githubRepoId\":\"1407837311\",\"githubRepoVisibility\":\"private\",\"githubHost\":\"github.com\",\"githubCommitAuthorLogin\":\"technology-ashiq\",\"githubCommitVerification\":\"unverified\",\"repoPushedAt\":\"1791838396000\",\"branchAlias\":\"arc-sandbox-git-main-automemorys-projects.vercel.app\"},\"target\":\"production\",\"aliasAssigned\":null,\"isRollbackCandidate\":false,\"createdAt\":1791838399193,\"buildingAt\":1791838401456,\"ready\":1791838405043,\"errorMessage\":\"The deployment was canceled because the Ignored Build Step command returned exit code 0.\",\"projectSettings\":{\"commandForIgnoringBuildStep\":\"[ \\\"$VERCEL_ENV\\\" = production ]\"}}],\"pagination\":{\"count\":1,\"next\":null,\"prev\":1791838399193}}"
+  }
+ ],
+ "answer": {
+  "ok": true,
+  "answerer": "api.vercel.com"
+ }
+}

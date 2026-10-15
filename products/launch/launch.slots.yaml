@@ -880,6 +880,19 @@ slots:
     required_when: "ai == true"
     optional_for:
       - any
+  - id: arc-harnesses
+    group: wiring
+    tier: core
+    exit_criteria:
+      - "arc doctor --dir <venture>: 0 missing, 0 unmanaged-conflict, all four harnesses placed (ADR-1763)"
+    verify: arc-harnesses-probe
+    depends_on:
+      - repo
+    gate: none
+    approval: false
+    timeout: 300
+    resume: resources
+    required_when: "always"
   - id: passport
     group: wiring
     tier: core

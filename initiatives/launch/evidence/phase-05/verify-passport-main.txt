@@ -1,0 +1,2 @@
+passport: verified now (answered by arc venture-register --dry-run)
+arc-sandbox: 1/1 slot(s) verified now

@@ -1,0 +1,113 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/worker.mjs:82",
+      "breaking_input": "ARC_LAUNCH_RECORD set to a directory outside any git tree whose ancestor is a symlink or Windows junction into the arc checkout (e.g. C:/tmp/rec -> C:/Users/ashiq/orca/workspaces/arc/arc-launch-3/tests/launch/replay/recorded). A git worktree has `.git` as a FILE; existsSync handles that, but the walk uses resolve(), which does not resolve symlinks.",
+      "why": "insideRepo walks the lexical path only. A symlink or junction outside the repo that points inside it passes the check, and writeFileSync then lands raw live keys and cookies in the public repo's tree.",
+      "fix": "Run realpathSync on the nearest existing ancestor of recordDir before walking up for `.git`. Refuse when recordDir is relative, and write with mode 0o600.",
+      "twin_of": "`ctx.write` resolved symlinks only on the ancestors, so a LEAF link carried a write out of the venture root -> every path check that validates one resolution and then writes through another (validate one read, use another)"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/worker.mjs:77-80",
+      "breaking_input": "ARC_LAUNCH_RECORD is a path that does not exist yet and sits under a not-yet-created repo-relative directory, or is a relative path such as `rec` while the worker's cwd is outside any repo but a later cwd change or runner cwd is the venture root.",
+      "why": "resolve(dir) uses the worker's cwd at the moment of the check. The check and the write use the same cwd, but the operator's intent for a relative path is ambiguous, and nothing refuses a relative value. A relative value naming a non-repo cwd silently writes secrets next to whatever the runner was started in, for example a synced folder.",
+      "fix": "Refuse any ARC_LAUNCH_RECORD that is not absolute, and refuse one that lies under os.tmpdir() or a cloud-sync folder.",
+      "twin_of": "`--venture-root .` pointed ctx.write at arc's public repo -> every user-supplied directory that becomes a write boundary"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:86-100",
+      "breaking_input": "A request URL that carries a credential in a query parameter other than `key` (a `token`, `code`, `apikey` or `access_token` value), or a request carrying credentials in a userinfo part (https://user:pass@host/).",
+      "why": "urlOf only deletes the `key` parameter. Any other secret in the URL is written to the raw record verbatim, and a userinfo password stays in x.href. The raw record is then protected only by the redact pass and the env-file match.",
+      "fix": "Strip userinfo, and delete every query parameter in a deny list (key, token, code, apikey, access_token, secret, signature), or record only origin plus pathname.",
+      "twin_of": "A PageSpeed key with no shape check -> every env value: shape-checked before use, cut from every error"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:89-94",
+      "breaking_input": "A response whose body stream stalls or is huge: `await res.clone().text()` with no cap and no signal.",
+      "why": "The recorder clones and reads the whole body, unbounded, before the probe's own bounded read. The probe returned only a capped slice, but the recorder buffers everything, and a never-ending stream hangs the recorder past the slot timeout. Because `clearTimeout(timer)` only runs after verify, the worker can be held until the runner's hard kill.",
+      "fix": "Read the clone through a reader with a byte cap and race it against the slot's abort signal.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing -> every bounded read: bound the READ, not the result"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:97-99",
+      "breaking_input": "Request headers and a request body are never recorded. A probe that POSTs different SQL to the same Management API URL, or a POST carrying a `Prefer` or authorization header the answer depends on.",
+      "why": "Recorded exchanges hold method and URL only. Replay's matcher in replay.mjs also keys on method and URL, so two different POST bodies to `/database/query` take their answers in recorded order. A probe whose SQL changed still replays green.",
+      "fix": "Record a SHA-256 of the request body and put it in the match key, and require `used === exchanges.length`.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran -> every vacuous replay"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "tests/launch/replay/replay.mjs:31-35",
+      "breaking_input": "An adapter that awaits a sleep built on `setTimeout` with a long ms, or a poll that reads `Date.now()` in a loop with no wait: `while (Date.now() < deadline) {}`.",
+      "why": "The patched setTimeout advances T only when its callback fires. A busy loop that never yields never lets the callback run, so T stays frozen and the loop spins forever, hanging CI without a kill. The bats test has no `timeout` wrapper, so the hang falls to the CI job limit.",
+      "fix": "Make Date.now() advance a small step on every call, and run the replay under a hard deadline from the bats test (spawn with a timeout, exit non-zero).",
+      "twin_of": "A sleep listened for \"abort\" on a signal that had already fired, so the slot timeout was swallowed for the whole poll -> every wait, retry or poll loop in an adapter or the runner"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "tests/launch/replay/redact.mjs:97-103",
+      "breaking_input": "A recorded body that fails JSON.parse (HTML, a BOM-prefixed JSON, trailing text), from a listing path such as /v1/projects or /domains.",
+      "why": "The `continue` on a parse failure skips both the listing filter and the PII scrub. Another venture's projects or domains stay in the body, and the text rules do not name them. The leak gate only checks secrets, the ref and known map keys, so nothing refuses.",
+      "fix": "Strip a BOM before parsing, and refuse (exit 1) when an unparseable body belongs to a listing path.",
+      "twin_of": "A filter that skips on parse failure -> every parse that falls through to the unredacted path"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "tests/launch/replay/redact.mjs:95-104",
+      "breaking_input": "A recorded exchange of the new error form `{method,url,error}` with no `body`, so `JSON.parse(undefined)` throws and is caught, and `new URL(x.url)` receives the already-stripped url.",
+      "why": "An error exchange is skipped by the catch, which is fine, but a record whose url is `(not a URL)` fails `new URL` quietly. Nothing validates that error exchanges carry no body, headers or message text, so a hand-edited error string would reach the fixture unscrubbed. The error text is also never run through the secret masks.",
+      "fix": "For error exchanges whitelist {method, url, error} and assert the error is a short identifier name.",
+      "twin_of": "Provider error text and resolver answers went raw into the slot's reason -> every adapter that builds a reason or message from a response body"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/launch/replay/scan.mjs:13-16",
+      "breaking_input": "A committed file in the recorded directory named `repo.JSON`, `repo.json.bak` or a subdirectory, with the bats test counting the files via `ls ... *.json` while scan filters on the exact lowercase suffix.",
+      "why": "Anything not ending in lowercase `.json` is never scanned, yet is committed. The bats count uses the glob `*.json`, also case-sensitive, so a stray file raises no alarm. The scan also does not recurse.",
+      "fix": "Scan every directory entry and fail on any name outside the expected 16 slot filenames.",
+      "twin_of": "A test titled \"only those\" had nothing it could have leaked -> every \"only X\" or \"never Y\" test: does the fixture contain a Y?"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "tests/launch-contract.bats:1497",
+      "breaking_input": "`$ARC_ROOT` as a POSIX path (/c/Users/...) passed straight to native node in `node \"$ARC_ROOT/tests/launch/replay/replay.mjs\"`, on the Windows leg without MSYS path conversion.",
+      "why": "The lane rule is to cd first and pass relative paths. D44 keeps this by saying MSYS converts argv, but it does not convert a path embedded in a larger string or under MSYS2_ARG_CONV_EXCL, and the other suites avoid the pattern. `run` also merges stderr, so a node warning before `RAN` fails the prefix match.",
+      "fix": "cd \"$ARC_ROOT\" and pass the relative path, and make the RAN check search the output lines rather than the prefix.",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes when a helper's output is eval'd or globbed -> every helper whose output bats evals or globs"
+    },
+    {
+      "id": "B11",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:87-95",
+      "breaking_input": "A probe that follows redirects or sends a credential header: `real(u, init)` is the unguarded global fetch captured at wrap time, and the wrapper replaces globalThis.fetch before the adapter's ctx is used.",
+      "why": "The wrapper sits on the global, not on ctx.fetch. If makeCtx captured the real fetch earlier, nothing is recorded and the replay then fails with used = 0. If the adapter imports a module that calls the global fetch directly, those exchanges bypass the ctx redirect and host allowlist guards but are recorded as if allowed. The record then hides which layer did the request.",
+      "fix": "Wrap inside makeCtx at the point where ctx.fetch calls the network, so only guarded requests are recorded, and assert exchanges.length > 0 when recording.",
+      "twin_of": "`node:` built-ins were waved through, so an adapter could ... call bare `fetch()` ... walking round every ctx guard -> any boundary enforced only inside an object the guarded code is free not to use"
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": ".claude/scripts/launch/lib/worker.mjs:104-110",
+      "breaking_input": "The record is written with `JSON.stringify(...)` to a fixed name `${a.slot}.json` and two verify workers for the same slot run concurrently (verify --all re-run) into one directory.",
+      "why": "writeFileSync truncates and rewrites in place, so a kill mid-write or a concurrent run leaves a truncated file that redact reads with a raw SyntaxError. The write is not atomic and the file is created with the default mode, readable by other local users.",
+      "fix": "Write to a temp file in the same directory with mode 0o600, then renameSync over the target.",
+      "twin_of": "A failed weekly run stamped the week done -> every \"last ran\" stamp: written after the work succeeded, never before or regardless"
+    }
+  ]
+}
