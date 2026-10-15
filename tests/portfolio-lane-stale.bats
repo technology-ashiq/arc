@@ -236,6 +236,12 @@ BL="$ARC_ROOT/.claude/scripts/core/board-lint.sh"
   cp "$ARC_ROOT/hq.policy.yaml" "$ARC_ROOT/hq.jobs.yaml" "$T/"
   cp -r "$ARC_ROOT/processes" "$T/"
   rm -f "$T/processes/lane-stale.process.yaml"
+  # Once the owner has applied, the committed files already hold the rows: strip them so the first run
+  # proves the write again, never only the unchanged branch.
+  awk '/# portfolio REQ-08 \(ADR-0079\)/ { s = 1 } s && /spend: \{ level: L0 \}/ { s = 0; next } !s' "$T/hq.policy.yaml" > "$T/p" && mv "$T/p" "$T/hq.policy.yaml"
+  awk '/# The board that notices \(portfolio REQ-08/ { s = 1 } s && /catchup: skip/ { s = 0; next } !s' "$T/hq.jobs.yaml" > "$T/j" && mv "$T/j" "$T/hq.jobs.yaml"
+  run grep -c 'lane-stale' "$T/hq.policy.yaml" "$T/hq.jobs.yaml"
+  [[ "$output" == *"hq.policy.yaml:0"* && "$output" == *"hq.jobs.yaml:0"* ]]
   mv "$T/.claude/scripts/docs/wiki-build.mjs" "$T/.claude/scripts/docs/wiki-build.mjs.off"
   git -C "$T" init -q
   run node "$T/.claude/scripts/core/owner-apply-lane-stale.mjs"

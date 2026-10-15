@@ -89,6 +89,13 @@ merged once at cycle end; each phase closes from the main clone after that merge
   project was installed by `arc init`). Both stay `active`. Receipts 01M4XDTCE1MMPSAF5X7SAXXWHQ /
   01M4XDTDCRVF26Y4E78PNZW5A6. Actual ~1d vs 1d. amendments: 0 · reopened: n. Debt row 34 (cycle ledger scope) filed
   at the seal.
+- **REQ-19 validated 2026-10-15** (seal run, owed at the close): the owner applied `owner-apply-radar-policy.mjs`,
+  merged as PR #429 (`77840115`, CI 19/19 on head `63f4b8cd`). CI asked for two fixes on the way: face rooms for the new
+  process and job, and a sandboxed radar in the `jobs-panel` catchup suite. A trial project became the first `arc init`
+  consumer (671 files, every harness). The radar then ran once from the main clone: `metric.observed`
+  01M4Y4B7XPWXSFVC7NRFSYP62C, 1 of 1 behind, no path in the payload, not in `_quarantine/`, and 0 files written in the
+  consumer (`evidence/post-merge/req19-radar-seal.md`). **Next acting fire: 2026-10-22 07:45 IST** (daily fires print `not due`
+  until then). The owner's 4 stamps were approved 2026-10-14 (`decision.recorded`).
 
 **Appetite burn:** ~2.5 of 3 planned days used (4-day cap): ~63%. The 50% tripwire held (REQ-16's arms green on CI). Live spend $0.0551 of $0.15.
 
@@ -99,9 +106,7 @@ merged once at cycle end; each phase closes from the main clone after that merge
 **Current position: Cycle 3 SEALED 2026-10-14 (retro: `docs/retro-log.md`, HISTORY C25); lane IDLE.** arc ships as
 `v0.2.0`. A clone of arc opens in OpenCode or Codex with its commands and no install step. `arc outdated` and `arc upgrade`
 tell a project the truth and move only arc's files, `arc uninstall` removes exactly the manifest's files, and `arc init`
-places every harness at once. REQ-14, 16, 17 and 18 are validated; REQ-15 (slot clause) and REQ-19 (seal run) are owed.
-**Next step:** none in this lane until the owed items land or a new `/arc-kickoff --lane distribute`. Owner items: the
-radar one-liner (`cd <arc checkout> && node .claude/scripts/engine/owner-apply-radar-policy.mjs && git add hq.policy.yaml
-hq.jobs.yaml processes/distribute-radar.process.yaml docs/wiki && git commit -m "feat(distribute): birth the
-distribute-radar job (REQ-19, ADR-2026)"`), the paste of `evidence/phase-08/launch-prompt.md` into the launch session,
-the kickoff stamp 01M4VPX5FTYQ2BHFHQA4NJZ676 and the three move-on stamps above.
+places every harness at once. The weekly radar is live: its first run was 2026-10-15 and the next acting fire is 2026-10-22.
+REQ-14, 16, 17, 18 and 19 are validated; only REQ-15's launch `core` slot clause is owed.
+**Next step:** none in this lane until the launch lane answers `evidence/phase-08/launch-prompt.md` (A-17) or a new
+`/arc-kickoff --lane distribute`. All owner stamps are approved.

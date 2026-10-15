@@ -236,6 +236,7 @@
           "day-close-roll",
           "distribute-radar",
           "kickoff-plan",
+          "lane-stale",
           "launch-watch",
           "narrative-verify",
           "review-diff"
@@ -259,7 +260,7 @@
           "0200"
         ]
       },
-      "itemCount": 22
+      "itemCount": 23
     },
     {
       "id": "model-policy",
@@ -366,10 +367,11 @@
           "brief-materialize",
           "day-close-roll",
           "distribute-radar",
+          "lane-stale",
           "launch-watch"
         ]
       },
-      "itemCount": 12
+      "itemCount": 13
     },
     {
       "id": "memory",
@@ -1389,7 +1391,8 @@
       "brief-materialize": "scheduler",
       "day-close-roll": "scheduler",
       "launch-watch": "scheduler",
-      "distribute-radar": "scheduler"
+      "distribute-radar": "scheduler",
+      "lane-stale": "scheduler"
     },
     "ventures": {
       "lexos": "ventures"

@@ -80,3 +80,15 @@ jobs:
     cadence: daily@07:45
     enabled: true
     catchup: skip
+
+  # The board that notices (portfolio REQ-08, ADR-0079): a LIVE lane no receipt has named in 14 days is derived
+  # stale into instance state and raised to needs-you, once per silence episode. Never written into PORTFOLIO.md.
+  - name: lane-stale
+    type: script
+    entry: .claude/scripts/hq/jobs/lane-stale.mjs
+    budget:
+      min: 5
+    policy_kind: process:lane-stale
+    cadence: daily@08:00
+    enabled: true
+    catchup: skip

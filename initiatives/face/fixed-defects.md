@@ -1041,3 +1041,11 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A decision with a malformed `decides` silently ignored** -- its winner read open forever (attack 8164ad9 L2). *Check: a join key outside its grammar is a counted finding, never a quiet miss.*
 - **Free-text tokens served with line breaks** (attack 8164ad9 L3). *Check: served text is one line.*
 - **Constants trusted without a grammar** -- discover's process name, version and gate (attack 8164ad9 L7, L9, L10). *Check: a selector imported from another lane is held to a token grammar before it selects.*
+- **A journalled receipt proved by membership in "every id the spine holds"** -- a day's own decision id passed as its op (attack dfc952e B1). *Check: a receipt is matched by identity: same day, the right kind, each receipt counted once.*
+- **`JSON.parse` accepted `null`, a number or an array, and the next property read threw** (attack dfc952e B2). *Check: a parsed line that is not a plain object is torn, never dereferenced.*
+- **A stray positional silently read as the repo root** -- a forgotten `--day` judged all history (attack dfc952e B4). *Check: at most one positional, and one shaped like another flag's value is refused by name.*
+- **Free text from a local file printed into an evidence line** (attack dfc952e B5). *Check: an id printed into a verdict matches its grammar at read time.*
+- **A hand-kept arm floor** (attack dfc952e B7). *Check: a suite compares its PASS count to the RAN count the selftest derives from its own arms.*
+- **"Any non-decision id that day" accepted as an op's receipt** -- a note or stamp passed as the op (attack f8c1485 L1, B2). *Check: a receipt is the kind (and process) the op's own registry row names, read from the registry the door applies from; no registry, no proof.*
+- **`process.exit` straight after a buffered stderr write** (attack f8c1485 B1). *Check: a refusal that a test asserts on is written with `writeSync(2, ...)` before exit.*
+- **A selftest that wrote a temp file turned a read-only tool into a "writer"** -- plan-bound-audit listed face-dogfood as an unbound tracked-file write, red on CI only (run 38484753659). *Check: a read-only tool tests its parser on a string; any fs write in a file makes the audit count it.*
