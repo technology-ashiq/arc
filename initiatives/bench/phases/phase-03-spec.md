@@ -40,6 +40,33 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## STATUS AT CLOSE (2026-10-17): every DoD item met; Phase 03 CLOSED
+
+- **Human verdict:** RECORDED. The owner approved on 2026-10-15 11:42 IST:
+  `decision.recorded 01M4Z31Z268S31BJE3RX0CDPDJ` decides `01M4Z0AAPCQETTQX1S3C2JJXF4`, verdict
+  `approve`, reason "route commit-msg-draft to claude-code/haiku". Read back off the main clone's
+  canonical spine (`.claude/state/hq/events/2026-10-15.jsonl`), not from session memory, so the
+  whole chain of run, proposal, approval and verdict is on the spine.
+- **Tests:** CI run `38706316194` on PR #435's head, 19/19 jobs success, read per job
+  (`evidence/phase-03/test-output.log`).
+- **Tracker:** PROGRESS row ✅, done-log line, `## Now` rewritten, header IDLE.
+- Every other item stands as recorded in the STATUS block below.
+
+The approval does not change the router. The tier line goes in as its own PR citing ADR-0069.
+
+## CHANGE (2026-10-17): PLAN Assumption #1 FIRED, routed out of bench
+
+**Trigger, verbatim:** the real event returned identical assertion pass-rates for both models on
+all 5 fixtures (sonnet and haiku 90/90, `[6/6 6/6 6/6]` each). **Triage:** the defect is in what
+the fixtures ask, not in bench. Bench scored both sides correctly and filed the proposal on cost,
+as ADR-0906 orders when quality ties. **Route:** the follow-up belongs to `commit-msg-draft`'s own
+eval pack (`tests/fixtures/engine/evals/**`), under the non-negotiable that bench strengthens
+packs in place and never forks a bench-only copy. Examples: a multi-concern diff that must be split,
+or a breaking change that must carry its `!`. **Phase impact:** none. The kill-criteria exit names
+this redirect, the appetite is already at 7.25 of 8d, and Phase 03's DoD asked for one real model
+to a recorded verdict, not for a quality gap. **Reopen when:** a stronger pack lands. The next
+`--champion` guard run (NEXT-CHECK 2026-11-02) then re-scores against it.
+
 ## STATUS (2026-10-15): every DoD item but the verdict is met, and the verdict is the owner's
 
 Evidence: `initiatives/bench/evidence/phase-03/README.md`.

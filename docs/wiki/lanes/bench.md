@@ -190,7 +190,7 @@ spine: arc's append-only logbook of what happened.
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-bench (Cycle 13, opened 2026-08-12) |
 | Product | — |
 

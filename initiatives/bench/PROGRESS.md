@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-bench "the model market"
 
-status: LIVE
+status: IDLE
 cycle: arc-bench (Cycle 13, opened 2026-08-12)
-phase: 04
+phase: 04 (cycle closed)
 appetite: 8d
 burn: 7.25d
-blocked-on: owner — router-merge verdict on approval 01M4Z0AAPCQETTQX1S3C2JJXF4 (arc-inbox, main clone)
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -21,7 +21,7 @@ depends-on: —
 | 00 | The road + steel thread — `drivers/mock`, `version` verb, assertion schema, fixture-repo harness, `commit-msg-draft` armed to 5, one fixture end to end | 3.0d | ✅ done 2026-08-13 |
 | 01 | Bench core — full run, K=3 sequential, K-group admission control, provenance, total encoder, replay proof | 1.5d | ✅ done 2026-08-13 |
 | 02 | Router proposal — three artifacts, gates-first eligibility, `NO PROPOSAL` with reason, `approval.requested` | 0.75d | ✅ done 2026-08-13 |
-| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ⚠️ guard done · real event RUN 2026-10-15 (sonnet vs haiku, PROPOSE haiku on cost) · verdict owed: owner stamp |
+| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ✅ done 2026-10-17 |
 | 04 | Seal + retro — two mutants, two adversarial surfaces, redaction sweep, runbook, production count from the spine | 1.0d | ✅ done 2026-08-13 |
 
 Phases sum to **7.25d**; the remaining **0.75d is named reserve, not unallocated scope**.
@@ -34,6 +34,18 @@ kickoff, not at 6pm on day 8).
 
 ## Done-log
 
+- **2026-10-17 — Phase 03 CLOSED, and with it Cycle 13: 5/5 phases, REQ-01..08 validated, lane
+  IDLE.** The last owed item was the human verdict, and it was recorded on 2026-10-15 11:42 IST:
+  `decision.recorded 01M4Z31Z268S31BJE3RX0CDPDJ` decides `01M4Z0AAPCQETTQX1S3C2JJXF4` with verdict
+  `approve`, reason "route commit-msg-draft to claude-code/haiku", read back off the main clone's
+  spine. The full chain now sits on the canonical spine: champion `run.completed`, `approval.requested`
+  (gate `router-merge`), candidate `run.completed`, `decision.recorded`. Tests: CI run `38706316194`
+  on PR #435's head, 19/19 jobs success, read per job. The approval is not the router change: the
+  one tier line `balanced-workhorse` → `cheap-scan` for `commit-msg-draft` lands as its own ADR-0069
+  PR. PLAN Assumption #1 FIRED and is routed (spec § CHANGE 2026-10-17) to `commit-msg-draft`'s own
+  eval pack. Phase 03 metrics: `amendments: 5` (the CHANGE sections in its spec) · `reopened: n`.
+  Actual 1.0d of its 1.0d appetite; the 2026-08-14 → 2026-10-15 calendar gap was blocked engine
+  work, not bench burn. Cycle: **7.25 of 8d, 91%**. Bundle: `evidence/phase-03/manifest.json`.
 - **2026-10-15 — Phase 03's real event RUN; its verdict is the owner's.** Four fixes merged first:
   #420 (ADR-0915: the output contract is shown and owner hooks are not loaded), #424 and #426
   (ADR-0916: the CLI works in the fixture repo, and the run stops at the first attempt that moves
@@ -153,6 +165,13 @@ lane to be born`. It was stale — `memory` holds 0700–0709 and `scheduler` ho
 in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **0900**.
 
 ## Now
+
+**2026-10-17: Cycle 13 is CLOSED and the lane is IDLE.** The owner approved the haiku proposal on
+2026-10-15 (`decision.recorded 01M4Z31Z268S31BJE3RX0CDPDJ`), so Phase 03 closed and every phase is
+✅. Two things stay open outside this tracker. First, the approved router line
+(`commit-msg-draft`: `balanced-workhorse` → `cheap-scan`) lands as its own PR citing ADR-0069, since
+a tier change is a production change. Second, the guard's NEXT-CHECK is **2026-11-02**, first
+working day, owner-started. A new bench cycle starts only through `/arc-kickoff --lane bench`.
 
 **2026-10-15 (later): the real event RAN end to end, and the only step left is the owner's
 verdict.** After #433 merged (`9cc0f48f`), both runs went from the main clone, no git write from
