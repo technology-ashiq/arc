@@ -1,0 +1,164 @@
+{
+  "phase": "03",
+  "commit": "00ea033bc762afb3d786e01e1e19a407abd86620",
+  "short": "00ea033b",
+  "generated": "2026-10-17T15:19:23Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "2685956470ebda1d84b8c04d5b93843d3dff522977845aba66db5e262c070f29"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/delete-and-add/0.json",
+      "sha256": "14df45086b8eec5fb4622761b9eb4464ed97f89b10ee2fd53f1120b948b6c0a8"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/delete-and-add/1.json",
+      "sha256": "a6a97ec1dceb1c559e47a988ef9948d4042d4f56b34fda350afb8e8df1c4ce76"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/delete-and-add/2.json",
+      "sha256": "ab93faca91e2f003bbf6670d1bebed2bd18ad290288770f1a1d2db98820d8a39"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/docs-only/0.json",
+      "sha256": "212603b1df7fc16d41e58214b708b4122d0b07f1f44439c8786337b68eb5e4aa"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/docs-only/1.json",
+      "sha256": "57ff797afeb7fa217cd1e6db590847d843e0aa7498f46d3979063397874e50f5"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/docs-only/2.json",
+      "sha256": "7d3a36eb9e1b4601fc22559c474b5d8795a8cc85a908dcc1edd41c91889c889c"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/multi-file-refactor/0.json",
+      "sha256": "1ad6476906bd3c9419aac1be5d442143c58b665bbc2f5dc6939f5c8e215fefc0"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/multi-file-refactor/1.json",
+      "sha256": "0fdaf40ef46226c67715b9d4132ae61144aceb3f85f18b99aa575e4681a0ba6e"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/multi-file-refactor/2.json",
+      "sha256": "f222b2a57ee1d0963779a2713da3137ba2e7e89f654f566089bd0333ea5f0da6"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/new-feature-file/0.json",
+      "sha256": "c11f14aded923f915170ca7290c8cae634f4ffcdded848521737db336606566b"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/new-feature-file/1.json",
+      "sha256": "ffb0968ec2219c4b29c3b27dcc8676af7d1d1c3edec72b89f2d74dad223a4652"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/new-feature-file/2.json",
+      "sha256": "1627d642b4f06db83a3dbd5cd8fada12bb050d225fa898e8c4a899cdff7dd724"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/single-file-fix/0.json",
+      "sha256": "21fcb0d0098fca681004901d64b541afbeca4303011a38b2fd85302f76ba4878"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/single-file-fix/1.json",
+      "sha256": "dff6846915e938df6b608338bdee3f51043db86f6c46284f03559d4b09d463b5"
+    },
+    {
+      "name": "candidate-haiku/capture/commit-msg-draft/single-file-fix/2.json",
+      "sha256": "fb78b01b3d8aef264d627f236f4eb00130940081a7e0f1c9f28322f9cd6e9a17"
+    },
+    {
+      "name": "candidate-haiku/proposal/commit-msg-draft.router.diff",
+      "sha256": "aefaf584a00e46cf7fe411ab6ae56352ffd934cbeba01883b68e6c0805627b5f"
+    },
+    {
+      "name": "candidate-haiku/proposal/evidence.md",
+      "sha256": "14ec8f3c2148dd286eab8722b59a17070221efb71756a3d3dd7e15c50ce4a007"
+    },
+    {
+      "name": "candidate-haiku/proposal/manifest.json",
+      "sha256": "f60938f26c51d578b01bf6731e8429c0e11b56cd918c00a2c6b4c1de9b153aec"
+    },
+    {
+      "name": "candidate-haiku/provenance.json",
+      "sha256": "58e6581641ebbc4886198083854fa6fe3928a4fc91aa6c8e5370dba93d0e0aa2"
+    },
+    {
+      "name": "candidate-haiku/scorecard.json",
+      "sha256": "8afec1e05031b19f5d1061cbd0e4370300d974973376e489f5a14fa5313da182"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/delete-and-add/0.json",
+      "sha256": "8ad6ecbb3eab0a8b3348a8d31be18bf37506862edd087b186938843035d0de9c"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/delete-and-add/1.json",
+      "sha256": "93fe35c84846b43933193cff8e1fda31eda22def88b55fbdb13461c8c0beab47"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/delete-and-add/2.json",
+      "sha256": "ebb3844550c111f511342bcee4a553ce415d04eafb6bd5b901916bbe058ca408"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/docs-only/0.json",
+      "sha256": "fdfc0fe13b5b3b23ba6fab77e751d1ebeeda4496fbb1beaf00e3d7e3df917530"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/docs-only/1.json",
+      "sha256": "23da9074ca6ccdecac12d39c3f84d4c58a7ba18f275291a1ce95fe6c3a484367"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/docs-only/2.json",
+      "sha256": "f69c8a09ee6390e8e3bc41fa03975fcd9f088602a46222bdbcf2c1a3811aa25d"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/multi-file-refactor/0.json",
+      "sha256": "ce1d3f86f3b32bab5526e3ce3922d7276e72675c84af1adc63dc5afc81b739ad"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/multi-file-refactor/1.json",
+      "sha256": "2f84cf1758f9f45c4ef06eaa7d78bce6c551f36c3121d8c2489bb32d7aebb528"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/multi-file-refactor/2.json",
+      "sha256": "fcb38adcec5c99f5fd5d0a58db97629b47f5972f2ba465d3e37af35aa7d83240"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/new-feature-file/0.json",
+      "sha256": "5db39232bc3763060f49e1d3cd9b771571b8fc8d321073619d4a2d018c2ebcdf"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/new-feature-file/1.json",
+      "sha256": "da9cd01223c8c2735eae4778c75de675b18b2e74a2485fd051f4f6f21b344d32"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/new-feature-file/2.json",
+      "sha256": "349d0d6d99bff91d5f112cb753bdb1e282eba2139183f200e7af764705137c4f"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/single-file-fix/0.json",
+      "sha256": "6ad5b0975964fd995c5bfc9a9be92be682edab40a6c151beae7cece303dd97ce"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/single-file-fix/1.json",
+      "sha256": "8199adace48d5e5ee101d0180d17776c7a11b3c56cfea0c5d3797d2fa404940a"
+    },
+    {
+      "name": "champion-sonnet5/capture/commit-msg-draft/single-file-fix/2.json",
+      "sha256": "d8f3b4d79c5ae1393a35821162b773b669a934a98395c59da262ed8651f74568"
+    },
+    {
+      "name": "champion-sonnet5/provenance.json",
+      "sha256": "644bb9aecfd8c85750e08aa46b1d0847a2c7fb44933dffccaef5cba5ba226bff"
+    },
+    {
+      "name": "champion-sonnet5/scorecard.json",
+      "sha256": "8afec1e05031b19f5d1061cbd0e4370300d974973376e489f5a14fa5313da182"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "47da5193f60cae84456c454a2f21b70207f36c6b1b02dfde4d3fa943c16b842a"
+    }
+  ]
+}
