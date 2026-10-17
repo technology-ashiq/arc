@@ -50,10 +50,12 @@ Both sides pinned to router SHA `ec88a286...faa52`. Contract delta 0.0pp, qualit
 delta -68 USD minor, latency p95 delta -106408 ms (a tiebreak only, ADR-0906). Every other class:
 `NO PROPOSAL - evidence insufficient (n of 5 fixtures)`, gate `coverage`.
 
-**The verdict is the owner's** — `cd E:/Work_Hub/01_Automemory/arc && node
-.claude/scripts/hq/arc-inbox.mjs approve|reject 01M4Z0AAPCQETTQX1S3C2JJXF4 --reason "..."`.
-Both outcomes are success; no agent may press it. An approval is not a router change: the diff
-lands as its own reviewed PR citing ADR-0069, because a tier change is a production change.
+**The verdict was the owner's, and it is recorded.** On 2026-10-15 at 11:42 IST the owner ran
+`arc-inbox approve 01M4Z0AAPCQETTQX1S3C2JJXF4` from the main clone. The spine holds
+`decision.recorded 01M4Z31Z268S31BJE3RX0CDPDJ`: `decides 01M4Z0AAPCQETTQX1S3C2JJXF4`, verdict
+`approve`, reason "route commit-msg-draft to claude-code/haiku". It was read back off
+`.claude/state/hq/events/2026-10-15.jsonl` on 2026-10-17. An approval is not a router change: the
+diff lands as its own reviewed PR citing ADR-0069, because a tier change is a production change.
 
 ## The candidate was REACHED
 
