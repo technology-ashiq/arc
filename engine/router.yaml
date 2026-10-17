@@ -88,7 +88,12 @@ tiers:
 #                 harness's notional list price, so these caps guard notional dollars, not an invoice.
 classes:
   commit-msg-draft:
-    tier: balanced-workhorse
+    # Production tier change under ADR-0069, proposed by bench (ADR-0917) and decided by the owner:
+    #   proposal   approval.requested 01M4Z0AAPCQETTQX1S3C2JJXF4  (gate router-merge, 2026-10-15)
+    #   decision   decision.recorded  01M4Z31Z268S31BJE3RX0CDPDJ  (approve, 2026-10-15)
+    # sonnet and haiku both scored 90/90 on the 5 fixtures, so this was decided on cost (15 vs 83
+    # notional US cents); evidence initiatives/bench/evidence/phase-03/.
+    tier: cheap-scan
     driver: claude-code
     max_attempts: 4
     max_wall_ms: 3600000
