@@ -221,7 +221,11 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   run node "$(RUN)" --process commit-msg-draft --driver auto --dry-run --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"claude-code"* ]]
-  [[ "$output" == *"balanced-workhorse"* ]]
+  # The expected tier is read from the router, not pinned here: a reviewed ADR-0069 tier change
+  # (PR #438 moved this row to cheap-scan) must not need a test edit to stay green.
+  tier="$(awk '/^  commit-msg-draft:/{f=1;next} f&&/^    tier:/{print $2;exit}' "$ARC_ROOT/engine/router.yaml")"
+  [ -n "$tier" ]
+  [[ "$output" == *"(tier $tier)"* ]]
 }
 
 @test "REQ-06: an unknown task class is a LOUD error naming the file to edit" {
