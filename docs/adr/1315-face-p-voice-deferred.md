@@ -28,3 +28,10 @@ and **not v1 scope**. The brain dock ships text-only this cycle.
 ## Consequences
 
 Easier: block C stays 13 days. Harder: nothing — the door stays open by contract.
+
+## Revisit (2026-10-18, the Cycle 16 retro)
+
+The trigger's natural place came. Voice already shipped in Phase 10 behind one switch
+(ADR-1350), so the question at the REQ-10 retro was keep or switch off. The owner approved
+the retro without asking for a change, so voice stays as shipped: optional, off unless the
+switch is on, keyboard-first unchanged.

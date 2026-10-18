@@ -37,3 +37,20 @@ The command ring's own trend line (PROGRESS.md, 2026-09-17 to 09-18) read `6 · 
 - **Three past days already meet the per-day bar:** 09-23, 09-26 and 10-03. None of them counts toward REQ-10. All three came before the final surface (Phase 17, 10-13), and none was named in advance as a dogfood day (ADR-1329: operable over two named days).
 
 The two dogfood days are read next to this table in the retro.
+
+## The two days, read beside the trend (2026-10-18, the retro)
+
+Read from the main clone's live journal and spine on 2026-10-18, same tool, same registry.
+
+| day | decisions through face | decided outside | face ops proven on spine | per-day verdict |
+|---|---|---|---|---|
+| 2026-10-14 (full day) | 21 | 1 | 0 | NOT MET |
+| **2026-10-15 (dogfood day 1)** | **12** | **0** | **1** | **MET** |
+| 2026-10-16 | 0 | 0 | 2 | NOT MET (no decision) |
+| 2026-10-17 | 0 | 0 | 0 | NOT MET |
+| **2026-10-18 (dogfood day 2)** | **1** | **0** | **1** | **MET** |
+
+- **Both named days are clean on both clauses.** 13 of 13 decisions through the face, 0 outside, one op each day. The trend's weak clause (ops) was the one that nearly failed day 2: the first read showed 0 ops, and the owner applied one again before the re-read.
+- **All history still reads 67 outside**, every one dated before 2026-10-15. Printed, never hidden.
+- **Ledger row 7 HELD:** the Inbox shape was not the problem; the surface arriving late was (PLAN.md row 7).
+- This proves the surface is operable on two named days. It does not prove the habit holds (ADR-1329).

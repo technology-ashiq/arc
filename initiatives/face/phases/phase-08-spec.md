@@ -9,12 +9,12 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Both days run from the MAIN clone via `node .claude/scripts/hq/arc-face.mjs`.
-- [ ] `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal, and ≥1 op receipt from the face on each day. If Phase 05's Block C gate fired and zero ops shipped, the op clause is recorded NOT MET and REQ-10 is re-scoped through `/arc-change` before these days start — never silently redefined.
-- [ ] The usage trend recorded since the command ring (Phase 03) is read next to the two days in the retro (retro-log 2026-09-16 lesson).
-- [ ] Assumptions ledger row 7 answered from the numbers: timing or Inbox shape.
-- [ ] ADR-1315's voice question asked at the retro (its trigger's natural place).
-- [ ] `/arc-retro` run; `docs/HISTORY.md` Cycle 16 row; `/arc-phase-done 08` from the main clone.
+- [x] Both days run from the MAIN clone via `node .claude/scripts/hq/arc-face.mjs`.
+- [x] `face-dogfood` reads MET for 2 days: every `decision.recorded` matched to the face journal, and ≥1 op receipt from the face on each day. If Phase 05's Block C gate fired and zero ops shipped, the op clause is recorded NOT MET and REQ-10 is re-scoped through `/arc-change` before these days start — never silently redefined.
+- [x] The usage trend recorded since the command ring (Phase 03) is read next to the two days in the retro (retro-log 2026-09-16 lesson).
+- [x] Assumptions ledger row 7 answered from the numbers: timing or Inbox shape.
+- [x] ADR-1315's voice question asked at the retro (its trigger's natural place).
+- [x] `/arc-retro` run; `docs/HISTORY.md` Cycle 16 row; `/arc-phase-done 08` from the main clone.
 
 ## Verification plan
 
