@@ -1,0 +1,6 @@
+REQ-10 MET: 13 decision(s) across 2 days, every one of them through the face and every one of them on the spine.
+  named days: 2026-10-15, 2026-10-18
+  face ops on the spine per named day: 2026-10-15=1, 2026-10-18=1
+  all history, not just these days: 67 decision(s) made outside the face
+  days through the face: 2026-10-15, 2026-10-18
+exit 0

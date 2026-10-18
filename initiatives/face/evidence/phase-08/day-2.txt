@@ -1,0 +1,32 @@
+# Day 2 -- 2026-10-18 (main clone, live spine)
+journal: .claude/state/face/journal-2026-10-18.jsonl, 276 lines
+
+REQ-10 MET: 1 decision(s) across 1 days, every one of them through the face and every one of them on the spine.
+  named days: 2026-10-18
+  face ops on the spine per named day: 2026-10-18=1
+  all history, not just these days: 67 decision(s) made outside the face
+  days through the face: 2026-10-18
+exit 0
+
+{
+  "met": true,
+  "daysWithFaceDecisions": 1,
+  "requiredDays": 1,
+  "window": [
+    "2026-10-18"
+  ],
+  "opsByDay": {
+    "2026-10-18": 1
+  },
+  "outsideAllHistory": 67,
+  "days": [
+    "2026-10-18"
+  ],
+  "matched": 1,
+  "spineOnly": [],
+  "journalOnly": [],
+  "journalTorn": 0,
+  "spineTorn": 0,
+  "reasons": [],
+  "headline": "REQ-10 MET: 1 decision(s) across 1 days, every one of them through the face and every one of them on the spine."
+}

@@ -1,0 +1,56 @@
+{
+  "phase": "08",
+  "commit": "b8cafa34db93c4134af81a6802f32813cbada204",
+  "short": "b8cafa34",
+  "generated": "2026-10-18T07:57:45Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "355ab7ee7b8e23e3b74de81f9a1ec130476a7b6792f8170aee73cb6b4237bad5"
+    },
+    {
+      "name": "attack-d102d9c-r1-boundary.json",
+      "sha256": "39741a0195ca4da7cb380abffefc6a0e4973bb94ad4acb36e6b90872ac85e058"
+    },
+    {
+      "name": "attack-d102d9c-r1-logic.json",
+      "sha256": "1b0db1b90289dffe33fb055991ba822a66e3a2da0147151e80e2068a26b1238f"
+    },
+    {
+      "name": "attack-dfc952e-r1-boundary-qwen-run.json",
+      "sha256": "acbe651376b48847a81c4cda5de9b4ac5d530cb6de8b2612c07b8c6917829cdc"
+    },
+    {
+      "name": "attack-dfc952e-r1-boundary.json",
+      "sha256": "06c7bfd01a360bc92696db8480f9bba5981655c4efe8e8b9103f80540a84fe9f"
+    },
+    {
+      "name": "attack-dfc952e-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-f8c1485-r2-boundary.json",
+      "sha256": "fc40fe39c4882a90d3a90252e4579084bc2c3bb392827c60c39fd701ec7ed226"
+    },
+    {
+      "name": "attack-f8c1485-r2-logic.json",
+      "sha256": "c2fdb585922c7bb9faa87a7ceea5f8325070e1d50887961521e67e7b00a4f197"
+    },
+    {
+      "name": "day-1.txt",
+      "sha256": "0a2891e38bc2e30f8e05ea747cb132ea57dee3f2aecb5dc445ac9a341afb296d"
+    },
+    {
+      "name": "day-2.txt",
+      "sha256": "e47401b3253da0c613f320cd461a59cba961530a982ef95046135d6a868fe9a4"
+    },
+    {
+      "name": "summary.txt",
+      "sha256": "2a597b40014f66a59751f39988b2dd1be5315c87867c91649e96b1d5119bb2c3"
+    },
+    {
+      "name": "trend.md",
+      "sha256": "e4bf47677932e9c24342af547acfbd4f52611a3309844ee97c053cdd0ea892c2"
+    }
+  ]
+}
