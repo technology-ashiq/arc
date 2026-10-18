@@ -8,14 +8,14 @@ Verification plan row 0, the precondition. Both rows are quoted from `initiative
 
 Phases 10-17, which the plan also runs before 08, are all closed. The last of them was 17, on 2026-10-13 (#414).
 
-## What is here, and what is still owed
+## What is here (all rows done 2026-10-18)
 
 | File | Row | State |
 |---|---|---|
 | `attack-*.json` | -- | the attack rounds for the `arc-face.mjs` Git-Bash fix (d102d9c) and for the `--day` amendment (dfc952e r1, f8c1485 r2) |
-| `trend.md` | 3 | a **baseline**, from 2026-09-17 to 2026-10-14. The two days are added beside it once they are run |
-| `day-1.txt`, `day-2.txt` | 1, 2 | **owed:** the owner's two days, from the main clone in Git Bash |
-| `summary.txt` | 2 | **owed:** `face-dogfood.mjs --days 2 --day <D1> --day <D2>` after day 2 |
+| `trend.md` | 3 | **done:** the 2026-09-17 to 10-14 baseline, with the two days read beside it on 2026-10-18 |
+| `day-1.txt`, `day-2.txt` | 1, 2 | **done:** 2026-10-15 MET, 2026-10-18 MET, both read from the main clone |
+| `summary.txt` | 2 | **done:** `--days 2 --day 2026-10-15 --day 2026-10-18` reads REQ-10 MET, 13 decisions, exit 0 |
 
 ## The measure (amended 2026-10-14, PR #421)
 

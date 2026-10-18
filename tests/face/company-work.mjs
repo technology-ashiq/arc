@@ -167,7 +167,9 @@ check("fixture: the CI gate's header reader was found and reads main's status (v
   check("MUTANT CONTROL: board-lint names the face lane when the header moves without its board row", mutant.face.length > 0 && clean(), `face warns: ${mutant.face.length}`);
 
   // ONE OPEN PROPOSAL PER LANE -- never per company -- and a merged one no longer counts.
-  const second = ls("--lane", "face", "--status", to === "QUEUED" ? "IDLE" : "QUEUED", "--dry-run");
+  // Neither main's status nor the open proposal's: with face IDLE on main, "IDLE" was refused as
+  // "already IDLE" before the open-proposal check could run, so the check read a different refusal.
+  const second = ls("--lane", "face", "--status", ["LIVE", "IDLE", "QUEUED"].find((s) => s !== to && s !== (faceStatus && faceStatus[1])), "--dry-run");
   check("lane-status refuses a second status of the same lane while its proposal is open", second.status === 2 && /already open/.test(second.stderr) && clean(), second.stderr);
   // ANOTHER LANE TOO, because the board is one file: two status branches merged in order conflicted in PORTFOLIO.md,
   // whose rows are adjacent lines, while the plan promised a green merge (PR 5b round-2 shell attack).
