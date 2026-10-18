@@ -26,6 +26,106 @@
       },
       "review_by": "2026-11-09",
       "note": "ADOPTED 2026-08-10 on decision 01KZN5H1E2RDHT9ZGQ4CSR85ZB (reason: adopt; appendix irundhaalum ok). Landed as docs/playbooks/finding-verification.md with .claude/commands/arc-audit.md as its caller -- ADR-0602 Amendment 2, taking Amendment 1 recorded route 2, no allowlist widening. TWO OWNER RECEIPTS POINT DIFFERENT WAYS AND BOTH STAND: the blind A/B pick (01KZN380GP5EDF58H6VRTT0S0T) chose the OLD-WAY report, reason findings neraya iruku; the adoption decision above chose to adopt anyway. RESULTS.md had already recorded, before the adoption, that the pick looked like a judgement about PRESENTATION rather than about the rule -- 13 findings shown against 22 while nine move one heading down, not away -- and refused to let that inference overturn the pick. The adoption is the owner settling it, not the record being rewritten. ENFORCEMENT IS WEAKER THAN THIS STATUS SUGGESTS: findings on /arc-audit are written by the security-auditor subagent whose definition is off the ADR-0602 allowlist, so the only mechanism is the caller forwarding the requirement into its Task prompt. Measured: the claimed class removed 3/3 across 3 fixtures, main-report precision -2.1 pts, 5 of 8 false findings untouched because a byte-match cannot judge whether a quote supports its claim."
+    },
+    {
+      "id": "T-05",
+      "name": "bar-lowering diff guard",
+      "status": "candidate",
+      "lane": "absorb",
+      "source": {
+        "name": "addyosmani/agent-skills",
+        "pin": "git aeac41d4d005999432bb7312f7ff06383a91d59d (local clone read 2026-10-18)",
+        "url": "https://github.com/addyosmani/agent-skills",
+        "license": "MIT, Copyright (c) 2025 Addy Osmani -- read in LICENSE at the repo root via study.mjs --read. Copying permitted with the notice; this study copied nothing."
+      },
+      "classification_ref": "initiatives/absorb/evidence/agent-skills/extraction-report.md",
+      "evidence": [
+        "initiatives/absorb/evidence/agent-skills/extraction-report.md"
+      ],
+      "attribution": null,
+      "lock_ref": null,
+      "decision_refs": {},
+      "review_by": "2027-01-18"
+    },
+    {
+      "id": "T-06",
+      "name": "check circularity ranking",
+      "status": "candidate",
+      "lane": "absorb",
+      "source": {
+        "name": "addyosmani/agent-skills",
+        "pin": "git aeac41d4d005999432bb7312f7ff06383a91d59d (local clone read 2026-10-18)",
+        "url": "https://github.com/addyosmani/agent-skills",
+        "license": "MIT, Copyright (c) 2025 Addy Osmani -- read in LICENSE at the repo root via study.mjs --read. Copying permitted with the notice; this study copied nothing."
+      },
+      "classification_ref": "initiatives/absorb/evidence/agent-skills/extraction-report.md",
+      "evidence": [
+        "initiatives/absorb/evidence/agent-skills/extraction-report.md"
+      ],
+      "attribution": null,
+      "lock_ref": null,
+      "decision_refs": {},
+      "review_by": "2027-01-18"
+    },
+    {
+      "id": "T-10",
+      "name": "withhold the claim; reconcile contract-misread first",
+      "status": "candidate",
+      "lane": "absorb",
+      "source": {
+        "name": "addyosmani/agent-skills",
+        "pin": "git aeac41d4d005999432bb7312f7ff06383a91d59d (local clone read 2026-10-18)",
+        "url": "https://github.com/addyosmani/agent-skills",
+        "license": "MIT, Copyright (c) 2025 Addy Osmani -- read in LICENSE at the repo root via study.mjs --read. Copying permitted with the notice; this study copied nothing."
+      },
+      "classification_ref": "initiatives/absorb/evidence/agent-skills/extraction-report.md",
+      "evidence": [
+        "initiatives/absorb/evidence/agent-skills/extraction-report.md"
+      ],
+      "attribution": null,
+      "lock_ref": null,
+      "decision_refs": {},
+      "review_by": "2027-01-18"
+    },
+    {
+      "id": "T-11",
+      "name": "external-reviewer CLI hygiene",
+      "status": "candidate",
+      "lane": "absorb",
+      "source": {
+        "name": "addyosmani/agent-skills",
+        "pin": "git aeac41d4d005999432bb7312f7ff06383a91d59d (local clone read 2026-10-18)",
+        "url": "https://github.com/addyosmani/agent-skills",
+        "license": "MIT, Copyright (c) 2025 Addy Osmani -- read in LICENSE at the repo root via study.mjs --read. Copying permitted with the notice; this study copied nothing."
+      },
+      "classification_ref": "initiatives/absorb/evidence/agent-skills/extraction-report.md",
+      "evidence": [
+        "initiatives/absorb/evidence/agent-skills/extraction-report.md"
+      ],
+      "attribution": null,
+      "lock_ref": null,
+      "decision_refs": {},
+      "review_by": "2027-01-18"
+    },
+    {
+      "id": "T-13",
+      "name": "write the procedure, not the workaround",
+      "status": "candidate",
+      "lane": "absorb",
+      "source": {
+        "name": "addyosmani/agent-skills",
+        "pin": "git aeac41d4d005999432bb7312f7ff06383a91d59d (local clone read 2026-10-18)",
+        "url": "https://github.com/addyosmani/agent-skills",
+        "license": "MIT, Copyright (c) 2025 Addy Osmani -- read in LICENSE at the repo root via study.mjs --read. Copying permitted with the notice; this study copied nothing."
+      },
+      "classification_ref": "initiatives/absorb/evidence/agent-skills/extraction-report.md",
+      "evidence": [
+        "initiatives/absorb/evidence/agent-skills/extraction-report.md"
+      ],
+      "attribution": null,
+      "lock_ref": null,
+      "decision_refs": {},
+      "review_by": "2027-01-18"
     }
   ]
 }
