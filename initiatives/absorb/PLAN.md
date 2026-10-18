@@ -141,6 +141,7 @@ flowchart TB
 | 0604 | ABS-E: absorb's boundaries against develop, bench, discover and evolve, recorded so nobody re-litigates | accepted |
 | 0605 | ABS-F: absorb's A/Bs run bench-style in v1, and flipping that needs an evolve-side ruling | accepted |
 | 0606 | ABS-G: absorb claims the 0600s, lives in `products/absorb/`, seeds its registry empty, and takes the unspecified-input defect class as its first target | accepted |
+| 0607 | the agent-skills rebuilds (T-05 T-06 T-10 T-11 T-13) land now as an owner-approved exception to the kernel freeze, no new cycle | accepted |
 
 ## Non-negotiables
 

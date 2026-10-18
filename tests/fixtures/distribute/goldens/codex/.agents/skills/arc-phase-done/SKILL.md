@@ -32,6 +32,11 @@ over assertion — show output, don't claim.
    condition that is now true, is unresolved risk: route it through `/arc-change` BEFORE
    closing. **Phase 0 only:** any ADR still `DEFERRED — spike scheduled` blocks this
    close — run the spike, land its evidence in the ADR, finalize the decision.
+5b. **Bar check:** walk `docs/playbooks/bar-guard.md` over the phase diff (plus untracked and
+   staged files). A lowered threshold, an easier test, a silenced checker, unfinished work or a new
+   exception that no `/arc-change` entry or ADR names blocks the close. Also say which kind of check
+   proves this phase (external / project / suite); a close proven only by its own suite is weak and
+   the done-log says so. (Re-expressed from addyosmani/agent-skills (MIT), ADR-0607.)
 
 **If anything fails: the phase is NOT done.** Say exactly what's missing and stop.
 Do not update the tracker for an unfinished phase.

@@ -185,6 +185,35 @@ available. Fixing it properly means the review *method* in `.claude/agents/code-
 to use this*, not *this is enforced*. A playbook plus one forwarded prompt is the honest v1, not the
 destination, and the row's own note says so at the same length.
 
+## Receiving findings: reconcile in a fixed order
+
+The rule above binds whoever **writes** a finding. This section binds whoever **receives** them — the
+building session reading an `/arc-attack` report or an audit.
+
+**Provenance.** Re-expressed from `addyosmani/agent-skills` @ `aeac41d4`
+(`skills/doubt-driven-development/SKILL.md:83-179`, MIT, (c) 2025 Addy Osmani), technique **T-10** in
+`initiatives/absorb/evidence/agent-skills/extraction-report.md`. Nothing is copied. Landed by ADR-0607.
+
+**Give the reviewer the artifact and the contract, never your claim.** "This gate is complete, check it"
+gets back agreement. arc's attackers already receive only the diff; keep it that way when you add
+context.
+
+Re-read the artifact against each finding, then put it in the **first** class that fits:
+
+1. **Contract misread** — the reviewer was wrong because what you told it the code must do was unclear
+   or incomplete. Fix the contract text first; re-classify on the next round.
+2. **Valid and actionable** — change the artifact.
+3. **Valid trade-off** — real, and cheaper to accept than to fix. Write the trade-off down where the
+   owner will read it (PR body or debt ledger), never just in chat.
+4. **Noise** — correct under context the reviewer lacked. Note it, and ask whether that context belongs
+   in the contract so the next round does not raise it again.
+
+**The guard on class 1:** a contract edit is itself reviewed. Rewriting the contract until a real
+finding stops applying is the same laundering the workaround clause above forbids, one level up. If a
+finding disappears only because the contract changed, say so in the report.
+
+The round bound is arc's own and is tighter than the source's: two attack rounds per PR.
+
 ## A sibling that already has this defect
 
 `.claude/scripts/absorb/report-lint.mjs` requires every extraction-report row to carry a `citation`

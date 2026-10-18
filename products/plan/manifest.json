@@ -30,6 +30,10 @@
       "dest": "docs/build-playbook.md"
     },
     {
+      "src": "docs/playbooks/bar-guard.md",
+      "dest": "docs/playbooks/bar-guard.md"
+    },
+    {
       "src": "docs/templates/PLAN-template.md",
       "dest": "docs/templates/PLAN-template.md"
     },
