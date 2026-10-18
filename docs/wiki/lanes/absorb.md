@@ -170,7 +170,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/absorb/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/absorb/PROGRESS.md)
 
-## Decisions (7)
+## Decisions (8)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -183,6 +183,7 @@ ADRs whose `Product:` line names this lane first.
 | [`0604`](../../../docs/adr/0604-absorb-boundary-rulings-recorded-so-nobody-relitigates.md) | ABS-E: absorb's boundaries against develop, bench, discover and evolve, recorded so nobody re-litigates them | accepted | 2026-08-09 |
 | [`0605`](../../../docs/adr/0605-absorb-ab-tests-run-bench-style-not-through-evolve.md) | ABS-F: absorb's A/Bs run bench-style in v1, and flipping that needs an evolve-side ruling | accepted | 2026-08-09 |
 | [`0606`](../../../docs/adr/0606-abs-g-century-code-home-empty-seed-and-first-target.md) | ABS-G: absorb claims the 0600s, lives in `products/absorb/`, seeds its registry empty, and takes the unspecified-input defect class as its first target | accepted | 2026-08-09 |
+| [`0607`](../../../docs/adr/0607-agent-skills-rebuilds-land-now-as-an-owner-exception-to-the-kernel-freeze.md) | the agent-skills rebuilds land now, as an owner-approved exception to the kernel freeze | accepted | 2026-10-18 |
 
 ## Source
 
