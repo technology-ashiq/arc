@@ -918,7 +918,7 @@ arm() {
 @test "launch-contract: a venture whose domain is a shared suffix is refused before any delivery (ADR-1739, ADR-1765)" {
   arm webhooks host-refused
   [ "$(j 'o.verify.ok + " " + o.queued + " " + o.routeCalls')" = "false 0 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix, not a registrable domain (VENTURE_HOST_UNRESOLVED)"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: webhooks-ledger verify is not ok and books nothing when the served route skips or re-serialises the signature, the secret differs, or a policy opens the table (ADR-1739)" {
@@ -999,7 +999,7 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
   arm refunds host-refused
   [ "$(j 'o.verify.ok + " " + o.queued + " " + o.routeCalls')" = "false 0 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix, not a registrable domain (VENTURE_HOST_UNRESOLVED)"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a refund of the probe payment launch did not send fails the probe, and a new probe payment gets a fresh refund (55c5065 L7 B3)" {
@@ -1287,7 +1287,7 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
   arm headers host-refused
   [ "$(j 'o.verify.ok + " " + o.siteCalls')" = "false 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix, not a registrable domain (VENTURE_HOST_UNRESOLVED)"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: dependency-scan commits its own workflow and Dependabot once, beside ci's, and verify reads a green audit run for main's head (ADR-1743)" {

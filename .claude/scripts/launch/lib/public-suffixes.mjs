@@ -10,7 +10,7 @@ export const MULTI_TENANT = [
   "netlify.app", "web.app", "firebaseapp.com", "appspot.com", "herokuapp.com", "onrender.com", "fly.dev", "railway.app",
   "deno.dev", "replit.app", "repl.co", "glitch.me", "surge.sh", "ngrok.io", "ngrok-free.app", "trycloudflare.com",
   "amazonaws.com", "cloudfront.net", "azurewebsites.net", "azurestaticapps.net", "blogspot.com", "wordpress.com",
-  "supabase.co", "neon.tech",
+  "supabase.co",
 ];
 
 // A bare hostname of two or more labels, lower-case, no scheme, port, path, wildcard or trailing dot.
