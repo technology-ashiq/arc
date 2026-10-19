@@ -3,6 +3,7 @@
 //
 //   arc-launch new   --venture SLUG [--venture-root D]
 //   arc-launch apply SLOT --venture SLUG --venture-root D [--provider ID] [--vet]
+//   arc-launch apply --next|--all --venture SLUG --venture-root D   (core slots in DAG order; stops on any non-zero exit)
 //   arc-launch plan | status | teardown --plan  --venture SLUG
 //   arc-launch verify SLOT|--all --venture SLUG [--venture-root D] [--public-only]   (--public-only: the weekly watch)
 //   arc-launch override SLOT --venture SLUG --provider ID --reason TEXT   (asks the owner; plan cites the decision)
@@ -20,6 +21,7 @@ import { apply, verifySlots, resolvePaths, emit, EXIT } from "./lib/runner.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 import { planLines, statusLines, teardownPlan } from "./lib/board.mjs";
+import { topoOrder } from "./lib/dag.mjs";
 
 const VALUE_FLAGS = {
   "--venture": "venture", "--venture-root": "ventureRoot", "--provider": "provider", "--catalog": "catalog",
@@ -33,6 +35,7 @@ export function parseArgs(argv) {
     const a = argv[i];
     if (a === "--vet") { o.vet = true; continue; }
     if (a === "--all") { o.all = true; continue; }
+    if (a === "--next") { o.next = true; continue; }
     if (a === "--again") { o.again = true; continue; }
     if (a === "--plan") { o.plan = true; continue; }
     if (a === "--public-only") { o.publicOnly = true; continue; }
@@ -133,6 +136,54 @@ function cmdStatus(o) {
   return EXIT.OK;
 }
 
+// apply --next / --all (ADR-1767): the core slots in topoOrder, one apply() each, stopping on the first non-zero exit.
+// Required and optional slots are never walked -- a core slot depends on core slots only (ADR-1717), so the filtered
+// order is closed. The walk answers no gate and writes no state of its own; apply() does both as it always has.
+async function cmdWalk(o) {
+  const P = resolvePaths(o);
+  const slots = loadCatalog(P.catalog);
+  const profile = loadProfile(o.venture, P.venturesDir);
+  const order = topoOrder(slots.filter((s) => s.tier === "core"));
+  const real = profile.honesty_class === "real";
+  const retried = new Set();
+  let applied = 0;
+  const done = () => {
+    const state = loadState(P.stateDir, profile.slug) || { slots: {} };
+    const skipped = order.filter((id) => (state.slots[id] || {}).state === "skipped").length;
+    console.log(`walk complete: ${applied} applied, ${skipped} skipped`);
+    return EXIT.OK;
+  };
+  for (;;) {
+    const state = loadState(P.stateDir, profile.slug, { onFallback: console.log });
+    if (!state) { console.log(`no board for ${profile.slug} -- run new first`); return EXIT.REFUSED; }
+    const at = (id) => (state.slots[id] || {}).state || "pending";
+    const id = order.find((x) => !["verified", "skipped"].includes(at(x)) && !(at(x) === "absent" && !real));
+    if (!id) return done();
+    if (at(id) === "absent") { console.log(`stopped at ${id}: exit ${EXIT.REFUSED} absent on real`); return EXIT.REFUSED; }
+    let last = "";
+    const log = (line) => { console.log(line); last = String(line); };
+    let code;
+    try { code = await apply({ ...o, slot: id, again: false }, log); }
+    catch (e) {
+      if (!(e instanceof LaunchError)) throw e;
+      code = e.exit || EXIT.REFUSED;
+      log(e.message);
+    }
+    if (code === EXIT.OK) {
+      const now = ((loadState(P.stateDir, profile.slug) || { slots: {} }).slots[id] || {}).state || "pending";
+      // An exit 0 that left the slot where it was would be picked again forever; it is a stop, not a step.
+      if (!["verified", "skipped", "absent"].includes(now)) { console.log(`stopped at ${id}: exit 0 but the slot is still ${now}`); return EXIT.FAILED; }
+      if (now !== "skipped") applied++;
+      if (o.next) return done();
+      continue;
+    }
+    // A failed slot is retried once, at once; the second failure stops the walk and names itself.
+    if (code === EXIT.FAILED && !retried.has(id)) { retried.add(id); continue; }
+    console.log(`stopped at ${id}: exit ${code} ${last}`);
+    return code;
+  }
+}
+
 function cmdTeardownPlan(o) {
   const b = board(o);
   for (const l of teardownPlan(b.slots, b.state, b.profile)) console.log(l);
@@ -162,6 +213,12 @@ export async function main(argv) {
       return cmdTeardownPlan(o);
     }
     if (verb === "apply") {
+      if (o.next || o.all) {
+        if (o.next && o.all) { console.log("apply takes --next or --all, not both"); return EXIT.REFUSED; }
+        if (slot) { console.log("apply takes a SLOT or --next/--all, not both"); return EXIT.REFUSED; }
+        if (o.again) { console.log("--again takes one SLOT"); return EXIT.REFUSED; }
+        return await cmdWalk(o);
+      }
       if (!slot) { console.log("apply needs a SLOT"); return EXIT.REFUSED; }
       return await apply({ ...o, slot });
     }

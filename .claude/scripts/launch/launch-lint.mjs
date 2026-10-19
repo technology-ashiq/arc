@@ -13,7 +13,9 @@ import { readFileSync, existsSync, readdirSync, statSync, mkdtempSync, cpSync, w
 import { join, resolve, dirname, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { PATHS, OWNER, TIERS, GATES, RESUME, STATUSES, readYaml, parsePredicate } from "./lib/catalog.mjs";
+import { PATHS, OWNER, TIERS, GATES, RESUME, STATUSES, readYaml, parsePredicate, loadProfile } from "./lib/catalog.mjs";
+import { VENTURE_TOKEN, literalHosts, resolveHosts } from "./lib/ctx.mjs";
+import { BARE_HOST, CC_SECOND_LEVEL } from "./lib/public-suffixes.mjs";
 import { dagFindings } from "./lib/dag.mjs";
 import { defaultWordHits, adapterFindings, adapterDigest, posix } from "./lib/scan.mjs";
 
@@ -32,7 +34,7 @@ function walkMjs(dir) {
   return out;
 }
 
-export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, providersDir = PATHS.providersDir } = {}) {
+export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, providersDir = PATHS.providersDir, venturesDir = PATHS.venturesDir } = {}) {
   const F = [];
   const R = [];
   const add = (rule, id, msg) => F.push({ rule, id, msg });
@@ -96,9 +98,11 @@ export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, provi
     if (!Array.isArray(r.hosts) || !r.hosts.length) add("hosts", r.id, "no hosts[] -- an adapter with no declared hosts may call nothing (ADR-1719)");
     // hostAllowed() admits every subdomain of an entry, so an entry must be a real host of two labels or more:
     // `com` or `co.in` would admit the whole internet under it (attack 3b48ed1 B15).
+    // `@venture` is a whole entry, once (ADR-1765); any other spelling of it is not a host and fails like one.
     for (const h of Array.isArray(r.hosts) ? r.hosts : [])
-      if (typeof h !== "string" || !/^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/.test(h) || /^(co|com|net|org|gov|ac|edu)\.[a-z]{2}$/.test(h))
+      if (h !== VENTURE_TOKEN && (typeof h !== "string" || !BARE_HOST.test(h) || CC_SECOND_LEVEL.test(h)))
         add("hosts", r.id, `host ${JSON.stringify(h)} is not a bare hostname of two or more labels`);
+    if (Array.isArray(r.hosts) && r.hosts.filter((h) => h === VENTURE_TOKEN).length > 1) add("hosts", r.id, `${VENTURE_TOKEN} appears more than once`);
     if (r.adapter && r.slot && posix(r.adapter) !== `providers/${r.slot}/${r.id}.mjs`) add("adapter-path", r.id, `adapter ${r.adapter} is not providers/${r.slot}/${r.id}.mjs`);
     const ap = r.adapter ? resolve(registryDir, r.adapter) : null;
     if (ap) referenced.add(ap);
@@ -115,6 +119,20 @@ export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, provi
     if (ap && r.digest && adapterDigest(ap) !== r.digest) add("digest-drift", r.id, `adapter changed since vet -- the row reads as candidate until re-vetted (ADR-1719)`);
   }
   for (const s of slots) if (s && s.tier === "core" && !rows.some((r) => r && r.slot === s.id)) add("slot-without-provider", s.id, "core slot with no provider row (required-tier rows arrive in Cycle 2)");
+
+  // Each committed venture's brand.domain against the registry (ADR-1765): a later row whose host collides with a
+  // venture fails here, on CI, rather than on that venture's next live run. A rehearsal may hold `unassigned`; a real
+  // venture may not, because its adapters would reach nothing.
+  const lits = literalHosts(rows.filter((r) => r && Array.isArray(r.hosts)));
+  const probeRow = { hosts: [VENTURE_TOKEN] };
+  for (const file of existsSync(venturesDir) ? readdirSync(venturesDir).filter((f) => f.endsWith(".venture.yaml")).sort() : []) {
+    const slug = file.slice(0, -".venture.yaml".length);
+    let profile;
+    try { profile = loadProfile(slug, venturesDir); } catch (e) { add("venture-host", slug, `profile does not load: ${e.message}`); continue; }
+    try { resolveHosts(probeRow, profile, lits); } catch (e) {
+      if (e.reason === "VENTURE_HOST_COLLIDES" || profile.honesty_class === "real") add("venture-host", slug, e.message);
+    }
+  }
 
   const realRef = new Set([...referenced].filter(existsSync).map((p) => realpathSync(p)));
   for (const file of walkMjs(providersDir)) {
@@ -164,7 +182,10 @@ function baseline(dir) {
     "    vetted_by: 01M40ZHP72PYVBJT17R7A4WZ3W", "    scout: docs/capability/probe-dns.md", "",
   ].join("\n");
   writeFileSync(registry, reg);
-  return { catalog, registry, providersDir, adapter };
+  // Ventures too, so the venture-host rule reads a copy a mutant may plant into, never the real dir.
+  const venturesDir = join(dir, "ventures");
+  cpSync(PATHS.venturesDir, venturesDir, { recursive: true });
+  return { catalog, registry, providersDir, adapter, venturesDir };
 }
 
 const MUTANTS = [
@@ -180,6 +201,12 @@ const MUTANTS = [
   ["edge-unresolved", (b) => edit(b.catalog, (t) => block(t, "dns", (x) => must(x, "      - domain\n", "      - domain\n      - nosuch-slot\n")))],
   ["default-word", (b) => edit(b.registry, (t) => t + "# a default provider for dns\n")],
   ["zero-dep-leg", (b) => edit(b.adapter, (t) => `import x from "lodash";\n${t}`, true)],
+  // ADR-1765: `@venture` only as a whole entry, once; and a venture whose domain overlaps a vendor host.
+  ...[["hosts-token-suffix", '"@venture.evil.com"'], ["hosts-token-prefix", "x.@venture"], ["hosts-token-case", '"@VENTURE"'],
+    ["hosts-token-twice", '"@venture"\n      - "@venture"']].map(([name, entry]) =>
+    [name, (b) => edit(b.registry, (t) => block(t, "nextjs-shell", (x) => must(x, '      - "@venture"\n', `      - ${entry}\n`))), "hosts"]),
+  ["venture-host", (b) => writeFileSync(join(b.venturesDir, "fx-collide.venture.yaml"), ["slug: fx-collide", "type: saas-b2b", "region: in", "payment_model: gateway",
+    "tenancy: multi", "ai: false", "honesty_class: real", "brand:", "  name: collide", "  domain: github.com", ""].join("\n"))],
   ["verify-is-probe", (b) => edit(b.adapter, (t) => must(t, 'const r = await ctx.fetch("https://api.cloudflare.com/client/v4"); return { ok: r.ok, answerer: "api.cloudflare.com" };', 'return { ok: true, answerer: "self" };'), true)],
 ];
 
@@ -204,13 +231,13 @@ function selftest() {
     }
     console.log(`RAN baseline clean (${clean.counts.slots} slots, ${clean.counts.rows} rows)`);
     let refused = 0;
-    for (const [name, mutate] of MUTANTS) {
+    for (const [name, mutate, rule = name] of MUTANTS) {
       const dir = join(root, name);
       const b = baseline(dir);
       mutate(b);
       const got = lint(b).findings;
       console.log(`RAN mutant ${name}`);
-      if (got.some((f) => f.rule === name)) { refused++; console.log(`REFUSED ${name}`); }
+      if (got.some((f) => f.rule === rule)) { refused++; console.log(`REFUSED ${name}`); }
       else console.log(`MISSED ${name} -- got: ${got.map((f) => f.rule).join(", ") || "nothing"}`);
     }
     console.log(`${refused}/${MUTANTS.length} mutants refused`);
@@ -224,7 +251,7 @@ function main(argv) {
   if (argv.includes("--mutant-selftest")) return selftest();
   const o = {};
   for (let i = 0; i < argv.length; i++) {
-    const k = { "--catalog": "catalog", "--registry": "registry", "--providers-dir": "providersDir" }[argv[i]];
+    const k = { "--catalog": "catalog", "--registry": "registry", "--providers-dir": "providersDir", "--ventures-dir": "venturesDir" }[argv[i]];
     if (!k || argv[i + 1] === undefined) { console.log(`launch-lint: unknown or valueless flag ${argv[i]}`); return 2; }
     o[k] = resolve(argv[++i]);
   }

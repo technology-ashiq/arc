@@ -18,6 +18,7 @@
     ".claude/scripts/launch/lib/catalog.mjs",
     ".claude/scripts/launch/lib/ctx.mjs",
     ".claude/scripts/launch/lib/dag.mjs",
+    ".claude/scripts/launch/lib/public-suffixes.mjs",
     ".claude/scripts/launch/lib/runner.mjs",
     ".claude/scripts/launch/lib/scan.mjs",
     ".claude/scripts/launch/lib/simulated.mjs",
