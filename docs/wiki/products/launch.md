@@ -23,7 +23,7 @@ None declared.
 
 None declared.
 
-## Scripts (15)
+## Scripts (16)
 
 - [`.claude/scripts/hq/jobs/launch-watch.mjs`](../../../.claude/scripts/hq/jobs/launch-watch.mjs)
 - [`.claude/scripts/launch/arc-launch.mjs`](../../../.claude/scripts/launch/arc-launch.mjs)
@@ -34,6 +34,7 @@ None declared.
 - [`.claude/scripts/launch/lib/catalog.mjs`](../../../.claude/scripts/launch/lib/catalog.mjs)
 - [`.claude/scripts/launch/lib/ctx.mjs`](../../../.claude/scripts/launch/lib/ctx.mjs)
 - [`.claude/scripts/launch/lib/dag.mjs`](../../../.claude/scripts/launch/lib/dag.mjs)
+- [`.claude/scripts/launch/lib/public-suffixes.mjs`](../../../.claude/scripts/launch/lib/public-suffixes.mjs)
 - [`.claude/scripts/launch/lib/runner.mjs`](../../../.claude/scripts/launch/lib/runner.mjs)
 - [`.claude/scripts/launch/lib/scan.mjs`](../../../.claude/scripts/launch/lib/scan.mjs)
 - [`.claude/scripts/launch/lib/simulated.mjs`](../../../.claude/scripts/launch/lib/simulated.mjs)
