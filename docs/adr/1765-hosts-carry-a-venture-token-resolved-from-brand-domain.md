@@ -4,7 +4,7 @@
 **Date:** 2026-10-19
 **Product:** `launch`
 **Reversibility:** one-way
-**Revisit trigger:** a provider needs a venture-derived host that is not `brand.domain` or one of its subdomains (for example
+**Revisit trigger:** a provider needs a venture-derived host that is not `brand.domain` itself, such as one of its subdomains (for example
 a per-venture `*.vercel.app` alias or a Supabase project ref). That host shape then needs its own named token, never a
 wildcard.
 
@@ -51,6 +51,11 @@ collides with a venture fails CI rather than that venture's next live run.
 
 `launch-lint` accepts `@venture` as a `hosts[]` entry. Its self-test gains mutants for `@venture.evil.com`,
 `x.@venture`, `@VENTURE` and a duplicated token, and refuses each of them.
+
+**Amended 2026-10-20 (Phase 06 attack 9d10382 B1):** the resolved venture host matches **exactly**, never as a
+subdomain base. `hostAllowed` admits every subdomain of an entry, so a dangling `x.{brand.domain}` that someone else took
+over would have been inside every `@venture` row's allow-list. No adapter fetches a venture subdomain: the Phase 06
+hostname table shows every one of them calls the apex.
 
 ## Consequences
 

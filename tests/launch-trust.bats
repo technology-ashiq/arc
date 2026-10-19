@@ -147,17 +147,17 @@ vh_run() {
 }
 vh() { node -e 'const j=JSON.parse(process.argv[1]);console.log(eval(process.argv[2]))' "$VH" "$1"; }
 
-@test "launch-trust: @venture reaches the venture own brand.domain and its subdomains through ctx.fetch" {
+@test "launch-trust: @venture reaches the venture own brand.domain exactly through ctx.fetch" {
   vh_run
-  [ "$(vh 'j.total')" -eq 18 ] || { echo "$VH"; false; }
-  local n; for n in own-domain own-subdomain own-domain-mixed-case; do
+  [ "$(vh 'j.total')" -eq 19 ] || { echo "$VH"; false; }
+  local n; for n in own-domain own-domain-mixed-case; do
     [ "$(vh "[j.cases[\"$n\"].ran, j.cases[\"$n\"].reached, j.cases[\"$n\"].pass].join(\" \")")" = "true true true" ] || { echo "$n: $VH"; false; }
   done
 }
 
 @test "launch-trust: @venture refuses lookalikes, an IP, another venture, and an unresolved or colliding domain, each after the fetch RAN" {
   vh_run
-  local n; for n in lookalike-prefix lookalike-suffix ip-literal other-venture unassigned no-domain suffix-vercel-app suffix-co-uk suffix-azurewebsites trailing-dot collides-github collides-mixed-case collides-fixture-row collides-own-row-no-registry; do
+  local n; for n in own-subdomain-refused suffix-ne-jp lookalike-prefix lookalike-suffix ip-literal other-venture unassigned no-domain suffix-vercel-app suffix-co-uk suffix-azurewebsites trailing-dot collides-github collides-mixed-case collides-fixture-row collides-own-row-no-registry; do
     [ "$(vh "[j.cases[\"$n\"].ran, j.cases[\"$n\"].reached, j.cases[\"$n\"].code, j.cases[\"$n\"].pass].join(\" \")")" = "true false HOST_REFUSED true" ] || { echo "$n: $VH"; false; }
   done
   [ "$(vh 'j.cases.unassigned.reason + " " + j.cases["suffix-co-uk"].reason + " " + j.cases["collides-github"].reason')" = "VENTURE_HOST_UNRESOLVED VENTURE_HOST_UNRESOLVED VENTURE_HOST_COLLIDES" ] || { echo "$VH"; false; }
@@ -171,9 +171,9 @@ vh() { node -e 'const j=JSON.parse(process.argv[1]);console.log(eval(process.arg
 
 @test "launch-trust: both resolver mutants turn the venture-hosts cases red" {
   vh_run --mutant identity
-  [ "$(vh 'j.mutant + " " + j.total')" = "identity 18" ] || { echo "$VH"; false; }
+  [ "$(vh 'j.mutant + " " + j.total')" = "identity 19" ] || { echo "$VH"; false; }
   [ "$(vh '["own-domain","cycle1-equivalence","collides-github"].every((n) => j.failed.includes(n))')" = "true" ] || { echo "$VH"; false; }
   vh_run --mutant unlowered
-  [ "$(vh 'j.mutant + " " + j.total')" = "unlowered 18" ] || { echo "$VH"; false; }
+  [ "$(vh 'j.mutant + " " + j.total')" = "unlowered 19" ] || { echo "$VH"; false; }
   [ "$(vh '["own-domain-mixed-case","collides-mixed-case"].every((n) => j.failed.includes(n))')" = "true" ] || { echo "$VH"; false; }
 }

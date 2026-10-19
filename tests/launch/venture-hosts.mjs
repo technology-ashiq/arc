@@ -61,7 +61,9 @@ const refuses = async (name, row, prof, url, reason, regHosts) => {
 };
 
 await reaches("own-domain", ROW, profile("myfitfolio.test"), "https://myfitfolio.test/", LITS);
-await reaches("own-subdomain", ROW, profile("myfitfolio.test"), "https://www.myfitfolio.test/", LITS);
+// The venture host matches exactly: a subdomain (a takeover target) is refused (attack 9d10382 B1).
+await refuses("own-subdomain-refused", ROW, profile("myfitfolio.test"), "https://dangling.myfitfolio.test/", undefined, LITS);
+await refuses("suffix-ne-jp", ROW, profile("ne.jp"), "https://ne.jp/", "VENTURE_HOST_UNRESOLVED", LITS);
 await reaches("own-domain-mixed-case", ROW, profile("MyFitFolio.TEST"), "https://myfitfolio.test/", LITS);
 await refuses("lookalike-prefix", ROW, profile("myfitfolio.test"), "https://evilmyfitfolio.test/", undefined, LITS);
 await refuses("lookalike-suffix", ROW, profile("myfitfolio.test"), "https://myfitfolio.test.evil.com/", undefined, LITS);

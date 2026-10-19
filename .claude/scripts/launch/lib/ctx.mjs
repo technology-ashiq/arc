@@ -87,11 +87,18 @@ export function makeCtx({ profile, board, slot, row, root, resources, upstream, 
   let rowHosts = [];
   let unresolved = null;
   try { rowHosts = resolveHosts(row, profile, registryHosts); } catch (e) { unresolved = e; }
-  const guardedFetch = (hosts) => async (url, init = {}) => {
+  // The venture's own host matches exactly, never its subdomains: a dangling `x.<domain>` someone else took over would
+  // otherwise sit inside every @venture row's allow-list (attack 9d10382 B1). No adapter fetches one.
+  // Taken from what resolveHosts returned (the entries that are not this row's literals), never from the profile
+  // directly, so the resolver stays the one seam a broken resolution shows through.
+  const ownLiterals = literalHosts([row]);
+  const exact = rowHosts.filter((h) => !ownLiterals.includes(String(h).toLowerCase()));
+  const guardedFetch = (hosts, only = []) => async (url, init = {}) => {
     let u;
     try { u = new URL(url); } catch { throw refusal("HOST_REFUSED", `not a URL: ${url}`); }
     if (u.protocol !== "https:") throw refusal("HOST_REFUSED", `${u.protocol} refused; adapters speak https only`);
-    if (!hostAllowed(u.hostname, hosts)) throw refusal("HOST_REFUSED", `${u.hostname} is not in this provider's hosts[] (${hosts.join(", ")})`);
+    const ok = only.includes(u.hostname.toLowerCase()) || hostAllowed(u.hostname, hosts.filter((h) => !only.includes(h)));
+    if (!ok) throw refusal("HOST_REFUSED", `${u.hostname} is not in this provider's hosts[] (${hosts.join(", ")})`);
     if (signal && signal.aborted) throw refusal("ABORTED", "slot timeout reached");
     // Redirects are never followed: the allowlist checks one URL, and a followed 3xx would land on a host nobody
     // checked (attack 3b48ed1 B1). The adapter sees the 3xx and may call ctx.fetch on its Location, which is checked.
@@ -101,7 +108,7 @@ export function makeCtx({ profile, board, slot, row, root, resources, upstream, 
   return Object.freeze({
     profile, board, slot, provider: row.id, root, resources: [...(resources || [])], upstream: freezeUpstream(upstream), tag, attempt, signal,
     env: Object.freeze({ ...env }),
-    fetch: unresolved ? async () => { throw refusal(unresolved.code, unresolved.message, { reason: unresolved.reason }); } : guardedFetch(rowHosts),
+    fetch: unresolved ? async () => { throw refusal(unresolved.code, unresolved.message, { reason: unresolved.reason }); } : guardedFetch(rowHosts, exact),
     write(rel, text) {
       const abs = confinedPath(root, rel);
       mkdirSync(dirname(abs), { recursive: true });

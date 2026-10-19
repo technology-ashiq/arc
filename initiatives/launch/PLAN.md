@@ -139,8 +139,8 @@ Cycle 1's ADR-1700 to ADR-1764 stand unchanged.
 
 ## Rabbit holes
 
-1. **Making `@venture` clever** (per-slot subdomains, `*.vercel.app` aliases). The token means `brand.domain` and its
-   subdomains, nothing else. A new host shape gets its own named token by ADR (ADR-1765's revisit trigger).
+1. **Making `@venture` clever** (per-slot subdomains, `*.vercel.app` aliases). The token means `brand.domain` exactly, not
+   its subdomains (attack 9d10382 B1). A new host shape gets its own named token by ADR (ADR-1765's revisit trigger).
 2. **Fixing the 32 REFUSED `required` slots because `plan` prints them.** They are Cycle 3. `plan` keeps printing them.
 3. **A purchase flow "while we are in Cloudflare".** No purchase code (ADR-1766).
 4. **Running real `apply` from this worktree.** It is refused (rabbit hole 9 of Cycle 1). Every live run happens in the

@@ -161,7 +161,8 @@ async function cmdWalk(o) {
     if (!id) return done();
     if (at(id) === "absent") { console.log(`stopped at ${id}: exit ${EXIT.REFUSED} absent on real`); return EXIT.REFUSED; }
     let last = "";
-    const log = (line) => { console.log(line); last = String(line); };
+    // Every line is cleaned as it is printed, so an adapter's words cannot forge a stop or complete line (9d10382 B6).
+    const log = (line) => { last = clean(line); console.log(last); };
     let code;
     try { code = await apply({ ...o, slot: id, again: false }, log); }
     catch (e) {
@@ -178,13 +179,12 @@ async function cmdWalk(o) {
       if (o.next) return done();
       continue;
     }
-    // A failed slot is retried once, at once; the second failure stops the walk and names itself. A refusal recorded
-    // as the failure (`refused:` -- a rejected sensitive action, an undeclared key) is the owner's or the row's to
-    // change, and a retry would only repeat it (attack 74ba8f0 B5).
-    const why = String(((loadState(P.stateDir, profile.slug) || { slots: {} }).slots[id] || {}).reason || "");
-    if (code === EXIT.FAILED && !retried.has(id) && !why.startsWith("refused:")) { retried.add(id); continue; }
+    // A failed slot is retried once, at once; the second failure stops the walk and names itself. The decision reads
+    // the exit code only, never the reason text an adapter can word (attack 9d10382 B3). An owner's rejection already
+    // exits 2, and a retry is a plain apply, which every adapter meets check-then-create (ADR-1704).
+    if (code === EXIT.FAILED && !retried.has(id)) { retried.add(id); continue; }
     // The last line can carry an adapter's words; it is cleaned like every other adapter string (attack 74ba8f0 B6).
-    console.log(`stopped at ${id}: exit ${code} ${clean(last)}`);
+    console.log(`stopped at ${id}: exit ${code} ${last}`);
     return code;
   }
 }
