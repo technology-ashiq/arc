@@ -31,7 +31,7 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   # The owner vetted 32 rows (decision.recorded 01M4YYNSS3H8N5A5HWAG77BM3J); domain and legal-pages hold only candidates.
   [[ "$output" == *"dns: recommended cloudflare-dns -- why: FIT-1 type saas-b2b"*"status vetted"* ]] || { echo "$output"; false; }
   [[ "$output" == *"payment-test: recommended razorpay"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-registrar (candidate)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-zone (candidate), cloudflare-registrar (candidate)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"legal-pages: REFUSED -- no vetted provider for legal-pages · candidates: arc-legal (candidate)"* ]] || { echo "$output"; false; }
   # A candidate is never the pick: no line recommends a row whose status is not vetted.
   [ "$(printf '%s

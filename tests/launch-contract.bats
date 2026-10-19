@@ -1531,3 +1531,52 @@ arm() {
   [ "$status" -eq 1 ] || { echo "a planted leak passed: $output"; false; }
   [[ "$output" == *"a sbp_ token that is not masked"* && "$output" == *"a Supabase project ref"* && "$output" == *"an e-mail address"* ]] || { echo "$output"; false; }
 }
+
+# ---------- domain on an owner-held Cloudflare zone (ADR-1766, REQ-15) ----------
+
+@test "launch-contract: cloudflare-zone records the owner's zone, creates nothing, and verifies it active, delegated and registered" {
+  arm domain active
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "cloudflare-zone zone-fit" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.zone + " " + o.verify.evidence.nameservers.join(",")')" = "true zone-fit meera.ns.cloudflare.com,noel.ns.cloudflare.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.answerer')" = "api.cloudflare.com + dns.google + cloudflare-dns.com + rdap.verisign.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.rdap.days > 30')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.steps.length')" = "0" ] || { echo "$DONE"; false; }
+  # Read-only by construction: every request the arm saw was a GET, to the four hosts the verify names.
+  [ "$(j 'o.methods.join(",")')" = "GET" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hosts.join(",")')" = "api.cloudflare.com,cloudflare-dns.com,dns.google,rdap.verisign.com" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: cloudflare-zone verify is not ok on a pending zone or a delegation public DNS does not show" {
+  arm domain pending
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false zone:pending -- "* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.methods.join(",")')" = "GET" ] || { echo "$DONE"; false; }
+  arm domain ns-mismatch
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false zone:ns-mismatch -- myfitfolio.com NS is google ns1.oldregistrar.example"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: cloudflare-zone refuses no zone, two zones and a malformed domain before asking anything else" {
+  arm domain no-zone
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.code + " " + o.verify.code')" = "false NO_ZONE NO_ZONE" ] || { echo "$DONE"; false; }
+  arm domain two-zones
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.code')" = "false ZONE_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  arm domain bad-domain
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_DOMAIN 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: cloudflare-zone verify reads the registry: unregistered, on hold, expiring, no expiry, and an unserved TLD are each not ok" {
+  local s want
+  for s in "unregistered:rdap:not-registered -- " "hold:rdap:status -- myfitfolio.com is client hold" "expiring:rdap:expiring -- myfitfolio.com expires in " "no-expiry:rdap:no-expiry -- " "tld-unsupported:rdap:tld-unsupported -- no registry RDAP server for .io"; do
+    arm domain "${s%%:*}"
+    want="${s#*:}"
+    [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false $want"* ]] || { echo "${s%%:*}: $DONE"; false; }
+  done
+}
+
+@test "launch-contract: cloudflare-zone keeps the token out of headers and text, and cleans a hostile provider error" {
+  arm domain crlf-token
+  [ "$(j 'o.scaffold.ok + " " + o.calls')" = "true 1" ] || { echo "$DONE"; false; }
+  arm domain hostile-error
+  [ "$(j 'o.scaffold.ok + " " + o.clean')" = "false true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == "cloudflare GET /zones -> 403 (1: evilFAKE LINE "* ]] || { echo "$DONE"; false; }
+}

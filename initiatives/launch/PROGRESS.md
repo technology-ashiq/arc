@@ -47,6 +47,15 @@ before `dns` runs.
 PR, run the 7 read-only key probes (phase-06 spec "Key probes"), the `plan` prefix + `apply --all` walk transcript,
 the legal `propose --dry-run` (A-12), then `/arc-phase-done 06 --lane launch`. Then Phase 07 (`cloudflare-zone`).
 
+**Owner ruling 2026-10-20 ("complete all phase ... final ah merge pannikalam"):** every remaining phase is built on ONE
+branch, `feat/launch-c2-phases`, pushed per phase for CI, merged once at the end. A worktree cannot emit receipts, so
+the live runs, gate approvals and vetting stamps of Phases 06-10 are batched after that merge, from the main clone.
+
+**Phase 07 (code):** `cloudflare-zone` adapter + candidate row + contract arm (13 scenarios) on `feat/launch-c2-phases`;
+ADR-1766 amended (gate 1 is asked before any probe; RDAP added for the slot's "registered" criterion). Live part waits
+for the merge: the owner deletes the apex/www A+AAAA records, `apply domain --provider cloudflare-zone --vet`, gate-1
+approval, vetting stamp, then `dns` / `tls` / `email-transactional` / `frontend`.
+
 **Still owed from the Phase 06 DoD:** key probes · legal dry-run · day-1 `required_when` count (34 expected) + the
 `verify --all` pair · the `apply --all` live transcript · two-surface attack evidence is in place.
 

@@ -27,6 +27,30 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  # ADR-1766: a real venture's owner-bought domain. Read-only; gate 1 is the owner's attestation. Vetted only through
+  # a live verify on the first real venture (myfitfolio), a scout record and the owner's decision (ADR-1705).
+  - id: cloudflare-zone
+    slot: domain
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - CLOUDFLARE_API_TOKEN
+    hosts:
+      - api.cloudflare.com
+      - rdap.verisign.com
+    credentials:
+      scope: "Zone:Read on the venture's zone; no write call exists in the adapter"
+    adapter: providers/domain/cloudflare-zone.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
   - id: cloudflare-dns
     slot: dns
     status: vetted

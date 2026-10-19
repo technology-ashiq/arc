@@ -1,7 +1,12 @@
 // In-memory Cloudflare: one or more zones, a DNS record store, and the two DoH resolvers answering from that store.
 // It replaces only the transport (globalThis.fetch); the adapter and ctx.fetch's host guard run as they do for real.
 // A proxied record is answered as A records, the way Cloudflare's edge flattens it -- so a grey-cloud check is real.
-export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" }], token = "cf-token-0123456789abcdef", seed = [] } = {}) {
+// A zone carries `status` and `name_servers` (the zones API's own fields); the resolvers answer a zone apex's NS query
+// with `publicNs[name]` when given (a delegation that disagrees), else the zone's own nameservers. `rdap[name]` is the
+// .com/.net registry's answer for a domain (status 404 when absent), for the domain slot's zone check (ADR-1766).
+const NS = ["meera.ns.cloudflare.com", "noel.ns.cloudflare.com"];
+export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" }], token = "cf-token-0123456789abcdef", seed = [], publicNs = {}, rdap = {} } = {}) {
+  zones = zones.map((z) => ({ status: "active", name_servers: NS, ...z }));
   const records = seed.map((r, i) => ({ id: `seed-${i + 1}`, ...r }));
   const calls = [];
   let n = 0;
@@ -12,8 +17,19 @@ export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" 
     const url = new URL(String(input));
     const method = String(init.method || "GET").toUpperCase();
     calls.push(`${method} ${url.hostname}${url.pathname}${url.search}`);
+    if (url.hostname === "rdap.verisign.com") {
+      const name = decodeURIComponent(url.pathname.split("/").pop());
+      const r = rdap[name];
+      if (!r) return new Response(JSON.stringify({ errorCode: 404, title: "Not Found" }), { status: 404 });
+      return new Response(JSON.stringify(r), { status: 200, headers: { "content-type": "application/rdap+json" } });
+    }
     if (url.hostname === "dns.google" || url.hostname === "cloudflare-dns.com") {
       const name = url.searchParams.get("name");
+      if ((url.searchParams.get("type") || "A") === "NS") {
+        const z = zones.find((x) => x.name === name);
+        const ns = publicNs[name] || (z && z.status === "active" ? z.name_servers : []);
+        return json(200, { Status: 0, Answer: ns.map((d) => ({ name: `${name}.`, type: 2, TTL: 3600, data: `${d}.` })) });
+      }
       const hits = records.filter((r) => r.name === name);
       const answer = hits.flatMap((r) => (r.proxied
         ? [{ name: `${name}.`, type: 1, TTL: 300, data: "104.21.0.1" }]

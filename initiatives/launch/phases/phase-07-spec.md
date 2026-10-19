@@ -7,12 +7,13 @@
 
 ## Exit criteria (Definition of Done)
 - [ ] `products/launch/providers/domain/cloudflare-zone.mjs`: four functions, GET-only, `hosts[]` = `api.cloudflare.com`,
-      `dns.google`, `cloudflare-dns.com` (ADR-1766)
+      `rdap.verisign.com`; DoH through `ctx.probe` (ADR-1766, amended)
 - [ ] a `cloudflare-zone` row in `launch.providers.yaml` (`status: candidate` until the owner's vetting stamp)
 - [ ] contract fixtures: active → verified; pending → `failed(zone:pending)`; nameserver mismatch →
-      `failed(zone:ns-mismatch)`; any non-GET → refused; the `approval.requested` payload names the zone id and nameservers
+      `failed(zone:ns-mismatch)`; RDAP unregistered / hold / expiring / no-expiry / unserved TLD each not ok; every request a
+      GET; the verify evidence names the zone id, nameservers and RDAP facts (ADR-1766 amendment)
 - [ ] `/arc-capability --vet` scout record for the row; live verify on `myfitfolio`; the owner's `decision.recorded`; digest pinned
-- [ ] `products/launch/manifest.json` has a line for `cloudflare-zone.mjs`; `tree-manifest.txt` (untracked filtered)
+- [ ] no manifest line needed (`products/launch/manifest.json` lists scripts + files, not provider adapters; checked 2026-10-20); `tree-manifest.txt` (untracked filtered)
       and `docs/wiki` regenerated in the same PR
 - [ ] gate 1 approved by the owner; `domain`, `dns`, `tls`, `email-transactional` verified on `myfitfolio` from the main clone
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)
