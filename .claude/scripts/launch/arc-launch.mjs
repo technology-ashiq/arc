@@ -20,7 +20,7 @@ import { emptyState, loadState, saveState, setSlot } from "./lib/state.mjs";
 import { apply, verifySlots, resolvePaths, emit, EXIT } from "./lib/runner.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
-import { planLines, statusLines, teardownPlan } from "./lib/board.mjs";
+import { planLines, statusLines, teardownPlan, clean } from "./lib/board.mjs";
 import { topoOrder } from "./lib/dag.mjs";
 
 const VALUE_FLAGS = {
@@ -173,13 +173,18 @@ async function cmdWalk(o) {
       const now = ((loadState(P.stateDir, profile.slug) || { slots: {} }).slots[id] || {}).state || "pending";
       // An exit 0 that left the slot where it was would be picked again forever; it is a stop, not a step.
       if (!["verified", "skipped", "absent"].includes(now)) { console.log(`stopped at ${id}: exit 0 but the slot is still ${now}`); return EXIT.FAILED; }
-      if (now !== "skipped") applied++;
+      // Only a slot this step verified was applied; a skip or a rehearsal's refusal-path absent is not (attack 74ba8f0 B4).
+      if (now === "verified") applied++;
       if (o.next) return done();
       continue;
     }
-    // A failed slot is retried once, at once; the second failure stops the walk and names itself.
-    if (code === EXIT.FAILED && !retried.has(id)) { retried.add(id); continue; }
-    console.log(`stopped at ${id}: exit ${code} ${last}`);
+    // A failed slot is retried once, at once; the second failure stops the walk and names itself. A refusal recorded
+    // as the failure (`refused:` -- a rejected sensitive action, an undeclared key) is the owner's or the row's to
+    // change, and a retry would only repeat it (attack 74ba8f0 B5).
+    const why = String(((loadState(P.stateDir, profile.slug) || { slots: {} }).slots[id] || {}).reason || "");
+    if (code === EXIT.FAILED && !retried.has(id) && !why.startsWith("refused:")) { retried.add(id); continue; }
+    // The last line can carry an adapter's words; it is cleaned like every other adapter string (attack 74ba8f0 B6).
+    console.log(`stopped at ${id}: exit ${code} ${clean(last)}`);
     return code;
   }
 }

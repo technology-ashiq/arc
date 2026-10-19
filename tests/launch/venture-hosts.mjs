@@ -71,10 +71,13 @@ await refuses("unassigned", ROW, profile("unassigned"), "https://unassigned/", "
 await refuses("no-domain", ROW, profile(undefined), "https://myfitfolio.test/", "VENTURE_HOST_UNRESOLVED", LITS);
 await refuses("suffix-vercel-app", ROW, profile("vercel.app"), "https://vercel.app/", "VENTURE_HOST_UNRESOLVED", LITS);
 await refuses("suffix-co-uk", ROW, profile("co.uk"), "https://co.uk/", "VENTURE_HOST_UNRESOLVED", LITS);
+await refuses("suffix-azurewebsites", ROW, profile("azurewebsites.net"), "https://azurewebsites.net/", "VENTURE_HOST_UNRESOLVED", LITS);
 await refuses("trailing-dot", ROW, profile("myfitfolio.test."), "https://myfitfolio.test/", "VENTURE_HOST_UNRESOLVED", LITS);
 await refuses("collides-github", ROW, profile("github.com"), "https://github.com/", "VENTURE_HOST_COLLIDES", LITS);
 await refuses("collides-mixed-case", ROW, profile("GitHub.COM"), "https://github.com/", "VENTURE_HOST_COLLIDES", LITS);
-await refuses("collides-fixture-row", ROW, profile("myfitfolio.test"), "https://myfitfolio.test/", "VENTURE_HOST_COLLIDES", [...LITS, "myfitfolio.test"]);
+await refuses("collides-fixture-row", ROW, profile("myfitfolio.test"), "https://myfitfolio.test/", "VENTURE_HOST_COLLIDES", [...LITS, "MyFitFolio.TEST"]);
+// No registry handed in: the row's own vendor literal still collides (attack 74ba8f0 B2).
+await refuses("collides-own-row-no-registry", { id: "fixture-row", hosts: ["@venture", "api.github.com"] }, profile("github.com"), "https://github.com/", "VENTURE_HOST_COLLIDES", undefined);
 
 // The 19 rows: derived from the registry, resolved for arc-sandbox through the real loader into ctx.fetch, and
 // compared element for element with the Cycle 1 literals.

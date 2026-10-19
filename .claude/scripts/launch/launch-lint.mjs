@@ -9,7 +9,7 @@
 // owner-born (ADR-1702). No word for a fallback provider anywhere (ADR-1703). Adapters are four functions that import
 // no package and whose verify asks the outside world (ADR-1704, 1709, 1715). The DAG is acyclic, every edge
 // resolves, and no core slot depends on a non-core one (ADR-1717). A vetted adapter's digest is pinned (ADR-1719).
-import { readFileSync, existsSync, readdirSync, statSync, mkdtempSync, cpSync, writeFileSync, rmSync, mkdirSync, realpathSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync, lstatSync, mkdtempSync, cpSync, writeFileSync, rmSync, mkdirSync, realpathSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -127,6 +127,9 @@ export function lint({ catalog = PATHS.catalog, registry = PATHS.registry, provi
   const probeRow = { hosts: [VENTURE_TOKEN] };
   for (const file of existsSync(venturesDir) ? readdirSync(venturesDir).filter((f) => f.endsWith(".venture.yaml")).sort() : []) {
     const slug = file.slice(0, -".venture.yaml".length);
+    // A directory or a link under that name is not a profile anyone wrote; say so instead of loading through it
+    // (attack 74ba8f0 B7).
+    if (!lstatSync(join(venturesDir, file)).isFile()) { add("venture-host", slug, `${file} is not a regular file`); continue; }
     let profile;
     try { profile = loadProfile(slug, venturesDir); } catch (e) { add("venture-host", slug, `profile does not load: ${e.message}`); continue; }
     try { resolveHosts(probeRow, profile, lits); } catch (e) {

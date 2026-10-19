@@ -9,6 +9,7 @@ import { hostname } from "node:os";
 import { ROOT, PATHS, LaunchError, loadCatalog, loadRegistry, loadProfile, resolveBoard } from "./catalog.mjs";
 import { adapterDigest } from "./scan.mjs";
 import { clean } from "./board.mjs";
+import { literalHosts } from "./ctx.mjs";
 import { emptyState, loadState, saveState, slotRow, setSlot, receiptKey } from "./state.mjs";
 import { recordSimulated } from "./simulated.mjs";
 import { withLock, spineRoot, eventsDir } from "../../hq/lib/spine-io.mjs";
@@ -341,7 +342,7 @@ function probeOne(P, slug, slot, rows, profile, ventureRoot, log) {
   const adapterPath = checkAdapter(P, prow);
   // A stale answer must never be read as this probe's: clear it first, so a killed probe leaves "no answer" (B3).
   saveState(P.stateDir, setSlot(loadState(P.stateDir, slug), id, { last_verify: null }));
-  const args = { ...P, mode: "verify", venture: slug, slot: id, provider: prow.id, row: prow, adapterPath, ventureRoot, attempt: r0.attempt || 0, timeout: slot.timeout };
+  const args = { ...P, mode: "verify", venture: slug, slot: id, provider: prow.id, row: prow, adapterPath, ventureRoot, attempt: r0.attempt || 0, timeout: slot.timeout, registryHosts: literalHosts(loadRegistry(P.registry)) };
   const argsFile = join(P.stateDir, `.${slug}.worker-args.json`);
   writeFileSync(argsFile, JSON.stringify(args));
   let r;
@@ -381,7 +382,9 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       }
       const attempt = (prev.attempt || 0) + 1;
       s = saveState(P.stateDir, setSlot(s, slot.id, { state: "applying", provider: prow.id, attempt, reason: null, receipt: null }));
-      const args = { ...P, venture: slug, slot: slot.id, provider: prow.id, row: prow, adapterPath: resolve(dirname(P.registry), prow.adapter), ventureRoot, attempt, timeout: slot.timeout };
+      const args = { ...P, venture: slug, slot: slot.id, provider: prow.id, row: prow, adapterPath: resolve(dirname(P.registry), prow.adapter), ventureRoot, attempt, timeout: slot.timeout,
+        // Every row's literal hosts, read by the PARENT, so the worker never re-reads the registry (attack 74ba8f0 B3).
+        registryHosts: literalHosts(loadRegistry(P.registry)) };
       // The args travel as a file, not one argv element: Windows caps a command line near 32k and re-parses quotes
       // in it, so a long or quote-bearing path would reach the worker cut or changed (attack 06cbc03 B4).
       const argsFile = join(P.stateDir, `.${slug}.worker-args.json`);

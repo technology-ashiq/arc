@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:17-31",
+      "breaking_input": "A profile with a brand.domain of '0' or '1' (a single numeric label) — BARE_HOST rejects it; a domain of 'a.b' works; but a domain like 'com' (single label, <4 chars) is rejected. The real attack: brand.domain 'co.uk' passes BARE_HOST (it has two labels and length >= 4) but is in CC_SECOND_LEVEL; however a domain like 'com.au' is rejected by CC_SECOND_LEVEL. What about 's3.amazonaws.com'? It's not in MULTI_TENANT, not CC_SECOND_LEVEL; a venture with brand.domain 's3.amazonaws.com' resolves fine, and hostAllowed accepts any subdomain, so an adapter can reach any tenant's bucket under that shared service — not in the deny list.",
+      "why": "The shared-suffix deny list (MULTI_TENANT + CC_SECOND_LEVEL) is a handful of hand-picked names; many other public multi-tenant suffixes (amazonaws.com, azurewebsites.net, cloudfront.net, firebaseapp.com, glitch.me, gitlab.io, surge.sh, ...) aren't covered, so a venture can claim such a domain and then every subdomain of it is allowed, handing the adapter every tenant's data. The comment even admits it's 'not a full public-suffix list'.",
+      "fix": "Use a real public-suffix list (or at least treat any two-label domain whose TLD is a known infrastructure TLD like .amazonaws.com / .azurewebsites.net / .cloudfront.net as a shared suffix); fail closed on any domain you cannot positively confirm is a registrable single-owner domain.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/public-suffixes.mjs:9",
+      "breaking_input": "brand.domain = 'github.io' — a venture whose own domain is a GitHub Pages subdomain is NOT in MULTI_TENANT (only 'github.io' IS there, but what about 'githubusercontent.com', 'raw.githubusercontent.com', 'amazonaws.com', 'azurewebsites.net'?). Concretely set profile.brand.domain = 'azurewebsites.net' and a row with hosts ['@venture']; ctx.fetch allows https://victim.azurewebsites.net — an attacker's venture can reach and exfiltrate any Azure-hosted tenant.",
+      "why": "The shared-suffix set is closure-incomplete; a domain like 'azurewebsites.net' is a public multi-tenant suffix and here is allowed as the venture's own domain, so the adapter's fetch can reach any subdomain of it.",
+      "fix": "Replace the hand-picked suffix list with a maintained public-suffix list (or at least reject any domain whose registrable root isn't under a verified single-owner registrable TLD).",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:25-29",
+      "breaking_input": "A profile whose brand.domain is, e.g., 'Evil-Example.com' — BARE_HOST allows uppercase? No: BARE_HOST matches only [a-z0-9]. But resolveHosts lowercases the domain first (d = raw.toLowerCase()), so an uppercase input 'GITHUB.COM' becomes 'github.com' and collides. However the attack is a colliding domain that is a subdomain of a registry host without being the subdomain of that host's registered root: registry host is 'api.github.com', venture domain is 'github.com' → d.endsWith('.api.github.com') false, h.endsWith('.github.com') true → collides. Good. Now try registry host 'api.vercel.com'; venture domain 'vercel.com' → d.endsWith('.api.vercel.com') false, h.endsWith('.vercel.com') true → collides. The gap: registry host with a SINGLE label like 'localhost'? BARE_HOST rejects. What about registry host 'supabase.co' (a CC second level) and venture domain 'supabase.co'? d == h → collides. Try a registry host that is itself a shared suffix but not in the deny list, e.g. a row with hosts ['s3.amazonaws.com'] and a venture with brand.domain 'amazonaws.com' — h.endsWith('.amazonaws.com') true → collides. Yet the real gap is the deny-list incompleteness itself, already L1/L2. Here I flag a different hole: resolveHosts compares `h.endsWith('.'+d) || d.endsWith('.'+h)', which is a suffix match, so a venture domain that is a SUBLIST of the host's suffix (e.g. registry host 'evil.example.com', venture domain 'example.com' → d.endsWith('.evil.example.com') false, h.endsWith('.example.com') true → collides. But what about registry host 'a.com' and venture domain 'b.a.com'? d.endsWith('.a.com') true → collides. The symmetric check is right. The real bypass: a registry host with a TRAILING dot? Hosts are linted to BARE_HOST (no trailing dot), so no. The bypass is the deny list, already covered. I'll instead report that `endsWith` on a host means a registry host that is a suffix of the venture domain (e.g. registry 'com' would break everything, but BARE_HOST rejects 'com'). So no new logic hole; I'll fold into L1/L2. Instead I'll report the `other-venture` test: the test refuses 'sandbox.automemory.ai' because it's in LITS (the real registry literal). But LITS is built from the CURRENT registry at worker creation; an attacker who can edit the registry later can widen LITS? The comment says 'A registry edited after the parent's check can only change which hosts collide, never widen this row's own list' — but resolveHosts FAILS CLOSED on a collision, so a larger LITS can only ADD collisions (denials), not widen the fetch. So that's safe. The true bypass is the incomplete suffix list. I'll move on.",
+      "why": "The deny list is incomplete — covered by L1/L2; no new finding here.",
+      "fix": "See L1/L2",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:36-37,99-101",
+      "breaking_input": "A row that does NOT contain '@venture' but has a hosts[] entry like 'api.github.com' — resolveHosts returns the literal hosts unchanged. Then ctx.fetch guards by hostAllowed against those literals, correct. The bypass: a row whose hosts[] contains a LITERAL that is itself a shared suffix (e.g. 'supabase.co' IS in the row and also in MULTI_TENANT? MULTI_TENANT has 'supabase.co', yes). But what about a literal 'amazonaws.com' or 'azurewebsites.net'? The lint (BARE_HOST) accepts them; resolveHosts leaves them; an adapter can fetch any tenant. The registry already has 'supabase.co' in rows, and 'supabase.co' is in MULTI_TENANT — yet it's allowed as a literal because a literal row host is never checked against isSharedSuffix. So an adapter with hosts ['supabase.co'] can hit ANY Supabase project's API region — that's the design (they fetch Supabase Management API? No, the hosts are for the adapter's calls; 'supabase.co' is the tenant-facing domain). Still, the lint and resolveHosts only block shared suffixes for @venture, not for literal hosts. An attacker who controls a provider row can name a shared suffix and reach arbitrary tenants.",
+      "why": "resolveHosts applies the shared-suffix rejection only when @venture is present; a literal host entry that is a shared-suffix multi-tenant domain (supabase.co, vercel.app, ...) passes through untouched, and hostAllowed then admits every subdomain of it.",
+      "fix": "In resolveHosts, reject any literal host that isSharedSuffix(h) too (populate the lint to the same effect), not just the resolved brand.domain.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:24,33-34,78-79",
+      "breaking_input": "profile.brand.domain = 'myfitfolio.test.' (trailing dot) — BARE_HOST rejects trailing dot → unresolved, good. But what about 'myfitfolio.test' with a trailing SPACE or tab? BARE_HOST has no space? It uses [a-z0-9-] and dots, no space, so ' myfitfolio.test' is rejected. What about a unicode domain like 'москва.рф'? BARE_HOST allows only [a-z0-9], so it's rejected — that's a DoS (rejects valid internationalized domains) but not a security hole. The real bypass: an uppercase registry host. literalHosts lowercases all literals, and resolveHosts lowercases the brand domain, so mixed-case collisions are caught. However launch-lint's `resolveHosts` call in launch-lint.mjs passes `lits` (lowercase) and `probeRow` with hosts ['@venture'], good. What about the lint's own check `h !== VENTURE_TOKEN && (typeof h !== 'string' || !BARE_HOST.test(h) || CC_SECOND_LEVEL.test(h))` — CC_SECOND_LEVEL is a regex for 'co.uk' etc. It does NOT check MULTI_TENANT for literal hosts — a literal 'vercel.app' passes lint (it's a valid bare host, not CC second level). That's the same L4 hole: the lint lets a shared suffix through as a literal host. Flag as twin of L4? I'll keep L4 as the core.",
+      "why": "Same root as L4.",
+      "fix": "Lint and resolveHosts must reject any literal host that isSharedSuffix.",
+      "twin_of": "L4"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:63-73",
+      "breaking_input": "hostAllowed allows a host whose domain is a SUFFIX of the literal, e.g. literal 'api.github.com', fetch URL 'https://github.com/api' — hostAllowed: h='github.com/api' not a host; the URL host is 'github.com'; a='api.github.com', h.endsWith('.api.github.com') false → refused. Correct. The real gap: redirects. ctx.fetch follows redirects by default (no redirect:'manual'), so an allowed URL 'https://myfitfolio.test/' can 302 to 'https://evil.com/' and the adapter's fetch follows it, reaching a host nobody checked. That is the exact pattern 'ctx.fetch checked only the first URL and let fetch follow redirects' in defect_patterns — and THE FIX DID NOT ADD redirect:'manual'. The new guardedFetch still uses the default fetch, so a redirect endpoint the adapter controls (or a venture domain with an open redirect) lets the adapter exfiltrate to any host.",
+      "why": "guardedFetch validates only the initial URL host; fetch follows redirects, so after the first hop the request can land on an unapproved host. The prior defect's fix (this diff) did not set redirect:'manual' or re-check each hop.",
+      "fix": "Pass redirect:'manual' and only follow a redirect if the Location host is also allowed; or abort on any redirect.",
+      "twin_of": "ctx.fetch checked only the first URL and let `fetch` follow redirects"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:63-73",
+      "breaking_input": "A fetch to an allowed host with a userinfo: 'https://myfitfolio.test@evil.com/' — new URL parses host as 'evil.com', not 'myfitfolio.test', so hostAllowed refuses 'evil.com' → good. What about 'https://myfitfolio.test.evil.com'? host 'myfitfolio.test.evil.com' endsWith('.evil.com')? no, endsWith('.myfitfolio.test')? no → refused. The bypass via a dot: 'https://myfitfolio.test./' — URL.hostname strips the trailing dot? In Node, new URL('https://myfitfolio.test./').hostname is 'myfitfolio.test.' with trailing dot, hostAllowed: h.endsWith('.myfitfolio.test.')? The literal is 'myfitfolio.test' (no dot), so 'myfitfolio.test.'.endsWith('.myfitfolio.test') is FALSE (because of the trailing dot). Wait: h='myfitfolio.test.', a='myfitfolio.test', h.endsWith('.'+a) = 'myfitfolio.test.'.endsWith('.myfitfolio.test') → false. So the trailing dot breaks the allowlist — a venture domain 'myfitfolio.test.' (trailing dot) is REFUSED by resolveHosts (BARE_HOST rejects), so the @venture path is safe. But a row with a literal host 'myfitfolio.test.'? Lint rejects trailing dot. So no. The redirection hole (L6) is the real one.",
+      "why": "Covered by L6",
+      "fix": "See L6",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:70-71",
+      "breaking_input": "ctx.fetch guards on rowHosts — but the row's adapter can also use ctx.probe.arc or ctx.write to exfiltrate? ctx.probe.arc is out of scope. The fetch guard itself is OK for the first hop. Another gap: the adapter can call global fetch() directly (not ctx.fetch) — the pattern 'node: built-ins were waved through' is a prior defect; here the worker runs the adapter in the same process, so an adapter that ignores ctx and calls global fetch reaches any host. That was previously fixed (normalizeAdapter/scan) but the diff doesn't show the runner enforcing a no-global-fetch sandbox; the worker.mjs just imports the adapter. So an attacker who controls a provider adapter can bypass ctx entirely.",
+      "why": "ctx.fetch is the only guard, but adapters run with full Node access; nothing forces the adapter to use ctx.fetch. The hand-rolled sandbox in scan.mjs (not shown in this diff) may block node: imports but a plain 'fetch(...)' call is still available unless the globals are replaced.",
+      "fix": "Run adapters in a vm/worker sandbox that replaces global fetch, process.env, etc., or audit adapters statically and refuse any that don't route all network through ctx.fetch.",
+      "twin_of": "`node:` built-ins were waved through, so an adapter could import `node:fs`/`node:child_process`/`node:https`, call bare `fetch()` or read `process.env`"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:84-87",
+      "breaking_input": "ctx.env is Object.freeze({ ...env }) — shallow freeze. An env value that is an object (e.g. a token object) is still mutable, and adapters can read process.env directly (covered by L8). Not a new hole beyond L8.",
+      "why": "Not a fetch boundary",
+      "fix": "N/A",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "high",
+      "where": ".claude/scripts/launch/arc-launch.mjs:154-174",
+      "breaking_input": "cmdWalk: the retry loop for a FAILED slot retries once 'at once' — but if the retry ALSO fails, it stops. However the loop for a slot that returns EXIT.OK but leaves the slot NOT in a terminal state treats it as a stop with EXIT.FAILED. The bug: `retried` set is per-walk, but a FAILED slot that later becomes verified (e.g. a re-run of the same walk wouldn't retry again). The real hole: `o.next` makes the walk stop after ONE successful apply, but the check for `if (o.next) return done()` happens after a successful apply; if the FIRST applied slot is the only one, fine. The attack: a slot that returns EXIT.OK and sets state to 'absent' on a REHEARSAL — `now === 'absent'` is in the terminal set, so `applied` isn't incremented and the walk continues; if o.next, it returns done() with applied possibly 0. Not security. The real issue: `retried` keyed on slot id, but a slot that gets verified on an --next path would not be retried on a later --all — the walk stops at exit 0 on the second failure, so no infinite loop. The subtle bug: an EXIT.FAILED slot is retried, but the retry may take a long time and the gap `retried.has(id)` is scoped to one `cmdWalk` call; a NEW --all run retries it again, which is intended. I don't see a fetch-boundary bug here.",
+      "why": "Walk logic is new; the stop conditions look sound.",
+      "fix": "N/A",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "high",
+      "where": "tests/launch/venture-hosts.mjs:60-84",
+      "breaking_input": "The 'collides-fixture-row' case passes [...LITS, 'myfitfolio.test'] to assert a collision, but the real vulnerability is that the test only checks collisions against LITS which is lowercased; the resolver collides on case-insensitive domain, good. A missing test: a venture domain that is a SUBDOMAIN of a registry host but the registry host itself is a shared suffix not in MULTI_TENANT (e.g. registry 'api.azurewebsites.net' and venture 'azurewebsites.net' — d.endsWith('.api.azurewebsites.net') false, h.endsWith('.azurewebsites.net') true → collides, good). The incomplete deny-list hole (L1/L2/L4) is the real finding; the tests don't cover it.",
+      "why": "Tests mirror the implementation's blind spot.",
+      "fix": "Add a MULTI_TENANT member like 'azurewebsites.net' to the deny list and a test that a venture claiming it is refused.",
+      "twin_of": null
+    },
+    {
+      "id": "L12",
+      "severity": "high",
+      "where": ".claude/scripts/launch/launch-lint.mjs:123-134 and lib/ctx.mjs",
+      "breaking_input": "launch-lint's venture-host rule calls resolveHosts(probeRow, profile, lits) where lits = literalHosts(rows). It ignores a venture whose brand.domain is a shared suffix ONLY if the venture is a rehearsal and the reason is not VENTURE_HOST_COLLIDES — but for a REAL it adds on any error. The bug: a rehearsal with brand.domain 'github.com' (a registry literal) — the rule catches it (COLLIDES), but a rehearsal with 'azurewebsites.net' (not in deny list) passes silently — the same incomplete list. Also the lint TRIES to `resolveHosts` and catches errors; for a rehearsal with a domain that is a shared suffix but NOT in the deny list, it resolves fine.",
+      "why": "Same incomplete-suffix-list root",
+      "fix": "See L1",
+      "twin_of": "L1"
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:29",
+      "breaking_input": "resolveHosts rejects a brand.domain of 'unassigned' ONLY by exact string. A domain of 'Unassigned' or 'unassigned.' (uppercase/trailing dot) is not caught by the exact check; BARE_HOST rejects 'unassigned.' (trailing dot) but rejects 'unassigned' (single label, <4? 'unassigned' is 10 chars but single label, BARE_HOST requires at least one dot → fails). 'Unassigned' → BARE_HOST test on the LOWERED 'unassigned' also fails. So no bypass. What about 'unassigned' with a leading space? BARE_HOST rejects. Fine.",
+      "why": "No bypass",
+      "fix": "N/A",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:96-98",
+      "breaking_input": "makeCtx sets `unresolved` but also passes `rowHosts` empty; the fetch throws the refused error. An adapter that catches the error and proceeds to call ctx.write or ctx.probe can still write — but the domain was refused, so the adapter can't exfiltrate the venture's own site. Not a critical hole.",
+      "why": "Covered by L6/L8",
+      "fix": "N/A",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": "tests/launch/venture-hosts.mjs:47-49",
+      "breaking_input": "The `attempt` helper records `reached` as calls.length > before, but if the fetch throws BEFORE making a network call (e.g. hostAllowed refusal), `reached` is false. Good. But the redirect case (L6) is not tested — the only fetch URL is a single one; no test for a 30x.",
+      "why": "Missing redirect test",
+      "fix": "Add a test where the adapter's fetch URL returns a 302 to an unapproved host and assert it does not reach it.",
+      "twin_of": null
+    }
+  ]
+}

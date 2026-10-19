@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:resolveHosts",
+      "breaking_input": "brand.domain of a bare multi-tenant child like `evil.vercel.app`, `foo.github.io`, `x.pages.dev`, `x.herokuapp.com`, or `foo.co.uk`/`foo.com.au`. BARE_HOST accepts it; isSharedSuffix only matches the exact suffix (MULTI_TENANT.includes(n) or CC_SECOND_LEVEL on the whole name), and `foo.co.uk` does not match the two-label CC_SECOND_LEVEL regex.",
+      "why": "The shared-suffix guard only blocks the suffix itself. A venture domain that is a tenant under a shared suffix is a legitimate registrable name there, so this is arguably intended. But `foo.co.uk` and every `<name>.<second-level>.<cc>` fall through because CC_SECOND_LEVEL is anchored to exactly two labels. A domain like `co.uk.evil.com` is fine, but `a.co.uk` resolves and hostAllowed then admits every subdomain of it. The ccTLD second-level list also omits `gov.uk`-style cases (`org.uk` is covered, `sch.uk`, `ltd.uk`, `plc.uk`, `me.uk`, `nom.*` are not), so `me.uk` or `ltd.uk` resolve as a venture domain and admit every tenant under it.",
+      "fix": "Check the domain against a list of suffixes with endsWith, extend the second-level list (me, ltd, plc, sch, nom, ne, or, go, gob, mil), and add the missing multi-tenant suffixes (vercel.dev, now.sh, onrender.com, fly.dev, netlify.com, azurewebsites.net, cloudfront.net, amazonaws.com, appspot.com, firebaseapp.com, ngrok.io, trycloudflare.com).",
+      "twin_of": "The shared-file path dropped the encoding guard the owned-file path had"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:resolveHosts (collision check)",
+      "breaking_input": "registryHosts is [] or stale because a caller omits it: any makeCtx call without registryHosts, which is the default `[]`, such as launch-lint's own probe path or a future caller. With brand.domain `github.com`, the collision check never runs.",
+      "why": "The collision protection is opt-in by argument with an empty default. A caller that forgets registryHosts silently loses the vendor-collision guard, and the failure is open rather than closed. The worker passes it, but makeCtx itself defaults to no protection.",
+      "fix": "Make registryHosts required in makeCtx when any row uses @venture (throw if undefined), or have makeCtx load the registry itself.",
+      "twin_of": "every second code path through the same file"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:67-71",
+      "breaking_input": "A registry file that fails to load or parse in the worker (a mid-run edit, a CRLF or encoding problem), or one that is read a second time after the parent hashed it.",
+      "why": "The worker calls loadRegistry(a.registry) a second time to build registryHosts, a second read of a file the parent already validated. The comment concedes the registry can change in between. Only the collision set can change, but a worker that throws here, outside the try that builds the ctx, dies before the adapter runs, so the parent sees an unclassified worker death instead of a named refusal. A registry edited to drop the vendor row also removes the collision check.",
+      "fix": "Pass the literal hosts from the parent as part of the worker's arguments (they are already validated and digested there), and do not re-read the registry in the worker.",
+      "twin_of": "The parent hashed the adapter file and the worker imported a second read of it, and re-read the registry too"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk",
+      "breaking_input": "A walk over a core slot whose apply() returns EXIT.OK after the lock was lost, or a stuck board: `apply --all` where a slot is in state `awaiting` and apply() exits 0 with state still `awaiting` (or `failed`, `running`).",
+      "why": "The post-OK re-read returns EXIT.FAILED when the state is not verified, skipped or absent. If an apply exits 0 and the slot is `absent` on a rehearsal, the walk counts it as applied. The next loop iteration skips an `absent` slot on a rehearsal, so the walk counts it as applied but never tells the owner that the slot was left absent. `applied++` also fires for `absent`, which is not applied.",
+      "fix": "Count `applied` only when now === \"verified\", and count absent separately.",
+      "twin_of": "Existence checked on one target set, the write covered another"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk retry",
+      "breaking_input": "A slot whose first apply fails with exit 1 after the worker was killed by its timeout; the walk retries immediately with `again: false`, while the runner's stale-lock window and provider-side resources from the first attempt are still settling.",
+      "why": "The walk retries a failed slot once, at once, with no delay and no check of why it failed. A failure caused by a sensitive or non-idempotent create (a half-made provider resource) is repeated, doubling the damage, and the second attempt is not subject to the --again guard, which exists to make a retry deliberate. A retry changes `attempt` and can create a second resource.",
+      "fix": "Retry only when the failure reason is classified as transient, or drop the automatic retry and stop at the first failure.",
+      "twin_of": "A first run adopted a same-named Neon project launch never made"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk output",
+      "breaking_input": "An adapter returns a reason with a newline or terminal escapes, and the walk prints `stopped at ${id}: exit ${code} ${last}` using the raw last log line.",
+      "why": "`last` is the last line passed to the log callback and printed without clean(). The lane's rule is that adapter-supplied strings are cleaned before they reach a terminal line. `log(e.message)` also prints a LaunchError message raw. A forged `stopped at` line or bidi override becomes possible.",
+      "fix": "Pass `last` and `e.message` through clean() from board.mjs before printing.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/launch/launch-lint.mjs:venture-host loop",
+      "breaking_input": "A venture file named `x.venture.yaml` that is a symlink or a directory, or a profile whose slug field differs from the file name.",
+      "why": "The lint derives the slug from the file name and loads by that slug, but never checks that it is a regular file, so a directory named `a.venture.yaml` throws inside loadProfile (caught and reported only as a generic finding). A profile with `honesty_class: real` and an unset domain is reported only if resolveHosts throws, but the lint also skips the case where the profile loads with a different slug, so the rule checks a different venture than the one the runner would select.",
+      "fix": "Use statSync to require a file, and assert profile.slug equals the file-derived slug.",
+      "twin_of": "The adapter path was data the runner trusted"
+    }
+  ]
+}

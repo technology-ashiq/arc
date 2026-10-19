@@ -4,9 +4,9 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { normalizeAdapter, digestOf } from "./scan.mjs";
-import { loadCatalog, loadRegistry, loadProfile, resolveBoard } from "./catalog.mjs";
+import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
-import { makeCtx, literalHosts } from "./ctx.mjs";
+import { makeCtx } from "./ctx.mjs";
 import { clean } from "./board.mjs";
 import { makeArcProbe } from "./arc-probe.mjs";
 
@@ -66,9 +66,8 @@ const ctx = makeCtx({
   profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, upstream, tag: resourceTag(a.venture, a.slot, row.id),
   attempt: a.attempt, signal: ac.signal, env: Object.fromEntries(keys.map((k) => [k, kept[k]])), approvals: prior.approvals || [],
   arcProbe: makeArcProbe({ venture: a.venture, profile, catalog: a.catalog, stateDir: a.stateDir, root: a.ventureRoot }),
-  // Every row's literal hosts, so `@venture` can refuse a brand.domain that overlaps a vendor's host (ADR-1765). A
-  // registry edited after the parent's check can only change which hosts collide, never widen this row's own list.
-  registryHosts: literalHosts(loadRegistry(a.registry)),
+  // Every row's literal hosts, as the PARENT read them (ADR-1765); resolveHosts adds this row's own either way.
+  registryHosts: Array.isArray(a.registryHosts) ? a.registryHosts : [],
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
     if (cur.resources.some((r) => r.kind === resource.kind && r.id === resource.id)) return;

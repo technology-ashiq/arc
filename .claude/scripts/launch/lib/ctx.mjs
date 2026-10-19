@@ -30,7 +30,10 @@ export function resolveHosts(row, profile, registryHosts = []) {
   if (!d || d === "unassigned") throw unresolved("is not set");
   if (!BARE_HOST.test(d)) throw unresolved("is not a bare hostname of two or more labels");
   if (isSharedSuffix(d)) throw unresolved("is a shared suffix, not a registrable domain");
-  const hit = registryHosts.find((h) => h === d || h.endsWith(`.${d}`) || d.endsWith(`.${h}`));
+  // The row's own literals always count, so a caller that hands no registry still cannot pass a domain that overlaps
+  // this row's vendor host; every literal is folded, whoever built the list (attack 74ba8f0 B2, L11).
+  const against = [...literalHosts([row]), ...(Array.isArray(registryHosts) ? registryHosts : [])].map((h) => String(h).toLowerCase());
+  const hit = against.find((h) => h === d || h.endsWith(`.${d}`) || d.endsWith(`.${h}`));
   if (hit) throw refusal("HOST_REFUSED", `@venture collides: brand.domain ${d} overlaps the registry host ${hit} (VENTURE_HOST_COLLIDES)`, { reason: "VENTURE_HOST_COLLIDES" });
   const out = [];
   for (const h of hosts) { const v = h === VENTURE_TOKEN ? d : h; if (!out.includes(v)) out.push(v); }
