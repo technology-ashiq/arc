@@ -152,7 +152,7 @@ providers:
     hosts:
       - api.vercel.com
       - api.ssllabs.com
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "domain config read"
     adapter: providers/tls/vercel-managed-tls.mjs
@@ -223,7 +223,7 @@ providers:
       - VERCEL_TOKEN
       - PAGESPEED_API_KEY
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.github.com
       - api.vercel.com
       - www.googleapis.com
@@ -247,7 +247,7 @@ providers:
     env_keys:
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.github.com
     credentials:
       scope: "commits the zod health contract and route; probes the live site (ADR-1733)"
@@ -312,7 +312,7 @@ providers:
     env_keys:
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.github.com
     credentials:
       scope: "commits the typed schema and its test; reads CI for main head (ADR-1733)"
@@ -362,7 +362,7 @@ providers:
     hosts:
       - api.supabase.com
       - supabase.co
-      - sandbox.automemory.ai
+      - "@venture"
       - api.github.com
       - api.vercel.com
     credentials:
@@ -386,7 +386,7 @@ providers:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
@@ -411,7 +411,7 @@ providers:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
@@ -436,7 +436,7 @@ providers:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
@@ -529,7 +529,7 @@ providers:
       - GITHUB_TOKEN
     hosts:
       - api.razorpay.com
-      - sandbox.automemory.ai
+      - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
@@ -555,7 +555,7 @@ providers:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.supabase.com
       - api.github.com
     credentials:
@@ -579,7 +579,7 @@ providers:
       - RAZORPAY_WEBHOOK_SECRET
       - SUPABASE_ACCESS_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.supabase.com
     credentials:
       scope: "webhook signing secret and Supabase Management API: reads refund.processed rows webhooks-ledger stored (ADR-1740)"
@@ -599,7 +599,7 @@ providers:
     region: any
     payment_model: any
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "none -- probes the live site"
     adapter: providers/legal-pages/arc-legal.mjs
@@ -620,7 +620,7 @@ providers:
     env_keys:
       - GITHUB_TOKEN
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
       - api.github.com
       - observatory-api.mdn.mozilla.net
     credentials:
@@ -666,7 +666,7 @@ providers:
       - GITHUB_TOKEN
     hosts:
       - sentry.io
-      - sandbox.automemory.ai
+      - "@venture"
       - api.github.com
     credentials:
       scope: "Sentry project, client keys and issues read in one org; GitHub contents for the probe route (ADR-1747)"
@@ -749,7 +749,7 @@ providers:
     region: any
     payment_model: any
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/passport/venture-register.mjs
@@ -768,7 +768,7 @@ providers:
     region: any
     payment_model: any
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/ledger-source/ledger-source.mjs
@@ -787,7 +787,7 @@ providers:
     region: any
     payment_model: any
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/face-room/face-planned.mjs
@@ -806,7 +806,7 @@ providers:
     region: any
     payment_model: any
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "none -- arc installs itself and reads its own doctor through ctx.probe.arc (ADR-1751, ADR-1763)"
     adapter: providers/arc-harnesses/arc-checkout.mjs
@@ -825,7 +825,7 @@ providers:
     region: any
     payment_model: any
     hosts:
-      - sandbox.automemory.ai
+      - "@venture"
     credentials:
       scope: "none -- answered by arc's own organs through ctx.probe.arc (ADR-1751)"
     adapter: providers/teardown-plan/teardown-render.mjs

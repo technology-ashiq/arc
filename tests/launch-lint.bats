@@ -32,7 +32,7 @@ COV() { printf '%s' "$ARC_ROOT/.claude/scripts/launch/launch-coverage.mjs"; }
     [[ "$output" == *"RAN mutant $m"* ]] || { echo "mutant $m never ran"; echo "$output"; false; }
     [[ "$output" == *"REFUSED $m"* ]] || { echo "mutant $m was not refused"; echo "$output"; false; }
   done
-  [[ "$output" == *"13/13 mutants refused"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"18/18 mutants refused"* ]] || { echo "$output"; false; }
 }
 
 @test "launch-lint: a missing registry is a named refusal, never a clean pass" {

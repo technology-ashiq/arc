@@ -146,9 +146,9 @@ switch (scenario) {
     out.reported = state.length;
     break;
   case "host-refused": {
-    // A domain outside the row's hosts[]: ctx.fetch refuses before anything leaves, so the route is never reached.
+    // A venture whose domain is a shared suffix (ADR-1765): ctx.fetch refuses before anything leaves, so the route is never reached.
     await adapter.scaffold(ctxNow());
-    const v = await verifyQ({ domain: "pay.evil-example.com" });
+    const v = await verifyQ({ domain: "vercel.app" });
     out.verify = v.v;
     out.queued = v.queued.length;
     out.routeCalls = webhook.calls.length;

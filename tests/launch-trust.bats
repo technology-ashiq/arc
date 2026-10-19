@@ -134,3 +134,46 @@ provider_total() { node -e 'const fs=require("fs");const f=process.argv[1];conso
   [ "$(j 'o.results.flatMap((r) => r.sensitive).every((s) => s.endsWith(":APPROVAL_PENDING")) && o.results.flatMap((r) => r.sensitiveApproved).every((s) => s.endsWith(":allowed"))')" = "true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.results.flatMap((r) => r.sensitive).length >= 2')" = "true" ] || { echo "$DONE"; false; }
 }
+
+# ---------- @venture (ADR-1765, REQ-13): a row reaches the venture's own domain and nothing else ----------
+
+VH_SCRIPT="$ARC_ROOT/tests/launch/venture-hosts.mjs"
+vh_run() {
+  run node "$VH_SCRIPT" "$@"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [[ "$output" == *"RAN venture-hosts"* ]] || { echo "$output"; return 1; }
+  VH=$(printf '%s\n' "$output" | grep '^DONE ' | sed 's/^DONE //')
+  [ -n "$VH" ] || { echo "$output"; return 1; }
+}
+vh() { node -e 'const j=JSON.parse(process.argv[1]);console.log(eval(process.argv[2]))' "$VH" "$1"; }
+
+@test "launch-trust: @venture reaches the venture own brand.domain exactly through ctx.fetch" {
+  vh_run
+  [ "$(vh 'j.total')" -eq 19 ] || { echo "$VH"; false; }
+  local n; for n in own-domain own-domain-mixed-case; do
+    [ "$(vh "[j.cases[\"$n\"].ran, j.cases[\"$n\"].reached, j.cases[\"$n\"].pass].join(\" \")")" = "true true true" ] || { echo "$n: $VH"; false; }
+  done
+}
+
+@test "launch-trust: @venture refuses lookalikes, an IP, another venture, and an unresolved or colliding domain, each after the fetch RAN" {
+  vh_run
+  local n; for n in own-subdomain-refused suffix-ne-jp lookalike-prefix lookalike-suffix ip-literal other-venture unassigned no-domain suffix-vercel-app suffix-co-uk suffix-azurewebsites trailing-dot collides-github collides-mixed-case collides-fixture-row collides-own-row-no-registry; do
+    [ "$(vh "[j.cases[\"$n\"].ran, j.cases[\"$n\"].reached, j.cases[\"$n\"].code, j.cases[\"$n\"].pass].join(\" \")")" = "true false HOST_REFUSED true" ] || { echo "$n: $VH"; false; }
+  done
+  [ "$(vh 'j.cases.unassigned.reason + " " + j.cases["suffix-co-uk"].reason + " " + j.cases["collides-github"].reason')" = "VENTURE_HOST_UNRESOLVED VENTURE_HOST_UNRESOLVED VENTURE_HOST_COLLIDES" ] || { echo "$VH"; false; }
+  [ "$(vh 'j.failed.length')" -eq 0 ] || { echo "$VH"; false; }
+}
+
+@test "launch-trust: the 19 @venture rows resolve for arc-sandbox to exactly the Cycle 1 literals, in place" {
+  vh_run
+  [ "$(vh 'const c=j.cases["cycle1-equivalence"]; [c.ran, c.snapshot, c.token_rows, c.mismatched.length, c.unreached.length, c.pass].join(" ")')" = "true 19 19 0 0 true" ] || { echo "$VH"; false; }
+}
+
+@test "launch-trust: both resolver mutants turn the venture-hosts cases red" {
+  vh_run --mutant identity
+  [ "$(vh 'j.mutant + " " + j.total')" = "identity 19" ] || { echo "$VH"; false; }
+  [ "$(vh '["own-domain","cycle1-equivalence","collides-github"].every((n) => j.failed.includes(n))')" = "true" ] || { echo "$VH"; false; }
+  vh_run --mutant unlowered
+  [ "$(vh 'j.mutant + " " + j.total')" = "unlowered 19" ] || { echo "$VH"; false; }
+  [ "$(vh '["own-domain-mixed-case","collides-mixed-case"].every((n) => j.failed.includes(n))')" = "true" ] || { echo "$VH"; false; }
+}

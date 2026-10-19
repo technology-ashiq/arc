@@ -451,7 +451,7 @@ switch (scenario) {
     // A venture domain outside the row's hosts[]: ctx.fetch refuses it, so verify answers not ok and no order is made.
     await toCheckout();
     await A[CO].mod.scaffold(ctxFor(CO));
-    out.verify = await A[CO].mod.verify(ctxFor(CO, [], { domain: "evil.example.com" }));
+    out.verify = await A[CO].mod.verify(ctxFor(CO, [], { domain: "vercel.app" }));
     out.creates = creates();
     break;
   }

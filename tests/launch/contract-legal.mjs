@@ -58,7 +58,7 @@ switch (scenario) {
     out.verify = await adapter.verify(ctxNow());
     break;
   case "host-refused":
-    out.verify = await adapter.verify(ctxNow("pay.evil-example.com"));
+    out.verify = await adapter.verify(ctxNow("vercel.app"));
     break;
   case "worker-absent":
   case "worker-absent-not-allowed": {

@@ -91,7 +91,7 @@ switch (scenario) {
     break;
   case "host-refused":
     await adapter.scaffold(ctxNow());
-    out.verify = await adapter.verify(ctxNow({ domain: "pay.evil-example.com" }));
+    out.verify = await adapter.verify(ctxNow({ domain: "vercel.app" }));
     out.siteCalls = live.calls.filter((c) => !c.includes("observatory")).length;
     break;
   default:

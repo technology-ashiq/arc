@@ -76,7 +76,7 @@ switch (scenario) {
     break;
   case "host-refused":
     await adapter.scaffold(ctxNow());
-    out.verify = await adapter.verify(ctxNow({ domain: "pay.evil-example.com" }));
+    out.verify = await adapter.verify(ctxNow({ domain: "vercel.app" }));
     out.routeCalls = sentry.calls.filter((c) => c.includes("route")).length;
     break;
   case "no-upstream":

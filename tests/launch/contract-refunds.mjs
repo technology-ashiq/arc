@@ -176,7 +176,7 @@ switch (scenario) {
     await charge();
     await adapter.scaffold(ctxNow());
     const before = webhook.calls.length;
-    const v = await verifyQ({ domain: "pay.evil-example.com" });
+    const v = await verifyQ({ domain: "vercel.app" });
     out.verify = v.v;
     out.queued = v.queued.length;
     out.routeCalls = webhook.calls.length - before;

@@ -66,6 +66,8 @@ const ctx = makeCtx({
   profile, board, slot, row, root: a.ventureRoot, resources: prior.resources, upstream, tag: resourceTag(a.venture, a.slot, row.id),
   attempt: a.attempt, signal: ac.signal, env: Object.fromEntries(keys.map((k) => [k, kept[k]])), approvals: prior.approvals || [],
   arcProbe: makeArcProbe({ venture: a.venture, profile, catalog: a.catalog, stateDir: a.stateDir, root: a.ventureRoot }),
+  // Every row's literal hosts, as the PARENT read them (ADR-1765); resolveHosts adds this row's own either way.
+  registryHosts: Array.isArray(a.registryHosts) ? a.registryHosts : [],
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
     if (cur.resources.some((r) => r.kind === resource.kind && r.id === resource.id)) return;

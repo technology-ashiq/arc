@@ -3,9 +3,41 @@
 // sensitive-action check that pauses for the owner. Every refusal is an Error with a .code an adapter cannot mistake.
 import { mkdirSync, writeFileSync, realpathSync, lstatSync } from "node:fs";
 import { dirname, resolve, relative, isAbsolute, join, sep } from "node:path";
+import { BARE_HOST, isSharedSuffix } from "./public-suffixes.mjs";
 
 export function refusal(code, message, extra = {}) {
   return Object.assign(new Error(message), { code }, extra);
+}
+
+export const VENTURE_TOKEN = "@venture";
+
+// Every literal host any registry row names, lower-cased; `@venture` is a token, not a host, so it never counts.
+export function literalHosts(rows) {
+  const all = (rows || []).flatMap((r) => (r && Array.isArray(r.hosts) ? r.hosts : []));
+  return [...new Set(all.filter((h) => typeof h === "string" && h !== VENTURE_TOKEN).map((h) => h.toLowerCase()))];
+}
+
+// A row's allow-list for one venture (ADR-1765). `@venture` is a whole entry and becomes the venture's own
+// `brand.domain`, in place, so the list keeps its order. It fails closed: a domain that is unset, not a bare host, or
+// a shared suffix resolves to nothing; one that equals, contains or sits under a host another row names would hand
+// that row's adapter a vendor's API, so it is refused as well. Both ride a HOST_REFUSED refusal.
+export function resolveHosts(row, profile, registryHosts = []) {
+  const hosts = (row && row.hosts) || [];
+  if (!hosts.includes(VENTURE_TOKEN)) return hosts;
+  const raw = profile && profile.brand ? profile.brand.domain : undefined;
+  const d = typeof raw === "string" ? raw.toLowerCase() : "";
+  const unresolved = (why) => refusal("HOST_REFUSED", `@venture does not resolve: brand.domain ${JSON.stringify(raw ?? null)} ${why} (VENTURE_HOST_UNRESOLVED)`, { reason: "VENTURE_HOST_UNRESOLVED" });
+  if (!d || d === "unassigned") throw unresolved("is not set");
+  if (!BARE_HOST.test(d)) throw unresolved("is not a bare hostname of two or more labels");
+  if (isSharedSuffix(d)) throw unresolved("is a shared suffix, not a registrable domain");
+  // The row's own literals always count, so a caller that hands no registry still cannot pass a domain that overlaps
+  // this row's vendor host; every literal is folded, whoever built the list (attack 74ba8f0 B2, L11).
+  const against = [...literalHosts([row]), ...(Array.isArray(registryHosts) ? registryHosts : [])].map((h) => String(h).toLowerCase());
+  const hit = against.find((h) => h === d || h.endsWith(`.${d}`) || d.endsWith(`.${h}`));
+  if (hit) throw refusal("HOST_REFUSED", `@venture collides: brand.domain ${d} overlaps the registry host ${hit} (VENTURE_HOST_COLLIDES)`, { reason: "VENTURE_HOST_COLLIDES" });
+  const out = [];
+  for (const h of hosts) { const v = h === VENTURE_TOKEN ? d : h; if (!out.includes(v)) out.push(v); }
+  return out;
 }
 
 export function hostAllowed(host, hosts) {
@@ -48,13 +80,25 @@ function freezeUpstream(upstream) {
     [s, Object.freeze((Array.isArray(rs) ? rs : []).filter(good).map((r) => Object.freeze({ kind: r.kind, id: r.id })))])));
 }
 
-export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [], arcProbe = null }) {
+export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [], arcProbe = null, registryHosts = [] }) {
   const queued = [];
-  const guardedFetch = (hosts) => async (url, init = {}) => {
+  // Resolved once, refused at call time: an adapter catches a ctx.fetch refusal like any other, and building the
+  // ctx must not throw before the adapter can report it.
+  let rowHosts = [];
+  let unresolved = null;
+  try { rowHosts = resolveHosts(row, profile, registryHosts); } catch (e) { unresolved = e; }
+  // The venture's own host matches exactly, never its subdomains: a dangling `x.<domain>` someone else took over would
+  // otherwise sit inside every @venture row's allow-list (attack 9d10382 B1). No adapter fetches one.
+  // Taken from what resolveHosts returned (the entries that are not this row's literals), never from the profile
+  // directly, so the resolver stays the one seam a broken resolution shows through.
+  const ownLiterals = literalHosts([row]);
+  const exact = rowHosts.filter((h) => !ownLiterals.includes(String(h).toLowerCase()));
+  const guardedFetch = (hosts, only = []) => async (url, init = {}) => {
     let u;
     try { u = new URL(url); } catch { throw refusal("HOST_REFUSED", `not a URL: ${url}`); }
     if (u.protocol !== "https:") throw refusal("HOST_REFUSED", `${u.protocol} refused; adapters speak https only`);
-    if (!hostAllowed(u.hostname, hosts)) throw refusal("HOST_REFUSED", `${u.hostname} is not in this provider's hosts[] (${hosts.join(", ")})`);
+    const ok = only.includes(u.hostname.toLowerCase()) || hostAllowed(u.hostname, hosts.filter((h) => !only.includes(h)));
+    if (!ok) throw refusal("HOST_REFUSED", `${u.hostname} is not in this provider's hosts[] (${hosts.join(", ")})`);
     if (signal && signal.aborted) throw refusal("ABORTED", "slot timeout reached");
     // Redirects are never followed: the allowlist checks one URL, and a followed 3xx would land on a host nobody
     // checked (attack 3b48ed1 B1). The adapter sees the 3xx and may call ctx.fetch on its Location, which is checked.
@@ -64,7 +108,7 @@ export function makeCtx({ profile, board, slot, row, root, resources, upstream, 
   return Object.freeze({
     profile, board, slot, provider: row.id, root, resources: [...(resources || [])], upstream: freezeUpstream(upstream), tag, attempt, signal,
     env: Object.freeze({ ...env }),
-    fetch: guardedFetch(row.hosts || []),
+    fetch: unresolved ? async () => { throw refusal(unresolved.code, unresolved.message, { reason: unresolved.reason }); } : guardedFetch(rowHosts, exact),
     write(rel, text) {
       const abs = confinedPath(root, rel);
       mkdirSync(dirname(abs), { recursive: true });
