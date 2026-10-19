@@ -25,3 +25,16 @@ record (Cycle 1 tier-L evidence). **A-15 fired.** REQ-13's live clause moves to 
 
 `cloudflare-dns` refuses records it did not tag (`FOREIGN_RECORD`, `providers/dns/cloudflare-dns.mjs:89-91`), so the
 owner removes the apex and `www` A/AAAA records in the Cloudflare dashboard before `dns` runs.
+
+## 2026-10-20 — read-only key probes (`~/.arc-private/launch/myfitfolio.env`; values never printed)
+
+```
+probe cloudflare: pass 200        (GET /zones?name=myfitfolio.com -> exactly 1 zone; A-09 holds)
+probe resend: pass 200
+probe supabase: pass 200
+probe razorpay-test: pass 200     (key id is rzp_test_)
+probe razorpay-webhook-secret: present
+probe vercel: pass 200            (GET /v9/projects/{hosting's vercel-project}/env)
+probe sentry: pass 200
+probe pagespeed: pass 200
+```

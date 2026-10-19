@@ -140,7 +140,9 @@ if (a.mode === "verify") {
     } catch (e) { process.stderr.write(`worker: the record was not written (${(e && e.code) || "error"})\n`); }
   }
   const ok = !!(v && v.ok === true && typeof v.answerer === "string" && v.answerer);
-  save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : (v && v.reason) || "verify:no answerer named" } });
+  // A PENDING answer (REQ-18) keeps its name in the probe's reason, so verify --all says "still building", not a regression text.
+  const pendingWhy = !ok && v && typeof v.pending === "string" && v.pending ? `PENDING(${[...clean(v.pending)].slice(0, 160).join("")})` : null;
+  save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : pendingWhy || (v && v.reason) || "verify:no answerer named" } });
   // No process.exit here: on Windows, exiting while a provider's keep-alive socket is closing aborts node in libuv
   // (0xC0000409), and the runner read the crash as no answer though last_verify was saved. The loop drains instead.
   process.exitCode = ok ? 0 : 1;
@@ -173,6 +175,14 @@ if (a.mode === "verify") {
     const cut = (t, n) => [...clean(t)].slice(0, n).join("");
     save({ state: "absent", reason: `ABSENT(${cut(v.absent, 160)})`, answerer: cut(v.answerer, 120), queued: [], verified_at: new Date().toISOString() });
     process.exit(0);
+  }
+  // PENDING (REQ-18, ADR-1771): the provider is still building what this slot's verify must read. Not failed and not
+  // verified: the slot goes back to pending with a named reason, and a later apply asks again. Only an answer that
+  // names what is pending and what answered counts; the runner exits 4, the walk's "waiting" code.
+  if (v && v.ok === false && typeof v.pending === "string" && v.pending && typeof v.answerer === "string" && v.answerer) {
+    const cut = (t, n) => [...clean(t)].slice(0, n).join("");
+    save({ state: "pending", reason: `PENDING(${cut(v.pending, 160)})`, answerer: cut(v.answerer, 120), queued: [] });
+    process.exit(4);
   }
   fail(v && v.ok === true ? "verify:no answerer named (a probe names what answered it)" : `verify:${(v && v.reason) || "failed"}`);
 } catch (e) {

@@ -1580,3 +1580,67 @@ arm() {
   [ "$(j 'o.scaffold.ok + " " + o.clean')" = "false true" ] || { echo "$DONE"; false; }
   [[ "$(j 'o.scaffold.message')" == "cloudflare GET /zones -> 403 (1: evilFAKE LINE "* ]] || { echo "$DONE"; false; }
 }
+
+# ---------- secrets places a missing production key itself (REQ-16, ADR-1768) ----------
+
+@test "launch-contract: secrets places a contract key production lacks, once, from the run's value, and never its own token" {
+  arm secrets place
+  [ "$(j 'o.first.ok && o.second.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.posts')" = "1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.envKeys.join(",")')" = "RAZORPAY_KEY_ID:production" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.placedRight')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "env-contract technology-ashiq/arc-sandbox:.env.example,vercel-env prj_fixture01:RAZORPAY_KEY_ID" ] || { echo "$DONE"; false; }
+  # A name with no value this run, and the adapter's own token, are left for the owner -- and say so.
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false owner places for production: DATABASE_URL, VERCEL_TOKEN" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete prj_fixture01:RAZORPAY_KEY_ID" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.sentinelSeen + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets never overwrites a key the owner already set for production" {
+  arm secrets place-keeps-owner
+  [ "$(j 'o.posts + " " + o.ownerKept + " " + o.placedRight')" = "1 true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.envKeys.join(",")')" = "DATABASE_URL:production,RAZORPAY_KEY_ID:production" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.sentinelSeen + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets masks a placed value a provider error echoes back" {
+  arm secrets place-echo-error
+  [ "$(j 'o.scaffold.ok + " " + o.masked')" = "false true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == "vercel POST /v10/projects/prj_fixture01/env -> 400: rejected value *** for key" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.sentinelSeen')" = "false" ] || { echo "$DONE"; false; }
+}
+
+# ---------- security-headers waits for the live build (REQ-18, ADR-1771) ----------
+
+@test "launch-contract: security-headers verify is PENDING while its build is building or not yet listed, never failed" {
+  local s
+  for s in "build-building:build: production deployment dpl_headers01 of " "build-absent:build: no production deployment of "; do
+    arm headers "${s%%:*}"
+    [ "$(j 'o.verify.ok + " " + (o.vercel.length > 0)')" = "false true" ] || { echo "${s%%:*}: $DONE"; false; }
+    [[ "$(j 'o.verify.pending')" == "${s#*:}"* ]] || { echo "${s%%:*}: $DONE"; false; }
+    [[ "$(j 'o.verify.reason')" == "PENDING(${s#*:}"* ]] || { echo "${s%%:*}: $DONE"; false; }
+  done
+}
+
+@test "launch-contract: security-headers fails an ERROR build and a cancelled one with nothing newer, and reads a newer live build" {
+  arm headers build-error
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production build dpl_headers01 of "*" failed (ERROR)" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.pending === undefined')" = "true" ] || { echo "$DONE"; false; }
+  arm headers build-canceled
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production deployment dpl_headers01 of "*" is CANCELED and nothing newer is live" ]] || { echo "$DONE"; false; }
+  arm headers build-newer-ready
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai + observatory-api.mdn.mozilla.net" ] || { echo "$DONE"; false; }
+}
+
+# ---------- legal-pages on a real venture (REQ-19, ADR-1769) ----------
+
+@test "launch-contract: legal-pages on a real venture fails unpublished pages and never answers ABSENT; served pages verify" {
+  arm legal absent-real
+  [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined)')" = "false true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "legal:unpublished -- /privacy and /terms are not served"* ]] || { echo "$DONE"; false; }
+  arm legal published-real
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+  # The rehearsal path is unchanged: the same site on a rehearsal is the named ABSENT.
+  arm legal absent
+  [ "$(j 'o.verify.absent')" = "legal renderer not ready: /privacy and /terms are not served" ] || { echo "$DONE"; false; }
+}

@@ -18,10 +18,13 @@ const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 
 const FULL = "technology-ashiq/arc-sandbox";
 const MARKER = "fixture-env-value-never-printed-0001";
+// The value REQ-16 places: it must reach Vercel and nothing else -- no report, error or DONE line (REQ-16).
+const SENTINEL = "fixture-placed-value-never-printed-0002";
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const envs = {
   placed: [{ key: "DATABASE_URL", target: ["production", "preview"], value: MARKER }],
   "preview-only": [{ key: "DATABASE_URL", target: ["preview"], value: MARKER }],
+  "place-keeps-owner": [{ key: "DATABASE_URL", target: ["production"], value: MARKER }],
 }[scenario] || [];
 const vercel = makeVercel({ github, projects: [{ name: "arc-sandbox", id: "prj_fixture01", link: { type: "github", org: "technology-ashiq", repo: "arc-sandbox" }, envs }] });
 globalThis.fetch = vercel.fetch;
@@ -29,10 +32,10 @@ globalThis.fetch = vercel.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-secrets-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctxNow = () => makeCtx({
+const ctxNow = (extra = {}) => makeCtx({
   profile: { slug: "arc-sandbox" }, board: {}, slot: { id: "secrets" }, row,
   root: ROOT, resources: reported, upstream: { hosting: [{ kind: "vercel-project", id: "prj_fixture01" }] }, tag: "arc-sandbox@secrets@vercel-env-store", attempt: 1, signal: undefined,
-  env: { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789" },
+  env: { VERCEL_TOKEN: "vercel_fixture_token_0123456789", GITHUB_TOKEN: "gho_fixtureToken0123456789", ...extra },
   report: (r) => { if (!reported.some((x) => x.kind === r.kind && x.id === r.id)) reported.push(r); },
 });
 const attempt = async (fn) => { try { return { ok: true, value: await fn() }; } catch (e) { return { ok: false, code: e.code || null, message: e.message }; } };
@@ -103,6 +106,35 @@ switch (scenario) {
     out.fileId = (reported.find((r) => r.kind === "github-file") || {}).id || null;
     break;
   }
+  case "place":
+  case "place-keeps-owner": {
+    // DATABASE_URL has no value this run; RAZORPAY_KEY_ID does; VERCEL_TOKEN is the adapter's own and never placed.
+    put(".env.example", "# keys\nDATABASE_URL=\nRAZORPAY_KEY_ID=\nVERCEL_TOKEN=\n");
+    const extra = { RAZORPAY_KEY_ID: SENTINEL, DATABASE_URL: scenario === "place-keeps-owner" ? "run-value-must-not-overwrite" : "" };
+    out.first = await attempt(() => adapter.scaffold(ctxNow(extra)));
+    out.second = await attempt(() => adapter.scaffold(ctxNow(extra)));
+    out.first = { ok: out.first.ok, code: out.first.code || null };
+    out.second = { ok: out.second.ok, code: out.second.code || null };
+    const envs = vercel.store.get("arc-sandbox").envs || [];
+    out.posts = vercel.calls.filter((c) => c.startsWith("POST ") && c.includes("/env")).length;
+    out.envKeys = envs.map((e) => e.key + ":" + [].concat(e.target).join("+")).sort();
+    out.placedRight = (envs.find((e) => e.key === "RAZORPAY_KEY_ID") || {}).value === SENTINEL;
+    out.ownerKept = scenario === "place-keeps-owner" ? (envs.find((e) => e.key === "DATABASE_URL") || {}).value === MARKER : null;
+    out.kinds = reported.map((r) => r.kind + " " + r.id);
+    out.verify = await adapter.verify(ctxNow(extra));
+    out.teardown = (await adapter.teardown(ctxNow())).steps.map((s) => s.action + " " + s.resource);
+    break;
+  }
+  case "place-echo-error": {
+    put(".env.example", "RAZORPAY_KEY_ID=\n");
+    const real = globalThis.fetch;
+    globalThis.fetch = async (u, init = {}) => (String(init.method || "GET").toUpperCase() === "POST" && String(u).includes("/env")
+      ? new Response(JSON.stringify({ error: { code: "bad", message: `rejected value ${SENTINEL} for key` } }), { status: 400 })
+      : real(u, init));
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ RAZORPAY_KEY_ID: SENTINEL })));
+    out.masked = String(out.scaffold.message || "").includes("***");
+    break;
+  }
   case "value-in-template":
     put(".env.example", "DATABASE_URL=has-a-value-here\n");
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
@@ -122,4 +154,5 @@ switch (scenario) {
 }
 out.decryptAsked = vercel.decryptAsked;
 out.valueSeen = JSON.stringify(out).includes(MARKER);
+out.sentinelSeen = JSON.stringify(out).includes(SENTINEL);
 console.log(`DONE ${JSON.stringify(out)}`);

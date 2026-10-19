@@ -10,6 +10,7 @@
 //   FAKE_SENSITIVE=action      call ctx.sensitive(action) before creating anything
 //   FAKE_PRINT_UPSTREAM=1      print `FAKE_UPSTREAM <json of ctx.upstream>` before creating anything
 //   FAKE_SIMULATED=json        a verify that passes queues this stored payment as revenue.simulated (ADR-1739)
+//   FAKE_PENDING=what          verify answers PENDING(what): the provider is still building (REQ-18)
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 export const id = "fake";
@@ -58,6 +59,7 @@ export async function verify(ctx) {
   // FAKE_VERIFY_RECORDED: answer from the resources the runner hands verify, as payment-test and ledger-source do.
   if (process.env.FAKE_VERIFY_RECORDED) return ctx.resources.length === 2 ? { ok: true, answerer: "fake-recorded", evidence: { resources: 2 } } : { ok: false, reason: `ctx holds ${ctx.resources.length} of 2` };
   if (process.env.FAKE_PRINT_UPSTREAM) console.log(`FAKE_UPSTREAM ${JSON.stringify(ctx.upstream)}`);
+  if (process.env.FAKE_PENDING) return { ok: false, pending: process.env.FAKE_PENDING, answerer: "fake-provider-file", reason: "still building" };
   const mine = read().filter((r) => r.tag === ctx.tag);
   if (mine.length === 2 && process.env.FAKE_SIMULATED) ctx.emit("revenue.simulated", JSON.parse(process.env.FAKE_SIMULATED));
   return mine.length === 2 ? { ok: true, answerer: "fake-provider-file", evidence: { resources: mine.length } } : { ok: false, reason: `provider holds ${mine.length} of 2` };

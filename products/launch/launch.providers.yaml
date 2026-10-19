@@ -185,9 +185,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 08 REQ-16 places missing production keys. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 92ec7d73b053.
   - id: vercel-env-store
     slot: secrets
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -197,13 +198,18 @@ providers:
     env_keys:
       - VERCEL_TOKEN
       - GITHUB_TOKEN
+      # REQ-16: runtime keys this slot may place, read only from the run's env file (never git).
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
+      - RAZORPAY_WEBHOOK_SECRET
+      - RESEND_API_KEY
     hosts:
       - api.vercel.com
       - api.github.com
     credentials:
-      scope: "env var NAMES list; values are placed by the owner; reads .env.example and the git tree (ADR-1729)"
+      scope: "env var NAMES list; places a missing production key from the declared env_keys (REQ-16); reads .env.example and the git tree (ADR-1729)"
     adapter: providers/secrets/vercel-env-store.mjs
-    digest: 92ec7d73b05327a444390c0acdd5a37141160c4e53aa5df8b37981efaebbc8fa
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
@@ -632,9 +638,10 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  # Re-vet pending (ADR-1719): Phase 08 REQ-18 waits for the production build. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 956f6723ae80.
   - id: next-headers
     slot: security-headers
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -643,14 +650,16 @@ providers:
     payment_model: any
     env_keys:
       - GITHUB_TOKEN
+      - VERCEL_TOKEN
     hosts:
       - "@venture"
       - api.github.com
+      - api.vercel.com
       - observatory-api.mdn.mozilla.net
     credentials:
-      scope: "GitHub contents on the venture repo (next.config.mjs); probes the live site and asks the Observatory for a grade (ADR-1742)"
+      scope: "GitHub contents on the venture repo (next.config.mjs); reads Vercel production deployments to wait for the build (REQ-18); probes the live site and asks the Observatory for a grade (ADR-1742)"
     adapter: providers/security-headers/next-headers.mjs
-    digest: 956f6723ae8044b9bcc39254cbe99204789193f72ddf1aab09996150d738fc40
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md

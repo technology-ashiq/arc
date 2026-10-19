@@ -19,7 +19,7 @@ const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 
 const FULL = "technology-ashiq/arc-sandbox";
 const DOMAIN = "sandbox.automemory.ai";
-const ENV = { GITHUB_TOKEN: "gho_fixtureToken0123456789" };
+const ENV = { GITHUB_TOKEN: "gho_fixtureToken0123456789", VERCEL_TOKEN: "vercel_fixture_token_0123456789" };
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const opts = {
   "csp-dropped": { serve: (src) => src.split("res.headers.set(\"content-security-policy\", csp);").join("") },
@@ -34,7 +34,22 @@ const opts = {
   "down": { up: false },
 }[scenario] || {};
 const live = makeHeaders({ github, full: FULL, domain: DOMAIN, inner: (i, o) => github.fetch(i, o), ...opts });
-globalThis.fetch = live.fetch;
+// REQ-18: Vercel's production deployments, answered from the headers commit this run recorded. BUILD steers the answer
+// (READY by default); the build-* scenarios set it. Every other host goes to the live fake as before.
+let BUILD = { "build-building": "BUILDING", "build-error": "ERROR", "build-canceled": "CANCELED", "build-absent": null, "build-newer-ready": "CANCELED" }[scenario];
+if (BUILD === undefined) BUILD = "READY";
+const vercelCalls = [];
+globalThis.fetch = async (input, init = {}) => {
+  const u = new URL(String(input));
+  if (u.hostname !== "api.vercel.com") return live.fetch(input, init);
+  vercelCalls.push(`${String(init.method || "GET")} ${u.pathname}`);
+  if (u.pathname !== "/v6/deployments") return new Response(JSON.stringify({ error: { message: "not modelled" } }), { status: 404 });
+  const rec = state.filter((r) => r.kind === "headers-config").map((r) => r.id).pop() || "";
+  const sha = rec.slice(rec.lastIndexOf(":") + 1);
+  const ds = BUILD === null ? [] : [{ uid: "dpl_headers01", created: 2000, readyState: BUILD, meta: { githubCommitSha: sha }, target: "production" }];
+  if (scenario === "build-newer-ready") ds.unshift({ uid: "dpl_newer01", created: 3000, readyState: "READY", meta: { githubCommitSha: "f".repeat(40) }, target: "production" });
+  return new Response(JSON.stringify({ deployments: ds }), { status: 200, headers: { "content-type": "application/json" } });
+};
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-headers-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
@@ -93,6 +108,15 @@ switch (scenario) {
     await adapter.scaffold(ctxNow());
     out.verify = await adapter.verify(ctxNow({ domain: "vercel.app" }));
     out.siteCalls = live.calls.filter((c) => !c.includes("observatory")).length;
+    break;
+  case "build-building":
+  case "build-error":
+  case "build-canceled":
+  case "build-absent":
+  case "build-newer-ready":
+    await adapter.scaffold(ctxNow());
+    out.verify = await adapter.verify(ctxNow());
+    out.vercel = vercelCalls;
     break;
   default:
     console.error(`unknown scenario ${scenario}`);

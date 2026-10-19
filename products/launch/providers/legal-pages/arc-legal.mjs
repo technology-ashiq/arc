@@ -83,6 +83,10 @@ async function probe(ctx) {
   // and the slot allows naming it. A dead or wrong site 404s everything and is never read as ABSENT (b6ffd12 B8).
   // The home page must be the launch shell, not any 200: a parking page or a wildcard is not this venture (edfe42c B7).
   const home = got.every((g) => g.status === 404) ? await page(ctx, `https://${domain}/`) : null;
+  // "renderer not ready" is a rehearsal's answer only: the renderer exists (legal C14), so on a real venture the pages
+  // missing means the owner has not published them yet, which is a failure until he does (ADR-1769, REQ-19).
+  if (home && home.status === 200 && home.shell && ctx.profile && ctx.profile.honesty_class === "real")
+    return { ok: false, reason: "legal:unpublished -- /privacy and /terms are not served; the owner publishes them through the legal lane" };
   if (home && home.status === 200 && home.shell)
     return { ok: false, absent: "legal renderer not ready: /privacy and /terms are not served", answerer: domain, reason: "ABSENT: legal renderer not ready" };
   return { ok: false, reason: got.map((g) => `${g.path} ${g.status === 0 ? "unreachable" : g.status}${g.status === 200 && !g.arc ? " (not an arc-legal page)" : ""}`).join(", ") };

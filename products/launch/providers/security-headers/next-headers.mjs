@@ -212,6 +212,37 @@ const FILES = {
     "",
   ].join("\n"),
 };
+// REQ-18 (ADR-1771): the headers ship with a build. Until production serves a build at or after this slot's commit, the
+// live site still answers with the old headers, and reading it then would fail a correct config. So verify first asks
+// Vercel for that build: building is PENDING(build) -- not failed, not verified; an ERROR build, or one cancelled with
+// nothing newer live, fails; READY (or a newer READY build) goes on to the live probe.
+const VERCEL = "https://api.vercel.com";
+const vc = (ctx, path) => call(ctx, `${VERCEL}${path}`, { authorization: `Bearer ${tokenOf(ctx, "VERCEL_TOKEN", /^[A-Za-z0-9_-]{20,}$/)}` }, "GET", undefined, [], `vercel ${path.split("?")[0]}`);
+const BUILDING = new Set(["BUILDING", "QUEUED", "INITIALIZING"]);
+function projectOf(ctx) {
+  const all = list(ctx.upstream && ctx.upstream.hosting).filter((r) => r.kind === "vercel-project" || r.kind === "vercel-project-found");
+  if (all.length !== 1 || !/^prj_[A-Za-z0-9]{1,64}$/.test(String(all[0].id))) throw refuse("UPSTREAM_MISSING", `hosting reported ${all.length} vercel projects; security-headers needs exactly one`);
+  return all[0].id;
+}
+async function buildGate(ctx) {
+  const mine = list(ctx.resources).filter((r) => r.kind === "headers-config").map((r) => String(r.id)).pop() || "";
+  const sha = mine.slice(mine.lastIndexOf(":") + 1);
+  if (!SHA.test(sha)) return { fail: "no headers-config commit recorded -- apply security-headers first" };
+  const pid = projectOf(ctx);
+  const r = await vc(ctx, `/v6/deployments?projectId=${encodeURIComponent(pid)}&target=production&limit=20`);
+  const ds = list(r.body && r.body.deployments);
+  const st = (d) => say(d.readyState || d.state, 20);
+  const ours = ds.find((d) => d.meta && d.meta.githubCommitSha === sha);
+  const newerReady = (at) => ds.some((d) => d !== ours && Number(d.created) > at && st(d) === "READY");
+  // Not in the newest 20 at all: either it has not started, or it is older than every one listed -- a newer build
+  // then carries it only if the commit is an ancestor, which this read cannot tell, so it waits rather than guesses.
+  if (!ours) return { pending: `build: no production deployment of ${sha.slice(0, 7)} among the newest 20` };
+  const s = st(ours);
+  if (s === "READY" || newerReady(Number(ours.created))) return null;
+  if (s === "ERROR") return { fail: `production build ${say(ours.uid, 40)} of ${sha.slice(0, 7)} failed (ERROR)` };
+  if (BUILDING.has(s)) return { pending: `build: production deployment ${say(ours.uid, 40)} of ${sha.slice(0, 7)} is ${s}` };
+  return { fail: `production deployment ${say(ours.uid, 40)} of ${sha.slice(0, 7)} is ${s || "unknown"} and nothing newer is live` };
+}
 const PRIVATE_REFERRER = new Set(["no-referrer", "same-origin", "strict-origin", "strict-origin-when-cross-origin"]);
 const GRADES = new Set(["A+", "A"]);
 
@@ -225,7 +256,7 @@ function repoOf(ctx) {
 }
 
 export function envContract() {
-  return ["GITHUB_TOKEN"];
+  return ["GITHUB_TOKEN", "VERCEL_TOKEN"];
 }
 
 export async function scaffold(ctx) {
@@ -259,6 +290,9 @@ async function probe(ctx) {
   const domain = domainOf(ctx);
   const drift = await oursAtHead(ctx, full, FILES);
   if (drift) return { ok: false, reason: drift };
+  const built = await buildGate(ctx);
+  if (built && built.pending) return { ok: false, pending: built.pending, answerer: "api.vercel.com", reason: `PENDING(${built.pending})` };
+  if (built && built.fail) return { ok: false, reason: built.fail };
   let res;
   try {
     res = await ctx.fetch(`https://${domain}/`, { method: "GET", headers: { "user-agent": "arc-launch" }, redirect: "manual" });
