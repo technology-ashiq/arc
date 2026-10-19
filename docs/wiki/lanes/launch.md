@@ -5,14 +5,14 @@
 
 > **Narrative pending.** These are this entity's declared facts only; nobody has written why it exists yet. It belongs in `docs/wiki/_narrative/lanes/launch.md` -- hand-written, never generated (ADR-1505, ADR-1508).
 
-*launch v1 "the venture factory"*
+*launch Cycle 2 "the first real venture"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-launch (Cycle 1, opened 2026-10-03) |
+| Status | LIVE |
+| Cycle | arc-launch (Cycle 2, opened 2026-10-19) |
 | Product | [launch](../products/launch.md) |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (65)
+## Decisions (70)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -93,6 +93,11 @@ ADRs whose `Product:` line names this lane first.
 | [`1762`](../../../docs/adr/1762-the-day-12-tripwire-cuts-nothing.md) | The day-12 tripwire cuts nothing; the overrun was the wait for owner keys | accepted | 2026-10-14 |
 | [`1763`](../../../docs/adr/1763-arc-harnesses-is-a-core-wiring-slot.md) | `arc-harnesses` is a core wiring slot: a venture is born with arc installed | accepted | 2026-10-15 |
 | [`1764`](../../../docs/adr/1764-req05-coverage-reads-a-named-absent-core-slot-as-answered.md) | REQ-05's coverage clause reads a named-ABSENT core slot as answered, and says so by name | accepted | 2026-10-15 |
+| [`1765`](../../../docs/adr/1765-hosts-carry-a-venture-token-resolved-from-brand-domain.md) | `hosts[]` carries a `@venture` token, resolved from the venture's own `brand.domain` | accepted | 2026-10-19 |
+| [`1766`](../../../docs/adr/1766-a-real-venture-answers-domain-with-an-owner-attested-zone-verify.md) | A real venture answers `domain` with an owner-attested, read-only Cloudflare zone check | accepted | 2026-10-19 |
+| [`1767`](../../../docs/adr/1767-apply-walks-the-dag-and-stops-on-every-non-zero-exit.md) | `apply --next` and `apply --all` walk the DAG and stop on every non-zero exit | accepted | 2026-10-19 |
+| [`1768`](../../../docs/adr/1768-cycle-2-scope-is-the-core-board-of-one-real-venture.md) | Cycle 2's scope is one real venture's core board, and C2-01..05 move to Cycle 3 | accepted | 2026-10-19 |
+| [`1769`](../../../docs/adr/1769-legal-pages-on-a-real-venture-verifies-only-on-served-pages.md) | On a real venture, `legal-pages` verifies only on served arc-legal pages; "renderer not ready" is a rehearsal answer | accepted | 2026-10-19 |
 
 ## Source
 

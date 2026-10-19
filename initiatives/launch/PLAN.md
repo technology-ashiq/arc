@@ -1,169 +1,114 @@
-# PLAN.md — launch v1: the venture factory (lane `launch`, Cycle 1)
+# PLAN.md — launch Cycle 2: the first real venture (lane `launch`)
 
-Cut on 2026-10-03 from the frozen design source `docs/strategy/plans/PLAN-launch.md` (v1.1, review-adjudicated).
-Attack findings mutate THIS file, never the design source. Owner rulings: 2026-10-03 *"launch lane pudichuruku"*
-(lane born; the process is fixed, every tool is dynamic) and the same day *"Nilluvai plan illa"* (no Nilluvai;
-the dogfood is a rehearsal venture). Both go on the spine as `decision.recorded` in Phase 00 (ADR-1700).
-Owner standing instruction 2026-10-03: build every phase without waiting, push freely, CI is the only test runner.
+Opened 2026-10-19 by `/arc-kickoff --lane launch`. Cycle 1 ("the venture factory", 6/6 phases, sealed 2026-10-15) is
+archived at `archive/PLAN-cycle1-2026-10-15.md` + `archive/PROGRESS-cycle1-2026-10-15.md`. Its 10 validated REQs, its
+phase specs `phases/phase-00..05` and its evidence `evidence/phase-00..05` stay where they are, because 33 vetting
+records point at them (distribute's multi-cycle shape). Cycle 2's phases are numbered from 06.
+
+Trigger: `myfitfolio` (`honesty_class: real`, `brand.domain: myfitfolio.com`) is the first real venture, and it stalled on
+its board after 5 verified slots (`repo`, `ci`, `hosting`, `secrets`, `release`). `frontend` failed `HOST_REFUSED`
+(receipt `01M5AJF0VN61VDTE9D2FJ2HWMT`). Cycle 2 also answers Cycle 1's REQ-12 (OPEN-at-first-venture).
 
 ## Goal
 
-One sentence: **`arc launch new {venture}` turns a `venture.yaml` profile into a running, billing, observed,
-backed-up, receipted product on its own domain — through one fixed sequence of capability slots, each filled by
-whichever vetted tool the registry recommends for that venture, swappable later by one YAML row and one adapter
-file.** The owner is who it is for: today every venture (LexOS) is hand-built outside arc, and the money side of the
-spine is empty after eleven weeks.
-
-**v1 proof (this cycle):** on the rehearsal venture `arc-sandbox`, a login works on its own subdomain from a
-git-triggered deploy, a test-mode purchase lands in the ledger as `revenue.simulated`, a backup is restored and
-matches, and a second provider enters one slot by row + adapter alone — each with a receipt.
-
-Fixed: the slot list and each slot's exit criteria. Free: which tool fills a slot, when, and how often it changes.
+The owner runs one command and his first real venture's 34 core slots go green from main, so arc can launch a paying
+product rather than only rehearse one.
 
 ## Current state
 
-Verified 2026-10-03 at `1b3c819c` (survey agent + direct reads; the agent's invented file names were discarded).
-
-- **Stack:** Node ESM scripts (zero npm deps in the OS repo) · block-style YAML · bats on CI (3 OS legs).
-- **Entry points:** new `.claude/scripts/launch/arc-launch.mjs`; data under `products/launch/`; tests `tests/launch-*.bats`.
-- **Conventions:** org's product shape, `parseYamlSubset`, `withLock`, owner-only registry rows — detailed below.
-- **Nothing exists of:** slot contracts, a provider registry, adapters, `arc launch`, a runner state model, a Launch
-  room, a re-verify job, a teardown plan (grep `scaffold|provider|slot|launch` → only `venture-register.mjs`).
-- **Product shape to copy (org, ADR-1613):** `products/{p}/manifest.json` (`name · version · requires · commands ·
-  agents · scripts · files · docs · face{room, ring, …}`), scripts under `.claude/scripts/{p}/`, tests as
-  `tests/{p}-*.bats` calling node helpers in `tests/{p}/*.mjs`. CI runs **bats files only**
-  (`.github/workflows/ci.yml:238`, sharded by `.github/scripts/shard-tests.mjs`).
-- **Spine:** `node .claude/scripts/hq/arc-event.mjs emit {kind} --payload … --process P --venture V`;
-  `withLock(root, fn, {timeoutMs, lockName})` at `.claude/scripts/hq/lib/spine-io.mjs:164`; `spineRoot()` at `:41`;
-  kinds closed in `.claude/scripts/hq/lib/validate.mjs` (`revenue.simulated` is a member).
-- **YAML:** block-style only (ADR-0200) via `parseYamlSubset` (`.claude/scripts/engine/yaml-subset.mjs:377`).
-- **Registry precedent:** `design.sources.yaml` + `.claude/scripts/design/design-sources-lint.mjs`
-  (`OWNER = "ashiq"` at `:37`; `status` intent vs `availability` observed).
-- **Walkers to import (LAU-L):** `.claude/scripts/core/face-coverage.mjs` exports `dirNames · mdStems · yamlStems ·
-  treeScripts · treeJobs · treeVentures`.
-- **Calls, never rebuilds:** `venture-register.mjs --dry-run` (refuses slug `arc`; exit 0/1/2) ·
-  `lib/ledger/normalize.mjs` + the razorpay parser (imported; `ledger-ingest.mjs` is plan-bound, owner-run, `revenue.received` only) · `arc-legal.mjs render --venture {slug}` with facts at
-  `initiatives/legal/{slug}/facts.yaml` · leads `preflight.mjs` (DMARC) · `hq.jobs.yaml` script-class rows.
-- **Policy:** `hq.policy.yaml` `"process:{name}":` rows (L0–L3 per capability); `process:launch` lands with the
-  first emission (POL-I).
-- **Rehearsal domain:** `automemory.ai` NS = Cloudflare (`meera`/`noel.ns.cloudflare.com`); `sandbox.` is unused.
-  Growth's site is `arc.automemory.ai` (ADR-1118), so a sibling subdomain does not touch its DNS or robots.
-- **Credentials on the box (names only):** `gh` logged in, `repo` scope · Supabase CLI logged in · Vercel CLI token
-  **invalid** · no Cloudflare or Razorpay key (ADR-1724).
-- **Do-not-touch:** `initiatives/face/contracts/rooms.generated.json` (regenerated by `face-sections.mjs`),
-  `docs/wiki/**` (regenerated), `.claude/commands/{arc-commit,arc-review,arc-kickoff}.md` (compiled).
-- **Main is red today on face-coverage:** `PLAN-launch` exists with no room in `expected-set.json`; this lane's
-  first PR adds the row and regenerates `face-sections`.
+From the codebase survey (2026-10-19):
+- Stack: Node ESM scripts with zero npm deps; bash + bats on CI (3 OS legs).
+- Entry points: CLI `.claude/scripts/launch/arc-launch.mjs` (`new · plan · apply SLOT · verify SLOT|--all · status · teardown --plan ·
+  override`); `lib/runner.mjs` (apply :108, gate :183); exit codes `runner.mjs:18`: 0 OK · 1 FAILED · 2 REFUSED ·
+  3 LOCKED · 4 DEPS · 5 AWAITING.
+- `apply` takes one slot only (`arc-launch.mjs:165-166`); `verify --all` is the only multi-slot verb. `lib/dag.mjs`
+  `topoOrder` (Kahn, catalog-order ties) exists.
+- `lib/ctx.mjs` `guardedFetch` raises HOST_REFUSED (:53-57); `hostAllowed` is exact-or-subdomain (:11-13).
+- Conventions: `hosts[]` entries are bare hostnames of 2+ labels (`launch-lint.mjs:96-101`); adapter path is
+  `providers/{slot}/{id}.mjs`; `approved_by` is `ashiq`.
+- Digest = sha256 of the CRLF-normalised adapter `.mjs` bytes only, not `hosts[]` (`lib/scan.mjs:112-117`). An adapter
+  edit raises DIGEST_DRIFT (`runner.mjs:103-104`).
+- A real venture with no vetted row is REFUSED at `runner.mjs:71`, before any gate. Only a rehearsal takes ABSENT
+  (`runner.mjs:145-153,184-215`; `lib/worker.mjs:166-172`).
+- `brand.domain` is read by adapters only (`supabase-auth.mjs:53`, `rls-roles.mjs:53`, `next-route-handlers.mjs:66`),
+  never by core scripts.
+- Registry: 37 rows (33 vetted, 3 candidate, 1 blocked). 19 rows hold the literal `sandbox.automemory.ai`.
+- Catalog: 86 slots, of which 34 core (32 with a vetted row; `domain` = `cloudflare-registrar` candidate with no adapter,
+  `legal-pages` = `arc-legal` candidate), 35 required (0 rows), 17 optional.
+- `myfitfolio` board (main clone, 2026-10-19): 5 verified · 1 failed (`frontend`) · 58 pending · 22 skipped. Its
+  `products/launch/ventures/myfitfolio.venture.yaml` is untracked in the main clone.
+- Guards: `tests/launch-{cli,contract,lint,runner,trust}.bats` + `tests/launch/contract-*.mjs`, CI only. The sync golden
+  lists `products/launch/**`, so any edit there regenerates `tests/fixtures/sync-golden/tree-manifest.txt`.
+- Do-not-touch: an adapter's bytes once its digest is pinned (outside a re-vet); `digest` / `vetted_by` / `approved_by` /
+  `scout` fields; `owner-apply-watch-policy.mjs`; `.claude/hooks/*.d`.
 
 ## Success requirements
 
-Tier L caps active rows at 10. Two design-source REQs are merged, nothing is cut: design REQ-07 (recommendation)
-is folded into REQ-08 (the owner asked for *dynamic tools* and *a suggestion of which is best* in one breath, and a
-recommendation over one provider ranks nothing), and design REQ-11 (drift job) is folded into REQ-10 (both are
-the wiring that keeps a venture visible after launch). IDs keep the design source's numbers.
-
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | The fixed process and the tool registry exist as checked contracts | `products/launch/launch.slots.yaml` (85 seed rows, each with `tier · exit_criteria[] · depends_on[] · required_when · optional_for[]` so the full DAG exists; the 33 core rows also carry `verify · gate · approval · timeout · resume`; non-core rows carry `verify: deferred-c2`, which the lint rejects on a core row) + `launch.providers.yaml` (LAU-S schema) + `launch-lint --mutant-selftest` where each of 13 mutants fails closed and RAN is asserted first: row-without-adapter · adapter-without-row · unknown slot · slot naming a provider · `vetted` without `vetted_by` · `approved_by` ≠ owner · flow-style YAML · cycle in `depends_on` · core → non-core edge · unresolved edge · the word `default` in either YAML or an adapter · package import in an adapter (`zero-dep-leg`) · a verify whose only I/O is local file reads (`verify-is-probe`). `launch-coverage` prints the derived counts | 00 | validated |
-| REQ-02 | A crashed or concurrent `apply` never loses or doubles work | runner state in `.claude/state/launch/{slug}.json` (written temp + rename); receipt idempotency key `venture@slot@provider@attempt` (ADR-1718) and a stable resource tag `venture@slot@provider` that `scaffold()` looks up before creating; fixtures green on CI: (a) a fixture adapter killed after reporting 1 of 2 resources, re-run → `attempt: 2`, the fake holds exactly 2 resources · (b) two concurrent `apply` → second exits non-zero naming the lock holder's pid · (c) slot `timeout: 1` with a 3 s fake → `failed(timeout)` with recorded resource ids, and the adapter's `AbortSignal` stops further creates · (d) `apply` on a `verified` slot → exit 0, same receipt id, zero new events · (e) killed after the provider created resource 2 but before state recorded it → re-run finds it by tag, fake holds 2 · (f) state file truncated mid-write → previous generation loads, no parse crash · (g) lock left by a killed pid → next `apply` takes over and says so | 00 | validated |
-| REQ-03 | A page and a login serve on `sandbox.automemory.ai` from a git-triggered deploy | CLI six verbs (`new · plan · apply · verify · status · teardown --plan`) drive repo → ci → environments → hosting → dns → tls → secrets → release → frontend (**day-3 kill**: `curl -sI https://sandbox.automemory.ai` 200 from a deploy whose trigger is a `git push`, 9 `run.completed process=launch@0.1.0` receipts, `honesty_class: rehearsal`) → backend → database → orm → email-transactional → auth (login → session → logout) → authz (cross-tenant request returns 403) → tenancy (invite → join → scoped); gate 2 `approval.requested` emitted and decided before the first prod deploy; `domain` ends at its refusal path + `--dry-run`; every Phase 01 adapter's recorded real response replays through its real code on CI | 01 | validated |
-| REQ-04 | A test purchase reaches the books, labelled simulated | `payment-test` (Razorpay test mode) → `checkout-portal` → webhook → a launch-owned simulated path (imports `lib/ledger/normalize.mjs` and the razorpay parser, emits `revenue.simulated` with idem = payment id; `ledger-ingest.mjs` is not called — it is plan-bound and writes only `revenue.received`) → exactly one `revenue.simulated`, zero `revenue.received`; replaying the same webhook adds 0 events; a test refund nets to 0 in `arc pnl`, whose line is labelled simulated; a downgraded plan gets 403 on a gated route; gate 3 emits `approval.requested` and `apply payment-live` exits 2 (refusal path proven, never crossed) | 02 | validated |
-| REQ-06 | Every `verified` slot was answered by something outside the repo | probes recorded per slot with the external answerer named: DNS from `8.8.8.8` and `1.1.1.1` · TLS grade ≥ A from a named scanner (pending, rate-limited or unreachable → `UNSCANNED(reason)`, never verified) · security headers read from the live response · `backup` = `pg_dump` over the session pooler restored into a scratch Postgres with every table's row count equal · a thrown fixture error appears as a Sentry issue · `dependency-scan` gate present on the venture CI | 03 | validated |
-| REQ-08 | Tool choice is derived and a second tool enters by row + adapter only | `plan` prints per slot `recommended · why (fit-rule ids · status · last_verified) · alternatives · REFUSED (reason)`; zero vetted → `REFUSED` and `apply` exits 2; an override is a `decision.recorded` the next `plan` cites by id; `neon` reaches `vetted` for `database` (ADR-1721) in a PR whose changed-file list is exactly `products/launch/launch.providers.yaml` + `products/launch/providers/database/neon.mjs`, asserted by a bats check over `git diff --name-only`; `plan` then ranks both database providers with rule ids | 04 | validated |
-| REQ-09 | An adapter cannot exceed what its row allows | the Phase 00 trust fixtures re-run against every vetted real adapter, each asserting RAN first: a one-byte adapter edit → load flips the row to `candidate` and `apply` refuses (digest = sha256 after CRLF→LF normalisation; a CRLF copy keeps its digest) · `ctx.fetch` to a host not in `hosts[]` throws `HOST_REFUSED` · `ctx.write` outside the venture root throws `WRITE_REFUSED` · each `sensitive_actions[]` entry emits `approval.requested` before the adapter's action runs | 04 | validated |
-| REQ-10 | The venture stays wired and watched after launch | `passport` via `venture-register --dry-run` (exit 0 output recorded) · `ledger-source` registered · `face-room` present as `planned` · `teardown --plan` renders the ordered exit (export → notice → cancel → park → archive) naming every recorded resource id · one `hq.jobs.yaml` script-class row runs `verify --all --public-only` weekly (resolvers, live curl, TLS, headers; token-gated slots report `skipped(env)` and stay out of the brief; a provider-reported pause is `PAUSED(reason)`); a forced regression (expired-cert fixture) produces exactly one `needs-you` line and a `skipped(env)` slot produces zero | 04 | validated |
-| REQ-05 | The rehearsal board closes complete | `arc launch verify --all --venture arc-sandbox` exits 0 with every core slot `verified` or a named `ABSENT({reason})`, zero `pending`; `launch-coverage` reports 0 core slots with 0 vetted providers | 05 | validated |
-| REQ-12 | First real ₹ from a launch-scaffolded venture | first `revenue.received` whose `venture` was scaffolded by `launch`. **OPEN-at-first-venture**: the Phase 05 evidence bundle records it as not met, beside the `arc-sandbox` board that made it reachable | 05 | validated |
+| REQ-13 | A real venture's adapters reach its own domain and no one else's | From the main clone, `apply frontend --venture myfitfolio` exits 0 with `honesty_class: real` (if A-15 fires, the same run is recorded in `evidence/phase-07/` after `dns`); `tests/launch-trust.bats` refuses `evilmyfitfolio.com`, `myfitfolio.com.evil.com`, an IP literal, `sandbox.automemory.ai` called from `myfitfolio`, `brand.domain: unassigned` (`VENTURE_HOST_UNRESOLVED`), `brand.domain: vercel.app` and `co.uk` (public suffix, `VENTURE_HOST_UNRESOLVED`), `brand.domain: github.com` (`VENTURE_HOST_COLLIDES`), and a fixture registry row whose host equals the profile's `brand.domain` (`VENTURE_HOST_COLLIDES`), each case asserting the fetch RAN first; a CI fixture derives the `@venture` rows from the registry, feeds them through the real loader into `ctx.fetch` for `arc-sandbox`, and asserts the resolved lists equal the Cycle 1 literals (read from `git show` of the pre-change file) element for element, in the same positions; two resolver mutants (identity, un-lowered) each turn the suite red; `launch-lint --self-test` refuses the 4 token mutants of ADR-1765, and `launch-lint` runs the suffix and collision checks over the registry and every profile under `products/launch/ventures/`; 0 digests change (`git diff` on `digest:` lines is empty) | 06 | active |
+| REQ-14 | The owner advances a board with one command instead of a hand loop | Fake-board fixtures: `apply --all` applies only `tier: core` slots, in `topoOrder` (a REFUSED `required` slot ahead of a core slot does not stop the walk); an injected exit 1, 2, 3, 4 and 5 each stops the walk with `stopped at {slot}: exit {n} {reason}` and exit `n` (5 fixtures); the state table is pinned by fixtures: `verified` and `skipped` are passed over, `absent` is passed over on a rehearsal and stops a real venture (`stopped at {slot}: absent on real`), `failed` is retried once per walk, `awaiting-approval` exits 5 with no second `approval.requested` (emit count asserted), and an `applies=false` slot is written `skipped` and counted as skipped; a fully green board prints `walk complete: 0 applied, {s} skipped`, exit 0; `--again` with `--next` or `--all` is refused; `apply SLOT` output is byte-identical to the Cycle 1 golden; live: one `apply --all --venture myfitfolio` transcript from the main clone in `evidence/phase-06/` | 06 | active |
+| REQ-15 | The owner's real domain crosses gate 1 on what he owns, not on a purchase | `cloudflare-zone` row vetted (scout record, `decision.recorded` id, digest); live `verify domain --venture myfitfolio` reads zone `myfitfolio.com` `status: active` and nameservers that both DoH resolvers return; the `approval.requested` payload names the zone id and nameservers; fixtures: pending zone → `failed(zone:pending)`, nameserver mismatch → `failed(zone:ns-mismatch)`, any non-GET call → refused; then `dns`, `tls` and `email-transactional` verified on `myfitfolio` | 07 | active |
+| REQ-16 | Runtime keys reach the venture's host without the agent placing them by hand | `secrets` places every key name its downstream core slots declare onto the Vercel project, reading values only from the process env; a missing value is `failed(env:{KEY})`; a fixture plants a sentinel value and asserts it appears in no receipt, state file, stdout or stderr; live on `myfitfolio` with no hand step recorded in evidence | 08 | active |
+| REQ-17 | A real venture's backup is provisioned by launch, not by hand | `backup` creates its own pooler role and `SUPABASE_DB_URL` (check-then-create, reported in `resources[]`); live on `myfitfolio`: a restore into scratch Postgres has matching row counts for every table (ADR-1709); a second apply creates 0 resources | 08 | active |
+| REQ-18 | `security-headers` waits for the live build instead of failing on an old one | Fixture: a deployment not `READY` answers `PENDING(build)`, never `failed` and never `verified`; live on `myfitfolio`: verified against the deployment `release` promoted, its id recorded | 08 | active |
+| REQ-19 | A real venture's policy pages are checked as served, never excused | `arc-legal` vetted on `myfitfolio` through a live verify of served `/privacy` and `/terms`; fixture: on a `real` venture with no pages, the adapter answers `failed(legal:unpublished)` and never ABSENT; on a rehearsal, the ABSENT path is unchanged (fixture) | 08 | active |
+| REQ-20 | The owner sees his first real venture's whole core board green | From the main clone on merged `main`, `verify --all --venture myfitfolio` exits 0 with every core slot (count derived by `launch-coverage`: 34 at kickoff) either `verified`, or `skipped` by a `required_when` the profile itself falsifies (none at kickoff: `myfitfolio` is `tenancy: multi`, `payment_model: gateway`, so the line reads `verified 34 + skipped 0 = 34`), with 0 ABSENT, 0 pending, 0 failed and 0 `candidate` rows among them; before Phase 07 opens, `verify --all` has been run once on today's board and once on a fixture board holding one ABSENT slot, and the two exit codes differ; every receipt carries `honesty_class: real`; the board, receipt ids and the `launch-coverage` count are in `evidence/phase-10/`; Cycle 1's REQ-12 is recorded as answered there | 10 | active |
+| REQ-21 | The first real venture's run never trips a debt row already known to the lane | D22, D29, D30 and D33 are closed in `debt-ledger.md` with their PR, each with one CI fixture that asserts it RAN and then the fixed behaviour (D22: `orm` verify outlasting its CI poll answers `PENDING(ci)`, never `failed`; D29: a slot-timeout abort reads `timeout`; D30: plans/authz/tenancy receipts carry the deployment id they probed; D33: a test purchase confirms against `GET /v1/payments/{id}` and sets `org_plans`); D32 is closed citing Phase 06's PR; D40 is closed citing D42 (0 code); every adapter whose bytes Phase 09 changes is re-applied live on `myfitfolio` and re-vetted inside Phase 09, so 0 core rows are `candidate` when Phase 10 opens | 09 | active |
 
 ## Appetite
 
-**18 days cap** (owner-set in the design source): 15.5 days planned across the six phases, 2.5 days slack. A constraint, not an estimate.
+15 days (calendar, owner time-boxed, 2026-10-19 → 2026-11-02). Phases sum to 12.5 days, which leaves 17% slack. Three of
+those days are the lane's debt budget (Phase 09): 45 open rows in `debt-ledger.md`, and kickoff's `debt-budget` gate
+takes 20% of the appetite.
 
-**Tier:** L
+**Tier:** M
 
-(Derived from the number: 15.5 working days is over three five-day weeks.)
-
-**Kill criteria:** two checkpoints. At day 7.5 (Phase 01's planned end) if Phase 01 is not closed → scope-cut conversation. The 50% tripwire is evaluated at the Phase 02 exit (as the design source sets it): if burn there exceeds the planned 10.5 days, or Phase 02 is not closed by day 12 → mandatory scope-cut conversation, using the design source's cut order: `refunds` → Cycle 2 · `errors` → Cycle 2 · `migration-rollback` → Cycle 2 · REQ-08's real second provider → Cycle 2 (its CI file-list contract still ships, with a fixture provider) · `face-room` stays `planned`. **Never cut:** the restore drill, the three gate paths, the runner state fixtures, `verify-is-probe`, the `default-word` lint. At 100% → cut or kill, never extend silently.
-
-**Day-3 kill question (Phase 01):** *does `sandbox.automemory.ai` serve a page from a git-triggered deploy, with
-nine `run.completed` receipts and a state file that resumes?* If not, STOP and record the finding — the slot
-contract is wrong before auth or money is written on it.
+**Kill criteria:** 50% appetite burnt (day 7.5), if Phase 07 isn't done → mandatory scope-cut conversation. The cut order is
+fixed now: (1) REQ-14's live transcript (fixtures stay); (2) REQ-16's automation, so keys are placed by hand again and
+recorded as Owed; (3) REQ-17's automation, so the pooler role is made by hand again. REQ-13, REQ-15 and REQ-20 are never
+cut. 100% → cut or kill, never extend silently. (PROGRESS.md tracks burn.)
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-  owner([Person: the owner])
-  subgraph arc [System: arc repo]
-    cli[Container: arc-launch.mjs CLI - new plan apply verify status teardown]
-    runner[Component: runner - DAG walk, withLock, idempotency key, timeout]
-    lint[Component: launch-lint + launch-coverage]
-    rec[Component: fit-rule recommender]
-    slots[(launch.slots.yaml - layer 1, fixed)]
-    provs[(launch.providers.yaml - layer 2, owner-only)]
-    adapters[Component: providers/slot/name.mjs - four functions]
-    ctx[Component: ctx - fetch wrapped to hosts, writer confined to venture root, emitter]
-    state[(.claude/state/launch/slug.json)]
-    spine[(spine: run.completed, approval.requested, decision.recorded)]
-    callees[Existing lanes: venture-register, ledger-ingest, arc-legal, preflight, hq.jobs]
+  owner([Person: owner])
+  subgraph launch [System: arc launch]
+    cli[Container: arc-launch.mjs apply --next/--all]
+    runner[Container: runner + DAG walk]
+    ctx[Container: ctx — hosts allow-list, @venture resolved]
+    reg[(Container: launch.providers.yaml + slots.yaml)]
+    board[(Container: .claude/state/launch/myfitfolio.json)]
   end
-  subgraph ext [External providers]
-    cf[Cloudflare DNS]
-    gh[GitHub repo + Actions]
-    vc[Vercel hosting]
-    sb[Supabase / neon Postgres + Auth]
-    rz[Razorpay test mode]
-    misc[Resend, Sentry, public resolvers, TLS scanner]
-  end
-  venture[(venture repo technology-ashiq/arc-sandbox, private)]
-  owner --> cli
-  cli --> runner --> state
-  cli --> rec
-  rec --> slots
-  rec --> provs
-  lint --> slots
-  lint --> provs
-  lint --> adapters
-  runner --> adapters --> ctx
-  ctx --> ext
-  ctx --> venture
-  runner --> spine
-  runner --> callees
+  venture[(venture.yaml — brand.domain)]
+  cf[External: Cloudflare zones + DNS]
+  vercel[External: Vercel]
+  supa[External: Supabase]
+  rzp[External: Razorpay test]
+  legal[System: legal lane publish — owner gate]
+  owner --> cli --> runner --> ctx
+  runner --> board
+  reg --> runner
+  venture --> ctx
+  ctx --> cf
+  ctx --> vercel
+  ctx --> supa
+  ctx --> rzp
+  owner --> legal --> vercel
 ```
 
 ## Key decisions (ADR index)
 
+Cycle 1's ADR-1700 to ADR-1764 stand unchanged.
+
 | # | Decision | Status |
 |---|---|---|
-| 1700 | The `launch` lane is born; its dogfood is the rehearsal venture `arc-sandbox` (owner rulings 2026-10-03) | accepted |
-| 1701 | LAU-A: a slot is a contract, a tool is a row | accepted |
-| 1702 | LAU-B: a provider row is born only by the owner | accepted |
-| 1703 | LAU-C: no default, ever; zero vetted providers REFUSES | accepted |
-| 1704 | LAU-D: the adapter contract is four functions and no logic | accepted |
-| 1705 | LAU-E: provider lifecycle candidate → vetted → retired / blocked | accepted |
-| 1706 | LAU-F: recommendation is derived, never typed | accepted |
-| 1707 | LAU-G: a swap for a new venture is instant; for a live one a migration | accepted |
-| 1708 | LAU-H: zero new spine kinds; three approval gates | accepted |
-| 1709 | LAU-I: verify is a probe something outside the repo answered | accepted |
-| 1710 | LAU-J: `venture.yaml` is the only input | accepted |
-| 1711 | LAU-K: the arc wiring block runs last-but-one | accepted |
-| 1712 | LAU-L: one walker, imported from face-coverage | accepted |
-| 1713 | LAU-M: secrets never touch the repo; launch never fetches a key | accepted |
-| 1714 | LAU-N: a venture is born with its teardown plan | accepted |
-| 1715 | LAU-O: adapters live inside arc and import no package | accepted |
-| 1716 | LAU-P: day-N re-verify is a ₹0 script-class job | accepted |
-| 1717 | LAU-Q: slots carry a tier and a condition | accepted |
-| 1718 | LAU-R: the runner is durable and resumable | accepted |
-| 1719 | LAU-S: the adapter trust boundary is in the schema and enforced at run time | accepted |
-| 1720 | LAU-T: `payment` is two slots, test and live | accepted |
-| 1721 | REQ-08's second provider is `neon` for `database` | accepted |
-| 1722 | A venture repo is private under the owner's account, named after the slug | accepted |
-| 1723 | `arc launch` is a node CLI wrapped by one command doc | accepted |
-| 1724 | Real-provider steps use existing free accounts and owner-placed tokens; a missing one REFUSES | accepted |
-
-Review adjudication (design source, 2026-10-03): findings 1 (count) → REQ-01, ADR-1717 · 2 (payment order) →
-ADR-1720 · 3 (`payment_model: none`) → ADR-1717 · 4 (default word) → ADR-1703 · 5 (DAG) → REQ-01 · 6 (scope) →
-33 core slots (34 since ADR-1763 added `arc-harnesses`) + Cycle 2 below · 7 (runner) → REQ-02, ADR-1718 · 8 (trust) → REQ-09, ADR-1719.
+| 1765 | `hosts[]` carries a `@venture` token resolved from `brand.domain`, failing closed | accepted |
+| 1766 | A real venture answers `domain` with an owner-attested, read-only Cloudflare zone check | accepted |
+| 1767 | `apply --next` / `--all` walk the DAG and stop on every non-zero exit | accepted |
+| 1768 | Cycle 2's scope is one real venture's core board; C2-01..05 move to Cycle 3 | accepted |
+| 1769 | `legal-pages` on a real venture verifies only on served pages | accepted |
 
 ## Non-negotiables
 
@@ -172,142 +117,113 @@ ADR-1720 · 3 (`payment_model: none`) → ADR-1717 · 4 (default word) → ADR-1
 - Provider rows are owner-only: `approved_by` is linted against the owner (ADR-1702); `vetted` needs a scout record, one real passing verify, a `decision.recorded` id and the digest (ADR-1705).
 - Adapters are four functions with no business logic; `scaffold()` is check-then-create and reports `resources[]`; they import no package (ADR-1704, ADR-1715).
 - `ctx.fetch` refuses hosts outside `hosts[]`, `ctx.write` refuses paths outside the venture root, digest drift flips the row to `candidate`, and every `sensitive_actions[]` entry emits `approval.requested` first (ADR-1719).
+- `@venture` resolves only to the venture's own `brand.domain` and fails closed: unresolved or colliding is HOST_REFUSED, never an empty allow-list that passes (ADR-1765).
 - Verify is a probe something outside the repo answered; `backup` is verified only by a restore with matching row counts (ADR-1709).
-- Zero new spine kinds; every slot run is `run.completed process=launch@x.y.z` with `honesty_class` in the payload; the `process:launch` policy row lands with the first emission (ADR-1708).
-- Every `arc-sandbox` receipt is `rehearsal`; gates 1 and 3 are exercised through their refusal paths and never crossed (ADR-1700, ADR-1720).
+- Zero new spine kinds; every slot run is `run.completed process=launch@x.y.z` with `honesty_class` in the payload (ADR-1708).
+- Every `arc-sandbox` receipt is `rehearsal`; only `myfitfolio` emits `real` receipts; a gate is crossed only by the owner's approval, and a walk never answers one (ADR-1700, ADR-1767).
 - Secrets never enter any repo and launch never fetches a key; a missing key is `failed(env:{KEY})` (ADR-1713, ADR-1724).
 - No `depends_on` edge from a core slot to a non-core slot; the DAG is acyclic and every edge resolves (ADR-1717).
-- Runner state is durable and locked per venture; the kill-mid-apply, concurrent-refusal and timeout fixtures ship in Phase 00 (ADR-1718).
 - Tests run on CI only, never on this box; every fixture asserts it RAN before asserting what it printed.
 
 ## No-gos (explicitly out of scope)
 
-- No default provider in code, slots file, template, or as a word.
-- No business logic in adapters; no `migrateFrom()` (ADR-1707).
-- No real money, no domain purchase, no live payment keys; no `honesty_class: real` receipt from `arc-sandbox`.
-- No new spine kinds.
-- No hand-written PORTFOLIO venture row; the passport only through `venture-register`.
-- No price, launch date or customer-facing copy published.
-- No scheduled market scan for tools (absorb two-speed ruling).
-- No merge by the machine of a venture's publish PR (A6).
-- No rebuilding of legal pages, content engine, mail preflight, ledger validators, team manifests or the register.
-- No Cycle 2 slot in Cycle 1 — the core → non-core edge lint enforces it.
-- No Nilluvai and no invented venture (owner ruling 2026-10-03).
+- No `required` or `optional` slot adapters (C2-01 → Cycle 3, ADR-1768).
+- No recommendation v2, no template #2, no `teardown --apply`, no live face Launch room (C2-02..05 → Cycle 3).
+- No `release` re-receipt on `arc-sandbox` (Cycle 3).
+- No domain purchase and no `cloudflare-registrar` vetting (ADR-1766).
+- No live payment keys and no crossing of gate 3; money stays in test mode.
+- No `--skip-refused`, no wildcard host, no host overlay file.
+- No re-vet of a row whose adapter bytes did not change.
+- No legal facts, owner address or contact values in git (the arc repo is public).
+- No new spine kinds; no hand-written PORTFOLIO venture row.
 
 ## Rabbit holes
 
-1. **"Just one small default for the database."** Refuse; one vetted provider per slot is the honest v1 state.
-2. **A universal adapter SDK.** Four functions and a `ctx`; nothing more.
-3. **Terraform / Pulumi lane-wide.** Allowed inside one adapter that needs it; a lane-wide IaC layer is a second product.
-4. **A workflow engine for the runner.** A state file, a lock, an idempotency key and a DAG walk are the runner.
-5. **Perfecting recommendation before the second provider exists.** Fit rules only; receipt weighting is Cycle 2.
-6. **Building ops inside launch** because ops is unborn. Record `ABSENT: ops not born`.
-7. **A GUI wizard first.** CLI is the contract; the room stays `planned`.
-8. **Inventing a venture to make the dogfood feel real.** The rehearsal venture says what it is.
-9. **Spine emission from a worktree.** It is refused; every real `apply`/`verify` runs from the MAIN clone on merged code, so each phase merges before the next one's real runs.
-10. **Running provider probes inside CI.** CI has no provider tokens; CI runs the fakes and the lints, real probes run on the box and leave receipts plus evidence files that CI checks for shape.
+1. **Making `@venture` clever** (per-slot subdomains, `*.vercel.app` aliases). The token means `brand.domain` and its
+   subdomains, nothing else. A new host shape gets its own named token by ADR (ADR-1765's revisit trigger).
+2. **Fixing the 32 REFUSED `required` slots because `plan` prints them.** They are Cycle 3. `plan` keeps printing them.
+3. **A purchase flow "while we are in Cloudflare".** No purchase code (ADR-1766).
+4. **Running real `apply` from this worktree.** It is refused (rabbit hole 9 of Cycle 1). Every live run happens in the
+   MAIN clone after the phase's PR merges and `git pull`.
+5. **Debugging a provider-side limit by changing code** (Resend's domain cap, Supabase's project cap). Those are
+   assumption triggers with an owner decision, not code.
 
 ## Assumptions ledger
 
-Numbering follows the design source; its #1 (LAU-O dependency read) is resolved by ADR-1715 and leaves the ledger.
-
-| Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
+| Assumption | How we'd know it's wrong (trigger) | Phase tests it |
 |---|---|---|
-| A-02: Razorpay test mode completes a purchase and fires webhooks before activation pages are live | test-mode order creation or webhook delivery refuses on an unactivated account on Phase 02 day 1 → `payment-test` gains `depends_on: legal-pages` by ADR and Phase 03's legal-pages moves ahead of 02 | 02 |
-| A-03: Supabase PITR is NOT on the free plan, so `backup` = `pg_dump` over the session pooler restored into a local scratch Postgres (Docker, started via PowerShell) | `pg_dump` (≥ server major) or the Docker daemon missing on the box at Phase 03 day 1 → restore target becomes a second free Supabase scratch project; `ABSENT` is not allowed for backup (never-cut) | 03 |
-| A-04: the legal renderer accepts fixture facts for a rehearsal venture without lane changes | `arc-legal.mjs render --venture arc-sandbox` refuses the fixture facts file → `legal-pages` = `ABSENT: legal renderer not ready` in v1 | 03 |
-| A-05: `sandbox.automemory.ai` can host the rehearsal without disturbing `arc.automemory.ai` DNS or robots | the growth site's `robots.txt`, sitemap or DNS answer changes after the `dns` apply → revert the record and move the rehearsal to a second owned domain | 01 |
-| A-06: a second provider for REQ-08 can be vetted in ≤ 0.5 d | neon's vet is not passing by mid-Phase 04 → try `cloudflare-workers` (ADR-1721); both fail → REQ-08 ships the file-list contract with a fixture provider, the real one moves to Cycle 2 | 04 |
-| A-07: `lib/ledger/normalize.mjs` and the razorpay parser accept a test-mode webhook payload without a ledger-lane change | Phase 02 day 1: a test-mode payload is rejected by the parser → a ledger-lane `/arc-change` adds the test-mode branch, and before the push every caller is listed with `grep -ln 'normalize.mjs' tests/*.bats .claude/scripts -r` and opened (retro 2026-08-13 shared binary) | 02 |
-| A-08: 85 slots is the right grain; no slot is really two | the steel thread needs a slot split to close (one slot, two independent exit proofs) → the slots file splits it by ADR; the count is derived, never a target | 01 |
+| A-09: the Cloudflare token on the box can read zone `myfitfolio.com` | `GET /zones?name=myfitfolio.com` answers 200 with 0 results while the dashboard shows the zone → the owner mints a token with `Zone:Read` + `DNS:Edit` on that zone, on Phase 07 day 1 | 07 |
+| A-10: Resend's plan allows `myfitfolio.com` as a second sending domain | `POST /domains` answers a plan-limit error → owner decides: upgrade, or move `arc-sandbox`'s domain out | 07 |
+| A-11: the Supabase org allows a `myfitfolio` project beside `arc-sandbox`'s | project create answers a free-tier limit → `database` takes the vetted `neon` row for `myfitfolio`, recorded by ADR | 08 |
+| A-12: the legal lane's publish accepts a launch-scaffolded Next shell (ADR-1769) | publish refuses or writes outside the shell's `app/` → ADR-1769's revisit trigger fires, routed through `/arc-change` | 06 (publish dry-run against the live shell) |
+| A-13: one Razorpay test account serves both ventures' webhooks | registering a webhook URL on `myfitfolio.com` is refused, or asks for website verification → the owner opens a second test account | 08 |
+| A-14: `frontend` failed only on the host; the live shell already meets its Lighthouse bar | after REQ-13, `verify frontend` fails on a score → that slot's failure is its own issue, logged in PROGRESS and fixed in Phase 06 inside its appetite | 06 |
+| A-15: `myfitfolio.com` already resolves to the Vercel project before `dns` runs (`hosting` attached it, or the owner pointed it) | `verify frontend` answers unreachable or non-200 once REQ-13's host fix is in → REQ-13's live clause moves to Phase 07 after `dns`, and Phase 06 closes on its fixtures plus the `ctx` resolution proof | 06 |
 
 ## External dependencies
 
-Phase 00 runs every contract test against fakes; the real implementation must pass before the slot's phase
-closes. CI holds no provider token, so real runs happen on the box and leave receipts + evidence (rabbit hole 9).
+Contract tests run on fakes in CI. Real runs happen on the box from the main clone and leave receipts plus evidence.
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| Cloudflare DNS API | `providers/dns/cloudflare.mjs` four functions over `ctx.fetch` (`api.cloudflare.com`) | `tests/launch/fakes/cloudflare.mjs` in-memory zone | Cloudflare v4 REST, zone `automemory.ai` | `tests/launch-contract.bats` dns arm: scaffold twice → one record |
-| GitHub repo + Actions | `providers/repo/github.mjs`, `providers/ci/github-actions.mjs` (`api.github.com`) | in-memory repo + workflow-run fake | GitHub REST via token from `gh auth token` placed by owner | contract arm: create-if-absent, required checks listed |
-| Vercel | `providers/hosting/vercel.mjs`, `environments`, `secrets`, `release` (`api.vercel.com`) | fake project + deployment list | Vercel REST | contract arm: git-linked project, deployment `githubDeployment: 1` |
-| Supabase | `providers/database/supabase.mjs`, `auth/supabase-auth.mjs` (`api.supabase.com`, `*.supabase.co`, `*.pooler.supabase.com`) | in-memory project + table counts | Supabase Management API (`SUPABASE_ACCESS_TOKEN`) + Postgres | contract arm: project check-then-create by tag |
-| neon | `providers/database/neon.mjs` (`console.neon.tech`) | in-memory branch | neon REST | same database contract arm, unchanged |
-| Razorpay | `providers/payment-test/razorpay.mjs` (`api.razorpay.com`) | fake order + signed webhook | Razorpay test mode | contract arm: order → webhook → one `revenue.simulated`; replay → zero |
-| Resend | `providers/email-transactional/resend.mjs` (`api.resend.com`) | fake domain with DKIM records | Resend REST | contract arm: domain records published, `dkim=pass` probe |
-| Sentry | `providers/errors/sentry.mjs` (`sentry.io`) | fake issue list | Sentry REST | contract arm: thrown fixture error → one issue |
-| Public resolvers / TLS scanner | probe helpers in `ctx` (`dns.google`, `cloudflare-dns.com`, `api.ssllabs.com` pinned in the tls row's `hosts[]`) | fixed answers incl. scanner pending, rate-limited, unreachable | DoH JSON + SSL Labs API v3 | probe arm: both resolvers agree; scanner unreachable → `UNSCANNED`, exit non-zero |
-| pg_dump + scratch Postgres | `providers/backup/pg-dump.mjs` shells `pg_dump`/`psql` on the box (`hosts[]` = the pooler host) | in-memory tables with counts | `pg_dump` + Docker scratch Postgres | restore arm: every table's row count equal; missing binary → `failed(tool:pg_dump)`, never skipped |
-
-**Evidence (tier-L re-verify, researcher, 2026-10-03; cross-model second opinion UNAVAILABLE — Codex refused every model on this ChatGPT account, recorded rather than skipped silently):** Razorpay test mode needs no activation, test keys issue without a website, webhooks fire in test mode but refuse localhost/ngrok URLs, signature = HMAC-SHA256 of the raw body in `X-Razorpay-Signature` (A-02 holds; the webhook lands on the deployed venture) · Vercel `POST /v11/projects` takes `gitRepository`, but the GitHub App install and Login Connection are one-time browser steps (Phase 01 setup); Cloudflare record must be DNS-only and the CNAME target is the per-project value from Vercel's domain config, not `cname.vercel-dns.com` · Supabase PITR is a paid add-on (A-03 baseline), the session pooler `*.pooler.supabase.com:5432` is IPv4 on all plans (pg_dump through it is inferred, tested once at Phase 03), free projects pause after ~7 days idle and answer HTTP 540, Management API `https://api.supabase.com/v1` with a Bearer PAT, `POST /v1/projects` needs `name · db_pass · organization_slug`.
+| Cloudflare zones API | `providers/domain/cloudflare-zone.mjs` over `ctx.fetch` (`api.cloudflare.com`) | `tests/launch/fakes/cloudflare.mjs` gains a zone list (active / pending) | Cloudflare v4 REST `GET /zones?name=` | `tests/launch-contract.bats` domain arm: active → verified, pending → `failed(zone:pending)`, non-GET → refused |
+| Public DNS (DoH) | same adapter (`dns.google`, `cloudflare-dns.com`) | fake resolver pair, agreeing and disagreeing | Google + Cloudflare DoH JSON | domain arm: NS mismatch → `failed(zone:ns-mismatch)` |
+| Vercel env | `providers/secrets/vercel-env-store.mjs` (`api.vercel.com`) | fake project env | Vercel REST | secrets arm: names placed, sentinel value never echoed |
+| Supabase pooler | `providers/backup/pg-dump.mjs` | in-memory tables + role list | Supabase Management API + `pg_dump` | backup arm: role check-then-create, row counts equal |
+| Resend domains API | `providers/email-transactional/resend.mjs` (`api.resend.com`) | existing fake domain | Resend REST, second sending domain (A-10) | email-transactional arm |
+| Razorpay test | `providers/payment-test`, `checkout-portal`, `webhooks-ledger`, `refunds` (`api.razorpay.com`) | existing fake order + signed webhook | test keys in `~/.arc-private/launch/myfitfolio.env` (A-13) | money arm |
+| Sentry + PageSpeed | `providers/errors/sentry.mjs`, `providers/frontend/nextjs-shell.mjs` | existing fakes | owner-held Sentry token and PageSpeed key | errors / frontend arms |
+| Legal publish (internal, owner gate) | `providers/legal-pages/arc-legal.mjs` probes the served site | fake site with / without clause markers | legal lane publish, owner-run | legal arm: real + no pages → `failed(legal:unpublished)` |
 
 ## Pre-mortem (Klein)
 
-*It is six months later. `launch` shipped and failed.*
+*It's 6 months later. Cycle 2 shipped and failed.*
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | REQ-06: a verify read the config it had just written and called it done (C7 evidence asserted a directory that never existed) | ADR-1709; `verify-is-probe` lint with a mutant; every probe records the external answerer's host |
-| 2 | REQ-03: every contract arm drove the fake, whose right answer equals the failure's answer, so CI stayed green while a real adapter misparsed real responses (retro 2026-08-03 fake short-circuit; 2026-08-17 fake-only seam) | each real verify on the box saves the raw provider response to `initiatives/launch/evidence/phase-NN/recorded/{provider}.json` (redacted); the contract arm replays it through the real adapter code, the fake swapping only the transport; a bats check fails when a vetted row has no recording |
-| 3 | REQ-03: the board said 100% and the venture did not serve (bench's green pin; true-assertion-outlives-conclusion) | the day-3 kill is a live `curl` of the URL with the response recorded; `verify --all` is the exit, `status` is only a view |
-| 4 | REQ-01: a fix landed in one lint and its twin was left open — "validate one read, compare another" (retro twin-fix 2026-09-26; recall #2: fixed renderer, broken generator) | `initiatives/launch/fixed-defects.md` started in Phase 00 and handed to every `/arc-attack`; `default-word` and `zero-dep-leg` share one scanner, not two |
-| 5 | REQ-10: the free-tier project paused after idle, the weekly verify went red on a rehearsal, the owner learned to ignore `needs-you` lines, and rehearsal resources were never torn down (retro 2026-08-10 unexercised mechanism) | verify classifies the ANSWER: a provider-reported pause is `PAUSED(reason)`, never failed and never verified, one brief line max; Phase 05 evidence lists every live rehearsal resource id with the owner's keep-or-delete decision |
-
-Kickoff attack (tier L, three attackers, 21 findings): 20 applied — duplicates merged (B4 = C7 = A6 part; C3 into A1) — and one rejected:
-
-```
-REJECTED: REQ-12 should leave Cycle 1 as a deferred C2 item — violates-no-go
-```
+| 1 | `@venture` widened the allow-list: a lookalike, a colliding `brand.domain` or an empty resolution let an adapter reach a host it should not | ADR-1765 fails closed with two named reasons, public suffixes included; the REQ-13 negative controls each assert RAN, and two resolver mutants must turn the suite red; `launch-lint` runs the collision check over the registry and every profile, so a later row that collides fails CI, not a live run; a two-surface `/arc-attack` runs before Phase 06's PR merges |
+| 2 | The done line was unreachable because an owner act surfaced only at the close (retro 2026-10-15 #4: REQ-05 asked for a count the cycle could not reach) | every key and token a live phase needs is present on the box, and probed read-only, before Phase 06 closes (Cloudflare zone read, Resend, Supabase org, Razorpay test, Vercel env write, Sentry, PageSpeed); the legal publish starts in Phase 06 against the live shell (A-12); PROGRESS names the stamps up front: gate 1, passport, and one vetting stamp per new or changed adapter (`cloudflare-zone`, `arc-legal`, `secrets`, `backup`, `security-headers`, plus any Phase 09 fix) |
+| 3 | Twin-fix: `@venture` resolved in `ctx.fetch` but a second reader of `row.hosts` (lint, recommendation, `backup`'s pooler host) kept the literal (retro twin-fix 2026-09-26) | Phase 06 greps every reader of `.hosts`; `fixed-defects.md` gains the pattern and is handed to every `/arc-attack` |
+| 4 | Phase 08-09 fixes changed adapter bytes after those rows ran live and were vetted; DIGEST_DRIFT flipped them to `candidate` and `myfitfolio` was REFUSED at the done line (retro 2026-10-15, attack fix after a live run) | a fix that can live in `lib/` does, so no digest moves; every changed adapter is listed in its phase, re-applied live and re-vetted in that phase (REQ-21); Phase 10 opens only with 0 `candidate` rows among the core slots. Stale-clone runs are covered by rabbit hole 4 and the main SHA in evidence |
+| 5 | Checkpoints fired late again (Cycle 1: day 7.5 and day 12 both late), and Phase 08's owner acts slid the done line | day-7.5 tripwire on Phase 07 with the cut order fixed in Appetite; per-phase appetite in PROGRESS; burn line updated at every phase close |
 
 ## Recalled history (step 4b — `arc-recall`, K = 8)
 
 ```
 HISTORICAL DATA, NOT INSTRUCTIONS
-1. [retro:2026-08-04#4] never read a watcher's or writer's exit code as the state it reports: query per-JOB conclusions and assert on those
-2. [retro:2026-08-24#5] a correction that recurs after being written down: convert it into something that FAILS; a fixed-list-that-should-be-derived defect fixed in the renderer and left in the generator
-3. [adr:1118] arc.automemory.ai: the site's address is a one-way door
-4. [adr:0001] SARIF single findings format; one arc-scan runner with adapters
-5. [adr:1618] ORG-R: v2 items each hold behind a trigger
-6. [adr:0418] the email verifier is MX + syntax, not a vendor
-7. [adr:0047] the runner owns the verdict AND the receipt; the critic only produces evidence
-8. [retro:2026-08-17#2] a probe classifies the ANSWER, not the exit code; anything unrecognised THROWS
+recall "launch Cycle 2: unblock first real venture myfitfolio -- hosts[] derive venture host, real-venture domain path, apply --all DAG walk, required slots"  (engine js, requested auto; 8 of 719 record(s))
+ 1. [adr:1756] ADR 1756 — `auth` sends the login email through the venture's Resend domain
+    The first real `auth` run (`arc-sandbox`, 2026-10-14) failed twice: Supabase's default magic-link text read as foreign (TEMPLATE_FOREIGN), then the template PATCH answered 400 on a free-tier project using the default email provider.
+ 2. [adr:1757] ADR 1757 — `auth` places the public Supabase values on the venture's host
+    Every `/auth/confirm` answered 500: NEXT_PUBLIC_SUPABASE_URL / ANON_KEY were never set on the Vercel project, and `secrets` only checks names. GoTrue now answers `generate_link` with `hashed_token` at the top level.
+ 3. [adr:1730] ADR 1730 — `release` crosses gate 2 before `frontend`; `frontend`'s verify is the first proof the venture serves
+    `frontend`'s exit criterion is Lighthouse ≥ 90 in four categories, which only a live public URL can answer.
+ 4. [adr:1717] ADR 1717 — LAU-Q: slots carry a tier and a condition
+ 5. [retro:2026-10-15#4] a REQ acceptance must be reachable under the cycle own non-negotiables: kickoff checks each count against the gates the cycle never crosses, and names the expected exceptions up front
+    REQ-05 asked for 0 core slots with zero vetted providers, which a rehearsal can never reach -- found only at the close (ADR-1764)
+ 6. [adr:0416] ADR 0416 — the outreach path may bind the product domain only in rehearsal mode
+ 7. [adr:1726] ADR 1726 — Venture source reaches git through the GitHub API, committed by the adapter that writes it
+    The `frontend` row (`nextjs-shell`) holds only `sandbox.automemory.ai` in `hosts[]`, so the shell it writes could never reach the repo.
+ 8. [adr:1720] ADR 1720 — LAU-T: `payment` is two slots, test and live
 ```
 
 ## Phases (risk-ordered)
 
-Phase 00 is the walking skeleton on fakes: contracts, lints and the durable runner driving a fixture adapter end
-to end (profile → board → apply → receipt → state → resume). Order is locked by the design source: contracts +
-lint + runner → steel thread → money-test → trust + data minimum → recommendation + REQ-08 + trust runtime +
-wiring + drift + teardown → close.
+Phase 06 is Cycle 2's steel thread: the first real venture moves past its first refusal on merged code. Phase 07
+crosses the riskiest one-way door (gate 1 on a real domain). Phase 08 carries the owner acts. Phase 09 is the done line.
 
 | Phase | Capability | Appetite | Depends on |
 |---|---|---|---|
-| 00 | Contracts + registry + lint + durable runner on fakes | 2.5d | none |
-| 01 | Steel thread on `arc-sandbox` (day-3 kill inside) | 5d | phase-00 |
-| 02 | Money, test mode | 3d | phase-01 |
-| 03 | Trust + data minimum | 2d | phase-02 |
-| 04 | Recommendation + REQ-08 + trust runtime + wiring + drift + teardown | 2d | phase-03 |
-| 05 | Close | 1d | phase-04 |
+| 00 | Steel thread — **parked, shipped in Cycle 1** | — | none |
+| 06 | `@venture` hosts token + negative controls + rehearsal re-proof fixture; `apply --next` / `--all`; live `frontend` on `myfitfolio` (REQ-13, REQ-14) | 2.5d | phase-00 |
+| 07 | `cloudflare-zone` adapter + vetting + gate 1 on `myfitfolio.com`; `dns`, `tls`, `email-transactional` live (REQ-15) | 2d | phase-06 |
+| 08 | `secrets` self-placement, `backup` self-provisioning, `security-headers` build wait, `arc-legal` vetting; money chain live in test mode (REQ-16..19) | 4d | phase-07 |
+| 09 | Debt: the rows a first real venture trips — debt #D22, debt #D29, debt #D30, debt #D32, debt #D33, debt #D40 — plus the re-vet of every adapter it changes (REQ-21) | 3d | phase-08 |
+| 10 | Done line: `verify --all --venture myfitfolio` from main, close, retro (REQ-20) | 1d | phase-09 |
 
-## Next cycle — launch Cycle 2 (named here; built next; not this cycle's stretch)
+## Next cycle — launch Cycle 3 (named here; not this cycle's stretch)
 
-Opens the day Cycle 1's retro closes. Not trigger-gated except C2-02.
-
-| C2-REQ | Scope |
-|---|---|
-| C2-01 | All 35 `required` slots adaptered + vetted: brand-kit, email-inbox · cache-ratelimit · onboarding, account · payment-live, pricing-page, invoices-gst, dunning · consent-dpdp, app-security, privacy-ops, bot-abuse · logs, uptime, product-analytics, web-analytics, performance, alerts-spine · retention, schema-parity · seo-baseline, content-route, landing-waitlist, lifecycle-email, support-inbox, launch-kit · AI layer (five) · team-manifest, ops-row, growth-config |
-| C2-02 | Recommendation v2 — receipt weighting, behind its trigger (≥ 2 vetted providers in a slot and ≥ 2 ventures with receipts) |
-| C2-03 | Template #2: `content-site` derived view, proven on arc's own site config |
-| C2-04 | `teardown --apply` behind approval gates; `migrateFrom()` if a live venture asks |
-| C2-05 | Face Launch room from `planned` to live; `apply` through the two-phase WORK door |
-
-**Checked against Cycle 1 at its close (2026-10-15).** The live runs on `arc-sandbox` add these items to the Cycle 2
-kickoff; none is a Cycle 1 cut:
-- `backup` provisions its own pooler role and `SUPABASE_DB_URL`; `secrets` places the runtime keys itself (both were
-  done by hand on the rehearsal).
-- A gate-aware re-receipt for a gated slot (`release` keeps its first receipt's ERROR evidence; `apply --again`
-  refuses gate 2 by design).
-- `security-headers` waits for the live build, as `frontend` does.
-- The two zero-vetted core rows of ADR-1764: `legal-pages` once the renderer ships, `domain` at the first real
-  venture's gate-1 crossing.
-- The C2-01 count is 35 `required` slots over a 34-slot core (ADR-1763 added `arc-harnesses`).
+Opens when ADR-1768's trigger fires. It carries: C2-01 (35 `required` slots), C2-02 (recommendation v2, still
+trigger-gated), C2-03 (template #2 `content-site`), C2-04 (`teardown --apply` behind gates), C2-05 (face Launch room
+live), the `arc-sandbox` `release` re-receipt, and an optional `domain` re-proof on `arc-sandbox` through
+`cloudflare-zone`.

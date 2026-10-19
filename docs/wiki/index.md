@@ -15,7 +15,7 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 | [Gates](#gates) | 7 | 0 |
 | **Total** | **154** | **34** |
 
-Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 437 of 507 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 442 of 512 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -57,7 +57,7 @@ Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 437 of 
 | [evolve](lanes/evolve.md) | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) |
 | [face](lanes/face.md) | IDLE | arc-face v2 (Cycle 16, opened 2026-09-16) |
 | [growth](lanes/growth.md) | LIVE | arc-growth (Cycle 14, opened 2026-08-12) |
-| [launch](lanes/launch.md) | IDLE | arc-launch (Cycle 1, opened 2026-10-03) |
+| [launch](lanes/launch.md) | LIVE | arc-launch (Cycle 2, opened 2026-10-19) |
 | [leads](lanes/leads.md) | LIVE | arc-leads (Cycle 8, opened 2026-08-04) |
 | [ledger](lanes/ledger.md) | IDLE | arc-ledger (opened 2026-08-12, closed 2026-08-13) |
 | [legal](lanes/legal.md) | IDLE | arc-legal (Cycle 14, sealed 2026-10-07) |
@@ -111,7 +111,7 @@ Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 437 of 
 | [1400–1499](adr/1400.md) | 23 | 0 |
 | [1500–1599](adr/1500.md) | 15 | 0 |
 | [1600–1699](adr/1600.md) | 31 | 0 |
-| [1700–1799](adr/1700.md) | 65 | 0 |
+| [1700–1799](adr/1700.md) | 70 | 0 |
 | [1800–1899](adr/1800.md) | 4 | 0 |
 | [1900–1999](adr/1900.md) | 17 | 0 |
 | [2000–2099](adr/2000.md) | 28 | 0 |
