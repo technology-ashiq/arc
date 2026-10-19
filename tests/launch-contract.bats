@@ -915,10 +915,10 @@ arm() {
   [ "$(j 'o.post.status + " " + o.rows')" = "500 0" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: a venture domain outside the row's hosts[] is refused before any delivery (ADR-1739)" {
+@test "launch-contract: a venture whose domain is a shared suffix is refused before any delivery (ADR-1739, ADR-1765)" {
   arm webhooks host-refused
   [ "$(j 'o.verify.ok + " " + o.queued + " " + o.routeCalls')" = "false 0 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix, not a registrable domain (VENTURE_HOST_UNRESOLVED)"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: webhooks-ledger verify is not ok and books nothing when the served route skips or re-serialises the signature, the secret differs, or a policy opens the table (ADR-1739)" {
@@ -999,7 +999,7 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
   arm refunds host-refused
   [ "$(j 'o.verify.ok + " " + o.queued + " " + o.routeCalls')" = "false 0 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix, not a registrable domain (VENTURE_HOST_UNRESOLVED)"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a refund of the probe payment launch did not send fails the probe, and a new probe payment gets a fresh refund (55c5065 L7 B3)" {
@@ -1226,9 +1226,9 @@ arm() {
   [ "$(j 'o.exit + " " + o.state + " " + o.reason')" = "1 failed env:RAZORPAY_KEY_ID" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: checkout-portal verify on a venture domain outside hosts[] is refused by ctx.fetch, and no order is made" {
+@test "launch-contract: checkout-portal verify on a venture whose domain is a shared suffix is refused by ctx.fetch, and no order is made" {
   arm login checkout-host
-  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false HOST_REFUSED: evil.example.com is not in this provider's hosts[]"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false HOST_REFUSED: @venture does not resolve"* ]] || { echo "$DONE"; false; }
   [ "$(j 'o.creates')" = "0" ] || { echo "$DONE"; false; }
 }
 
@@ -1287,7 +1287,7 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "UPSTREAM_MISSING 0" ] || { echo "$DONE"; false; }
   arm headers host-refused
   [ "$(j 'o.verify.ok + " " + o.siteCalls')" = "false 0" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: pay.evil-example.com is not in this provider"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "HOST_REFUSED: @venture does not resolve: brand.domain \"vercel.app\" is a shared suffix, not a registrable domain (VENTURE_HOST_UNRESOLVED)"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: dependency-scan commits its own workflow and Dependabot once, beside ci's, and verify reads a green audit run for main's head (ADR-1743)" {
@@ -1339,7 +1339,7 @@ arm() {
   arm legal foreign
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false /privacy 200 (not an arc-legal page)"* ]] || { echo "$DONE"; false; }
   arm legal host-refused
-  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false HOST_REFUSED: pay.evil-example.com"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false HOST_REFUSED: @venture does not resolve"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: both legal pages absent is a named ABSENT the worker records as state absent, and only where the slot's exit criteria allow it (ADR-1745)" {

@@ -325,3 +325,109 @@ add_probe_rows() {
   [[ "$output" == *"0 of 1 board(s) due"*"all due boards watched"* ]] || { echo "$output"; false; }
   [ "$(tr -d '\r\n' < "$sd/.watch-last")" = "{\"zz-broken\":\"$today\"}" ] || { cat "$sd/.watch-last"; false; }
 }
+
+# ---------- apply --next / --all (ADR-1767): core slots in DAG order, stopping on every non-zero exit ----------
+
+# The walk fixture adds `rowless` (core, no row), `ghost` (required) and `orphan` (core, depends on ghost) at the end,
+# and a `real` venture. Its own dir, so the default fixture's tests are untouched.
+walk_fx() {
+  local out; out=$(FX_WALK=1 node "$ARC_ROOT/tests/launch/make-fixture.mjs" "$BATS_TEST_TMPDIR/wfx") || { echo "walk fixture failed"; return 1; }
+  eval "$out"
+  grep -q 'id: orphan' "$FX_DIR/catalog.yaml" && [ -s "$FX_DIR/ventures/fx-real.venture.yaml" ] || { echo "walk fixture empty"; return 1; }
+}
+walk_set() { node "$ARC_ROOT/tests/launch/walk-state.mjs" "$FX_STATE_DIR" "$@" >/dev/null || { echo "walk-state failed"; return 1; }; }
+spine_slot() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep "\"kind\":\"$1\"" | grep -c "\"slot\":\"$2\"" || true; }
+EARLY="probe=verified slow=verified after-probe=verified gated=verified live-money=verified sens=verified"
+
+@test "launch-cli: apply --all walks the fake board in DAG order and stops at the first gate with exit 5" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 5 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at gated: exit 5 gated: gate-2 -- approval.requested "* ]] || { echo "$output"; false; }
+  [ "$(slot_field probe state) $(slot_field slow state) $(slot_field after-probe state)" = "verified verified verified" ] || { echo "$output"; false; }
+  [ "$(spine_slot approval.requested gated)" -eq 1 ]
+  # A second walk meets the same gate and asks the owner nothing new.
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 5 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at gated: exit 5 "* ]] || { echo "$output"; false; }
+  [ "$(spine_slot approval.requested gated)" -eq 1 ]
+}
+
+@test "launch-cli: apply --all retries a failed slot once, at once, then stops at it with exit 1" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  export FAKE_SLEEP_MS=4000
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  unset FAKE_SLEEP_MS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at slow: exit 1 "* ]] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "verified" ] || { echo "$output"; false; }
+  [ "$(slot_field slow state)" = "failed" ]
+  [ "$(slot_field slow attempt)" -eq 2 ]
+}
+
+@test "launch-cli: apply --all stops with exit 2 at a core slot with no provider and never walks past it" {
+  walk_fx
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  walk_set fx-sandbox $EARLY
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at rowless: exit 2 REFUSED -- no vetted provider for rowless"* ]] || { echo "$output"; false; }
+  [ "$(slot_field orphan state)" = "pending" ]
+}
+
+@test "launch-cli: apply --all stops with exit 4 on an unmet dependency and never walks a required slot" {
+  walk_fx
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  walk_set fx-sandbox $EARLY rowless=verified
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 4 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at orphan: exit 4 orphan: waiting on ghost"* ]] || { echo "$output"; false; }
+  [ "$(slot_field ghost state)" = "pending" ]
+}
+
+@test "launch-cli: apply --all stops with exit 3 while another apply holds the lock" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  ( FAKE_HOLD_MS=6000 node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS > "$BATS_TEST_TMPDIR/a.out" 2>&1; echo "A_RC=$?" >> "$BATS_TEST_TMPDIR/a.out" ) &
+  local i; for i in $(seq 1 100); do grep -q FAKE_HOLDING "$BATS_TEST_TMPDIR/a.out" 2>/dev/null && break; sleep 0.1; done
+  grep -q FAKE_HOLDING "$BATS_TEST_TMPDIR/a.out" || { echo "holder never started"; cat "$BATS_TEST_TMPDIR/a.out"; false; }
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  wait
+  [ "$status" -eq 3 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at probe: exit 3 another apply holds fx-sandbox's lock"* ]] || { echo "$output"; false; }
+  grep -q "A_RC=0" "$BATS_TEST_TMPDIR/a.out" || { cat "$BATS_TEST_TMPDIR/a.out"; false; }
+}
+
+@test "launch-cli: an absent slot is passed over on a rehearsal and stops a real venture with exit 2" {
+  walk_fx
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" new --venture fx-real $FX_FLAGS
+  walk_set fx-sandbox probe=absent
+  walk_set fx-real probe=absent
+  run node "$(L)" apply --next --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"walk complete: 1 applied, 1 skipped"* ]] || { echo "$output"; false; }
+  [ "$(slot_field slow state)" = "verified" ] || { echo "$output"; false; }
+  run node "$(L)" apply --all --venture fx-real $FX_FLAGS
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at probe: exit 2 absent on real"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: a walk over a green board applies nothing and counts the skipped slots" {
+  walk_fx
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  walk_set fx-sandbox $EARLY rowless=verified orphan=verified
+  run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"walk complete: 0 applied, 1 skipped"* ]] || { echo "$output"; false; }
+}
+
+@test "launch-cli: apply refuses --again with a walk, a SLOT with a walk, and --next with --all" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run node "$(L)" apply --all --again --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] && [[ "$output" == *"--again takes one SLOT"* ]] || { echo "$output"; false; }
+  run node "$(L)" apply probe --next --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] && [[ "$output" == *"apply takes a SLOT or --next/--all, not both"* ]] || { echo "$output"; false; }
+  run node "$(L)" apply --next --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 2 ] && [[ "$output" == *"apply takes --next or --all, not both"* ]] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "pending" ]
+}

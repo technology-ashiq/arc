@@ -1,0 +1,169 @@
+{
+ "source": "products/launch/launch.providers.yaml at a30c3d4e (Cycle 1 literal, before ADR-1765)",
+ "rows": [
+  {
+   "id": "vercel-managed-tls",
+   "slot": "tls",
+   "hosts": [
+    "api.vercel.com",
+    "api.ssllabs.com",
+    "sandbox.automemory.ai"
+   ]
+  },
+  {
+   "id": "nextjs-shell",
+   "slot": "frontend",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.github.com",
+    "api.vercel.com",
+    "www.googleapis.com"
+   ]
+  },
+  {
+   "id": "next-route-handlers",
+   "slot": "backend",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "drizzle",
+   "slot": "orm",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "supabase-auth",
+   "slot": "auth",
+   "hosts": [
+    "api.supabase.com",
+    "supabase.co",
+    "sandbox.automemory.ai",
+    "api.github.com",
+    "api.vercel.com"
+   ]
+  },
+  {
+   "id": "rls-roles",
+   "slot": "authz",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.supabase.com",
+    "supabase.co",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "org-invite",
+   "slot": "tenancy",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.supabase.com",
+    "supabase.co",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "plans-yaml",
+   "slot": "plans",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.supabase.com",
+    "supabase.co",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "razorpay-checkout",
+   "slot": "checkout-portal",
+   "hosts": [
+    "api.razorpay.com",
+    "sandbox.automemory.ai",
+    "api.supabase.com",
+    "supabase.co",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "razorpay-webhook",
+   "slot": "webhooks-ledger",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.supabase.com",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "razorpay-refunds",
+   "slot": "refunds",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.supabase.com"
+   ]
+  },
+  {
+   "id": "arc-legal",
+   "slot": "legal-pages",
+   "hosts": [
+    "sandbox.automemory.ai"
+   ]
+  },
+  {
+   "id": "next-headers",
+   "slot": "security-headers",
+   "hosts": [
+    "sandbox.automemory.ai",
+    "api.github.com",
+    "observatory-api.mdn.mozilla.net"
+   ]
+  },
+  {
+   "id": "sentry",
+   "slot": "errors",
+   "hosts": [
+    "sentry.io",
+    "sandbox.automemory.ai",
+    "api.github.com"
+   ]
+  },
+  {
+   "id": "venture-register",
+   "slot": "passport",
+   "hosts": [
+    "sandbox.automemory.ai"
+   ]
+  },
+  {
+   "id": "ledger-source",
+   "slot": "ledger-source",
+   "hosts": [
+    "sandbox.automemory.ai"
+   ]
+  },
+  {
+   "id": "face-planned",
+   "slot": "face-room",
+   "hosts": [
+    "sandbox.automemory.ai"
+   ]
+  },
+  {
+   "id": "arc-checkout",
+   "slot": "arc-harnesses",
+   "hosts": [
+    "sandbox.automemory.ai"
+   ]
+  },
+  {
+   "id": "teardown-render",
+   "slot": "teardown-plan",
+   "hosts": [
+    "sandbox.automemory.ai"
+   ]
+  }
+ ]
+}

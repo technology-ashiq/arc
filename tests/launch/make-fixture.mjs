@@ -19,6 +19,16 @@ const slot = (id, extra = []) => [
   `  - id: ${id}`, "    group: delivery", "    tier: core", "    exit_criteria:", "      - \"the fake provider holds both resources\"",
   `    verify: ${id}-probe`, ...extra, "    resume: resources", "    required_when: always",
 ];
+// FX_WALK=1 (the apply --all fixtures, ADR-1767): three more slots at the end of the walk -- `rowless` (core, no
+// provider row: exit 2), `ghost` (required tier, never walked) and `orphan` (core, depends on ghost: exit 4, the edge
+// launch-lint refuses in the real catalog) -- and a `real` venture for the absent-on-real stop.
+const WALK = process.env.FX_WALK === "1";
+const walkSlots = WALK ? [
+  ...slot("rowless", ["    gate: none", "    approval: false", "    timeout: 60"]),
+  "  - id: ghost", "    group: delivery", "    tier: required", "    exit_criteria:", "      - \"never walked\"",
+  "    verify: ghost-probe", "    gate: none", "    approval: false", "    timeout: 60", "    resume: resources", "    required_when: always",
+  ...slot("orphan", ["    depends_on:", "      - ghost", "    gate: none", "    approval: false", "    timeout: 60"]),
+] : [];
 writeFileSync(join(dir, "catalog.yaml"), ["slots:",
   ...slot("probe", ["    gate: none", "    approval: false", "    timeout: 60"]),
   ...slot("slow", ["    gate: none", "    approval: false", "    timeout: 2"]),
@@ -28,7 +38,7 @@ writeFileSync(join(dir, "catalog.yaml"), ["slots:",
   ...slot("sens", ["    gate: none", "    approval: true", "    timeout: 60"]),
   "  - id: no-money", "    group: money", "    tier: core", "    exit_criteria:", "      - \"skipped for gateway ventures\"",
   "    verify: no-money-probe", "    gate: none", "    approval: false", "    timeout: 60", "    resume: resources", "    required_when: \"payment_model == none\"",
-  ""].join("\n"));
+  ...walkSlots, ""].join("\n"));
 
 const row = (slotId, extra = []) => [
   `  - id: fake`, `    slot: ${slotId}`, "    status: vetted", "    hosts:", "      - fixture.invalid",
@@ -40,13 +50,16 @@ const row = (slotId, extra = []) => [
   "    vetted_by: 01M40ZHP72PYVBJT17R7A4WZ3W", "    scout: tests/launch/fixtures/scout.md", ...extra,
 ];
 writeFileSync(join(dir, "registry.yaml"), ["providers:",
-  ...["probe", "slow", "after-probe", "gated", "live-money", "no-money"].flatMap((s) => row(s)),
+  ...["probe", "slow", "after-probe", "gated", "live-money", "no-money", ...(WALK ? ["orphan"] : [])].flatMap((s) => row(s)),
   ...row("sens", ["    sensitive_actions:", "      - delete"]),
   ""].join("\n"));
 
 writeFileSync(join(dir, "ventures", "fx-sandbox.venture.yaml"), [
   "slug: fx-sandbox", "type: saas-b2b", "region: in", "payment_model: gateway", "tenancy: multi", "ai: false",
   "honesty_class: rehearsal", "brand:", "  name: fixture", "  domain: fixture.invalid", ""].join("\n"));
+if (WALK) writeFileSync(join(dir, "ventures", "fx-real.venture.yaml"), [
+  "slug: fx-real", "type: saas-b2b", "region: in", "payment_model: gateway", "tenancy: multi", "ai: false",
+  "honesty_class: real", "brand:", "  name: fixture", "  domain: fixture.invalid", ""].join("\n"));
 
 for (const f of ["catalog.yaml", "registry.yaml", "ventures/fx-sandbox.venture.yaml", "providers/probe/fake.mjs"])
   if (!statSync(join(dir, f)).size) { console.error(`make-fixture: ${f} is empty`); process.exit(1); }
@@ -57,6 +70,7 @@ const out = {
   FAKE_PROVIDER_FILE: join(dir, "provider.json"),
   ARC_SPINE_ROOT: join(dir, "spine"),
   FX_STATE: join(dir, "state", "fx-sandbox.json"),
+  FX_STATE_DIR: join(dir, "state"),
   FX_ADAPTER: join(prov, "fake.mjs"),
 };
 // Forward slashes: node takes them on Windows, and bash on the Windows leg would read a backslash as an escape.
