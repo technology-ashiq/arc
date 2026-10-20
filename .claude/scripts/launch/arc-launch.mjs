@@ -17,7 +17,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LaunchError, loadCatalog, loadRegistry, loadProfile, resolveBoard } from "./lib/catalog.mjs";
 import { emptyState, loadState, saveState, setSlot } from "./lib/state.mjs";
-import { apply, verifySlots, resolvePaths, emit, EXIT } from "./lib/runner.mjs";
+import { apply, verifySlots, resolvePaths, emit, EXIT, pickProvider } from "./lib/runner.mjs";
 import { query } from "../hq/spine.mjs";
 import { spineRoot } from "../hq/lib/spine-io.mjs";
 import { planLines, statusLines, teardownPlan, clean } from "./lib/board.mjs";
@@ -147,19 +147,39 @@ async function cmdWalk(o) {
   const real = profile.honesty_class === "real";
   const retried = new Set();
   let applied = 0;
+  // F5: the owner sees each slot before it runs, each one passed over, and one summary line after the byte-stable
+  // walk complete / stopped at lines that scripts read.
+  const rows = loadRegistry(P.registry);
+  const pos = (id) => `[${order.indexOf(id) + 1}/${order.length}]`;
+  const told = new Set();
+  const summary = (stop, code) => {
+    const st = (loadState(P.stateDir, profile.slug) || { slots: {} }).slots;
+    const n = (k) => order.filter((id) => (st[id] || {}).state === k).length;
+    console.log(`walk summary: ${n("verified")} verified · ${applied} applied · ${n("skipped")} skipped · stopped at ${stop || "none"}`);
+    return code;
+  };
+  const stopped = (id, line, code) => { console.log(line); return summary(id, code); };
   const done = () => {
     const state = loadState(P.stateDir, profile.slug) || { slots: {} };
     const skipped = order.filter((id) => (state.slots[id] || {}).state === "skipped").length;
     console.log(`walk complete: ${applied} applied, ${skipped} skipped`);
-    return EXIT.OK;
+    return summary(null, EXIT.OK);
   };
   for (;;) {
     const state = loadState(P.stateDir, profile.slug, { onFallback: console.log });
     if (!state) { console.log(`no board for ${profile.slug} -- run new first`); return EXIT.REFUSED; }
     const at = (id) => (state.slots[id] || {}).state || "pending";
     const id = order.find((x) => !["verified", "skipped"].includes(at(x)) && !(at(x) === "absent" && !real));
+    for (const x of order.slice(0, id ? order.indexOf(id) : order.length))
+      if (!told.has(x)) { told.add(x); console.log(`· ${pos(x)} ${x}: ${at(x)} -- passed over`); }
     if (!id) return done();
-    if (at(id) === "absent") { console.log(`stopped at ${id}: exit ${EXIT.REFUSED} absent on real`); return EXIT.REFUSED; }
+    if (at(id) === "absent") return stopped(id, `stopped at ${id}: exit ${EXIT.REFUSED} absent on real`, EXIT.REFUSED);
+    if (!told.has(id)) {
+      told.add(id);
+      let via;
+      try { via = pickProvider(rows, id, profile).id; } catch { via = "no vetted provider"; }
+      console.log(`→ ${pos(id)} applying ${id} via ${via}`);
+    }
     let last = "";
     // Every line is cleaned as it is printed, so an adapter's words cannot forge a stop or complete line (9d10382 B6).
     const log = (line) => { last = clean(line); console.log(last); };
@@ -173,7 +193,7 @@ async function cmdWalk(o) {
     if (code === EXIT.OK) {
       const now = ((loadState(P.stateDir, profile.slug) || { slots: {} }).slots[id] || {}).state || "pending";
       // An exit 0 that left the slot where it was would be picked again forever; it is a stop, not a step.
-      if (!["verified", "skipped", "absent"].includes(now)) { console.log(`stopped at ${id}: exit 0 but the slot is still ${now}`); return EXIT.FAILED; }
+      if (!["verified", "skipped", "absent"].includes(now)) return stopped(id, `stopped at ${id}: exit 0 but the slot is still ${now}`, EXIT.FAILED);
       // Only a slot this step verified was applied; a skip or a rehearsal's refusal-path absent is not (attack 74ba8f0 B4).
       if (now === "verified") applied++;
       if (o.next) return done();
@@ -184,8 +204,7 @@ async function cmdWalk(o) {
     // exits 2, and a retry is a plain apply, which every adapter meets check-then-create (ADR-1704).
     if (code === EXIT.FAILED && !retried.has(id)) { retried.add(id); continue; }
     // The last line can carry an adapter's words; it is cleaned like every other adapter string (attack 74ba8f0 B6).
-    console.log(`stopped at ${id}: exit ${code} ${last}`);
-    return code;
+    return stopped(id, `stopped at ${id}: exit ${code} ${last}`, code);
   }
 }
 

@@ -58,6 +58,12 @@ approval, vetting stamp, then `dns` / `tls` / `email-transactional` / `frontend`
 
 **Phases 07-09 (code, 2026-10-20) on `feat/launch-c2-phases` (PR #444):** P07 cloudflare-zone + candidate row; P08 REQ-16 secrets places keys, REQ-17 backup mints its pooler role (ADR-1772, `ctx.writePrivate`), REQ-18 PENDING verify (ADR-1771) + headers build wait, REQ-19 legal real path; P09 debt D22, D29, D30, D32, D33(a), D40 closed, D33(b) split to D53. Two attack rounds on P07-08 (b5b09df, 36e7ee4) fixed; debt D46-D52. **Rows awaiting the owner's re-vet after the merge (bytes changed):** vercel-env-store, next-headers, pg-dump, drizzle, plans-yaml, rls-roles, org-invite, razorpay-webhook; new: cloudflare-zone, arc-legal.
 
+**`/arc-change` 2026-10-20 (F4 + F5, branch `feat/launch-apex-dns-walk-ux`):** F4 bug — the live `dns` run on the
+apex `myfitfolio.com` failed verify 3 times (receipt `01M5CGAXT2T3G8MS1FMXH7YQ6F`): Cloudflare flattens an apex CNAME,
+so no resolver ever returns it. Fix in `cloudflare-dns` verify (phase-07 exit criterion). F5 owner UX — the walk names
+each slot before it runs and every slot it passes over, and ends on a summary line (phase-06 exit criterion). No
+assumption fired; no new REQ, dependency or ADR.
+
 **Still owed from the Phase 06 DoD:** key probes · legal dry-run · day-1 `required_when` count (34 expected) + the
 `verify --all` pair · the `apply --all` live transcript · two-surface attack evidence is in place.
 

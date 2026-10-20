@@ -57,6 +57,20 @@ j() { node -e 'const o=JSON.parse(process.argv[1]);console.log(String(eval(proce
   [[ "$(j 'o.verify.reason')" == *"not abc123.vercel-dns-017.com at both resolvers"* ]] || { echo "$DONE"; false; }
 }
 
+@test "launch-contract: dns on a zone apex verifies the flattened answer against the target's addresses" {
+  dns apex
+  [ "$(j 'o.scaffold.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.records.length + " " + o.records[0].type + " " + o.records[0].proxied')" = "1 CNAME false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.flattened')" = "true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.google_A.join(",") + " " + o.verify.evidence.cloudflare_A.join(",")')" = "76.76.21.21 76.76.21.21" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: dns on a proxied zone apex fails, its edge addresses are not the target's" {
+  dns apex-proxied
+  [ "$(j 'o.verify.ok')" = "false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == *"flattened A: google 104.21.0.1, cloudflare 104.21.0.1, not all abc123.vercel-dns-017.com"* ]] || { echo "$DONE"; false; }
+}
+
 @test "launch-contract: dns refuses an upstream target that is not a plain hostname, before any create" {
   dns bad-target
   [ "$(j 'o.scaffold.code')" = "BAD_TARGET" ] || { echo "$DONE"; false; }

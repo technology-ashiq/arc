@@ -23,6 +23,10 @@
       `x.@venture`, `@VENTURE`, and a duplicated token
 - [ ] `apply --next` and `apply --all` per ADR-1767: core slots only, the state table pinned by fixtures; `apply SLOT`
       output byte-identical to Cycle 1
+- [ ] F5 (owner UX, `/arc-change` 2026-10-20): the walk prints `→ [i/n] applying {slot} via {provider}` before each
+      slot, `· [i/n] {slot}: {state} -- passed over` per slot it skips, and a closing `walk summary: {v} verified · {a}
+      applied · {s} skipped · stopped at {slot|none}`; the `walk complete:` and `stopped at` lines stay byte-stable
+      (fixtures in `tests/launch-cli.bats`)
 - [ ] sync golden regenerated in this worktree only, with untracked files filtered out (`git ls-files --others
       --exclude-standard`), never from the main clone; the `tree-manifest.txt` diff shows no `myfitfolio.venture.yaml`
       row; `docs/wiki` regenerated for ADR-1765..1769; on a conflict in either file, regenerate on the merged tree and run
