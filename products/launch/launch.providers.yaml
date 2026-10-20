@@ -27,6 +27,30 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  # ADR-1766: a real venture's owner-bought domain. Read-only; gate 1 is the owner's attestation. Vetted only through
+  # a live verify on the first real venture (myfitfolio), a scout record and the owner's decision (ADR-1705).
+  - id: cloudflare-zone
+    slot: domain
+    status: candidate
+    fits:
+      - saas-b2b
+      - saas-b2c
+      - api-product
+    region: any
+    payment_model: any
+    env_keys:
+      - CLOUDFLARE_API_TOKEN
+    hosts:
+      - api.cloudflare.com
+      - rdap.verisign.com
+    credentials:
+      scope: "Zone:Read on the venture's zone; no write call exists in the adapter"
+    adapter: providers/domain/cloudflare-zone.mjs
+    digest: null
+    approved_by: ashiq
+    vetted_by: null
+    scout: null
+    last_verified: null
   - id: cloudflare-dns
     slot: dns
     status: vetted
@@ -161,9 +185,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 08 REQ-16 places missing production keys. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 92ec7d73b053.
   - id: vercel-env-store
     slot: secrets
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -173,13 +198,18 @@ providers:
     env_keys:
       - VERCEL_TOKEN
       - GITHUB_TOKEN
+      # REQ-16: runtime keys this slot may place, read only from the run's env file (never git).
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
+      - RAZORPAY_WEBHOOK_SECRET
+      - RESEND_API_KEY
     hosts:
       - api.vercel.com
       - api.github.com
     credentials:
-      scope: "env var NAMES list; values are placed by the owner; reads .env.example and the git tree (ADR-1729)"
+      scope: "env var NAMES list; places a missing production key from the declared env_keys (REQ-16); reads .env.example and the git tree (ADR-1729)"
     adapter: providers/secrets/vercel-env-store.mjs
-    digest: 92ec7d73b05327a444390c0acdd5a37141160c4e53aa5df8b37981efaebbc8fa
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
@@ -300,9 +330,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-15
+  # Re-vet pending (ADR-1719): Phase 09 debt D22 answers PENDING while CI runs. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 4d1e14f76d36.
   - id: drizzle
     slot: orm
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -317,7 +348,7 @@ providers:
     credentials:
       scope: "commits the typed schema and its test; reads CI for main head (ADR-1733)"
     adapter: providers/orm/drizzle.mjs
-    digest: 4d1e14f76d36a4fa6d6cfaf132a6440f9783f00dc11b65367474e85dca7c71a3
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
@@ -373,9 +404,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 09 debt D30 ties the served build to main. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest dca77275db07.
   - id: rls-roles
     slot: authz
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -385,22 +417,25 @@ providers:
     env_keys:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
+      - VERCEL_TOKEN
     hosts:
       - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
+      - api.vercel.com
     credentials:
       scope: "orgs + memberships migration and routes; probes with minted probe users (ADR-1734)"
     adapter: providers/authz/rls-roles.mjs
-    digest: dca77275db07a09aa18d6bb97056fda328ab26cd2b320e2f58c3ead47cdd8e31
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 09 debt D30 ties the served build to main. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 572fdbe494bf.
   - id: org-invite
     slot: tenancy
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -410,22 +445,25 @@ providers:
     env_keys:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
+      - VERCEL_TOKEN
     hosts:
       - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
+      - api.vercel.com
     credentials:
       scope: "invites migration and routes; probes with minted probe users (ADR-1734)"
     adapter: providers/tenancy/org-invite.mjs
-    digest: 572fdbe494bf372e01e5a2487bae14ad0950c3f502e111f10fbb6899c0b05544
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 09 debt D30 ties the served build to main. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 1467986929d9.
   - id: plans-yaml
     slot: plans
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -435,15 +473,17 @@ providers:
     env_keys:
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
+      - VERCEL_TOKEN
     hosts:
       - "@venture"
       - api.supabase.com
       - supabase.co
       - api.github.com
+      - api.vercel.com
     credentials:
       scope: "org_plans migration, plans files and the gated route; sets the probe org's plan in verify (ADR-1737)"
     adapter: providers/plans/plans-yaml.mjs
-    digest: 1467986929d93ed79de26a84de8f975f99319dd5f9e53b67ba05d313c034a443
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
@@ -541,9 +581,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 09 debt D33 confirms real stored payments at Razorpay. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 42c633c14e46.
   - id: razorpay-webhook
     slot: webhooks-ledger
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -554,14 +595,17 @@ providers:
       - RAZORPAY_WEBHOOK_SECRET
       - SUPABASE_ACCESS_TOKEN
       - GITHUB_TOKEN
+      - RAZORPAY_KEY_ID
+      - RAZORPAY_KEY_SECRET
     hosts:
       - "@venture"
       - api.supabase.com
       - api.github.com
+      - api.razorpay.com
     credentials:
       scope: "webhook secret to sign the probe event; webhook table migration and the route commit; no Razorpay API call (ADR-1739)"
     adapter: providers/webhooks-ledger/razorpay-webhook.mjs
-    digest: 42c633c14e461f9925126269de4d6ea3740ce3fe266b3df860fb5ec4e6ad4494
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
@@ -608,9 +652,10 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  # Re-vet pending (ADR-1719): Phase 08 REQ-18 waits for the production build. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 956f6723ae80.
   - id: next-headers
     slot: security-headers
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -619,14 +664,16 @@ providers:
     payment_model: any
     env_keys:
       - GITHUB_TOKEN
+      - VERCEL_TOKEN
     hosts:
       - "@venture"
       - api.github.com
+      - api.vercel.com
       - observatory-api.mdn.mozilla.net
     credentials:
-      scope: "GitHub contents on the venture repo (next.config.mjs); probes the live site and asks the Observatory for a grade (ADR-1742)"
+      scope: "GitHub contents on the venture repo (next.config.mjs); reads Vercel production deployments to wait for the build (REQ-18); probes the live site and asks the Observatory for a grade (ADR-1742)"
     adapter: providers/security-headers/next-headers.mjs
-    digest: 956f6723ae8044b9bcc39254cbe99204789193f72ddf1aab09996150d738fc40
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
@@ -676,9 +723,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 08 REQ-17 provisions its pooler role. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 09b01af24255.
   - id: pg-dump
     slot: backup
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -687,12 +735,14 @@ providers:
     payment_model: any
     env_keys:
       - GITHUB_TOKEN
+      - SUPABASE_ACCESS_TOKEN
     hosts:
       - api.github.com
+      - api.supabase.com
     credentials:
-      scope: "GitHub contents on the venture repo (the drill workflow) and its Actions runs; the dump runs on the venture CI under the owner Actions secret SUPABASE_DB_URL, which launch never reads (ADR-1746)"
+      scope: "GitHub contents on the venture repo (the drill workflow) and its Actions runs; makes the read-only launch_backup pooler role through the Supabase Management API and writes its URL to the owner private dir only (REQ-17, ADR-1772); the dump runs on the venture CI under the owner Actions secret SUPABASE_DB_URL (ADR-1746)"
     adapter: providers/backup/pg-dump.mjs
-    digest: 09b01af242557c12e9babd1b7a753b798f7b9992f66bdbc9e9d04f4fad44d3cf
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md

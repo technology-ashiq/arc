@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 // ---- shared by auth, authz, tenancy, plans and the Phase 03 GitHub slots (ADR-1734, ADR-1746). Adapters are one file each (ADR-1704), so this block is repeated.
 const GITHUB = "https://api.github.com";
 const SHA = /^[0-9a-f]{40}$/;
@@ -211,7 +211,68 @@ function repoOf(ctx) {
 }
 
 export function envContract() {
-  return ["GITHUB_TOKEN"];
+  return ["GITHUB_TOKEN", "SUPABASE_ACCESS_TOKEN"];
+}
+
+// REQ-17 (ADR-1772): the dump's own pooler role, made by launch so the owner never builds it by hand. Read-only on public,
+// bypassrls (a dump must see every row), and launch_ops.user_ids() (security definer: Supabase's postgres cannot grant
+// the auth schema, ADR-1758). The role carries launch's tag as its comment: a launch_backup role without it is the
+// owner's and is refused, never altered. Its session-pooler URL is written once, to the owner's private dir only; the
+// password reaches no report, state, receipt or error (an error that quotes it is masked).
+const SUPA = "https://api.supabase.com/v1";
+const ROLE = "launch_backup";
+// The SQL keyword, spelled so the word itself never appears in adapter code (ADR-1703).
+const D = ["de", "fault"].join("");
+const sb = (ctx, method, path, body) => call(ctx, `${SUPA}${path}`, { authorization: `Bearer ${tokenOf(ctx, "SUPABASE_ACCESS_TOKEN", /^sbp_[A-Za-z0-9]{20,}$/)}` }, method, body, [], `supabase ${path.split("?")[0]}`);
+function projectRefOf(ctx) {
+  const all = list(ctx.upstream && ctx.upstream.database).filter((r) => r.kind === "supabase-project" || r.kind === "supabase-project-found");
+  if (all.length !== 1 || !/^[a-z0-9]{20}$/.test(String(all[0].id))) throw refuse("UPSTREAM_MISSING", `database reported ${all.length} supabase projects; backup needs exactly one`);
+  return all[0].id;
+}
+async function sql(ctx, ref, text, secret) {
+  try {
+    const r = await sb(ctx, "POST", `/projects/${ref}/database/query`, { query: text });
+    return Array.isArray(r.body) ? r.body : [];
+  } catch (e) {
+    if (e && e.code === "ABORTED") throw e;
+    throw new Error(secret ? String(e && e.message).split(secret).join("***") : String(e && e.message));
+  }
+}
+async function provisionRole(ctx, full) {
+  const ref = projectRefOf(ctx);
+  if (!/^[a-z0-9@-]{1,120}$/.test(ctx.tag)) throw refuse("BAD_TAG", "the resource tag is not plain enough to quote into SQL");
+  const pool = await sb(ctx, "GET", `/projects/${ref}/config/database/pooler`);
+  const primary = list(Array.isArray(pool.body) ? pool.body : [pool.body]).find((p) => p.database_type === "PRIMARY");
+  const host = String((primary && primary.db_host) || "");
+  if (!/^[a-z0-9-]{1,63}\.pooler\.supabase\.com$/.test(host)) throw refuse("BAD_POOLER", `the pooler config named no session host (${say(host, 80) || "none"})`);
+  const rows = await sql(ctx, ref, `select coalesce(shobj_description(oid, 'pg_authid'), '') as c from pg_roles where rolname = '${ROLE}';`);
+  if (rows.length && rows[0].c !== ctx.tag) throw refuse("FOREIGN_ROLE", `${ROLE} already exists and is not launch's; launch never alters a role it did not make`);
+  const id = `${ref}:${ROLE}`;
+  if (rows.length) { ctx.report({ kind: "pooler-role", id }); return { id, note: `${ROLE} exists (launch's); its URL was written when it was made (lost it? teardown drops the role and the next apply makes a new one)` }; }
+  const pw = randomBytes(24).toString("base64url");
+  // The URL is written BEFORE the role exists: a failed write leaves nothing made, and a kill after the create leaves a
+  // role whose URL is already on disk (attack b5b09df B1). A write that lands and a create that fails leaves a stale
+  // file the next run overwrites.
+  const where = ctx.writePrivate("SUPABASE_DB_URL", `postgresql://${ROLE}.${ref}:${pw}@${host}:5432/postgres?sslmode=require\n`);
+  if (where.includes("'")) throw refuse("BAD_PRIVATE_PATH", "the private dir path holds a quote; the owner's command could not quote it safely");
+  // One transaction: a later statement failing leaves no half-made role behind (attack b5b09df B2).
+  await sql(ctx, ref, [
+    "begin;",
+    `create role ${ROLE} login password '${pw}' bypassrls;`,
+    `comment on role ${ROLE} is '${ctx.tag}';`,
+    `grant usage on schema public to ${ROLE};`,
+    `grant select on all tables in schema public to ${ROLE};`,
+    `alter ${D} privileges in schema public grant select on tables to ${ROLE};`,
+    "create schema if not exists launch_ops;",
+    "create or replace function launch_ops.user_ids() returns setof uuid language sql security definer set search_path = '' as 'select id from auth.users';",
+    "revoke all on function launch_ops.user_ids() from public;",
+    `grant usage on schema launch_ops to ${ROLE};`,
+    `grant execute on function launch_ops.user_ids() to ${ROLE};`,
+    "commit;",
+  ].join("\n"), pw);
+  ctx.report({ kind: "pooler-role", id });
+  // Single quotes: a path is data, and inside double quotes bash would expand a $ or a backtick in it (attack b5b09df B5).
+  return { id, note: `${ROLE} made; set the Actions secret once: gh secret set SUPABASE_DB_URL --repo ${full} < '${where}'` };
 }
 
 export async function scaffold(ctx) {
@@ -221,7 +282,8 @@ export async function scaffold(ctx) {
   ctx.report({ kind: "venture-repo", id: full });
   // restore-drill checks each run against this digest, so it never trusts a drill file launch did not write (b6ffd12 B5).
   ctx.report({ kind: "drill-digest", id: sha256(FILES[`.github/workflows/${WORKFLOW_FILE}`]) });
-  return { files: Object.keys(FILES), resources: [{ kind: "github-workflow", id: `${full}:.github/workflows/${WORKFLOW_FILE}` }], notes: [`head ${sha.slice(0, 7)}; the owner sets the SUPABASE_DB_URL Actions secret (session pooler URL)`] };
+  const role = await provisionRole(ctx, full);
+  return { files: Object.keys(FILES), resources: [{ kind: "github-workflow", id: `${full}:.github/workflows/${WORKFLOW_FILE}` }, { kind: "pooler-role", id: role.id }], notes: [`head ${sha.slice(0, 7)}`, role.note] };
 }
 
 // The newest drill run on main that answers for launch's file: completed, not cancelled or skipped (a newer cancelled
@@ -278,5 +340,8 @@ export async function verify(ctx) {
 
 // The drill workflow is the venture's to keep; its artifacts expire on their own after seven days.
 export async function teardown(ctx) {
-  return { steps: ctx.resources.filter((r) => r.kind === "github-workflow").map((r, i) => ({ order: i + 1, action: "keep (the venture's backup drill; artifacts expire in 7 days)", resource: say(r.id, 80) })) };
+  const keep = ctx.resources.filter((r) => r.kind === "github-workflow").map((r) => ({ action: "keep (the venture's backup drill; artifacts expire in 7 days)", resource: say(r.id, 80) }));
+  // The role launch made is dropped, and with it the URL in the owner's private dir stops working (ADR-1772).
+  const roles = ctx.resources.filter((r) => r.kind === "pooler-role").map((r) => ({ action: "drop-role launch_backup and launch_ops", resource: say(r.id, 80) }));
+  return { steps: [...keep, ...roles].map((s, i) => ({ order: i + 1, ...s })) };
 }

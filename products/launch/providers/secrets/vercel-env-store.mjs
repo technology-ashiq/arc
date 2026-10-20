@@ -1,5 +1,6 @@
 // secrets slot on Vercel's env store (ADR-1704, ADR-1729). The contract is the NAME= lines of the venture repo's
-// .env.example on main; launch writes the file (no names) when it is absent, and never reads, writes or prints a value.
+// .env.example on main; launch writes the file (no names) when it is absent. It places a contract name production lacks
+// from the value its row declared (REQ-16), never overwrites a set key, and never reads back or prints a value.
 // verify asks Vercel which keys are set for production (no decrypt) and GitHub whether any .env file is in git.
 import { Buffer } from "node:buffer";
 
@@ -129,7 +130,38 @@ export async function scaffold(ctx) {
       ctx.report({ kind: "github-file", id: `${full}:${FILE}@${cur.body.sha}` });
   }
   ctx.report({ kind: "env-contract", id: `${full}:${FILE}` });
-  return { files: [], resources: [{ kind: "env-contract", id: `${full}:${FILE}` }], notes: [] };
+  const placed = names === null ? [] : await place(ctx, pid, names);
+  return { files: [], resources: [{ kind: "env-contract", id: `${full}:${FILE}` }, ...placed], notes: placed.length ? [`placed ${placed.length} key(s) for production`] : [] };
+}
+
+// REQ-16 (ADR-1768): a contract name that production lacks is placed from the value this run holds -- the row's
+// declared env_keys, as the worker passed them -- never from anywhere else. A key already set is the owner's or an
+// earlier run's, and is never overwritten. The adapter's own tokens are never placed. A value never reaches a report,
+// a receipt or an error: a provider message that echoes it is masked before it leaves this function.
+const OWN = new Set(["VERCEL_TOKEN", "GITHUB_TOKEN"]);
+async function place(ctx, pid, names) {
+  const have = await vc(ctx, "GET", `/v10/projects/${pid}/env`);
+  const set = new Set(list(have.body && have.body.envs).filter((e) => (Array.isArray(e.target) ? e.target : [e.target]).includes("production")).map((e) => e.key));
+  const out = [];
+  for (const key of names) {
+    const value = String(ctx.env[key] ?? "");
+    if (set.has(key) || OWN.has(key) || !value.trim()) continue;
+    // Recorded before the create: a kill after Vercel stores it still leaves launch's claim, so a re-run and the exit
+    // plan never mistake launch's key for the owner's (attack b5b09df B6).
+    const r = { kind: "vercel-env", id: `${pid}:${key}` };
+    ctx.report(r);
+    out.push(r);
+    let res;
+    try {
+      res = await ctx.fetch(`${VERCEL}/v10/projects/${pid}/env`, { method: "POST", headers: { authorization: `Bearer ${tokenOf(ctx, "VERCEL_TOKEN", /^[A-Za-z0-9_-]{20,}$/)}`, "content-type": "application/json", "user-agent": "arc-launch" }, body: JSON.stringify({ key, value, type: "encrypted", target: ["production"] }) });
+    } catch (e) {
+      if (e && e.code) throw e;
+      throw new Error(`vercel POST /v10/projects/${pid}/env (${key}) -> transport error`);
+    }
+    // The provider's text is never carried: it can echo the value in a form no mask matches (attack b5b09df L5, B7).
+    if (!res.ok) throw new Error(`vercel POST /v10/projects/${pid}/env (${key}) -> ${res.status}; the provider's message is withheld because it may echo the value`);
+  }
+  return out;
 }
 
 // Asked of Vercel and GitHub, never of state.
@@ -167,5 +199,7 @@ export async function verify(ctx) {
 }
 
 export async function teardown(ctx) {
-  return { steps: ctx.resources.filter((r) => r.kind === "github-file").map((r, i) => ({ order: i + 1, action: "delete-if-unchanged", resource: r.id })) };
+  const files = ctx.resources.filter((r) => r.kind === "github-file").map((r) => ({ action: "delete-if-unchanged", resource: r.id }));
+  const envs = ctx.resources.filter((r) => r.kind === "vercel-env").map((r) => ({ action: "delete", resource: r.id }));
+  return { steps: [...envs, ...files].map((s, i) => ({ order: i + 1, ...s })) };
 }

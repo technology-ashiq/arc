@@ -54,8 +54,10 @@
     "sandbox.automemory.ai",
     "api.supabase.com",
     "supabase.co",
-    "api.github.com"
-   ]
+    "api.github.com",
+    "api.vercel.com"
+   ],
+   "amended": "Phase 09, debt D30: api.vercel.com added after the Cycle 1 literal, for the served-build check"
   },
   {
    "id": "org-invite",
@@ -64,8 +66,10 @@
     "sandbox.automemory.ai",
     "api.supabase.com",
     "supabase.co",
-    "api.github.com"
-   ]
+    "api.github.com",
+    "api.vercel.com"
+   ],
+   "amended": "Phase 09, debt D30: api.vercel.com added after the Cycle 1 literal, for the served-build check"
   },
   {
    "id": "plans-yaml",
@@ -74,8 +78,10 @@
     "sandbox.automemory.ai",
     "api.supabase.com",
     "supabase.co",
-    "api.github.com"
-   ]
+    "api.github.com",
+    "api.vercel.com"
+   ],
+   "amended": "Phase 09, debt D30: api.vercel.com added after the Cycle 1 literal, for the served-build check"
   },
   {
    "id": "razorpay-checkout",
@@ -94,8 +100,10 @@
    "hosts": [
     "sandbox.automemory.ai",
     "api.supabase.com",
-    "api.github.com"
-   ]
+    "api.github.com",
+    "api.razorpay.com"
+   ],
+   "amended": "Phase 09, debt D33: api.razorpay.com added after the Cycle 1 literal, to confirm real stored payments"
   },
   {
    "id": "razorpay-refunds",
@@ -118,8 +126,10 @@
    "hosts": [
     "sandbox.automemory.ai",
     "api.github.com",
+    "api.vercel.com",
     "observatory-api.mdn.mozilla.net"
-   ]
+   ],
+   "amended": "Phase 08, ADR-1771: api.vercel.com added after the Cycle 1 literal, for the build wait (REQ-18)"
   },
   {
    "id": "sentry",
@@ -165,5 +175,6 @@
     "sandbox.automemory.ai"
    ]
   }
- ]
+ ],
+ "amendments": "A row whose literals change after Phase 06 is amended here by name, never re-derived from the live registry."
 }

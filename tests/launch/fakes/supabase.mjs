@@ -53,6 +53,8 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
     for (const stmt of sql.split(";").map((s) => s.trim()).filter(Boolean)) {
       out = [];
       if (/^(begin|commit|set local role anon)$/i.test(stmt)) continue;
+      // Debt D33: the webhooks-ledger's real stored payments (probe rows excluded), as the arm seeds them.
+      if (/^select payment_id, amount::bigint as amount, currency from public\.razorpay_webhook_events where event = 'payment\.captured'/i.test(stmt)) { out = (p.realPayments || []).map((r) => ({ ...r })); continue; }
       if (/^select count\(\*\)::int as n from pg_tables/i.test(stmt)) out = [{ n: p.tables.launch_probe ? 1 : 0 }];
       else if (/^select \(count\(\*\) = 1 and bool_and\(id = 1 and note = 'owner-only'\)\)::int as n/i.test(stmt)) {
         const rows = (p.tables.launch_probe || { rows: [] }).rows;

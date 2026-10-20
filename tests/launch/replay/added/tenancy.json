@@ -1,0 +1,23 @@
+{
+  "why": "debt D30 (Phase 09) added a served-build check after this verify was recorded. These are the calls it adds, written by hand from the recording's own main head, never captured from a provider. Re-recorded on the next live run on myfitfolio (debt D54).",
+  "exchanges": [
+    {
+      "method": "GET",
+      "url": "https://api.vercel.com/v13/deployments/sandbox.automemory.ai",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"uid\":\"dpl_replay_added_served\",\"meta\":{\"githubCommitSha\":\"d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\"}}"
+    },
+    {
+      "method": "GET",
+      "url": "https://api.github.com/repos/technology-ashiq/arc-sandbox/git/ref/heads/main",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"ref\":\"refs/heads/main\",\"object\":{\"sha\":\"d6e23ea8e33752fd17d40aaae2ba7b69db72cbe0\",\"type\":\"commit\"}}"
+    }
+  ]
+}

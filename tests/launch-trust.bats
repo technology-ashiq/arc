@@ -177,3 +177,26 @@ vh() { node -e 'const j=JSON.parse(process.argv[1]);console.log(eval(process.arg
   [ "$(vh 'j.mutant + " " + j.total')" = "unlowered 19" ] || { echo "$VH"; false; }
   [ "$(vh '["own-domain-mixed-case","collides-mixed-case"].every((n) => j.failed.includes(n))')" = "true" ] || { echo "$VH"; false; }
 }
+
+@test "launch-trust: a request the slot timeout aborts is ABORTED to the adapter, never the DOMException's own code (debt D29)" {
+  run node "$ARC_ROOT/tests/launch/ctx-abort.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN ctx-abort"* ]] || { echo "$output"; false; }
+  [[ "$output" == *'DONE {"got":{"code":"ABORTED","name":"Error","message":"slot timeout reached"}}'* ]] || { echo "$output"; false; }
+}
+
+@test "launch-trust: writePrivate lands a credential only in a private dir outside every work tree, never through a link (ADR-1772)" {
+  run node "$ARC_ROOT/tests/launch/private-write.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN private-write"* ]] || { echo "$output"; false; }
+  local d; d=$(printf '%s\n' "$output" | sed -n 's/^DONE //p')
+  [ -n "$d" ] || { echo "$output"; false; }
+  jx() { node -e 'const o=JSON.parse(process.argv[1]);console.log(eval(process.argv[2]))' "$d" "$1"; }
+  [ "$(jx 'o.clean.ok + " " + o.clean.written')" = "true true" ] || { echo "$d"; false; }
+  [ "$(jx 'o.clean.mode === undefined || o.clean.mode === "600"')" = "true" ] || { echo "$d"; false; }
+  [ "$(jx 'o.inRepo.ok + " " + o.inRepo.code + " " + o.inRepo.written')" = "false WRITE_REFUSED false" ] || { echo "$d"; false; }
+  # A link the runner could not build is a FAIL, never a skip that passes.
+  [ "$(jx 'o.link.built')" = "true" ] || { echo "the link fixture was never built: $d"; false; }
+  [ "$(jx 'o.link.ok + " " + o.link.code + " " + o.link.written')" = "false WRITE_REFUSED false" ] || { echo "$d"; false; }
+  [ "$(jx 'o.pathName.code + " " + o.dotName.code + " " + o.unset.code')" = "WRITE_REFUSED WRITE_REFUSED PRIVATE_UNSET" ] || { echo "$d"; false; }
+}

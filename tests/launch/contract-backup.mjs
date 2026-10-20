@@ -3,7 +3,7 @@
 // Prints `RAN <scenario>` first, `DONE <json>` last.
 //   node tests/launch/contract-backup.mjs <scenario>
 import { join } from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { loadRegistry, PRODUCT } from "../../.claude/scripts/launch/lib/catalog.mjs";
@@ -25,14 +25,38 @@ const github = makeGithub({
   stepLag: scenario.startsWith("step-lag"),
   jobConclusions: { "step-lag-red": { restore: "failure" }, "restore-red": { restore: "failure" }, "backup-red": { dump: "failure", restore: "skipped" } }[scenario] || {},
 });
-globalThis.fetch = github.fetch;
+// REQ-17: an in-memory Supabase Management API -- the pooler config and the SQL endpoint, holding one role table. A
+// role-* scenario seeds it; every query body is kept so the arm can prove the password never left the SQL.
+const supa = { roles: scenario === "role-foreign" ? [{ name: "launch_backup", comment: "" }] : [], queries: [], failCreate: scenario === "role-echo-error" };
+const SUPA_TOKEN = "sbp_fixturetoken0123456789abcd";
+globalThis.fetch = async (input, init = {}) => {
+  const u = new URL(String(input));
+  if (u.hostname !== "api.supabase.com") return github.fetch(input, init);
+  if ((init.headers || {}).authorization !== `Bearer ${SUPA_TOKEN}`) return new Response(JSON.stringify({ message: "unauthorized" }), { status: 401 });
+  const json = (s, b) => new Response(JSON.stringify(b), { status: s, headers: { "content-type": "application/json" } });
+  if (u.pathname.endsWith("/config/database/pooler")) return json(200, [{ database_type: "PRIMARY", db_host: "aws-0-ap-south-1.pooler.supabase.com", db_port: 6543, pool_mode: "transaction" }]);
+  if (u.pathname.endsWith("/database/query")) {
+    const q = JSON.parse(init.body).query;
+    supa.queries.push(q);
+    if (/from pg_roles/.test(q)) return json(200, supa.roles.filter((r) => r.name === "launch_backup").map((r) => ({ c: r.comment })));
+    if (/^create role launch_backup/m.test(q)) {
+      const pw = (q.match(/password '([^']+)'/) || [])[1];
+      if (supa.failCreate) return json(400, { message: `ERROR: role creation failed near '${pw}'` });
+      supa.roles.push({ name: "launch_backup", comment: (q.match(/comment on role launch_backup is '([^']+)'/) || [])[1] || "" });
+      return json(201, []);
+    }
+    return json(201, []);
+  }
+  return json(404, { message: "not modelled" });
+};
 const ROOT = mkdtempSync(join(tmpdir(), "launch-backup-"));
+const PRIV = join(ROOT, "private");
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const bState = [];
 const rState = [];
 const ctxFor = (slot, row, state, upstream) => makeCtx({
   profile: { slug: "arc-sandbox", region: "in", brand: { name: "arc sandbox", domain: "sandbox.automemory.ai" } }, board: {}, slot: { id: slot }, row,
-  root: ROOT, resources: state, upstream, tag: `arc-sandbox@${slot}@${row.id}`, attempt: 1, signal: undefined, env: { GITHUB_TOKEN: "gho_fixtureToken0123456789" },
+  root: ROOT, resources: state, upstream, tag: `arc-sandbox@${slot}@${row.id}`, attempt: 1, signal: undefined, env: { GITHUB_TOKEN: "gho_fixtureToken0123456789", SUPABASE_ACCESS_TOKEN: SUPA_TOKEN }, privateRoot: PRIV,
   report: (r) => { if (!state.some((x) => x.kind === r.kind && x.id === r.id)) state.push(r); },
 });
 const UP = { database: [{ kind: "supabase-project", id: "fixtureref0000000001" }], orm: [{ kind: "orm-schema", id: `${FULL}:${"b".repeat(40)}` }] };
@@ -45,6 +69,26 @@ const commits = () => repo().commits.filter((c) => (c.message || "").startsWith(
 
 const out = { scenario };
 switch (scenario) {
+  case "role-made":
+  case "role-foreign":
+  case "role-echo-error": {
+    const a = await attempt(() => backup.scaffold(bCtx()));
+    const b = scenario === "role-made" ? await attempt(() => backup.scaffold(bCtx())) : null;
+    out.first = { ok: a.ok, code: a.code || null, message: a.ok ? null : a.message };
+    out.second = b && { ok: b.ok };
+    out.creates = supa.queries.filter((q) => /^create role/m.test(q)).length;
+    out.roles = supa.roles.map((r) => r.name + ":" + r.comment);
+    out.reported = bState.filter((r) => r.kind === "pooler-role").map((r) => r.id);
+    const url = existsSync(join(PRIV, "SUPABASE_DB_URL")) ? readFileSync(join(PRIV, "SUPABASE_DB_URL"), "utf8").trim() : null;
+    out.urlShape = url ? url.replace(/:[A-Za-z0-9_-]{32}@/, ":<pw>@") : null;
+    const pw = url ? (url.match(/:([A-Za-z0-9_-]{32})@/) || [])[1] : null;
+    out.notes = a.ok ? a.value.notes : null;
+    // The password lives in the private file only: no report, note, error or the DONE line carries it.
+    out.pwLeaked = !!pw && JSON.stringify({ ...out, bState, notes: out.notes }).includes(pw);
+    out.errorMasked = scenario === "role-echo-error" ? String(a.message).includes("near '***'") : null;
+    out.teardown = (await backup.teardown(bCtx())).steps.map((s) => s.action);
+    break;
+  }
   case "thread": {
     out.verifyBefore = (await backup.verify(bCtx())).ok;
     out.first = (await attempt(() => backup.scaffold(bCtx()))).ok;

@@ -168,7 +168,9 @@ async function probe(ctx) {
     if (red.length) return { ok: false, reason: `run ${run.id}: ${red.map((n) => `${n} ${say(byName.get(n) ?? "absent", 20)}`).join(", ")}` };
     return { ok: true, answerer: "api.github.com", evidence: { repo: full, head, run: run.id } };
   }
-  return { ok: false, reason: last };
+  // CI still running when the poll ends is a wait, not a failure (debt D22, ADR-1771): the slot stays pending and a later
+  // apply asks again. Only a red leg or a missing workflow is a failure.
+  return { ok: false, pending: `ci: ${last}`, answerer: "api.github.com", reason: `PENDING(ci: ${last})` };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.
