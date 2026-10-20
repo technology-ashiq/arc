@@ -84,6 +84,14 @@ function freezeUpstream(upstream) {
 // venture, outside every repo, file mode 0600. A plain file name only -- no path, no dot-leading name, no link -- and
 // the call returns where it landed, never the text (ADR-1772).
 const PRIVATE_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
+function systemLink(d, st) {
+  if (process.platform === "win32" || st.uid !== 0) return false;
+  try {
+    const p = lstatSync(dirname(d));
+    return p.uid === 0 && !p.isSymbolicLink() && (p.mode & 0o022) === 0;
+  } catch { return false; }
+}
+
 export function writePrivateFile(privateRoot, name, text) {
   if (!privateRoot) throw refusal("PRIVATE_UNSET", "no private dir is set for this run; a minted credential has nowhere safe to go");
   if (!PRIVATE_NAME.test(String(name))) throw refusal("WRITE_REFUSED", `private file name ${JSON.stringify(String(name).slice(0, 40))} is not an env-style NAME`);
@@ -95,7 +103,10 @@ export function writePrivateFile(privateRoot, name, text) {
   for (let d = root; ; d = dirname(d)) {
     let st = null;
     try { st = lstatSync(d); } catch (e) { if (e.code !== "ENOENT") throw e; }
-    if (st && st.isSymbolicLink()) throw refusal("WRITE_REFUSED", `the private dir passes through a link (${d}); a minted credential is never written through one`);
+    // A link only root could have planted is the OS's own (macOS /var -> /private/var): it and its parent are root's
+    // and the parent is not group- or world-writable. Any other link refuses; Windows reports uid 0 with a writable
+    // mode, so it stays strict there.
+    if (st && st.isSymbolicLink() && !systemLink(d, st)) throw refusal("WRITE_REFUSED", `the private dir passes through a link (${d}); a minted credential is never written through one`);
     if (st && (existsSync(join(d, ".git")) || existsSync(join(realpathSync(d), ".git")))) throw refusal("WRITE_REFUSED", `the private dir ${privateRoot} is inside a git work tree (${d}); a minted credential never lands where it can be committed`);
     if (dirname(d) === d) break;
   }

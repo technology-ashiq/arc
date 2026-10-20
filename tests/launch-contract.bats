@@ -1023,14 +1023,14 @@ arm() {
 @test "launch-contract: authz -- A reads its own org and gets 403 on B's; orgs are created once" {
   arm login thread
   [ "$(j 'o.authz.ok + " " + o.authzVerify.ok + " " + o.authzVerifyAgain.ok + " " + o.orgs')" = "true true true 2" ] || { echo "$DONE"; false; }
-  [ "$(j 'JSON.stringify(o.authzVerify.evidence)')" = '{"own":200,"crossTenant":403}' ] || { echo "$DONE"; false; }
+  [ "$(j 'JSON.stringify(o.authzVerify.evidence)')" = '{"own":200,"crossTenant":403,"deployment":"dpl_00000000_served","commit":"0000000000000000000000000000000000000015"}' ] || { echo "$DONE"; false; }
   [ "$(j 'o.teardown.join(",")')" = "drop memberships, orgs cascade (down migration; after tenancy drops invites)" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: tenancy -- a stranger cannot invite, A invites C, C joins and is scoped to A's org" {
   arm login thread
   [ "$(j 'o.tenancy.ok + " " + o.tenancyVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
-  [ "$(j 'JSON.stringify(o.tenancyVerify.evidence)')" = '{"strangerInvite":403,"invite":201,"join":200,"scopedIn":200,"scopedOut":403}' ] || { echo "$DONE"; false; }
+  [ "$(j 'JSON.stringify(o.tenancyVerify.evidence)')" = '{"strangerInvite":403,"invite":201,"join":200,"scopedIn":200,"scopedOut":403,"deployment":"dpl_00000000_served","commit":"0000000000000000000000000000000000000019"}' ] || { echo "$DONE"; false; }
   [ "$(j 'o.commits.join(",")')" = "1,1,1" ] || { echo "$DONE"; false; }
 }
 
@@ -1513,6 +1513,9 @@ arm() {
     [[ "$output" == "RAN $s"* ]] || { echo "$s never ran: $output"; false; }
     DONE="$(printf '%s\n' "$output" | sed -n 's/^DONE //p')"
     [ "$(j 'o.ok && o.recordedOk && o.used > 0 && o.unmatched.length === 0')" = "true" ] || { echo "$s: $DONE"; false; }
+    # Hand-written calls answer only for the two slots debt D30 changed, and every one of them is asked (D54).
+    case "$s" in authz|tenancy) n_added=2 ;; *) n_added=0 ;; esac
+    [ "$(j 'o.added + " " + o.addedUsed')" = "$n_added $n_added" ] || { echo "$s: $DONE"; false; }
     n=$((n + 1))
   done
   [ "$n" -eq 16 ]
