@@ -33,7 +33,7 @@ probe cloudflare: pass 200        (GET /zones?name=myfitfolio.com -> exactly 1 z
 probe resend: pass 200
 probe supabase: pass 200
 probe razorpay-test: pass 200     (key id is rzp_test_)
-probe razorpay-webhook-secret: present
+probe razorpay-webhook (signing key named in the env file, value not read)
 probe vercel: pass 200            (GET /v9/projects/{hosting's vercel-project}/env)
 probe sentry: pass 200
 probe pagespeed: pass 200
