@@ -80,7 +80,21 @@ function freezeUpstream(upstream) {
     [s, Object.freeze((Array.isArray(rs) ? rs : []).filter(good).map((r) => Object.freeze({ kind: r.kind, id: r.id })))])));
 }
 
-export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [], arcProbe = null, registryHosts = [] }) {
+// A credential launch MINTS (REQ-17: the backup pooler role's URL) has one home: the owner's private dir for this
+// venture, outside every repo, file mode 0600. A plain file name only -- no path, no dot-leading name, no link -- and
+// the call returns where it landed, never the text (ADR-1772).
+const PRIVATE_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
+export function writePrivateFile(privateRoot, name, text) {
+  if (!privateRoot) throw refusal("PRIVATE_UNSET", "no private dir is set for this run; a minted credential has nowhere safe to go");
+  if (!PRIVATE_NAME.test(String(name))) throw refusal("WRITE_REFUSED", `private file name ${JSON.stringify(String(name).slice(0, 40))} is not an env-style NAME`);
+  mkdirSync(privateRoot, { recursive: true, mode: 0o700 });
+  const abs = join(privateRoot, name);
+  try { if (lstatSync(abs).isSymbolicLink()) throw refusal("WRITE_REFUSED", `${name} in the private dir is a link; launch never writes through one`); } catch (e) { if (e.code !== "ENOENT") throw e; }
+  writeFileSync(abs, String(text), { mode: 0o600 });
+  return abs;
+}
+
+export function makeCtx({ profile, board, slot, row, root, resources, upstream, tag, attempt, signal, env, report, approvals = [], arcProbe = null, registryHosts = [], privateRoot = null }) {
   const queued = [];
   // Resolved once, refused at call time: an adapter catches a ctx.fetch refusal like any other, and building the
   // ctx must not throw before the adapter can report it.
@@ -114,6 +128,9 @@ export function makeCtx({ profile, board, slot, row, root, resources, upstream, 
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, text);
       return rel;
+    },
+    writePrivate(name, text) {
+      return writePrivateFile(privateRoot, name, text);
     },
     report(resource) {
       if (!resource || typeof resource.kind !== "string" || typeof resource.id !== "string")

@@ -118,8 +118,10 @@
    "hosts": [
     "sandbox.automemory.ai",
     "api.github.com",
+    "api.vercel.com",
     "observatory-api.mdn.mozilla.net"
-   ]
+   ],
+   "amended": "Phase 08, ADR-1771: api.vercel.com added after the Cycle 1 literal, for the build wait (REQ-18)"
   },
   {
    "id": "sentry",
@@ -165,5 +167,6 @@
     "sandbox.automemory.ai"
    ]
   }
- ]
+ ],
+ "amendments": "A row whose literals change after Phase 06 is amended here by name, never re-derived from the live registry."
 }

@@ -1364,7 +1364,7 @@ arm() {
 @test "launch-contract: backup commits the drill once -- dump, checksum, restore into scratch, row-count diff -- and verify needs both jobs green (ADR-1746)" {
   arm backup thread
   [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest,pooler-role" ] || { echo "$DONE"; false; }
   [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.noUpload + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs + " " + o.workflow.usersGuarded')" = "drill true true true true false true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.steps.join("+")')" = "true api.github.com dump and checksum+restore and compare row counts" ] || { echo "$DONE"; false; }
 }
@@ -1373,7 +1373,8 @@ arm() {
   arm backup thread
   [ "$(j 'o.rScaffold + " " + o.rKinds.join(",")')" = "true restore-source" ] || { echo "$DONE"; false; }
   [ "$(j 'o.rVerify.ok + " " + o.rVerify.evidence.step')" = "true restore and compare row counts" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.length')" = "2" ] || { echo "$DONE"; false; }
+  # backup keeps its drill and drops the pooler role it made (REQ-17); restore-drill has nothing of its own.
+  [ "$(j 'o.teardown.length')" = "3" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a green drill job whose steps GitHub has not concluded yet counts; a red one never does" {
@@ -1643,4 +1644,27 @@ arm() {
   # The rehearsal path is unchanged: the same site on a rehearsal is the named ABSENT.
   arm legal absent
   [ "$(j 'o.verify.absent')" = "legal renderer not ready: /privacy and /terms are not served" ] || { echo "$DONE"; false; }
+}
+
+# ---------- backup provisions its own pooler role (REQ-17, ADR-1772) ----------
+
+@test "launch-contract: backup makes its read-only pooler role once and writes the session URL to the private dir only" {
+  arm backup role-made
+  [ "$(j 'o.first.ok && o.second.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates')" = "1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.roles.join(",")')" = "launch_backup:arc-sandbox@backup@pg-dump" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "fixtureref0000000001:launch_backup" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.urlShape')" = "postgresql://launch_backup.fixtureref0000000001:<pw>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.notes[1]')" == "launch_backup made; set the Actions secret once: gh secret set SUPABASE_DB_URL --repo technology-ashiq/arc-sandbox < "* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.pwLeaked')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "keep (the venture's backup drill; artifacts expire in 7 days),drop-role launch_backup and launch_ops" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backup refuses a launch_backup role it did not make, and masks the password in a provider error" {
+  arm backup role-foreign
+  [ "$(j 'o.first.ok + " " + o.first.code + " " + o.creates')" = "false FOREIGN_ROLE 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.urlShape')" = "null" ] || { echo "$DONE"; false; }
+  arm backup role-echo-error
+  [ "$(j 'o.first.ok + " " + o.errorMasked + " " + o.pwLeaked')" = "false true false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.urlShape')" = "null" ] || { echo "$DONE"; false; }
 }

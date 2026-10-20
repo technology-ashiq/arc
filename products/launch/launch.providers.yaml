@@ -709,9 +709,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): Phase 08 REQ-17 provisions its pooler role. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 09b01af24255.
   - id: pg-dump
     slot: backup
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -720,12 +721,14 @@ providers:
     payment_model: any
     env_keys:
       - GITHUB_TOKEN
+      - SUPABASE_ACCESS_TOKEN
     hosts:
       - api.github.com
+      - api.supabase.com
     credentials:
-      scope: "GitHub contents on the venture repo (the drill workflow) and its Actions runs; the dump runs on the venture CI under the owner Actions secret SUPABASE_DB_URL, which launch never reads (ADR-1746)"
+      scope: "GitHub contents on the venture repo (the drill workflow) and its Actions runs; makes the read-only launch_backup pooler role through the Supabase Management API and writes its URL to the owner private dir only (REQ-17, ADR-1772); the dump runs on the venture CI under the owner Actions secret SUPABASE_DB_URL (ADR-1746)"
     adapter: providers/backup/pg-dump.mjs
-    digest: 09b01af242557c12e9babd1b7a753b798f7b9992f66bdbc9e9d04f4fad44d3cf
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md

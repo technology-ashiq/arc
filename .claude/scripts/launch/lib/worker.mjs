@@ -3,6 +3,7 @@
 // what exists outlives it. Exit: 0 verified · 1 failed (reason in state) · 5 a sensitive action awaits the owner.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { homedir } from "node:os";
 import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
@@ -68,6 +69,8 @@ const ctx = makeCtx({
   arcProbe: makeArcProbe({ venture: a.venture, profile, catalog: a.catalog, stateDir: a.stateDir, root: a.ventureRoot }),
   // Every row's literal hosts, as the PARENT read them (ADR-1765); resolveHosts adds this row's own either way.
   registryHosts: Array.isArray(a.registryHosts) ? a.registryHosts : [],
+  // The owner's private dir for this venture (ADR-1772): ARC_PRIVATE_DIR when set, as every arc tool reads it.
+  privateRoot: join(process.env.ARC_PRIVATE_DIR || join(homedir(), ".arc-private"), "launch", a.venture),
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
     if (cur.resources.some((r) => r.kind === resource.kind && r.id === resource.id)) return;
