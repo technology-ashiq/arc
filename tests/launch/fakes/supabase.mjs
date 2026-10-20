@@ -2,7 +2,8 @@
 // database adapter sends (create/alter/insert/select on public.launch_probe, the pg_policies count, `set local role`).
 // RLS is modelled: a table with RLS on and no policy returns 0 rows to `anon` and all rows to the owner role.
 //   orgs          organizations the token sees
-//   projects      seed projects [{ id, name, status }]
+//   projects      seed projects [{ id, name, status, organization_id }] (organization_id defaults to the first org;
+//                 null leaves it out of the answer, as a partial answer would)
 //   becomeHealthy how many GETs a new project answers COMING_UP before ACTIVE_HEALTHY
 //   rlsOff        the probe table's RLS is ignored (a broken database) -- anon sees every row
 //   policy        a policy exists on the probe table
@@ -95,11 +96,11 @@ export function makeSupabase({ token = "sbp_fixture_token_0123456789abcd", orgs 
     if (body) bodies.push(body);
     const p = url.pathname.replace(/^\/v1/, "");
     if (method === "GET" && p === "/organizations") return json(200, orgs);
-    if (method === "GET" && p === "/projects") return json(200, store.map(({ id, name, status }) => ({ id, name, status, organization_id: orgs[0] && orgs[0].id })));
+    if (method === "GET" && p === "/projects") return json(200, store.map(({ id, name, status, organization_id }) => ({ id, name, status, organization_id: organization_id === null ? undefined : organization_id || (orgs[0] && orgs[0].id) })));
     if (method === "POST" && p === "/projects") {
       if (!orgs.some((o) => o.id === body.organization_id)) return err(400, "organization not found");
       if (typeof body.db_pass !== "string" || body.db_pass.length < 16) return err(400, "db_pass too weak");
-      const proj = { id: `fixtureref${String(++n).padStart(10, "0")}`, name: body.name, region: body.region, status: "COMING_UP", tables: {}, polls: 0 };
+      const proj = { id: `fixtureref${String(++n).padStart(10, "0")}`, name: body.name, region: body.region, organization_id: body.organization_id, status: "COMING_UP", tables: {}, polls: 0 };
       store.push(proj);
       return json(201, { id: proj.id, ref: proj.id, name: proj.name, status: proj.status });
     }

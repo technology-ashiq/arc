@@ -545,8 +545,53 @@ arm() {
 @test "launch-contract: database refuses two organizations and an unknown region, creating nothing" {
   arm database two-orgs
   [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  # The refusal says how to name one (ADR-1773).
+  [[ "$(j 'o.scaffold.message')" == *"(ashiq (id o1), acme (id o2)); one is required -- name it with supabase_org: <id> in the venture.yaml (ADR-1773)" ]] || { echo "$DONE"; false; }
   arm database bad-region
   [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_REGION 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a venture names its Supabase org by id or name; unknown or not a string refuses, creating nothing (F6, ADR-1773)" {
+  arm database two-orgs-named
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",") + " " + o.verify.ok')" = "true o2 true" ] || { echo "$DONE"; false; }
+  arm database two-orgs-named-by-name
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",") + " " + o.verify.ok')" = "true o2 true" ] || { echo "$DONE"; false; }
+  arm database org-unknown
+  [ "$(j 'o.scaffold.code + " " + o.creates + " " + o.verify.ok')" = "ORG_UNKNOWN 0 false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *'"o9" matches 0 of the 2 organizations'* ]] || { echo "$DONE"; false; }
+  arm database bad-org
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_ORG 0" ] || { echo "$DONE"; false; }
+  # verify answers a bad org as not-ok, never a throw out of a read (attack 67c6e07 B2).
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false BAD_ORG: "* ]] || { echo "$DONE"; false; }
+  # An explicit null is a mistake, not "unnamed" (attack 67c6e07 L7).
+  arm database null-org
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_ORG 0" ] || { echo "$DONE"; false; }
+  # A name matches exactly, case and all (attack 67c6e07 L1).
+  arm database name-case
+  [ "$(j 'o.exact.ok + " " + o.made.join(",") + " " + o.other.code')" = "true o2 ORG_UNKNOWN" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: no org, a project listed without its org, and a long org list each refuse by name (F6, attack 67c6e07)" {
+  arm database no-orgs
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "ORG_NONE 0" ] || { echo "$DONE"; false; }
+  arm database unscoped-project
+  [ "$(j 'o.scaffold.code + " " + o.creates + " " + o.verify.ok')" = "PROJECT_UNSCOPED 0 false" ] || { echo "$DONE"; false; }
+  # Every org id up to the cap, whole, and a count past it (attack 67c6e07 B3).
+  arm database many-orgs
+  [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == "the token sees 22 organizations (team 1 (id org01), "*"team 20 (id org20), +2 more); one is required"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" != *"org21"* ]] || { echo "$DONE"; false; }
+  # An id wins over another org's equal name (attack 47d6b91 L1).
+  arm database id-beats-name
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",")')" = "true o2" ] || { echo "$DONE"; false; }
+  # An org without a usable id is a coded refusal, never a bare error (attack 47d6b91 L2).
+  arm database org-no-id
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "ORG_BAD_ANSWER 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a named org scopes the lookup -- a same-named project in another org is not adopted (F6, ADR-1773)" {
+  arm database named-scopes-lookup
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",") + " " + o.kinds[0] + " " + o.verify.ok')" = "true o2 supabase-project true" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: an owner's project is found, not owned, and a paused one is PAUSED" {

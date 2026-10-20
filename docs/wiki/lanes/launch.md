@@ -22,7 +22,7 @@ Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROG
 - [`PLAN.md`](../../../initiatives/launch/PLAN.md)
 - [`PROGRESS.md`](../../../initiatives/launch/PROGRESS.md)
 
-## Decisions (72)
+## Decisions (73)
 
 ADRs whose `Product:` line names this lane first.
 
@@ -100,6 +100,7 @@ ADRs whose `Product:` line names this lane first.
 | [`1769`](../../../docs/adr/1769-legal-pages-on-a-real-venture-verifies-only-on-served-pages.md) | On a real venture, `legal-pages` verifies only on served arc-legal pages; "renderer not ready" is a rehearsal answer | accepted | 2026-10-19 |
 | [`1771`](../../../docs/adr/1771-a-verify-may-answer-pending-and-the-slot-stays-pending.md) | A verify may answer PENDING: the slot stays pending, exits 4, and is neither failed nor verified | accepted | 2026-10-20 |
 | [`1772`](../../../docs/adr/1772-launch-mints-the-backup-pooler-role-and-keeps-its-url-private.md) | `backup` mints its own pooler role; the URL goes to the owner's private dir, and the owner sets the secret | accepted | 2026-10-20 |
+| [`1773`](../../../docs/adr/1773-a-venture-names-its-supabase-org-and-launch-never-picks-one.md) | A venture names its Supabase org; launch never picks one | accepted | 2026-10-20 |
 
 ## Source
 

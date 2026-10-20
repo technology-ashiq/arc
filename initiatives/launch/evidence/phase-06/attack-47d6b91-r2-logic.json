@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/database/supabase.mjs:org()",
+      "breaking_input": "venture.yaml: supabase_org: 'o2' while the token sees orgs [{id:'o1',name:'o2'},{id:'o2',name:'acme'}] — the id of o2 equals the name of o1.",
+      "why": "org() matches o.id === want OR o.name === want, so both orgs match (o1 by name, o2 by id). With two hits it refuses ORG_UNKNOWN 'matches 2 of the 2 organizations', even though the owner meant the id o2 exactly once. The test fixtures never overlap id and name, so this collision is unseen. The ADR promises a name or id sure form; an id colliding with another org's name makes it impossible to name the intended org unambiguously.",
+      "fix": "Prefer id matches over name matches: if any org.id === want, use that one (must be unique by id); only fall back to name matching when no id matches.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "products/launch/providers/database/supabase.mjs:org() when want===null",
+      "breaking_input": "A token that sees exactly one org but that org's id arrives as an empty string or a non-string number (e.g., a proxy or partial answer) while the owner named nothing. The new check `typeof hit[0].id !== \"string\"` throws a bare Error, but the guard is after `hit.length !== 1`, so a single org with a non-string id passes the ambiguity check and then throws an uncoded Error — not a coded refusal. The contract test 'no-orgs' covers zero orgs, and ORG_AMBIGUOUS covers 'one org' only when the id is a string. A malformed id from the provider (which the pattern list names as 'an absent or other-encoded field') is read as 'present with no usable id' and explodes.",
+      "why": "The code checks `if (typeof hit[0].id !== \"string\") throw new Error(\"supabase returned an organization without an id\")` which is a bare Error, not a coded refusal. The ADR says a malformed answer should refuse by name; this is the twin of 'A contents answer with no content was read as an empty contract' and of the uncoded-error verify pattern: an unreadable field is read as present-but-broken and throws out of a read.",
+      "fix": "Treat a non-string or empty id as ORG_NONE/ORG_AMBIGUOUS with a message naming the org name and the bad id value, never a bare Error.",
+      "twin_of": "A contents answer with no content ... was read as an empty contract -> every decode of a provider field: what does an absent or other-encoded field decode to?"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:named()",
+      "breaking_input": "venture.yaml: supabase_org: ' 0 ' (spaces around a numeric-looking string) — the token sees 0 orgs. named() trims to '0', org() calls list and finds 0 orgs, and since want!==null and hit.length===0, it throws ORG_UNKNOWN 'matches 0 of the 0 organizations'. The owner gets an ORG_UNKNOWN for a badly-shaped value while the ADR says a value that is not a non-empty string is BAD_ORG; a string that is a valid number-as-string is still a string and could be a legit org id, but the zero-org case reports 'matches 0 of the 0' which claims a count it has, but the diagnosis for a token with no org access is concealed.",
+      "why": "The org() code refuses ORG_NONE for the unnamed path only (`if (!orgs.length) throw refuse(\"ORG_NONE\"...)` is before the hit computation, so with want!==null and 0 orgs it falls through to ORG_UNKNOWN with the misleading 'of the 0 organizations' phrasing. Pattern: a cause named by a count that doesn't prove it.",
+      "fix": "For want!==null and orgs.length===0, refuse ORG_NONE with the same 'token sees no org' explanation, not ORG_UNKNOWN.",
+      "twin_of": "Any 400 on a single-order read was reported as 'the order does not exist' -> every allowed error status: does it prove the cause the reason names?"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:found() in verify",
+      "breaking_input": "A venture without supabase_org (unnamed) whose token sees exactly one org, and that org has a project named exactly like the venture slug; the project's organization_id is present and equals the single org. find() with orgId===null returns all matching projects without checking organization_id, so a project whose organization_id is a different org's id (the provider returns a mismatched organization_id for that project) is adopted. A project that is not in the token's only org is claimed as the venture's and verified.",
+      "why": "When orgId===null, find() skips the PROJECT_UNSCOPED check entirely (`if (orgId === null) return all;`). The ADR says a named org scopes the lookup; but the unnamed path trusts any matching project regardless of its organization_id. A provider inconsistency (a same-named project that belongs to a different org the token can't see) is adopted and verified as launch's, the twin of 'a same-named project in another org is never adopted' — the unnamed path has no org to scope against and silently adopts foreign projects. The contract test 'found' seeds a project with no organization_id at all and the fake fills in the first org's id, so it can't see a mismatched id.",
+      "fix": "In the unnamed case, if any matching project's organization_id is present but not equal to the token's only org id (or is missing), refuse as PROJECT_UNSCOPED — never adopt a project that is not in the resolved org.",
+      "twin_of": "An identical file was claimed as launch's without asking who committed it"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:scaffold() and org()",
+      "breaking_input": "venture.yaml names an org by an id. The org() read returns hit[0].id. Then scaffold uses that id for the POST /projects create. But the resolved id is never re-validated against the profile at find time; the contract tests call scaffold and then verify, but both read the same fixture, so a profile edit between scaffold and a later verify (or a token whose org memberships change) creates the project in an org that a later find() (which re-reads org()) no longer resolves to. The finding L6 in the transcript named this as a two-step create, but the fix in the diff only resolved the org once within a single scaffold invocation, not across a scaffold-then-verify lifecycle.",
+      "why": "find() calls named(ctx) and org(ctx) afresh on verify, while scaffold also called them; a profile change or org-list change between runs means the same named value can resolve to a different org, so verify looks in o2 while the project was created in o1. The ADR says 'the org is resolved once per scaffold or verify' — but that is per invocation, not per venture state, so a re-run after a sibling org is added resolves differently and fails to adopt the venture's own created project, marking it failed or creating a duplicate.",
+      "fix": "Record the resolved org id on the resource at create time (e.g., in the supabase-project resource) and have verify require that the named org still resolves to the recorded org id; if not, refuse with a clear 'the venture's named org changed' message.",
+      "twin_of": "A two-step create (remote role, then local credential) -> a credential is written before the thing it unlocks"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:find() when orgId!==null and a project has organization_id as a number",
+      "breaking_input": "A named org 'o1'; the project list returns a same-named project with organization_id: 12345 (a JSON number, not a string). The check `typeof p.organization_id !== \"string\"` throws PROJECT_UNSCOPED — correct refusal, not a silent drop. But the twin: when orgId===null (unnamed), the same list returns a project with organization_id: 12345 and the code returns all matching projects without checking organization_id at all (L4). The non-string check is only on the named path, so the unnamed path silently reads a project whose org it cannot tell apart — the same 'unreadable field read as absent' defect in the path the new test 'found' covers.",
+      "why": "The named path correctly refuses a non-string organization_id; the unnamed path never inspects organization_id, so a malformed field is read as belonging to whatever (the first org) and the project is adopted. Inconsistent handling of the same provider field between the two branches.",
+      "fix": "Also refuse PROJECT_UNSCOPED (or filter out) when organization_id is not a string, even in the unnamed path.",
+      "twin_of": "A contents answer with no content ... was read as an empty contract -> every decode of a provider field: what does an absent or other-encoded field decode to?"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/launch/contract-database.mjs:ctxNow() 'many-orgs' scenario",
+      "breaking_input": "'many-orgs' seeds 22 orgs with ids org01..org22 and names 'team 1'..'team 22'. The message check `pattern *'team 20 (id org20), +2 more'*` is correct — seen() caps at 20 and says '+2 more'. But the ADR promise says 'The refusals list every org's name and whole id, up to 20, then +N more' — so the cap is intentional. The defect: the many-orgs test asserts ORG_AMBIGUOUS only, and the message check only confirmed the 20-cap; it never asserts the 21st and 22nd orgs are absent and that the count prefix says '22 organizations (20 listed, +2 more)'. The message's own count text at the front says 'the token sees 22 organizations' — that's true, but no test asserts the message includes '+2 more' AND that the 2 missing are the last two, so a bug that lists 20 but says '+3 more' would pass. Weak test, not a code defect — but in attacking the fix, the test is weaker than the claim.",
+      "why": "The B3 fix was to cap at 20 and say '+N more'; the test only checks the tail of an example; it doesn't assert the count consistency (20 listed + N more = total), so a message that says 'the token sees 23 organizations' plus listing 20 would still pass. The pattern list has 'the count in the message says 7 while only 5 are listed' — here the fix cap is fine, but the test doesn't prove the claimed total equals listed plus more.",
+      "fix": "Extend the many-orgs assertion to check the full prefix 'the token sees 22 organizations' and that the listed ids are exactly org01..org20, and the '+2 more' suffix, proving the count is consistent.",
+      "twin_of": "A test titled 'only those' had nothing it could have leaked -> every 'only X' or 'never Y' test: does the fixture contain a Y?"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:org() message for ORG_AMBIGUOUS",
+      "breaking_input": "The token sees exactly two orgs with names that truncate to the same 60-character prefix when seen() calls say(o.name, 60). e.g., names 'long-prefix-...AAA' and 'long-prefix-...BBB' sharing the first 60 chars. The ORG_AMBIGUOUS message lists both as identical-looking entries 'long-prefix-... (id o1), long-prefix-... (id o2)' — the ids themselves are cut? No, say(id, 80) keeps ids up to 80, and org ids are usually short; but ids could also be long (Supabase org ids are UUIDs, typically 36 chars, under 80). The real risk: the id is whole, the name is cut; the owner told to copy an id can, but the message's name is not unique — the pattern says a cut of the disambiguator hides it; here ids are kept whole, so low. However, the seen() function uses say(o.name, 60), and the org names are user-controlled; two names differing after 60 chars show the same visible name and the owner cannot tell which is which by name, but can by id. The ADR's promise 'lists every org's name' is undermined for names >60 chars.",
+      "why": "The name is truncated to 60; the id is whole. The pattern list flags display truncation of keys that must be unique; ids are the keys and they're kept, so the finding is low, but the same 'silent truncation of a list the owner must act on' shape exists for names.",
+      "fix": "Either show the full org name (they come from the owner's own account) or append the id prominently as the disambiguator; at minimum mention truncation.",
+      "twin_of": "A 40-character cut gave two long slugs the same Razorpay receipt -> every provider-side key cut to a length limit: does the cut keep it unique?"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:find() when a project has multiple same-named entries in DIFFERENT orgs and the venture is UNNAMED (orgId===null)",
+      "breaking_input": "The token sees several orgs; no supabase_org; the project list contains two projects both named the venture slug, in different orgs. find() with orgId===null returns both; scaffold sees have.length>1 and throws PROJECT_AMBIGUOUS. That's the correct behavior (original code did this). The fix did not change this path, and the contract test 'two-orgs' (unnamed) still expects ORG_AMBIGUOUS. The twin: the ADR says a named org scopes the lookup and a same-named project in another org is never adopted; the unnamed case correctly refuses. However, the unnamed case when the token sees exactly one org and the project list contains a same-named project in a DIFFERENT org (token's only org is o1, project lists organization_id o2) is adopted (L4). That's the real issue, already flagged.",
+      "why": "Duplicate of L4.",
+      "fix": "Covered by L4.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:scaffold() — when find returns exactly 1, org() is NOT called in the named path",
+      "breaking_input": "A venture names an org that the token does NOT see, but another org the token sees has a project with the same name. find() calls org(ctx) first, which throws ORG_UNKNOWN, so it refuses before looking at projects — correct. The opposite: the venture names an org the token sees, and that org has no project, but ANOTHER org (also seen) has a project with the same name. find() with orgId=o2 filters to o2's projects, returns none, scaffolder creates a new project in o2. Correct per ADR. The edge: the named org's project exists, and the other org also has a project; find returns just the named one, correct. The finding L12 in the transcript said this ADR claim holds. The remaining gap: the named org is resolved once per scaffold, but if the org name matches by name and the org's id changes between runs (provider renames the org), the project was created under the old id and find on re-run resolves a new id, failing to adopt (L5). Already covered.",
+      "why": "Nothing new beyond L5.",
+      "fix": "Combine with L5.",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:org() and the ORG_UNKNOWN message when want matches 0 of 0 (L14), and the no-org path for a NAMED org",
+      "breaking_input": "Token sees 0 orgs; venture has supabase_org: 'o1'. org() first checks `if (!orgs.length) throw refuse(\"ORG_NONE\"...)` — that check is before the want===null branch, so with want!==null and 0 orgs, it throws ORG_NONE. The transcript's L14 claimed it would hit ORG_UNKNOWN 'matches 0 of the 0', but the code as diffed has the ORG_NONE check first, so the transcript's L14 is already fixed correctly. However, the ORG_NONE message says 'the token sees no Supabase organization; it needs access to the venture's org' — that's fine. The remaining issue: the contract test 'no-orgs' only exercises the unnamed path (org undefined → want null); it never tests a NAMED org with zero orgs, so the ORG_NONE path with a named org is untested and could regress. The test fix added 'no-orgs' with no org param, so it only proves ORG_NONE for the unnamed case.",
+      "why": "The 'no-orgs' scenario calls ctxNow() with no org, so scaffold's orgId = null and org() hits ORG_NONE via the first check. A named-org-with-no-token case would also ORG_NONE, but that path is not in any contract scenario.",
+      "fix": "Add a 'no-orgs-named' scenario asserting ORG_NONE with a named org, and that it creates nothing.",
+      "twin_of": null
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:seen() cap of 20 and the ADR claim 'lists every org's id' when N>20",
+      "breaking_input": "With 25 orgs, ORG_UNKNOWN message lists 20 ids plus '+5 more'. The owner must copy an id from the list to fix, but the org they mean might be in the '+5 more' bucket. The ADR says 'The refusals list every org's name and whole id, up to 20, then +N more' — the ADR itself acknowledges the cap, so the fix matches the ADR. But the owner-facing help 'name it with supabase_org: <id>' cannot work if the id they need is past the cap; the message gives no way to list the rest. That's a product decision (the ADR chose it), so it's not a code defect against the ADR, but it's a usability gap that undermines 'the owner copies one into supabase_org' for accounts with >20 orgs. The transcript's B3 fixed the 5-cap to 20, but 20 is still a cap that can hide the needed org.",
+      "why": "The fix bounded the list at 20, but with the message 'the token sees 25 organizations (20 listed, +5 more)' the owner cannot identify which org is which beyond the 20. The ADR accepted this, so the code is faithful. The twin pattern about a cap hiding the distinguishing tail applies: if the owner's org is the 25th, they cannot get its id from this message.",
+      "fix": "Provide an alternative: allow the owner to re-try with a partial id prefix and have ORG_UNKNOWN accept a prefix match, or offer a separate 'list orgs' command.",
+      "twin_of": "A 40-character cut gave two long slugs the same Razorpay receipt -> every provider-side key cut to a length limit: does the cut keep it unique?"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "tests/launch/contract-database.mjs:unscoped-project scenario",
+      "breaking_input": "The 'unscoped-project' fixture seeds a project named 'arc-sandbox' with organization_id: null. The fake then maps organization_id===null ? undefined : ..., so the adapter receives a project with NO organization_id field at all. The find() named path sees `typeof p.organization_id !== \"string\"` → true → throws PROJECT_UNSCOPED. The test asserts scaffold.code==='PROJECT_UNSCOPED' and verify.ok===false. That is correct. But the fixture's project is in the DEFAULT org only because the fake leaves organization_id undefined; the seed `organization_id: null` deliberately models an unscoped project. The test does not cover a project whose organization_id is a NUMBER (a malformed but present field) in the named path — that also throws PROJECT_UNSCOPED, fine. The gap: the UNNAMED path (orgId null) with that same unscoped project — the existing 'found' scenario seeds a project with NO organization_id and the fake defaults it to the first org's id; there is no unnamed-path test with an unstring organization_id. That's the L6 gap.",
+      "why": "The unscoped-project test only runs the named path (org='o2'); the unnamed path with a partial answer is untested.",
+      "fix": "Add an unnamed (no supabase_org) scenario whose project has organization_id:null and assert it is refused or not adopted (per L4 fix).",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:org() when org list contains duplicate ids",
+      "breaking_input": "The token sees two orgs with the SAME id (e.g., a misbehaving API or a proxy returning dupes). want===null, orgs.length becomes 2 but both have id 'o1'. org() computes hit=orgs (length 2) → ORG_AMBIGUOUS — correct. If want='o1', hit.length=2 → ORG_UNKNOWN — correct. The bigger problem: the unnamed path, when orgs.length===1 but that org's id is duplicated in the list? length would be 2. So org() never returns a duplicated id as unique. Fine. The subtle issue: when want===null and orgs.length===1, the code returns hit[0].id without checking whether other orgs in a DIFFERENT read would conflict — but that's the L5 re-read issue. Nothing new.",
+      "why": "No new defect beyond existing ones.",
+      "fix": "Drop.",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:find() PROJECT_UNSCOPED message",
+      "breaking_input": "The PROJECT_UNSCOPED message includes the project `name` (the venture slug). The name is the venture's own slug, not attacker-controlled beyond the venture itself; but the message does not include the organization_id value that was malformed (it says 'without its organization'). The message tells the owner the project is out of scope but gives no hint whether it's an encoding problem (number id) or a genuinely missing field. Pattern: an unreadable field should be described by its value shape. Low severity.",
+      "why": "Diagnosis aid only; no wrong action.",
+      "fix": "Include the offending organization_id value (sanitized via say) in the message.",
+      "twin_of": "A free-text reason prefix (`env:`) chose the outcome -> every branch on adapter text: is the text adapter-controlled?"
+    }
+  ]
+}

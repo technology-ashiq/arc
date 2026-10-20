@@ -19,6 +19,20 @@ globalThis.setTimeout = (fn) => realTimeout(fn, 0);
 
 const opts = {
   "two-orgs": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  "two-orgs-named": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  "two-orgs-named-by-name": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  "org-unknown": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  "bad-org": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  // The venture's org holds no project yet; a same-named project sits in the other org (ADR-1773).
+  // A same-named project whose answer names no org: refused, never dropped into a duplicate create (attack 67c6e07 B1).
+  "unscoped-project": { ...{ orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] }, projects: [{ id: "ownerref000000000004", name: "arc-sandbox", organization_id: null }] },
+  "name-case": { orgs: [{ id: "o1", name: "acme" }, { id: "o2", name: "ACME" }] },
+  "null-org": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  "no-orgs": { orgs: [] },
+  "id-beats-name": { orgs: [{ id: "o1", name: "o2" }, { id: "o2", name: "acme" }] },
+  "org-no-id": { orgs: [{ id: 7, name: "acme" }] },
+  "many-orgs": { orgs: Array.from({ length: 22 }, (_, i) => ({ id: `org${String(i + 1).padStart(2, "0")}`, name: `team ${i + 1}` })) },
+  "named-scopes-lookup": { ...{ orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] }, projects: [{ id: "ownerref000000000003", name: "arc-sandbox", organization_id: "o1" }] },
   found: { projects: [{ id: "ownerref000000000001", name: "arc-sandbox" }] },
   "rls-off": { rlsOff: true },
   policy: { policy: true },
@@ -33,8 +47,8 @@ globalThis.fetch = sb.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-db-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctxNow = ({ region = "in" } = {}) => makeCtx({
-  profile: { slug: "arc-sandbox", region }, board: {}, slot: { id: "database" }, row,
+const ctxNow = ({ region = "in", org } = {}) => makeCtx({
+  profile: { slug: "arc-sandbox", region, ...(org === undefined ? {} : { supabase_org: org }) }, board: {}, slot: { id: "database" }, row,
   root: ROOT, resources: reported, upstream: {}, tag: "arc-sandbox@database@supabase", attempt: 1, signal: undefined,
   env: { SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd" },
   report: (r) => { if (!reported.some((x) => x.kind === r.kind && x.id === r.id)) reported.push(r); },
@@ -98,6 +112,42 @@ switch (scenario) {
     // A project that is not healthy within the bounded wait: a resumable refusal, never a held lock.
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow()));
     out.kinds = reported.map((r) => r.kind);
+    break;
+  case "two-orgs-named":
+  case "two-orgs-named-by-name":
+  case "named-scopes-lookup": {
+    const org = { "two-orgs-named": "o2", "two-orgs-named-by-name": "acme", "named-scopes-lookup": "o2" }[scenario];
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ org })));
+    out.made = sb.store.filter((p) => p.id.startsWith("fixtureref")).map((p) => p.organization_id);
+    out.kinds = reported.map((r) => r.kind);
+    out.verify = await adapter.verify(ctxNow({ org }));
+    break;
+  }
+  case "name-case": {
+    // A name matches exactly: ACME is o2, and Acme matches neither (attack 67c6e07 L1).
+    out.exact = await attempt(() => adapter.scaffold(ctxNow({ org: "ACME" })));
+    out.made = sb.store.map((p) => p.organization_id);
+    out.other = await attempt(() => adapter.scaffold(ctxNow({ org: "Acme" })));
+    break;
+  }
+  case "id-beats-name":
+  case "org-no-id":
+  case "unscoped-project":
+  case "null-org":
+  case "no-orgs":
+  case "many-orgs": {
+    const org = { "unscoped-project": "o2", "null-org": null, "id-beats-name": "o2" }[scenario];
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ org })));
+    out.creates = sb.calls.filter((c) => c === "POST /v1/projects").length;
+    out.verify = await adapter.verify(ctxNow({ org }));
+    out.made = sb.store.map((p) => p.organization_id);
+    break;
+  }
+  case "org-unknown":
+  case "bad-org":
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ org: scenario === "bad-org" ? 42 : "o9" })));
+    out.creates = sb.calls.filter((c) => c === "POST /v1/projects").length;
+    out.verify = await adapter.verify(ctxNow({ org: scenario === "bad-org" ? 42 : "o9" }));
     break;
   case "bad-region":
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ region: "mars" })));

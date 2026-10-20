@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "products/launch/providers/database/supabase.mjs:org()",
+      "breaking_input": "venture.yaml with supabase_org: 'ACME' while the token sees orgs [{id:'o1',name:'acme'},{id:'o2',name:'ACME'}]",
+      "why": "Match by name is case-sensitive exact; but the ADR says 'by id or by name' and the failing test 'org-unknown' only checks unmatched. The break: a user names an org exactly like one the token sees (case-sensitive) but a different org also matches the same name under case folding; the filter hits length 2 → ORG_UNKNOWN even though a single unique case-insensitive match exists. More importantly, the name comparison uses ===, so a name that differs only by case from the real org (which Supabase may display normalized) refuses even when unambiguous.",
+      "fix": "Normalize both sides (lowercase/trim) for the name comparison, or require id only; at minimum document that name match is case-sensitive and refuse ambiguous-only on exact matches.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:find()",
+      "breaking_input": "A venture has supabase_org named by NAME (e.g. 'acme') and the token sees org 'acme' with id 'o1'; the projects list returns a project with name matching and organization_id absent (older Supabase API, or a project in the default org where organization_id is omitted).",
+      "why": "find() calls named(ctx) again and then org(ctx) which re-lists organizations; but if any project in the fetched list lacks organization_id, the filter p.organization_id === id drops it, so a same-named project in a named org whose organization_id field is missing is never adopted — while the same list without an org name would treat the missing field as belonging to the first org. The named path can silently adopt nothing and then create a duplicate.",
+      "fix": "Treat a project with no organization_id in the named case as foreign (do not adopt), but verify that the API always includes organization_id; otherwise refuse ORG_UNKNOWN rather than silently creating a second project.",
+      "twin_of": "A contents answer with no content ... was read as an empty contract -> every decode of a provider field: what does an absent or other-encoded field decode to?"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:named()",
+      "breaking_input": "venture.yaml sets supabase_org: '  acme  ' (spaces around), token sees exactly one org named 'acme'",
+      "why": "named() trims the value, so '  acme  ' becomes 'acme', good. But the trim happens AFTER the type check and BEFORE the empty-string check — the check `!v.trim()` happens on the untrimmed v, so a value of '   ' (only spaces) passes the guard ('.trim()' is truthy) and returns the trimmed '' as the org name. Then org() matches no org and throws ORG_UNKNOWN 'matches 0' with an empty quoted name, instead of BAD_ORG; the ADR says a non-string is BAD_ORG, and empty is arguably not a valid name.",
+      "fix": "Trim first, then check emptiness: const t = v.trim(); if (!t) throw BAD_ORG.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:org()",
+      "breaking_input": "Token sees two orgs with identical names but different ids (e.g. two 'acme' orgs in different Supabase accounts under the same token) and venture names 'acme'",
+      "why": "Two separate reads of the organizations list can disagree under a concurrent change; scaffold and find use different org ids, so scaffold creates a project in o1 and verify/find looks in o2, failing adoption and verification.",
+      "fix": "Resolve the org id once per adapter invocation and pass it down, or re-read once and share.",
+      "twin_of": "The parent hashed the adapter file and the worker imported a second read of it ... validate one read, use another: every check-then-load pair"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:seen() and org()",
+      "breaking_input": "Token sees 6 orgs; venture names an org that matches none",
+      "why": "seen() slices to 5, so the ORG_UNKNOWN and ORG_AMBIGUOUS messages list only the first 5 orgs. The user cannot tell whether the 6th org is the one they meant. The ADR says 'listing each org's id and name' — actually the message is capped at 5, which is a silent truncation of a list the user needs.",
+      "fix": "Either list all orgs (bounded by API limits) or explicitly say 'and N more'.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:named() and find()",
+      "breaking_input": "venture.yaml supabase_org is a string that trims to 'o1' but the token also has an org named 'o1' in addition to id 'o1' (i.e., id and name overlap)",
+      "why": "org() matches o.id === want OR o.name === want, so an org with id 'o1' and another with name 'o1' both match → 2 hits → ORG_UNKNOWN, though the user may have meant the id. The ambiguity is inherent to matching by id-or-name, and the refusal is correct, but the message could help by stating whether the hit was by id or name. More concerning: find() re-calls named() and org() — if org() passes on the first call with 1 hit, but later the token sees an added org with same name, find() throws after scaffold; the failure is a refusal after a created resource, leaving the project created but the venture marked failed.",
+      "fix": "Resolve org once and pass the id to find; also if a refusal happens after scaffold, tear down the created project.",
+      "twin_of": "A two-step create ... -> a credential is written before the thing it unlocks"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/launch/contract-database.mjs:ctxNow() for 'org-unknown' and 'bad-org'",
+      "breaking_input": "The 'bad-org' scenario passes org=42 (a number) to ctxNow, which spreads into profile.supabase_org:42. The adapter's named() sees typeof v !== 'string' → BAD_ORG. But the check `!(v === null)` happens first: for 42 it's fine. However, the test never covers a null value. If venture.yaml omits the key, named() returns null (fine). But if the YAML has `supabase_org: null`, named() returns null too, and org() treats it as 'not named' — meaning a user who explicitly set null gets the ambiguous refusal instead of BAD_ORG, and worse, a named value that is null is silently treated as unnamed, so the venture's intended org is ignored.",
+      "why": "The guard `if (v === undefined || v === null) return null;` means an explicit YAML null is indistinguishable from absent, so the org is not scoped; the ADR says 'a value that is not a string is BAD_ORG', and null is not a string.",
+      "fix": "Distinguish absent (undefined) from null; null should throw BAD_ORG.",
+      "twin_of": "`typeof null === \"object\"` let `\"slots\": null` past the state shape guard"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:find()",
+      "breaking_input": "Token sees two orgs; venture names 'o2'. The project list contains a project named 'arc-sandbox' with organization_id 'o2' and another with organization_id 'o2' and the same name (duplicate in same org) — the Supabase API could return two projects with identical names in one org.",
+      "why": "find() filters by name and org, returning BOTH projects in the org with the same name. The caller (scaffold/verify) treats multiple matches as ambiguous or picks the first; the ADR says 'a same-named project in another org is never adopted' but says nothing about two in the SAME org. The existing code apparently expected one; a duplicate in the named org would be adopted ambiguously.",
+      "fix": "If more than one project in the named org matches, refuse with a distinct code (e.g., PROJECT_AMBIGUOUS) rather than picking one.",
+      "twin_of": "Conflicts were read by name AND type ... does its filter hide the conflict?"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:org()",
+      "breaking_input": "The token sees exactly one org, but the venture names a DIFFERENT org (say 'oX' that the token does not see).",
+      "why": "Re-reading the profile means a user edit during the run (or an inconsistent profile) makes scaffold and find disagree; the resource is created in one org and looked up in another.",
+      "fix": "Read the profile once and carry the resolved org; also consider validating that the org name/id still matches at find time and refusing if changed.",
+      "twin_of": "A check and the use it guards read the same object"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "tests/launch/contract-database.mjs:two-orgs-named-by-name",
+      "breaking_input": "The scenario uses name 'acme' for org 'o2'; the test asserts OK. But the fixture orgs list both orgs with distinct names. The test does not cover a name that is a substring of another, e.g., an org named 'acme' and another named 'acme-test' — exact equality is fine. It also does not cover names with leading/trailing whitespace INSIDE the org name as returned by Supabase (e.g., name ' acme ') — the org() comparison uses exact === and trims only the venture value, not the org name; so a token that returns names with accidental spaces would never match. Real Supabase names come from user input, so a trailing space is plausible.",
+      "why": "The comparison `o.name === want` uses the untrimmed org name; if the org name has leading or trailing whitespace (which the API could return), a user who names 'acme' fails to match.",
+      "fix": "Trim org names on the API side before comparison, or document that names are exact.",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:org()",
+      "breaking_input": "venture holds supabase_org with a value containing non-printable characters (e.g., a tab or newline), trimmed only at edges — an interior newline remains.",
+      "why": "named() checks `!v.trim()` which only trims outer whitespace; an interior newline or tab stays. The org name match against API names will fail, giving ORG_UNKNOWN, but the message JSON.stringify(say(want,60)) will echo a string with a control character; say() presumably sanitizes display, but the value is still used in the comparison — no harm, but the BAD_ORG guard does not catch interior control; a value like \"o\\n2\" is a string and passes, then never matches. The user intended 'o2'; the message shows 'o\\n2' truncated, confusing.",
+      "fix": "Reject any org value with control characters (or at least fail early with BAD_ORG).",
+      "twin_of": "A free-text reason prefix (`env:`) chose the outcome -> every branch on adapter text: is the text adapter-controlled?"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "docs/adr/1773-...md decision bullet 'A named org also scopes the project lookup' vs code",
+      "breaking_input": "The ADR claims 'a same-named project in another org is never adopted, never counted as ambiguous, and never verified.' The code in find() first filters by name across ALL orgs, then, if named, filters those by org. If two orgs both have a project with the same name, but the named org's project is exactly one, the first filter returns 2, then the org filter returns 1 — fine. But the CAVEAT: the first filter `all.filter(p.name===name)` runs BEFORE org filter; if the named org's project is the same name, no issue. However, the contract test 'named-scopes-lookup' seeds only ONE project (in other org), and the named org has none, and the test expects it creates a new one. What if the named org has a project and the other org also has one — the code returns only the named org's, good. The ADR is accurate. The finding is actually about a DIFFERENT line: the ADR says 'never counted as ambiguous' but the code, when named and hit.length===1 for orgs but the PROJECT list has two same-named in the same org (L8), will count ambiguous — a contradiction. Resolved by L8.",
+      "why": "L8 covers the gap; ADR overstates.",
+      "fix": "Update ADR to say 'at most one project per org name is adopted; two in the same named org is a refusal.'",
+      "twin_of": null
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:org() and named()",
+      "breaking_input": "A venture has supabase_org set to a value that equals an org's NAME but the name contains a leading/trailing whitespace exactly as in venture.yaml AND the org has the same whitespace (both dirty) — this works, but the message listing uses say() which truncates to 40; if an org name is longer than 40 the message truncates, and the user cannot distinguish two long org names that share a 40-char prefix. The ADR says 'lists each org's id and name'; truncation makes that unreliable.",
+      "why": "Display truncation hides the distinguishing tail of long org names; a user with two orgs whose names share the first 40 chars sees identical entries.",
+      "fix": "Print full ids (ids are the disambiguator) and mention truncation, or list names without truncation (they come from the user's own account).",
+      "twin_of": "The sanitiser missed U+061C and the zero-width marks, and capped by UTF-16 units -> every sanitiser and every .slice(0, n) on display text"
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:org()",
+      "breaking_input": "Token sees 0 orgs (an empty list — e.g., a token with no org access).",
+      "why": "The old code: `if (orgs.length !== 1) throw ORG_AMBIGUOUS` — with 0 orgs, it threw ORG_AMBIGUOUS saying 'the token sees 0 organizations; one is required'. The new code: with want===null, orgs.length=0, hit = orgs (length 0), hit.length!==1 → throws ORG_AMBIGUOUS — same. But with want!==null (e.g., a named org) and orgs.length===0, hit.length=0 → ORG_UNKNOWN 'matches 0 of the 0 organizations' — the message says 'of the 0 organizations', which is a false claim about the number; more importantly, the user named an org but the token sees none, so the refusal is correct, but the message 'matches 0 of the 0 organizations' is confusing. Also, the code counts hit.length against 1; if orgs.length===0 and want===null, ORG_AMBIGUOUS says 'one is required' — correct. The real issue: a token with no orgs (misconfigured token) causes ORG_UNKNOWN/AMBIGUOUS rather than a distinct NO_ORG error, so a user diagnosing a bad token sees 'ambiguous' not 'no access'.",
+      "fix": "Add an explicit case: if orgs.length===0, refuse with a distinct code like NO_ORG and an explanation about the token's org access.",
+      "twin_of": "Any 400 on a single-order read was reported as 'the order does not exist' -> every allowed error status: does it prove the cause the reason names?"
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:find()",
+      "breaking_input": "A named org scopes the lookup; but the PROJECTS list from Supabase's GET /v1/projects returns ALL projects the token can see, which is account-wide. The filter by organization_id is correct. However, the code reads the projects list BEFORE knowing the org id: `const all = list(...).filter(p=>p.name===name)` — this fetches the entire account-wide project list, which could be large and could include projects whose names leak into the memory even though filtered. The ADR says 'a same-named project in another org is never adopted' — true. But there is a subtle TOCTOU: the organization list is fetched once in org() and then again in find() calling org() (which calls named() again and lists organizations again). If a project is created in the named org between the two GETs (or a project removed), find sees a snapshot; that's fine. The real defect: if the venture's named org is 'o2' and the token's project list includes a 'arc-sandbox' in org 'o1' AND the token loses access to org 'o1' between the project list read and the org read (unlikely), the filter still works on the fetched list. No. The finding is actually a boundary: the account-wide project list read can be large; the adapter reads it unbounded, and a malicious or noisy org could make it slow — but the surface is logic, so I'll drop this.",
+      "why": "The only concrete issue is the TOCTOU between two org() calls (L4) and two profile reads (L9).",
+      "fix": "Combine L4/L9.",
+      "twin_of": null
+    }
+  ]
+}
