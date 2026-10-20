@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": "products/launch/providers/backup/pg-dump.mjs:provisionRole (sql call, `create role` request) and the private-file write order",
+      "breaking_input": "The create-role SQL succeeds on Supabase, then ctx.writePrivate throws (PRIVATE_UNSET because ARC_PRIVATE_DIR and homedir resolve badly, a read-only dir, a link at SUPABASE_DB_URL, or disk full). The role now exists with launch's tag comment and its password is lost. On re-run, `rows.length` is true, so the adapter reports the role and returns 'its URL was written when it was made' without writing any file.",
+      "why": "A two-step create (remote role, then local credential) leaves a half-made state that the retry reads as complete. The owner has no URL and the slot is stuck. A kill between the two calls does the same. This is the twin of 'a kill between creating a branch and committing to it' and of 'every create-then-record'.",
+      "fix": "Write the private file before or atomically with the create, and on re-entry with an existing launch-tagged role and no private file, rotate the password with `alter role ... password` and rewrite the file. Or check that the private file exists before returning the 'exists' note.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign -> every two-step create: is the half-made state recognisable as ours?"
+    },
+    {
+      "id": "B2",
+      "severity": "high",
+      "where": "products/launch/providers/backup/pg-dump.mjs:provisionRole (SQL string interpolation of ctx.tag and the role-existence probe)",
+      "breaking_input": "Role creation is a multi-statement query sent in one request with no transaction. If `create role` succeeds but a later statement fails (e.g. `create or replace function` or a grant on a schema the owner restricted), the role exists with its tag comment. Because the comment is set in the second statement, a failure between statement 1 and statement 2 leaves a role with an empty comment. The re-run then reads the empty comment as FOREIGN_ROLE and refuses permanently.",
+      "why": "The half-made state is not recognisable as launch's own, which is the same defect as 'a fix refused launch's own half-made resource as foreign'. Whether Management API /database/query wraps a multi-statement body in a transaction is not modelled by the fake.",
+      "fix": "Put the comment in the same transaction, or order it so a tag-less role cannot exist, e.g. `begin; ... commit;` as one body (checking the endpoint's answer shape), or treat an empty-comment role as recoverable only if it is also the one created by this run.",
+      "twin_of": "A fix refused launch's own half-made resource as foreign -> every refuse-the-unrecorded guard: can launch itself leave an unrecorded resource?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:writePrivateFile",
+      "breaking_input": "privateRoot resolves from ARC_PRIVATE_DIR set to a path inside a git work tree (for example `.` or the venture repo). writePrivateFile never checks for a work tree, so the minted DB URL is written inside a repo that can commit it. A link at privateRoot itself or at `launch/<venture>` is also followed, since only the leaf is lstat-checked.",
+      "why": "ADR-1772 promises the URL lives 'outside every repo', but the code enforces nothing. The fixed-defects list already has 'A raw record could be written inside a git work tree' and 'The git-tree check read the lexical path'. Also, lstat then writeFileSync is check-then-use, and writeFileSync follows a link planted in between.",
+      "fix": "Realpath privateRoot after mkdir, refuse if it or any ancestor holds a .git, and open the file with the O_NOFOLLOW|O_EXCL flags (or write a temp file and rename it).",
+      "twin_of": "A raw record could be written inside a git work tree -> every artifact holding live secrets: where may it land, and what may it hold?"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "ctx.mjs:writePrivateFile / worker.mjs privateRoot",
+      "breaking_input": "venture slug `a.venture` is joined into privateRoot with only the existing slug grammar. A Windows reserved name such as `con` or `nul` is a valid slug per the grammar, so `join(root, 'launch', 'nul')` with mkdirSync fails or targets a device. The 0o600/0o700 modes also do nothing on NTFS, so the secret URL file is readable by other local users on Windows.",
+      "why": "The mode bits are the only access control claimed, and they do not apply on the platform this run uses (win32). The Windows reserved-name twin applies to a path segment built from data.",
+      "fix": "Validate the slug against the reserved-device list before use, and on win32 either document that ACLs are not set or set a restrictive ACL via icacls. Do not claim 0600 where it is not enforced.",
+      "twin_of": "`ctx.write` accepted `nul`, `C:foo` and `file.txt:stream`, which are files on Linux and something else on Windows -> every path segment built from data: slugs, ids, file names"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs:scaffold note (`gh secret set ... < \"${where}\"`)",
+      "breaking_input": "ARC_PRIVATE_DIR or the home directory contains `\"`, `$`, a backtick or `%`, or on Windows the path has backslashes and spaces (C:\\Users\\Some Name\\.arc-private\\...). The path is interpolated into a shell command shown to the owner inside double quotes, and `full` (repo) is interpolated unquoted.",
+      "why": "The note is an owner-run command line built from an env-supplied path. Inside a double-quoted bash string, `$` and a backtick are expanded, so a crafted ARC_PRIVATE_DIR yields a command that runs something else when pasted. Backslash paths are read as escapes by bash. This matches the defect 'Paths node prints on Windows carry backslashes that bash reads as escapes'.",
+      "fix": "Print the path with forward slashes and single-quote it with embedded single quotes escaped, or refuse a private dir containing shell metacharacters. Quote `full` too.",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes when a helper's output is eval'd or globbed -> every helper whose output bats evals or globs"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:place",
+      "breaking_input": "Vercel POST /env fails for the second key after the first was placed. The first key was already reported via ctx.report, but if POST succeeds and the process is killed before ctx.report, or if an earlier key succeeds and a later one throws, the resources for the placed keys stay recorded only partially. On a rerun the key is in `set`, so it is skipped and never recorded as launch's. Teardown then never deletes it, or a pre-existing owner key is skipped and never recorded either way.",
+      "why": "Ownership is derived from 'production lacks it now', so a key launch placed and failed to record is indistinguishable from the owner's. Report-after-create leaves an unrecorded resource, the same defect as 'A resource was reported only after a later call succeeded'.",
+      "fix": "Record intent before the POST (report then create, with a marker), or verify ownership on rerun by comparing against recorded vercel-env resources. Placed values should carry a launch marker in the key's comment field.",
+      "twin_of": "A resource was reported only after a later call succeeded, so a failure in between left an unrecorded commit -> every scaffold with two creates: what is recorded if the second fails?"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": "products/launch/providers/secrets/vercel-env-store.mjs:place (mask via split(value).join)",
+      "breaking_input": "A key value that is empty after trim but nonempty, or a very short value such as `a` or `1`. `String(e.message).split(value).join(\"***\")` then rewrites every occurrence of that character in the provider's message. Conversely the Vercel body is masked only by the exact value, so a provider echoing a URL-encoded or JSON-escaped form of the value (e.g. a value containing a quote or newline, echoed as `\\n` or `\\\"`) is not masked.",
+      "why": "Masking by exact substring misses an escaped echo, so the secret reaches the error, the reason, and the receipt. The same logic applies to pg-dump's `sql` mask of the password, though the base64url password has no escapable characters.",
+      "fix": "Mask the JSON-escaped and URL-encoded variants too, or do not include the provider message when the request carried a secret. Report status and code only.",
+      "twin_of": "Provider error text and resolver answers went raw into the slot's reason -> every adapter that builds a reason or message from a response body"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:runAttempt (outcome pending) with worker.mjs exit 4",
+      "breaking_input": "A worker that exits 4 for another reason, or an adapter whose verify keeps answering PENDING forever (the build never reaches READY). The runner exits 4 on every apply, and `apply --all` stops at that slot every time with no bound. There is also no timeout or attempt cap that converts a perpetual PENDING into a failure, and `last_verify` PENDING from `verify --all` is stored as a non-ok reason.",
+      "why": "A pending that never resolves is a livelock for the walk, and ADR-1771's own revisit trigger names it but nothing detects it. Exit 4 is also the walk's 'unmet dependency' code, so a pending slot and a missing dependency are indistinguishable to a script reading the exit code.",
+      "fix": "Record the first-pending timestamp in state and fail after a bound, and use a distinct exit code or a distinct stop line for pending.",
+      "twin_of": "A poll that ran out reported \"no run\" while a run was still going -> every poll loop's final reason"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "products/launch/providers/domain/cloudflare-zone.mjs:getJson (RDAP fetch) and verify",
+      "breaking_input": "RDAP server answers with a redirect or an enormous body. getJson calls `res.json()` with no size bound, and ctx.fetch follows whatever redirect policy it has. The request carries no credential, so the redirect risk is limited, but a hostile or broken answer is read unbounded.",
+      "why": "The unbounded `res.json()` on a third-party endpoint is the same shape as 'A capped read buffered the whole body before slicing'. The Cloudflare call carrying the bearer token also goes through the same getJson, so any redirect on api.cloudflare.com would carry the credential.",
+      "fix": "Bound the read (text with a length cap, then parse), and pass `redirect: \"manual\"` on every call that carries a credential header.",
+      "twin_of": "The Razorpay calls carrying the Basic key pair followed redirects -> every call with a credential header: is a redirect followed?"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs:buildGate",
+      "breaking_input": "A `headers-config` resource id whose text after the last `:` is a 40-hex string that is not the commit launch made (an id recorded by a different slot or an owner edit), or the newest 20 deployments are all from branch previews of the same sha. `ds.find(d => d.meta.githubCommitSha === sha)` takes the first match in list order, which may be an older redeploy of the same sha, and `Number(d.created)` of an older one makes `newerReady` true for an unrelated build.",
+      "why": "`newerReady` accepts any READY deployment created later without checking it descends from sha, so a hotfix or a rollback build counts as proof the headers shipped. The code comment admits this for the absent case but not for the found case. Also the `limit=20` single page repeats the paged-list defect.",
+      "fix": "Require the newer READY build's commit to be sha or a descendant (compare via GitHub compare API), or only accept READY on `ours` itself.",
+      "twin_of": "The sha-matched proof was searched in a fixed page of recent deployments -> every \"find the one we made\" inside a paged list"
+    }
+  ]
+}

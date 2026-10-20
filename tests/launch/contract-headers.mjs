@@ -36,18 +36,22 @@ const opts = {
 const live = makeHeaders({ github, full: FULL, domain: DOMAIN, inner: (i, o) => github.fetch(i, o), ...opts });
 // REQ-18: Vercel's production deployments, answered from the headers commit this run recorded. BUILD steers the answer
 // (READY by default); the build-* scenarios set it. Every other host goes to the live fake as before.
-let BUILD = { "build-building": "BUILDING", "build-error": "ERROR", "build-canceled": "CANCELED", "build-absent": null, "build-newer-ready": "CANCELED" }[scenario];
+let BUILD = { "build-building": "BUILDING", "build-error": "ERROR", "build-canceled": "CANCELED", "build-absent": null, "build-newer-ready": "CANCELED", "build-newer-unrelated": "CANCELED" }[scenario];
 if (BUILD === undefined) BUILD = "READY";
 const vercelCalls = [];
+// The newer build descends from the headers commit in build-newer-ready, and is a rollback in build-newer-unrelated.
+const NEWER = "f".repeat(40);
 globalThis.fetch = async (input, init = {}) => {
   const u = new URL(String(input));
+  const cmp = u.hostname === "api.github.com" && u.pathname.match(/\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})$/);
+  if (cmp && cmp[2] === NEWER) return new Response(JSON.stringify({ status: scenario === "build-newer-unrelated" ? "diverged" : "ahead" }), { status: 200, headers: { "content-type": "application/json" } });
   if (u.hostname !== "api.vercel.com") return live.fetch(input, init);
   vercelCalls.push(`${String(init.method || "GET")} ${u.pathname}`);
   if (u.pathname !== "/v6/deployments") return new Response(JSON.stringify({ error: { message: "not modelled" } }), { status: 404 });
   const rec = state.filter((r) => r.kind === "headers-config").map((r) => r.id).pop() || "";
   const sha = rec.slice(rec.lastIndexOf(":") + 1);
   const ds = BUILD === null ? [] : [{ uid: "dpl_headers01", created: 2000, readyState: BUILD, meta: { githubCommitSha: sha }, target: "production" }];
-  if (scenario === "build-newer-ready") ds.unshift({ uid: "dpl_newer01", created: 3000, readyState: "READY", meta: { githubCommitSha: "f".repeat(40) }, target: "production" });
+  if (scenario === "build-newer-ready" || scenario === "build-newer-unrelated") ds.unshift({ uid: "dpl_newer01", created: 3000, readyState: "READY", meta: { githubCommitSha: NEWER }, target: "production" });
   return new Response(JSON.stringify({ deployments: ds }), { status: 200, headers: { "content-type": "application/json" } });
 };
 
@@ -114,6 +118,7 @@ switch (scenario) {
   case "build-canceled":
   case "build-absent":
   case "build-newer-ready":
+  case "build-newer-unrelated":
     await adapter.scaffold(ctxNow());
     out.verify = await adapter.verify(ctxNow());
     out.vercel = vercelCalls;

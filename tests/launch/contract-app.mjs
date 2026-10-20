@@ -22,7 +22,7 @@ globalThis.setTimeout = (fn) => realTimeout(fn, 0);
 
 const FULL = "technology-ashiq/arc-sandbox";
 const DOMAIN = "sandbox.automemory.ai";
-const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }], runConclusions: scenario === "red-ci" ? ["success", "failure", "success"] : null });
+const github = makeGithub({ pendingPolls: scenario === "ci-running" ? 99 : 0, repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }], runConclusions: scenario === "red-ci" ? ["success", "failure", "success"] : null });
 const vercel = makeVercel({ github });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: vercel.fetch, healthBody: scenario === "bad-health" ? { ok: true, service: "venture", version: "0.1.0", debug: "x" } : null });
 globalThis.fetch = live.fetch;
@@ -90,6 +90,7 @@ switch (scenario) {
     repo().commits.push({ sha: "e".repeat(40), message: "copy", files: { "lib/contract.js": repo().files["lib/contract.js"].sha } });
     out.backend = await attempt(() => A.backend.mod.scaffold(ctxFor("backend")));
     break;
+  case "ci-running":
   case "red-ci":
     await A.orm.mod.scaffold(ctxFor("orm"));
     out.ormVerify = await A.orm.mod.verify(ctxFor("orm"));

@@ -1604,10 +1604,11 @@ arm() {
   [ "$(j 'o.sentinelSeen + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: secrets masks a placed value a provider error echoes back" {
+@test "launch-contract: secrets withholds the provider error text when a placement fails, so the value cannot leak" {
   arm secrets place-echo-error
-  [ "$(j 'o.scaffold.ok + " " + o.masked')" = "false true" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.scaffold.message')" == "vercel POST /v10/projects/prj_fixture01/env -> 400: rejected value *** for key" ]] || { echo "$DONE"; false; }
+  # The provider's text is withheld whole, so no echo of the value in any encoding can reach a reason (b5b09df L5, B7).
+  [ "$(j 'o.scaffold.ok')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.scaffold.message')" = "vercel POST /v10/projects/prj_fixture01/env (RAZORPAY_KEY_ID) -> 400; the provider's message is withheld because it may echo the value" ] || { echo "$DONE"; false; }
   [ "$(j 'o.sentinelSeen')" = "false" ] || { echo "$DONE"; false; }
 }
 
@@ -1666,5 +1667,17 @@ arm() {
   [ "$(j 'o.urlShape')" = "null" ] || { echo "$DONE"; false; }
   arm backup role-echo-error
   [ "$(j 'o.first.ok + " " + o.errorMasked + " " + o.pwLeaked')" = "false true false" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.urlShape')" = "null" ] || { echo "$DONE"; false; }
+  # The URL is written before the role (b5b09df B1): a failed create leaves a stale file the next run overwrites, and no role.
+  [ "$(j 'o.roles.length + " " + o.reported.length')" = "0 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: orm verify is PENDING while CI is still running, never failed (debt D22, ADR-1771)" {
+  arm app ci-running
+  [ "$(j 'o.ormVerify.ok + " " + o.ormVerify.pending + " " + o.ormVerify.answerer')" = "false ci: run 4 is still in_progress api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.ormVerify.reason')" = "PENDING(ci: run 4 is still in_progress)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: security-headers counts a newer live build only when it descends from the headers commit (b5b09df B10)" {
+  arm headers build-newer-unrelated
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production deployment dpl_headers01 of "*" is CANCELED and nothing newer is live" ]] || { echo "$DONE"; false; }
 }

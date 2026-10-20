@@ -330,9 +330,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-15
+  # Re-vet pending (ADR-1719): Phase 09 debt D22 answers PENDING while CI runs. Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 4d1e14f76d36.
   - id: drizzle
     slot: orm
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -347,7 +348,7 @@ providers:
     credentials:
       scope: "commits the typed schema and its test; reads CI for main head (ADR-1733)"
     adapter: providers/orm/drizzle.mjs
-    digest: 4d1e14f76d36a4fa6d6cfaf132a6440f9783f00dc11b65367474e85dca7c71a3
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md

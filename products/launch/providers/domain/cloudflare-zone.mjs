@@ -75,8 +75,11 @@ const nsOf = (answer) => ((answer && answer.Answer) || []).filter((a) => a && a.
 
 function rdapFacts(json, now) {
   const status = (Array.isArray(json && json.status) ? json.status : []).map((s) => String(s).toLowerCase());
-  const ev = (Array.isArray(json && json.events) ? json.events : []).find((e) => e && e.eventAction === "expiration");
-  const expires = ev ? Date.parse(String(ev.eventDate)) : NaN;
+  // Every expiration event counts and the EARLIEST wins: a record listing a stale and a renewed date must not pass on
+  // whichever came first in the array, and a malformed date is no date at all (attack b5b09df L3).
+  const dates = (Array.isArray(json && json.events) ? json.events : []).filter((e) => e && e.eventAction === "expiration")
+    .map((e) => Date.parse(String(e.eventDate))).filter(Number.isFinite);
+  const expires = dates.length ? Math.min(...dates) : NaN;
   return { status, expires: Number.isFinite(expires) ? new Date(expires).toISOString() : null, days: Number.isFinite(expires) ? Math.floor((expires - now) / 86400000) : null };
 }
 

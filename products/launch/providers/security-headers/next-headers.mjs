@@ -233,12 +233,17 @@ async function buildGate(ctx) {
   const ds = list(r.body && r.body.deployments);
   const st = (d) => say(d.readyState || d.state, 20);
   const ours = ds.find((d) => d.meta && d.meta.githubCommitSha === sha);
-  const newerReady = (at) => ds.some((d) => d !== ours && Number(d.created) > at && st(d) === "READY");
+  // A newer live build counts only when its commit descends from the headers commit: a rollback or a hotfix branch built
+  // later does not carry the headers (attack b5b09df B10). GitHub's compare answers that; at most three are asked.
+  const full = repoOf(ctx);
+  const later = (at) => ds.filter((d) => d !== ours && Number(d.created) > at && st(d) === "READY" && d.meta && SHA.test(String(d.meta.githubCommitSha))).slice(0, 3);
+  const descends = async (c) => { const r = await gh(ctx, "GET", `/repos/${full}/compare/${sha}...${c}`, undefined, [404]); return r.status === 200 && r.body && (r.body.status === "ahead" || r.body.status === "identical"); };
+  const newerReady = async (at) => { for (const d of later(at)) if (await descends(d.meta.githubCommitSha)) return true; return false; };
   // Not in the newest 20 at all: either it has not started, or it is older than every one listed -- a newer build
   // then carries it only if the commit is an ancestor, which this read cannot tell, so it waits rather than guesses.
   if (!ours) return { pending: `build: no production deployment of ${sha.slice(0, 7)} among the newest 20` };
   const s = st(ours);
-  if (s === "READY" || newerReady(Number(ours.created))) return null;
+  if (s === "READY" || await newerReady(Number(ours.created))) return null;
   if (s === "ERROR") return { fail: `production build ${say(ours.uid, 40)} of ${sha.slice(0, 7)} failed (ERROR)` };
   if (BUILDING.has(s)) return { pending: `build: production deployment ${say(ours.uid, 40)} of ${sha.slice(0, 7)} is ${s}` };
   return { fail: `production deployment ${say(ours.uid, 40)} of ${sha.slice(0, 7)} is ${s || "unknown"} and nothing newer is live` };

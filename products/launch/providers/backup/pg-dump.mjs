@@ -248,9 +248,16 @@ async function provisionRole(ctx, full) {
   const rows = await sql(ctx, ref, `select coalesce(shobj_description(oid, 'pg_authid'), '') as c from pg_roles where rolname = '${ROLE}';`);
   if (rows.length && rows[0].c !== ctx.tag) throw refuse("FOREIGN_ROLE", `${ROLE} already exists and is not launch's; launch never alters a role it did not make`);
   const id = `${ref}:${ROLE}`;
-  if (rows.length) { ctx.report({ kind: "pooler-role", id }); return { id, note: `${ROLE} exists (launch's); its URL was written when it was made` }; }
+  if (rows.length) { ctx.report({ kind: "pooler-role", id }); return { id, note: `${ROLE} exists (launch's); its URL was written when it was made (lost it? teardown drops the role and the next apply makes a new one)` }; }
   const pw = randomBytes(24).toString("base64url");
+  // The URL is written BEFORE the role exists: a failed write leaves nothing made, and a kill after the create leaves a
+  // role whose URL is already on disk (attack b5b09df B1). A write that lands and a create that fails leaves a stale
+  // file the next run overwrites.
+  const where = ctx.writePrivate("SUPABASE_DB_URL", `postgresql://${ROLE}.${ref}:${pw}@${host}:5432/postgres?sslmode=require\n`);
+  if (where.includes("'")) throw refuse("BAD_PRIVATE_PATH", "the private dir path holds a quote; the owner's command could not quote it safely");
+  // One transaction: a later statement failing leaves no half-made role behind (attack b5b09df B2).
   await sql(ctx, ref, [
+    "begin;",
     `create role ${ROLE} login password '${pw}' bypassrls;`,
     `comment on role ${ROLE} is '${ctx.tag}';`,
     `grant usage on schema public to ${ROLE};`,
@@ -261,10 +268,11 @@ async function provisionRole(ctx, full) {
     "revoke all on function launch_ops.user_ids() from public;",
     `grant usage on schema launch_ops to ${ROLE};`,
     `grant execute on function launch_ops.user_ids() to ${ROLE};`,
+    "commit;",
   ].join("\n"), pw);
   ctx.report({ kind: "pooler-role", id });
-  const where = ctx.writePrivate("SUPABASE_DB_URL", `postgresql://${ROLE}.${ref}:${pw}@${host}:5432/postgres?sslmode=require\n`);
-  return { id, note: `${ROLE} made; set the Actions secret once: gh secret set SUPABASE_DB_URL --repo ${full} < "${where}"` };
+  // Single quotes: a path is data, and inside double quotes bash would expand a $ or a backtick in it (attack b5b09df B5).
+  return { id, note: `${ROLE} made; set the Actions secret once: gh secret set SUPABASE_DB_URL --repo ${full} < '${where}'` };
 }
 
 export async function scaffold(ctx) {

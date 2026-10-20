@@ -146,15 +146,20 @@ async function place(ctx, pid, names) {
   for (const key of names) {
     const value = String(ctx.env[key] ?? "");
     if (set.has(key) || OWN.has(key) || !value.trim()) continue;
-    try {
-      await vc(ctx, "POST", `/v10/projects/${pid}/env`, { key, value, type: "encrypted", target: ["production"] });
-    } catch (e) {
-      if (e && e.code === "ABORTED") throw e;
-      throw new Error(String(e && e.message).split(value).join("***"));
-    }
+    // Recorded before the create: a kill after Vercel stores it still leaves launch's claim, so a re-run and the exit
+    // plan never mistake launch's key for the owner's (attack b5b09df B6).
     const r = { kind: "vercel-env", id: `${pid}:${key}` };
     ctx.report(r);
     out.push(r);
+    let res;
+    try {
+      res = await ctx.fetch(`${VERCEL}/v10/projects/${pid}/env`, { method: "POST", headers: { authorization: `Bearer ${tokenOf(ctx, "VERCEL_TOKEN", /^[A-Za-z0-9_-]{20,}$/)}`, "content-type": "application/json", "user-agent": "arc-launch" }, body: JSON.stringify({ key, value, type: "encrypted", target: ["production"] }) });
+    } catch (e) {
+      if (e && e.code) throw e;
+      throw new Error(`vercel POST /v10/projects/${pid}/env (${key}) -> transport error`);
+    }
+    // The provider's text is never carried: it can echo the value in a form no mask matches (attack b5b09df L5, B7).
+    if (!res.ok) throw new Error(`vercel POST /v10/projects/${pid}/env (${key}) -> ${res.status}; the provider's message is withheld because it may echo the value`);
   }
   return out;
 }
