@@ -51,9 +51,10 @@ providers:
     vetted_by: null
     scout: null
     last_verified: null
+  # Re-vet pending (ADR-1719): F4 verifies a flattened apex CNAME (myfitfolio.com). Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest b79227399a27.
   - id: cloudflare-dns
     slot: dns
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -67,7 +68,7 @@ providers:
     credentials:
       scope: "zone DNS edit on one zone"
     adapter: providers/dns/cloudflare-dns.mjs
-    digest: b79227399a27103e2cc88a0e03dbe52cdb51ddda4574b432b9068c993467c4c7
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md

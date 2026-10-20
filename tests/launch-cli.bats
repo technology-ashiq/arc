@@ -29,7 +29,9 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   run node "$(L)" plan --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # The owner vetted 32 rows (decision.recorded 01M4YYNSS3H8N5A5HWAG77BM3J); domain and legal-pages hold only candidates.
-  [[ "$output" == *"dns: recommended cloudflare-dns -- why: FIT-1 type saas-b2b"*"status vetted"* ]] || { echo "$output"; false; }
+  # cloudflare-dns awaits its re-vet after F4 (ADR-1719), so dns is REFUSED by name until the owner stamps it.
+  [[ "$output" == *"dns: REFUSED -- no vetted provider for dns · candidates: cloudflare-dns (candidate)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"hosting: recommended "*"status vetted"* ]] || { echo "$output"; false; }
   [[ "$output" == *"payment-test: recommended razorpay"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
   [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-registrar (candidate), cloudflare-zone (candidate)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"legal-pages: REFUSED -- no vetted provider for legal-pages · candidates: arc-legal (candidate)"* ]] || { echo "$output"; false; }
