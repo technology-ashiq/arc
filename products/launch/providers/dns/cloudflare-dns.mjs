@@ -115,12 +115,14 @@ const ips = (answer, type) => list(answer && answer.Answer).filter((a) => a.type
 // 01M5CGAXT2T3G8MS1FMXH7YQ6F). The apex is read by its answer instead: at each resolver, every A/AAAA the name returns is
 // one the target returns at that same resolver, and there is at least one A. A proxied record answers Cloudflare's edge
 // addresses, which the target never returns, so the grey-cloud check still holds.
-async function flattened(ctx, name, to) {
+// The target's own answers are asked once per verify, not once per poll (r1 B7): they are the hosting provider's, not
+// the record launch is waiting on.
+async function flattened(ctx, name, to, targetAnswers) {
   const seen = {};
   let ok = true;
   for (const [q, type] of [["A", 1], ["AAAA", 28]]) {
     const at = await ctx.probe.doh(name, q);
-    const of = await ctx.probe.doh(to, q);
+    const of = targetAnswers[q] || (targetAnswers[q] = await ctx.probe.doh(to, q));
     for (const k of ["google", "cloudflare"]) {
       const got = ips(at[k], type);
       const want = ips(of[k], type);
@@ -137,6 +139,7 @@ export async function verify(ctx) {
   const to = target(ctx);
   let seen = null;
   let flat = null;
+  const targetAnswers = {};
   for (let i = 0; i < 6; i++) {
     if (i) await wait(10000, ctx.signal);
     const r = await ctx.probe.doh(name, "CNAME");
@@ -144,7 +147,7 @@ export async function verify(ctx) {
     if (seen.google.includes(to) && seen.cloudflare.includes(to))
       return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, ...seen } };
     if (!seen.google.length && !seen.cloudflare.length) {
-      flat = await flattened(ctx, name, to);
+      flat = await flattened(ctx, name, to, targetAnswers);
       if (flat.ok) return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, flattened: true, ...flat.seen } };
     }
   }

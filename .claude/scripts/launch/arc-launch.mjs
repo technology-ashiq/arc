@@ -149,11 +149,12 @@ async function cmdWalk(o) {
   let applied = 0;
   // F5: the owner sees each slot before it runs, each one passed over, and one summary line after the byte-stable
   // walk complete / stopped at lines that scripts read.
-  const rows = loadRegistry(P.registry);
   const pos = (id) => `[${order.indexOf(id) + 1}/${order.length}]`;
   const told = new Set();
+  // The summary is a view: a state read that fails here never replaces the exit code the walk already chose (r1 B1).
   const summary = (stop, code) => {
-    const st = (loadState(P.stateDir, profile.slug) || { slots: {} }).slots;
+    let st = {};
+    try { st = (loadState(P.stateDir, profile.slug) || { slots: {} }).slots; } catch { console.log("walk summary: state unreadable"); return code; }
     const n = (k) => order.filter((id) => (st[id] || {}).state === k).length;
     console.log(`walk summary: ${n("verified")} verified · ${applied} applied · ${n("skipped")} skipped · stopped at ${stop || "none"}`);
     return code;
@@ -171,14 +172,19 @@ async function cmdWalk(o) {
     const at = (id) => (state.slots[id] || {}).state || "pending";
     const id = order.find((x) => !["verified", "skipped"].includes(at(x)) && !(at(x) === "absent" && !real));
     for (const x of order.slice(0, id ? order.indexOf(id) : order.length))
-      if (!told.has(x)) { told.add(x); console.log(`· ${pos(x)} ${x}: ${at(x)} -- passed over`); }
+      if (!told.has(x)) { told.add(x); console.log(`· ${pos(x)} ${x}: ${clean(at(x))} -- passed over`); }
     if (!id) return done();
     if (at(id) === "absent") return stopped(id, `stopped at ${id}: exit ${EXIT.REFUSED} absent on real`, EXIT.REFUSED);
     if (!told.has(id)) {
       told.add(id);
+      // The registry is read fresh per slot, as apply reads it, so the header names the row apply will pick (r1 B2);
+      // only the runner's own refusal becomes text, anything else is a real error (r1 B4).
       let via;
-      try { via = pickProvider(rows, id, profile).id; } catch { via = "no vetted provider"; }
-      console.log(`→ ${pos(id)} applying ${id} via ${via}`);
+      try { via = pickProvider(loadRegistry(P.registry), id, profile).id; } catch (e) {
+        if (!(e instanceof LaunchError)) throw e;
+        via = `none (${e.message})`;
+      }
+      console.log(`→ ${pos(id)} applying ${id} via ${clean(via)}`);
     }
     let last = "";
     // Every line is cleaned as it is printed, so an adapter's words cannot forge a stop or complete line (9d10382 B6).
