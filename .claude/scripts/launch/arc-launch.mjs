@@ -177,12 +177,12 @@ async function cmdWalk(o) {
     if (at(id) === "absent") return stopped(id, `stopped at ${id}: exit ${EXIT.REFUSED} absent on real`, EXIT.REFUSED);
     if (!told.has(id)) {
       told.add(id);
-      // The registry is read fresh per slot, as apply reads it, so the header names the row apply will pick (r1 B2);
-      // only the runner's own refusal becomes text, anything else is a real error (r1 B4).
+      // The registry is read fresh per slot, as apply reads it, so the header names the row apply will pick (r1 B2).
+      // The header is a view: any error is printed with its own message and apply, which reads the same files, decides
+      // the exit (r2 B1, r1 B4).
       let via;
       try { via = pickProvider(loadRegistry(P.registry), id, profile).id; } catch (e) {
-        if (!(e instanceof LaunchError)) throw e;
-        via = `none (${e.message})`;
+        via = `unknown (${(e && e.message) || e})`;
       }
       console.log(`→ ${pos(id)} applying ${id} via ${clean(via)}`);
     }

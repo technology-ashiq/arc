@@ -147,7 +147,12 @@ export async function verify(ctx) {
     if (seen.google.includes(to) && seen.cloudflare.includes(to))
       return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, ...seen } };
     if (!seen.google.length && !seen.cloudflare.length) {
-      flat = await flattened(ctx, name, to, targetAnswers);
+      // A resolver error on the apex read is a poll that saw nothing, not a verify that throws (r2 B2); the slot timeout
+      // still ends it.
+      try { flat = await flattened(ctx, name, to, targetAnswers); } catch (e) {
+        if (e && e.code === "ABORTED") throw e;
+        flat = { ok: false, seen: { google_A: [], cloudflare_A: [] } };
+      }
       if (flat.ok) return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, flattened: true, ...flat.seen } };
     }
   }

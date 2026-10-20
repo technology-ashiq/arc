@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk (header block, `loadRegistry(P.registry)` inside the try)",
+      "breaking_input": "Edit the registry file mid-walk so it no longer parses (a half-written file, a JSON/YAML syntax error), or make it unreadable (EACCES, ENOENT). The next slot's header block calls loadRegistry, which throws a SyntaxError or a raw fs error rather than a LaunchError.",
+      "why": "The catch rethrows anything that is not a LaunchError, so the cosmetic `applying ... via` line now aborts the whole walk. The result is an uncaught exception (exit 1) with no `stopped at` line and no summary. Apply would have given a coded refusal and the walk its proper stop line and exit code. This is the same defect round 1 fixed for summary(): a view line that can replace the exit code. The r1 B4 fix over-corrected by rethrowing.",
+      "fix": "Treat the header as a view. For any error from loadRegistry or pickProvider, print `via` as `unknown (<clean(e.message)>)` and continue into apply, so apply decides the exit code. Alternatively, rethrow only for programmer errors, not I/O errors.",
+      "twin_of": "A view line that can replace the exit code, a header named from a stale read, a bare catch that turns every error into one false sentence, a poll that re-asks a fixed answer each round"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:verify -> flattened()",
+      "breaking_input": "An apex name with no visible CNAME where ctx.probe.doh throws, for example a transport error, a timeout, a resolver 5xx, or an AAAA query type the probe rejects. The throw comes from the new `ctx.probe.doh(name, \"A\"/\"AAAA\")` or `ctx.probe.doh(to, q)` call.",
+      "why": "The round 1 finding asked for flattened() to be wrapped so a transport error becomes `ok:false`. The fix only hoisted the target lookup out of the loop. A throw from flattened() still escapes the read-only verify, so the slot fails with a thrown error instead of a verify result and the remaining poll rounds are skipped. The poll also has no overall deadline, and the worst case is still several extra network calls per round.",
+      "fix": "Wrap the flattened() call in try/catch. On an error, set flat to {ok:false, seen} with empty arrays and carry on polling. Add a contract case where the fake resolver errors on A/AAAA.",
+      "twin_of": "The verify fix caught one refusal code around one call, so the others still threw out of a read"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:flattened() (`targetAnswers[q] || (targetAnswers[q] = await ...)`)",
+      "breaking_input": "The hosting target's A lookup returns an empty or SERVFAIL answer on round 1, a transient resolver glitch. The result `{google: undefined, cloudflare: undefined}` is truthy and gets cached.",
+      "why": "Caching the target's answer for the whole verify means every later round compares against an empty `want`. A transient bad answer for the target therefore turns into a permanent false `ok:false` for the remaining five rounds, even though the apex is correct. Only a non-empty, successful answer should be cached.",
+      "fix": "Cache the target's answer only when it carries at least one A (or the lookup succeeded). Otherwise re-ask next round.",
+      "twin_of": "A poll that re-asks a fixed answer each round"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk (header `via` and `pos(x)`/`${x}` in the passed-over line)",
+      "breaking_input": "A slot id from the board or registry containing a newline plus `walk complete: 9 applied, 0 skipped`, or a bidi override such as U+202E.",
+      "why": "The fixed-defects entry says provider and state text is cleaned. The code cleans `via` and `at(x)`, but the slot ids `x` and `id` in `· [i/n] ${x}`, `applying ${id}` and `stopped at ${stop}` in summary() are still printed raw. These are the byte-stable lines scripts parse. Slot ids may be validated upstream, but this file does not check that, so the claimed fix covers only some of the interpolations.",
+      "fix": "Pass `x`, `id` and `stop` through clean(), or assert in cmdWalk that every id in `order` matches the slot-id grammar.",
+      "twin_of": "Adapter-supplied strings (resource ids, reasons, answerers) were printed raw, so a newline or escape could forge a line"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk header (`pickProvider(loadRegistry(P.registry), id, profile)`)",
+      "breaking_input": "A slot that holds resources from a prior apply recorded under provider A, while the registry now vets provider B (or a second row is added later). If apply honours the provider recorded in state, the header names B.",
+      "why": "Round 1 B2 raised both a stale registry and the state-recorded provider. The fix only re-reads the registry per slot. It still decides the announced provider from the registry alone, so the header can differ from the row apply actually uses once state holds resources. This is the `plan` pattern for a view that decides from the registry when state already has an answer.",
+      "fix": "Take the announced provider from the same selector apply uses (state's recorded provider first, then the registry), or share one function between the two.",
+      "twin_of": "`plan` recommended a provider for a slot that already held resources from another apply -> every view that decides from the registry alone when state already has an answer"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/launch-cli.bats (F5 assertions)",
+      "breaking_input": "Revert the summary() try/catch, or make loadRegistry throw during the header, and rerun the suite.",
+      "why": "The round 1 fixes for B1 (state read throwing in summary), B2 (registry read per slot) and B4 (the catch) have no fixture: the new bats assertions only cover the happy path and the gated stop. The code claims an unreadable state never changes the exit code, but nothing exercises it, so a regression passes CI.",
+      "fix": "Add a bats case that corrupts the state file or registry between slots and asserts the original exit code and the stop line survive. Add a case where the registry is a LaunchError refusal.",
+      "twin_of": "A gate/lint/parser is NOT done until the found holes are fixed and pinned as fixtures"
+    }
+  ]
+}

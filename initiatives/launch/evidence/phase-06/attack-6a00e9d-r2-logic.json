@@ -1,0 +1,70 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:flattened() / verify loop",
+      "breaking_input": "A walk stops with exit code 5 while the state file is momentarily unreadable (another process holds it mid-write, or a truncated write). The new summary() function calls loadState(P.stateDir, profile.slug) without try/catch after the stop line is printed.",
+      "why": "summary() runs on every exit path after the walk decides its code. If loadState throws, the uncaught exception replaces the carefully chosen exit code (3/5/FAILED) with exit 1. The byte-stable 'stopped at' line prints, then the process dies with a different code, so a caller that branches on the status reads the wrong outcome. Before this change the stop paths did no state read after the decision.",
+      "fix": "Wrap the loadState call in summary() in try/catch (e.g. fall back to {slots:{}} and print 'walk summary: unavailable') and always return the original code unchanged.",
+      "twin_of": "A runner exit code became a deny-list of one failure label, so any other label exited 0 / every exit code another program interprets"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk (`via = pickProvider(rows, id, profile).id`)",
+      "breaking_input": "A slot that already holds resources from an earlier half-applied run, or a registry file edited while a long walk is in flight. `rows` is loaded once at the top of cmdWalk (via loadRegistry), while the runner's apply re-reads the registry and may honour the provider recorded in state.",
+      "why": "The '→ [i/n] applying X via P' header is decided from a stale registry read alone. It can name a provider the runner then does not use - a different one, or a slot that already has resources from another apply. The owner is shown a false provider name as the pre-run announcement. This is validate-one-read, use-another.",
+      "fix": "Take the provider from the same function/read the runner uses (call loadRegistry fresh per slot, or read the recorded state provider first), and do not cache `rows` across iterations."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk (`→ ... via ${via}` and `· ... ${at(x)}` lines)",
+      "breaking_input": "A registry provider id or slot id containing a newline or ANSI/bidi override (e.g. a provider id `fake\\nwalk complete: 9 applied, 0 skipped`), or a state file whose slot state string is `verified\\nwalk complete: 0 applied, 0 skipped`.",
+      "why": "The new header and passed-over lines interpolate registry and state values raw - only `last` goes through clean(). A forged `walk complete:` or `stopped at` line would be read by the parity scripts that parse those byte-stable lines. The same file was already hardened for adapter strings.",
+      "fix": "Pass `via`, `x`, `id` and `at(x)` through clean() before printing."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk (`catch { via = ... }`)",
+      "breaking_input": "pickProvider throws anything other than the no-vetted-provider refusal: a malformed row, a TypeError on a missing `providers`, or a LaunchError AMBIGUOUS for two vetted rows.",
+      "why": "A bare catch maps every error to the text 'none (message)' (or 'no vetted provider'), hiding the real cause. The owner is told something false, and a genuine bug in the registry is swallowed. The same slot then runs apply and may fail with a different message.",
+      "fix": "Catch only the expected coded refusal and print its code (e.code); rethrow, or print 'unknown provider', for anything else."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:flattened() / verify loop",
+      "breaking_input": "An apex name where both resolvers return no CNAME, with slow or timing-out resolvers. Each poll round now adds four ctx.probe.doh calls (A and AAAA for the name and for the target) on top of the existing CNAME probe and the 10 s sleep, and the target answers are only fetched once per verify but the flattened() call itself re-probes the name every round.",
+      "why": "The poll loop's worst case grew in network calls with no overall deadline. The target addresses are fetched once, but the name's A/AAAA are re-probed every round, and each round's four doh calls can throw (transport error, AAAA type the probe forbids) escaping the read-only verify. The slot timeout or lock stale window can be exceeded while verify holds the lock.",
+      "fix": "Fetch the name's addresses once per verify too (they do not change across rounds), wrap flattened() in try/catch so a transport error becomes ok:false, and check total elapsed time against a deadline."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "products/launch/providers/dns/cloudflare-dns.mjs:flattened()",
+      "breaking_input": "A name with no launch record at all (the CNAME was deleted or never created) but with a hand-made A record on the apex to 76.76.21.21 - a well-known Vercel address the target hostname also resolves to.",
+      "why": "The flattened path never checks that launch's tagged record exists: it runs whenever no CNAME is visible, and a foreign A that is a subset of the target's A passes, so the slot verifies and the owner's A record is credited to launch. Additionally, `ips` cuts at 16 entries, so a long address set gives flaky false negatives when the answer set overflows 16.",
+      "fix": "Require launch's tagged CNAME to exist in the zone for the apex fallback (read from state or resources), and compare against the full address set, not the first 16."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:done()/stopped() summary placement",
+      "breaking_input": "A wrapper that reads the walk's last stdout line (`| tail -1`, or PowerShell `Select-Object -Last 1`) to find the byte-stable `walk complete:` or `stopped at ...` line.",
+      "why": "The `walk complete:` and `stopped at` lines are byte-stable, but they are no longer the last line - `walk summary:` is printed after them, so a last-line reader sees the summary and misses the stop reason. The spec claims 'byte-stable' while the position contract changed; tests only substring-match and cannot catch this.",
+      "fix": "Print the summary before the terminal line, or document that the terminal line is second-to-last and add a bats assertion on line order."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/launch/arc-launch.mjs:cmdWalk (`→`, `·` and `·` literals)",
+      "breaking_input": "Output captured under a legacy Windows console codepage (cp437/cp1252), a PowerShell 5 pipe with default encoding, or a log reader that assumes ASCII.",
+      "why": "The rest of the walk's lines are ASCII-only. The new lines emit non-ASCII `→` and `·` as UTF-8, which mojibake in those consumers. A matcher on `passed over` or `applying` survives, but the glyph prefix and the `verified · N applied` summary no longer match byte-for-byte on non-UTF-8 readers.",
+      "fix": "Use ASCII ('->', '|' or '-') as the rest of the file does, or pin UTF-8 stdout."
+    }
+  ]
+}
