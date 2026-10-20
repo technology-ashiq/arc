@@ -561,6 +561,25 @@ arm() {
   [[ "$(j 'o.scaffold.message')" == *'"o9" matches 0 of the 2 organizations'* ]] || { echo "$DONE"; false; }
   arm database bad-org
   [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_ORG 0" ] || { echo "$DONE"; false; }
+  # verify answers a bad org as not-ok, never a throw out of a read (attack 67c6e07 B2).
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false BAD_ORG: "* ]] || { echo "$DONE"; false; }
+  # An explicit null is a mistake, not "unnamed" (attack 67c6e07 L7).
+  arm database null-org
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_ORG 0" ] || { echo "$DONE"; false; }
+  # A name matches exactly, case and all (attack 67c6e07 L1).
+  arm database name-case
+  [ "$(j 'o.exact.ok + " " + o.made.join(",") + " " + o.other.code')" = "true o2 ORG_UNKNOWN" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: no org, a project listed without its org, and a long org list each refuse by name (F6, attack 67c6e07)" {
+  arm database no-orgs
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "ORG_NONE 0" ] || { echo "$DONE"; false; }
+  arm database unscoped-project
+  [ "$(j 'o.scaffold.code + " " + o.creates + " " + o.verify.ok')" = "PROJECT_UNSCOPED 0 false" ] || { echo "$DONE"; false; }
+  # Every org id up to the cap, whole, and a count past it (attack 67c6e07 B3).
+  arm database many-orgs
+  [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"team 20 (id org20), +2 more"* ]] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a named org scopes the lookup -- a same-named project in another org is not adopted (F6, ADR-1773)" {

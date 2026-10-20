@@ -24,6 +24,12 @@ const opts = {
   "org-unknown": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
   "bad-org": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
   // The venture's org holds no project yet; a same-named project sits in the other org (ADR-1773).
+  // A same-named project whose answer names no org: refused, never dropped into a duplicate create (attack 67c6e07 B1).
+  "unscoped-project": { ...{ orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] }, projects: [{ id: "ownerref000000000004", name: "arc-sandbox", organization_id: null }] },
+  "name-case": { orgs: [{ id: "o1", name: "acme" }, { id: "o2", name: "ACME" }] },
+  "null-org": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
+  "no-orgs": { orgs: [] },
+  "many-orgs": { orgs: Array.from({ length: 22 }, (_, i) => ({ id: `org${String(i + 1).padStart(2, "0")}`, name: `team ${i + 1}` })) },
   "named-scopes-lookup": { ...{ orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] }, projects: [{ id: "ownerref000000000003", name: "arc-sandbox", organization_id: "o1" }] },
   found: { projects: [{ id: "ownerref000000000001", name: "arc-sandbox" }] },
   "rls-off": { rlsOff: true },
@@ -112,6 +118,23 @@ switch (scenario) {
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ org })));
     out.made = sb.store.filter((p) => p.id.startsWith("fixtureref")).map((p) => p.organization_id);
     out.kinds = reported.map((r) => r.kind);
+    out.verify = await adapter.verify(ctxNow({ org }));
+    break;
+  }
+  case "name-case": {
+    // A name matches exactly: ACME is o2, and Acme matches neither (attack 67c6e07 L1).
+    out.exact = await attempt(() => adapter.scaffold(ctxNow({ org: "ACME" })));
+    out.made = sb.store.map((p) => p.organization_id);
+    out.other = await attempt(() => adapter.scaffold(ctxNow({ org: "Acme" })));
+    break;
+  }
+  case "unscoped-project":
+  case "null-org":
+  case "no-orgs":
+  case "many-orgs": {
+    const org = { "unscoped-project": "o2", "null-org": null }[scenario];
+    out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ org })));
+    out.creates = sb.calls.filter((c) => c === "POST /v1/projects").length;
     out.verify = await adapter.verify(ctxNow({ org }));
     break;
   }

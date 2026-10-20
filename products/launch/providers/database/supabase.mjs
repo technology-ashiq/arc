@@ -72,33 +72,43 @@ function slugOf(ctx) {
 }
 
 // A personal token is account-wide, so the venture names its org (ADR-1773). Unnamed, the org is the token's only one.
-// Several are refused by name, never picked between.
+// Several are refused by name, never picked between. A name matches exactly (case and all): an id is the sure form.
+// An explicit empty or null value is a mistake, not "unnamed" (attack 67c6e07 L7).
 function named(ctx) {
-  const v = ctx.profile ? ctx.profile.supabase_org : undefined;
-  if (v === undefined || v === null) return null;
-  if (typeof v !== "string" || !v.trim()) throw refuse("BAD_ORG", `venture supabase_org ${JSON.stringify(say(v, 40))} is not an org id or name (ADR-1773)`);
-  return v.trim();
+  const p = ctx.profile || {};
+  if (!Object.prototype.hasOwnProperty.call(p, "supabase_org")) return null;
+  const v = p.supabase_org;
+  const t = typeof v === "string" ? v.trim() : "";
+  if (!t) throw refuse("BAD_ORG", `venture supabase_org ${JSON.stringify(say(v, 40))} is not an org id or name (ADR-1773)`);
+  return t;
 }
-const seen = (orgs) => orgs.slice(0, 5).map((o) => `${say(o.name, 40)} (id ${say(o.id, 40)})`).join(", ");
+// Every org the token sees, ids whole: the owner copies one into supabase_org (attack 67c6e07 B3).
+const SEEN_CAP = 20;
+const seen = (orgs) => orgs.slice(0, SEEN_CAP).map((o) => `${say(o.name, 60)} (id ${say(o.id, 80)})`).join(", ") +
+  (orgs.length > SEEN_CAP ? `, +${orgs.length - SEEN_CAP} more` : "");
 
+// Resolved once per scaffold or verify and passed down, so the lookup and the create name the same org (attack 67c6e07 L4).
 async function org(ctx) {
   const want = named(ctx);
   const orgs = list((await sb(ctx, "GET", "/organizations")).body);
+  if (!orgs.length) throw refuse("ORG_NONE", "the token sees no Supabase organization; it needs access to the venture's org");
   const hit = want === null ? orgs : orgs.filter((o) => o.id === want || o.name === want);
   if (want !== null && hit.length !== 1)
-    throw refuse("ORG_UNKNOWN", `venture supabase_org ${JSON.stringify(say(want, 60))} matches ${hit.length} of the ${orgs.length} organizations the token sees (${seen(orgs)}); exactly one is required`);
+    throw refuse("ORG_UNKNOWN", `venture supabase_org ${JSON.stringify(say(want, 80))} matches ${hit.length} of the ${orgs.length} organizations the token sees (${seen(orgs)}); exactly one is required`);
   if (hit.length !== 1)
     throw refuse("ORG_AMBIGUOUS", `the token sees ${orgs.length} organizations (${seen(orgs)}); one is required -- name it with supabase_org: <id> in the venture.yaml (ADR-1773)`);
   if (typeof hit[0].id !== "string") throw new Error("supabase returned an organization without an id");
   return hit[0].id;
 }
 
-// A named org scopes the lookup: a same-named project in another org is not the venture's (ADR-1773).
-async function find(ctx, name) {
+// A named org scopes the lookup: a same-named project in another org is not the venture's (ADR-1773). A same-named
+// project whose answer names no org is refused, never dropped -- dropping it would create a duplicate (attack 67c6e07 B1).
+async function find(ctx, name, orgId) {
   const all = list((await sb(ctx, "GET", "/projects")).body).filter((p) => p.name === name);
-  if (named(ctx) === null) return all;
-  const id = await org(ctx);
-  return all.filter((p) => p.organization_id === id);
+  if (orgId === null) return all;
+  if (all.some((p) => typeof p.organization_id !== "string"))
+    throw refuse("PROJECT_UNSCOPED", `supabase listed a project named ${name} without its organization; it cannot be told apart from another org's`);
+  return all.filter((p) => p.organization_id === orgId);
 }
 
 export function envContract() {
@@ -132,7 +142,8 @@ export async function scaffold(ctx) {
   const region = REGION[String((ctx.profile && ctx.profile.region) || "any")];
   if (!region) throw refuse("BAD_REGION", `profile.region ${JSON.stringify(say(ctx.profile && ctx.profile.region, 20))} has no Supabase region`);
 
-  const have = await find(ctx, name);
+  const orgId = named(ctx) === null ? null : await org(ctx);
+  const have = await find(ctx, name, orgId);
   if (have.length > 1) throw refuse("PROJECT_AMBIGUOUS", `${have.length} supabase projects are named ${name}`);
   let ref, kind;
   if (have.length === 1) {
@@ -140,7 +151,7 @@ export async function scaffold(ctx) {
     // One this slot created on an earlier attempt stays its own; any other is the owner's (no marker exists, ADR-1731).
     kind = ctx.resources.some((r) => r.kind === "supabase-project" && r.id === ref) ? "supabase-project" : "supabase-project-found";
   } else {
-    const organization_id = await org(ctx);
+    const organization_id = orgId === null ? await org(ctx) : orgId;
     // Used once, here, and recorded nowhere (ADR-1731). 32 random bytes as hex.
     const db_pass = randomBytes(32).toString("hex");
     const made = await sb(ctx, "POST", "/projects", { name, organization_id, region, db_pass });
@@ -166,7 +177,7 @@ export async function scaffold(ctx) {
 
 async function probe(ctx) {
   const name = slugOf(ctx);
-  const have = await find(ctx, name);
+  const have = await find(ctx, name, named(ctx) === null ? null : await org(ctx));
   if (have.length !== 1) return { ok: false, reason: `${have.length} supabase projects named ${name}; verify needs exactly one` };
   const ref = String(have[0].id || have[0].ref || "");
   if (!REF.test(ref)) return { ok: false, reason: "supabase returned no usable project ref" };

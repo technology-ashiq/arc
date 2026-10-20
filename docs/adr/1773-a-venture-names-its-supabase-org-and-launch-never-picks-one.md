@@ -39,7 +39,12 @@ Option 3.
   how to name one (`supabase_org: <id>` in the venture.yaml) and lists each org's id and name.
 - A named org also scopes the project lookup. Only projects in that org count as the venture's, so a same-named
   project in another org is never adopted, never counted as ambiguous, and never verified.
-- Launch never picks between orgs. A value that is not a string is `BAD_ORG`.
+- Launch never picks between orgs. A value that is not a non-empty string, an explicit `null` included, is `BAD_ORG`.
+  A name matches exactly, case and all; an id is the sure form. A token that sees no org is `ORG_NONE`.
+- The refusals list every org's name and whole id, up to 20, then `+N more`.
+- If a same-named project comes back without its `organization_id`, it is refused as `PROJECT_UNSCOPED`. It is never
+  dropped, because dropping it would make the next create a duplicate. The org is resolved once per scaffold or
+  verify, and both the lookup and the create use that one id.
 - The eight other adapters that touch Supabase take the project ref from the `database` slot's upstream resources, so
   they carry no org assumption and do not change.
 - The adapter's bytes change, so the `supabase` row is `candidate` until the owner re-vets it (ADR-1719).

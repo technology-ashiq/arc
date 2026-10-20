@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:97-101 (find)",
+      "breaking_input": "supabase_org: \"acme\" with one project named like the venture, and the Management API answer omits organization_id on that project (an older or partial answer), or the field is renamed. The filter p.organization_id === id drops it and find returns [].",
+      "why": "A project launch created in the named org is read as absent. Every re-run goes to create and makes a duplicate project, using up the free-project limit that caused F6. The fake defaults organization_id to the first org, so the tests cannot see this. 'An answer without the field is read as absent' is the same shape as the pattern 'An order list answered without items was read as no order'.",
+      "fix": "Treat a project with no string organization_id as unscoped. Refuse it by name (BAD_ANSWER) or fetch it individually, and never drop it silently. Add a fixture whose project omits organization_id.",
+      "twin_of": "An order list answered without `items` was read as \"no order\", so a second order would be created -> every check-then-create: is an unreadable answer ever read as absent?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:97-101 (find calls org and named)",
+      "breaking_input": "supabase_org: 42 (a number, or a YAML-unquoted numeric org name) or an org the token no longer sees, then `verify database`. find() now calls named() and org(), which throw BAD_ORG or ORG_UNKNOWN. find is also used by verify.",
+      "why": "A read-only probe can now throw a coded refusal out of a read it previously made safely. This is the 'verify threw a refusal out of a read-only probe' pattern. The new test calls adapter.verify without the attempt() wrapper used for scaffold, so it only passes if verify catches these codes internally. Teardown and plan paths that call find can also throw before they report anything.",
+      "fix": "Confirm that every caller of find (verify, teardown, plan) catches the codes thrown by org() and named(), and turns them into a verify answer {ok:false, reason} rather than a throw. Add a fixture for each caller with a bad or unknown org.",
+      "twin_of": "verify threw a refusal out of a read-only probe -> every verify: can anything it calls throw a coded refusal?"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:74-83 (named, seen)",
+      "breaking_input": "The token sees 7 orgs, and the owner's org is the 6th or 7th. The ORG_AMBIGUOUS and ORG_UNKNOWN messages list only seen(orgs), which is capped at 5. The owner cannot find the id to put in supabase_org.",
+      "why": "The message tells the owner to name an org but may not show the org they need. The count in the message says 7 while only 5 are listed. Org names are also cut to 40 characters, so two orgs can look identical.",
+      "fix": "List every org id, or print '+N more' and let the id be matched by prefix. Never cut the id.",
+      "twin_of": "A 40-character cut gave two long slugs the same Razorpay receipt -> every key cut to a provider limit: does the cut keep it unique?"
+    }
+  ]
+}
