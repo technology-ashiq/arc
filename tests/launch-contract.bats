@@ -1023,14 +1023,14 @@ arm() {
 @test "launch-contract: authz -- A reads its own org and gets 403 on B's; orgs are created once" {
   arm login thread
   [ "$(j 'o.authz.ok + " " + o.authzVerify.ok + " " + o.authzVerifyAgain.ok + " " + o.orgs')" = "true true true 2" ] || { echo "$DONE"; false; }
-  [ "$(j 'JSON.stringify(o.authzVerify.evidence)')" = '{"own":200,"crossTenant":403}' ] || { echo "$DONE"; false; }
+  [ "$(j 'JSON.stringify(o.authzVerify.evidence)')" = '{"own":200,"crossTenant":403,"deployment":"dpl_00000000_served","commit":"0000000000000000000000000000000000000015"}' ] || { echo "$DONE"; false; }
   [ "$(j 'o.teardown.join(",")')" = "drop memberships, orgs cascade (down migration; after tenancy drops invites)" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: tenancy -- a stranger cannot invite, A invites C, C joins and is scoped to A's org" {
   arm login thread
   [ "$(j 'o.tenancy.ok + " " + o.tenancyVerify.ok')" = "true true" ] || { echo "$DONE"; false; }
-  [ "$(j 'JSON.stringify(o.tenancyVerify.evidence)')" = '{"strangerInvite":403,"invite":201,"join":200,"scopedIn":200,"scopedOut":403}' ] || { echo "$DONE"; false; }
+  [ "$(j 'JSON.stringify(o.tenancyVerify.evidence)')" = '{"strangerInvite":403,"invite":201,"join":200,"scopedIn":200,"scopedOut":403,"deployment":"dpl_00000000_served","commit":"0000000000000000000000000000000000000019"}' ] || { echo "$DONE"; false; }
   [ "$(j 'o.commits.join(",")')" = "1,1,1" ] || { echo "$DONE"; false; }
 }
 
@@ -1364,7 +1364,7 @@ arm() {
 @test "launch-contract: backup commits the drill once -- dump, checksum, restore into scratch, row-count diff -- and verify needs both jobs green (ADR-1746)" {
   arm backup thread
   [ "$(j 'o.verifyBefore + " " + o.first + " " + o.second + " " + o.commits')" = "false true true 1" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "github-workflow,venture-repo,drill-digest,pooler-role" ] || { echo "$DONE"; false; }
   [ "$(j 'o.workflow.jobs.join(",") + " " + o.workflow.noUpload + " " + o.workflow.checksum + " " + o.workflow.diff + " " + o.workflow.secretOnly + " " + o.workflow.tabs + " " + o.workflow.usersGuarded')" = "drill true true true true false true" ] || { echo "$DONE"; false; }
   [ "$(j 'o.verify.ok + " " + o.verify.answerer + " " + o.verify.evidence.steps.join("+")')" = "true api.github.com dump and checksum+restore and compare row counts" ] || { echo "$DONE"; false; }
 }
@@ -1373,7 +1373,8 @@ arm() {
   arm backup thread
   [ "$(j 'o.rScaffold + " " + o.rKinds.join(",")')" = "true restore-source" ] || { echo "$DONE"; false; }
   [ "$(j 'o.rVerify.ok + " " + o.rVerify.evidence.step')" = "true restore and compare row counts" ] || { echo "$DONE"; false; }
-  [ "$(j 'o.teardown.length')" = "2" ] || { echo "$DONE"; false; }
+  # backup keeps its drill and drops the pooler role it made (REQ-17); restore-drill has nothing of its own.
+  [ "$(j 'o.teardown.length')" = "3" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a green drill job whose steps GitHub has not concluded yet counts; a red one never does" {
@@ -1512,6 +1513,9 @@ arm() {
     [[ "$output" == "RAN $s"* ]] || { echo "$s never ran: $output"; false; }
     DONE="$(printf '%s\n' "$output" | sed -n 's/^DONE //p')"
     [ "$(j 'o.ok && o.recordedOk && o.used > 0 && o.unmatched.length === 0')" = "true" ] || { echo "$s: $DONE"; false; }
+    # Hand-written calls answer only for the two slots debt D30 changed, and every one of them is asked (D54).
+    case "$s" in authz|tenancy) n_added=2 ;; *) n_added=0 ;; esac
+    [ "$(j 'o.added + " " + o.addedUsed')" = "$n_added $n_added" ] || { echo "$s: $DONE"; false; }
     n=$((n + 1))
   done
   [ "$n" -eq 16 ]
@@ -1530,4 +1534,173 @@ arm() {
   run node "$ARC_ROOT/tests/launch/replay/scan.mjs" "$d"
   [ "$status" -eq 1 ] || { echo "a planted leak passed: $output"; false; }
   [[ "$output" == *"a sbp_ token that is not masked"* && "$output" == *"a Supabase project ref"* && "$output" == *"an e-mail address"* ]] || { echo "$output"; false; }
+}
+
+# ---------- domain on an owner-held Cloudflare zone (ADR-1766, REQ-15) ----------
+
+@test "launch-contract: cloudflare-zone records the owner's zone, creates nothing, and verifies it active, delegated and registered" {
+  arm domain active
+  [ "$(j 'o.first && o.second')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "cloudflare-zone zone-fit" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.zone + " " + o.verify.evidence.nameservers.join(",")')" = "true zone-fit meera.ns.cloudflare.com,noel.ns.cloudflare.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.answerer')" = "api.cloudflare.com + dns.google + cloudflare-dns.com + rdap.verisign.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.evidence.rdap.days > 30')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.steps.length')" = "0" ] || { echo "$DONE"; false; }
+  # Read-only by construction: every request the arm saw was a GET, to the four hosts the verify names.
+  [ "$(j 'o.methods.join(",")')" = "GET" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.hosts.join(",")')" = "api.cloudflare.com,cloudflare-dns.com,dns.google,rdap.verisign.com" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: cloudflare-zone verify is not ok on a pending zone or a delegation public DNS does not show" {
+  arm domain pending
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false zone:pending -- "* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.methods.join(",")')" = "GET" ] || { echo "$DONE"; false; }
+  arm domain ns-mismatch
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false zone:ns-mismatch -- myfitfolio.com NS is google ns1.oldregistrar.example"* ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: cloudflare-zone refuses no zone, two zones and a malformed domain before asking anything else" {
+  arm domain no-zone
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.code + " " + o.verify.code')" = "false NO_ZONE NO_ZONE" ] || { echo "$DONE"; false; }
+  arm domain two-zones
+  [ "$(j 'o.scaffold.ok + " " + o.scaffold.code')" = "false ZONE_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  arm domain bad-domain
+  [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_DOMAIN 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: cloudflare-zone verify reads the registry: unregistered, on hold, expiring, no expiry, another name, and an unserved TLD are each not ok" {
+  local s want
+  for s in "unregistered:rdap:not-registered -- " "hold:rdap:status -- myfitfolio.com is client hold" "expiring:rdap:expiring -- myfitfolio.com expires in " "no-expiry:rdap:no-expiry -- " "wrong-record:rdap:wrong-record -- the registry answered for OTHER-DOMAIN.COM" "tld-unsupported:rdap:tld-unsupported -- no registry RDAP server for .io"; do
+    arm domain "${s%%:*}"
+    want="${s#*:}"
+    [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false $want"* ]] || { echo "${s%%:*}: $DONE"; false; }
+  done
+}
+
+@test "launch-contract: cloudflare-zone keeps the token out of headers and text, and cleans a hostile provider error" {
+  arm domain crlf-token
+  [ "$(j 'o.scaffold.ok + " " + o.calls')" = "true 1" ] || { echo "$DONE"; false; }
+  arm domain hostile-error
+  [ "$(j 'o.scaffold.ok + " " + o.clean')" = "false true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == "cloudflare GET /zones -> 403 (1: evilFAKE LINE "* ]] || { echo "$DONE"; false; }
+}
+
+# ---------- secrets places a missing production key itself (REQ-16, ADR-1768) ----------
+
+@test "launch-contract: secrets places a contract key production lacks, once, from the run's value, and never its own token" {
+  arm secrets place
+  [ "$(j 'o.first.ok && o.second.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.posts')" = "1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.envKeys.join(",")')" = "RAZORPAY_KEY_ID:production" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.placedRight')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.kinds.join(",")')" = "env-contract technology-ashiq/arc-sandbox:.env.example,vercel-env prj_fixture01:RAZORPAY_KEY_ID" ] || { echo "$DONE"; false; }
+  # A name with no value this run, and the adapter's own token, are left for the owner -- and say so.
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false owner places for production: DATABASE_URL, VERCEL_TOKEN" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "delete prj_fixture01:RAZORPAY_KEY_ID" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.sentinelSeen + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets never overwrites a key the owner already set for production" {
+  arm secrets place-keeps-owner
+  [ "$(j 'o.posts + " " + o.ownerKept + " " + o.placedRight')" = "1 true true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.envKeys.join(",")')" = "DATABASE_URL:production,RAZORPAY_KEY_ID:production" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.sentinelSeen + " " + o.valueSeen')" = "false false" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: secrets withholds the provider error text when a placement fails, so the value cannot leak" {
+  arm secrets place-echo-error
+  # The provider's text is withheld whole, so no echo of the value in any encoding can reach a reason (b5b09df L5, B7).
+  [ "$(j 'o.scaffold.ok')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.scaffold.message')" = "vercel POST /v10/projects/prj_fixture01/env (RAZORPAY_KEY_ID) -> 400; the provider's message is withheld because it may echo the value" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.sentinelSeen')" = "false" ] || { echo "$DONE"; false; }
+}
+
+# ---------- security-headers waits for the live build (REQ-18, ADR-1771) ----------
+
+@test "launch-contract: security-headers verify is PENDING while its build is building or not yet listed, never failed" {
+  local s
+  for s in "build-building:build: production deployment dpl_headers01 of " "build-absent:build: no production deployment of "; do
+    arm headers "${s%%:*}"
+    [ "$(j 'o.verify.ok + " " + (o.vercel.length > 0)')" = "false true" ] || { echo "${s%%:*}: $DONE"; false; }
+    [[ "$(j 'o.verify.pending')" == "${s#*:}"* ]] || { echo "${s%%:*}: $DONE"; false; }
+    [[ "$(j 'o.verify.reason')" == "PENDING(${s#*:}"* ]] || { echo "${s%%:*}: $DONE"; false; }
+  done
+}
+
+@test "launch-contract: security-headers fails an ERROR build and a cancelled one with nothing newer, and reads a newer live build" {
+  arm headers build-error
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production build dpl_headers01 of "*" failed (ERROR)" ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.pending === undefined')" = "true" ] || { echo "$DONE"; false; }
+  arm headers build-canceled
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production deployment dpl_headers01 of "*" is CANCELED and nothing newer is live" ]] || { echo "$DONE"; false; }
+  arm headers build-newer-ready
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai + observatory-api.mdn.mozilla.net" ] || { echo "$DONE"; false; }
+}
+
+# ---------- legal-pages on a real venture (REQ-19, ADR-1769) ----------
+
+@test "launch-contract: legal-pages on a real venture fails unpublished pages and never answers ABSENT; served pages verify" {
+  arm legal absent-real
+  [ "$(j 'o.verify.ok + " " + (o.verify.absent === undefined)')" = "false true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.reason')" == "legal:unpublished -- /privacy and /terms are not served"* ]] || { echo "$DONE"; false; }
+  arm legal published-real
+  [ "$(j 'o.verify.ok + " " + o.verify.answerer')" = "true sandbox.automemory.ai" ] || { echo "$DONE"; false; }
+  # The rehearsal path is unchanged: the same site on a rehearsal is the named ABSENT.
+  arm legal absent
+  [ "$(j 'o.verify.absent')" = "legal renderer not ready: /privacy and /terms are not served" ] || { echo "$DONE"; false; }
+}
+
+# ---------- backup provisions its own pooler role (REQ-17, ADR-1772) ----------
+
+@test "launch-contract: backup makes its read-only pooler role once and writes the session URL to the private dir only" {
+  arm backup role-made
+  [ "$(j 'o.first.ok && o.second.ok')" = "true" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.creates')" = "1" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.roles.join(",")')" = "launch_backup:arc-sandbox@backup@pg-dump" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.reported.join(",")')" = "fixtureref0000000001:launch_backup" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.urlShape')" = "postgresql://launch_backup.fixtureref0000000001:<pw>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres?sslmode=require" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.notes[1]')" == "launch_backup made; set the Actions secret once: gh secret set SUPABASE_DB_URL --repo technology-ashiq/arc-sandbox < "* ]] || { echo "$DONE"; false; }
+  [ "$(j 'o.pwLeaked')" = "false" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.teardown.join(",")')" = "keep (the venture's backup drill; artifacts expire in 7 days),drop-role launch_backup and launch_ops" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: backup refuses a launch_backup role it did not make, and masks the password in a provider error" {
+  arm backup role-foreign
+  [ "$(j 'o.first.ok + " " + o.first.code + " " + o.creates')" = "false FOREIGN_ROLE 0" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.urlShape')" = "null" ] || { echo "$DONE"; false; }
+  arm backup role-echo-error
+  [ "$(j 'o.first.ok + " " + o.errorMasked + " " + o.pwLeaked')" = "false true false" ] || { echo "$DONE"; false; }
+  # The URL is written before the role (b5b09df B1): a failed create leaves a stale file the next run overwrites, and no role.
+  [ "$(j 'o.roles.length + " " + o.reported.length')" = "0 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: orm verify is PENDING while CI is still running, never failed (debt D22, ADR-1771)" {
+  arm app ci-running
+  [ "$(j 'o.ormVerify.ok + " " + o.ormVerify.pending + " " + o.ormVerify.answerer')" = "false ci: run 4 is still in_progress api.github.com" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.ormVerify.reason')" = "PENDING(ci: run 4 is still in_progress)" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: security-headers counts a newer live build only when it descends from the headers commit (b5b09df B10)" {
+  arm headers build-newer-unrelated
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production deployment dpl_headers01 of "*" is CANCELED and nothing newer is live" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: plans names the deployment it probed and fails a production build that lags main (debt D30)" {
+  arm login plans
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.evidence.deployment')" == "dpl_"*"_served" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.evidence.commit')" =~ ^[0-9a-f]{40}$ ]] || { echo "$DONE"; false; }
+  arm login plans-served-lags
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false sandbox.automemory.ai serves "*", which is not main's head "*"; release main before verifying" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: webhooks-ledger confirms a real stored payment at Razorpay and fails one Razorpay contradicts (debt D33)" {
+  arm webhooks real-confirmed
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.real_confirmed + " " + o.rzpCalls.join(",")')" = "true 1 pay_RealOne0001" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.answerer')" = "sandbox.automemory.ai + api.supabase.com + api.razorpay.com" ] || { echo "$DONE"; false; }
+  arm webhooks real-mismatch
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false stored payment pay_RealOne0001 is 49900 INR, but Razorpay says captured 100 INR" ] || { echo "$DONE"; false; }
+  # Launch's own probe rows are never asked of Razorpay: the thread stores only probes, and confirms none.
+  arm webhooks thread
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.real_confirmed')" = "true 0" ] || { echo "$DONE"; false; }
 }

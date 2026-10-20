@@ -419,6 +419,7 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       let outcome;
       if (r.status === 0 && after.state === "verified" && !ledger) outcome = "ok";
       else if (r.status === 0 && after.state === "absent" && !ledger) outcome = "absent";
+      else if (r.status === 4 && after.state === "pending" && String(after.reason || "").startsWith("PENDING(") && !ledger) outcome = "pending";
       else {
         const timedOut = r.error && r.error.code === "ETIMEDOUT";
         // A worker that recorded no terminal state died mid-attempt; Windows reports a SIGKILL as plain exit 1, so the
@@ -433,7 +434,9 @@ function runAttempt(P, slug, slot, prow, profile, ventureRoot, opts, log) {
       const fin = slotRow(loadState(P.stateDir, slug), slot.id);
       log(`${slot.id}: ${fin.state}${fin.reason ? ` (${clean(fin.reason)})` : ""} -- attempt ${attempt}, receipt ${receipt || "UNRECEIPTED"}`);
       if (!receipt) return EXIT.FAILED;
-      // An allow-list: only the two settled outcomes exit 0 (attack b6ffd12 B1).
+      // An allow-list: only the two settled outcomes exit 0 (attack b6ffd12 B1). A named PENDING exits 4: waiting, as an
+      // unmet dependency does, so a walk stops and says on what (REQ-18).
+      if (outcome === "pending") return EXIT.DEPS;
       return outcome === "ok" || outcome === "absent" ? EXIT.OK : EXIT.FAILED;
     }, log);
   } catch (e) {

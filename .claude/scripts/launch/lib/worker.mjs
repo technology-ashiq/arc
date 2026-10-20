@@ -3,6 +3,7 @@
 // what exists outlives it. Exit: 0 verified · 1 failed (reason in state) · 5 a sensitive action awaits the owner.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { homedir } from "node:os";
 import { normalizeAdapter, digestOf } from "./scan.mjs";
 import { loadCatalog, loadProfile, resolveBoard } from "./catalog.mjs";
 import { loadState, saveState, slotRow, setSlot, resourceTag } from "./state.mjs";
@@ -68,6 +69,8 @@ const ctx = makeCtx({
   arcProbe: makeArcProbe({ venture: a.venture, profile, catalog: a.catalog, stateDir: a.stateDir, root: a.ventureRoot }),
   // Every row's literal hosts, as the PARENT read them (ADR-1765); resolveHosts adds this row's own either way.
   registryHosts: Array.isArray(a.registryHosts) ? a.registryHosts : [],
+  // The owner's private dir for this venture (ADR-1772): ARC_PRIVATE_DIR when set, as every arc tool reads it.
+  privateRoot: join(process.env.ARC_PRIVATE_DIR || join(homedir(), ".arc-private"), "launch", a.venture),
   report(resource) {
     const cur = slotRow(loadState(a.stateDir, a.venture), a.slot);
     if (cur.resources.some((r) => r.kind === resource.kind && r.id === resource.id)) return;
@@ -140,7 +143,9 @@ if (a.mode === "verify") {
     } catch (e) { process.stderr.write(`worker: the record was not written (${(e && e.code) || "error"})\n`); }
   }
   const ok = !!(v && v.ok === true && typeof v.answerer === "string" && v.answerer);
-  save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : (v && v.reason) || "verify:no answerer named" } });
+  // A PENDING answer (REQ-18) keeps its name in the probe's reason, so verify --all says "still building", not a regression text.
+  const pendingWhy = !ok && v && typeof v.pending === "string" && v.pending.trim() ? `PENDING(${[...clean(v.pending)].slice(0, 160).join("")})` : null;
+  save({ last_verify: { ok, at: new Date().toISOString(), answerer: ok ? v.answerer : null, reason: ok ? null : pendingWhy || (v && v.reason) || "verify:no answerer named" } });
   // No process.exit here: on Windows, exiting while a provider's keep-alive socket is closing aborts node in libuv
   // (0xC0000409), and the runner read the crash as no answer though last_verify was saved. The loop drains instead.
   process.exitCode = ok ? 0 : 1;
@@ -173,6 +178,14 @@ if (a.mode === "verify") {
     const cut = (t, n) => [...clean(t)].slice(0, n).join("");
     save({ state: "absent", reason: `ABSENT(${cut(v.absent, 160)})`, answerer: cut(v.answerer, 120), queued: [], verified_at: new Date().toISOString() });
     process.exit(0);
+  }
+  // PENDING (REQ-18, ADR-1771): the provider is still building what this slot's verify must read. Not failed and not
+  // verified: the slot goes back to pending with a named reason, and a later apply asks again. Only an answer that
+  // names what is pending and what answered counts; the runner exits 4, the walk's "waiting" code.
+  if (v && v.ok === false && typeof v.pending === "string" && v.pending.trim() && typeof v.answerer === "string" && v.answerer.trim()) {
+    const cut = (t, n) => [...clean(t)].slice(0, n).join("");
+    save({ state: "pending", reason: `PENDING(${cut(v.pending, 160)})`, answerer: cut(v.answerer, 120), queued: [] });
+    process.exit(4);
   }
   fail(v && v.ok === true ? "verify:no answerer named (a probe names what answered it)" : `verify:${(v && v.reason) || "failed"}`);
 } catch (e) {

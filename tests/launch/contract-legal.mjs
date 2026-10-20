@@ -22,6 +22,8 @@ const LEGAL = "<html><body><!-- clause:privacy.controller -->\nWe are arc sandbo
 const site = {
   published: { "/privacy": [200, LEGAL], "/terms": [200, LEGAL] },
   absent: { "/": [200, "<head><meta name=\"generator\" content=\"arc-launch\"/></head><h1>shell</h1>"] },
+  "absent-real": { "/": [200, "<head><meta name=\"generator\" content=\"arc-launch\"/></head><h1>shell</h1>"] },
+  "published-real": { "/privacy": [200, LEGAL], "/terms": [200, LEGAL] },
   parked: { "/": [200, "<h1>This domain is parked</h1>"] },
   hostile: { "/privacy": [200, "<!-- clause:a -->".repeat(50000)], "/terms": [200, LEGAL] },
   dead: {},
@@ -38,8 +40,10 @@ globalThis.fetch = async (input) => {
 const ROOT = mkdtempSync(join(tmpdir(), "launch-legal-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const state = [];
+// The -real scenarios run as a real venture (ADR-1769): the rehearsal's ABSENT is never its answer.
+const honesty_class = scenario.endsWith("-real") ? "real" : "rehearsal";
 const ctxNow = (domain = DOMAIN) => makeCtx({
-  profile: { slug: "arc-sandbox", region: "in", brand: { name: "arc sandbox", domain } }, board: {}, slot: { id: "legal-pages" }, row,
+  profile: { slug: "arc-sandbox", region: "in", honesty_class, brand: { name: "arc sandbox", domain } }, board: {}, slot: { id: "legal-pages" }, row,
   root: ROOT, resources: state, upstream: {}, tag: "arc-sandbox@legal-pages@arc-legal", attempt: 1, signal: undefined, env: {},
   report: (r) => { if (!state.some((x) => x.kind === r.kind && x.id === r.id)) state.push(r); },
 });
@@ -48,6 +52,8 @@ const out = { scenario };
 switch (scenario) {
   case "published":
   case "absent":
+  case "absent-real":
+  case "published-real":
   case "parked":
   case "hostile":
   case "dead":

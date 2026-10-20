@@ -13,6 +13,10 @@ const slot = process.argv[2];
 console.log(`RAN ${slot}`);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const rec = JSON.parse(readFileSync(join(HERE, "recorded", `${slot}.json`), "utf8"));
+// Calls the adapter added after its recording, written by hand and named apart: they answer only once no recorded
+// exchange matches, and the count used is reported on its own, so a recorded answer is never shadowed by one.
+let added = [];
+try { added = JSON.parse(readFileSync(join(HERE, "added", `${slot}.json`), "utf8")).exchanges; } catch (e) { if (e.code !== "ENOENT") throw e; }
 const row = loadRegistry().find((r) => r.id === rec.provider);
 if (!row) { console.error(`no provider row ${rec.provider}`); process.exit(1); }
 const mod = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
@@ -44,12 +48,17 @@ const keyOf = (method, url) => {
 };
 const used = new Set();
 const unmatched = [];
+const addedUsed = new Set();
 globalThis.fetch = async (input, init = {}) => {
   const k = keyOf(init.method, input);
   const i = rec.exchanges.findIndex((x, n) => !used.has(n) && keyOf(x.method, x.url) === k);
-  if (i < 0) { unmatched.push(k); return new Response("not in the recording", { status: 599 }); }
-  used.add(i);
-  const x = rec.exchanges[i];
+  let x;
+  if (i >= 0) { used.add(i); x = rec.exchanges[i]; } else {
+    const a = added.findIndex((y, n) => !addedUsed.has(n) && keyOf(y.method, y.url) === k);
+    if (a < 0) { unmatched.push(k); return new Response("not in the recording", { status: 599 }); }
+    addedUsed.add(a);
+    x = added[a];
+  }
   // A request that never answered during the recording throws here too (B3).
   if (x.error) throw new TypeError(`fetch failed (recorded ${x.error})`);
   const h = new Headers(x.headers || {});
@@ -69,4 +78,4 @@ const ctx = makeCtx({
 });
 let v;
 try { v = await mod.verify(ctx); } catch (e) { v = { ok: false, reason: `threw ${e.code || ""} ${e.message}` }; }
-console.log(`DONE ${JSON.stringify({ slot, provider: row.id, ok: v && v.ok === true, answerer: v && v.answerer, reason: v && v.reason, recordedOk: rec.answer && rec.answer.ok === true, exchanges: rec.exchanges.length, used: used.size, unmatched })}`);
+console.log(`DONE ${JSON.stringify({ slot, provider: row.id, ok: v && v.ok === true, answerer: v && v.answerer, reason: v && v.reason, recordedOk: rec.answer && rec.answer.ok === true, exchanges: rec.exchanges.length, used: used.size, added: added.length, addedUsed: addedUsed.size, unmatched })}`);

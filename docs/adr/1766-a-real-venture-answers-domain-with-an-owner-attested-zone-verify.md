@@ -32,6 +32,17 @@ Option 1. The adapter lives at `providers/domain/cloudflare-zone.mjs`, and its `
 other than `GET` reaches `ctx.fetch`. Gate 1 stays where it is. The `approval.requested` payload names the zone id and
 the nameservers the probe observed, so the owner's stamp attests to exactly what was seen.
 
+**Amended 2026-10-20 (Phase 07 build):**
+- The runner asks gate 1 BEFORE any adapter runs (`runner.mjs` `gate()`), so no probe has seen the zone when the owner
+  decides. The approval therefore carries his attestation alone: the domain is his, with WHOIS privacy on. The observed
+  zone id, nameservers and registry facts land in the verify receipt's evidence, and the owner's VETTING stamp
+  (ADR-1705) is given on that evidence. The runner is not changed for one slot.
+- The slot's exit criterion is "registered, WHOIS privacy" (ADR-1701: a row never redefines it), so verify also reads
+  the registry's RDAP record over `rdap.verisign.com` (.com and .net): registered, not on hold or in redemption, and
+  more than 30 days from expiry. Any other TLD is `rdap:tld-unsupported`, named, never guessed. WHOIS privacy itself
+  is in the owner's gate-1 attestation, because a thin .com registry holds no registrant data to read.
+- `hosts[]` is `api.cloudflare.com` + `rdap.verisign.com`; the two resolvers are `ctx.probe.doh`'s own pinned hosts.
+
 `cloudflare-registrar` stays a `candidate`, and no purchase code is written in Cycle 2.
 
 ## Consequences

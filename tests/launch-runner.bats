@@ -263,3 +263,27 @@ spine_kind() { cat "$ARC_SPINE_ROOT"/events/*.jsonl 2>/dev/null | grep -c "\"kin
   [ "$(spine_kind run.completed)" -eq 1 ]
   grep -q '"outcome":"fail"' "$ARC_SPINE_ROOT"/events/*.jsonl
 }
+
+# ---------- PENDING (REQ-18, ADR-1771): a provider still building is neither failed nor verified ----------
+
+@test "launch-runner: a verify that answers PENDING leaves the slot pending, exits 4, and receipts the attempt as pending" {
+  run env FAKE_PENDING="build: deployment dpl_x is BUILDING" node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 4 ] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "pending" ] || { echo "$output"; false; }
+  [ "$(slot_field probe reason)" = "PENDING(build: deployment dpl_x is BUILDING)" ] || { echo "$output"; false; }
+  [ "$(spine_kind run.completed)" -eq 1 ]
+  cat "$ARC_SPINE_ROOT"/events/*.jsonl | grep '"kind":"run.completed"' | grep -q '"outcome":"pending"' || { cat "$ARC_SPINE_ROOT"/events/*.jsonl; false; }
+  # Asked again once the build is live, the same slot verifies -- nothing was marked failed in between.
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "verified" ] || { echo "$output"; false; }
+}
+
+@test "launch-runner: verify of a pending build names PENDING in its answer and never changes the slot" {
+  run node "$(L)" apply probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run env FAKE_PENDING="build: a newer deployment is QUEUED" node "$(L)" verify probe --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "verified" ] || { echo "$output"; false; }
+  node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const r=s.slots.probe.last_verify.reason;if(r!=="PENDING(build: a newer deployment is QUEUED)"){console.log(r);process.exit(1)}' "$FX_STATE"
+}

@@ -31,7 +31,7 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   # The owner vetted 32 rows (decision.recorded 01M4YYNSS3H8N5A5HWAG77BM3J); domain and legal-pages hold only candidates.
   [[ "$output" == *"dns: recommended cloudflare-dns -- why: FIT-1 type saas-b2b"*"status vetted"* ]] || { echo "$output"; false; }
   [[ "$output" == *"payment-test: recommended razorpay"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-registrar (candidate)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-registrar (candidate), cloudflare-zone (candidate)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"legal-pages: REFUSED -- no vetted provider for legal-pages · candidates: arc-legal (candidate)"* ]] || { echo "$output"; false; }
   # A candidate is never the pick: no line recommends a row whose status is not vetted.
   [ "$(printf '%s
@@ -429,5 +429,13 @@ EARLY="probe=verified slow=verified after-probe=verified gated=verified live-mon
   [ "$status" -eq 2 ] && [[ "$output" == *"apply takes a SLOT or --next/--all, not both"* ]] || { echo "$output"; false; }
   run node "$(L)" apply --next --all --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 2 ] && [[ "$output" == *"apply takes --next or --all, not both"* ]] || { echo "$output"; false; }
+  [ "$(slot_field probe state)" = "pending" ]
+}
+
+@test "launch-cli: apply --all stops with exit 4 at a slot whose provider is still building (REQ-18)" {
+  run node "$(L)" new --venture fx-sandbox $FX_FLAGS
+  run env FAKE_PENDING="build: deployment dpl_x is BUILDING" node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
+  [ "$status" -eq 4 ] || { echo "$output"; false; }
+  [[ "$output" == *"stopped at probe: exit 4 probe: pending (PENDING(build: deployment dpl_x is BUILDING))"* ]] || { echo "$output"; false; }
   [ "$(slot_field probe state)" = "pending" ]
 }

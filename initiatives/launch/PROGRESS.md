@@ -31,11 +31,35 @@ ADR-1765..1769 written at kickoff.
 
 ## Now
 
-**Current position:** Cycle 2 kicked off 2026-10-19; plan approved 2026-10-20 (approval `01M5AQ42YSKTRYKK8G5XVZ0K3K`, decision `01M5AQ5BYS6WS342H4RPJRZC0T`). No code yet.
-`myfitfolio` board: 5 verified · 1 failed (`frontend`, HOST_REFUSED) · 58 pending · 22 skipped.
+**Current position:** Phase 06 code MERGED 2026-10-20: PR #443 → `0bbe7dc8` (head `89520c47`, CI run 39321893373
+19/19 green). `@venture` hosts (REQ-13) and `apply --next/--all` (REQ-14) are on main; attack r1 (74ba8f0) + r2
+(9d10382) fixed, L4 → debt D46. Live, from the main clone: the owner's `apply frontend --venture myfitfolio` answered
+`failed (verify: https://myfitfolio.com/ answered 525, not 200)`, receipt `01M5B0PVX6H2KG8FNV7GGYGMR4`. That is
+past HOST_REFUSED: the adapter now reaches the venture's domain.
 
-**Next step:** after the approval, Phase 06: the red-first `launch-trust.bats` case for `@venture`, then the token in
-`lib/ctx.mjs`.
+**A-15 FIRED (2026-10-20):** the apex is proxied (orange cloud, A `104.21.1.99` / `172.67.129.3`), so Cloudflare's edge
+fails the TLS handshake to Vercel (525); `myfitfolio.vercel.app` answers 200. Per the ledger, REQ-13's live clause moves
+to Phase 07 after `dns`, and Phase 06 closes on fixtures + the ctx resolution proof. Phase 07 catch: `cloudflare-dns`
+refuses the owner's existing apex records as `FOREIGN_RECORD` (`cloudflare-dns.mjs:89-91`), so the owner deletes them
+before `dns` runs.
+
+**Next step:** Phase 06 close on branch `feat/launch-p06-close` (this file + `evidence/phase-06/live-runs.md`): open its
+PR, run the 7 read-only key probes (phase-06 spec "Key probes"), the `plan` prefix + `apply --all` walk transcript,
+the legal `propose --dry-run` (A-12), then `/arc-phase-done 06 --lane launch`. Then Phase 07 (`cloudflare-zone`).
+
+**Owner ruling 2026-10-20 ("complete all phase ... final ah merge pannikalam"):** every remaining phase is built on ONE
+branch, `feat/launch-c2-phases`, pushed per phase for CI, merged once at the end. A worktree cannot emit receipts, so
+the live runs, gate approvals and vetting stamps of Phases 06-10 are batched after that merge, from the main clone.
+
+**Phase 07 (code):** `cloudflare-zone` adapter + candidate row + contract arm (13 scenarios) on `feat/launch-c2-phases`;
+ADR-1766 amended (gate 1 is asked before any probe; RDAP added for the slot's "registered" criterion). Live part waits
+for the merge: the owner deletes the apex/www A+AAAA records, `apply domain --provider cloudflare-zone --vet`, gate-1
+approval, vetting stamp, then `dns` / `tls` / `email-transactional` / `frontend`.
+
+**Phases 07-09 (code, 2026-10-20) on `feat/launch-c2-phases` (PR #444):** P07 cloudflare-zone + candidate row; P08 REQ-16 secrets places keys, REQ-17 backup mints its pooler role (ADR-1772, `ctx.writePrivate`), REQ-18 PENDING verify (ADR-1771) + headers build wait, REQ-19 legal real path; P09 debt D22, D29, D30, D32, D33(a), D40 closed, D33(b) split to D53. Two attack rounds on P07-08 (b5b09df, 36e7ee4) fixed; debt D46-D52. **Rows awaiting the owner's re-vet after the merge (bytes changed):** vercel-env-store, next-headers, pg-dump, drizzle, plans-yaml, rls-roles, org-invite, razorpay-webhook; new: cloudflare-zone, arc-legal.
+
+**Still owed from the Phase 06 DoD:** key probes · legal dry-run · day-1 `required_when` count (34 expected) + the
+`verify --all` pair · the `apply --all` live transcript · two-surface attack evidence is in place.
 
 **Owner acts named up front (pre-mortem #2):**
 - Phase 06: approve this plan (it records the 19 rows' host scope change, ADR-1765).
