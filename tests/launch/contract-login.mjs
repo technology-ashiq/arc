@@ -45,7 +45,7 @@ const deployed = {
   "checkout-org": (p, t) => (p === "app/api/checkout/route.js" ? t.replace("org_id: org,", "org_id: \"00000000-0000-4000-8000-999999999999\",") : t),
 }[scenario];
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
-const vercel = makeVercel({ github });
+const vercel = makeVercel({ github, servedLag: scenario === "plans-served-lags" });
 const supabase = makeSupabase({ rlsOff: scenario === "rls-off-authz", freeTierMail: scenario.startsWith("free-tier") || scenario.startsWith("stock-template") || scenario.startsWith("smtp-") });
 const live = makeLive({ github, full: FULL, domain: DOMAIN, inner: (i, o) => supabase.fetch(i, o).catch(() => vercel.fetch(i, o)) });
 const venture = makeVenture({ github, supabase, live, full: FULL, domain: DOMAIN, leakCrossTenant: scenario === "leak", ignorePlan: scenario === "plans-ignored", reportsFail: scenario === "plans-reports-fail", serverEnv, linkShape: scenario === "nested-link" ? "nested" : "flat", ...(deployed ? { deployed } : {}) });
@@ -293,6 +293,7 @@ switch (scenario) {
     await A.tenancy.mod.scaffold(ctxFor("tenancy"));
     out.tenancyVerify = await A.tenancy.mod.verify(ctxFor("tenancy"));
     break;
+  case "plans-served-lags":
   case "plans": {
     // The whole login half, then plans: scaffold twice, verify pro -> 200 and downgraded -> 403, twice.
     await A.auth.mod.scaffold(ctxFor("auth"));

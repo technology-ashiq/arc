@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:writePrivateFile (lstat leaf check then writeFileSync)",
+      "breaking_input": "Another local process plants a symlink at <privateRoot>/SUPABASE_DB_URL between the lstatSync(abs) check and writeFileSync(abs). writeFileSync follows the link and writes the pooler URL (with password) to the link target, e.g. a world-readable file.",
+      "why": "Check-then-use on the leaf: the ancestor walk was fixed, but the final write is still path-based and follows a link planted after the check (validate one read, use another).",
+      "fix": "Open with fs.openSync(abs, O_WRONLY|O_CREAT|O_TRUNC|O_NOFOLLOW, 0o600) where O_NOFOLLOW exists, or write a temp file with flag 'wx' in the same dir and renameSync over the target.",
+      "twin_of": "`ctx.write` resolved symlinks only on the ancestors, so a LEAF link (`root/evil -> /outside`) carried a write out of the venture root -> every path check that validates one resolution and then writes through another (validate one read, use another)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/ctx.mjs:writePrivateFile and worker.mjs privateRoot",
+      "breaking_input": "Run on Windows with default ~/.arc-private. mkdirSync mode 0o700 and writeFileSync mode 0o600 are ignored on NTFS, so the minted pooler URL (a password-bearing credential) inherits the parent ACL. On a machine where the profile dir is readable by other local users or ARC_PRIVATE_DIR points to a shared folder like C:\\Users\\Public, any local user reads it.",
+      "why": "The 0600 promise in the comment and ADR is enforced nowhere on win32, the platform this lane runs on; the test skips the mode assertion on win32, so nothing detects it.",
+      "fix": "On win32 either refuse a privateRoot outside the user's profile dir, or apply icacls /inheritance:r /grant:r %USERNAME%:F to the dir and verify; at least state in the return/notes that the mode is not enforced.",
+      "twin_of": "A raw record could be written inside a git work tree -> every artifact holding live secrets: where may it land, and what may it hold?"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/worker.mjs:72 (privateRoot) and ctx.mjs:writePrivateFile",
+      "breaking_input": "ARC_PRIVATE_DIR set to a relative path such as `.` or `private`. join(...) stays relative, so privateRoot resolves against the worker cwd. The git-tree walk starts from resolve(privateRoot) so a cwd inside a work tree is refused, but a cwd outside any repo that later changes, or a relative dir resolved differently by the parent (which printed the path in the owner command) than by the worker, yields a `gh secret set ... < 'relative/path'` command that reads a different or missing file. ",
+      "why": "The returned path `abs` is join(privateRoot, name), not resolved, and is embedded in an owner-run shell command; a relative path is data the owner runs from an unknown cwd, reading the wrong file (or an attacker-planted file with that relative name) into the Actions secret.",
+      "fix": "Resolve privateRoot to an absolute path in the worker (and refuse a relative ARC_PRIVATE_DIR); return resolve(abs).",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes when a helper's output is eval'd or globbed -> every helper whose output bats evals or globs"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "products/launch/providers/backup/pg-dump.mjs:provisionRole (owner command note)",
+      "breaking_input": "Windows run: `where` is `C:\\Users\\Some Name\\.arc-private\\launch\\x\\SUPABASE_DB_URL`. The note wraps it in single quotes, which stops expansion, but the backslashes are kept and the owner pastes the line into Git Bash or PowerShell: in PowerShell `<` is not a valid redirection operator, so the command fails or does nothing; in bash a single-quoted backslash path works only under MSYS path conversion.",
+      "why": "The command is shell-specific text built from an OS path with no normalisation; the only guard is a rejection of a quote character in the path.",
+      "fix": "Emit the path with forward slashes and a form valid in the shell the lane documents (bash), or print `Get-Content ... | gh secret set` separately for PowerShell.",
+      "twin_of": "Paths node prints on Windows carry backslashes that bash reads as escapes when a helper's output is eval'd or globbed -> every helper whose output bats evals or globs"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "products/launch/providers/backup/pg-dump.mjs:provisionRole (write-then-create order)",
+      "breaking_input": "A role launch_backup already exists with launch's tag (made by an earlier run), and the owner already set the Actions secret from the earlier file. A second run reaches the `rows.length` branch and returns early, fine; but in the other order: a first run writes the file, create fails (e.g. password policy, begin/commit rejected), and a SECOND run on a different machine/private dir writes a new file with a new password. If instead the first run's create succeeded server-side but the response was lost (timeout), the retry sees the role, returns early, and the file holds a password for a role created with the same password only if the same file survived; the retry never rewrites it.",
+      "why": "The write-before-create fix covers a failed write, but a lost response or a run whose file was overwritten by a later failed attempt leaves the file holding a password that is NOT the role's: an earlier attempt's file is overwritten by a failed second attempt (new pw written, create refused as role exists is not reached, but a create failing after the role exists from an unseen first success). The file and the role can disagree and nothing checks it.",
+      "fix": "On the existing-role branch, if the private file is missing, rotate with `alter role launch_backup password '<new>'` and rewrite the file; on any failed create after the file was written, delete the stale file.",
+      "twin_of": "A kill between creating a branch and committing to it left a branch the re-run refused as foreign -> every two-step create: is the half-made state recognisable as ours?"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "products/launch/providers/security-headers/next-headers.mjs:buildGate (compare calls)",
+      "breaking_input": "Up to three `gh(... /compare/...)` calls run inside verify with no abort check between them, and each uses the slot's shared signal; a slow GitHub plus Vercel list can push verify past the lock window. Also `d.created` of an older redeploy of the same sha: `ds.find` takes the first sha match in list order, which can be an older redeploy rather than the newest.",
+      "why": "`ours` is the first list match, so a newer redeploy of the same sha that is BUILDING is ignored in favour of an older ERROR or CANCELED one, yielding a false failure; the list is one page of 20 and sha-only.",
+      "fix": "Choose the newest deployment (max created) among those matching sha; treat any matching BUILDING as pending first.",
+      "twin_of": "The sha-matched proof was searched in a fixed page of recent deployments -> every \"find the one we made\" inside a paged list"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "products/launch/providers/domain/cloudflare-zone.mjs:getJson",
+      "breaking_input": "RDAP host returns a multi-gigabyte or endless body, or the zones call returns an oversized body; `res.json()` buffers it whole. Redirects on api.cloudflare.com carrying the bearer header are refused by ctx.fetch's manual redirect, but the 3xx then reads as `res.ok` false with a null body and the reason is only the status.",
+      "why": "Unbounded read of a third-party body before parsing, already recorded as debt D48 but unfixed in a security-relevant adapter, and the same shape as the capped-read-buffers-whole-body defect.",
+      "fix": "Read text with a byte cap (stream and stop at 1 MB) then JSON.parse.",
+      "twin_of": "A \"capped\" read buffered the whole body before slicing -> every bounded read: bound the READ, not the result"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/launch/lib/runner.mjs:422 (outcome pending) and worker.mjs exit 4",
+      "breaking_input": "An adapter whose scaffold or any non-verify path makes the worker exit 4 for another reason, or a worker killed such that r.status is 4, while the state row was previously left as pending with a reason beginning `PENDING(` by an earlier run. The runner classifies exit 4 + state pending + stale `PENDING(` reason as outcome pending and returns EXIT.DEPS, receipting a success-like wait for an attempt that did something else.",
+      "why": "The pending branch decides from exit code plus a free-text reason prefix read from state, which an earlier attempt wrote; the attempt's own answer is not tied to this run. That is a branch on adapter text and a stale-result read.",
+      "fix": "Have the worker write a per-attempt marker (attempt number or nonce) with the pending state and require it to match this attempt before classifying as pending.",
+      "twin_of": "A free-text reason prefix (`env:`) chose the outcome -> every branch on adapter text: is the text adapter-controlled?"
+    }
+  ]
+}

@@ -7,7 +7,7 @@
 //   previewState     readyState of every preview deployment
 import { tick } from "./clock.mjs";
 
-export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [], failDeployments = false, previewState = "READY" } = {}) {
+export function makeVercel({ github, token = "vercel_fixture_token_0123456789", cname = "abc123.vercel-dns-017.com", projects = [], failDeployments = false, previewState = "READY", servedLag = false } = {}) {
   let n = 0;
   const id = (p) => `${p}_${String(++n).padStart(6, "0")}`;
   const store = new Map(projects.map((p) => [p.name, { id: id("prj"), domains: [], linkedAt: 0, ...p }]));
@@ -91,6 +91,18 @@ export function makeVercel({ github, token = "vercel_fixture_token_0123456789", 
     m = p.match(/^\/v6\/domains\/([^/]+)\/config$/);
     if (m && method === "GET") return json(200, { misconfigured: true, recommendedCNAME: cname ? [{ rank: 1, value: `${cname}.` }] : [], recommendedIPv4: [] });
     if (failDeployments) return err(500, "internal", "An unexpected error occurred");
+    // Debt D30: the deployment serving a domain -- the project holding it, at main's head unless `servedLag` holds it
+    // back one commit (a production deploy that lags main).
+    m = p.match(/^\/v13\/deployments\/([^/]+)$/);
+    if (m && method === "GET" && !m[1].startsWith("dpl_")) {
+      const host = decodeURIComponent(m[1]);
+      const proj = [...store.values()].find((x) => (x.domains || []).some((d) => (d.name || d) === host)) || (store.size === 1 ? [...store.values()][0] : null);
+      const r = proj && proj.link ? github.store.get(`${proj.link.org}/${proj.link.repo}`) : null;
+      const cs = r ? r.commits : [];
+      const c = cs[cs.length - 1 - (servedLag && cs.length > 1 ? 1 : 0)];
+      if (!c) return err(404, "not_found", "no deployment serves that host");
+      return json(200, { uid: `dpl_${c.sha.slice(0, 8)}_served`, readyState: "READY", target: "production", meta: { githubCommitSha: c.sha } });
+    }
     if (method === "GET" && p === "/v6/deployments") {
       const proj = byIdOrName(url.searchParams.get("projectId"));
       if (!proj || !proj.link) return json(200, { deployments: [] });

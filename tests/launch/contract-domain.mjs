@@ -32,7 +32,8 @@ const cfOpts = {
   unregistered: { zones: [zone()] },
   hold: { zones: [zone()], rdap: { [NAME]: rdapFor({ status: ["client hold"] }) } },
   expiring: { zones: [zone()], rdap: { [NAME]: rdapFor({ days: 9 }) } },
-  "no-expiry": { zones: [zone()], rdap: { [NAME]: { objectClassName: "domain", status: ["active"], events: [] } } },
+  "no-expiry": { zones: [zone()], rdap: { [NAME]: { objectClassName: "domain", ldhName: NAME, status: ["active"], events: [] } } },
+  "wrong-record": { zones: [zone()], rdap: { [NAME]: { ...rdapFor(), ldhName: "OTHER-DOMAIN.COM" } } },
   "tld-unsupported": { zones: [{ id: "zone-io", name: "myfitfolio.io" }] },
 }[scenario] || { zones: [zone()], rdap: { [NAME]: rdapFor() } };
 const cf = makeCloudflare(cfOpts);
@@ -68,6 +69,7 @@ switch (scenario) {
   case "hold":
   case "expiring":
   case "no-expiry":
+  case "wrong-record":
     out.verify = await adapter.verify(ctxFor());
     out.methods = methods();
     break;

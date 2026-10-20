@@ -100,6 +100,8 @@ export async function verify(ctx) {
   const { res, json } = await getJson(ctx, `${RDAP[tld]}/domain/${encodeURIComponent(d)}`, { accept: "application/rdap+json" }, "rdap GET /domain");
   if (res.status === 404) return { ok: false, reason: `rdap:not-registered -- the .${tld} registry has no record of ${d}` };
   if (!res.ok || !json) return { ok: false, reason: `rdap:unreadable -- the registry answered ${res.status}` };
+  // The record must be the one asked for: a registry answer about another name proves nothing about this one (36e7ee4 L7).
+  if (String(json.ldhName || "").toLowerCase() !== d) return { ok: false, reason: `rdap:wrong-record -- the registry answered for ${say(json.ldhName, 80) || "no name"}, not ${d}` };
   const f = rdapFacts(json, Date.now());
   const bad = f.status.filter((s) => BAD_STATUS.includes(s));
   if (bad.length) return { ok: false, reason: `rdap:status -- ${d} is ${say(bad.join(", "))}` };

@@ -1,7 +1,7 @@
 // The adapter's whole world (ADR-1704, ADR-1719). An adapter gets this object and nothing else: a fetch wrapped to
 // its row's hosts, a writer confined to the venture root, a resource reporter that persists before returning, and a
 // sensitive-action check that pauses for the owner. Every refusal is an Error with a .code an adapter cannot mistake.
-import { mkdirSync, writeFileSync, realpathSync, lstatSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, realpathSync, lstatSync, existsSync, renameSync } from "node:fs";
 import { dirname, resolve, relative, isAbsolute, join, sep } from "node:path";
 import { BARE_HOST, isSharedSuffix } from "./public-suffixes.mjs";
 
@@ -89,17 +89,24 @@ export function writePrivateFile(privateRoot, name, text) {
   if (!PRIVATE_NAME.test(String(name))) throw refusal("WRITE_REFUSED", `private file name ${JSON.stringify(String(name).slice(0, 40))} is not an env-style NAME`);
   // "Outside every repo" is checked, not promised: every existing ancestor, lexical and real, is asked for a .git, and
   // any existing ancestor that is a link refuses (attack b5b09df L2, B3; the worker's recorder rule, 1dc6035 B1).
-  for (let d = resolve(privateRoot); ; d = dirname(d)) {
+  // Absolute from here on: a relative ARC_PRIVATE_DIR would land against the worker's cwd, and the owner's command
+  // would read a path relative to wherever he runs it (attack 36e7ee4 B3).
+  const root = resolve(privateRoot);
+  for (let d = root; ; d = dirname(d)) {
     let st = null;
     try { st = lstatSync(d); } catch (e) { if (e.code !== "ENOENT") throw e; }
     if (st && st.isSymbolicLink()) throw refusal("WRITE_REFUSED", `the private dir passes through a link (${d}); a minted credential is never written through one`);
     if (st && (existsSync(join(d, ".git")) || existsSync(join(realpathSync(d), ".git")))) throw refusal("WRITE_REFUSED", `the private dir ${privateRoot} is inside a git work tree (${d}); a minted credential never lands where it can be committed`);
     if (dirname(d) === d) break;
   }
-  mkdirSync(privateRoot, { recursive: true, mode: 0o700 });
-  const abs = join(privateRoot, name);
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const abs = join(root, name);
   try { if (lstatSync(abs).isSymbolicLink()) throw refusal("WRITE_REFUSED", `${name} in the private dir is a link; launch never writes through one`); } catch (e) { if (e.code !== "ENOENT") throw e; }
-  writeFileSync(abs, String(text), { mode: 0o600 });
+  // A fresh file that cannot already exist ('wx'), then a rename over the name: a link planted after the check above
+  // is replaced itself, never written through (attack 36e7ee4 B1).
+  const tmp = join(root, `.${name}.${process.pid}.${Date.now()}.tmp`);
+  writeFileSync(tmp, String(text), { mode: 0o600, flag: "wx" });
+  renameSync(tmp, abs);
   return abs;
 }
 

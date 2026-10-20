@@ -1565,9 +1565,9 @@ arm() {
   [ "$(j 'o.scaffold.code + " " + o.calls')" = "BAD_DOMAIN 0" ] || { echo "$DONE"; false; }
 }
 
-@test "launch-contract: cloudflare-zone verify reads the registry: unregistered, on hold, expiring, no expiry, and an unserved TLD are each not ok" {
+@test "launch-contract: cloudflare-zone verify reads the registry: unregistered, on hold, expiring, no expiry, another name, and an unserved TLD are each not ok" {
   local s want
-  for s in "unregistered:rdap:not-registered -- " "hold:rdap:status -- myfitfolio.com is client hold" "expiring:rdap:expiring -- myfitfolio.com expires in " "no-expiry:rdap:no-expiry -- " "tld-unsupported:rdap:tld-unsupported -- no registry RDAP server for .io"; do
+  for s in "unregistered:rdap:not-registered -- " "hold:rdap:status -- myfitfolio.com is client hold" "expiring:rdap:expiring -- myfitfolio.com expires in " "no-expiry:rdap:no-expiry -- " "wrong-record:rdap:wrong-record -- the registry answered for OTHER-DOMAIN.COM" "tld-unsupported:rdap:tld-unsupported -- no registry RDAP server for .io"; do
     arm domain "${s%%:*}"
     want="${s#*:}"
     [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false $want"* ]] || { echo "${s%%:*}: $DONE"; false; }
@@ -1680,4 +1680,24 @@ arm() {
 @test "launch-contract: security-headers counts a newer live build only when it descends from the headers commit (b5b09df B10)" {
   arm headers build-newer-unrelated
   [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false production deployment dpl_headers01 of "*" is CANCELED and nothing newer is live" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: plans names the deployment it probed and fails a production build that lags main (debt D30)" {
+  arm login plans
+  [ "$(j 'o.verify.ok')" = "true" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.evidence.deployment')" == "dpl_"*"_served" ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.verify.evidence.commit')" =~ ^[0-9a-f]{40}$ ]] || { echo "$DONE"; false; }
+  arm login plans-served-lags
+  [[ "$(j 'o.verify.ok + " " + o.verify.reason')" == "false sandbox.automemory.ai serves "*", which is not main's head "*"; release main before verifying" ]] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: webhooks-ledger confirms a real stored payment at Razorpay and fails one Razorpay contradicts (debt D33)" {
+  arm webhooks real-confirmed
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.real_confirmed + " " + o.rzpCalls.join(",")')" = "true 1 pay_RealOne0001" ] || { echo "$DONE"; false; }
+  [ "$(j 'o.verify.answerer')" = "sandbox.automemory.ai + api.supabase.com + api.razorpay.com" ] || { echo "$DONE"; false; }
+  arm webhooks real-mismatch
+  [ "$(j 'o.verify.ok + " " + o.verify.reason')" = "false stored payment pay_RealOne0001 is 49900 INR, but Razorpay says captured 100 INR" ] || { echo "$DONE"; false; }
+  # Launch's own probe rows are never asked of Razorpay: the thread stores only probes, and confirms none.
+  arm webhooks thread
+  [ "$(j 'o.verify.ok + " " + o.verify.evidence.real_confirmed')" = "true 0" ] || { echo "$DONE"; false; }
 }

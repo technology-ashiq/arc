@@ -274,7 +274,7 @@ function upstreamOf(ctx, from) {
 }
 
 export function envContract() {
-  return ["SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN"];
+  return ["SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN", "VERCEL_TOKEN"];
 }
 
 export async function scaffold(ctx) {
@@ -303,10 +303,33 @@ async function orgNamed(ctx, domain, user, name) {
 }
 
 // Asked of the live app: B cannot invite into A's org; A invites C; C joins; C reads A's org and not B's.
+// Debt D30: the behaviour this verify proves is whatever the live domain serves, so the build that serves it is named
+// and tied to main's head -- a production deploy that lags main (or a hand-promoted one) would otherwise pass on old
+// code. Vercel names the deployment behind the domain; its commit must be main's head or descend from it.
+const VERCEL_API = "https://api.vercel.com";
+async function servedBuild(ctx, full, domain) {
+  const auth = { authorization: `Bearer ${tokenOf(ctx, "VERCEL_TOKEN", /^[A-Za-z0-9_-]{20,}$/)}` };
+  const r = await call(ctx, `${VERCEL_API}/v13/deployments/${encodeURIComponent(domain)}`, auth, "GET", undefined, [404], "vercel /v13/deployments");
+  const d = r.status === 200 && r.body && typeof r.body === "object" ? r.body : null;
+  if (!d) return { fail: `vercel names no deployment serving ${domain}` };
+  const sha = String((d.meta && d.meta.githubCommitSha) || "");
+  if (!SHA.test(sha)) return { fail: `the deployment serving ${domain} carries no git commit` };
+  const ref = await gh(ctx, "GET", `/repos/${full}/git/ref/heads/main`);
+  const head = ref.body && ref.body.object ? String(ref.body.object.sha) : "";
+  if (sha !== head) {
+    const cmp = await gh(ctx, "GET", `/repos/${full}/compare/${head}...${sha}`, undefined, [404]);
+    if (!(cmp.status === 200 && cmp.body && (cmp.body.status === "ahead" || cmp.body.status === "identical")))
+      return { fail: `${domain} serves ${sha.slice(0, 7)}, which is not main's head ${head.slice(0, 7)}; release main before verifying` };
+  }
+  return { id: say(d.uid || d.id, 64), sha };
+}
+
 async function probe(ctx) {
   const { full, ref } = upstreamOf(ctx, "authz");
   const domain = domainOf(ctx);
   const drift = await oursAtHead(ctx, full, FILES);
+  const served = drift ? null : await servedBuild(ctx, full, domain);
+  if (served && served.fail) return { ok: false, reason: served.fail };
   if (drift) return { ok: false, reason: drift };
   const key = await serviceKey(ctx, ref);
   const a = await signIn(ctx, domain, ref, key, "a");
@@ -324,7 +347,7 @@ async function probe(ctx) {
   if (inside.status !== 200) return { ok: false, reason: `C reading A's org after joining answered ${inside.status}, not 200` };
   const outside = await page(ctx, domain, c.cookies, "GET", `/api/orgs/${orgB}`);
   if (outside.status !== 403) return { ok: false, reason: `C reading B's org answered ${outside.status}, not 403` };
-  return { ok: true, answerer: `${domain} + ${ref}.supabase.co`, evidence: { strangerInvite: 403, invite: 201, join: 200, scopedIn: 200, scopedOut: 403 } };
+  return { ok: true, answerer: `${domain} + ${ref}.supabase.co`, evidence: { strangerInvite: 403, invite: 201, join: 200, scopedIn: 200, scopedOut: 403, deployment: served.id, commit: served.sha } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.

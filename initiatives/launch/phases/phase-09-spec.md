@@ -6,12 +6,12 @@ The lane has 45 open rows, and kickoff's debt budget is 20% of the appetite (3 o
 **Depends on:** phase-08
 
 ## Exit criteria (Definition of Done)
-- [ ] debt #D22 — `orm` verify outlasting its CI poll answers `PENDING(ci)`, never `failed`
-- [ ] debt #D29 — a slot-timeout DOMException is reported as a timeout, never as a coded adapter error
-- [ ] debt #D30 — plans/authz/tenancy record the deployment id they probed beside main's head
-- [ ] debt #D32 — closed citing Phase 06's `@venture` PR (0 code here)
-- [ ] debt #D33 — a test purchase confirms against Razorpay `GET /v1/payments/{id}` and sets the org's plan in `org_plans`
-- [ ] debt #D40 — closed citing D42 (the logic surface already ran from the main clone; 0 code)
+- [x] debt #D22 — `orm` verify outlasting its CI poll answers `PENDING(ci)`, never `failed`
+- [x] debt #D29 — a slot-timeout DOMException is reported as a timeout, never as a coded adapter error
+- [x] debt #D30 — plans/authz/tenancy record the deployment id they probed beside main's head
+- [x] debt #D32 — closed citing Phase 06's `@venture` PR (0 code here)
+- [x] debt #D33 — webhooks-ledger confirms every real stored payment against Razorpay `GET /v1/payments/{id}` (status, amount, currency). The `org_plans` half is split to D53: it needs checkout's order notes from a REAL payment, whose shape is unknown until myfitfolio's first test purchase
+- [x] debt #D40 — closed citing D42 (the logic surface already ran from the main clone; 0 code)
 - [ ] a fix that can live in `lib/` does; every adapter whose bytes change is re-applied live on `myfitfolio` and
       re-vetted here, and Phase 10 opens only with 0 `candidate` core rows
 - [ ] each closed row marked closed in `debt-ledger.md` with its PR; every fix attacked somewhere it was not made

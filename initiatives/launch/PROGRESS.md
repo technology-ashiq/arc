@@ -56,6 +56,8 @@ ADR-1766 amended (gate 1 is asked before any probe; RDAP added for the slot's "r
 for the merge: the owner deletes the apex/www A+AAAA records, `apply domain --provider cloudflare-zone --vet`, gate-1
 approval, vetting stamp, then `dns` / `tls` / `email-transactional` / `frontend`.
 
+**Phases 07-09 (code, 2026-10-20) on `feat/launch-c2-phases` (PR #444):** P07 cloudflare-zone + candidate row; P08 REQ-16 secrets places keys, REQ-17 backup mints its pooler role (ADR-1772, `ctx.writePrivate`), REQ-18 PENDING verify (ADR-1771) + headers build wait, REQ-19 legal real path; P09 debt D22, D29, D30, D32, D33(a), D40 closed, D33(b) split to D53. Two attack rounds on P07-08 (b5b09df, 36e7ee4) fixed; debt D46-D52. **Rows awaiting the owner's re-vet after the merge (bytes changed):** vercel-env-store, next-headers, pg-dump, drizzle, plans-yaml, rls-roles, org-invite, razorpay-webhook; new: cloudflare-zone, arc-legal.
+
 **Still owed from the Phase 06 DoD:** key probes · legal dry-run · day-1 `required_when` count (34 expected) + the
 `verify --all` pair · the `apply --all` live transcript · two-surface attack evidence is in place.
 

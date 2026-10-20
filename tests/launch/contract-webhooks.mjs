@@ -27,7 +27,11 @@ const DOMAIN = "sandbox.automemory.ai";
 const REF = "fixtureref0000000001";
 const HOOK_KEY = "fixture_webhook_secret_not_real";
 const TAG = "arc-sandbox@webhooks-ledger@razorpay-webhook";
-const ENV = { RAZORPAY_WEBHOOK_SECRET: HOOK_KEY, SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", GITHUB_TOKEN: "gho_fixtureToken0123456789" };
+const ENV = { RAZORPAY_WEBHOOK_SECRET: HOOK_KEY, SUPABASE_ACCESS_TOKEN: "sbp_fixture_token_0123456789abcd", GITHUB_TOKEN: "gho_fixtureToken0123456789", RAZORPAY_KEY_ID: "rzp_test_Fixture0123", RAZORPAY_KEY_SECRET: "fixture_secret_0123456789" }; // gitleaks:allow -- fake Razorpay test keys for the fake API
+// Debt D33: Razorpay's view of a real stored payment. real-mismatch says the stored amount is not what was captured.
+const RZP = { pay_RealOne0001: { id: "pay_RealOne0001", status: "captured", amount: 49900, currency: "INR" } };
+if (scenario === "real-mismatch") RZP.pay_RealOne0001 = { ...RZP.pay_RealOne0001, amount: 100 };
+const rzpCalls = [];
 
 const github = makeGithub({ repos: [{ name: "arc-sandbox", description: "x", commits: [{ sha: "a".repeat(40), message: "Initial commit", files: {} }] }] });
 const supabase = makeSupabase({ projects: [{ id: REF, name: "arc-sandbox" }] });
@@ -39,7 +43,13 @@ const opts = {
   "foreign-table": { foreign: true },
   "secret-unset": { hookKey: null },
 }[scenario] || {};
-const webhook = makeWebhook({ github, supabase, full: FULL, domain: DOMAIN, hookKey: HOOK_KEY, inner: (i, o) => (new URL(String(i)).hostname === "api.github.com" ? github.fetch(i, o) : supabase.fetch(i, o)), ...opts });
+const rzp = async (i) => {
+  const id = decodeURIComponent(new URL(String(i)).pathname.split("/").pop());
+  rzpCalls.push(id);
+  const p = RZP[id];
+  return new Response(JSON.stringify(p || { error: { code: "BAD_REQUEST_ERROR" } }), { status: p ? 200 : 404, headers: { "content-type": "application/json" } });
+};
+const webhook = makeWebhook({ github, supabase, full: FULL, domain: DOMAIN, hookKey: HOOK_KEY, inner: (i, o) => (new URL(String(i)).hostname === "api.razorpay.com" ? rzp(i, o) : new URL(String(i)).hostname === "api.github.com" ? github.fetch(i, o) : supabase.fetch(i, o)), ...opts });
 globalThis.fetch = webhook.fetch;
 
 const ROOT = mkdtempSync(join(tmpdir(), "launch-webhooks-"));
@@ -103,6 +113,15 @@ switch (scenario) {
     out.simulatedLines = render(sim).split("\n").filter(Boolean);
     out.realVentures = (await derivePnl(SPINE, { mode: "real", engine: "scan" })).ventures.length;
     out.teardown = (await adapter.teardown(ctxNow())).steps.map((s) => s.action);
+    break;
+  }
+  case "real-confirmed":
+  case "real-mismatch": {
+    await adapter.scaffold(ctxNow());
+    supabase.store[0].realPayments = [{ payment_id: "pay_RealOne0001", amount: 49900, currency: "INR" }];
+    const v = await verifyQ();
+    out.verify = v.v;
+    out.rzpCalls = rzpCalls;
     break;
   }
   case "route": {

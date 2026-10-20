@@ -233,7 +233,7 @@ function probeIds(ctx) {
 }
 
 export function envContract() {
-  return ["RAZORPAY_WEBHOOK_SECRET", "SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN"];
+  return ["RAZORPAY_WEBHOOK_SECRET", "SUPABASE_ACCESS_TOKEN", "GITHUB_TOKEN", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"];
 }
 
 export async function scaffold(ctx) {
@@ -288,6 +288,29 @@ const int = (v) => (typeof v === "number" ? v : typeof v === "string" && /^[0-9]
 
 // Asked of the live route and the venture's database: one signed event delivered twice is one row, and the route refuses
 // a re-serialised signature and a missing event id, storing nothing for either.
+// Debt D33 (a): a stored row says a payment was captured; Razorpay is asked whether it was. Every real row (not launch's
+// probe) is confirmed by id, amount and currency before the ledger is called proven. At most 20 are asked per verify.
+const RAZORPAY = "https://api.razorpay.com/v1";
+const REAL_ROWS = "select payment_id, amount::bigint as amount, currency from public.razorpay_webhook_events where event = 'payment.captured' and payment_id is not null and payment_id not like 'pay_ArcProbe%' order by received_at desc nulls last limit 20;";
+async function confirmReal(ctx, ref) {
+  const rows = list(await query(ctx, ref, REAL_ROWS));
+  if (!rows.length) return { confirmed: 0 };
+  const id = String(ctx.env.RAZORPAY_KEY_ID || "").trim();
+  const secret = String(ctx.env.RAZORPAY_KEY_SECRET || "").trim();
+  if (!/^rzp_(test|live)_[A-Za-z0-9]{8,}$/.test(id) || !secret) return { fail: "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are needed to confirm stored payments; their values are not printed" };
+  const auth = { authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}` };
+  for (const r of rows) {
+    const pid = String(r.payment_id);
+    if (!/^pay_[A-Za-z0-9]{6,32}$/.test(pid)) return { fail: `stored payment id ${say(pid, 40)} is not a Razorpay payment id` };
+    const p = await call(ctx, `${RAZORPAY}/payments/${pid}`, auth, "GET", undefined, [404], "razorpay /payments");
+    if (p.status === 404) return { fail: `stored payment ${pid} is unknown to Razorpay` };
+    const b = p.body || {};
+    if (b.status !== "captured" || Number(b.amount) !== Number(r.amount) || String(b.currency) !== String(r.currency))
+      return { fail: `stored payment ${pid} is ${say(r.amount, 12)} ${say(r.currency, 6)}, but Razorpay says ${say(b.status, 20)} ${say(b.amount, 12)} ${say(b.currency, 6)}` };
+  }
+  return { confirmed: rows.length };
+}
+
 async function probe(ctx) {
   const { full, ref } = upstreamOf(ctx, "plans");
   const domain = domainOf(ctx);
@@ -330,7 +353,9 @@ async function probe(ctx) {
     return { ok: false, reason: `the stored probe row is ${say(row.event, 30)} ${say(row.amount, 12)} ${say(row.currency, 6)}, not payment.captured 100 INR` };
   // The stored row, not the event launch sent, is what the ledger books: the round trip is the proof.
   ctx.emit("revenue.simulated", { event_id: ids.event, payment_id: ids.payment, amount, fee, currency: "INR", paid_at: paid });
-  return { ok: true, answerer: `${domain} + api.supabase.com`, evidence: { stored: 1, replays: 2, reserialised: 401, no_event_id: 400, payment: ids.payment } };
+  const real = await confirmReal(ctx, ref);
+  if (real.fail) return { ok: false, reason: real.fail };
+  return { ok: true, answerer: `${domain} + api.supabase.com${real.confirmed ? " + api.razorpay.com" : ""}`, evidence: { stored: 1, replays: 2, reserialised: 401, no_event_id: 400, payment: ids.payment, real_confirmed: real.confirmed } };
 }
 
 // verify answers; every failure but the slot timeout is a not-ok answer, never a throw out of a read.
