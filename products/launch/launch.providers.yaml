@@ -288,9 +288,10 @@ providers:
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md
     last_verified: 2026-10-14
+  # Re-vet pending (ADR-1719): F6 takes the org from the venture's supabase_org (ADR-1773). Previous vetting 01M4YYNSS3H8N5A5HWAG77BM3J at digest 213c746fedcf.
   - id: supabase
     slot: database
-    status: vetted
+    status: candidate
     fits:
       - saas-b2b
       - saas-b2c
@@ -305,7 +306,7 @@ providers:
     credentials:
       scope: "project create in one organization; reads the probe as anon through PostgREST (ADR-1731)"
     adapter: providers/database/supabase.mjs
-    digest: 213c746fedcf5ada453f201e18c55a5a283e8c9d48da00acc2216262d808baa0
+    digest: null
     approved_by: ashiq
     vetted_by: 01M4YYNSS3H8N5A5HWAG77BM3J
     scout: initiatives/launch/evidence/phase-04/provider-scout.md

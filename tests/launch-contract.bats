@@ -545,8 +545,27 @@ arm() {
 @test "launch-contract: database refuses two organizations and an unknown region, creating nothing" {
   arm database two-orgs
   [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
+  # The refusal says how to name one (ADR-1773).
+  [[ "$(j 'o.scaffold.message')" == *"name it with supabase_org: <id> in the venture.yaml"*"ashiq (id o1), acme (id o2)"* ]] || { echo "$DONE"; false; }
   arm database bad-region
   [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_REGION 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a venture names its Supabase org by id or name; unknown or not a string refuses, creating nothing (F6, ADR-1773)" {
+  arm database two-orgs-named
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",") + " " + o.verify.ok')" = "true o2 true" ] || { echo "$DONE"; false; }
+  arm database two-orgs-named-by-name
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",") + " " + o.verify.ok')" = "true o2 true" ] || { echo "$DONE"; false; }
+  arm database org-unknown
+  [ "$(j 'o.scaffold.code + " " + o.creates + " " + o.verify.ok')" = "ORG_UNKNOWN 0 false" ] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *'"o9" matches 0 of the 2 organizations'* ]] || { echo "$DONE"; false; }
+  arm database bad-org
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_ORG 0" ] || { echo "$DONE"; false; }
+}
+
+@test "launch-contract: a named org scopes the lookup -- a same-named project in another org is not adopted (F6, ADR-1773)" {
+  arm database named-scopes-lookup
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",") + " " + o.kinds[0] + " " + o.verify.ok')" = "true o2 supabase-project true" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: an owner's project is found, not owned, and a paused one is PAUSED" {

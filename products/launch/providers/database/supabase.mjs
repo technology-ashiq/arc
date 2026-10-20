@@ -1,5 +1,6 @@
-// database slot on Supabase (ADR-1704, ADR-1731). One project per venture slug in the token's only organization. The
-// database password is generated, used once at creation and recorded nowhere. One migration creates `launch_probe` with
+// database slot on Supabase (ADR-1704, ADR-1731). One project per venture slug in the venture's named organization
+// (`supabase_org`, ADR-1773) or the token's only one. The database password is generated, used once at
+// creation and recorded nowhere. One migration creates `launch_probe` with
 // RLS on and no policy, holding one owner-written row; verify proves RLS by reading it as `anon` (0 rows) and as the
 // owner role (1 row), both through the Management API's query endpoint.
 import { randomBytes } from "node:crypto";
@@ -70,17 +71,34 @@ function slugOf(ctx) {
   return s;
 }
 
-// The organization is the token's only one: several are refused by name, never picked between.
+// A personal token is account-wide, so the venture names its org (ADR-1773). Unnamed, the org is the token's only one.
+// Several are refused by name, never picked between.
+function named(ctx) {
+  const v = ctx.profile ? ctx.profile.supabase_org : undefined;
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "string" || !v.trim()) throw refuse("BAD_ORG", `venture supabase_org ${JSON.stringify(say(v, 40))} is not an org id or name (ADR-1773)`);
+  return v.trim();
+}
+const seen = (orgs) => orgs.slice(0, 5).map((o) => `${say(o.name, 40)} (id ${say(o.id, 40)})`).join(", ");
+
 async function org(ctx) {
+  const want = named(ctx);
   const orgs = list((await sb(ctx, "GET", "/organizations")).body);
-  if (orgs.length !== 1) throw refuse("ORG_AMBIGUOUS", `the token sees ${orgs.length} organizations (${orgs.slice(0, 5).map((o) => say(o.name, 40)).join(", ")}); one is required`);
-  if (typeof orgs[0].id !== "string") throw new Error("supabase returned an organization without an id");
-  return orgs[0].id;
+  const hit = want === null ? orgs : orgs.filter((o) => o.id === want || o.name === want);
+  if (want !== null && hit.length !== 1)
+    throw refuse("ORG_UNKNOWN", `venture supabase_org ${JSON.stringify(say(want, 60))} matches ${hit.length} of the ${orgs.length} organizations the token sees (${seen(orgs)}); exactly one is required`);
+  if (hit.length !== 1)
+    throw refuse("ORG_AMBIGUOUS", `the token sees ${orgs.length} organizations (${seen(orgs)}); one is required -- name it with supabase_org: <id> in the venture.yaml (ADR-1773)`);
+  if (typeof hit[0].id !== "string") throw new Error("supabase returned an organization without an id");
+  return hit[0].id;
 }
 
+// A named org scopes the lookup: a same-named project in another org is not the venture's (ADR-1773).
 async function find(ctx, name) {
-  const all = list((await sb(ctx, "GET", "/projects")).body);
-  return all.filter((p) => p.name === name);
+  const all = list((await sb(ctx, "GET", "/projects")).body).filter((p) => p.name === name);
+  if (named(ctx) === null) return all;
+  const id = await org(ctx);
+  return all.filter((p) => p.organization_id === id);
 }
 
 export function envContract() {

@@ -7,6 +7,11 @@ served pages. `auth` through `refunds` verify live on `myfitfolio` in test mode.
 
 ## Exit criteria (Definition of Done)
 - [ ] REQ-16, REQ-17, REQ-18 and REQ-19 acceptance met (PLAN); `legal-pages` per ADR-1769, inside the scope ADR-1768 fixes
+- [ ] F6 (bug, `/arc-change` 2026-10-20, live receipt `01M5CRFPBM11PVBY7BK7S8N8XF`, A-11 fired, ADR-1773): `supabase`
+      takes the org from the venture's `supabase_org` (id or name); it must match exactly one org the token sees, else
+      `ORG_UNKNOWN` by name; one org and nothing named is unchanged; several and nothing named stays `ORG_AMBIGUOUS` and
+      says how to name one; a named org scopes the project lookup. Fixtures: 2 orgs + named (ok), 2 orgs + unnamed
+      (refuse), named-but-unknown (refuse). Row demoted to `candidate` until the owner re-vets (ADR-1719)
 - [ ] `auth`, `authz`, `tenancy`, `plans`, `checkout-portal`, `payment-test`, `webhooks-ledger`, `refunds`, `database`,
       `orm`, `backend`, `environments`, `errors`, `dependency-scan`, `backup`, `restore-drill`, `migration-rollback`
       verified on `myfitfolio` from the main clone

@@ -64,6 +64,16 @@ so no resolver ever returns it. Fix in `cloudflare-dns` verify (phase-07 exit cr
 each slot before it runs and every slot it passes over, and ends on a summary line (phase-06 exit criterion). No
 assumption fired; no new REQ, dependency or ADR.
 
+**`/arc-change` 2026-10-20 (F6, branch `feat/launch-supabase-org-pick`):** bug — `apply database --venture
+myfitfolio` refused `ORG_AMBIGUOUS` (receipt `01M5CRFPBM11PVBY7BK7S8N8XF`): a Supabase personal token is account-wide,
+and the owner keeps a second org because the first one's free-project limit is used up. **A-11 FIRED** (PLAN ledger):
+its planned fallback was `neon`; the owner chose the second org, recorded in ADR-1773. The venture names its org in
+`venture.yaml` (`supabase_org`, like `ci_protection`), never guessed (phase-08 exit criterion). Checked: the eight
+other Supabase-touching adapters (`supabase-auth`, `rls-roles`, `pg-dump`, `plans-yaml`, `org-invite`,
+`razorpay-checkout`, `razorpay-refunds`, `razorpay-webhook`) take the project ref from `ctx.upstream`, so none
+assumes one org; only `database/supabase.mjs` changes. A-11's other dependants (REQ-17 backup on Supabase, the
+phase-08 money chain) stand, since the venture stays on Supabase. `supabase` row → `candidate` until the owner's re-vet.
+
 **Still owed from the Phase 06 DoD:** key probes · legal dry-run · day-1 `required_when` count (34 expected) + the
 `verify --all` pair · the `apply --all` live transcript · two-surface attack evidence is in place.
 
