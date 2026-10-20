@@ -109,20 +109,55 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 });
 
 const cnames = (answer) => ((answer && answer.Answer) || []).filter((a) => a && a.type === 5).slice(0, 8).map((a) => bare(say(a.data, 253)));
+const ips = (answer, type) => list(answer && answer.Answer).filter((a) => a.type === type).slice(0, 16).map((a) => say(a.data, 45));
+
+// Cloudflare always flattens a CNAME at a zone apex, so no resolver returns it there (myfitfolio.com, receipt
+// 01M5CGAXT2T3G8MS1FMXH7YQ6F). The apex is read by its answer instead: at each resolver, every A/AAAA the name returns is
+// one the target returns at that same resolver, and there is at least one A. A proxied record answers Cloudflare's edge
+// addresses, which the target never returns, so the grey-cloud check still holds.
+// The target's own answers are asked once per verify, not once per poll (r1 B7): they are the hosting provider's, not
+// the record launch is waiting on.
+async function flattened(ctx, name, to, targetAnswers) {
+  const seen = {};
+  let ok = true;
+  for (const [q, type] of [["A", 1], ["AAAA", 28]]) {
+    const at = await ctx.probe.doh(name, q);
+    const of = targetAnswers[q] || (targetAnswers[q] = await ctx.probe.doh(to, q));
+    for (const k of ["google", "cloudflare"]) {
+      const got = ips(at[k], type);
+      const want = ips(of[k], type);
+      seen[`${k}_${q}`] = got;
+      if ((type === 1 && !got.length) || got.some((a) => !want.includes(a))) ok = false;
+    }
+  }
+  return { ok, seen };
+}
 
 // Asked of two public resolvers, never of Cloudflare's API: the record existing is not the name resolving.
 export async function verify(ctx) {
   const name = hostName(ctx.profile.brand && ctx.profile.brand.domain, "brand.domain");
   const to = target(ctx);
   let seen = null;
+  let flat = null;
+  const targetAnswers = {};
   for (let i = 0; i < 6; i++) {
     if (i) await wait(10000, ctx.signal);
     const r = await ctx.probe.doh(name, "CNAME");
     seen = { google: cnames(r.google), cloudflare: cnames(r.cloudflare) };
     if (seen.google.includes(to) && seen.cloudflare.includes(to))
       return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, ...seen } };
+    if (!seen.google.length && !seen.cloudflare.length) {
+      // A resolver error on the apex read is a poll that saw nothing, not a verify that throws (r2 B2); the slot timeout
+      // still ends it.
+      try { flat = await flattened(ctx, name, to, targetAnswers); } catch (e) {
+        if (e && e.code === "ABORTED") throw e;
+        flat = { ok: false, seen: { google_A: [], cloudflare_A: [] } };
+      }
+      if (flat.ok) return { ok: true, answerer: "dns.google + cloudflare-dns.com", evidence: { name, cname: to, flattened: true, ...flat.seen } };
+    }
   }
-  return { ok: false, reason: `${name} CNAME not ${to} at both resolvers (google: ${say(seen.google.join(",")) || "none"}; cloudflare: ${say(seen.cloudflare.join(",")) || "none"})` };
+  const apex = flat ? `; flattened A: google ${say(flat.seen.google_A.join(","), 60) || "none"}, cloudflare ${say(flat.seen.cloudflare_A.join(","), 60) || "none"}, not all ${to}'s` : "";
+  return { ok: false, reason: `${name} CNAME not ${to} at both resolvers (google: ${say(seen.google.join(",")) || "none"}; cloudflare: ${say(seen.cloudflare.join(",")) || "none"})${apex}` };
 }
 
 export async function teardown(ctx) {

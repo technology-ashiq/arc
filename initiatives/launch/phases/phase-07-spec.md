@@ -15,6 +15,11 @@
 - [ ] `/arc-capability --vet` scout record for the row; live verify on `myfitfolio`; the owner's `decision.recorded`; digest pinned
 - [ ] no manifest line needed (`products/launch/manifest.json` lists scripts + files, not provider adapters; checked 2026-10-20); `tree-manifest.txt` (untracked filtered)
       and `docs/wiki` regenerated in the same PR
+- [ ] F4 (bug, `/arc-change` 2026-10-20, live receipt `01M5CGAXT2T3G8MS1FMXH7YQ6F`): `cloudflare-dns` verify passes an
+      apex name, whose CNAME Cloudflare always flattens: when neither resolver returns a CNAME, every A/AAAA the name
+      answers at a resolver is one the hosting target answers at that same resolver (A non-empty); still asked of the
+      two public resolvers only, never Cloudflare's API (ADR-1709). Fixtures: grey-cloud apex verifies; proxied apex
+      fails. `tls` and `email-transactional` checked for the same subdomain assumption: none in code
 - [ ] gate 1 approved by the owner; `domain`, `dns`, `tls`, `email-transactional` verified on `myfitfolio` from the main clone
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)
 

@@ -29,7 +29,9 @@ slot_field() { node -e 'const s=JSON.parse(require("fs").readFileSync(process.ar
   run node "$(L)" plan --venture arc-sandbox --state-dir "$BATS_TEST_TMPDIR/st"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # The owner vetted 32 rows (decision.recorded 01M4YYNSS3H8N5A5HWAG77BM3J); domain and legal-pages hold only candidates.
-  [[ "$output" == *"dns: recommended cloudflare-dns -- why: FIT-1 type saas-b2b"*"status vetted"* ]] || { echo "$output"; false; }
+  # cloudflare-dns awaits its re-vet after F4 (ADR-1719), so dns is REFUSED by name until the owner stamps it.
+  [[ "$output" == *"dns: REFUSED -- no vetted provider for dns · candidates: cloudflare-dns (candidate)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"hosting: recommended "*"status vetted"* ]] || { echo "$output"; false; }
   [[ "$output" == *"payment-test: recommended razorpay"*"stripe (blocked: India new-account onboarding"* ]] || { echo "$output"; false; }
   [[ "$output" == *"domain: REFUSED -- no vetted provider for domain · candidates: cloudflare-registrar (candidate), cloudflare-zone (candidate)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"legal-pages: REFUSED -- no vetted provider for legal-pages · candidates: arc-legal (candidate)"* ]] || { echo "$output"; false; }
@@ -344,6 +346,10 @@ EARLY="probe=verified slow=verified after-probe=verified gated=verified live-mon
   run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 5 ] || { echo "$output"; false; }
   [[ "$output" == *"stopped at gated: exit 5 gated: gate-2 -- approval.requested "* ]] || { echo "$output"; false; }
+  # F5: each slot is named before it runs, with its provider, and the walk ends on one summary line.
+  [[ "$output" == *"→ ["*"] applying probe via fake"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"→ ["*"] applying gated via fake"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"walk summary: "*" verified · 3 applied · "*" skipped · stopped at gated"* ]] || { echo "$output"; false; }
   [ "$(slot_field probe state) $(slot_field slow state) $(slot_field after-probe state)" = "verified verified verified" ] || { echo "$output"; false; }
   [ "$(spine_slot approval.requested gated)" -eq 1 ]
   # A second walk meets the same gate and asks the owner nothing new.
@@ -419,6 +425,11 @@ EARLY="probe=verified slow=verified after-probe=verified gated=verified live-mon
   run node "$(L)" apply --all --venture fx-sandbox $FX_FLAGS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"walk complete: 0 applied, 1 skipped"* ]] || { echo "$output"; false; }
+  # F5: every slot passed over gets its own line, nothing is announced as applying, and the summary closes the walk.
+  [[ "$output" == *"· ["*"] probe: verified -- passed over"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"· ["*"] rowless: verified -- passed over"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"applying"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"walk summary: "*" verified · 0 applied · 1 skipped · stopped at none"* ]] || { echo "$output"; false; }
 }
 
 @test "launch-cli: apply refuses --again with a walk, a SLOT with a walk, and --next with --all" {

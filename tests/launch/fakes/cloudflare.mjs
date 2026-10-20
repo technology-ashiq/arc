@@ -4,8 +4,9 @@
 // A zone carries `status` and `name_servers` (the zones API's own fields); the resolvers answer a zone apex's NS query
 // with `publicNs[name]` when given (a delegation that disagrees), else the zone's own nameservers. `rdap[name]` is the
 // .com/.net registry's answer for a domain (status 404 when absent), for the domain slot's zone check (ADR-1766).
+// `addrs[host]` = { A, AAAA } is what an outside host (the hosting target) resolves to.
 const NS = ["meera.ns.cloudflare.com", "noel.ns.cloudflare.com"];
-export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" }], token = "cf-token-0123456789abcdef", seed = [], publicNs = {}, rdap = {} } = {}) {
+export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" }], token = "cf-token-0123456789abcdef", seed = [], publicNs = {}, rdap = {}, addrs = {} } = {}) {
   zones = zones.map((z) => ({ status: "active", name_servers: NS, ...z }));
   const records = seed.map((r, i) => ({ id: `seed-${i + 1}`, ...r }));
   const calls = [];
@@ -30,9 +31,14 @@ export function makeCloudflare({ zones = [{ id: "zone-1", name: "automemory.ai" 
         const ns = publicNs[name] || (z && z.status === "active" ? z.name_servers : []);
         return json(200, { Status: 0, Answer: ns.map((d) => ({ name: `${name}.`, type: 2, TTL: 3600, data: `${d}.` })) });
       }
+      const qtype = url.searchParams.get("type") || "A";
       const hits = records.filter((r) => r.name === name);
+      const ip = (list, type) => (list || []).map((d) => ({ name: `${name}.`, type, TTL: 300, data: d }));
+      if (!hits.length && addrs[name]) return json(200, { Status: 0, Answer: qtype === "AAAA" ? ip(addrs[name].AAAA, 28) : qtype === "A" ? ip(addrs[name].A, 1) : [] });
       const answer = hits.flatMap((r) => (r.proxied
         ? [{ name: `${name}.`, type: 1, TTL: 300, data: "104.21.0.1" }]
+        // A CNAME at a zone apex is always flattened: the resolver sees the target's addresses, never the CNAME.
+        : r.type === "CNAME" && zones.some((z) => z.name === name) ? (qtype === "AAAA" ? ip((addrs[r.content] || {}).AAAA, 28) : qtype === "A" ? ip((addrs[r.content] || {}).A, 1) : [])
         : r.type === "CNAME" ? [{ name: `${name}.`, type: 5, TTL: 300, data: `${r.content}.` }]
         : r.type === "TXT" && (url.searchParams.get("type") || "A") === "TXT" ? [{ name: `${name}.`, type: 16, TTL: 300, data: JSON.stringify(r.content) }] : []));
       return json(200, { Status: 0, Answer: answer });

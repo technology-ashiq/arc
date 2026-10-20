@@ -19,6 +19,9 @@ const adapter = await import(pathToFileURL(join(PRODUCT, row.adapter)).href);
 const NAME = "sandbox.automemory.ai";
 const TARGET = "abc123.vercel-dns-017.com";
 const TAG = "arc-sandbox@dns@cloudflare-dns";
+// An apex venture (myfitfolio.com): its zone IS the name, so Cloudflare flattens the CNAME (receipt 01M5CGAXT2T3G8MS1FMXH7YQ6F).
+const APEX = "apex-venture.com";
+const APEX_ZONE = { zones: [{ id: "zone-1", name: APEX }], addrs: { [TARGET]: { A: ["76.76.21.21"], AAAA: [] } } };
 // The verify polls a resolver every 10 s while propagation lags; the arm does not wait out real seconds.
 const realTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn) => realTimeout(fn, 0);
@@ -27,6 +30,8 @@ const cfOpts = {
   foreign: { seed: [{ zone: "zone-1", type: "A", name: NAME, content: "192.0.2.1", proxied: false, comment: "hand-made" }] },
   "foreign-txt": { seed: [{ zone: "zone-1", type: "TXT", name: NAME, content: "v=spf1 -all", proxied: false, comment: null }] },
   proxied: { seed: [{ zone: "zone-1", type: "CNAME", name: NAME, content: TARGET, proxied: true, comment: TAG }] },
+  apex: APEX_ZONE,
+  "apex-proxied": { ...APEX_ZONE, seed: [{ zone: "zone-1", type: "CNAME", name: APEX, content: TARGET, proxied: true, comment: TAG }] },
   drifted: { seed: [{ zone: "zone-1", type: "CNAME", name: NAME, content: "old.example.net", proxied: true, comment: TAG }] },
 }[scenario] || {};
 const cf = makeCloudflare(cfOpts);
@@ -36,8 +41,8 @@ globalThis.fetch = cf.fetch;
 const ROOT = mkdtempSync(join(tmpdir(), "launch-dns-"));
 process.on("exit", () => rmSync(ROOT, { recursive: true, force: true }));
 const reported = [];
-const ctxFor = ({ upstream = { hosting: [{ kind: "dns-target", id: TARGET }] }, token = "cf-token-0123456789abcdef", resources = reported } = {}) => makeCtx({
-  profile: { slug: "arc-sandbox", brand: { domain: NAME } }, board: {}, slot: { id: "dns" }, row,
+const ctxFor = ({ domain = NAME, upstream = { hosting: [{ kind: "dns-target", id: TARGET }] }, token = "cf-token-0123456789abcdef", resources = reported } = {}) => makeCtx({
+  profile: { slug: "arc-sandbox", brand: { domain } }, board: {}, slot: { id: "dns" }, row,
   root: ROOT, resources, upstream, tag: TAG, attempt: 1, signal: undefined,
   env: { CLOUDFLARE_API_TOKEN: token }, report: (r) => { if (!reported.some((x) => x.id === r.id)) reported.push(r); },
 });
@@ -56,6 +61,15 @@ switch (scenario) {
     out.teardown = await adapter.teardown(ctxFor({ resources: reported }));
     break;
   }
+  case "apex": {
+    out.scaffold = await attempt(() => adapter.scaffold(ctxFor({ domain: APEX })));
+    out.records = cf.records.filter((r) => r.name === APEX).map((r) => ({ type: r.type, content: r.content, proxied: r.proxied }));
+    out.verify = await adapter.verify(ctxFor({ domain: APEX }));
+    break;
+  }
+  case "apex-proxied":
+    out.verify = await adapter.verify(ctxFor({ domain: APEX }));
+    break;
   case "foreign":
   case "foreign-txt":
   case "drifted":
