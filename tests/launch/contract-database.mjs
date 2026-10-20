@@ -29,6 +29,8 @@ const opts = {
   "name-case": { orgs: [{ id: "o1", name: "acme" }, { id: "o2", name: "ACME" }] },
   "null-org": { orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] },
   "no-orgs": { orgs: [] },
+  "id-beats-name": { orgs: [{ id: "o1", name: "o2" }, { id: "o2", name: "acme" }] },
+  "org-no-id": { orgs: [{ id: 7, name: "acme" }] },
   "many-orgs": { orgs: Array.from({ length: 22 }, (_, i) => ({ id: `org${String(i + 1).padStart(2, "0")}`, name: `team ${i + 1}` })) },
   "named-scopes-lookup": { ...{ orgs: [{ id: "o1", name: "ashiq" }, { id: "o2", name: "acme" }] }, projects: [{ id: "ownerref000000000003", name: "arc-sandbox", organization_id: "o1" }] },
   found: { projects: [{ id: "ownerref000000000001", name: "arc-sandbox" }] },
@@ -128,14 +130,17 @@ switch (scenario) {
     out.other = await attempt(() => adapter.scaffold(ctxNow({ org: "Acme" })));
     break;
   }
+  case "id-beats-name":
+  case "org-no-id":
   case "unscoped-project":
   case "null-org":
   case "no-orgs":
   case "many-orgs": {
-    const org = { "unscoped-project": "o2", "null-org": null }[scenario];
+    const org = { "unscoped-project": "o2", "null-org": null, "id-beats-name": "o2" }[scenario];
     out.scaffold = await attempt(() => adapter.scaffold(ctxNow({ org })));
     out.creates = sb.calls.filter((c) => c === "POST /v1/projects").length;
     out.verify = await adapter.verify(ctxNow({ org }));
+    out.made = sb.store.map((p) => p.organization_id);
     break;
   }
   case "org-unknown":

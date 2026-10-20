@@ -579,7 +579,14 @@ arm() {
   # Every org id up to the cap, whole, and a count past it (attack 67c6e07 B3).
   arm database many-orgs
   [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
-  [[ "$(j 'o.scaffold.message')" == *"team 20 (id org20), +2 more"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == "the token sees 22 organizations (team 1 (id org01), "*"team 20 (id org20), +2 more); one is required"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" != *"org21"* ]] || { echo "$DONE"; false; }
+  # An id wins over another org's equal name (attack 47d6b91 L1).
+  arm database id-beats-name
+  [ "$(j 'o.scaffold.ok + " " + o.made.join(",")')" = "true o2" ] || { echo "$DONE"; false; }
+  # An org without a usable id is a coded refusal, never a bare error (attack 47d6b91 L2).
+  arm database org-no-id
+  [ "$(j 'o.scaffold.code + " " + o.creates')" = "ORG_BAD_ANSWER 0" ] || { echo "$DONE"; false; }
 }
 
 @test "launch-contract: a named org scopes the lookup -- a same-named project in another org is not adopted (F6, ADR-1773)" {

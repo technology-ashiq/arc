@@ -91,21 +91,25 @@ const seen = (orgs) => orgs.slice(0, SEEN_CAP).map((o) => `${say(o.name, 60)} (i
 async function org(ctx) {
   const want = named(ctx);
   const orgs = list((await sb(ctx, "GET", "/organizations")).body);
+  // An org with no usable id is refused by name, never a bare error (attack 47d6b91 L2).
+  const bad = orgs.find((o) => typeof o.id !== "string" || !o.id);
+  if (bad) throw refuse("ORG_BAD_ANSWER", `supabase listed organization ${JSON.stringify(say(bad.name, 60))} without a usable id`);
   if (!orgs.length) throw refuse("ORG_NONE", "the token sees no Supabase organization; it needs access to the venture's org");
-  const hit = want === null ? orgs : orgs.filter((o) => o.id === want || o.name === want);
+  const byId = want === null ? [] : orgs.filter((o) => o.id === want);
+  const hit = want === null ? orgs : byId.length ? byId : orgs.filter((o) => o.name === want);
   if (want !== null && hit.length !== 1)
     throw refuse("ORG_UNKNOWN", `venture supabase_org ${JSON.stringify(say(want, 80))} matches ${hit.length} of the ${orgs.length} organizations the token sees (${seen(orgs)}); exactly one is required`);
   if (hit.length !== 1)
     throw refuse("ORG_AMBIGUOUS", `the token sees ${orgs.length} organizations (${seen(orgs)}); one is required -- name it with supabase_org: <id> in the venture.yaml (ADR-1773)`);
-  if (typeof hit[0].id !== "string") throw new Error("supabase returned an organization without an id");
   return hit[0].id;
 }
 
 // A named org scopes the lookup: a same-named project in another org is not the venture's (ADR-1773). A same-named
 // project whose answer names no org is refused, never dropped -- dropping it would create a duplicate (attack 67c6e07 B1).
-async function find(ctx, name, orgId) {
+// Unnamed, the lookup stays account-wide as before ADR-1773; PROJECT_AMBIGUOUS still refuses two of one name.
+async function find(ctx, name, orgId = null) {
   const all = list((await sb(ctx, "GET", "/projects")).body).filter((p) => p.name === name);
-  if (orgId === null) return all;
+  if (orgId == null) return all;
   if (all.some((p) => typeof p.organization_id !== "string"))
     throw refuse("PROJECT_UNSCOPED", `supabase listed a project named ${name} without its organization; it cannot be told apart from another org's`);
   return all.filter((p) => p.organization_id === orgId);

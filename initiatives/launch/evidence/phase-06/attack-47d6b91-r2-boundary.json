@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:find (new orgId parameter, `if (orgId === null) return all`)",
+      "breaking_input": "Any caller of find() that still passes two arguments (find(ctx, name)), such as a teardown, plan or other verify path in this file that the diff does not show. orgId is then undefined, not null.",
+      "why": "The unscoped branch tests `=== null`, so undefined falls through. Any same-named project then either throws PROJECT_UNSCOPED or, once organization_id is present, is filtered against undefined and dropped. A teardown or plan that relied on find would then see no project and report absent, or throw a coded refusal out of a read. Only scaffold and probe were updated in the diff, so the unchanged callers are unchecked. This is the pattern 'an answer read as absent' plus 'every catch fix: list every code the guarded body can throw'.",
+      "fix": "Give the parameter a default (`orgId = null`) or use `orgId == null`. Grep the file for every find( call. Add a fixture for each caller, with and without a named org.",
+      "twin_of": "An order list answered without `items` was read as \"no order\", so a second order would be created -> every check-then-create: is an unreadable answer ever read as absent?"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "products/launch/providers/database/supabase.mjs:scaffold (`const orgId = named(ctx) === null ? null : await org(ctx)`) and find unscoped branch",
+      "breaking_input": "No supabase_org is set, the token sees 2 orgs, and one same-named project already exists in either org (the owner's own `arc-sandbox` in the first org).",
+      "why": "When unnamed, org() is skipped before find, and find returns every same-named project across the whole account. scaffold adopts it as `supabase-project-found` and never reaches the ORG_AMBIGUOUS refusal. ADR-1773 says launch never picks between orgs, but here the project's org is the pick, and the probe then writes launch_probe into whichever org's project matched. The same happens in probe(), so verify passes against it. This is the 'existence checked on one target set, the write covered another' pattern.",
+      "fix": "Always resolve org(ctx) first, even when unnamed, so several orgs without a name refuse before any lookup. Then scope find to that id in every case.",
+      "twin_of": "Existence checked on one target set, the write covered another -> every check-then-create: does the create's scope equal the check's?"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "products/launch/providers/database/supabase.mjs:org and seen (o.id / o.name on list elements)",
+      "breaking_input": "GET /organizations answers an array containing a null or non-object element, for example [null, {\"id\":\"o2\",\"name\":\"acme\"}], with supabase_org: acme.",
+      "why": "`orgs.filter((o) => o.id === want ...)` and seen() dereference each element, so a null throws a raw TypeError. That is an uncoded error, so verify's coded-refusal catch does not turn it into an answer, and it escapes as a throw. The same pattern was already fixed for `errors || []`, where the provider was trusted to send objects.",
+      "fix": "Drop or refuse non-object elements before filtering, for example `orgs.filter((o) => o && typeof o === \"object\")`, and refuse if any were dropped.",
+      "twin_of": "`errors || []` trusted the provider to send an array of objects -> every `x || []` over a response body"
+    }
+  ]
+}

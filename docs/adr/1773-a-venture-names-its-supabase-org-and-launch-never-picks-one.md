@@ -40,7 +40,10 @@ Option 3.
 - A named org also scopes the project lookup. Only projects in that org count as the venture's, so a same-named
   project in another org is never adopted, never counted as ambiguous, and never verified.
 - Launch never picks between orgs. A value that is not a non-empty string, an explicit `null` included, is `BAD_ORG`.
-  A name matches exactly, case and all; an id is the sure form. A token that sees no org is `ORG_NONE`.
+  A name matches exactly, case and all; an id is the sure form, and an id match wins over another org's equal name.
+  A token that sees no org is `ORG_NONE`; an org listed without a usable id is `ORG_BAD_ANSWER`.
+- Unnamed, the project lookup stays account-wide as it was before this ADR. Two projects of one name anywhere are
+  still `PROJECT_AMBIGUOUS`, and the create still needs exactly one org.
 - The refusals list every org's name and whole id, up to 20, then `+N more`.
 - If a same-named project comes back without its `organization_id`, it is refused as `PROJECT_UNSCOPED`. It is never
   dropped, because dropping it would make the next create a duplicate. The org is resolved once per scaffold or
