@@ -546,7 +546,7 @@ arm() {
   arm database two-orgs
   [ "$(j 'o.scaffold.code')" = "ORG_AMBIGUOUS" ] || { echo "$DONE"; false; }
   # The refusal says how to name one (ADR-1773).
-  [[ "$(j 'o.scaffold.message')" == *"name it with supabase_org: <id> in the venture.yaml"*"ashiq (id o1), acme (id o2)"* ]] || { echo "$DONE"; false; }
+  [[ "$(j 'o.scaffold.message')" == *"(ashiq (id o1), acme (id o2)); one is required -- name it with supabase_org: <id> in the venture.yaml (ADR-1773)" ]] || { echo "$DONE"; false; }
   arm database bad-region
   [ "$(j 'o.scaffold.code + " " + o.creates')" = "BAD_REGION 0" ] || { echo "$DONE"; false; }
 }
