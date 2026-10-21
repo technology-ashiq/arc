@@ -1,7 +1,7 @@
 // reads.mjs -- the door's Phase 04 read routes (face v2 Phase 04, REQ-06; ADR-1301, ADR-1312, ADR-1324, ADR-1338).
 //
 // Phase 03 drew every panel the door could not fill as NOT SERVED, naming the route it needed; the union of
-// those five lists is what this file serves, and nothing else (initiatives/face/evidence/phase-03/not-served-*.md).
+// those five lists is what this file serves, and nothing else (initiatives/face/archive/evidence-cycle16-2026-10-21/phase-03/not-served-*.md).
 // arc-dash.mjs keeps the ONE route table and the one serializer; this file holds the handlers it dispatches to.
 //
 // THE RULE EVERY HANDLER KEEPS: the door derives no truth of its own. Each file is parsed by the function the
