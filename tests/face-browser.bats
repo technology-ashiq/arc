@@ -359,8 +359,8 @@ heading_verdict() {
     # directions, against the lists module-frame holds equal to the folds.
     # Phase 04 (REQ-06): the NOT SERVED panels are the RESIDUE -- which may be empty -- and the panels a door route
     # now fills are a list of their own; both are held equal to the folds by module-frame, and to the page here.
-    list_distribution "$ARC_ROOT/initiatives/face/archive/evidence-cycle16-2026-10-21/phase-04" "residue.md" > "$BATS_TEST_TMPDIR/ns-expected"
-    list_distribution "$ARC_ROOT/initiatives/face/archive/evidence-cycle16-2026-10-21/phase-04" "served.md" > "$BATS_TEST_TMPDIR/sv-expected"
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "residue.md" > "$BATS_TEST_TMPDIR/ns-expected"
+    list_distribution "$ARC_ROOT/initiatives/face/evidence/phase-03" "served.md" > "$BATS_TEST_TMPDIR/sv-expected"
     # Phase 05 (ADR-1339): Phase 03's cards minus the ones a work-door op retired -- the one list module-frame holds
     # equal to the folds AND to Phase 03's rows minus the registry's retirements.
     list_distribution "$ARC_ROOT/initiatives/face/archive/evidence-cycle16-2026-10-21/phase-05" "verbs-pending.md" > "$BATS_TEST_TMPDIR/vp-expected"

@@ -25,7 +25,7 @@ setup() {
 @test "discover-cluster: every test in the file is registered" {
   local declared
   declared=$(grep -c '^@test "discover-cluster: ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 7 ] || { echo "declared $declared, expected 7"; false; }
+  [ "$declared" -eq 8 ] || { echo "declared $declared, expected 8"; false; }
   [ "${#BATS_TEST_NAMES[@]}" -eq "$declared" ] || { echo "registered ${#BATS_TEST_NAMES[@]} of $declared"; false; }
 }
 
@@ -106,7 +106,7 @@ setup() {
   [ -z "$(ls -A "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null)" ] || { echo "something quarantined"; ls "$ARC_SPINE_ROOT/events/_quarantine"; false; }
 }
 
-@test "discover.hunt op: plan writes no receipt, apply lands run.completed, the niche never on argv, its file gone, HUNT_RUNNING" {
+@test "discover-cluster: the discover.hunt op -- plan writes no receipt, apply lands run.completed, the niche never on argv, its file gone, HUNT_RUNNING" {
   run node "$ARC_ROOT/tests/discover/hunt-op.mjs"
   [[ "$output" == *"RAN hunt-op checks"* ]] || { echo "the suite never started: $output"; false; }
   [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }

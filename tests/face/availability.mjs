@@ -105,7 +105,8 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
     !tree.unreadable && folded >= 36 && half.fields > 0 && half.findings.length === 0, `folded=${folded} fields=${half.fields} ${half.findings.slice(0, 3).join(" | ")}`);
   const ns15 = tree.modules.flatMap((m) => m.notServed || []);
   check("FOLDS: every NOT SERVED panel on the tree is not-instrumented or not-applicable and names an owner lane",
-    ns15.length >= 15 && ns15.every((n) => ["not-instrumented", "not-applicable"].includes(n.avail.availability) && n.avail.owner_lane !== ""), `n=${ns15.length}`);
+    // 14 since Cycle 17 Phase 03: the agents room's tier panel is served by /api/roster now (REQ-08).
+    ns15.length >= 14 && ns15.every((n) => ["not-instrumented", "not-applicable"].includes(n.avail.availability) && n.avail.owner_lane !== ""), `n=${ns15.length}`);
   // round 2 B1/B2/B3: a finding's text is one line, with the checkout's path withheld in every spelling.
   {
     const BS = String.fromCharCode(92);
