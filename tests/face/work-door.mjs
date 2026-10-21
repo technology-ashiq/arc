@@ -682,6 +682,23 @@ try {
       const m = OPS_MOD.lastMonths;
       check("lastMonths: 31 Dec 2026 offers 2026-12 down to 2026-01", JSON.stringify(m(new Date("2026-12-31T23:00:00+05:30"))) === JSON.stringify(["2026-12", "2026-11", "2026-10", "2026-09", "2026-08", "2026-07", "2026-06", "2026-05", "2026-04", "2026-03", "2026-02", "2026-01"]));
       check("lastMonths: 00:30 IST on 1 Jan 2027 is January, though UTC still reads December", m(new Date("2027-01-01T00:30:00+05:30"))[0] === "2027-01" && m(new Date("2027-01-01T00:30:00+05:30"))[11] === "2026-02");
+      // The month window is judged on the caller's clock (attack b0a4249 L1): a door at 2026-03 refuses 2025-02.
+      const close = OPS_MOD.OPS.find((o) => o.id === "money.close-month");
+      let at = "";
+      try { OPS_MOD.validateInput(close, { month: "2025-02" }, Date.parse("2026-03-10T12:00:00+05:30")); at = "ACCEPTED"; } catch (e) { at = e.code; }
+      let inside = "";
+      try { OPS_MOD.validateInput(close, { month: "2025-04" }, Date.parse("2026-03-10T12:00:00+05:30")); inside = "ACCEPTED"; } catch (e) { inside = e.code; }
+      check("close-month judges its window on the injected clock, not the wall clock", at === "BAD_INPUT" && inside === "ACCEPTED", `${at} ${inside}`);
+      // An unreadable campaigns store is FIELD_UNKNOWN at plan, never planned on (attack b0a4249 B3).
+      const leadsBefore = process.env.ARC_LEADS_STORE;
+      const badStore = join(tmp, "bad-leads");
+      mkdirSync(badStore, { recursive: true });
+      writeFileSync(join(badStore, "campaigns"), "not a directory");
+      process.env.ARC_LEADS_STORE = badStore;
+      let unread = "";
+      try { OPS_MOD.validateInput(OPS_MOD.OPS.find((o) => o.id === "leads.daily-send"), { campaign: "pilot" }); unread = "ACCEPTED"; } catch (e) { unread = e.code; }
+      if (leadsBefore === undefined) delete process.env.ARC_LEADS_STORE; else process.env.ARC_LEADS_STORE = leadsBefore;
+      check("a campaigns store that is a file, not a directory: FIELD_UNKNOWN, never planned on", unread === "FIELD_UNKNOWN", unread);
       check("lastMonths: 29 Feb 2028 offers 2028-02 down to 2027-03", m(new Date("2028-02-29T12:00:00+05:30"))[0] === "2028-02" && m(new Date("2028-02-29T12:00:00+05:30"))[11] === "2027-03" && m(new Date("2028-02-29T12:00:00+05:30")).length === 12);
       // Every field that names an existing venture, campaign or month is a picker, or a list checked against its source.
       const kindOf = (id, name) => { const o = OPS_MOD.OPS.find((x) => x.id === id); const f = o && o.fields.find((x) => x.name === name); return f ? f.type : "missing"; };

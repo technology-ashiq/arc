@@ -209,7 +209,7 @@ export function createWorkDoor(ctx, opts = {}) {
     if (body !== null && typeof body === "object" && !Array.isArray(body)) {
       for (const k of Object.keys(body)) if (k !== "input") throw new OpError("BAD_INPUT", `a plan takes { input }, not "${k}"`);
     } else throw new OpError("BAD_INPUT", "a plan takes { input: { ...fields } }");
-    const values = validateInput(op, /** @type {any} */ (body).input);
+    const values = validateInput(op, /** @type {any} */ (body).input, now());
     // A sim door answers against a fixture spine; a paid model called from one would spend real money to write a
     // receipt nobody can trust. The row says when its run is free (the mock driver); nothing else runs here.
     if (ctx.mode === "sim" && op.spends && !(typeof op.simSafe === "function" && op.simSafe(values)))
@@ -306,7 +306,7 @@ export function createWorkDoor(ctx, opts = {}) {
     // click -- a venture removed, a month rolled out of the window -- is refused before the claim, never applied.
     // A source that cannot be read stays FIELD_UNKNOWN; a value that left a list it was read from is OPTION_GONE, so the
     // owner can tell "the list moved" from "the list is unreadable" (attack 7d3f02f B4).
-    try { validateInput(op, p.values); } catch (e) {
+    try { validateInput(op, p.values, now()); } catch (e) {
       if (e instanceof OpError && e.code === "BAD_INPUT") throw new OpError("OPTION_GONE", `a value this plan was made with is no longer offered -- plan again. ${e.message}`);
       throw e;
     }
