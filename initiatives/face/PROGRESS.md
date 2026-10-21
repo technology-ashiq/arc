@@ -68,7 +68,7 @@ depends-on: —
 ## Now
 
 **CYCLE 17 PLANNED (2026-10-21) — waiting on the owner's two stamps:** the owner-ruling
-`01M5ER722G87D19PFDR7KFD48H` (the freeze exemption) and `approval.requested{gate: kickoff}`, both in
-the face inbox; then `/arc-phase-done 00` from the main clone
+`01M5ER722G87D19PFDR7KFD48H` (the freeze exemption) and the kickoff approval
+`01M5ESEN589HQAJAS7VZ4NPXMT` (`kickoff.done` = `01M5ESEMSQN7HH05QZ2W6J3SA2`), both on the canonical spine; then `/arc-phase-done 00` from the main clone
 on #449's evidence; then Phase 01 on `feat/face-v3-01-records-pickers`. Owner step before Phase 01's
 attack: the DeepSeek model id + `ARC_LLM_ENDPOINT` / `ARC_LLM_API_KEY` in his environment (ADR-1368).
