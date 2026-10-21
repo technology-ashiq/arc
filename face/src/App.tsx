@@ -485,7 +485,7 @@ export default function App() {
         </div>
       </main>
 
-      <Dock door={door} voiceOn={voiceOn} />
+      <Dock door={door} voiceOn={voiceOn} place={settingsOn ? '#settings' : openable ? openable.id : shownId ?? ''} />
     </div>
   )
   })()

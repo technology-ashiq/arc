@@ -32,6 +32,7 @@ import { unescapeDoorText } from "../../../lib/door.mjs";
  * @property {import("../../../lib/registry.mjs").NotServed} today
  * @property {{ isVerbPending: true, verb: string, sentence: string }} birthVerb
  * @property {OrgView} org
+ * @property {import("../../../ui/orgchart").OrgChartView} chart
  * @property {Read[]} reads
  */
 
@@ -294,6 +295,161 @@ export function fold(payloads, ctx) {
       "Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here.",
     ),
     org,
+    chart: foldChart(orgWhy === null ? payloadOf(payloads, orgRead) : { state: "refused", code: "READ_REFUSED", human: orgWhy }, ctx.picks ?? {}),
     reads,
+  };
+}
+
+// The org chart (face v3 P02, FV3-D): Owner -> CEO -> department boxes -> role chips. Every style, label, filter and
+// selected flag is chosen here so the View and ui/orgchart.tsx only map. Colours are tokens.
+/** @typedef {import("../../../ui/orgchart").OrgChartView} OrgChartView */
+
+const CHIP_STYLE = Object.freeze({
+  agent: { background: "rgba(var(--accent-rgb), 0.18)", border: "1px solid var(--accent-line)", color: "var(--text-1)" },
+  script: { background: "rgba(var(--accent-rgb), 0.09)", border: "1px solid var(--accent-line)", color: "var(--text-1)" },
+  skill: { background: "rgba(var(--blue-rgb), 0.14)", border: "1px solid rgba(var(--blue-rgb), 0.45)", color: "var(--text-1)" },
+  process: { background: "rgba(var(--blue-rgb), 0.08)", border: "1px solid rgba(var(--blue-rgb), 0.40)", color: "var(--text-1)" },
+  human: { background: "rgba(var(--violet-rgb), 0.16)", border: "1px solid rgba(var(--violet-rgb), 0.50)", color: "var(--text-1)" },
+  partial: { background: "rgba(var(--amber-rgb), 0.12)", border: "1px solid rgba(var(--amber-rgb), 0.50)", color: "var(--text-1)" },
+  vacant: { background: "transparent", border: "1px dashed var(--line-2)", color: "var(--text-3)" },
+});
+const LEGEND = Object.freeze([
+  { key: "agent", label: "agent" }, { key: "script", label: "script" }, { key: "skill", label: "skill" }, { key: "process", label: "process" },
+  { key: "human", label: "human" }, { key: "partial", label: "partial" }, { key: "vacant", label: "vacant" },
+]);
+const FILTERS = Object.freeze([
+  { value: "all", label: "All" }, { value: "vacant", label: "Vacant" }, { value: "human", label: "Human" }, { value: "staffed", label: "Staffed" },
+]);
+const SELECTED_RING = "0 0 0 2px var(--accent)";
+
+/** The chip class a role is drawn in: its state first (vacant/human/partial), then a staffed seat's kind. */
+function chipClass(/** @type {string} */ state, /** @type {string} */ seat) {
+  if (state === "vacant" || seat === "vacant") return "vacant";
+  if (state === "human" || seat === "human") return "human";
+  if (state !== "staffed") return "partial";
+  return Object.hasOwn(CHIP_STYLE, seat) ? seat : "agent";
+}
+
+/**
+ * @param {Payload} p  the /api/org payload
+ * @param {Record<string, string>} picks  the View's picks: `role` (an open card) and `orgFilter`
+ * @returns {OrgChartView}
+ */
+export function foldChart(p, picks) {
+  const filter = FILTERS.some((x) => x.value === picks["orgFilter"]) ? String(picks["orgFilter"]) : "all";
+  const picked = typeof picks["role"] === "string" ? picks["role"] : "";
+  const filters = FILTERS.map((x) => {
+    const isOn = x.value === filter;
+    return {
+      key: x.value, label: x.label, value: x.value, isOn,
+      style: isOn
+        ? { background: "var(--accent)", color: "var(--on-accent)", border: "1px solid var(--accent)" }
+        : { background: "transparent", color: "var(--text-2)", border: "1px solid var(--line-2)" },
+    };
+  });
+  const legend = LEGEND.map((l) => ({ key: l.key, label: l.label, style: { ...CHIP_STYLE[/** @type {keyof typeof CHIP_STYLE} */ (l.key)] } }));
+  /** @type {import("../../../ui/orgchart").OrgCard} */
+  const closed = { isOpen: false, title: "", id: "", tag: "", tagStyle: {}, lines: [], hint: "Pick a role chip to open its card: who sits it, who it reports to, and its scorecard." };
+  /** @type {OrgChartView} */
+  const blank = { isShown: false, owner: { label: "Owner", sub: "" }, ceo: { label: "CEO", sub: "" }, summary: "", legend, filters, depts: [], card: closed };
+  if (p.state !== "ok") return blank;
+  const body = isObj(p.data) ? /** @type {Record<string, unknown>} */ (p.data) : {};
+  const chart = isObj(body["chart"]) ? /** @type {Record<string, unknown>} */ (body["chart"]) : null;
+  const depts = chart && Array.isArray(chart["departments"]) ? chart["departments"].filter(isObj).map((d) => /** @type {Record<string, unknown>} */ (d)) : null;
+  if (body["schema"] !== 1 || !depts) return blank;
+
+  /** @type {{ dept: string, deptName: string, r: Record<string, unknown> }[]} */
+  const all = [];
+  for (const d of depts) {
+    for (const r of (Array.isArray(d["roles"]) ? d["roles"] : []).filter(isObj)) all.push({ dept: str(d["dept"]), deptName: str(d["name"]) || str(d["dept"]), r: /** @type {Record<string, unknown>} */ (r) });
+  }
+  const byId = new Map(all.map((x) => [str(x.r["id"]), x]));
+  // The CEO is the role most others report to (reports_to as /api/org served it); the owner is who the CEO reports to.
+  /** @type {Map<string, number>} */
+  const tally = new Map();
+  for (const x of all) { const t = str(x.r["reports_to"]); if (byId.has(t)) tally.set(t, (tally.get(t) ?? 0) + 1); }
+  const ceoId = [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? "";
+  const ceo = byId.get(ceoId);
+  const ownerRef = ceo ? str(ceo.r["reports_to"]) : "";
+
+  const sc = isObj(body["scorecards"]) ? /** @type {Record<string, unknown>} */ (body["scorecards"]) : {};
+  const scoreRows = sc["state"] === "ok" && Array.isArray(sc["rows"]) ? sc["rows"].filter(isObj).map((r) => /** @type {Record<string, unknown>} */ (r)) : [];
+  const scoreOf = new Map(scoreRows.map((r) => [str(r["role"]), r]));
+
+  const keep = (/** @type {string} */ cls) => filter === "all" || (filter === "staffed" ? !["vacant", "human", "partial"].includes(cls) : cls === filter);
+
+  const deptBoxes = depts.map((d, i) => {
+    const dept = str(d["dept"]);
+    const roles = (Array.isArray(d["roles"]) ? d["roles"] : []).filter(isObj).map((r) => /** @type {Record<string, unknown>} */ (r));
+    const ids = new Set(roles.map((r) => str(r["id"])));
+    // The head is the role others in this department report to; a department holding the CEO is headed by the CEO.
+    /** @type {Map<string, number>} */
+    const inner = new Map();
+    for (const r of roles) { const t = str(r["reports_to"]); if (ids.has(t)) inner.set(t, (inner.get(t) ?? 0) + 1); }
+    const innerTop = [...inner.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? "";
+    const headId = innerTop || (ids.has(ceoId) ? ceoId : "");
+    const head = roles.find((r) => str(r["id"]) === headId);
+    const n = { staffed: 0, vacant: 0, human: 0, partial: 0 };
+    for (const r of roles) {
+      const cls = chipClass(str(r["state"]), str(r["seat"]));
+      if (cls === "vacant") n.vacant++; else if (cls === "human") n.human++; else if (cls === "partial") n.partial++; else n.staffed++;
+    }
+    const countParts = [`${fmtInt(roles.length)} roles`, `${fmtInt(n.staffed)} staffed`, `${fmtInt(n.vacant)} vacant`];
+    if (n.human > 0) countParts.push(`${fmtInt(n.human)} human`);
+    if (n.partial > 0) countParts.push(`${fmtInt(n.partial)} partial`);
+    const ordered = head ? [head, ...roles.filter((r) => r !== head)] : roles;
+    const chips = ordered.map((r, j) => {
+      const id = str(r["id"]);
+      const cls = chipClass(str(r["state"]), str(r["seat"]));
+      const isHead = r === head;
+      const isSelected = id !== "" && id === picked;
+      /** @type {Record<string, string>} */
+      const style = { ...CHIP_STYLE[/** @type {keyof typeof CHIP_STYLE} */ (cls)] };
+      if (isHead) style["fontWeight"] = "700";
+      if (isSelected) style["boxShadow"] = SELECTED_RING;
+      return {
+        key: `${i}-${j}-${id}`, id, label: str(r["title"]) || id, tag: isHead ? `head · ${cls}` : cls, state: cls,
+        title: `${str(r["title"])} (${id}) · ${str(r["state"])} · ${str(r["seat"])}`,
+        pick: isSelected ? "" : id, style, isHead, isSelected, cls,
+      };
+    }).filter((c) => keep(c.cls)).map(({ cls: _cls, ...c }) => c);
+    return {
+      key: `${i}-${dept}`, dept, name: str(d["name"]) || dept, counts: countParts.join(" · "),
+      head: head ? `head: ${str(head["title"]) || headId}` : ceo ? `reports straight to ${str(ceo.r["title"]) || ceoId}` : "no head named",
+      isEmpty: chips.length === 0, empty: `no ${filter} role here`, chips,
+    };
+  });
+
+  const shown = deptBoxes.reduce((s, d) => s + d.chips.length, 0);
+  const summary = `${fmtInt(shown)} of ${fmtInt(all.length)} roles shown · ${fmtInt(deptBoxes.length)} departments`;
+
+  const sel = byId.get(picked);
+  let card = closed;
+  if (sel) {
+    const r = sel.r;
+    const cls = chipClass(str(r["state"]), str(r["seat"]));
+    const to = str(r["reports_to"]);
+    const toRole = byId.get(to);
+    const s = scoreOf.get(str(r["id"]));
+    const verdict = s ? (s["staffed"] === true && str(s["verdict"]) ? `${str(s["verdict"]).toUpperCase()}${str(s["why"]) ? ` · ${str(s["why"])}` : ""}${str(s["due"]) ? ` · ${str(s["due"])}` : ""}` : "no verdict -- the seat is not staffed") : "no scorecard row served for this role";
+    card = {
+      isOpen: true, title: str(r["title"]) || picked, id: picked, tag: `state ${str(r["state"])} · seat ${str(r["seat"])}`,
+      tagStyle: { ...CHIP_STYLE[/** @type {keyof typeof CHIP_STYLE} */ (cls)] },
+      lines: [
+        { key: "dept", k: "Department", v: sel.deptName },
+        { key: "who", k: "Who sits it", v: whoSits(r).who },
+        { key: "to", k: "Reports to", v: to ? (toRole ? `${str(toRole.r["title"])} (${to})` : to) : "not named on the card" },
+        { key: "verdict", k: "Scorecard verdict", v: verdict },
+        { key: "receipts", k: "Receipts", v: s ? receiptsLine(s) : "no evidence" },
+      ],
+      hint: closed.hint,
+    };
+  }
+
+  return {
+    isShown: true,
+    owner: { label: "Owner", sub: ownerRef || "the owner" },
+    ceo: { label: ceo ? str(ceo.r["title"]) || ceoId : "CEO", sub: ceo ? `${ceoId} · ${fmtInt(tally.get(ceoId) ?? 0)} report in` : "no role is reported to" },
+    summary, legend, filters, depts: deptBoxes, card,
   };
 }

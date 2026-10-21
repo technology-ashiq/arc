@@ -13,7 +13,7 @@
 //   - the chips are ask.mjs's EXAMPLE_QUESTIONS, the questions the deterministic reader is known to
 //     reach, not v0.7's room-keyed table -- a shell file names no room;
 //   - the front door has its own bar in its own neon look (frontdoor/FrontDoorAsk.tsx); both run useAsk.
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArrowRight, Microphone, X } from '@phosphor-icons/react'
 import { EXAMPLE_QUESTIONS } from '../lib/ask.mjs'
@@ -22,8 +22,11 @@ import type { Door } from '../lib/door.mjs'
 import { UI } from '../ui/kit'
 import { useAsk } from './useAsk'
 
-export default function Dock({ door, voiceOn }: { door: Door; voiceOn: boolean }) {
+/** `place` names the page shown (a room id, or Settings): when it changes the answer card closes, so an answer never
+ *  stays over a room it was not asked in (face v3 P04, FV3-G). The draft is kept. */
+export default function Dock({ door, voiceOn, place }: { door: Door; voiceOn: boolean; place: string }) {
   const { draft, setDraft, state, ask, voice, press, micShown, close } = useAsk(door, voiceOn)
+  useEffect(() => { close() }, [place, close])
   const [focused, setFocused] = useState(false)
   const blurTimer = useRef<number | undefined>(undefined)
 

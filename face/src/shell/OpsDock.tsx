@@ -17,7 +17,8 @@ import {
 import type { OpCard, OpState } from '../lib/ops.mjs'
 import { Btn, Chip, Field, MONO, Panel, PanelTitle, PickRow, Receipt, TextInput, UI } from '../ui/kit'
 
-export default function OpsDock({ ops, door, onApplied }: { ops: readonly unknown[]; door: Door; onApplied: () => void }) {
+// `only` draws just the card with that op id (the action drawer, FV3-A); `bare` drops the section chrome around the cards.
+export default function OpsDock({ ops, door, onApplied, only, bare = false }: { ops: readonly unknown[]; door: Door; onApplied: () => void; only?: string; bare?: boolean }) {
   const [registry, setRegistry] = useState<unknown>(null)
   const [loadError, setLoadError] = useState('')
   useEffect(() => {
@@ -31,8 +32,18 @@ export default function OpsDock({ ops, door, onApplied }: { ops: readonly unknow
     return () => ac.abort()
   }, [door])
 
-  const cards = opCards(ops, registry)
+  const cards = opCards(ops, registry).filter((c) => only === undefined || c.id === only)
   if (cards.length === 0) return null
+  if (bare) {
+    return (
+      <div data-ops-dock={only ?? 'bare'}>
+        {loadError ? <p className="mb-3 text-[12px]" style={{ fontFamily: MONO, color: 'var(--red)' }}>ops list refused: {loadError}</p> : null}
+        <div className="space-y-4">
+          {cards.map((c) => <OpCardView key={c.id} card={c} door={door} onApplied={onApplied} />)}
+        </div>
+      </div>
+    )
+  }
   return (
     <section data-ops-dock className="mt-6">
       <Panel>

@@ -22,6 +22,12 @@ import IndexRoom from '../rooms/IndexRoom'
 import { Failure } from '../ui/legacy'
 import OpsDock from './OpsDock'
 import SessionDock from './SessionDock'
+import ActionStrip from './ActionStrip'
+import ActionDrawer from './ActionDrawer'
+import { opCards } from '../lib/ops.mjs'
+import { sessionCards } from '../lib/sessions.mjs'
+import { currentTab, frameTabs, itemKey, stripItems, tabLabel } from '../lib/frame.mjs'
+import type { FrameTab } from '../lib/frame.mjs'
 import { MONO, UI } from '../ui/kit'
 import { AvailabilityCountsContext } from '../ui/availability-context'
 
@@ -172,6 +178,29 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
     [door, m, dropAll],
   )
 
+  // face v3 P01 (FV3-A/B): the strip and the tabs need the room's op labels and session verbs. These are reads only --
+  // the docks read the same registries again for their own cards, and nothing here starts or plans anything.
+  const [opsRegistry, setOpsRegistry] = useState<unknown>(null)
+  const [sessionRegistry, setSessionRegistry] = useState<unknown>(null)
+  useEffect(() => {
+    const ac = new AbortController()
+    setOpsRegistry(null)
+    setSessionRegistry(null)
+    if (m.ops.length > 0) door.ops(ac.signal).then((r: unknown) => { if (!ac.signal.aborted) setOpsRegistry(r) }).catch(() => { /* the dock names the refusal */ })
+    door.sessions(ac.signal).then((r: unknown) => { if (!ac.signal.aborted) setSessionRegistry(r) }).catch(() => { /* the dock names the refusal */ })
+    return () => ac.abort()
+  }, [door, m])
+  const strip = useMemo(() => stripItems(opCards(m.ops, opsRegistry), sessionCards(m.id, sessionRegistry)), [m, opsRegistry, sessionRegistry])
+  const sessionCount = strip.filter((it) => it.kind === 'session').length
+  const tabs = frameTabs(m.ops.length, sessionCount)
+  // Both are held against the room they were picked in, so a room change opens on Overview with no drawer.
+  const [picked, setPicked] = useState<{ room: string; tab: string } | null>(null)
+  const [drawer, setDrawer] = useState<{ room: string; key: string } | null>(null)
+  const tab = currentTab(picked, m.id, tabs)
+  const openKey = drawer && drawer.room === m.id ? drawer.key : ''
+  const openItem = strip.find((it) => itemKey(it) === openKey)
+  const closeDrawer = useCallback(() => setDrawer(null), [])
+
   // Phase 15 (ADR-1354): the header's unknown and not-instrumented counts, taken over what this fold returned.
   const counts = useMemo(() => (folded.ok ? availabilityCountsOf(folded.f) : { unknown: 0, notInstrumented: 0 }), [folded])
   const viewCtx = useMemo((): ModuleViewContext => ({ ...ctx, picks, onPick, onAct, onReread }), [ctx, picks, onPick, onAct, onReread])
@@ -184,6 +213,26 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
   const problems = [...(leaks.length ? [keyLeakSentence(leaks)] : []), ...[...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale].map(scrubText)]
   return (
     <>
+      {tabs.length > 1 ? (
+        <div role="tablist" aria-label="Room views" data-frame-tabs={tabs.join(' ')} className="mb-3 flex items-center gap-1" style={{ borderBottom: '1px solid var(--line-1)' }}>
+          {tabs.map((t: FrameTab) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              data-frame-tab={t}
+              aria-selected={t === tab}
+              onClick={() => setPicked({ room: m.id, tab: t })}
+              className="h-[34px] px-3 -mb-px text-[13px] cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)"
+              style={{ fontFamily: UI, fontWeight: t === tab ? 600 : 500, color: t === tab ? 'var(--text-1)' : 'var(--text-3)', borderBottom: `2px solid ${t === tab ? 'var(--accent)' : 'transparent'}` }}
+            >
+              {tabLabel(t)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {/* FV3-A: every verb of the room sits here, above the content; a click opens the drawer holding that one form. */}
+      <ActionStrip items={strip} open={openKey} onOpen={(key) => setDrawer({ room: m.id, key })} />
       {problems.length > 0 && (
         <p data-read-problem={problems.length} className="mb-3 text-[12px] leading-[18px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>
           {problems.map((p) => (
@@ -193,15 +242,28 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
           ))}
         </p>
       )}
-      <AvailabilityCountsContext.Provider value={counts}>
-        <View f={folded.f} ctx={viewCtx} />
-      </AvailabilityCountsContext.Provider>
-      {/* Phase 05 (ADR-1339): the room's ops, if its ops.mjs names any. A run that lands drops the room's reads, so the
-          receipt shows in the room without a reload. */}
-      {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
-      {/* Phase 06 (REQ-08, ADR-1326): the room's session verbs, if the door's registry names any for it. It reads on
-          mount and starts nothing: a session starts only from its Start button's click. */}
-      <SessionDock roomId={m.id} door={door} />
+      {tab === 'overview' ? (
+        <AvailabilityCountsContext.Provider value={counts}>
+          <View f={folded.f} ctx={viewCtx} />
+        </AvailabilityCountsContext.Provider>
+      ) : (
+        <div data-frame-work={m.id}>
+          {/* Phase 05 (ADR-1339): the room's ops. A run that lands drops the room's reads, so the receipt shows without a reload. */}
+          {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
+          {/* Phase 06 (REQ-08, ADR-1326): the room's session verbs. It reads on mount and starts nothing: a session starts
+              only from its Start button's click. */}
+          <SessionDock roomId={m.id} door={door} />
+        </div>
+      )}
+      {openItem ? (
+        <ActionDrawer key={openKey} title={openItem.label} kind={openItem.kind === 'op' ? 'op' : 'session'} onClose={closeDrawer}>
+          {openItem.kind === 'op' ? (
+            <OpsDock ops={m.ops} door={door} onApplied={dropAll} only={openItem.id} bare />
+          ) : (
+            <SessionDock roomId={m.id} door={door} only={openItem.id} bare />
+          )}
+        </ActionDrawer>
+      ) : null}
     </>
   )
 }

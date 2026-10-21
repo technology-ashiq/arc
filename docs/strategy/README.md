@@ -769,6 +769,12 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     block's REQ-03 row and its P00 kill question are retired, its REQs become **REQ-14…19**, its ADRs
     start at **2023**, the new kill question is "a fresh clone opened in OpenCode lists `/arc-resume`",
     and P00 also closes Cycle 2's debt rows 22-24. DST-N…Q unchanged; still DRAFT for owner review.
+33. **2026-10-21:** `plans/PLAN-face-v3.md` added (face v3 — "Hands First"), owner-instructed. A live
+    audit of `main` @ `17c07a5` over the canonical spine found the work door real but drawn last
+    (`RoomFrame` renders View → OpsDock → SessionDock; org 7,732 px tall, its forms ~6,000 px down),
+    6 of 15 session buttons with no process behind them, and 13 of 32 ops rejecting their own
+    placeholder. Decisions FV3-A…H; Tier S, the owner's 30-minute timebox. `PLAN-face-v2.md` is NOT
+    superseded. File map 30 → 31 files, 28 → 29 full PLANs.
 
 33. **2026-10-20:** `plans/PLAN-launch-mobile.md` added (`launch` mobile v1.0: iOS + Android as one more
     slot group — Expo shell → signed builds → TestFlight / Play internal → store listing → a gated public

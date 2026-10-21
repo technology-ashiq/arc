@@ -292,7 +292,7 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "toolbelt", verb: "Pin a tool to the top of this room" }),
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "tool", label: "Tool", placeholder: "command:arc-review, or agent:code-reviewer", type: "text", max: 120, pattern: `(${TOOL_SECTIONS.join("|")}):[A-Za-z0-9][A-Za-z0-9._/() -]{0,100}`, required: true }),
+      Object.freeze({ name: "tool", label: "Tool", placeholder: "command:arc-review", type: "text", max: 120, pattern: `(${TOOL_SECTIONS.join("|")}):[A-Za-z0-9][A-Za-z0-9._/() -]{0,100}`, required: true }),
       Object.freeze({ name: "action", label: "Pin or unpin", placeholder: "", type: "select", options: Object.freeze(["pin", "unpin"]), required: true }),
     ]),
     ...emitOp("note.logged", (v) => ({ note: "toolbelt.pin", tool: v.tool, action: v.action })),
@@ -435,10 +435,10 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "money", verb: "Close the month" }),
     humanRun: true, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "month", label: "Month", placeholder: "YYYY-MM", type: "text", max: 7, pattern: "\\d{4}-(0[1-9]|1[0-2])", required: true }),
+      Object.freeze({ name: "month", label: "Month", placeholder: "2026-10", type: "text", max: 7, pattern: "\\d{4}-(0[1-9]|1[0-2])", required: true }),
       // Optional: a month no rail touched reconciles against nothing, and the close says so itself. When a rail DID
       // move money, arc-pnl refuses the close without its total -- that refusal is the gate, not this form.
-      Object.freeze({ name: "totals", label: "Provider totals", placeholder: "razorpay:INR=0 -- one per rail, space-separated", type: "text", max: 400, pattern: "[a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}( [a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}){0,7}", required: false }),
+      Object.freeze({ name: "totals", label: "Provider totals", placeholder: "razorpay:INR=0 mor:INR=0", type: "text", max: 400, pattern: "[a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}( [a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}){0,7}", required: false }),
     ]),
     plan: (v) => ({ script: "hq/arc-pnl.mjs", args: ["--close", v.month, ...(v.totals ? v.totals.split(" ").flatMap((t) => ["--reconcile-total", t]) : []), "--emit-plan"] }),
     apply: "emit-plan",
@@ -475,7 +475,7 @@ export const OPS = Object.freeze([
     // Human-run, like every op that writes a branch (ADR-1340): the owner ticks before it is written.
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "slug", label: "Venture", placeholder: "the venture's slug, lowercase", type: "text", max: 41, pattern: "[a-z][a-z0-9-]{1,40}", required: true }),
+      Object.freeze({ name: "slug", label: "Venture", placeholder: "myfitfolio", type: "text", max: 41, pattern: "[a-z][a-z0-9-]{1,40}", required: true }),
       Object.freeze({ name: "days", label: "Kill after days without revenue", placeholder: "90", type: "int", min: 1, max: 1000000, required: true }),
       Object.freeze({ name: "floor", label: "Kill under visits a month", placeholder: "100", type: "int", min: 1, max: 1000000, required: true }),
       Object.freeze({ name: "repository", label: "Its repository", placeholder: "private, separate repo", type: "text", max: 120, pattern: `(?!.*[|])${ONE_LINE}`, required: true }),
@@ -555,9 +555,9 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "concepts", verb: "Define a term" }),
     humanRun: true, spends: false, touchesFiles: true,
     fields: Object.freeze([
-      Object.freeze({ name: "term", label: "Term", placeholder: "the word, as the palette finds it", type: "text", max: 60, pattern: "(?!.*(//|\\.\\.|:[^ ]))[A-Za-z0-9][A-Za-z0-9 ./()?%:&+-]{0,59}", required: true }),
+      Object.freeze({ name: "term", label: "Term", placeholder: "kill line", type: "text", max: 60, pattern: "(?!.*(//|\\.\\.|:[^ ]))[A-Za-z0-9][A-Za-z0-9 ./()?%:&+-]{0,59}", required: true }),
       Object.freeze({ name: "room", label: "Room", placeholder: "", type: "select", get options() { return Object.freeze(conceptRooms()); }, required: true }),
-      Object.freeze({ name: "station", label: "Station", placeholder: "a stop on the room's line", type: "text", max: 40, pattern: "[A-Za-z0-9][A-Za-z0-9 .-]{0,39}", required: true }),
+      Object.freeze({ name: "station", label: "Station", placeholder: "ADR map", type: "text", max: 40, pattern: "[A-Za-z0-9][A-Za-z0-9 .-]{0,39}", required: true }),
     ]),
     plan: (v) => ({ script: "core/concept-define.mjs", args: ["--term", v.term, "--room", v.room, "--station", v.station, "--dry-run"] }),
     apply: (v) => ({ script: "core/concept-define.mjs", args: ["--term", v.term, "--room", v.room, "--station", v.station] }),
@@ -576,7 +576,7 @@ export const OPS = Object.freeze([
     // leavesMachine: mail leaves this machine. Without a flag for it a SIM door ran the real send (PR 5c round-1 attacks).
     humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
-      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "the campaign's name in the store", type: "text", max: 64, pattern: "[a-z0-9-]{1,64}", required: true }),
+      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "pilot", type: "text", max: 64, pattern: "[a-z0-9-]{1,64}", required: true }),
     ]),
     plan: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign, "--dry-run"] }),
     apply: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign] }),
@@ -595,7 +595,7 @@ export const OPS = Object.freeze([
     // proposal branch -- so a sim door refuses it (PR 5c round-1 attacks; "gitignored" is not "not in this checkout").
     humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
-      Object.freeze({ name: "venture", label: "Venture", placeholder: "the venture whose pages these are", type: "text", max: 64, pattern: "[a-z][a-z0-9-]{0,63}", required: true }),
+      Object.freeze({ name: "venture", label: "Venture", placeholder: "lexos", type: "text", max: 64, pattern: "[a-z][a-z0-9-]{0,63}", required: true }),
     ]),
     // The pages carry a real venture's contact facts, so they are rendered under the gitignored state directory, never
     // into this public tree; the facts themselves come from ARC_LEGAL_VENTURE_DIR, which the tool never prints.
@@ -615,7 +615,7 @@ export const OPS = Object.freeze([
     humanRun: true, spends: false, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "slug", label: "Slug", placeholder: "the-author-cannot-be-the-attacker", type: "text", max: 120, pattern: "[a-z0-9]([a-z0-9-]*[a-z0-9])?", required: true }),
-      Object.freeze({ name: "article", label: "The merged .mdx", placeholder: "the article file in the site repo's merged tree", type: "text", max: 400, pattern: `(?![\\\\/]{2})${ONE_LINE}\\.mdx`, required: true }),
+      Object.freeze({ name: "article", label: "The merged .mdx", placeholder: "src/content/blog/the-author-cannot-be-the-attacker.mdx", type: "text", max: 400, pattern: `(?![\\\\/]{2})${ONE_LINE}\\.mdx`, required: true }),
       Object.freeze({ name: "cluster", label: "Cluster", placeholder: "c-001", type: "text", max: 12, pattern: "c-[0-9]{3,9}", required: true }),
       Object.freeze({ name: "title", label: "Title", placeholder: "the title as published", type: "text", max: 300, pattern: ONE_LINE, required: true }),
       Object.freeze({ name: "pr", label: "Merged PR", placeholder: "2", type: "text", max: 10, pattern: "[1-9][0-9]{0,9}", required: true }),
@@ -634,7 +634,7 @@ export const OPS = Object.freeze([
     humanRun: true, spends: true, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "driver", label: "Driver", placeholder: "", type: "select", get options() { return Object.freeze(benchDrivers()); }, required: true }),
-      Object.freeze({ name: "model", label: "Model", placeholder: "the model id the driver takes", type: "text", max: 128, pattern: "[A-Za-z0-9][A-Za-z0-9._:/-]*", required: true }),
+      Object.freeze({ name: "model", label: "Model", placeholder: "sonnet", type: "text", max: 128, pattern: "[A-Za-z0-9][A-Za-z0-9._:/-]*", required: true }),
       // At least 1: a ceiling of 0 stops every attempt before it invokes anything (arc-run's own rule), so a run under it
       // measures nothing -- even on the mock driver, which spends 0 but still needs room to be called.
       Object.freeze({ name: "inr", label: "Spend ceiling, rupees", placeholder: "50", type: "int", min: 1, max: 50000, required: true }),
@@ -749,12 +749,12 @@ export const OPS = Object.freeze([
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true }),
-      Object.freeze({ name: "module", label: "Module", placeholder: "the product whose manifest declares the surface", type: "text", max: 64, pattern: "[a-z][a-z-]*", required: true }),
+      Object.freeze({ name: "module", label: "Module", placeholder: "growth", type: "text", max: 64, pattern: "[a-z][a-z-]*", required: true }),
       Object.freeze({ name: "surface", label: "Surface", placeholder: "hero-copy", type: "text", max: 64, pattern: "[a-z0-9][a-z0-9-]{0,63}", required: true }),
-      Object.freeze({ name: "target", label: "Surface file", placeholder: "the surface_file the manifest declares", type: "text", max: 300, pattern: "[A-Za-z0-9._()\\[\\]-]+(/[A-Za-z0-9._()\\[\\]-]+)*", required: true }),
+      Object.freeze({ name: "target", label: "Surface file", placeholder: "products/growth/hero-copy.md", type: "text", max: 300, pattern: "[A-Za-z0-9._()\\[\\]-]+(/[A-Za-z0-9._()\\[\\]-]+)*", required: true }),
       // Exactly two arms, champion then challenger: the pinned test compares one pair (ADR-0306).
       Object.freeze({ name: "arms", label: "Arms", placeholder: "+champion,+challenger", type: "text", max: 80, pattern: "\\+[a-z0-9][a-z0-9-]{0,31},\\+[a-z0-9][a-z0-9-]{0,31}", required: true }),
-      Object.freeze({ name: "split", label: "Split", placeholder: "optional -- the manifest's split", type: "text", max: 5, pattern: "[0-9]{1,2},[0-9]{1,2}", required: false }),
+      Object.freeze({ name: "split", label: "Split", placeholder: "50,50", type: "text", max: 5, pattern: "[0-9]{1,2},[0-9]{1,2}", required: false }),
       Object.freeze({ name: "ttl", label: "TTL, days", placeholder: "28", type: "int", min: 1, max: 365, required: false }),
     ]),
     plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveOpenArgs(v) }),
@@ -772,12 +772,12 @@ export const OPS = Object.freeze([
     humanRun: false, spends: false, touchesFiles: false,
     fields: Object.freeze([
       Object.freeze({ name: "experiment", label: "Experiment id", placeholder: "x-hero-copy-2", type: "text", max: 64, pattern: "x-[A-Za-z0-9][A-Za-z0-9._-]{0,62}", required: true }),
-      Object.freeze({ name: "unit", label: "Unit id", placeholder: "an opaque id, never an address", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
+      Object.freeze({ name: "unit", label: "Unit id", placeholder: "u-7f3a9c", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
       Object.freeze({ name: "metric", label: "Metric", placeholder: "signup_conversion", type: "text", max: 64, pattern: "[a-z][a-z0-9_]{0,63}", required: true }),
-      Object.freeze({ name: "value", label: "Value", placeholder: "1 for a success, 0 for none", type: "text", max: 32, pattern: "-?[0-9]+(\\.[0-9]+)?", required: true }),
-      Object.freeze({ name: "count", label: "Observations", placeholder: "how many observations the value covers", type: "int", min: 1, max: 100000000, required: true }),
+      Object.freeze({ name: "value", label: "Value", placeholder: "0.25", type: "text", max: 32, pattern: "-?[0-9]+(\\.[0-9]+)?", required: true }),
+      Object.freeze({ name: "count", label: "Observations", placeholder: "120", type: "int", min: 1, max: 100000000, required: true }),
       Object.freeze({ name: "window", label: "Window", placeholder: "2026-09-01..2026-09-07", type: "text", max: 22, pattern: "\\d{4}-\\d{2}-\\d{2}\\.\\.\\d{4}-\\d{2}-\\d{2}", required: true }),
-      Object.freeze({ name: "source", label: "Source id", placeholder: "where the number came from, as an opaque id", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
+      Object.freeze({ name: "source", label: "Source id", placeholder: "plausible-2026-09-07", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
     ]),
     plan: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveMeasureArgs(v) }),
     apply: (v) => ({ script: "evolve/arc-evolve.mjs", args: evolveMeasureArgs(v) }),
@@ -828,9 +828,9 @@ export const OPS = Object.freeze([
     fields: Object.freeze([
       Object.freeze({ name: "candidate", label: "Candidate", placeholder: "T-01", type: "text", max: 12, pattern: "T-[0-9]{2,9}", required: true }),
       Object.freeze({ name: "variants", label: "Variants", placeholder: "nameA,nameB", type: "text", max: 200, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}(,[A-Za-z0-9][A-Za-z0-9._-]{0,63}){1,7}", required: true }),
-      Object.freeze({ name: "fixtures", label: "Fixtures", placeholder: "at least three: f1,f2,f3", type: "text", max: 400, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}(,[A-Za-z0-9][A-Za-z0-9._-]{0,63}){2,31}", required: true }),
+      Object.freeze({ name: "fixtures", label: "Fixtures", placeholder: "f1,f2,f3", type: "text", max: 400, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}(,[A-Za-z0-9][A-Za-z0-9._-]{0,63}){2,31}", required: true }),
       Object.freeze({ name: "evidence", label: "Bundle path", placeholder: "initiatives/absorb/evidence/NAME", type: "text", max: 200, pattern: "initiatives/absorb/evidence/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*", required: true }),
-      Object.freeze({ name: "correlation", label: "Correlation", placeholder: "a new id -- a seal uses it up", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
+      Object.freeze({ name: "correlation", label: "Correlation", placeholder: "t-01-seal-1", type: "text", max: 64, pattern: "[A-Za-z0-9][A-Za-z0-9._-]{0,63}", required: true }),
     ]),
     plan: (v) => ({ script: "absorb/trial.mjs", args: ["--candidate", v.candidate, "--variants", v.variants, "--fixtures", v.fixtures, "--evidence", v.evidence, "--correlation", v.correlation, "--dry-run"] }),
     apply: (v) => ({ script: "absorb/trial.mjs", args: ["--candidate", v.candidate, "--variants", v.variants, "--fixtures", v.fixtures, "--evidence", v.evidence, "--correlation", v.correlation] }),
