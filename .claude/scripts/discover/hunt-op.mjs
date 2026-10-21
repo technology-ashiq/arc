@@ -8,7 +8,7 @@
 //
 //   ARC_HUNT_NICHE="invoice reminders" hunt-op.mjs [--emit] [--offline-fixture FILE]
 import { createHash } from "node:crypto";
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync, writeSync } from "node:fs";
+import { linkSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { spawnBounded } from "../core/spawn-bounded.mjs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ import { parseNiche } from "./arc-discover.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
 const DISCOVER = join(HERE, "arc-discover.mjs");
+const LOCK_MAX_MS = 150_000;
 const RECORDED = join(REPO, "tests", "discover", "fixtures", "recorded", "hn.json");
 
 /** The file names a niche is held under: derived from its hash, never from its text. @param {string} niche */
@@ -54,10 +55,34 @@ export function isScratchSpine(env = process.env, root = REPO) {
 
 /** The pid a lock names, if that process is alive: a lock left by a killed run is stale, never a wedge (B2). */
 function liveHolder(lock) {
-  let pid = 0;
-  try { pid = Number(readFileSync(lock, "utf8").trim()); } catch { return null; }
-  if (!Number.isInteger(pid) || pid <= 0) return null;
+  let pid = 0, at = 0;
+  try { [pid, at] = readFileSync(lock, "utf8").trim().split(" ").map(Number); } catch { return null; }
+  if (!Number.isInteger(pid) || pid <= 0 || !Number.isFinite(at)) return null;
+  // A lock older than any hunt can run is stale whatever its pid says: a reused pid never wedges the niche again
+  // (attack 54ad42f B2). A hunt is killed at 110 s; 150 s is that plus the time to settle.
+  if (Date.now() - at > LOCK_MAX_MS) return null;
   try { process.kill(pid, 0); return pid; } catch (e) { return /** @type {any} */ (e).code === "EPERM" ? pid : null; }
+}
+
+/**
+ * Take the lock atomically WITH its content: written to a private file, then hard-linked into place (link fails if the
+ * lock exists), so no contender ever reads an empty lock (attack 54ad42f B1). A stale lock is broken by renaming it
+ * away -- one rename wins -- never by a check-then-delete another contender could interleave.
+ * @param {string} lock @returns {"taken" | "running"}
+ */
+function takeLock(lock) {
+  const mine = `${lock}.${process.pid}.${Date.now()}`;
+  writeFileSync(mine, `${process.pid} ${Date.now()}`, { flag: "wx" });
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { linkSync(mine, lock); return "taken"; } catch (e) {
+        if (/** @type {any} */ (e).code !== "EEXIST") throw e;
+        if (liveHolder(lock) !== null) return "running";
+        try { renameSync(lock, `${lock}.stale.${process.pid}.${Date.now()}`); } catch (r) { if (/** @type {any} */ (r).code !== "ENOENT") throw r; }
+      }
+    }
+    return "running";
+  } finally { rmSync(mine, { force: true }); }
 }
 
 /** The state directory, as a real directory inside this repo: a link or junction there is refused (attack c551846 B3). */
@@ -78,20 +103,9 @@ async function main() {
   if (niche === null) { process.stderr.write("hunt-op: BAD_NICHE -- the niche must be 3-60 chars of lowercase letters, digits, spaces and hyphens\n"); return 2; }
   const p = nichePaths(niche);
   try { realStateDir(p.dir); } catch (e) { process.stderr.write(`hunt-op: ${/** @type {Error} */ (e).message}\n`); return 2; }
-  let lockFd;
-  for (let attempt = 0; attempt < 2 && lockFd === undefined; attempt++) {
-    try { lockFd = openSync(p.lock, "wx"); } catch (e) {
-      if (/** @type {any} */ (e).code !== "EEXIST") throw e;
-      if (liveHolder(p.lock) !== null) { process.stderr.write("hunt-op: HUNT_RUNNING -- a hunt for this niche is still running; wait for its receipt\n"); return 3; }
-      // A lock whose holder is dead is stale: cleared once, then taken (attack c551846 B2).
-      rmSync(p.lock, { force: true });
-      rmSync(p.file, { force: true });
-    }
-  }
-  if (lockFd === undefined) { process.stderr.write("hunt-op: HUNT_RUNNING -- the lock could not be taken\n"); return 3; }
-  writeSync(lockFd, String(process.pid));
+  if (takeLock(p.lock) === "running") { process.stderr.write("hunt-op: HUNT_RUNNING -- a hunt for this niche is still running; wait for its receipt\n"); return 3; }
   // A signal still clears the lock and the niche file (B2); the hunt tree is killed by spawnBounded on its own timeout.
-  const clear = () => { rmSync(p.file, { force: true }); try { closeSync(lockFd); } catch { /* closed */ } rmSync(p.lock, { force: true }); };
+  const clear = () => { rmSync(p.file, { force: true }); rmSync(p.lock, { force: true }); };
   const onSignal = () => { clear(); process.exit(130); };
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);

@@ -58,13 +58,17 @@ try {
 
   // A lock whose holder is dead is stale and is cleared: a killed run never wedges the niche (attack c551846 B2).
   mkdirSync(files.dir, { recursive: true });
-  writeFileSync(files.lock, "999999999");
+  writeFileSync(files.lock, `999999999 ${Date.now()}`);
   const stale = await door.plan("discover.hunt", { input: { niche: NICHE } });
   check("a stale lock (its pid dead) is cleared and the plan runs", stale.ok === true && !existsSync(files.lock), JSON.stringify(stale).slice(0, 200));
   // A hunt for this niche still running (its lock held by a live pid) refuses a second, and writes no niche file.
-  writeFileSync(files.lock, String(process.pid));
+  writeFileSync(files.lock, `${process.pid} ${Date.now()}`);
   const busy = await door.plan("discover.hunt", { input: { niche: NICHE } });
   check("a plan while a hunt for the niche runs is refused HUNT_RUNNING", busy.ok === false && /HUNT_RUNNING/.test(JSON.stringify(busy.refusal)) && !existsSync(files.file), JSON.stringify(busy).slice(0, 300));
+  // A lock held by a live pid but older than any hunt can run is stale: a reused pid never wedges (attack 54ad42f B2).
+  writeFileSync(files.lock, `${process.pid} ${Date.now() - 200_000}`);
+  const aged = await door.plan("discover.hunt", { input: { niche: NICHE } });
+  check("a lock older than any hunt is stale even when its pid is alive", aged.ok === true, JSON.stringify(aged).slice(0, 200));
   rmSync(files.lock, { force: true });
 } finally {
   rmSync(files.lock, { force: true });
@@ -72,4 +76,4 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 11 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 12 ? 0 : 1;

@@ -1,0 +1,86 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:79-86",
+      "breaking_input": "Two hunt-ops start for one niche at once, both find a stale lock (dead pid). A rmSync(lock) then removes the lock the other just created with openSync wx. Both pass the loop on attempt 2 or one takes the live lock deleted by the other.",
+      "why": "The stale break is not a critical section: check liveHolder, then rmSync, then wx create. Between the check and rmSync the other contender can create and write its own lock. This one then deletes the live lock and the niche file the live run is reading, so HUNT_RUNNING no longer guards both runs. The lock file is also created empty and the pid is written after, so a contender reading it in that window sees pid 0 and treats it as stale.",
+      "fix": "Create the lock with the pid in one step (write to a temp file and link/rename, or open wx and treat an empty lock younger than a few seconds as held). Break a stale lock by renaming it to a unique name and re-checking that name's pid before deleting.",
+      "twin_of": "A stale break in three steps -> a lock's break is a critical section of its own"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:80",
+      "breaking_input": "A hunt-op was killed by SIGKILL, the OS reused its pid for an unrelated long-lived process. The next hunt reads the lock, process.kill(pid,0) succeeds, and every hunt for that niche is refused HUNT_RUNNING until that process dies.",
+      "why": "Liveness by pid alone, with no second fact (start time, host). The lock is never cleared and the wedge is back, just rarer. Also a pid written by a different host over a shared checkout means nothing.",
+      "fix": "Write the pid plus a start timestamp and the host name into the lock; treat a lock older than the hunt timeout plus a grace (about 2 min) as stale whatever the pid says.",
+      "twin_of": "A reused pid wedged the lock forever, and another machine's fresh spine lock was broken -> a pid means nothing off its own host, and nothing after its own lifetime"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:96-101",
+      "breaking_input": "hunt-op is killed by SIGKILL, or by the door's own timeout using a non-tree kill, while spawnBounded's child tree is running. The signal handlers never run and the finally never runs.",
+      "why": "The hunt tree keeps running with no parent, still reading the niche file; the lock names a dead pid so the next hunt treats it as stale, deletes the niche file under the orphan, and starts a second hunt for the same niche. Two hunts can then emit receipts, and the hunt-op's own death does not end its tree.",
+      "fix": "Have the child's lifetime tied to the parent (detached group the door kills as a tree, or the child watching the parent pid), and record the child pid in the lock so a stale check also asks whether the child is alive.",
+      "twin_of": "A descendant outliving a settled run -> a run is over when its tree is"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:96-97",
+      "breaking_input": "SIGINT arrives while spawnBounded is running. onSignal calls clear() and process.exit(130) at once.",
+      "why": "process.exit does not wait for the hunt tree to die, so the lock and niche file are removed under a live child tree, and process.exit is called behind pending stdout/stderr writes (the process.exit row twin). Same lock-released-before-tree-dead defect the r1 fix claimed to close.",
+      "fix": "On a signal, abort spawnBounded (kill the tree), await its settle, then clear and set process.exitCode.",
+      "twin_of": "A lock released while the tree it guarded was still alive -> a lock is released after a tree kill that settles only when the whole tree is dead"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:92",
+      "breaking_input": "A niche file left by a crash, or a symlink planted at niche-<hash>.txt inside the state dir, with the lock absent. writeFileSync follows the link and overwrites its target.",
+      "why": "The state directory is checked, but the file inside is opened with a plain write that follows a link; the hash name is predictable from the niche text. Only the niche text lands, but the write goes outside the fence.",
+      "fix": "Open the niche file with flag wx after removing a stale one under the lock, or lstat it first and refuse a link; write via the fd.",
+      "twin_of": "Check-then-open on a caller's path -> decide on the descriptor you read from"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:93-95",
+      "breaking_input": "Disk full or permission error on writeFileSync, or openSync failing with EACCES/ENOSPC on the lock.",
+      "why": "Both throw out of main uncaught (the lock open rethrows non-EEXIST; the write is inside try without a catch), so top-level await rejects and Node prints a stack with the machine's absolute paths and exits with its own code, not a named refusal.",
+      "fix": "Catch at the edge of main, print one line naming the errno code without the path, and return 1.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:34-40",
+      "breaking_input": "ARC_SPINE_ROOT is a relative path or a path through a junction/symlink pointing into the repo, or differs only by 8.3 short names or a trailing separator on Windows.",
+      "why": "isScratchSpine uses resolve plus lowercase only, never realpath, so a scratch-looking path that really lands inside the canonical repo spine reads as scratch and the hunt uses recorded HN while emitting to the real spine. Lowercasing also makes POSIX paths that differ only by case compare equal, wrongly refusing a real scratch dir. A relative root is also resolved per process cwd.",
+      "fix": "Require an absolute path, realpath both sides (the existing ancestor if absent), compare with the platform's case rule, and compare with relative() rather than a prefix.",
+      "twin_of": "A containment check that only looks for `..`, and compare a realpath with a realpath -> resolve every existing ancestor"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:218",
+      "breaking_input": "A plan whose env holds ARC_HUNT_NICHE is passed to runTool as env; for a row with no env, planCmd.env is undefined and {} is passed, but a future row's env could carry names like PATH or ARC_SPINE_ROOT.",
+      "why": "The door hands a registry row's env straight to runTool with no allow-list or no refusal of steering and identity names, so an op row can override the spine or git location the door set. The B5 fix named by the prior round, a test that the plan response and journal never carry the niche, is not in this diff.",
+      "fix": "Accept only env keys with a declared op-level allow-list (ARC_HUNT_NICHE), refuse the rest by name, spread the door's trusted env last, and add a test that the plan body, journal and refusals do not contain the niche.",
+      "twin_of": "A spread order that let a caller's click win -> Spread the trusted value last, and refuse the untrusted key"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": "tests/discover/hunt-op.mjs:63-66",
+      "breaking_input": "The suite writes a stale lock holding pid 999999999 and a live one holding its own pid; both arms are set up by hand.",
+      "why": "No arm kills a real hunt mid-run, no arm exercises the 110 s timeout or a signal path, and none proves the niche is absent from the real child's argv; the B2/B7 recovery claims rest on hand-planted lock files. A pid test of 999999999 can also be a valid pid on some systems.",
+      "fix": "Add an arm that runs hunt-op with a slow fixture, sends it SIGTERM, then asserts the lock and file are gone and the child tree is dead; read the child's real argv; use a pid from a process already reaped.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails"
+    }
+  ]
+}
