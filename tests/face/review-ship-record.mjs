@@ -76,9 +76,9 @@ try {
   const bodySteps = (proc.split("\nbody: |")[1] || "").split("\n").filter((l) => /`[^`]+`/.test(l) && /^\s+\d\./.test(l)).join("\n");
   check("no step or command of ship-run, and no line of the writer, deploys, publishes or pushes",
     commands.every((c) => !DEPLOY.test(c)) && !DEPLOY.test(bodySteps) && !DEPLOY.test(writerCode)
-    // The writer's one git call reads HEAD; any other git verb from it fails this (round-1 B3 added the read).
-    && [...writerCode.matchAll(/spawnSync\("git", \[([^\]]*)\]/g)].every((m) => m[1].trim() === '"rev-parse", "HEAD"')
-    && [...writerCode.matchAll(/spawnSync\("git"/g)].length === 1);
+    // The writer's git calls only READ: HEAD and the tree's status. Any other git verb from it fails this.
+    && [...writerCode.matchAll(/spawnSync\("git", \[([^\]]*)\]/g)].every((m) => ['"rev-parse", "HEAD"', '"status", "--porcelain", "--untracked-files=no"'].includes(m[1].trim()))
+    && [...writerCode.matchAll(/spawnSync\("git"/g)].length === 2);
   check("MUTANT CONTROL: a planted `vercel --prod` step is caught", DEPLOY.test([...commands, "vercel --prod:*"].join("\n")));
   // Approving the deploy gate triggers nothing: no script under .claude/scripts reacts to gate deploy.
   // POSIX classes, not \s: git grep -E has no \s, and a pattern that matches nothing passes this check on silence.

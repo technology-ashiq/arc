@@ -1079,3 +1079,5 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A registry row's env merged over the door's** -- a row could set PATH or the spine for its tool (attack c1f375b L1). *Check: a row may pass only env names the door allow-lists; any other is refused before anything runs.*
 - **A tool whose top level let an errno escape as a stack trace** (attack c1f375b L2, B3). *Check: a tool the door runs ends every failure as one named refusal line.*
 - **A predictable file name written with a plain write** -- a link planted at it was followed (attack c1f375b B2). *Check: a file under a name derived from user input is cleared, then created exclusively.*
+- **A test-door path compared lexically** -- a link outside the repo pointing at the canonical spine passed as scratch (attack 091c310 B1). *Check: a scratch-path guard compares realpaths on both sides with `relative()`.*
+- **A deploy gate raised over a dirty tree** -- CI was green for HEAD, while the checkout held changes it never tested (attack 091c310 B2). *Check: a gate that cites CI for a commit refuses when the tree has uncommitted tracked changes.*
