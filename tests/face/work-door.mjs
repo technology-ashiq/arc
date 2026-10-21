@@ -674,10 +674,10 @@ try {
       const staleList = [];
       let snapshot = null;
       const stale = await pickerHolds({ name: "thing", label: "Thing", placeholder: "", type: "select", get options() { if (snapshot === null) snapshot = ["alpha", "beta"]; return snapshot; }, required: true }, staleList);
-      check("MUTANT CONTROL: a picker serving a stale list FAILs the membership check", stale !== "", stale);
+      check("MUTANT CONTROL: a picker serving a stale list fails the membership check", stale !== "", stale);
       const skipList = [];
       const skipped = await pickerHolds({ name: "thing", label: "Thing", placeholder: "", type: "text", max: 64, pattern: "[a-z]+", required: true, get options() { return [...skipList]; } }, skipList);
-      check("MUTANT CONTROL: a picker whose plan skips the membership check FAILs it", skipped !== "", skipped);
+      check("MUTANT CONTROL: a picker whose plan skips the membership check fails it", skipped !== "", skipped);
       // The months a close may name, from an injected clock (IST): 31 Dec, 1 Jan just after midnight, and 29 Feb.
       const m = OPS_MOD.lastMonths;
       check("lastMonths: 31 Dec 2026 offers 2026-12 down to 2026-01", JSON.stringify(m(new Date("2026-12-31T23:00:00+05:30"))) === JSON.stringify(["2026-12", "2026-11", "2026-10", "2026-09", "2026-08", "2026-07", "2026-06", "2026-05", "2026-04", "2026-03", "2026-02", "2026-01"]));
