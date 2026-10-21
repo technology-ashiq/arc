@@ -33,6 +33,10 @@ try {
   check("the niche is never on argv -- only in the environment", ![...planCmd.args, ...applyCmd.args].join(" ").includes("invoice")
     && planCmd.env.ARC_HUNT_NICHE === NICHE && applyCmd.args.join(" ") === "--emit" && planCmd.args.length === 0, JSON.stringify([planCmd.args, applyCmd.args]));
   check("MUTANT CONTROL: a builder that puts the niche on argv is caught", ["hunt", "--niche", NICHE].join(" ").includes("invoice"));
+  // The hunt child's env carries no token and no niche (B4), and a spine inside the repo is not a scratch one.
+  const env = HUNT.huntEnv({ PATH: "x", GH_TOKEN: "t", ARC_LLM_API_KEY: "k", ARC_HUNT_NICHE: NICHE, ARC_SPINE_ROOT: "/tmp/s" });
+  check("the hunt child gets PATH and the spine, never a token or the niche", env.PATH === "x" && env.ARC_SPINE_ROOT === "/tmp/s" && !("GH_TOKEN" in env) && !("ARC_LLM_API_KEY" in env) && !("ARC_HUNT_NICHE" in env), JSON.stringify(Object.keys(env)));
+  check("a spine root inside the repo is not a scratch spine", HUNT.isScratchSpine({ ARC_SPINE_ROOT: join(REPO, ".claude", "state", "hq") }) === false && HUNT.isScratchSpine({ ARC_SPINE_ROOT: SPINE }) === true);
 
   const door = DOOR.createWorkDoor({ mode: "sim", root: SPINE, repo: REPO }, {});
   const before = events().length;
@@ -52,9 +56,13 @@ try {
   try { door.apply("discover.hunt", { planId: plan.planId }); again = "APPLIED"; } catch (e) { again = e.code || "THREW"; }
   check("a second apply of one plan id runs nothing new", (again === "APPLIED" ? run.replayed !== true : true) && events().filter((e) => e.kind === "run.completed").length === 1, again);
 
-  // A hunt for this niche still running (its lock held) refuses a second, and writes no niche file.
+  // A lock whose holder is dead is stale and is cleared: a killed run never wedges the niche (attack c551846 B2).
   mkdirSync(files.dir, { recursive: true });
-  writeFileSync(files.lock, "");
+  writeFileSync(files.lock, "999999999");
+  const stale = await door.plan("discover.hunt", { input: { niche: NICHE } });
+  check("a stale lock (its pid dead) is cleared and the plan runs", stale.ok === true && !existsSync(files.lock), JSON.stringify(stale).slice(0, 200));
+  // A hunt for this niche still running (its lock held by a live pid) refuses a second, and writes no niche file.
+  writeFileSync(files.lock, String(process.pid));
   const busy = await door.plan("discover.hunt", { input: { niche: NICHE } });
   check("a plan while a hunt for the niche runs is refused HUNT_RUNNING", busy.ok === false && /HUNT_RUNNING/.test(JSON.stringify(busy.refusal)) && !existsSync(files.file), JSON.stringify(busy).slice(0, 300));
   rmSync(files.lock, { force: true });
@@ -64,4 +72,4 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 8 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 11 ? 0 : 1;

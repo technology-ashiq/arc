@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/discover/hunt-op.mjs:63",
+      "breaking_input": "A hunt runs past 110 s (slow HN). spawnSync kills only the direct node child with SIGKILL; arc-discover cannot clean up and any grandchild it spawned keeps running, still reading the niche file. The finally block then removes the niche file and the lock, so a second hunt for the same niche starts while the orphan is still alive.",
+      "why": "The lock is released while the tree is not dead. SIGKILL gives the child no time to end its own children, so HUNT_RUNNING no longer guards a run that is still going, and two hunts can emit receipts for the same niche.",
+      "fix": "Use an async spawn that kills the whole tree (taskkill /T on Windows, a detached process group with -pid on POSIX), sends SIGTERM first with a grace period, and releases the lock only after the tree is dead.",
+      "twin_of": "SIGKILL before a nested tool can clean up -> a parent that kills must leave its child time to end its own children."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:50-57",
+      "breaking_input": "The hunt-op process is killed by the door's timeout, by Ctrl-C, or by SIGTERM after the lock was created with openSync(\"wx\"). The finally block never runs. The lock file niche-<hash>.lock stays and the niche file may stay too.",
+      "why": "Every later hunt for that niche is refused with HUNT_RUNNING forever. The lock has no pid, no host and no staleness check, and no signal handler cleans it up. The niche text also stays on disk.",
+      "fix": "Write the pid and a timestamp into the lock and treat a dead pid as stale. Register SIGINT/SIGTERM/exit cleanup. Break a stale lock inside its own critical section.",
+      "twin_of": "Liveness by pid needs a second fact. / Ctrl-C orphaned a running tool -> a cleanup on exit covers the signals too."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:22-26",
+      "breaking_input": "The directory .claude/state/discover (or the niche file or lock path inside it) is a symlink or junction pointing outside the repo. mkdirSync recursive accepts it, and openSync and writeFileSync write through it.",
+      "why": "The writer neither realpaths nor lstats its destination directory, so the lock and niche files can land wherever the link points. Hunt files are created outside the fence.",
+      "fix": "lstat the directory and require a real directory. Realpath it and check containment in REPO before creating any file. Refuse a link by name.",
+      "twin_of": "The scaffold wrote through a linked `face/src`, modules or ring folder -> the writer-realpaths-its-destination twin."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:57-62",
+      "breaking_input": "The spawned child inherits the door's whole environment (ARC_SPINE_ROOT, tokens, git location variables). Only ARC_HUNT_NICHE is deleted. A caller-set ARC_SPINE_ROOT also makes the code choose RECORDED on the strength of the variable alone, with no check that it names a scratch spine.",
+      "why": "A child that reaches the network is handed every secret in the door's environment. Choosing the offline fixture from a bare env var is a steering variable that decides which data the op uses.",
+      "fix": "Build an allow-list env for the child (PATH, ARC_SPINE_ROOT, HOME/TEMP and the like). Strip git location variables. Decide the fixture from the door's sim mode, not from a raw environment variable.",
+      "twin_of": "A child handed the whole environment / The child was never told which spine -> pass the spine to the child by name."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:218",
+      "breaking_input": "runTool is passed env: planCmd.env, which holds ARC_HUNT_NICHE. If runTool merges that env into a child that logs it, or echoes the env in a spawn error or in the plan's argv/env display, the niche reaches the page, the journal or the logs. In this diff only the argv is scrubbed, argument by argument.",
+      "why": "The niche now travels in the environment, and the door's scrub and redaction cover argv and output lines, not env values. Any error, plan-card or journal field that prints the command object leaks it.",
+      "fix": "Show the env's keys only, never its values. Pass the scrub the env values. Test that the plan response and the journal do not carry the niche.",
+      "twin_of": "Redaction left out of the new summary line -> New output from a child passes the same redaction as the old."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:48-55",
+      "breaking_input": "Two sessions run at once: one passes the lock check, the other finds the file already there. Separately, a crash between openSync(lock) and writeFileSync(file, {flag:\"wx\"}) leaves a stale niche file. If writeFileSync then throws EEXIST because a niche file exists with no lock, the finally block deletes that file anyway.",
+      "why": "The exclusive-create on the niche file turns a leftover file into a thrown exception, which is not a named refusal. The finally runs rmSync(p.file) unconditionally, so it deletes a file this process did not create. The uncaught throw gives a Node stack, not a hunt-op message.",
+      "fix": "Catch EEXIST on writeFileSync and refuse it by name. Track whether this process created the file before removing it. Remove a stale niche file only when you hold the lock.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/discover/hunt-op.mjs:57-62",
+      "breaking_input": "The HUNT_RUNNING check uses a bare empty lock file written by the test and asserts that the plan is refused. It never proves that a lock left behind by a killed run is recoverable, and it never proves that a lock held by a live hunt blocks a real second spawn.",
+      "why": "The test passes while B2's permanent wedge exists, and no mutant covers a timeout or a signal. The suite also never asserts that the niche is absent from the child's argv at the process level.",
+      "fix": "Add an arm that kills a hunt-op mid-run and then shows the next hunt is not refused forever. Add an arm that reads the child's real argv and asserts the niche is not in it.",
+      "twin_of": "Tests that could not fail, or could not pass -> the mutant is the negative control; write the check it fails."
+    }
+  ]
+}
