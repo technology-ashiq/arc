@@ -192,7 +192,7 @@
 .claude/scripts/discover/lib/score.mjs	98edeaf6f74fb37e1b29af29871b535f49e56b7056d0cc6bb3cda3151a13f902
 .claude/scripts/discover/lib/spine.mjs	a84a6bbd1e8758298eda6531c8d9f998ea9cee69f06ed203b1b99c1eea66e781
 .claude/scripts/discover/miners/hn.mjs	dcc5be6725df9e0eaba7b326602c9b16056e3e4b844f2c107ede1f7dc31e3ac9
-.claude/scripts/docs/narrative-anchors.mjs	e6e9eec5bdca03dae720a32e4f412529dc09233f0a5ead6a859bde3d8d0c30de
+.claude/scripts/docs/narrative-anchors.mjs	e2ae2f360a1bce8d059dc1833b5926ee4e29f3efb3e434d9baf6951df2c96e4e
 .claude/scripts/docs/wiki-build.mjs	e387b53c28bfa9ef91ffa7f33b85f89b77c02554939ba0d378f577095987f79f
 .claude/scripts/docs/wiki-coverage.mjs	08626d1c44e0eef10779d9234e96b24683ec23750def596c354dce637f799774
 .claude/scripts/docs/wiki-drift.mjs	520d4116f93e5b2dd3dc61695101dde0f6f491f3f642af9551017f7e03d004e7
@@ -280,7 +280,7 @@
 .claude/scripts/growth/lib/text.mjs	0646e9d36d38cf6a217b8fa449fbc78336770deae607d025cdf6b6fa89094d2b
 .claude/scripts/hq/adr-record.mjs	4610932bf8b33d35ea7656cfcb8c62d87ac4b55cae7f01b4b696280350c7e4f1
 .claude/scripts/hq/arc-brief.mjs	1c1672f5bf12428ee37c075bae71b7bb0591a5a41cd310fce09b216d60c55b4c
-.claude/scripts/hq/arc-dash.mjs	781f06cf50b9fd6904bf0487370c8f61be461aabd3d06c97608f3925411f2fa0
+.claude/scripts/hq/arc-dash.mjs	b215fc7b4e0b58f1dd010b0b5722a4ef78c3af1be9df5f6149c56b9738fca49e
 .claude/scripts/hq/arc-event.mjs	77c775f63e2fd4013f53b7625b55a6f2c56cf71d0c14b6ac7869a373b7b10ca3
 .claude/scripts/hq/arc-event.sh	f627a1f5058c8b19caaf3e564ac01fb699ebc73d67f25788cfddc3ba7b4d8847
 .claude/scripts/hq/arc-face.mjs	a5d3428c0faa315838e3b80c678b02a9a7517c65d34c00ad30007bdd53681284
@@ -305,12 +305,12 @@
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
 .claude/scripts/hq/lib/face/ask-offline.mjs	93c41cc1ff5feddb58a214876acc913c876e43d2220cb42c44608f1eccf1505e
 .claude/scripts/hq/lib/face/discover/route.mjs	11f58d39cd507bdfdb6c96f62c124d58c42738af9b2a9537f22b7a4eb663251a
-.claude/scripts/hq/lib/face/models.mjs	dee2063e634ff21cbe6c4c30b5060d0c5269c89a7a866b383a662ed50b96b684
+.claude/scripts/hq/lib/face/models.mjs	86a52b5cc6374405c3cbf745add1c76fe36af10fb88a5220e3f722a07a482f41
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
 .claude/scripts/hq/lib/face/reads.mjs	3da5cd1ee721dbb03b2f7cc24cb0577d32a226819bcd1be0edaeaeb4627c56af
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	cd2b57badaabe8310387800b1770aa3ca3eef1cecf3b3896a96d111167af8b49
-.claude/scripts/hq/lib/face/work-door.mjs	0ed3e096a4a1e3239b4b9ed2138b99d775b43fdb939d4f10751c887ee2cf69e0
+.claude/scripts/hq/lib/face/work-door.mjs	3ad48fdfdb18e10a5f12b4fbaae5090db8f94f7c2a1d04da486286563406b02c
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
@@ -330,7 +330,7 @@
 .claude/scripts/hq/lib/ledger/pnl.mjs	238dc9d9fe07cdacc6ac8d9bb48b0e9211c3c714651f612a48ced9e0279c3699
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
 .claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
-.claude/scripts/hq/lib/narrative-proof.mjs	c5d906b6ad023f1ab1dc0d4bd1ea6f4df4d21001ab8e7f02c767f52c47fd1971
+.claude/scripts/hq/lib/narrative-proof.mjs	109e1314cde5ef2a42f246d7d1abca54c458b5612ab6e0b5df21cb09cd8973fc
 .claude/scripts/hq/lib/owner-key.mjs	363a037ce80983aef12294b0d08f2a47c3bb3fac5c1627d909503b77dea66586
 .claude/scripts/hq/lib/owner-sig.mjs	33828b142f9f4a5b651026dbf711ce91db1572e3af164d11ce7d20ac296c62d0
 .claude/scripts/hq/lib/policy-evidence/fold.mjs	18f2b72674df82d7866275563484ddf3a0b38caed1df747c096abd959770bd79
