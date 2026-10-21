@@ -187,7 +187,7 @@ function registeredVentures() {
  * phase-15-spec.md before any code; an op not here is not gated. When the source's read failed the op refuses
  * FIELD_UNKNOWN rather than planning on an empty list (money.criteria, money.close-month and ventures.register read no
  * such field).
- * @type {Readonly<Record<string, Readonly<Record<string, () => { failure: string, options: string[] }>>>>}
+ * @type {Readonly<Record<string, Readonly<Record<string, (now: number) => { failure: string, options: string[] }>>>>}
  */
 export const FIELD_SOURCES = Object.freeze({
   "money.ingest": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
@@ -197,6 +197,8 @@ export const FIELD_SOURCES = Object.freeze({
   "leads.daily-send": Object.freeze({ campaign: () => leadsCampaigns() }),
   "legal.full-read": Object.freeze({ venture: () => legalVentures() }),
   "org.seat-assign": Object.freeze({ agents: () => agentNames() }),
+  // The month window is judged on the DOOR's clock, never the wall clock read inside the row (attack b0a4249 L1).
+  "money.close-month": Object.freeze({ month: (now) => ({ failure: "", options: lastMonths(new Date(now)) }) }),
 });
 
 /**
@@ -268,9 +270,14 @@ function legalVentures() {
   try {
     const dir = join(HERE, "..", "..", "..", "tests", "fixtures", "legal", "ventures");
     fixtures = (listRealDir(dir) ?? []).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n) && entryIs(join(dir, n), "dir"));
-  } catch { fixtures = []; }
-  // A registry that could not be read leaves the fixtures still nameable; only with neither is the field unknown.
-  return { failure: reg.failure !== "" && fixtures.length === 0 ? reg.failure : "", options: [...new Set([...fixtures, ...reg.ventures])].sort() };
+  } catch (e) {
+    // A link or a file where the fixtures directory should be is a failure, never "no fixtures" (attack b0a4249 B1).
+    return { failure: errCode(e), options: [] };
+  }
+  // A registry that could not be read makes the whole field unknown: a full read sends on facts whose standing is
+  // then unknown, so the fixtures alone never stand in for it (attack b0a4249 L4).
+  if (reg.failure !== "") return { failure: reg.failure, options: [] };
+  return { failure: "", options: [...new Set([...fixtures, ...reg.ventures])].sort() };
 }
 
 /** The agents a seat can bind: every `.claude/agents/<name>.md` (REQ-03). */
@@ -942,10 +949,10 @@ export function opById(id) {
 /**
  * The owner's fields, checked against the row. Strings only, every key known, every required key present, each
  * value inside its pattern, options or range. Returns the values the plan and apply builders see -- nothing else.
- * @param {typeof OPS[number]} op @param {unknown} input
+ * @param {typeof OPS[number]} op @param {unknown} input @param {number} [now] the caller's clock (ms), for a windowed source
  * @returns {Record<string, string>}
  */
-export function validateInput(op, input) {
+export function validateInput(op, input, now = Date.now()) {
   if (input === null || typeof input !== "object" || Array.isArray(input))
     throw new OpError("BAD_INPUT", `${op.id} takes an object of fields (${op.fields.map((f) => f.name).join(", ")})`);
   const known = new Set(op.fields.map((f) => f.name));
@@ -959,7 +966,7 @@ export function validateInput(op, input) {
     const source = Object.hasOwn(FIELD_SOURCES, op.id) && Object.hasOwn(FIELD_SOURCES[op.id], f.name) ? FIELD_SOURCES[op.id][f.name] : null;
     // ONE read judges the source and supplies the options the value is checked against (attack c0fc549 B8): judging one
     // read and checking against another let a file swapped between them pass a value neither read held.
-    const read = source === null ? null : source();
+    const read = source === null ? null : source(now);
     if (read !== null) {
       const { failure } = read;
       if (failure !== "") throw new OpError("FIELD_UNKNOWN", `${f.label} is read from a source that could not be read (${failure}), so it is unknown -- not empty; ${op.id} does not plan on it`);
@@ -972,7 +979,7 @@ export function validateInput(op, input) {
     if (f.type === "select") {
       const options = read !== null ? read.options : f.options;
       // The field and the value are both named (REQ-03): "must be one of" alone left the owner guessing what was sent.
-      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) "${echo(raw, 80)}" is not one of the options the door serves: ${options.length ? options.join(", ") : "none yet -- create one first"}`);
+      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) "${echo(raw, 80)}" is not one of the options the door serves: ${options.length ? `${options.slice(0, 12).join(", ")}${options.length > 12 ? ` and ${options.length - 12} more` : ""}` : "none yet -- create one first"}`);
     } else if (f.type === "int") {
       if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new OpError("BAD_INPUT", `${f.label} must be a whole number`);
       const n = Number(raw);
@@ -1078,8 +1085,9 @@ export function registryView(registry = OPS) {
     // A sourced field carries whether its source could be read, so the page can say "could not be read" rather than
     // "none yet" over an empty list (attack 8dec47f B4).
     fields: o.fields.map((f) => {
-      const src = Object.hasOwn(FIELD_SOURCES, o.id) && Object.hasOwn(FIELD_SOURCES[o.id], f.name) ? FIELD_SOURCES[o.id][f.name]() : null;
-      return src === null ? f : { ...f, ...(f.type === "select" ? { options: src.options } : {}), sourceFailure: src.failure };
+      const src = Object.hasOwn(FIELD_SOURCES, o.id) && Object.hasOwn(FIELD_SOURCES[o.id], f.name) ? FIELD_SOURCES[o.id][f.name](Date.now()) : null;
+      // sourceSize: a sourced TEXT field with nothing to name is as empty as a select with no option (attack b0a4249 L5).
+      return src === null ? f : { ...f, ...(f.type === "select" ? { options: src.options } : {}), sourceFailure: src.failure, sourceSize: src.options.length };
     }),
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));
