@@ -101,8 +101,8 @@ function main() {
     kind = "qa.completed";
     // The counts are the session's own report: the writer cannot see the qa-tester run, so the receipt says whose
     // count it is rather than passing it off as measured (attack 2d8afd0 B3).
-    // The URL is stored as host and path, never as `scheme://...`: beside the receipt's `qa-run@x.y.z` process tag a
-    // whole URL reads as `scheme://user:pass@host` to the spine's secret rule, which refused every QA receipt (CI 453).
+    // The URL is stored as host and path, never whole: beside the receipt's process tag (name at version) a
+    // whole URL reads as a credential-bearing connection string to the spine's secret rule, which refused every QA receipt (CI 453).
     const u = new URL(v["--url"]);
     payload = { host: u.host, path: u.pathname || "/", tls: u.protocol === "https:", bugs: v["--bugs"], fixed: v["--fixed"], counted_by: "session-reported" };
   } else {
