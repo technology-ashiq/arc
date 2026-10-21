@@ -1,0 +1,50 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:759",
+      "breaking_input": "Send 50 concurrent POST /api/ask requests with q=\"hello\" (the ask box accepts Enter while an ask is still in flight, and a script or an auto-retry can do the same). apiAsk claims no in-flight slot before its first await, so every request spawns its own arc-run -> generic-api child and bills the owner's provider key; none are refused, and the only guard is the page's own busy state.",
+      "why": "Phase 10 makes /api/ask a paid spend-per-request route, but the door has no server-side concurrency ceiling or in-flight slot. The defect pattern 'No ceiling on paid children -> A rate limit is not a concurrency limit' is the same class: a burst of asks (or a stuck retry loop) exhausts the owner's API budget with no refusal.",
+      "fix": "Claim an in-flight slot (a counter with a ceiling, released in a finally) inside apiAsk before the first await; when the ceiling is reached, refuse with a named code before spawning the child.",
+      "twin_of": "A paid action guarded only in the page -> Check: a spend-per-request route claims an in-flight slot server-side before its first await."
+    },
+    {
+      "id": "L2",
+      "severity": "low",
+      "where": "face/src/shell/ModelsPanel.tsx:88",
+      "breaking_input": "Fill the add-model form with name 'Provider', baseUrl 'https://openrouter.ai/api/v1', model 'gpt-4o-mini', and an API key that contains a space (a paste accident). Click add: setForm(emptyForm()) runs before the door answers; the door refuses with BAD_MODEL ('the key is 8 to 400 printable characters with no spaces'); the typed key and URL are gone and must be retyped from scratch.",
+      "why": "The form clears on submit, not on the server's acceptance. The defect pattern 'A form cleared before the server answered -> an edit form closes on the server's acceptance, never on submit' is the same class; here it loses a typed secret as well as the other fields.",
+      "fix": "Clear the form only after door.setModels resolves ok; on refusal keep the form values and show the door's reason.",
+      "twin_of": "A form cleared before the server answered -> Check: an edit form closes on the server's acceptance, never on submit."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:861",
+      "breaking_input": "POST /api/models/set twice concurrently when models.json is empty: once with {op:'add', model:{name:'A', ...}} and once with {op:'add', model:{name:'B', ...}}. apiModelsChange loads the same empty registry in both requests, applies both adds, and saves whole-file twice; the final file holds only the last writer's model, yet both responses are 200 saying the model was added. Model A silently disappears.",
+      "why": "loadRegistry -> applyChange -> saveRegistry is a read-modify-write with no re-read and no lock between the load and the save. The defect pattern 'A re-check with no lock' (and 'A check-then-emit across two processes with no shared lock') is the same class: a write between the check and the save is lost.",
+      "fix": "Serialize writes to the models file (a per-file lock or a synchronous write queue) and re-read the registry immediately before saving, refusing when it changed since the load.",
+      "twin_of": "A re-check with no lock -> a re-check is only a check if nothing can land between it and the write."
+    },
+    {
+      "id": "L4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:831",
+      "breaking_input": "Ask the face a question that makes the model return {\"lane\":\"arc\",\"answer\":\"...\",\"citations\":[21 ids]}, e.g. 'list every open approval, one per citation'. judgeModelAnswer throws ASK_FAILED, discarding the paid answer entirely; the already-computed deterministic offline answer is available but is not served, and the owner is billed for a refusal.",
+      "why": "The 20-citation cap is implemented as a whole-run refusal rather than a cap on the list. The defect pattern 'A list filtered before it is judged -> ... Cap the list' expects the list to be bounded while the answer is still served; a throw converts a verbose model into a spent failure every time.",
+      "fix": "Cap citations at 20 entries (keep the first 20, mark the rest as truncated/unresolved) and serve the answer with the cap noted, instead of refusing the paid run.",
+      "twin_of": "A list filtered before it is judged -> Judge every entry; an entry that is not an id is unresolved and named. Cap the list."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "face/src/lib/ask.mjs:938",
+      "breaking_input": "Make the spine unreadable at response time (temporarily lock the spine file so readAll throws) and ask any general question. judgeModelAnswer's spineIds catch returns an empty set, so the returned receipt is null and citations are unresolved; but the face still renders the model half's hardcoded halfLine '...answered it under face-ask, receipted...', claiming a receipt the door explicitly refused to provide.",
+      "why": "The client decides the halfLine from source === 'model' alone and drops the door's receipt field entirely; a static claim is shown where the served value says the opposite. This is the 'validate one read, serve another' class: the claim displayed is not derived from the field that proves it.",
+      "fix": "Return the door's receipt (or its absence) through readAnswer and render 'receipted' only when a receipt id was actually verified; otherwise say the answer was not receipted.",
+      "twin_of": "A model-typed output drawn as fact -> Draw what the spine holds, never what the model says it wrote."
+    }
+  ]
+}

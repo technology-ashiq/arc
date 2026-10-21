@@ -226,9 +226,13 @@ export function ownerKeyBaseState(root, opts = {}) {
   const exists = (full) => { try { git(["show-ref", "--verify", "--quiet", full]); return true; } catch (e) { if (e && /** @type {any} */ (e).status === 1) return false; throw e; } };
   /** @type {string} */ let target = base, sha = "";
   try {
-    const shadows = [`refs/${base}`, `refs/tags/${base}`, `refs/heads/${base}`, `refs/remotes/${base}`].filter(exists);
     const literal = base.startsWith("refs/") || base === "HEAD" || /^[0-9a-f]{40,64}$/.test(base);
-    if (literal ? shadows.length > 0 : shadows.length > 1) return cannot(`the base ref name ${base} is ambiguous (it names ${shadows.join(" and ")}); a local branch or tag can stand in for the real base, so pass the full name, for example refs/remotes/origin/main`);
+    // A full `refs/...` name, HEAD or a sha resolves by exact match first: a ref planted at refs/tags/refs/... cannot
+    // stand in for it, so a literal base is never refused as ambiguous (attack abf6f1b B1, Phase 04 D95). Short names
+    // are still scanned for a local branch or tag shadowing the real base.
+    const shadows = literal ? [] : [`refs/${base}`, `refs/tags/${base}`, `refs/heads/${base}`, `refs/remotes/${base}`].filter(exists);
+    if (literal && base.startsWith("refs/") && !exists(base)) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`);
+    if (!literal && shadows.length > 1) return cannot(`the base ref name ${base} is ambiguous (it names ${shadows.join(" and ")}); a local branch or tag can stand in for the real base, so pass the full name, for example refs/remotes/origin/main`);
     if (!literal) { if (shadows.length === 0) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`); target = shadows[0]; }
   } catch (e) { return cannot(why(e)); }
   try { sha = git(["rev-parse", "--verify", "--quiet", "--end-of-options", `${target}^{commit}`]).trim(); }
@@ -689,6 +693,12 @@ other
     const shadowDefault = ownerKeyBaseState(rz), shadowShort = ownerKeyBaseState(rz, { baseRef: "origin/main" }), shadowFull = ownerKeyBaseState(rz, { baseRef: "refs/remotes/origin/main" });
     out.push(["MUTANT B2 shadowed ref: with a local tag named origin/main on a commit holding the swapped key, the default base still reads refs/remotes/origin/main and says 'changed'; the short name origin/main is refused as ambiguous, naming both refs; the full name works",
       shadowDefault.state === "changed" && shadowDefault.was === fingerprint(pubPem) && shadowShort.state === "unavailable" && shadowShort.why.includes("ambiguous") && shadowShort.why.includes("refs/tags/origin/main") && shadowFull.state === "changed"]);
+    // Phase 04 D95 (attack abf6f1b B1): a tag planted at refs/tags/refs/remotes/origin/main shadows nothing -- a full ref name
+    // resolves exactly -- so the default base still reads 'changed', never 'unavailable'.
+    gz.run(["update-ref", "refs/tags/refs/remotes/origin/main", gz.get(["rev-parse", "evil"])]);
+    const literalShadow = ownerKeyBaseState(rz), literalFull = ownerKeyBaseState(rz, { baseRef: "refs/remotes/origin/main" });
+    out.push(["MUTANT B1 literal shadow: with refs/tags/refs/remotes/origin/main planted, the full default base still reads 'changed' against the real remote-tracking ref, not 'unavailable'",
+      literalShadow.state === "changed" && literalShadow.was === fingerprint(pubPem) && literalFull.state === "changed"]);
     // B5: a replace ref on the base commit must not change what the key is compared with; the environment cannot move the object store or the config.
     const rp = W("r2/replace"); mkdirSync(join(rp, ".claude"), { recursive: true });
     const gpr = gitIn(rp);

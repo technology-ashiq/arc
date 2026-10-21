@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "face/src/lib/mode.mjs:readParts",
+      "breaking_input": "#token=GOOD&token=BAD",
+      "why": "readParts decodes every `token=` part and assigns to the same `token` variable, so the last token wins and the first is silently dropped. A link carrying two tokens makes the app discard a valid token and use the attacker-placed one; the repeated-key rule from the defect patterns is violated (a key given twice is BAD_ARGS, never last-wins).",
+      "fix": "Refuse a fragment that names any key twice with a named BAD_ARGS result, or keep the first token and report the duplicate; never silently last-wins.",
+      "twin_of": "Repeated flags were last-wins and an empty value resolved to the cwd"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "face/src/lib/mode.mjs:modeOf",
+      "breaking_input": "#/hq",
+      "why": "A fragment `#/hq` is a room link whose decoded room id is `hq`, but modeOf returns `hq` (the workroom) whenever any room part exists. A served room whose id is `hq` becomes unreachable from its own link, and `#/hq` is treated as the workroom home instead of the room. The surface grammar and the room id grammar collide.",
+      "fix": "Forbid a room id equal to the HQ_PART in the registry or in the surface scanner, and refuse that collision by name; or make modeOf require the bare part to be exactly `hq` only when it is not a slash-prefixed room.",
+      "twin_of": "Two grammars for one value"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "face-coverage.mjs:appImportDirs",
+      "breaking_input": "App.tsx containing `const re = /\\/\\/.*/; import './ghostdoor'`",
+      "why": "The new one-pass comment stripper recognizes strings and comments but not regex literals. A `//` or `/*` inside a regex literal is treated as a comment opening and eats the rest of the line or file, so a real import after it is invisible to the surface scanner. A second, unnamed surface directory mounted by that import is never reported, exactly the class the surface half exists to catch.",
+      "fix": "Skip regex literals (including escapes and character classes) in the same one-pass scanner, and report when scanning stops as a named finding.",
+      "twin_of": "A text scanner's comment stripper read `/*` inside a path, a `//` comment and a string"
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": "face-coverage.mjs:appImportDirs",
+      "breaking_input": "App.tsx containing `` import(`${'./ghostdoor/FrontDoor'}`) ``",
+      "why": "A template literal with interpolation is copied verbatim by the string branch, but the specifier regex cannot cross the embedded quotes, so the import is not scanned at all. A surface mounted through a computed template-import spelling is invisible to the scanner, and the `imports`/`mounted` reconciliation never sees it. The disk half still sees the directory, but a directory that is also named by a row passes the mount check without ever being mounted by App.tsx.",
+      "fix": "Refuse dynamic template imports with a named finding (“a mount that cannot be named is not a mount that is ignored”), and make any import spelling the bundler follows parse or fail closed.",
+      "twin_of": "A text scanner’s comment stripper … never goes quiet"
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": "face/src/frontdoor/StageGuard.tsx:componentDidCatch",
+      "breaking_input": "A FaceStage render/effect that throws a second time after the first throw already made the guard render null",
+      "why": "StageGuard latches its own `failed` state and renders null forever; App’s `stageFailed` is only set from the first error. If the stage throws again while the guard is still mounted but returning null, React never calls getDerivedStateFromError again, so `stageFailed` stays false, the face silently disappears, and no `data-stage-fallback` line is drawn — the harness’s throwing-stage guard can pass a page that shows neither face nor fallback.",
+      "fix": "Report `onFail` from getDerivedStateFromError as well, and re-mount the guard (keyed by stageFailed) so a retry can observe a fresh error.",
+      "twin_of": "An early throw that skips the returned teardown"
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": "face-colour-literal.mjs:lintFiles allow branch",
+      "breaking_input": "A hard link at face/src/frontdoor/neon.mjs to face/src/lib/stage.mjs (or any file full of colour literals)",
+      "why": "The named allowance is matched by path string only. A regular file at the allowed path that is a hard link to another file passes as the “one allowed file”, so the same literal content can exist twice (two directory entries, one inode) and both are allowed. The comment promises allowance in exactly one file by name, but the check does not verify the file is a distinct file.",
+      "fix": "Compare the allowed file by realpath (or device+inode) and refuse a second link to the same content.",
+      "twin_of": "A writer realpaths its destination and refuses its source"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "face-coverage.mjs:surfaceFindings",
+      "breaking_input": "expected-set.json surfaces.list row: { id: \"ghost-door\", dir: \"face/src/ghostdoor\", adr: \"ADR-1349\" } while face/src/ghostdoor on disk is a directory and App.tsx mounts it through `import('./ghostdoor/FrontDoor')`",
+      "why": "A single-segment dynamic import `import('./ghostdoor/front')` is visible, but a template-literal dynamic import (L4) is not. With the template spelling, the row’s mount check passes vacuously while App.tsx actually mounts the directory, so the “never mounts” finding is skipped and the disk loop does not flag it because the row names it. The dual reconciliation depends completely on the import scanner being exhaustive.",
+      "fix": "Make the import scanner fail closed on any spelling it cannot parse, and keep the row’s mount check as a positive assertion (App.tsx must contain a parseable mount), never a silence.",
+      "twin_of": "A parser reports when it stops scanning; it never goes quiet"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "face/src/App.tsx:hashchange / open()",
+      "breaking_input": "A room whose registry id is exactly `hq`",
+      "why": "The surface state and the room hash share the address bar but use two different parses: modeOf(`#/hq`) returns “hq” (the workroom) while parseHash(`#/hq`) returns room “hq”. On reload of `#/hq`, App sets surface=hq and room=hq; the room Frame may draw, but the exit/warp logic and the harness’s inWorkroom predicate treat any `#/hq` as the workroom home, so the room is never distinguishable from the home surface.",
+      "fix": "Reject a room id equal to HQ_PART in the registry generator or the surface scanner, so “hq” is exactly one thing.",
+      "twin_of": "Two grammars for one value"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "face/src/App.tsx:keydown / surfaceRef",
+      "breaking_input": "Press Ctrl+K on the door, then, in the same tick before React re-renders surfaceRef, click ENTER HQ",
+      "why": "The keydown handler reads surfaceRef.current, which is updated during render. The palette toggle check happens before the `if (surfaceRef.current === 'door') return`. If a hashchange lands between the palette opening and the next keydown, the ref still says “door” while the surface is actually hq, so room keys and room-move shortcuts are blocked on a page that is now the workroom — or, in the reverse interleaving, allowed on a page whose surface has not committed. The ref lags reality.",
+      "fix": "Read modeOf(window.location.hash) at the top of the keydown handler instead of a ref, and drop the ref.",
+      "twin_of": "A read that can fail after a paid effect"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "face/src/App.tsx:warp effect",
+      "breaking_input": "Cross door→hq and then hq→door within STAGE_UNMOUNT_MS (1750 ms) using the brand button",
+      "why": "The door→hq timeout that writes `dataset.warpHeldMs` is cleared by the effect cleanup on the return crossing, so `warpHeldMs` is never recorded. The harness judges the warp from this page-written record; a rapid double crossing produces no record at all, and the warp-held judgment silently drops to 0. The comment says the read is avoided because it races the hold; the page-side record is now the single source, but it is not written for the out-warp and is deleted for an interrupted in-warp.",
+      "fix": "Have the page record warp-held for both directions and on interruption, or have the harness measure the hold by its own polling instead of a page record that can be cancelled.",
+      "twin_of": "A finish held during navigation moved the clock even when its request belonged to the old document"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": "face-coverage.mjs:appImportDirs onDisk check",
+      "breaking_input": "App.tsx contains `import './ghostdoor'` and face/src/ghostdoor is a regular FILE, not a directory",
+      "why": "The scanner deliberately skips `./dir` bare imports when the name is not an on-disk directory, so a single-file surface mounted as `face/src/ghostdoor` is invisible to the import half. The disk half still reports the file if no row names it, but if a row DOES name `face/src/ghostdoor`, the “mounts” half is vacuous (the row passes the mount check without any import record). The scanner’s own rule “tell a bare directory from a bare file by the disk” makes a top-level file surface indistinguishable from an unmounted one.",
+      "fix": "Treat a single-segment bare import as naming a mount whether the on-disk entry is a directory or a file, and let the disk loop decide shell vs surface.",
+      "twin_of": "An import scanner that reads one spelling of an import"
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "face/src/lib/mode.mjs:readParts",
+      "breaking_input": "#/%E0%A4%A (malformed percent-encoding followed by a room-like part)",
+      "why": "A malformed escape makes decodeURIComponent throw, and readParts returns null; modeOf then reports “door”. That is safe. But the same malformed input also carries no data to the rooms: a user at a valid workroom URL who pastes a truncated token fragment silently drops to the door. The defect pattern requires decode errors to be a named 400/refusal rather than a generic fallback; here a fragment nobody can read is treated as the front door, which is the permissive “unknown is the permissive answer” shape.",
+      "fix": "Keep the door as the visual fallback but record/name the unreadable fragment; do not silently treat a fragment that throws as clean.",
+      "twin_of": "Malformed percent-encoding → generic 500"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "face/src/App.tsx:exit()",
+      "breaking_input": "From workroom `#/<room>&token=X`, clicking the brand button returns to `#token=X`",
+      "why": "Not a practical bypass; documented only as a consistency note. No concrete breaking input changes the verdict.",
+      "fix": "No change needed.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "face-colour-literal.mjs:allow-absent check",
+      "breaking_input": "Running the lint with an explicit `--root face/src/frontdoor` while face/src/frontdoor/neon.mjs is missing",
+      "why": "An explicit custom root gets allow:[] by design, so the neon allowance is not applied; the absence of neon.mjs is also not reported because the allow-absent loop only runs for allow entries. The missing allowed file is therefore silence on a custom-root run, even though the same tree’s default run would report “allow-absent”. The comment says “an explicit --root gets no allowance”, but the absence check is equally skipped, which the message says should be a finding.",
+      "fix": "For custom-root runs, either apply the named allowances for roots that overlap the default roots, or report that the allowance was disabled; never silently drop the absence check.",
+      "twin_of": "A wrong-shaped source returned an empty inventory"
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "face/src/lib/mode.mjs:warpTargets",
+      "breaking_input": "rapid consecutive crossings producing warp ids that are skipped",
+      "why": "FaceStage only restarts a warp when `live.warp.id !== warpSeen`. If two crossings commit in the same frame (e.g. door→hq then immediately hq→door before React re-renders), the warp object’s id is updated but the second id may never be observed by the rAF loop, or both ids land in one liveRef update and only the last is seen. The warp pass then runs once with the wrong direction or not at all, while the harness counts a crossing and may record warp-held=0. The design smooths toward targets, but a swallowed id is a swallowed crossing.",
+      "fix": "Keep a queue or at least the latest two warp ids so each committed crossing is seen at least once by the frame loop.",
+      "twin_of": "A request cancelled by the next navigation"
+    }
+  ]
+}
