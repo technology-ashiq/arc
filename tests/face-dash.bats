@@ -50,7 +50,7 @@ load 'test_helper'
   # A failed check prints a line STARTING "FAIL ". Matched at the line start, never as a bare *FAIL* glob: an ok line
   # naming a mutant once read every green run as red (attack 60c13e9 B1).
   ! grep -q '^FAIL ' <<< "$output" || { echo "$output"; false; }
-  [[ "$output" == *"ok every other row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok every row reached a spawn (the loop judged real starts, not refusals)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok residue: shipped + residue rows equal the registry both ways"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok residue: every residue row still refuses (no process file, or a confirm stop)"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok residue: every start-only row's process body emits the row's own kind"* ]] || { echo "$output"; false; }
@@ -251,7 +251,7 @@ load 'test_helper'
   [[ "$output" == *"RAN review-ship-record checks"* ]] || { echo "the suite never started: $output"; false; }
   [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok qa: lands qa.completed, read back off the spine by the id it printed"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok ship over a CI that is not green: refused, no approval.requested lands"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ship over red CI: refused as red, no gate lands"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok MUTANT CONTROL: a planted"* ]] || { echo "$output"; false; }
   [ "$status" -eq 0 ]
 }
