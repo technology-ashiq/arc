@@ -47,8 +47,23 @@ depends-on: —
   2026-10-18 ruling `01M5741NXKQ4GVDDRWZKTCYJ0Y` (no kernel-lane kickoff before the first
   `revenue.received`); the owner chose to exempt face Cycle 17, emitted as the superseding
   owner-ruling `01M5ER722G87D19PFDR7KFD48H` (same text, `face Cycle 17` added to the exempt list,
-  parsed by `kickoff-gates.mjs` before emit) — awaiting his stamp. Auto-decided (two-way): pickers name existing things, and the hunt is a
+  parsed by `kickoff-gates.mjs` before emit) — awaiting his stamp.
+  **Attack panel (×3):** 21 findings (A 7 · B 7 · C 7); 18 applied as mutations (REQ-02, 03, 04, 05,
+  06, 07, 09, 10 sharpened; kill criteria gained the REQ-05 dead-end cut, a per-area Phase 04 cap and a
+  pre-authorized 75% cut order; pre-mortem rows 4 and 5 replaced; ADR-1368's trigger moved to the Phase
+  05 retro; a GitHub dependency row; Phase 02 verification written; #449 joins the Debt phase).
+  REJECTED: hunt-flags assumption row — already-covered
+  REJECTED: Phase 01 `Depends on` as prose — non-actionable
+  REJECTED: a pass/fail dogfood calibration day before Phase 01 closes — out-of-appetite
+  Auto-decided (two-way): pickers name existing things, and the hunt is a
   work-door op — it calls no model — superseding ADR-1356 decision 2 (ADR-1369).
+  **Plan-simulator:** round 1 — 7 blockers (order of steps, the PR head SHA, CI on `main`, who runs
+  phase-done, attack-file location, the order-deviation wording, receipts), all fixed; round 2 — 3
+  blockers (audit counts beyond the first verb, the audit's topology, the CI-log evidence command),
+  all fixed: `audit.cjs` now prints the org, not-ready and op-plan counts and was dry-run against a
+  live door on `6012c36` + a spine copy (23/23 · 71/10/24 · 6 named · 32/32, 0 console errors).
+  Two non-zero rounds → by rule a human call; per the Cycle 16 precedent the round-2 fixes are NOT
+  re-simulated and are on the table at the owner's kickoff approval.
 
 ## Now
 

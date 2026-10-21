@@ -8,7 +8,7 @@
 
 ## Exit criteria (Definition of Done)
 - [ ] `/api/roster` serves `tier` + `tier_source: "implied by model:"` per agent, `unmapped` for a model absent from router.yaml (mutant guessing FAILs); the agents room's tier and switched-on panels read served values (ADR-1367).
-- [ ] `discover.hunt` op: plan `--dry-run`; apply writes the niche file under `.claude/state/discover/` and runs `hunt --niche-file`; a fixture greps argv for the niche and FAILs if present; `run.completed{step: hunt}` in the room within 5 s; ADR-1356 decision 2 superseded by ADR-1369 in the PR (ADR-1369).
+- [ ] `discover.hunt` op (ADR-1369): plans by running `hunt --niche-file F` WITHOUT `--emit` (no `--dry-run` exists) and applies the same argv WITH `--emit`; the door validates the niche with `parseNiche` at plan time (400, no file written, on a failing input); the niche file is named from `sha256(niche)` under `.claude/state/discover/` and removed after the run; a fixture greps argv for the niche text; a second apply of one plan id is refused and a plan for a niche whose hunt still runs returns 409; with `--offline-fixture`, `run.completed{step: hunt}` appears in the room within 5 s; on live HN the op returns "running" and the room polls to the receipt or a 120 s "hunt did not finish" state, a source exit 1 surfacing as an error row; ADR-1356 decision 2 superseded by ADR-1369 in the PR.
 - [ ] Coverage, wiki, sync golden regenerated; two attack surfaces; CI per job; the owner runs one hunt from the face; `/arc-phase-done 03`.
 
 ## Verification plan

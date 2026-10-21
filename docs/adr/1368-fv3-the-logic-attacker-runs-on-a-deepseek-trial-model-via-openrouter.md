@@ -3,7 +3,7 @@
 **Status:** accepted 2026-10-21 by the owner at the Cycle 17 kickoff (fork 4, "DeepSeek via OpenRouter"; exact model id confirmed by the owner in Phase 01)
 **Lane:** face (Cycle 17) · **REQ:** REQ-05 · **Phase:** 01
 **Reversibility:** two-way
-**Revisit trigger:** the attacker has run on more than one phase's PRs (router.yaml: production use → an ADR-0069 amendment filling `independent-family-verifier` and its class row)
+**Revisit trigger:** Cycle 17's close (Phase 05 retro): the attacker will by then have run on every phase's PRs, so Phase 05 decides keep-as-trial or file the ADR-0069 amendment (`independent-family-verifier` row plus class row) as the next cycle's first slice; no production reliance on the trial model before that decision
 **Bound by:** ADR-0226 (two surfaces) · ADR-0069(g) (trials) · ADR-0220 (the trial seam)
 
 ## Context
@@ -21,4 +21,5 @@ The three variables live in the owner's shell env only (names already in `.env.e
 
 ## Consequences
 
-- The ADR-0069 amendment is deferred past Cycle 17 and named as this ADR's trigger.
+- The ADR-0069 amendment is decided at Phase 05's retro (this ADR's trigger), not built this cycle.
+- Before each real run a 60 s smoke on a tiny `attack-diff` input; a failed round-1 LOGIC re-runs as round 1 on a second-family fallback (retro arc-org 2026-10-02/-03/-05, arc-engine-cycle8 2026-10-08).
