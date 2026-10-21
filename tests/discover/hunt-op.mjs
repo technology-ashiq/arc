@@ -36,6 +36,10 @@ try {
   // The hunt child's env carries no token and no niche (B4), and a spine inside the repo is not a scratch one.
   const env = HUNT.huntEnv({ PATH: "x", GH_TOKEN: "t", ARC_LLM_API_KEY: "k", ARC_HUNT_NICHE: NICHE, ARC_SPINE_ROOT: "/tmp/s" });
   check("the hunt child gets PATH and the spine, never a token or the niche", env.PATH === "x" && env.ARC_SPINE_ROOT === "/tmp/s" && !("GH_TOKEN" in env) && !("ARC_LLM_API_KEY" in env) && !("ARC_HUNT_NICHE" in env), JSON.stringify(Object.keys(env)));
+  const W = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "work-door.mjs")).href);
+  let steer = "";
+  try { W.rowEnv({ id: "x" }, { env: { PATH: "/tmp/evil" } }); steer = "PASSED"; } catch (e) { steer = e.code; }
+  check("a row handing its tool PATH in the environment is refused (attack c1f375b L1)", steer === "TOOL_MISSING" && W.rowEnv({ id: "x" }, { env: { ARC_HUNT_NICHE: "a b c" } }).ARC_HUNT_NICHE === "a b c", steer);
   check("a spine root inside the repo is not a scratch spine", HUNT.isScratchSpine({ ARC_SPINE_ROOT: join(REPO, ".claude", "state", "hq") }) === false && HUNT.isScratchSpine({ ARC_SPINE_ROOT: SPINE }) === true);
 
   const door = DOOR.createWorkDoor({ mode: "sim", root: SPINE, repo: REPO }, {});
@@ -76,4 +80,4 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 12 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 13 ? 0 : 1;

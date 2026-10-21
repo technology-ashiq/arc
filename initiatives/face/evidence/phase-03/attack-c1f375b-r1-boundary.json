@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:104-107",
+      "breaking_input": "Hunt-op gets SIGINT/SIGTERM while spawnBounded is running. onSignal runs clear() (removes lock and niche file) and calls process.exit(130) immediately.",
+      "why": "process.exit does not wait for the hunt tree to die. The lock is released while arc-discover and its descendants are still alive and reading the niche file, so a second hunt for the same niche starts under a live first one. It is also an exit() behind pending stdout/stderr writes. This is the same lock-released-before-tree-dead defect the r1 fix claimed to close, left open on the signal path.",
+      "fix": "On signal, abort the spawnBounded run (tree kill), await its settle, then clear() and set process.exitCode. Do not call process.exit.",
+      "twin_of": "A lock released while the tree it guarded was still alive"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:92-96",
+      "breaking_input": "A symlink or leftover file planted at .claude/state/discover/niche-<hash>.txt (the name is predictable from the niche text). The state directory passes realStateDir, then writeFileSync(p.file, ...) follows the link.",
+      "why": "Only the directory is checked. The file inside is opened with a plain write that follows a link, so the write lands outside the fence. The finally clause then rmSyncs the path, which also deletes a file this process did not create.",
+      "fix": "Remove any existing path under the lock, then open with flag wx (or lstat and refuse a link), and write through that descriptor.",
+      "twin_of": "Check-then-open on a caller's path"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:80-100",
+      "breaking_input": "takeLock or writeFileSync throws ENOSPC, EACCES or EPERM. This includes the Windows case where renameSync or linkSync of the lock fails because an AV scanner or another process holds it open (EPERM/EBUSY), which takeLock rethrows.",
+      "why": "takeLock sits outside the try, and writeFileSync(p.file) sits in a try with only a finally. The error escapes main(), so the top-level await rejects and Node prints a stack with absolute machine paths and exits with its own code, not a named refusal. When writeFileSync(p.file) is the call that throws, the signal listeners are already registered and the finally clears them. When takeLock throws after creating its private file, the finally in takeLock cleans only that file.",
+      "fix": "Catch at the edge of main, print one line naming the errno code without the path, and return 1.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:23-33",
+      "breaking_input": "A hunt-op is SIGKILLed from outside the door, or the door's timeout hits it without a tree kill. The signal handlers and finally never run, while spawnBounded's child tree keeps running.",
+      "why": "The orphaned hunt tree keeps reading the niche file. The lock names a dead pid, so the next hunt treats it as stale, removes the niche file under the orphan, and starts a second hunt. The debt ledger accepts this, but the lock records no child pid, so a stale check cannot ask whether the hunt tree is still alive.",
+      "fix": "Record the child pid in the lock and treat the lock as held while the child is alive, or tie the child's lifetime to the parent.",
+      "twin_of": "A descendant outliving a settled run"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:46-51",
+      "breaking_input": "ARC_SPINE_ROOT is a relative path, or goes through a junction or symlink pointing into the repo, or differs by 8.3 short names.",
+      "why": "isScratchSpine uses resolve and lowercase only, with no realpath. A scratch-looking path that really lands inside the repo's canonical spine reads as scratch, so the hunt uses recorded HN while emitting into the real spine. The prefix compare also breaks on separators other than / and \\. A relative root resolves against whatever cwd the hunt-op has, not the door's.",
+      "fix": "Require an absolute path, realpath both sides (the deepest existing ancestor if absent), and compare with relative() instead of a string prefix.",
+      "twin_of": "compare a realpath with a realpath: resolve every existing ancestor"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:218",
+      "breaking_input": "A future registry row whose plan() returns env keys such as PATH or ARC_SPINE_ROOT, handed straight to runTool as env.",
+      "why": "The door passes a row's env to runTool with no allow-list or refusal of steering names, so an op row can override the spine or git location the door sets. The test for r1 B5 (plan body and journal never carry the niche) is not in this diff.",
+      "fix": "Allow only declared env keys per op (ARC_HUNT_NICHE), refuse the rest by name, spread the door's trusted env last, and add a test that the plan response and journal do not contain the niche.",
+      "twin_of": "A spread order that let a caller's click win"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/discover/hunt-op.mjs:63-76",
+      "breaking_input": "The stale-lock arm plants pid 999999999 and the live arm plants its own pid, both by hand. No arm covers the 110 s timeout or a signal mid-run, and none reads the real child's argv.",
+      "why": "The claims that a killed run is recoverable and that the niche is not on the child's argv rest on hand-planted lock files. A pid of 999999999 can be valid on some systems, and the stale test depends on that.",
+      "fix": "Add an arm that runs hunt-op against a slow fixture, sends it SIGTERM, and asserts the lock, the file and the child tree are gone. Read the child's real argv, and take the dead pid from a process that was just reaped.",
+      "twin_of": "Tests that could not fail, or could not pass"
+    }
+  ]
+}

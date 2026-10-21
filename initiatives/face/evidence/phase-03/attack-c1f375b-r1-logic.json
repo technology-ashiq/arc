@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:218,322",
+      "breaking_input": "A registry row's plan/apply carries env: { PATH: '/tmp/evil', HOME: '/tmp', ARC_SPINE_ROOT: '/victim/spine' }. runTool receives it and merges it into the child's environment, overriding the trusted values the door set. The child now runs with the attacker's PATH and writes to a spine the door never checked.",
+      "why": "The door passes the registry-supplied env straight through without an allow-list, and the merge order is not shown — the caller's key can win over the door's trusted value. A row named by the owner could ship env keys that steer the child, and a compromised registry row becomes arbitrary process control rather than a niche value. The prior B8 finding flagged this; the diff added env passthrough with no restriction.",
+      "fix": "Accept only op-declared env keys (e.g. ARC_HUNT_NICHE), refuse the rest by name, and spread trusted env last."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/discover/hunt-op.mjs:93-95",
+      "breaking_input": "ARC_HUNT_NICHE set to a 60-char niche, or a niche whose hash-collides directory, or the state dir unwritable — hunt-op writes the niche file with writeFileSync (no flag) inside a try whose catch does not exist, and the lock write via takeLock() can throw EEXIST/ENOSPC. Neither is caught at the edge of main; a throw becomes a Node stack with machine paths and a non-2 exit.",
+      "why": "The only catch in main is for realStateDir; writeFileSync and takeLock throw out of main uncaught, so an errno (EACCES, ENOSPC, EEXIST from the lock) exits with Node's default code and a stack, not a named refusal. This repeats the documented 'CLI let the library's throw out as a stack' defect pattern in this very new file.",
+      "fix": "Wrap the plan/apply body in a try/catch at the top of main, print one line naming the errno without the path, and return 1."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:48-55",
+      "breaking_input": "Two hunt-ops start for one niche; both find a stale lock (dead pid). A third process (or the same one) breaks the stale lock by rename while the others pass the stale check; one wins the link, but the others, seeing a fresh live lock, return HUNT_RUNNING. Alternatively, a pid reuse by a long-lived unrelated process makes process.kill(pid,0) succeed; the lock is never stale and every later hunt is refused until that process dies.",
+      "why": "Liveness by pid alone, with the time check only as an upper bound (150s), still wedges when a reused pid is alive past LOCK_MAX_MS. The stale-break critical section was improved by rename, but the rename-then-relink loop only tries twice: a third contender can take the lock between this one's rename and its relink, and the loop ends by returning 'running' after two attempts, so a legitimate hunt is refused. The attack dossier's B2 named exactly this wedge; the fix claims it closed it but the aged-lock test plants an old timestamp, never a reused live pid.",
+      "fix": "Write the pid plus host/start-time and treat a lock older than the guard as stale regardless of pid liveness; make the break loop retry on a hard link with a fresh timestamp, not a fixed attempt count."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:96-100",
+      "breaking_input": "While spawnBounded is running, the door sends SIGINT/SIGTERM. onSignal calls clear() and process.exit(130) immediately, before the hunt tree is dead. The lock and niche file are removed while the child (which may have spawned grandchildren) is still reading them; a second hunt starts under a live tree, and two hunts can emit receipts.",
+      "why": "The signal handler does not abort the child tree; process.exit does not wait for it. The prior B4 finding is unchanged: the check 'a lock is released after a tree kill that settles only when the whole tree is dead' is not met. The diff added the signal handler but not a tree abort.",
+      "fix": "On a signal, abort spawnBounded, await its settle, then clear, then set process.exitCode=130."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:57-62",
+      "breaking_input": "The env passed to the child is allow-listed, but the allow-list keeps ARC_SPINE_ROOT and the fixture choice is derived from isScratchSpine(env). A caller can set ARC_SPINE_ROOT to a real scratch path outside the repo (e.g. /tmp/evil-spine) and the child will use recorded HN and write run.completed to that path. The door (work-door) may set its own ARC_SPINE_ROOT that is not scratch, so a live door's own env is refused — but a registry row could pass a different ARC_SPINE_ROOT through the env gap of L1, steering the child to a different spine.",
+      "why": "isScratchSpine uses resolve, not realpath — a symlink/junction pointing into the repo, or a path differing by 8.3 short names on Windows, reads as scratch and the child emits to a path that is actually inside the fence, or a scratch-looking path is a real spine the door did not check. The child was never told which spine by name; it decides from an env var that an attacker-influenced env can set.",
+      "fix": "Require ARC_SPINE_ROOT be absolute, realpath it and compare against the realpath'ed REPO, and pass the spine to the child by the door's own parameter, never trust a raw env var."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/discover/hunt-op.mjs:22-26",
+      "breaking_input": "A lock file or niche file inside the checked state dir can be a symlink planted at the predictable hash name. realStateDir lstat's the directory, but writeFileSync(p.file) and takeLock's writeFileSync(mine) then linkSync follow a symlink that was a regular file at lstat time. An attacker (or a stale crash leaving a link) can place a symlink at niche-<hash>.txt inside the dir; the niche write goes through the link to a file outside the fence.",
+      "why": "The fence checks the directory, not the individual file it opens. The prior B5 finding is not fixed — the diff added lstat on the directory but opens the file with a plain write that follows links.",
+      "fix": "Open the niche/lock files with flag 'wx' and lstat each before writing, refusing a link; or open via an fd created with O_NOFOLLOW."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:34-40",
+      "breaking_input": "ARC_SPINE_ROOT with a trailing slash or a path that differs only by case on POSIX: isScratchSpine resolves and lowercases, so a root like '/repo/CLAUDE/STATE' that is actually inside the repo reads as equal to the repo root and is not scratch — the child then runs recorded HN while writing to the real spine; or a root with a trailing separator fails the startsWith check and is treated as scratch when it is inside.",
+      "why": "Lowercasing makes POSIX case-differing paths compare equal, and a trailing separator breaks the prefix test. The diff's own test does not cover these shapes.",
+      "fix": "Compare with relative() after realpath'ing both sides; do not lowercase on POSIX."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:549-562",
+      "breaking_input": "agentTiers reads .claude/agents/*.md, slices the first 8192 bytes, and parses frontmatter. An agent file whose model line exceeds 80 chars, or contains a quote/apostrophe variant, is parsed with a regex that allows only [A-Za-z0-9._:/-]{1,80}; a model spelled with a space (an alias like 'claude-sonnet-4-20250514' is fine, but a future model with a space) is silently read as empty and the agent is drawn with tier_source '(none in its frontmatter)' — a wrong reading that makes the owner think the agent declares no model.",
+      "why": "The parser is stricter than the YAML reader that actually loads the file; a model the frontmatter names in a form the regex does not accept reads as absent, and the tier is unmapped. A malformed value should be a named finding, not an empty default.",
+      "fix": "Read the model via a real YAML subset parser, or refuse a model line the grammar cannot read, naming the file."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:535-548",
+      "breaking_input": "impliedTier receives three tiers where models for the same driver/model appear in two; it returns 'unmapped'. But if a model appears in zero tiers (the map simply does not list it), it also returns 'unmapped'. The two cases are conflated; a model that is genuinely absent from the map is served as 'unmapped' and drawn with a tier row, while a model claimed by two tiers also draws 'unmapped'. The UI shows a row either way, so an owner cannot tell which — a wrong-shaped map is a finding, never a default.",
+      "why": "The contract says 'a model two tiers both name is unmapped', but an absent model and a doubly-claimed model are different malformations; both should be named separately, not folded into one value.",
+      "fix": "Return separate values (e.g. 'unmapped' vs 'ambiguous'), and draw them differently."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/reads.mjs:575",
+      "breaking_input": "A .claude/agents workspace with a subdirectory named 'foo.md' (a directory, not a file) is skipped via lstat isFile, but a symlink to a file outside the repo passes lstat isFile and readFileSync follows it. The roster then serves an agent whose frontmatter comes from outside the fence, and the tier implies a model the repo does not load.",
+      "why": "lstat only checks the link itself is a file; a symlink to a regular file is a file. The fence should refuse a link by name, not follow it.",
+      "fix": "lstat and require !isSymbolicLink, or realpath and require containment in repo."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "face/src/modules/factory/agents/fold.mjs:49-51",
+      "breaking_input": "servedRead reads /api/roster, and the fold sets served only if st.isRead && Array.isArray(agents) && agentsUnreadable !== true. If the roster body carries agents: [] because the directory is empty (no agent files), that is a legitimate empty list, not an unreadable one; but the same body with agentsUnreadable true (the directory read threw) also serves [] and the UI draws 'the roster served no agent list'. The two states are conflated: an unreadable directory draws as 'no agents', hiding a real failure.",
+      "why": "The prior rule 'empty because absent and empty because unreadable are different results' is violated in this new fold.",
+      "fix": "Serve agentsUnreadable as a distinct refusal state, and draw it as a refusal, not as an empty list."
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:104-107",
+      "breaking_input": "--url 'http://user:pass@host/path?x=1' — the new code does new URL, stores host/path/tls, and drops the query and fragment. But a QA URL with a query (e.g. 'http://host/path?token=secret') is common; the query is silently dropped, so a receipt loses the resource's actual location. Worse, the URL is parsed with new URL, which normalizes and may throw on a malformed URL; the throw is uncaught (the else branch does not catch), so a bad --url crashes the writer with a stack.",
+      "why": "The fix addressed the secret-rule scan by splitting host/path, but it silently discards the query/fragment, and it added a throw point that is not translated at the CLI edge — the prior pattern 'a library throw is translated at the CLI edge' applies.",
+      "fix": "Parse with a try/catch, refuse malformed URLs by name, and store the query (or a hashed form) if the spine's secret rule would refuse it; never silently drop it."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "tests/discover/hunt-op.mjs:63-66",
+      "breaking_input": "The test that 'a lock whose holder is dead is stale and cleared' writes pid 999999999 and asserts the plan runs. On a real system, pid 999999999 may be a valid live process (Linux allows up to 4194304 by default, so 999999999 is out of range there, but on macOS or a system with pid_max raised it can be a live pid). If that pid happens to be alive, the stale test fails and the suite goes red for a reason unrelated to the code. The suite never tests the reused-pid path at all.",
+      "why": "The test's hand-planted lock uses a pid that is not guaranteed dead; the very defect pattern 'a pid test of 999999999 can also be a valid pid on some systems' was named in the prior dossier and is unchanged.",
+      "fix": "Use a pid from a process already reaped (spawn a child and reap it), or a pid known to be outside the OS's range, and add an arm that reuses a live pid and asserts staleness by time."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/discover/hunt-op.mjs:103-105,110-112",
+      "breaking_input": "A hunt-op run that is killed by SIGKILL between takeLock and the finally clear leaves the niche file and lock on disk. The next hunt sees the lock, breaks it as stale (the pid is dead) and proceeds — but it overwrites the niche file with writeFileSync while the orphan child tree (from the killed run) may still be reading it. The niche text swap can cause the orphan to emit receipts for a different niche than the lock guards.",
+      "why": "SIGKILL gives no signal handler and no finally; the orphan keeps running with the old niche file until it finishes. The prior B3 residue names exactly this; the diff did not tie the child's lifetime to the parent.",
+      "fix": "Record the child pid in the lock and, when breaking a stale lock, also check the child is dead; or have the child watch the parent pid and exit."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:218,322",
+      "breaking_input": "The plan path passes planCmd.env to runTool, but the run result (res) is scrubbed as a single line and the env values are never scrubbed. If a niche contains a value that looks like a secret (e.g. 'sk-abc...'), the niche rides env and a failure message that prints the command object or the env values can leak it to the page. The prior B5 finding is not fixed: only argv is scrubbed, and the diff added env passthrough without scrubbing env values.",
+      "why": "The niche is owner-typed but a plan error or journal line could echo the env; the door's redaction covers argv and output, not env.",
+      "fix": "Scrub env values through the same scrubber, or show only env keys, and add a test that the plan body, journal and refusals do not contain the niche."
+    }
+  ]
+}

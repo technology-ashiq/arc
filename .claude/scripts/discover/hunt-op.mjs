@@ -49,8 +49,10 @@ export function huntEnv(env = process.env) {
 export function isScratchSpine(env = process.env, root = REPO) {
   const s = env.ARC_SPINE_ROOT;
   if (!s) return false;
-  const a = resolve(s).toLowerCase(), r = resolve(root).toLowerCase();
-  return a !== r && !a.startsWith(r + "\\") && !a.startsWith(r + "/");
+  // Real paths both sides: a link, a junction or an 8.3 short name into the repo is the repo (attack c1f375b L5).
+  const real = (p) => { try { return realpathSync.native(p); } catch { return resolve(p); } };
+  const rel = relative(real(root), real(s));
+  return rel !== "" && (rel.startsWith("..") || isAbsolute(rel));
 }
 
 /** The pid a lock names, if that process is alive: a lock left by a killed run is stale, never a wedge (B2). */
@@ -106,11 +108,17 @@ async function main() {
   if (takeLock(p.lock) === "running") { process.stderr.write("hunt-op: HUNT_RUNNING -- a hunt for this niche is still running; wait for its receipt\n"); return 3; }
   // A signal still clears the lock and the niche file (B2); the hunt tree is killed by spawnBounded on its own timeout.
   const clear = () => { rmSync(p.file, { force: true }); rmSync(p.lock, { force: true }); };
-  const onSignal = () => { clear(); process.exit(130); };
+  /** @type {null | (() => void)} */
+  let killTree = null;
+  // A signal ends the hunt's whole tree before the lock and the niche file go (attack c1f375b B1).
+  const onSignal = () => { try { if (killTree) killTree(); } catch { /* already gone */ } clear(); process.exit(130); };
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
   try {
-    writeFileSync(p.file, `${niche}\n`);
+    // Exclusive create, after clearing any leftover: a link planted at the predictable name is never written through
+    // (attack c1f375b B2).
+    rmSync(p.file, { force: true });
+    writeFileSync(p.file, `${niche}\n`, { flag: "wx" });
     // A scratch spine (a sim door, a test) hunts recorded HN, never the network: only a live door, which refuses
     // ARC_SPINE_ROOT, reaches Hacker News.
     const fixture = args.fixture || (isScratchSpine() ? RECORDED : "");
@@ -121,6 +129,7 @@ async function main() {
     const r = await spawnBounded(process.execPath, argv, {
       cwd: REPO, env: huntEnv(), timeoutMs: 110_000,
       onData: (stream, chunk) => (stream === "out" ? process.stdout : process.stderr).write(chunk),
+      onSpawn: (kill) => { killTree = kill; },
     });
     if (r.error) { process.stderr.write(`hunt-op: the hunt could not run (${r.error})\n`); return 1; }
     if (r.timedOut) { process.stderr.write("hunt-op: the hunt did not finish in 110 s and was stopped -- no receipt\n"); return 1; }
@@ -138,4 +147,11 @@ function isMainModule() {
   try { return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
 }
 
-if (isMainModule()) process.exitCode = await main();
+if (isMainModule()) {
+  // Every failure ends as a named refusal, never a stack trace with machine paths (attack c1f375b L2, B3).
+  try { process.exitCode = await main(); } catch (e) {
+    const code = e && typeof e === "object" && typeof (/** @type {any} */ (e).code) === "string" ? /** @type {any} */ (e).code : "THREW";
+    process.stderr.write(`hunt-op: HUNT_FAILED (${code}) -- the hunt did not run; no receipt\n`);
+    process.exitCode = 2;
+  }
+}
