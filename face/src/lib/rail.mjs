@@ -14,6 +14,14 @@
 /** The localStorage key the viewer's choices live under. */
 export const RAIL_STORAGE_KEY = "arc.face.rail.rings";
 
+// A ring name is a key on plain objects here; one spelled like a prototype slot would write the prototype instead of
+// a field (attack 0991e16 B2). Such a name is never a ring: it is dropped on read and never stored.
+const RESERVED = new Set(["__proto__", "constructor", "prototype"]);
+/** @param {unknown} k @returns {boolean} */
+function usableKey(k) {
+  return typeof k === "string" && k.length > 0 && k.length <= 64 && !RESERVED.has(k);
+}
+
 /** @typedef {{ ring: string, rooms: { id: string }[] }} RailGroup */
 /** @typedef {Record<string, boolean>} RailSaved  ring name -> true (open) | false (folded), only rings the viewer touched */
 
@@ -40,13 +48,13 @@ export function ringOf(groups, roomId) {
  */
 export function expandedRings(groups, roomId, saved) {
   /** @type {Record<string, boolean>} */
-  const out = {};
+  const out = Object.create(null);
   if (!Array.isArray(groups)) return out;
   const here = ringOf(groups, roomId);
   const first = groups.length > 0 && groups[0] ? groups[0].ring : null;
   const s = saved && typeof saved === "object" ? saved : {};
   for (const g of groups) {
-    if (!g) continue;
+    if (!g || !usableKey(g.ring)) continue;
     if (g.ring === here) out[g.ring] = true;
     else if (Object.prototype.hasOwnProperty.call(s, g.ring)) out[g.ring] = s[g.ring] === true;
     else out[g.ring] = g.ring === first;
@@ -75,9 +83,13 @@ export function canFold(groups, roomId, ring) {
  */
 export function toggleRing(groups, roomId, saved, ring) {
   const s = saved && typeof saved === "object" ? saved : {};
-  if (!canFold(groups, roomId, ring)) return s;
+  if (!usableKey(ring) || !canFold(groups, roomId, ring)) return s;
   const open = expandedRings(groups, roomId, s)[ring] === true;
-  return { ...s, [ring]: !open };
+  /** @type {RailSaved} */
+  const next = Object.create(null);
+  for (const [k, b] of Object.entries(s)) if (usableKey(k) && typeof b === "boolean") next[k] = b;
+  next[ring] = !open;
+  return next;
 }
 
 /**
@@ -91,9 +103,9 @@ export function parseSaved(raw) {
   try { v = JSON.parse(raw); } catch { return {}; }
   if (!v || typeof v !== "object" || Array.isArray(v)) return {};
   /** @type {RailSaved} */
-  const out = {};
+  const out = Object.create(null);
   for (const [k, b] of Object.entries(v)) {
-    if (typeof b === "boolean" && k.length > 0 && k.length <= 64) out[k] = b;
+    if (typeof b === "boolean" && usableKey(k)) out[k] = b;
   }
   return out;
 }

@@ -10,7 +10,7 @@
 //      room: not in the groups, not counted, and it carries no data-room.
 //   5. (face v3 P04, FV3-G) a ring header folds its rooms away, so five rings fit at 768 px. Which rings are open is
 //      lib/rail.mjs's decision; this file reads and writes the viewer's choice in try/catch (no storage = defaults).
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { ComponentType } from 'react'
 import { CaretDown, CaretRight, CircleDashed, GearSix, MagnifyingGlass } from '@phosphor-icons/react'
 import { RAIL_STORAGE_KEY, canFold, expandedRings, parseSaved, serializeSaved, toggleRing } from '../lib/rail.mjs'
@@ -48,9 +48,15 @@ export default function Rail({
   const [saved, setSaved] = useState<RailSaved>(() => {
     try { return parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)) } catch { return {} }
   })
-  useEffect(() => {
-    try { window.localStorage.setItem(RAIL_STORAGE_KEY, serializeSaved(saved)) } catch { /* no storage: the defaults hold next visit */ }
-  }, [saved])
+  // Written only on a click, never on mount, and merged over what storage holds NOW: a second tab's fold survives
+  // this one's stale copy (attack 0991e16 B1).
+  const onToggle = (ring: string) => {
+    let fresh: RailSaved = saved
+    try { fresh = { ...parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)), ...saved } } catch { /* no storage: in-memory only */ }
+    const next = toggleRing(groups, current, fresh, ring)
+    setSaved(next)
+    try { window.localStorage.setItem(RAIL_STORAGE_KEY, serializeSaved(next)) } catch { /* no storage: the defaults hold next visit */ }
+  }
   const open = expandedRings(groups, current, saved)
   return (
     <nav aria-label="Rooms" className="fixed left-0 top-0 bottom-0 z-40 hidden lg:flex flex-col" style={{ width: RAIL_W, background: 'var(--bg-1)', borderRight: '1px solid var(--line-1)' }}>
@@ -83,7 +89,7 @@ export default function Rail({
               data-rail-ring-header={g.ring}
               aria-expanded={open[g.ring] === true}
               aria-disabled={canFold(groups, current, g.ring) ? undefined : true}
-              onClick={() => setSaved((s) => toggleRing(groups, current, s, g.ring))}
+              onClick={() => onToggle(g.ring)}
               title={canFold(groups, current, g.ring) ? g.lede : `${g.lede} · holds the room open now`}
               className="w-full flex items-center gap-1.5 px-2.5 h-[26px] text-left text-[10.5px] uppercase tracking-[0.08em] cursor-pointer transition-colors duration-150 hover:text-(--text-2) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)"
               style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)', borderRadius: 'var(--r-sm)' }}
