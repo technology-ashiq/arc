@@ -1111,7 +1111,7 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
     return i >= 0 && j >= 0 && i < j ? "" : `strip index ${i} >= View index ${j}`;
   };
   const mutant = ["tabs", "problems", "body", "strip", "drawer"];
-  check("MUTANT CONTROL -- a frame that draws the strip after the View FAILs the first-verb order", stripFirst(mutant) !== "", stripFirst(mutant));
+  check("MUTANT CONTROL -- a frame that draws the strip after the View fails the first-verb order", stripFirst(mutant) !== "", stripFirst(mutant));
   check("the frame draws the action strip before the tab body (first verb above the content)", stripFirst([...frame.frameSections()]) === "", stripFirst([...frame.frameSections()]));
   check("frameSections names each section once", new Set(frame.frameSections()).size === frame.frameSections().length);
   check("Records is a tab only when the fold declares a collection", JSON.stringify(frame.frameTabs(1, 0, 0)) === '["overview","work"]' && JSON.stringify(frame.frameTabs(0, 0, 2)) === '["overview","records"]' && JSON.stringify(frame.frameTabs(1, 1, 1)) === '["overview","records","work"]');

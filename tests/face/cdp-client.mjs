@@ -360,9 +360,9 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 }, firstVerb: { rooms: 23, over: [], worst: 126, unread: 0 } };
   check("the verdict passes a full, clean, settled run", smoke.judge(good).ok);
   // Cycle 17 P01 (REQ-04): a verb below the first screen fails the run, and so does a first verb nobody read.
-  check("the verdict FAILS a first verb at or below 768 px, naming the room", (() => { const v = smoke.judge({ ...good, firstVerb: { rooms: 23, over: ["ventures:6000"], worst: 6000, unread: 0 } }); return !v.ok && v.reasons.some((r) => r.includes("ventures:6000")); })());
-  check("the verdict FAILS a run where no room drew a verb (attack 7d3f02f B6)", !smoke.judge({ ...good, firstVerb: { rooms: 0, over: [], worst: 0, unread: 0 } }).ok);
-  check("the verdict FAILS a report whose first verbs were never read", !smoke.judge({ ...good, firstVerb: undefined }).ok && !smoke.judge({ ...good, firstVerb: { rooms: 22, over: [], worst: 126, unread: 1 } }).ok);
+  check("the verdict fails a first verb at or below 768 px, naming the room", (() => { const v = smoke.judge({ ...good, firstVerb: { rooms: 23, over: ["ventures:6000"], worst: 6000, unread: 0 } }); return !v.ok && v.reasons.some((r) => r.includes("ventures:6000")); })());
+  check("the verdict fails a run where no room drew a verb (attack 7d3f02f B6)", !smoke.judge({ ...good, firstVerb: { rooms: 0, over: [], worst: 0, unread: 0 } }).ok);
+  check("the verdict fails a report whose first verbs were never read", !smoke.judge({ ...good, firstVerb: undefined }).ok && !smoke.judge({ ...good, firstVerb: { rooms: 22, over: [], worst: 126, unread: 1 } }).ok);
   {
     const rows = [{ id: "a", opened: true, firstVerb: 126 }, { id: "b", opened: true, firstVerb: 768 }, { id: "c", opened: true, firstVerb: -1 }, { id: "d", opened: false }];
     const fv = smoke.firstVerbOf(rows);
