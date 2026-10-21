@@ -107,7 +107,7 @@ f: `docs/adr/1339-fv2-flagship-six-and-every-verb-works.md`
 t: The session door
 plain: Long jobs, such as convening a council, start only from a click. The result is a receipt the face can read back.
 d: A session starts only through `arc-run --driver`, never a raw binary (ADR-1326, ADR-1345). The council convene runs as the `council-convene` process. Some verbs read their receipt back, some do not yet, and some were filed as residue.
-f: `initiatives/face/phases/phase-06-spec.md`
+f: `initiatives/face/archive/phases-cycle16-2026-10-21/phase-06-spec.md`
 ```
 
 # The bigger loop
