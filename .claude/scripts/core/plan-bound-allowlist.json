@@ -32,6 +32,11 @@
       "why": "the discover lane's spine adapter (SPINE-G): it hands events to the emitter; the discover verb carries the binding"
     },
     {
+      "verb": "discover/hunt-op",
+      "class": "writer",
+      "why": "the face discover.hunt op runner (ADR-1369): its only writes are the hashed niche file and its lock under the gitignored .claude/state/discover, both removed after the run; the receipts are arc-discover emit, which the work door plan and apply bind"
+    },
+    {
       "verb": "hq/lib/narrative-proof",
       "class": "writer",
       "why": "the docs lane's narrative receipt writer (ADR-1514): called by narrative-verify, whose row carries the binding"

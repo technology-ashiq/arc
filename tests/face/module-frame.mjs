@@ -650,7 +650,8 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   // Phase 04 (REQ-06): the RESIDUE -- every panel still NOT SERVED, with the route it needs -- and the SERVED list --
   // every panel a door route now fills -- each held equal to the folds both ways. A panel that flips leaves the
   // first and joins the second; one that vanished from both is a mismatch in the second.
-  const P04 = join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-04");
+  // The live lists (Cycle 17 Phase 03): Cycle 16's are archived and frozen, and a panel that became served moved here.
+  const P04 = join(REPO, "initiatives", "face", "evidence", "phase-03");
   listCheck("residue.md", join(P04, "residue.md"),
     /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
     (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, allRows, "NOT SERVED");

@@ -8,8 +8,7 @@
 // not taste (ADR-0069): adding an agent, with its tier declared, is a verb of the work door.
 import { fmtInt } from "../../../lib/inbox.mjs";
 import { heldAcrossRooms } from "../../../lib/lane-room.mjs";
-import { asArray, asObject, servedRead } from "../../../lib/served.mjs";
-import { stateOfTable } from "../../../lib/availability.mjs";
+import { asArray, asObject, servedRead, servedTable } from "../../../lib/served.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {import("../../../lib/registry.mjs").Read} Read */
@@ -26,7 +25,7 @@ import { stateOfTable } from "../../../lib/availability.mjs";
  * @property {boolean} isRosterPartial
  * @property {string} partial
  * @property {string} rosterEmpty
- * @property {{ isReading: boolean, isRefused: boolean, refusal: { code: string, human: string }, rows: { key: string, name: string, model: string, tier: string, source: string, isHigh: boolean, isUnmapped: boolean, ink: string }[], note: string, availability: string }} tiers
+ * @property {import("../../../lib/served.mjs").ServedTable} tiers
  * @property {string} law
  * @property {Read[]} reads
  */
@@ -79,14 +78,21 @@ export function fold(_payloads, ctx) {
     rosterEmpty: isUnread
       ? `The served registry carried agents unreadably in ${held.unreadable.join(", ")} -- none is drawn, and none is claimed absent.`
       : "The served registry homes no agent in any room.",
-    tiers: {
-      isReading: st.isReading,
-      isRefused: st.isRefused,
-      refusal: st.refusal,
-      rows: tierRows.map(({ on: _on, ...r }) => ({ ...r, ink: r.isUnmapped ? "var(--amber)" : "var(--text-2)" })),
-      availability: stateOfTable({ isReading: st.isReading, isRefused: st.isRefused, refusal: st.refusal, isDrawn: served, rows: tierRows }).availability,
+    // A SERVED table over /api/roster, the panel the Phase 03 lists named NOT SERVED (REQ-08, ADR-1367): the registry's
+    // servedOf counts it, and the shared ServedTable draws its availability.
+    tiers: servedTable(st, {
+      panel: "Tiers and who is switched on",
+      route: "/api/roster",
+      columns: ["agent", "tier (implied by model)", "model", "on"],
+      listKey: "agents",
+      empty: "The roster served no agent.",
+      row: (a) => (typeof a["name"] !== "string" || a["name"] === "" ? null : {
+        key: String(a["name"]),
+        cells: [String(a["name"]), typeof a["tier"] === "string" ? a["tier"] : "unmapped", typeof a["model"] === "string" && a["model"] ? a["model"] : "(none)", a["enabled"] === true ? "on" : "off"],
+      }),
       note: "Each tier is implied by the model the agent's frontmatter names, through engine/router.yaml's models map -- a model the map does not name reads unmapped, never a guessed tier (ADR-0069, ADR-1367).",
-    },
+      owner: "engine",
+    }),
     law: "An employee here is an agent spawned for a task, then gone. Tiers are law, not taste: a tier change is a production change, reviewed and cited, never a quiet edit (ADR-0069).",
     reads,
   };
