@@ -182,14 +182,14 @@ face-pure: the check that a module's decisions run with plain node and no browse
 face-coverage: the check that every module and every served room has its partner.
 ```
 
-*Cycle 16 · arc-face v2 "The Workroom"*
+*Cycle 17 · arc-face v3 "Hands First"*
 
 ## At a glance
 
 | | |
 |---|---|
-| Status | IDLE |
-| Cycle | arc-face v2 (Cycle 16, opened 2026-09-16) |
+| Status | LIVE |
+| Cycle | arc-face v3 (Cycle 17, opened 2026-10-21) |
 | Product | — |
 
 Where the lane is right now -- phase, burn, what blocks it -- lives in its `PROGRESS.md` and live in the face.
