@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/src/shell/Rail.tsx:51-56",
+      "breaking_input": "Tab A has saved {command:false}. Tab B (stale in-memory {}) toggles ring 'work'. onToggle merges `{...stored, ...saved}` so tab B's stale in-memory copy wins over storage. If tab B's saved holds command:true from earlier and tab A has since folded it, tab B's click rewrites command:true over A's fold.",
+      "why": "The merge spread order puts the stale in-memory copy last, so it overrides the fresher stored values. The fix claims storage is merged over what it holds now, but for every key this tab ever touched, the stale copy wins. The read-modify-write race is only narrowed, not closed.",
+      "fix": "Apply only the clicked ring's change over the fresh stored copy: toggleRing(groups, current, parseSaved(storage), ring). Do not spread the in-memory copy over it.",
+      "twin_of": "Viewer state written to storage on mount, from a stale in-memory copy"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": "face/src/lib/rail.mjs:101-108",
+      "breaking_input": "Stored JSON with a 100k-key object, or ring keys of 64 chars or fewer in large numbers (for example 50,000 distinct names).",
+      "why": "parseSaved caps neither the number of keys nor the raw string length. Every render calls expandedRings, and each click runs serializeSaved, which does a stringify→parse→stringify round trip over unbounded viewer-controlled data. Hostile storage degrades the UI, and the bloat is re-persisted.",
+      "fix": "Cap the raw length before JSON.parse, and keep only keys that are in the served ring list.",
+      "twin_of": "A new pattern on a path every input crosses, with no bound on the input"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/src/shell/RoomFrame.tsx (drawer SessionDock/OpsDock effects)",
+      "breaking_input": "Open the drawer on an op, close it, and repeat quickly. Each open mounts a new OpsDock, which calls door.ops again, with no share or cache. The frame also calls door.sessions, and SessionDock calls it a third time. A slow door gets 3 or more concurrent identical reads per room change.",
+      "why": "Duplicate uncached door reads per mount and per drawer open. The frame's read result is not passed to the docks. This is the unfixed prior B4.",
+      "fix": "Pass the already-loaded registries to the docks as props, or share one in-flight read.",
+      "twin_of": "Concurrent reads of one build-time fact share one in-flight computation."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/src/modules/company/org/fold.mjs foldChart",
+      "breaking_input": "/api/org role title or why containing a newline, ANSI/control characters, or 100KB of text. A role with `reports_to` equal to its own id also makes tally count it.",
+      "why": "Door strings go raw into chip title, label, head and card lines. The one-line and cap rule is not applied. This is the unfixed prior B3. A role that reports to itself can become the CEO.",
+      "fix": "Pass each served string through the shared one-line + cap helper. Skip self-reports_to when tallying.",
+      "twin_of": "A finding that interpolates a fold-returned string raw"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/src/modules/company/org/fold.mjs foldChart (picks.role)",
+      "breaking_input": "Fragment pick role=<id>, where the id is unknown or has changed, or an orgFilter value that is not in the set.",
+      "why": "An unknown role pick is silently treated as no card, with no note. The filter falls back to all. Malformed input is dropped without naming it.",
+      "fix": "Show a named line when the picked role is not found.",
+      "twin_of": "A malformed id dropped silently"
+    }
+  ]
+}

@@ -48,11 +48,11 @@ export default function Rail({
   const [saved, setSaved] = useState<RailSaved>(() => {
     try { return parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)) } catch { return {} }
   })
-  // Written only on a click, never on mount, and merged over what storage holds NOW: a second tab's fold survives
+  // Written only on a click, never on mount, and what storage holds NOW wins over this tab's copy: a second tab's fold survives
   // this one's stale copy (attack 0991e16 B1).
   const onToggle = (ring: string) => {
     let fresh: RailSaved = saved
-    try { fresh = { ...parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)), ...saved } } catch { /* no storage: in-memory only */ }
+    try { fresh = { ...saved, ...parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)) } } catch { /* no storage: in-memory only */ }
     const next = toggleRing(groups, current, fresh, ring)
     setSaved(next)
     try { window.localStorage.setItem(RAIL_STORAGE_KEY, serializeSaved(next)) } catch { /* no storage: the defaults hold next visit */ }

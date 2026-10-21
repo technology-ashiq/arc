@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/src/shell/Rail.tsx:48-53",
+      "breaking_input": "A viewer with localStorage under key arc.face.rail.rings holding a JSON object with a key like __proto__, or a ring name present in the served registry but with 64+ chars. Also a second tab: both tabs write whole 'saved' state on every effect run (including mount), so tab B mounting with defaults overwrites tab A's saved choices.",
+      "why": "The effect writes serializeSaved(saved) on mount, immediately persisting the initial state. Two tabs/instances with stale in-memory state clobber each other's storage (read-modify-write with no re-read). Also parseSaved builds `out` as a plain object keyed by untrusted storage keys; `out['__proto__']=true` is a no-op assignment, silently dropping a ring named __proto__ (lossy transform, plain-object map keyed by input).",
+      "fix": "Build the map with Object.create(null) or a Map, read keys by Object.hasOwn, and re-read storage before write or only write on user toggle.",
+      "twin_of": "A read-modify-write with no re-read, and a plain-object map keyed by input -> Re-read and compare right before the write, write by temp file and rename, and key a map built from input with a null-prototype object."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/lib/rail.mjs:55-62",
+      "breaking_input": "Ring name 'constructor' or 'toString' served by the registry with saved = {}",
+      "why": "expandedRings uses Object.hasOwnProperty.call so lookup is OK, but `out` is a plain object keyed by ring name from the door; a ring named '__proto__' makes out['__proto__']=true a no-op, so open['__proto__'] reads Object.prototype-ish/undefined and the ring can never open. toggleRing spreads `{...s,[ring]:...}`, which defines own '__proto__' key, then serializeSaved->parseSaved re-assigns via out[k]=b and drops it.",
+      "fix": "Use null-prototype objects or Map for out/saved in rail.mjs.",
+      "twin_of": "`out[key] =` on a plain object -> Build maps from untrusted keys without a prototype."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/src/modules/company/org/fold.mjs foldChart (picks['orgFilter'], picks['role'])",
+      "breaking_input": "picks is a plain object from the URL fragment; role pick value is an arbitrary string, and byId.get(picked) is a Map so safe, but `Object.hasOwn(CHIP_STYLE, seat)` is used while `CHIP_STYLE[l.key]` is indexed directly; a role seat string served by the door such as '__proto__' is guarded, yet title/id/why strings from /api/org are interpolated raw into chip `title`, card lines and `head:` text with no one-line/cap treatment.",
+      "why": "Free text from the door (title, reason, why, due, verdict) is drawn without a cap or control-character/line-break stripping, so a newline or very long string from a role card distorts the chart. Fold-returned strings must be one line and capped.",
+      "fix": "Pass every door string through the one-line + length-cap helper before putting it in labels, titles and card lines.",
+      "twin_of": "A finding that interpolates a fold-returned string raw -> Check: every value a finding quotes from data is one line, quoted and capped."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/src/shell/RoomFrame.tsx (effect fetching door.ops / door.sessions)",
+      "breaking_input": "Rapid room switches while a door.sessions read is slow",
+      "why": "Each ModuleView issues its own ops and sessions reads, and then OpsDock/SessionDock issue the same reads again (plus once more per open drawer instance). That is an uncached duplicate of a door read per mount and per drawer open, and the drawer's SessionDock re-reads sessions with no backoff.",
+      "fix": "Share one in-flight read between the frame and docks, or pass the loaded registries down as props.",
+      "twin_of": "The full extract per request, unbounded -> Concurrent reads of one build-time fact share one in-flight computation."
+    }
+  ]
+}
