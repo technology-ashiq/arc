@@ -17,7 +17,7 @@
 // Exit:  0 smoke passed in every mood · 1 a mood failed · 2 setup failed (no dist, door or preview never up).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { spawnTracked, isDead, deathReason, stopTree, removeDir, delay } from "./proc.mjs";
+import { spawnTracked, isDead, deathReason, stopTree, removeDir, delay, installStopHandlers } from "./proc.mjs";
 import { findChrome } from "./cdp.mjs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -115,6 +115,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
   const sentences = Object.fromEntries(Object.entries(JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "room-copy.json"), "utf8")).rooms ?? {}).map(([id, r]) => [id, String(r && r.sentence ? r.sentence : "")]));
 
   const tmp = mkdtempSync(join(tmpdir(), "face-browser-"));
+  ACTIVE.tmp = tmp;
   const spine = join(tmp, "spine");
   const token = `face-browser-${process.pid}`;
   let door = null;
@@ -262,7 +263,11 @@ function invokedDirectly() {
   catch { return false; }
 }
 
+/** The run's scratch directory, for the stop handler to remove when a kill skips the `finally` (debt #D23). */
+export const ACTIVE = { tmp: "" };
+
 if (invokedDirectly()) {
+  installStopHandlers(async () => { if (ACTIVE.tmp) await removeDir(ACTIVE.tmp, "harness-run"); });
   (async () => {
     try {
       process.exitCode = await runHarness(parseArgs(process.argv.slice(2)));

@@ -1,0 +1,94 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/arc-dash.mjs (apiAsk, env passed to runTool) / work-door.mjs:118",
+      "breaking_input": "The owner's key is placed in the arc-run child env (ARC_LLM_API_KEY). arc-run then spawns the driver and, per the existing design, may forward its env or print it into driver stderr or transcripts; a model with tools or a driver that logs env would leak it. The face-ask process runs with the key in env for the whole tree, and a fallback hop is only blocked after the first attempt.",
+      "why": "Key reaches every descendant of arc-run, including any driver spawned on a path the owner-model guard does not cover. It is allow-listed for the one child only by convention, not enforced.",
+      "fix": "Have arc-run pass ARC_LLM_API_KEY only to the generic-api driver spawn and strip it from every other child env and from transcript capture.",
+      "twin_of": "A child handed the whole environment, and a data source chosen by a bare env var"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:118",
+      "breaking_input": "env override `{ ...childEnv(), ...env }` spreads the caller's env last. A caller passing ARC_SPINE_ROOT, NODE_OPTIONS, PATH, or GIT_DIR overrides the door's scrubbed values; apiAsk passes only three names today, but the helper accepts any.",
+      "why": "The helper has no allow-list for names; the existing rule says spread the trusted value last and refuse the untrusted key.",
+      "fix": "Allow-list env names in runTool (ARC_LLM_ENDPOINT, ARC_LLM_API_KEY, ARC_SPINE_ROOT) and refuse others by name; compare case-insensitively on win32.",
+      "twin_of": "A spread order that let a caller's click win"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:registryPath",
+      "breaking_input": "ARC_FACE_MODELS_FILE set to a relative path (e.g. `models.json`) or a path with a Windows alternate form (8.3 short name of the repo, `\\\\?\\` prefix, junction created after the check).",
+      "why": "resolve() makes a relative path cwd-relative per process: the door and a later process resolve it differently. The inside-repo check compares case-folded strings after realpath of only the nearest existing ancestor; a junction created later under that ancestor, or a short-name spelling, lets the key file land in the repo. The door also honours an env override of a file it writes, with no scratch-outside-repo requirement beyond the repo check.",
+      "fix": "Refuse a non-absolute ARC_FACE_MODELS_FILE by name; re-check realpath of the parent directory immediately before the write in saveRegistry, and refuse symlink or junction destinations.",
+      "twin_of": "A relative path override resolved per process"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:saveRegistry",
+      "breaking_input": "Two concurrent POST /api/models/set requests (add A, add B) or a door and a second door process: both load, apply, then rename; the later rename wins and silently drops the first change. A Windows rename over a file briefly held open by AV or a reader fails with EPERM/EBUSY and is reported as a hard failure.",
+      "why": "Read-modify-write with no lock or re-read across load, apply and save, and no bounded retry on transient Windows rename codes.",
+      "fix": "Hold a lock beside the registry file across load..rename, and retry rename on EPERM/EBUSY/EACCES with a time bound.",
+      "twin_of": "A Windows rename over a briefly-open file as a hard failure"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:saveRegistry",
+      "breaking_input": "The destination path is a symlink or junction to a file inside the repo or elsewhere. renameSync replaces the link itself, but mkdirSync recursive on a path through a junction creates directories inside the target; mode 0o600 and 0o700 are ignored on Windows, leaving the key readable by other local users under a shared profile.",
+      "why": "A writer does not lstat or realpath its destination directory before creating files in it, and the key file has no owner-only guarantee on win32.",
+      "fix": "lstat the parent directory as a real directory before writing and refuse links; on win32 note or apply an ACL.",
+      "twin_of": "A state directory written through unchecked"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs apiAsk (redactKey)",
+      "breaking_input": "A driver error that prints the key with a non-standard encoding (base64 in a Basic header, HTML-escaped, split across a line break at the stderr cap, or truncated by the 500-character slice happening before another occurrence is matched). Also res.stdout is not redacted: a model answer echoing the key (ASK reply) is served in `answer` if the model was prompted to repeat its env.",
+      "why": "Redaction covers three spellings on the error path only, and the answer text from stdout is never passed through redactKey, so a provider that echoes the bearer reaches the browser.",
+      "fix": "Run redactKey over answer, citations and stderr-derived text before serving; also redact the base64 form and chunk-split occurrences.",
+      "twin_of": "A secret redacted in one spelling"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs apiAsk",
+      "breaking_input": "Two simultaneous POST /api/ask calls from a page or a script: each spawns a paid arc-run tree with timeout 120 s, with no server-side in-flight slot.",
+      "why": "A spend-per-request route claims no in-flight slot before its first await, so concurrency multiplies cost and child process count; the door-wide ceiling for paid children is not applied here.",
+      "fix": "Claim a single in-flight slot server-side before the first await and refuse the second with a named status.",
+      "twin_of": "A paid action guarded only in the page"
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs apiAsk (spineIds / since check)",
+      "breaking_input": "Host clock skew or an event ts written in IST with an offset: `Date.parse(String(e.event.ts))` of a spine ts in the door's IST grammar may parse as NaN or in local time; `ev.ms >= run.since - 1000` is false for NaN, so a real receipt is dropped; or true for a stale one if the clock moved.",
+      "why": "Newness is judged on a wall-clock comparison between the door process and the writer's formatted ts, rather than on an id or a snapshot of the log taken before the action.",
+      "fix": "Snapshot the set of face-ask run.completed ids before spawn and accept only an id absent from that snapshot.",
+      "twin_of": "A \"since\" read off a log that keeps earlier events"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/engine/arc-run.mjs:~700",
+      "breaking_input": "`--owner-model` passed together with `--dry-run` or with a `--driver auto` that resolves to generic-api after routing: `tier` is checked, but `driver` is compared against MODEL_CAPABLE before or after auto resolution depending on order; also `--owner-model=x` form.",
+      "why": "Ordering of the owner guard relative to driver resolution is not shown to run after auto selection, and the `--flag=value` spelling of a value flag is handled only if takeValue refuses it; the new flag copies --trial-model's handling without a test of its own.",
+      "fix": "Add a fixture for `--owner-model=x`, auto driver, and dry-run, asserting a named exit 2 for each."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "face/scripts/harness-run.mjs (llm setup)",
+      "breaking_input": "`startFakeLlm` throws after `freePort()` returns a port another process takes first, or the import of fake-llm.mjs fails; `llm` is assigned only after the await, but the models file and door port steps follow. A throw in startFakeLlm leaves nothing to close, yet the freePort-then-listen gap is a race, and the fake provider listens with no check that the answers came from this suite's server.",
+      "why": "Free port probed then released then bound later; the door ask could hit another local service on that port that returns a plausible reply.",
+      "fix": "Have startFakeLlm listen(0) and return its port, and assert a per-run marker in its replies.",
+      "twin_of": "Fixed ports in a suite that spawns servers"
+    }
+  ]
+}

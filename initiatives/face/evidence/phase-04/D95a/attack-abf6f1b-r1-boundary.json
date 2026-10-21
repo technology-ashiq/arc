@@ -1,0 +1,56 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:ownerKeyBaseState (shadows/literal block)",
+      "breaking_input": "In the working repo, run `git update-ref refs/tags/refs/remotes/origin/main HEAD`. This creates a ref named refs/tags/refs/remotes/origin/main. Then run the gate with the default base refs/remotes/origin/main.",
+      "why": "For a literal full name, `shadows` is built from refs/<base>, refs/tags/<base>, refs/heads/<base> and refs/remotes/<base>, and any hit is refused as ambiguous. Git resolves a full refs/... name by exact match first, so none of those refs can stand in for it and the refusal is gratuitous. The agent controls the refs and can downgrade the swap detector from state \"changed\" (owner-key-changed=1) to \"unavailable\" ([owner-key-unchecked], owner-key-changed=0) whenever the tree's key is the swapped one. The ambiguity check is only meaningful for short names.",
+      "fix": "For a literal name (refs/..., HEAD or a sha), skip the shadow scan and resolve it directly. Run the shadow scan only for short names."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/validate.mjs:8 (new import of ./owner-sig.mjs)",
+      "breaking_input": "Any sandbox, fixture or sync target that copies validate.mjs and its siblings from a hand-kept file list, and does not list owner-sig.mjs, or does not list the new .claude/owner-key.pub in the product manifest and sync-golden. Running assertDecision or arc-event in that sandbox hits ERR_MODULE_NOT_FOUND.",
+      "why": "validate.mjs is imported by the spine writer, so this is a new static import in a core module. The defect list records the same class: a new import in a shared module breaks test sandboxes that copy files by name. A failed import here takes down every decision.recorded write, not just narrative-accept.",
+      "fix": "Grep tests/, the sandbox copy lists and the products/*/manifest.json for validate.mjs and add owner-sig.mjs (and owner-key.pub) wherever it is copied by name. Regenerate the sync golden."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:proofArms (spawned, spawnedInit, forge's arc-event spawn, inboxCli, usage)",
+      "breaking_input": "Make the spawned arc-inbox hang, or fail to spawn so that status is null and .error is set. The arm `spawned.status !== 0` is then true, and `spawned.stderr.includes` throws or the selftest hangs.",
+      "why": "These spawnSync calls have no timeout or killSignal and no `.error` read. `status !== 0` accepts null (killed or failed to spawn) as a refusal. This repeats the recorded rows \"every spawn a test makes has a timeout and asserts .error and a non-null status\" and \"a spawnSync in a node fixture with no timeout\". forge() ignores the arc-event result entirely.",
+      "fix": "Add timeout and killSignal to each spawn. Assert `!r.error && r.status !== null` before comparing the status or reading stdout.",
+      "twin_of": "A spawnSync in a node fixture with no timeout"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:proofArms, A2 no-terminal arm (`!existsSync(join(homeBox, \".arc-private\"))`)",
+      "breaking_input": "Run the spawned `owner-key init` and have it write the key to the real OS home. The arm still passes.",
+      "why": "B6 in the same diff makes ownerKeyDir ignore HOME and USERPROFILE and use the OS user record. homeBox is therefore never where a key would land, so `!existsSync(homeBox/.arc-private)` is true whatever the child does. The arm claims \"touch no key directory\" while checking a directory that cannot be touched. This is a vacuous pass.",
+      "fix": "Assert against OK.ownerKeyDir(), by snapshotting its existence before and after the spawn. Or inject the key directory into the child by an argument or env var that it honours."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:proofArms (rmSync in the finally blocks; the keyBox cleanup at the very end)",
+      "breaking_input": "On Windows, hold a handle open on a file in the temp dir, which is the usual EBUSY/EPERM case. rmSync in `finally` throws past the RAN line. Separately, any throw inside the spine2 or r1 try skips the final `rmSync(keyBox)`, leaving a scrypt-sealed private key and its passphrase-derived test files in %TEMP%.",
+      "why": "The cleanups are bare rmSync calls with no try/catch, and keyBox is removed only in the last finally, which a mid-function throw never reaches. This matches the recorded rows \"a cleanup in finally that can throw past the RAN line\" and \"a temp directory that would not delete was dropped silently\".",
+      "fix": "Wrap each cleanup so it warns instead of throwing. Register keyBox, spine2 and the others for removal in a single outer try/finally that opens at creation.",
+      "twin_of": "A cleanup in `finally` that can throw past the RAN line"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:proofArms (gk, gm, gb, gitIn.run helpers)",
+      "breaking_input": "The runner's global git config sets commit.gpgsign=true, a global core.hooksPath with a pre-commit hook, or a commit template. Every temp-repo `git commit` then prompts, runs the hook, or fails.",
+      "why": "gitEnv strips GIT_CONFIG* but keeps HOME, so the owner's global config still applies. Only user.name and user.email are overridden with -c. This matches \"owner config that runs or hides -> override every config key that can run a program\" for a test that creates commits.",
+      "fix": "Add `-c commit.gpgsign=false -c core.hooksPath=<empty dir>` to those helpers. Or set GIT_CONFIG_GLOBAL to the null device and GIT_CONFIG_NOSYSTEM=1 in the helpers' env.",
+      "twin_of": "Owner config that runs or hides -> override every config key that can run a program, write beside the index, or change what a diff shows."
+    }
+  ]
+}

@@ -49,6 +49,37 @@ export function waitExit(child, ms) {
   });
 }
 
+/** Every child spawnTracked started and has not seen exit: what a stop must end (debt #D23). */
+const LIVE = new Set();
+
+/** Stop every live tracked child and its whole tree. */
+export async function stopAll() {
+  await Promise.all([...LIVE].map((c) => stopTree(c, { graceMs: 1500 })));
+}
+
+/**
+ * End the harness cleanly when it is told to stop: SIGINT and SIGTERM on POSIX, the IPC `shutdown` message on win32
+ * (where a parent cannot deliver a catchable signal), and an uncaught error. Every tracked tree is stopped and
+ * `cleanup` runs before exit, so a runner kill no longer skips the `finally` and leaks children (debt #D23).
+ * @param {() => Promise<void> | void} cleanup @param {(code: number) => void} [exit]
+ */
+export function installStopHandlers(cleanup, exit = (code) => process.exit(code)) {
+  let stopping = false;
+  const stop = async (code) => {
+    if (stopping) return;
+    stopping = true;
+    try { await stopAll(); } catch { /* best effort */ }
+    try { await cleanup(); } catch { /* best effort */ }
+    exit(code);
+  };
+  process.once("SIGINT", () => { stop(130); });
+  process.once("SIGTERM", () => { stop(143); });
+  process.on("message", (m) => { if (m && typeof m === "object" && m.type === "shutdown") stop(143); });
+  process.once("uncaughtException", (e) => { process.stderr.write(`harness: uncaught ${e && e.message}
+`); stop(2); });
+  return stop;
+}
+
 /**
  * Spawn with the harness's defaults: stdin ignored, stderr captured (tail only), never a
  * window, and on POSIX its own process group so the whole tree can be killed at once.
@@ -60,6 +91,8 @@ export function spawnTracked(command, args, opts = {}) {
     windowsHide: true,
     detached: POSIX,
   });
+  LIVE.add(child);
+  child.once("exit", () => LIVE.delete(child));
   let tail = "";
   child.spawnError = null;
   child.on("error", (e) => { child.spawnError = e; });
@@ -71,7 +104,9 @@ export function spawnTracked(command, args, opts = {}) {
 function signalTree(child, signal) {
   try {
     if (POSIX) process.kill(-child.pid, signal);
-    else child.kill(signal);
+    // win32 has no process group to signal, and child.kill ends the direct child ONLY: it exited inside the grace, the
+    // taskkill below never ran, and its grandchild lived on (debt #D23). The tree is ended by taskkill /T at once.
+    else spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore", windowsHide: true, timeout: 10000 });
   } catch { /* already gone */ }
 }
 

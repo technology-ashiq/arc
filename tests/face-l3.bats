@@ -818,3 +818,11 @@ load 'test_helper'
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
 }
+
+@test "harness tree: a stopped harness ends its child AND grandchild (SIGTERM, or the IPC shutdown on win32); a direct-child-only stop is caught" {
+  run node "$ARC_ROOT/tests/face/harness-tree.mjs"
+  [[ "$output" == *"RAN harness-tree on "* ]] || { echo "the suite never started: $output"; false; }
+  [[ "$output" == *"RAN pids child="*" grandchild="* ]] || { echo "no pids line: $output"; false; }
+  [[ "$output" == *"RAN: 3 checks, 0 failed"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
+}

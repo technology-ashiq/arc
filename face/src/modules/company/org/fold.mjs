@@ -110,7 +110,10 @@ export const STATE_CLASSES = Object.freeze([
 
 const isObj = (/** @type {unknown} */ v) => v !== null && typeof v === "object" && !Array.isArray(v);
 // The door escapes every string it serves (escapeDeep); the room draws the text, so it is unescaped once here.
-const str = (/** @type {unknown} */ v) => (typeof v === "string" ? unescapeDoorText(v) : "");
+// debt #D113: a door string drawn on a chip or a card is one line and capped -- a role title holding a newline or
+// 10,000 characters never stretches the chart.
+const STR_MAX = 200;
+const str = (/** @type {unknown} */ v) => (typeof v === "string" ? unescapeDoorText(v).replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").slice(0, STR_MAX) : "");
 const int = (/** @type {unknown} */ v) => (Number.isInteger(v) ? /** @type {number} */ (v) : null);
 
 /**

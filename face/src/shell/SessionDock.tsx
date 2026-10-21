@@ -20,11 +20,14 @@ import { notReadyReason } from '../lib/frame.mjs'
 import { Btn, Chip, Field, MONO, Panel, PanelTitle, PickRow, Receipt, TextInput, UI } from '../ui/kit'
 
 // `only` draws just the verb card with that id and no run list (the action drawer, FV3-A); `bare` drops the section chrome.
-export default function SessionDock({ roomId, door, only, bare = false }: { roomId: string; door: Door; only?: string; bare?: boolean }) {
-  const [registry, setRegistry] = useState<unknown>(null)
+export default function SessionDock({ roomId, door, only, bare = false, served }: { roomId: string; door: Door; only?: string; bare?: boolean; served?: unknown }) {
+  const [own, setRegistry] = useState<unknown>(null)
   const [loadError, setLoadError] = useState('')
   const [bump, setBump] = useState(0)
+  // debt #D113: the frame's /api/sessions read is used until a start asks for a fresh one (bump), never read twice.
+  const registry = bump === 0 && served !== undefined && served !== null ? served : own
   useEffect(() => {
+    if (bump === 0 && served !== undefined) return
     const ac = new AbortController()
     setLoadError('')
     door
@@ -32,7 +35,7 @@ export default function SessionDock({ roomId, door, only, bare = false }: { room
       .then((r: unknown) => { if (!ac.signal.aborted) setRegistry(r) })
       .catch((err: { human?: string; message?: string }) => { if (!ac.signal.aborted) setLoadError(String(err?.human ?? err?.message ?? 'the door did not answer')) })
     return () => ac.abort()
-  }, [door, bump])
+  }, [door, bump, served])
 
   const cards = sessionCards(roomId, registry).filter((c) => only === undefined || c.id === only)
   if (registry !== null && cards.length === 0) return null

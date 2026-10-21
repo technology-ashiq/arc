@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/arc-dash.mjs:868",
+      "breaking_input": "An attacker sends `{op:'edit', name:'foo', model:{name:'foo', baseUrl:'x', model:'y'}, clearKey:false}` and then a concurrent `testModel('foo')` completes; the stored key changed but `clearKey:false` keeps the old key, so the result is stored for the new model while the test ran against the old key.",
+      "why": "The edit path does not invalidate in-flight tests; only the running test's completion checks the key, but if the test started before the edit and finishes after, `still.key === hit.key` compares the runner's captured key (old) against the new key, so the result is correctly dropped. However the edit itself does not cancel or re-run a pending test; a test that started before the edit and returns after the edit is dropped, but a test that started before the edit and completes while the edit is in progress may block the edit's `applyChange` because `testModel` holds no lock, so the edit can land between the test's read and its write, causing the test to store against the old registry view that was overwritten.",
+      "fix": "In `apiModelsTest`, after the wait, reload the registry, and if the model was edited (name/URL/model/key changed) during the wait, do not store the result; also have `apiModelsChange` for `edit` invalidate any cached test result for that model under both names.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:870-874",
+      "breaking_input": "`body.name` is the OLD name; `step.reg.models[got.reg.models.indexOf(was)]` assumes the edit kept the same array position. But `applyChange` for edit replaces the hit model with a new object; if the edit also renames, the replacement object sits at the same index, so indexOf works. However if the edit changes the name to one that collides (already refused), fine; but if two edits are sent concurrently, the second edit's `got.reg` may have already been replaced, so `got.reg.models.indexOf(was)` returns -1 or a different index, and `tests.delete` may delete the wrong model's test.",
+      "why": "The edit-name invalidation uses `got.reg.models.indexOf(was)` which is positional; concurrent edits can reorder (though they cannot reorder since the array preserves order). But the real issue is that `was` is found in `got.reg`, which is the registry BEFORE the change; the new model is at the same index only if the edit does not change the array length (it doesn't). So this is not a positional bug. The actual flaw: `tests.delete(was.name.toLowerCase())` and `tests.delete(now.name.toLowerCase())` are case-insensitive, but the registry may store names that differ only by case, and `findModel` may match case-insensitively, so deleting by lowercased name could delete a test for a DIFFERENT model that shares the case-folded name.",
+      "fix": "Delete only the exact name that the test result was stored under, by checking that the row's name equals the model's name case-sensitively.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/hq/arc-dash.mjs:944",
+      "breaking_input": "An attacker edits a model to change only its key (via `edit` with `key` set), then runs `testModel('name')`; the test runs against the NEW key, but if the client had a cached test result from before the edit (stored in `testsOf(ctx)`), the edit's invalidation in `apiModelsChange` only deletes the names, not the key comparison. However the bigger issue: the test result is stored only if `still.key === hit.key`, but `hit.key` here is the model from the freshly loaded registry; the runner's `hit` came from an earlier read. If the key was changed by a concurrent edit BETWEEN the test's start and the reload, the comparison correctly drops the result. But if the test started against the OLD key and the edit lands AFTER the reload but before the write, the result is stored for the NEW key while the test actually used the old key. There is no lock or versioning.",
+      "why": "Race: test reads registry (old key), edit changes key, test reloads and sees new key, compares with its captured old key -> drops; but if the edit happens between the reload and the store, the store writes under the new key, attributing an old-key test to the new key.",
+      "fix": "Make `apiModelsTest` read the registry once, capture the model's full record, and after the test, re-read and compare identity by a monotonic version number, not by field equality.",
+      "twin_of": "A check-then-emit with no lock"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:111-128",
+      "breaking_input": "`{op:'edit', name:'foo', model:{name:'foo', baseUrl:'a', model:'b'}, clearKey:true}` with no `key` field. `c.record.key` is undefined, so the \"new key and remove-the-key together\" check passes; then `key` becomes undefined, and the model loses its key. This is fine. But `{op:'edit', name:'foo', model:{name:'foo', baseUrl:'a', model:'b', key:'sk-...'}, clearKey:false}` -- the `model` contains a key, and the code keeps it as the new key. That is intended. However the edit validation only rejects `clearKey:true` with a key in `model`; it does NOT reject `clearKey` other than boolean; and it allows `clearKey` to be present with `undefined` value, which the UI's checkbox sets. But the defect: the edit form sends `key:''` always (from `editForm`), and `editChange` passes `key:''` to `addChange`? Actually `editChange` calls `addChange(form)` where form has `key:''`; `addChange` treats an empty string as no key. So a user who types a space in the key field sends a key of `' '` which is truthy, and the edit sets a space as the key. The door accepts a whitespace-only key, which is a credential that will likely be a broken key, but it is stored.",
+      "why": "`addChange` accepts any non-empty string as a key, including whitespace; the edit path inherits this. The UI's password field allows spaces.",
+      "fix": "In `addChange` and `checkRecord`, trim the key and refuse a key that is empty after trimming.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "face/src/lib/talk.mjs:248-253",
+      "breaking_input": "`editChange('oldname', {name:'newname', baseUrl:'http://x', model:'m', key:'', clearKey:true})` returns `{op:'edit', name:'oldname', clearKey:true, model:{name:'newname', baseUrl:'http://x', model:'m'}}`. The door's `applyChange` then checks `if (b.clearKey === true && c.record.key !== undefined)`; here `c.record.key` is undefined because `addChange` omitted it, so it passes and the key is removed. Fine. But `editChange('oldname', {name:'newname', baseUrl:'http://x', model:'m', key:'newkey', clearKey:true})` returns `{ok:false}` as expected. However the UI's checkbox, when checked, sets `key:''` (see `onChange`), so a user who types a key and then checks \"remove\" gets a rejected edit and the form stays open with the key still typed; but the checkbox is checked, so the field is disabled, and the user cannot uncheck without losing the typed key? Actually the checkbox's onChange resets `key:''`, so the typed key is already cleared. The issue: if the user types a key, then checks the box (which clears the key), the form now has `clearKey:true, key:''`, which is valid; but the user might intend to keep the typed key and uncheck later, but the key is already gone. This is a UI footgun but not a security hole.",
+      "why": "The UI clears the key field when the user checks 'remove', so the user cannot change their mind without retyping. Not a logic bug per se, but a UX that could lead to accidental key removal.",
+      "fix": "When the checkbox is unchecked, restore the previously typed key; or do not clear the key field on check, but instead disable it and ignore it.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": "face/src/shell/ModelsPanel.tsx:63-68",
+      "breaking_input": "When the user presses Escape while an edit form is open, the handler `setEditing(null)` fires, but the `useEffect` depends on `editing`, so the handler is re-registered. If the user presses Escape twice quickly, the first keydown closes the edit, and the second (which may be a repeat) now calls `onClose()` because `editing` is null; the panel closes. The user intended to just cancel the edit but the second Escape closes the whole settings page.",
+      "why": "The effect's dependency array includes `editing`, so the handler changes identity each time `editing` changes; a keydown that repeats (holding Escape) can trigger the new handler while the old one is being removed.",
+      "fix": "Use a ref to track the editing state, or queue the state update so only one action per event.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "high",
+      "where": "face/src/shell/ModelsPanel.tsx:88-93",
+      "breaking_input": "In `onSave`, after `await door.setModels(c.change)` succeeds, `setEditing(null)` is called. But if the edit renames the model to a name that already exists in the newly returned `view`, `modelsView` will show two rows with the same `data-model-row` key (the edited row's new name and the existing row). The list uses `key={r.name}`, and React will warn or misbehave. More critically, the rename could collide with another row's name that the server already refused, so this is not reachable.",
+      "why": "`onSave` closes the form on success, but it does not verify that the new name is still unique in the returned view; if the server accepted a rename that now collides (but the server refuses collisions, so not reachable).",
+      "fix": "None needed; server refuses collisions. However check that `setEditing(null)` does not race with the return data.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "face/src/shell/ModelsPanel.tsx:174-180",
+      "breaking_input": "The edit button (`data-model-edit`) is disabled when `testing !== null`, but the `use` button is not disabled when an edit is open, and the `remove` button is also not disabled while editing. A user can click 'remove' on the row being edited (since the row is replaced by the edit form, the remove button is not shown? Actually the edit form replaces the entire row, so the remove/use/edit buttons for that row are not rendered; but other rows' buttons are active. A user could click 'remove' on another model while this edit is open; the edit's `onSave` still holds `editing.name`, which may be the same as the removed model? If a user removes the model being edited from another row (impossible because the edited row is hidden), or if a concurrent external actor removes it, the save will fail with a refusal. Acceptable.",
+      "why": "No real bug; but consider that the edit form is not dismissed when the model is removed elsewhere, causing a stale edit.",
+      "fix": "On any model list change, if the edited name no longer exists, close the edit.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "face/src/shell/ModelsPanel.tsx:182-185",
+      "breaking_input": "The `clearKey` checkbox is only rendered if `r.hasKey`; but the `editing.form` is initialised with `clearKey:false`. If the user checks it, the key field becomes disabled and its value cleared. If the user then unchecks, the key field is re-enabled but empty, so the user must retype the old key? Actually the user cannot retype the old key because they don't know it; the form says leave empty to keep, but now it's empty and unchecking does not restore the old key from the server (it was never loaded). So the user loses the old key and, if they save with clearKey unchecked and key empty, the key is kept (good). If they wanted to keep the old key but typed a new one first, then checked the box (which cleared the new key), then unchecked, the new key is lost.",
+      "why": "UI issue: unchecking 'remove the key' does not restore whatever was typed before checking.",
+      "fix": "Store the typed key in a separate ref when checking the box, and restore on uncheck.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "face/src/lib/talk.mjs:262-265",
+      "breaking_input": "`modelsView` reads `m.baseUrl` and `m.model` and coerces to String; if these are non-string types (e.g., numbers), the raw model record from the door might have numbers, but the door's registry should always store strings. Not a practical issue.",
+      "why": "No real bug; the door validates baseUrl and model as strings in `checkRecord`.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:117-125",
+      "breaking_input": "The edit validation rejects unknown keys in `b` but accepts `name` and `model`; it does not accept `key` directly on the edit body (it expects key in `model`). The body from `editChange` puts `key` inside the model object, so fine. But the door's `applyChange` for edit does not validate that the new name's case differs only in case from an existing model; it uses `same(m.name, ...)` which is case-insensitive (per `same`), so a rename to 'Foo' when 'foo' exists is refused. Good.",
+      "why": "No bug.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "face/scripts/smoke.mjs:1273-1287",
+      "breaking_input": "The smoke's `rename` function clicks `[data-model-edit]` on the active row, then focuses the name field, inserts text, clicks save, and waits for the row to show the new name. If the rename fails (e.g., the server refuses because the new name already exists), the form stays open and the wait times out, so `renamed` becomes false and the test stops. But the original name is captured as `original` which includes the ' · answering' suffix; the `rowName()` returns the full text 'foo · answering', and `original` is set to that WITH the suffix, then `rename(`${original} edited`)` sends a name that includes ' · answering edited', which is not a valid model name (spaces and dots are allowed? The door's `checkRecord` may allow spaces? It likely requires a name without whitespace? Not clear).",
+      "why": "The smoke captures `original` as the row text including the ' · answering' suffix, then uses it as the new name, producing a garbage name. The door may refuse it (likely, since names are supposed to be simple), causing the smoke to fail spuriously.",
+      "fix": "Strip the ' · answering' suffix before using as a name; also the test should set a name without the suffix.",
+      "twin_of": null
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "face/src/lib/talk.mjs:237-243",
+      "breaking_input": "`editForm` returns a form with `key:''` and `clearKey:false`. The baseUrl and modelId may be empty strings if the model lacks them (though the door requires them for add).",
+      "why": "No bug.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:113",
+      "breaking_input": "`for (const k of Object.keys(b)) if (![\"op\", \"name\", \"model\", \"clearKey\"].includes(k))` rejects any extra key, but it does not reject `b.name` being the same as the new name? Fine. However it allows `clearKey` to be any truthy/falsy value (it checks `typeof !== \"boolean\"` for undefined? It allows undefined because undefined is not boolean, so `clearKey:undefined` is rejected. But `editChange` never sends undefined. Not a bug.",
+      "why": "No bug.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "high",
+      "where": "face/src/shell/ModelsPanel.tsx:98-101",
+      "breaking_input": "In `onSave`, after a successful save, `setView(modelsView(await door.setModels(c.change)))`. If the edit renames the model, the new `view` contains the renamed model, but the `editing` state is closed. However, if the edit changes the name to one that collides with an existing row (blocked server-side), fine. But if the edit changes only the key (same name), the `view` is refreshed, and the row now shows the new key tail.",
+      "why": "No bug.",
+      "fix": "None.",
+      "twin_of": null
+    }
+  ]
+}

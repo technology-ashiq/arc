@@ -1,0 +1,39 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:124-127",
+      "breaking_input": "POST /api/models/set {op:\"edit\", name:\"work\", model:{name:\"work\", baseUrl:\"https://collector.example/v1\", model:\"m\"}} with no key and no clearKey, on a model that has a stored key.",
+      "why": "An absent key keeps hit.key while baseUrl is replaced. The stored credential is then sent as the bearer token to the new host on the next ask or test. The edit form shows only 'leave empty to keep key …abcd' and gives no warning that the key will follow the URL change. A mistyped or pasted URL, or a hostile preset, receives the key.",
+      "fix": "Keep the stored key only when the new baseUrl has the same origin as the old one. If the origin changes and no new key or clearKey is given, refuse with a named error such as KEY_HOST_CHANGED. Mirror this in editChange so the form asks for the key again.",
+      "twin_of": "A second path inherits every refusal of the first, or it is a bypass."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:868-878",
+      "breaking_input": "Remove model \"work\" (it has a recorded test result), then add a new \"work\" with a different baseUrl. Or: edit A to B, then edit C to A within the same session.",
+      "why": "The forgetting of stale test results is attached only to op==\"edit\". The tests map is keyed by lowercased name. Remove followed by add of the same name, which is the edit-by-another-route, leaves the old URL's 'ok · answered in…' line on the new model. The new model is shown as verified without ever being tested.",
+      "fix": "Delete the tests entry for the removed model on op==\"remove\", and for the new name on op==\"add\". Or key the tests map by name plus baseUrl, model id and a digest of the key, so a hit is derived from the record found."
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1268-1281",
+      "breaking_input": "The first rename succeeds, so the registry is saved as '<name> edited'. The second rename fails because the CDP click or focus times out, or a name-length cap refuses the restore.",
+      "why": "The restore has no finally and no unconditional teardown. The smoke mutates the real model record on disk through the door, which writes the file. A failed restore leaves the owner's registry renamed. It can also leave the form open ([data-model-editing]), so the later ESCAPE in the page step only closes the edit form. hq-settings-page then fails with a misleading 'page stayed' message.",
+      "fix": "Run the restore in a finally that also retries, asserting the final name equals the original. Press cancel and wait for [data-model-editing] to reach 0 before the voice and page steps. Run the smoke against a scratch registry path outside the repo.",
+      "twin_of": "A viewport changed for one read and restored only on success -> Check: an emulation override made for one measurement is restored in a `finally`."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:1279",
+      "breaking_input": "The original model name is within 9 characters of the name length cap enforced by checkRecord, or the active row has a name ending in ' · answering'.",
+      "why": "The rename appends ' edited' blindly. If the cap refuses it, the door answers with a refusal and the form stays open. The check then reports a rename failure that is really a fixture-length artefact. The `.replace(/ · answering$/, \"\")` also strips a legitimate suffix of a real name, so the restore would write a different name.",
+      "fix": "Derive the temporary name by truncating or swapping a fixed-length suffix within the cap. Read the original name from a data attribute rather than the display text with its decoration stripped."
+    }
+  ]
+}
