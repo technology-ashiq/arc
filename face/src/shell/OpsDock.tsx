@@ -141,8 +141,8 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
       <fieldset disabled={st.phase === 'planning' || live} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 min-w-0 border-0 p-0 m-0">
         {card.fields.map((f) => (
           <Field key={f.name} label={f.label} className={f.type === 'select' ? 'md:col-span-2' : ''} hint={fieldCount(f, values[f.name]) || undefined}>
-            {f.type === 'select' && f.options.length === 0 ? (
-              <p data-picker-empty={f.name} aria-disabled="true" className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{NONE_YET}</p>
+            {f.sourceFailure || (f.type === 'select' && f.options.length === 0) ? (
+              <p data-picker-empty={f.name} aria-disabled="true" className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.sourceFailure ? `its list could not be read (${f.sourceFailure})` : NONE_YET}</p>
             ) : f.type === 'select' ? (
               <PickRow small label={f.label} options={f.options} value={values[f.name] ?? ''} onPick={(v) => setValue(f.name, v)} />
             ) : (

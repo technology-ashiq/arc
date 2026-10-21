@@ -5,7 +5,7 @@
 // carries and what a not-ready session says are decided here, where node can import them with no install; the frame
 // runs the effects and draws.
 
-import { emptyPicker, NONE_YET } from "./ops.mjs";
+import { emptyPicker } from "./ops.mjs";
 
 /**
  * @typedef {"overview" | "records" | "work"} FrameTab
@@ -80,7 +80,7 @@ export function stripItems(opCards, sessionCards) {
     // An op whose required picker has nothing to pick is not ready either (REQ-03): its button says so.
     const empty = emptyPicker(o);
     const ready = o.state !== "absent" && empty === null;
-    out.push({ kind: "op", id: o.id, label, ready, reason: empty !== null ? `${empty.label}: ${NONE_YET}` : ready ? "" : String(o.why ?? "") });
+    out.push({ kind: "op", id: o.id, label, ready, reason: empty !== null ? `${empty.label}: ${empty.why}` : ready ? "" : String(o.why ?? "") });
   }
   for (const c of Array.isArray(sessionCards) ? sessionCards : []) {
     const s = /** @type {any} */ (c);

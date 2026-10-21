@@ -990,9 +990,10 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
           // Cycle 17 P01 (REQ-04): where the room's first verb sits on the owner's 1366x768 frame -- the top of its
           // highest drawn strip button, from the top of the page. -1 is a room with no verb. The frame is put back to
           // the suite's 1440x1000 before the next read, so no other count is measured on a different frame.
-          await page.send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
           let firstVerb;
           try {
+            // Inside the try: an override that rejects after Chrome applied it is restored too (attack 8dec47f B5).
+            await page.send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
             firstVerb = await page.send("Runtime.evaluate", {
               expression: `(function () { var all = document.querySelectorAll("[data-strip-item]"); var top = null; for (var i = 0; i < all.length; i++) { var e = all[i]; if (e.getClientRects().length === 0) continue; var t = e.getBoundingClientRect().top + window.scrollY; if (top === null || t < top) top = t; } return top === null ? -1 : Math.round(top); })()`,
               returnByValue: true,

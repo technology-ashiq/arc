@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput (text-with-source branch)",
+      "breaking_input": "org.seat-assign agents = a value with a comma list where the field pattern was written for a different grammar, e.g. \"researcher,planner\" is fine but the tool's own re-split (space or other separator) reads a different list; also an empty names list: when read.options is empty and raw is empty string for a non-required field, names=[\"\"] is flagged unknown.",
+      "why": "The membership check hard-codes a comma separator independent of the field's pattern and of how the tool splits the value. Two grammars for one value remain: the round-1 B3 fix added duplicate refusal but did not tie the separator to the declaration, so a pattern change silently desynchronises check and use.",
+      "fix": "Declare the separator on the field (e.g. f.list: \",\") and use it in both the pattern and the split, or assert at module load that the pattern admits only the separator used here.",
+      "twin_of": "Two grammars for one value -> Import one pattern from its owner."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:entryIs / leadsCampaigns / agentNames / legalVentures",
+      "breaking_input": "Between readdirSync and the later run, replace entry `pilot.json` (a regular file) with a symlink or junction to a file outside the store; or an entry whose lstat is a file but whose parent `campaigns` directory is itself a symlink/junction pointing outside the tree.",
+      "why": "lstat is applied to the entries but never to the directory being listed (campaigns/, .claude/agents, fixtures/legal/ventures) and no realpath containment is done, so a linked parent yields entries that all lstat as regular files from outside the root. The fix closed the per-entry link but not the listing root, the exact 'realpath'ed inside the root' half of the pattern. The check is also a separate lstat from the later read by the tool (check-then-use).",
+      "fix": "realpath the listed directory and require it to sit inside its expected root (store path, repo .claude/agents, fixtures) before listing; refuse by name otherwise.",
+      "twin_of": "A listing that followed symlinks -> Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:leadsCampaigns",
+      "breaking_input": "campaigns path exists but is a regular file, or a dangling link at `campaigns`: readdirSync throws ENOTDIR.",
+      "why": "ENOENT is read as 'none yet' while ENOTDIR/ELOOP are failures, but a store whose `campaigns` entry is a dangling symlink reports ENOENT from readdir and is treated as empty and healthy ('none yet -- create one first'), hiding a broken store as an empty list. Empty-because-absent and empty-because-unreadable are conflated.",
+      "fix": "On ENOENT, lstat the path: if it exists as a link, return a named failure; only a truly absent path is empty.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "face/src/lib/frame.mjs:stripItems and face/src/lib/ops.mjs:emptyPicker",
+      "breaking_input": "A source failure: leadsCampaigns/legalVentures returns failure with options [] (e.g. EBUSY reading ventures.yaml). The op card's select field then has options [] with required true.",
+      "why": "emptyPicker treats an unreadable source the same as an empty one and the UI says 'none yet -- create one first', telling the owner to create something when the list is merely unreadable. The server-side distinction (FIELD_UNKNOWN vs empty) is lost at the card, so an unreadable list reads as 'none'.",
+      "fix": "Carry the source failure code on the served field and have emptyPicker/planBlocked name 'could not be read (CODE)' instead of NONE_YET.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:runSmoke firstVerb read",
+      "breaking_input": "The first setDeviceMetricsOverride (1366x768) itself throws or times out after partially applying; it is outside the try/finally.",
+      "why": "Only the evaluate is inside try/finally. If the first override send rejects after the browser applied it, the restore never runs and later rooms are measured on the 1366 frame. The round-1 fix guards the read but not the write that changes the frame.",
+      "fix": "Move the first setDeviceMetricsOverride inside the try so the finally always restores.",
+      "twin_of": "A viewport changed for one read and restored only on success -> an emulation override made for one measurement is restored in a `finally`."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:firstVerbOf / judge",
+      "breaking_input": "The strip renders but every button sits inside a hidden ancestor (getClientRects length 0) in all rooms, or a mutant where every room's verb is drawn at top 767 via a spacer only above the fold; also firstVerb values of -1 for 36 rooms except 1.",
+      "why": "judge() only requires rooms > 0, while the floor of 20 lives only in the bats wrapper. A run where 19 rooms lose their strip passes judge(); the verdict itself does not carry the promise ('23/23 rooms with verbs').",
+      "fix": "Give judge() a floor derived from the contract's rooms that declare ops, with a mutant at one below the floor.",
+      "twin_of": "A judged number with a floor below its promise -> Judge the number against what the REQ promises (every crossing), with a mutant at each failing value."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:echo",
+      "breaking_input": "A select value containing non-BMP or multibyte text, e.g. 80 emoji, or a value of 79 ASCII chars followed by a surrogate pair split by slice(0,80).",
+      "why": "slice works on UTF-16 units, so a surrogate pair can be cut in half before the replace; the lone surrogate is then replaced by '?', fine, but the cap counts units not characters, and options.join(', ') in the same message is uncapped: a source holding hundreds of names makes the refusal line unbounded and it travels to the page and logs.",
+      "fix": "Cap the joined option list (e.g. first 20 names plus a count) in the refusal message.",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs apply (validateInput before the claim)",
+      "breaking_input": "A plan for money.close-month made at the last second of a month, applied after the window rolls; or an op whose plan-time values were accepted by a source read, then a transient source failure at apply.",
+      "why": "Re-validation re-reads the picker sources (and the wall clock) outside the claim, so a transient reader failure surfaces as OPTION_GONE ('no longer offered') because failures arrive as BAD_INPUT from an empty options list, not as FIELD_UNKNOWN. The comment promises the distinction, but validateInput throws BAD_INPUT for an unreadable select source (read.options empty) whenever the read carries a failure only if it throws a different code, which the diff does not show.",
+      "fix": "Have validateInput throw FIELD_UNKNOWN when read.failure is non-empty before the membership test, and pin it with a test that makes the source fail between plan and apply.",
+      "twin_of": "One refusal code for \"the list moved\" and \"the list is unreadable\" -> a value that left its list after the plan is OPTION_GONE; a source that cannot be read stays FIELD_UNKNOWN."
+    }
+  ]
+}

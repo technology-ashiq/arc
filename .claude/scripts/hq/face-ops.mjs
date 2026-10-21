@@ -224,6 +224,19 @@ function entryIs(p, kind) {
   try { const st = lstatSync(p); return kind === "file" ? st.isFile() : st.isDirectory(); } catch { return false; }
 }
 
+/**
+ * A picker source's directory, listed only when it is itself a real directory: a linked or junctioned listing root
+ * would make every lstat-clean entry one outside the tree (attack 8dec47f B2). An absent directory is `null` -- none
+ * yet -- while a link, a file or a dangling link where the directory should be is a failure, never "none" (B3).
+ * @param {string} dir @returns {string[] | null}
+ */
+function listRealDir(dir) {
+  let st;
+  try { st = lstatSync(dir); } catch (e) { if (errCode(e) === "ENOENT") return null; throw e; }
+  if (!st.isDirectory()) throw Object.assign(new Error("not a directory"), { code: st.isSymbolicLink() ? "LINKED_SOURCE" : "ENOTDIR" });
+  return readdirSync(dir);
+}
+
 /** A refused value as the refusal echoes it: printable ASCII only, so no control or line-break character rides out. */
 const echo = (v, n) => String(v).slice(0, n).replace(/[^ -~]/g, "?");
 
@@ -238,10 +251,12 @@ const errCode = (e) => (e !== null && typeof e === "object" && typeof (/** @type
 function leadsCampaigns() {
   try {
     const dir = join(leadsStorePath(), "campaigns");
-    const names = readdirSync(dir).filter((f) => /^[a-z0-9-]{1,64}\.json$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -5));
+    const listed = listRealDir(dir);
+    if (listed === null) return { failure: "", options: [] };
+    const names = listed.filter((f) => /^[a-z0-9-]{1,64}\.json$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -5));
     return { failure: "", options: names.sort() };
   } catch (e) {
-    return errCode(e) === "ENOENT" ? { failure: "", options: [] } : { failure: errCode(e), options: [] };
+    return { failure: errCode(e), options: [] };
   }
 }
 
@@ -252,7 +267,7 @@ function legalVentures() {
   let fixtures = [];
   try {
     const dir = join(HERE, "..", "..", "..", "tests", "fixtures", "legal", "ventures");
-    fixtures = readdirSync(dir).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n) && entryIs(join(dir, n), "dir"));
+    fixtures = (listRealDir(dir) ?? []).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n) && entryIs(join(dir, n), "dir"));
   } catch { fixtures = []; }
   // A registry that could not be read leaves the fixtures still nameable; only with neither is the field unknown.
   return { failure: reg.failure !== "" && fixtures.length === 0 ? reg.failure : "", options: [...new Set([...fixtures, ...reg.ventures])].sort() };
@@ -262,7 +277,7 @@ function legalVentures() {
 function agentNames() {
   try {
     const dir = join(HERE, "..", "..", "agents");
-    const names = readdirSync(dir).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -3));
+    const names = (listRealDir(dir) ?? []).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -3));
     return { failure: "", options: names.sort() };
   } catch (e) {
     return { failure: errCode(e), options: [] };
@@ -614,7 +629,7 @@ export const OPS = Object.freeze([
       Object.freeze({ name: "role", label: "Role", placeholder: "coo-dispatcher", type: "text", max: 64, pattern: "[a-z][a-z0-9-]*", required: true }),
       Object.freeze({ name: "seat", label: "Seat", placeholder: "", type: "select", options: Object.freeze(["agent", "vacant"]), required: true }),
       // The tool's own grammar, so the door refuses what the tool would: names, comma-separated, no spaces.
-      Object.freeze({ name: "agents", label: "Agents (empty for a vacant seat)", placeholder: "researcher,code-reviewer", type: "text", max: 1600, pattern: "[a-z0-9][a-z0-9-]{0,63}(,[a-z0-9][a-z0-9-]{0,63}){0,23}", required: false }),
+      Object.freeze({ name: "agents", label: "Agents (empty for a vacant seat)", placeholder: "researcher,code-reviewer", type: "text", list: ",", max: 1600, pattern: "[a-z0-9][a-z0-9-]{0,63}(,[a-z0-9][a-z0-9-]{0,63}){0,23}", required: false }),
     ]),
     plan: (v) => ({ script: "org/org-own.mjs", args: ["--assign", "--role", v.role, "--seat", v.seat, ...(v.agents ? ["--agents", v.agents] : []), "--dry-run"] }),
     apply: (v) => ({ script: "org/org-own.mjs", args: ["--assign", "--role", v.role, "--seat", v.seat, ...(v.agents ? ["--agents", v.agents] : [])] }),
@@ -975,8 +990,10 @@ export function validateInput(op, input) {
       if (f.pattern === ONE_LINE && refusedChar(raw)) throw new OpError("BAD_INPUT", `${f.label} is one line of text, and it holds ${refusedChar(raw)}`);
       if (!new RegExp(`^(?:${f.pattern})$`, "u").test(raw)) throw new OpError("BAD_INPUT", `${f.label} is not in the shape this op takes (${f.placeholder || f.pattern})`);
       // A text field with a source is a list of existing names: each one must be in the source's own read.
+      // The separator is the field's own declaration -- the one the tool is handed (`--agents a,b`) -- never a guess
+      // here; a sourced text field that declares none is checked whole (attack 8dec47f B1).
       if (read !== null) {
-        const names = raw.split(",");
+        const names = typeof f.list === "string" && f.list !== "" ? raw.split(f.list) : [raw];
         const unknown = names.filter((x) => !read.options.includes(x));
         if (unknown.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${unknown.map((x) => `"${echo(x, 64)}"`).join(", ")}, which the door does not hold`);
         // A name given twice binds one thing twice (attack 7d3f02f B3).
@@ -1058,7 +1075,12 @@ export function registryView(registry = OPS) {
     receipt: o.receipt, binding: o.binding, retires: o.retires || null,
     humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, touchesTree: o.touchesTree === true,
     leavesMachine: o.leavesMachine === true, expect: o.expect === true,
-    fields: o.fields,
+    // A sourced field carries whether its source could be read, so the page can say "could not be read" rather than
+    // "none yet" over an empty list (attack 8dec47f B4).
+    fields: o.fields.map((f) => {
+      const src = Object.hasOwn(FIELD_SOURCES, o.id) && Object.hasOwn(FIELD_SOURCES[o.id], f.name) ? FIELD_SOURCES[o.id][f.name]() : null;
+      return src === null ? f : { ...f, ...(f.type === "select" ? { options: src.options } : {}), sourceFailure: src.failure };
+    }),
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));
 }
