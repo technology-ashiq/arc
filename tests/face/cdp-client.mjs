@@ -542,7 +542,8 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a class list that was not read, or a near-miss class, never holds",
     !smoke.moodHolds(null, "dark") && !smoke.moodHolds(undefined, "light") && !smoke.moodHolds("hq-lightish hq", "light") && !smoke.moodHolds("hqx", "dark") && !smoke.moodHolds("hq", "sepia"));
 
-  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
+  // Cycle 17 P01 (REQ-04): a clean report read every room's first verb, above the first screen.
+  const clean = { firstVerb: { rooms: 23, over: [], worst: 126, unread: 0 }, openable: 33, opened: 33, countedErrors: 0, unsettled: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
   check("a clean light run passes", smoke.judge({ ...clean, mood: "light", moodMiss: [] }).ok);
   const noLight = smoke.judge({ ...clean, mood: "light", moodMiss: [{ id: "today", htmlClass: "hq" }, { id: "inbox", htmlClass: "hq" }] });
   check("a light run whose rooms lack hq-light FAILS with the spec's words",

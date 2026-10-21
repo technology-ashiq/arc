@@ -137,7 +137,10 @@ const readsWith = (h, real, sim) => {
   const manifest = await manifestOf("money");
   const { full } = loaded(fold, ctxFor("money", manifest), answerMoney(ok(health("live", ["revenue.received", "revenue.simulated"])), ok(pnl("real")), ok(pnl("simulated"))));
   check("MONEY: the fired badge, the figures and both substances come from the reads", full.isRealFired === true && full.realPanel.isDrawn === true && full.simPanel.isDrawn === true && full.figures.length === 2, JSON.stringify({ badge: full.badge }));
-  check("MONEY: the kill lines are a panel with one venture's criterion", full.kill.isPanel === true && full.kill.rows.length === 1 && full.kill.rows[0].criterion === "days_without_revenue", JSON.stringify(full.kill.rows));
+  // Cycle 17 P01 (ADR-1365): the panel stays on Overview and its lines are rows of the Records tab's kill-lines collection.
+  const killRows = (full.records || []).find((c) => c.key === "kill-lines");
+  check("MONEY: the kill lines are a panel with one venture's criterion, drawn on Records", full.kill.isPanel === true && full.kill.rows.length === 0
+    && killRows !== undefined && killRows.rows.length === 1 && killRows.rows[0].criterion === "days_without_revenue", JSON.stringify(killRows && killRows.rows));
   // Phase 04: the fourteen days are the money brain's day series through /api/pnl?by=day -- three SERVED tables, one
   // per substance -- and the milestone line and "where money comes from" stay NOT SERVED.
   // Phase 05 (ADR-1339, ADR-1342): criteria, the month close and recording real revenue are live work-door ops, so
