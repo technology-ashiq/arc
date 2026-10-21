@@ -72,7 +72,12 @@ export function parseArgs(argv) {
  * @param {string} sha
  */
 function ciVerdict(sha) {
-  const fixture = process.env.ARC_SPINE_ROOT && process.env.ARC_REVIEW_SHIP_CI_DIGEST ? process.env.ARC_REVIEW_SHIP_CI_DIGEST : null;
+  // The canonical spine is never a scratch one: a fixture reader named beside it is refused, not honoured (attack 2d8afd0 B2).
+  const scratch = process.env.ARC_SPINE_ROOT ? resolve(process.env.ARC_SPINE_ROOT) : "";
+  const canonical = resolve(REPO, ".claude", "state", "hq");
+  if (process.env.ARC_REVIEW_SHIP_CI_DIGEST && (!scratch || scratch.toLowerCase() === canonical.toLowerCase() || scratch.toLowerCase().startsWith(resolve(REPO).toLowerCase())))
+    die(2, "ARC_REVIEW_SHIP_CI_DIGEST is a test door for a scratch spine outside this repo; it is never read beside the canonical one");
+  const fixture = scratch && process.env.ARC_REVIEW_SHIP_CI_DIGEST ? process.env.ARC_REVIEW_SHIP_CI_DIGEST : null;
   const r = spawnSync(process.execPath, [fixture || CI_DIGEST, "--sha", sha], { cwd: REPO, encoding: "utf8", timeout: 120_000, maxBuffer: 4 << 20, env: childEnv() });
   const tail = plain(String(r.stdout || "").trim().split(/\r?\n/).pop() || "", 200);
   const state = r.error ? `could not be read (${plain(/** @type {any} */ (r.error).code || r.error.message, 40)})`
@@ -94,7 +99,9 @@ function main() {
   let kind, payload;
   if (verb === "qa") {
     kind = "qa.completed";
-    payload = { url: v["--url"], bugs: v["--bugs"], fixed: v["--fixed"] };
+    // The counts are the session's own report: the writer cannot see the qa-tester run, so the receipt says whose
+    // count it is rather than passing it off as measured (attack 2d8afd0 B3).
+    payload = { url: v["--url"], bugs: v["--bugs"], fixed: v["--fixed"], counted_by: "session-reported" };
   } else {
     // The gate is for the commit being prepared: a green SHA from another commit raises nothing (attack 09a1c07 B3).
     const head = headSha();
@@ -102,6 +109,8 @@ function main() {
     if (v["--sha"] !== head) die(2, `--sha ${v["--sha"].slice(0, 12)} is not this checkout's HEAD (${head.slice(0, 12)}) -- a gate is raised only for the commit being prepared`);
     const ci = ciVerdict(v["--sha"]);
     if (!ci.green) die(2, `CI for ${v["--sha"].slice(0, 12)} is ${ci.state}${ci.tail ? ` (${ci.tail})` : ""} -- no deploy gate is raised`);
+    // HEAD again, after the CI read: the branch can move while CI is asked (attack 2d8afd0 B1).
+    if (headSha() !== v["--sha"]) die(2, "HEAD moved while CI was read -- no deploy gate is raised; prepare the ship again");
     kind = "approval.requested";
     payload = { gate: "deploy", sha: v["--sha"], what: `deploy ${v["--sha"].slice(0, 12)}: CI green on every job; nothing deploys until you run the deploy yourself` };
   }

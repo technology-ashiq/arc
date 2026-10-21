@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:63",
+      "breaking_input": "The writer accepts `ship --sha <HEAD>` and ci-digest checks CI for that SHA, but the working tree may be dirty or HEAD may be unpushed. A checkout with uncommitted changes or a local-only commit still passes headSha equality only if CI exists for that SHA. A local commit that was pushed and went green, followed by `git commit --amend` or a branch switch between the ciVerdict read and the emit, leaves the gate raised for a SHA that is no longer HEAD. HEAD is read before ciVerdict (which can take up to 120s) and is not re-read before emit.",
+      "why": "Validate one read, act on another: HEAD is read once, then CI is awaited for up to 120s, then the gate is emitted. The branch can move in that window (parallel sessions on this worktree are a documented condition), so the gate names a commit that is no longer the one being prepared.",
+      "fix": "Re-read headSha() immediately before spineRefusal/emitReceipt and refuse if it differs from --sha; also refuse a dirty tree via `git status --porcelain`.",
+      "twin_of": "A gate raised on a SHA the caller named"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:48",
+      "breaking_input": "Run the writer with ARC_SPINE_ROOT set to any directory and ARC_REVIEW_SHIP_CI_DIGEST pointing at a script that exits 0. The fixture reader is honoured on a variable that merely being set is the only condition, and a model-run child inherits the environment from the door. A run that can set env for its own child (or a shell grant that allows `ARC_SPINE_ROOT=x ARC_REVIEW_SHIP_CI_DIGEST=y node ...review-ship-record.mjs ship:*`) forges green CI and lands approval.requested on its scratch spine, which is then served as a real receipt.",
+      "why": "An env override of a source, documented as test-only, is read by the very actor the proof guards against. The gate it protects is the one whose point is that a model cannot vouch for CI. The condition (any ARC_SPINE_ROOT) is not tied to the canonical spine being absent.",
+      "fix": "Refuse the fixture env by name unless the spine root is under the OS temp dir and a test marker is present, or inject the reader through a parameter and drop the env door from the production file.",
+      "twin_of": "An env door read by the very actor the proof guards against"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "processes/qa-run.process.yaml:19",
+      "breaking_input": "The grant `node .claude/scripts/hq/review-ship-record.mjs qa:*` is a prefix grant. The model appends `--dry-run` repeatedly or, more usefully, a second shell command joined after it (`... qa --url http://x --bugs 0 --fixed 0 --as-process qa-run@1.0.0 && ...`) if the per-part permission check treats the chained text as one prefix. The model also chooses --bugs and --fixed freely, so a run that never invoked qa-tester can seal qa.completed with bugs 0 fixed 0.",
+      "why": "The receipt's counts are model-typed and the writer cannot tell whether the qa-tester agent ran. The spine records fabricated QA as a genuine qa.completed. A prefix grant covers every flag combination of the writer.",
+      "fix": "Have the writer derive or verify the counts from an artifact the qa-tester agent leaves (a file under a run-private directory), or mark the payload `reported_by: model` so the face does not draw it as measured.",
+      "twin_of": "A model-typed output drawn as fact"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:53",
+      "breaking_input": "ci-digest writes its verdict line to stderr or prints a trailing blank line. `tail` is the last element of stdout split on newlines; a trailing newline-only sequence of whitespace lines makes the final element empty after trim only if trimmed first — here trim is applied, but a stdout that ends with a line of `\\r` characters or a verdict line followed by a progress line makes `tail` the progress line, not the verdict. A red job's name is then missing from the refusal.",
+      "why": "The refusal text depends on position in a stream the writer does not own, so the owner may read a message that names a different job than the one that failed.",
+      "fix": "Read ci-digest's machine-readable output (a --json flag) or print the first line that matches a verdict prefix instead of the last line.",
+      "twin_of": "A stderr phrase matched anywhere decides the message"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:294",
+      "breaking_input": "With opts.sessions supplied, start(\"no.such.row\", {}) takes rows.find, which returns undefined, and the next line reads s.pickProcess in the unknown-key error branch only when a key is bad, but `s.process` etc. are read later; a body with a valid shape then throws a raw TypeError instead of the named unknown-session refusal sessionById gives.",
+      "why": "The fixture lookup path drops sessionById's refusal, so a second lookup path does not inherit the first path's failure semantics (the round-1 B9 finding was recorded as debt and not fixed).",
+      "fix": "Throw the same SessionError as sessionById when rows.find returns undefined.",
+      "twin_of": "A new path that dropped the old path's failure semantics"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/face/review-ship-record.mjs:42",
+      "breaking_input": "The tests spawn the writer (qa, dry run, refusals) with `spawnSync` carrying a timeout but no `killSignal`, and none of the `run`/`ship` calls read `r.error` before reading `status`. If node fails to spawn or the 120s timeout fires, status is null and the checks print `FAIL` with `null` detail and no cause; the qa check reads `qa.stdout` as a string without guarding null.",
+      "why": "The round-1 B1 fix was applied to the git grep spawn only; the same fixture-child pattern remains in `run`, `ship` and the HEAD read, which has no `.error` check either (`.stdout.trim()` throws a TypeError on a failed spawn, skipping the RAN line's honest crash handling).",
+      "fix": "Route every spawn in the suite through one helper that sets timeout and killSignal, reads `.error` first, and returns a named FAIL.",
+      "twin_of": "A spawnSync in a node fixture with no timeout"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:88",
+      "breaking_input": "The last-resort catch prints \"nothing was written\" for any non-Stop throw, including a throw after emitReceipt landed (stdout write failing on a closed pipe, EPIPE when the door closes the pipe early). The receipt exists but the run reports a refusal and exits 2, inviting a retry and a second gate.",
+      "why": "The line after the effect can be lost and turn into a refusal. Debt-ledgered as LOW but still open.",
+      "fix": "Track a landed flag set right after emitReceipt returns; in the catch, print `receipt <id> IS written` and exit 1 when set.",
+      "twin_of": "An id line that throws after the write"
+    }
+  ]
+}
