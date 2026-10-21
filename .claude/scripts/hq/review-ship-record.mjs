@@ -11,7 +11,7 @@
 // "green" over a red tree raises nothing.
 import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emitReceipt, spineRefusal } from "../core/plan-expect.mjs";
 
@@ -73,9 +73,11 @@ export function parseArgs(argv) {
  */
 function ciVerdict(sha) {
   // The canonical spine is never a scratch one: a fixture reader named beside it is refused, not honoured (attack 2d8afd0 B2).
-  const scratch = process.env.ARC_SPINE_ROOT ? resolve(process.env.ARC_SPINE_ROOT) : "";
-  const canonical = resolve(REPO, ".claude", "state", "hq");
-  if (process.env.ARC_REVIEW_SHIP_CI_DIGEST && (!scratch || scratch.toLowerCase() === canonical.toLowerCase() || scratch.toLowerCase().startsWith(resolve(REPO).toLowerCase())))
+  // Real paths both sides: a link or junction outside the repo that points INTO it is the repo (attack 091c310 B1).
+  const real = (p) => { try { return realpathSync.native(p); } catch { return resolve(p); } };
+  const scratch = process.env.ARC_SPINE_ROOT ? real(process.env.ARC_SPINE_ROOT) : "";
+  const rel = scratch ? relative(real(REPO), scratch) : "";
+  if (process.env.ARC_REVIEW_SHIP_CI_DIGEST && (!scratch || rel === "" || !(rel.startsWith("..") || isAbsolute(rel))))
     die(2, "ARC_REVIEW_SHIP_CI_DIGEST is a test door for a scratch spine outside this repo; it is never read beside the canonical one");
   const fixture = scratch && process.env.ARC_REVIEW_SHIP_CI_DIGEST ? process.env.ARC_REVIEW_SHIP_CI_DIGEST : null;
   const r = spawnSync(process.execPath, [fixture || CI_DIGEST, "--sha", sha], { cwd: REPO, encoding: "utf8", timeout: 120_000, maxBuffer: 4 << 20, env: childEnv() });
@@ -84,6 +86,12 @@ function ciVerdict(sha) {
     : r.status === 0 ? "green" : r.status === 1 ? "red" : r.status === 3 ? "still running"
     : `could not be read (ci-digest ${r.status === null ? `killed by ${r.signal || "a timeout"}` : `exit ${r.status}`})`;
   return { green: state === "green", state, tail };
+}
+
+/** Whether the checkout holds uncommitted tracked changes: CI tested the commit, not this tree (attack 091c310 B2). */
+function treeDirty() {
+  const r = spawnSync("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: REPO, encoding: "utf8", timeout: 30_000, env: childEnv() });
+  return r.status !== 0 || String(r.stdout || "").trim() !== "";
 }
 
 /** The commit this checkout is on, read here, never taken on the caller's word (attack 09a1c07 B3). */
@@ -109,6 +117,7 @@ function main() {
     // The gate is for the commit being prepared: a green SHA from another commit raises nothing (attack 09a1c07 B3).
     const head = headSha();
     if (head === null) die(2, "the checkout's HEAD could not be read -- no deploy gate is raised");
+    if (treeDirty()) die(2, "the checkout has uncommitted changes -- CI tested the commit, not this tree; no deploy gate is raised");
     if (v["--sha"] !== head) die(2, `--sha ${v["--sha"].slice(0, 12)} is not this checkout's HEAD (${head.slice(0, 12)}) -- a gate is raised only for the commit being prepared`);
     const ci = ciVerdict(v["--sha"]);
     if (!ci.green) die(2, `CI for ${v["--sha"].slice(0, 12)} is ${ci.state}${ci.tail ? ` (${ci.tail})` : ""} -- no deploy gate is raised`);

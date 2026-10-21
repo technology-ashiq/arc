@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:ciVerdict",
+      "breaking_input": "ARC_SPINE_ROOT=<symlink or junction outside the repo that points at .claude/state/hq> plus ARC_REVIEW_SHIP_CI_DIGEST=<script that exits 0>. The writer compares resolve() paths only, never realpath. The link path passes as a scratch spine, the fixture reader is honoured, and the forged green lands approval.requested on the canonical spine through the link.",
+      "why": "The guard that the fixture reader never runs beside the canonical spine compares the spelling of two paths. It does not compare the directories they name, so a link defeats it.",
+      "fix": "realpathSync both the spine root and the canonical dir (case-fold on win32) and compare those. Refuse if the scratch root does not exist or the real paths are equal or nested.",
+      "twin_of": "A test door honoured beside the canonical spine -> a test-only override refuses unless the spine it writes to is a scratch one outside the repo."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:main (ship branch)",
+      "breaking_input": "Run `ship --sha $(git rev-parse HEAD)` in a checkout with uncommitted changes, or with a HEAD that was amended or reset after CI ran. If CI is green for that SHA, the gate `deploy <sha>: CI green on every job` is raised for a tree that differs from what CI tested.",
+      "why": "The writer proves HEAD equals --sha and that CI is green for that SHA. It never checks the working tree is clean, so the receipt names a commit and the owner deploys something different.",
+      "fix": "Add a bounded `git status --porcelain` through the same childEnv spawn. Refuse a non-empty result or a failed read, and re-read it together with the second headSha().",
+      "twin_of": "Validate one read, compare another (a check on one object, an effect on another)"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:ciVerdict",
+      "breaking_input": "ci-digest exits 0 while it printed nothing: no runs found for the SHA, or all jobs skipped. `ci.green` is true and the gate is raised on an exit code alone. The tail is read but never judged.",
+      "why": "The green verdict rests on the exit code only. An empty result or zero-job digest that exits 0 reads as 'every job green'.",
+      "fix": "Require the digest to state a positive job count (or a machine-readable summary line) before it counts as green. Treat empty stdout on exit 0 as 'could not be read'.",
+      "twin_of": "A zero-count gate where every unreadable outcome equals the pass -> a gate whose pass is 0 must fail closed on every read error."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/review-ship-record.mjs:ciVerdict",
+      "breaking_input": "ci-digest hangs on gh for more than 120 s. spawnSync's timeout kills only the node child. On Windows the gh grandchild is orphaned, and the run-wide wall clock still has to cover this wait.",
+      "why": "The timeout does not end the child's process tree. There is no killSignal escalation, and the 120 s wait is not aligned with the writer's 60 s emit timeout.",
+      "fix": "Spawn with killSignal SIGKILL and run ci-digest in its own process group, then kill the tree (taskkill /T on win32). Or give ci-digest its own deadline flag.",
+      "twin_of": "A timeout that kills the child and not its children -> kill the TREE."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/face/review-ship-record.mjs:96",
+      "breaking_input": "Delete or weaken any one or two checks. The count stays above 20, so the suite exits 0, because the floor is a hand-kept 20 against exactly 20 checks today. Add a check and the floor stays at 20.",
+      "why": "The floor is set by hand to the current count. It is neither derived from the suite's own arms nor pinned to an exact number, so it detects no dropped check.",
+      "fix": "Derive the expected count from the arm list, or assert an exact number and update it with each change. Have the bats test pin a marker plus a floor it keeps in step.",
+      "twin_of": "A hand-kept arm floor -> a suite compares its PASS count to the RAN count the selftest derives from its own arms."
+    }
+  ]
+}

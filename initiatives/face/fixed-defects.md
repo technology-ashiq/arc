@@ -1067,3 +1067,5 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **A gate re-read before its act was skipped** -- HEAD read once, then CI awaited, then the gate raised for a branch that moved (attack 2d8afd0 B1). *Check: the fact a gate names is read again right before the emit.*
 - **A test door honoured beside the canonical spine** -- the CI-reader override needed only ARC_SPINE_ROOT set (attack 2d8afd0 B2). *Check: a test-only override refuses unless the spine it writes to is a scratch one outside the repo.*
 - **Model-typed counts sealed as if measured** (attack 2d8afd0 B3). *Check: a receipt whose numbers the writer cannot see being produced says whose count it is (`counted_by`).*
+- **A test-door path compared lexically** -- a link outside the repo pointing at the canonical spine passed as scratch (attack 091c310 B1). *Check: a scratch-path guard compares realpaths on both sides with `relative()`.*
+- **A deploy gate raised over a dirty tree** -- CI was green for HEAD, while the checkout held changes it never tested (attack 091c310 B2). *Check: a gate that cites CI for a commit refuses when the tree has uncommitted tracked changes.*
