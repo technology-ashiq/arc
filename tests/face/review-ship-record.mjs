@@ -29,7 +29,7 @@ try {
   const id = (/^receipt: qa\.completed ([0-9A-HJKMNP-TV-Z]{26})$/m.exec(qa.stdout) || [])[1];
   const hit = events().find((e) => e.id === id);
   check("qa: lands qa.completed, read back off the spine by the id it printed", qa.status === 0 && Boolean(hit) && hit.kind === "qa.completed"
-    && hit.payload.url === "http://localhost:3000" && hit.payload.bugs === "2" && hit.payload.fixed === "1", `${qa.status} ${qa.stderr} ${qa.stdout}`);
+    && hit.payload.host === "localhost:3000" && hit.payload.path === "/" && hit.payload.tls === false && hit.payload.bugs === "2" && hit.payload.fixed === "1", `${qa.status} ${qa.stderr} ${qa.stdout}`);
   const before = events().length;
   const dry = run(["qa", "--url", "http://localhost:3000", "--bugs", "0", "--fixed", "0", "--dry-run"]);
   check("qa --dry-run lands nothing", dry.status === 0 && events().length === before, dry.stderr);
@@ -75,7 +75,10 @@ try {
   const writerCode = readFileSync(WRITER, "utf8").split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
   const bodySteps = (proc.split("\nbody: |")[1] || "").split("\n").filter((l) => /`[^`]+`/.test(l) && /^\s+\d\./.test(l)).join("\n");
   check("no step or command of ship-run, and no line of the writer, deploys, publishes or pushes",
-    commands.every((c) => !DEPLOY.test(c)) && !DEPLOY.test(bodySteps) && !DEPLOY.test(writerCode) && !/spawnSync\([^)]*git/.test(writerCode));
+    commands.every((c) => !DEPLOY.test(c)) && !DEPLOY.test(bodySteps) && !DEPLOY.test(writerCode)
+    // The writer's one git call reads HEAD; any other git verb from it fails this (round-1 B3 added the read).
+    && [...writerCode.matchAll(/spawnSync\("git", \[([^\]]*)\]/g)].every((m) => m[1].trim() === '"rev-parse", "HEAD"')
+    && [...writerCode.matchAll(/spawnSync\("git"/g)].length === 1);
   check("MUTANT CONTROL: a planted `vercel --prod` step is caught", DEPLOY.test([...commands, "vercel --prod:*"].join("\n")));
   // Approving the deploy gate triggers nothing: no script under .claude/scripts reacts to gate deploy.
   // POSIX classes, not \s: git grep -E has no \s, and a pattern that matches nothing passes this check on silence.

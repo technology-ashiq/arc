@@ -101,7 +101,10 @@ function main() {
     kind = "qa.completed";
     // The counts are the session's own report: the writer cannot see the qa-tester run, so the receipt says whose
     // count it is rather than passing it off as measured (attack 2d8afd0 B3).
-    payload = { url: v["--url"], bugs: v["--bugs"], fixed: v["--fixed"], counted_by: "session-reported" };
+    // The URL is stored as host and path, never as `scheme://...`: beside the receipt's `qa-run@x.y.z` process tag a
+    // whole URL reads as `scheme://user:pass@host` to the spine's secret rule, which refused every QA receipt (CI 453).
+    const u = new URL(v["--url"]);
+    payload = { host: u.host, path: u.pathname || "/", tls: u.protocol === "https:", bugs: v["--bugs"], fixed: v["--fixed"], counted_by: "session-reported" };
   } else {
     // The gate is for the commit being prepared: a green SHA from another commit raises nothing (attack 09a1c07 B3).
     const head = headSha();
