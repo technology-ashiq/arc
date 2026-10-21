@@ -729,3 +729,11 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-10-14 04:39 — feat/portfolio-cycle-5
 - Last commit: 2df81d4e chore(plan): ship kickoff-gates.mjs with the plan product
 - Uncommitted files at exit: 3
+
+## 2026-10-21 18:57 — feat/face-v3-01-records-pickers
+- Last commit: 7d3f02fe feat(face): Records tab, pickers, first-verb gate (Cycle 17 Phase 01, REQ-02..04)
+- Uncommitted files at exit: 
+
+## 2026-10-21 19:06 — feat/face-v3-01-records-pickers
+- Last commit: 8dec47f1 fix(face): Phase 01 attack r1 fixes -- lstat picker sources, list repeats, OPTION_GONE, viewport restore
+- Uncommitted files at exit: 1

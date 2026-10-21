@@ -24,7 +24,8 @@ const events = () => readdirSync(join(SPINE, "events")).filter((f) => f.endsWith
 try {
   console.log("RAN review-ship-record checks");
   // qa: the receipt lands, its kind and payload are the writer's, and its id is the one printed.
-  const qa = run(["qa", "--url", "http://localhost:3000", "--bugs", "2", "--fixed", "1", "--as-process", "qa-run@1.0.0"]);
+  // --as-process first: a URL followed later by `name@x.y.z` on one line reads as `scheme://user:pass@` to the scanner.
+  const qa = run(["qa", "--as-process", "qa-run@1.0.0", "--url", "http://localhost:3000", "--bugs", "2", "--fixed", "1"]);
   const id = (/^receipt: qa\.completed ([0-9A-HJKMNP-TV-Z]{26})$/m.exec(qa.stdout) || [])[1];
   const hit = events().find((e) => e.id === id);
   check("qa: lands qa.completed, read back off the spine by the id it printed", qa.status === 0 && Boolean(hit) && hit.kind === "qa.completed"
