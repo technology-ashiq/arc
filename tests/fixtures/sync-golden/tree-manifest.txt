@@ -291,7 +291,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	328c882670f6935000cf78a35110d49f4720e9c296ee88c9eff6ec469b77f999
+.claude/scripts/hq/face-ops.mjs	8917a82d47698a22f6dfbb892721e4e537e403fda4ef3fb893828b52bc4fed77
 .claude/scripts/hq/face-sessions.mjs	5255350fc9be8c2f0643e727fbbe028aa5cc4b02c184455ec474af7e5ba1c318
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
@@ -309,7 +309,7 @@
 .claude/scripts/hq/lib/face/reads.mjs	178668845cc49bf8583e86881581258d0f3a40e0b632838bd92eeee0f3c06ac7
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
-.claude/scripts/hq/lib/face/work-door.mjs	53b1accf8f94fe2b3dbaa2b843034a7e00a4304ca27711772827c90f030c880f
+.claude/scripts/hq/lib/face/work-door.mjs	11be0fd6611336e5a2dc4c9ac9bd4108f4bd573a31d40eae89fa1e3efb6c940b
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
