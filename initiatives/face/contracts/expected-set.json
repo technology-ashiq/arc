@@ -1440,6 +1440,7 @@
       "PLAN-face-v2": "strategy",
       "PLAN-growth": "strategy",
       "PLAN-launch": "strategy",
+      "PLAN-launch-mobile": "strategy",
       "PLAN-leads": "strategy",
       "PLAN-ledger": "strategy",
       "PLAN-legal-pack": "strategy",

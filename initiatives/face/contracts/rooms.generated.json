@@ -1219,6 +1219,7 @@
           "PLAN-face-v2",
           "PLAN-growth",
           "PLAN-launch",
+          "PLAN-launch-mobile",
           "PLAN-leads",
           "PLAN-ledger",
           "PLAN-legal-pack",
@@ -1232,7 +1233,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 32
+      "itemCount": 33
     },
     {
       "id": "org",
