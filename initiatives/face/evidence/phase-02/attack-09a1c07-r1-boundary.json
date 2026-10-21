@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/face/review-ship-record.mjs:63",
+      "breaking_input": "The `git grep` spawnSync that backs the \"approving {gate: deploy} triggers nothing\" check has no timeout or killSignal. If git blocks (a held index.lock, or a slow Windows scan), the suite hangs before its RAN line. The spawn's `.error` is also never read: a missing git leaves `status` null and `stdout` null, so `named` is empty and only the positive control fails, with no cause named.",
+      "why": "A fixture child needs a bound, and `.error` must be read first, so the failure shows up as a named FAIL and not as a hang or a mislabelled absence.",
+      "fix": "Add `timeout: 60_000, killSignal: \"SIGKILL\"`, check `reacts.error` first, and report it as its own FAIL.",
+      "twin_of": "A spawnSync in a node fixture with no timeout -> Check: every child a fixture spawns carries `timeout` + `killSignal`, and the check reads `.error` first."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "review-ship-record.mjs:19",
+      "breaking_input": "A model run inside qa-run is granted only the `qa:*` prefix, but it can append `--as-process ship-run@1.0.0` (or `lesson-log@1.0.0`, `hire-certify@9.9.9`). PROCESS_RE checks only the grammar, so the writer forwards that name as `--process` to arc-event, and the qa.completed receipt is attributed to another process.",
+      "why": "The identity is chosen by the model, not bound to the process that is running. The door and the spine credit receipts by kind and process, so the run can forge attribution.",
+      "fix": "Bind `--as-process` to an allow-list per verb (qa -> qa-run@1.0.0 only, ship -> ship-run@1.0.0 only). Better, derive it from the ARC_RUN process env that arc-run sets.",
+      "twin_of": "Requested read as ran -> who ran is what ran; one identity function for the check and the key"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "review-ship-record.mjs:57",
+      "breaking_input": "`ship --sha <40-hex of any old commit that had green CI>`. ciVerdict only asks ci-digest about that SHA. HEAD, the branch and the repo are never compared, so a gate `deploy <old sha>` is raised although the tree being prepared is a different, unpushed or red commit.",
+      "why": "The ship-run steps (lint and compile on the working tree) and the CI read judge different objects. The model-supplied SHA is validated by shape only, and the gate is raised on whatever SHA it names.",
+      "fix": "In the writer, resolve HEAD with one bounded git read and refuse unless `--sha` equals it. Alternatively drop `--sha` and read HEAD in the writer itself.",
+      "twin_of": "Validate one read, compare another (a check on one object, an effect on another)"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "tests/face/review-ship-record.mjs:49",
+      "breaking_input": "Mutant: make `ciVerdict` always return `green:false`, or run on a box where gh is unauthenticated or offline. The check \"ship over a CI that is not green\" still passes, because every failure path prints \"not green\" and exits 2. No arm covers the green path, so a mutant that never raises the gate is also green.",
+      "why": "The refusal is attributed to red CI, but any ci-digest failure produces it. The negative control cannot distinguish red CI from an unreachable gh, and the positive path (`approval.requested{gate:deploy}` landing) is never run.",
+      "fix": "Inject a stub CI_DIGEST through an argument or a scratch tree. Run one arm with exit 0 that must land the gate, one with exit 1 that must refuse, and one with exit 3 (pending) that must refuse. Assert the ci-digest exit code named in the message.",
+      "twin_of": "A mutant caught by any exit 1 -> A control asserts the NAMED refusal; a sample is never the whole."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": "processes/ship-run.process.yaml:17",
+      "breaking_input": "The shell grants `node .claude/scripts/plan/kickoff-lint.mjs:*` and `node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code:*` are prefix grants. The model can run `arc-compile.mjs --check --all --target claude-code --write` (if the tool has that mode), or kickoff-lint with any write or fix flag. The process is declared write L0 and has no write guard other than the prompt.",
+      "why": "A prefix grant covers the binary plus any trailing flags, so it also covers the write mode of the same tool. The \"deploys/pushes nothing\" claim is only enforced for the writer, not for these two tools.",
+      "fix": "Grant exact argv with no `:*` for the two checks. If the permission grammar needs it, add a PreToolUse guard that refuses `--write` and `--fix` for ship-run.",
+      "twin_of": "A prefix shell grant on a tool with a write flag -> A read tool with an output flag is a write grant."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "review-ship-record.mjs:50",
+      "breaking_input": "ci-digest prints more than the 1 MB default spawnSync maxBuffer (many jobs and logs). The child is killed with ENOBUFS, `status` is null, and a green tree is refused with a message whose tail is empty. Separately, `tail` is raw child stdout containing ESC or other control characters. It is interpolated into the die() message on stderr, which the run reads back and the face displays.",
+      "why": "The oversized-output failure is named only as \"exit null\", and unsanitized child text reaches a parsed or displayed stream.",
+      "fix": "Set an explicit maxBuffer and report `r.error` and `r.signal`. Pass `tail` through the one-line control-stripping filter and JSON-quote it.",
+      "twin_of": "Free text bound for a parsed log is one line (`\\p{Cc}`/line breaks refused)"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "review-ship-record.mjs:88",
+      "breaking_input": "The top-level catch prints \"nothing was written\" and exits 2 for any non-Stop throw. That includes a throw raised after emitReceipt landed, such as a failing `process.stdout.write` on the receipt line or a getter throwing on `got`. The receipt exists on the spine, but the caller sees a refusal that invites a retry and a duplicate gate.",
+      "why": "The catch cannot know the write state. A failure after the effect should degrade, not turn into a claim that nothing happened.",
+      "fix": "Track a `landed` flag. After the emit, catch around the output and exit 0, or exit 1 with \"receipt <id> IS written\".",
+      "twin_of": "The line after the effect can be lost; it can never turn the effect into a refusal."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": "review-ship-record.mjs:75",
+      "breaking_input": "Two ship-run sessions (a double click, or two worktrees) both pass spineRefusal for the same SHA and both emit `approval.requested{gate:deploy}`. The check runs before the emit with no lock and no idem key.",
+      "why": "The duplicate-gate guard is a check-then-emit with a spawn between them, so an append can land in the gap. The owner then sees two stamps to give for one deploy.",
+      "fix": "Pass an idempotency key derived from the sha and the gate to arc-event, or run the refusal check and the emit under the spine append lock.",
+      "twin_of": "A check and a write with a spawn between them -> make the write itself the check."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/session-door.mjs:294",
+      "breaking_input": "With `opts.sessions` set, `start(\"no.such.row\", body)` takes `rows.find(...)`, which returns undefined. The next line dereferences `s.pickProcess` in the BAD_SESSION_BODY message and throws a raw TypeError instead of the named unknown-session error that `sessionById` raises.",
+      "why": "The fixture path drops the lookup's refusal, so a second lookup path does not inherit the first path's failure semantics. The door answers a generic INTERNAL.",
+      "fix": "Throw the same SessionError as `sessionById` when `rows.find` returns undefined, or give `sessionById` a rows argument.",
+      "twin_of": "A new path that dropped the old path's failure semantics -> A second path inherits every refusal of the first, or it is a bypass."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": "review-ship-record.mjs:49",
+      "breaking_input": "ciVerdict spawns ci-digest with the inherited environment. If the writer is run with GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE set (hooks, or a parent session pointing at another clone), ci-digest and gh resolve another repo and read CI for the wrong repository. The SHA is then looked up in the wrong place, or the result is a green on a same-named SHA elsewhere.",
+      "why": "A child that resolves a repo inherits git location variables. The writer sets `cwd` but does not strip them.",
+      "fix": "Spawn ci-digest with an env copy that has GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE and GIT_COMMON_DIR removed and GIT_OPTIONAL_LOCKS=0.",
+      "twin_of": "Children that inherit the caller's git location variables -> Every child a gate spawns runs with git's location variables stripped and GIT_OPTIONAL_LOCKS=0."
+    }
+  ]
+}

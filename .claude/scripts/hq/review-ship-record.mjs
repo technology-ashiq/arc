@@ -19,6 +19,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
 const ARC_EVENT = join(REPO, ".claude", "scripts", "hq", "arc-event.mjs");
 const CI_DIGEST = join(REPO, ".claude", "scripts", "review", "ci-digest.mjs");
+// The process each verb may be credited to: a run inside qa-run cannot sign its receipt as another process (attack
+// 09a1c07 B2). The version is the caller's; the NAME is bound to the verb.
+const PROCESS_OF = Object.freeze({ qa: "qa-run", ship: "ship-run" });
+// The children's environment, without the git location variables a caller could have set: a child resolving the repo
+// must resolve THIS one (attack 09a1c07 B10).
+const childEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|COMMON_DIR|NAMESPACE|CEILING_DIRECTORIES)$/i.test(k)));
+/** Child text as a refusal may print it: printable ASCII, capped (attack 09a1c07 B6). */
+const plain = (t, n) => String(t ?? "").slice(0, n).replace(/[^\x20-\x7e]/g, "?");
 const PROCESS_RE = /^[a-z][a-z0-9-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const URL_RE = /^https?:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?(\/[A-Za-z0-9._~\/-]*)?$/;
@@ -46,6 +54,7 @@ export function parseArgs(argv) {
     i++;
   }
   if (v["--as-process"] !== undefined && !PROCESS_RE.test(v["--as-process"])) die(2, "--as-process is <process>@<major.minor.patch>");
+  if (v["--as-process"] !== undefined && v["--as-process"].split("@")[0] !== PROCESS_OF[verb]) die(2, `${verb} is credited to ${PROCESS_OF[verb]} only, never to ${plain(v["--as-process"].split("@")[0], 64)}`);
   if (verb === "qa") {
     for (const k of ["--url", "--bugs", "--fixed"]) if (v[k] === undefined) die(2, `qa needs ${k}`);
     if (!URL_RE.test(v["--url"]) || v["--url"].length > 300) die(2, "--url is an http(s) URL with no query, at most 300 bytes");
@@ -55,11 +64,28 @@ export function parseArgs(argv) {
   return { verb, v, dryRun };
 }
 
-/** CI's verdict for SHA, read per job by ci-digest (exit 0 = every job green). @param {string} sha */
+/**
+ * CI's verdict for SHA, read per job by ci-digest: 0 every job green, 1 a job red, 3 still running, anything else the
+ * read itself failed -- each named apart, so "CI is red" is never said of a CI nobody could reach (attack 09a1c07 B4).
+ * ARC_REVIEW_SHIP_CI_DIGEST swaps the reader for a fixture, and is honoured only on a scratch spine (ARC_SPINE_ROOT
+ * set): a forged green can never raise a gate on the canonical one.
+ * @param {string} sha
+ */
 function ciVerdict(sha) {
-  const r = spawnSync(process.execPath, [CI_DIGEST, "--sha", sha], { cwd: REPO, encoding: "utf8", timeout: 120_000 });
-  const tail = String(r.stdout || "").trim().split(/\r?\n/).pop() || "";
-  return { green: r.status === 0, status: r.status, tail: tail.slice(0, 200) };
+  const fixture = process.env.ARC_SPINE_ROOT && process.env.ARC_REVIEW_SHIP_CI_DIGEST ? process.env.ARC_REVIEW_SHIP_CI_DIGEST : null;
+  const r = spawnSync(process.execPath, [fixture || CI_DIGEST, "--sha", sha], { cwd: REPO, encoding: "utf8", timeout: 120_000, maxBuffer: 4 << 20, env: childEnv() });
+  const tail = plain(String(r.stdout || "").trim().split(/\r?\n/).pop() || "", 200);
+  const state = r.error ? `could not be read (${plain(/** @type {any} */ (r.error).code || r.error.message, 40)})`
+    : r.status === 0 ? "green" : r.status === 1 ? "red" : r.status === 3 ? "still running"
+    : `could not be read (ci-digest ${r.status === null ? `killed by ${r.signal || "a timeout"}` : `exit ${r.status}`})`;
+  return { green: state === "green", state, tail };
+}
+
+/** The commit this checkout is on, read here, never taken on the caller's word (attack 09a1c07 B3). */
+function headSha() {
+  const r = spawnSync("git", ["rev-parse", "HEAD"], { cwd: REPO, encoding: "utf8", timeout: 30_000, env: childEnv() });
+  const sha = String(r.stdout || "").trim();
+  return r.status === 0 && SHA_RE.test(sha) ? sha : null;
 }
 
 function main() {
@@ -70,8 +96,12 @@ function main() {
     kind = "qa.completed";
     payload = { url: v["--url"], bugs: v["--bugs"], fixed: v["--fixed"] };
   } else {
+    // The gate is for the commit being prepared: a green SHA from another commit raises nothing (attack 09a1c07 B3).
+    const head = headSha();
+    if (head === null) die(2, "the checkout's HEAD could not be read -- no deploy gate is raised");
+    if (v["--sha"] !== head) die(2, `--sha ${v["--sha"].slice(0, 12)} is not this checkout's HEAD (${head.slice(0, 12)}) -- a gate is raised only for the commit being prepared`);
     const ci = ciVerdict(v["--sha"]);
-    if (!ci.green) die(2, `CI for ${v["--sha"].slice(0, 12)} is not green (ci-digest exit ${ci.status}: ${ci.tail}) -- no deploy gate is raised`);
+    if (!ci.green) die(2, `CI for ${v["--sha"].slice(0, 12)} is ${ci.state}${ci.tail ? ` (${ci.tail})` : ""} -- no deploy gate is raised`);
     kind = "approval.requested";
     payload = { gate: "deploy", sha: v["--sha"], what: `deploy ${v["--sha"].slice(0, 12)}: CI green on every job; nothing deploys until you run the deploy yourself` };
   }

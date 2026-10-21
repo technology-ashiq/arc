@@ -13,9 +13,11 @@ permissions: declared
 inputs: []
 tools:
   - shell.run:
-      - "node .claude/scripts/plan/kickoff-lint.mjs:*"
-      - "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code:*"
-      - "git rev-parse HEAD:*"
+      # Exact grants, no `:*`: a prefix grant on arc-compile let `--check ... --write` through, and arc-compile takes
+      # the LAST mode flag (attack 09a1c07 B5). Only the writer takes arguments.
+      - "node .claude/scripts/plan/kickoff-lint.mjs"
+      - "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code"
+      - "git rev-parse HEAD"
       - "node .claude/scripts/hq/review-ship-record.mjs ship:*"
 output:
   type: object
