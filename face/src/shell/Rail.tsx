@@ -53,7 +53,10 @@ export default function Rail({
   const onToggle = (ring: string) => {
     let fresh: RailSaved = saved
     try { fresh = { ...saved, ...parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)) } } catch { /* no storage: in-memory only */ }
-    const next = toggleRing(groups, current, fresh, ring)
+    // The click flips what THIS tab shows, and only that ring is written over storage: deciding on the merged copy made a
+    // click look dead and overwrote another tab's fold (Phase 04 PR449 B1).
+    const flipped = toggleRing(groups, current, saved, ring)
+    const next = Object.assign(Object.create(null), fresh, { [ring]: flipped[ring] }) as RailSaved
     setSaved(next)
     try { window.localStorage.setItem(RAIL_STORAGE_KEY, serializeSaved(next)) } catch { /* no storage: the defaults hold next visit */ }
   }

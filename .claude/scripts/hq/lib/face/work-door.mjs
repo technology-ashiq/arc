@@ -66,7 +66,7 @@ const scrubArgs = (cmd, repo) => ({ ...cmd, args: cmd.args.map((a) => scrub(a, r
 export const WORK_STATUS = Object.freeze({
   UNKNOWN_OP: 404, UNKNOWN_PLAN: 404,
   BAD_INPUT: 400, BAD_PLAN_ID: 400,
-  PLAN_OTHER_OP: 409, PLAN_EXPIRED: 410, CONFIRM_REQUIRED: 428,
+  PLAN_OTHER_OP: 409, OP_BUSY: 409, PLAN_EXPIRED: 410, CONFIRM_REQUIRED: 428,
   SIM_SPEND: 403, SIM_EFFECT: 403,
   NO_EMIT_PLAN: 502, EMIT_PLAN_MISMATCH: 502, NO_EXPECT: 502, TOOL_MISSING: 503,
   PLAN_HIDDEN: 422,
@@ -323,6 +323,10 @@ export function createWorkDoor(ctx, opts = {}) {
       throw e;
     }
 
+    // One running apply per op: a drawer closed mid-run and reopened plans again, and a second apply of the same op --
+    // a second mail send, a second paid bench run -- must wait for the first (Phase 04 PR449 B2).
+    for (const [id, other] of plans) if (id !== planId && other.opId === op.id && other.state === "running")
+      throw new OpError("OP_BUSY", `${op.id} is still running from an earlier apply; wait for its receipt`);
     // THE CLAIM. Synchronous, before the first await: a second apply of this plan id, from anywhere, sees "running"
     // and replays -- it cannot start a second run.
     p.state = "running";

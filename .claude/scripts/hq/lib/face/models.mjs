@@ -107,6 +107,9 @@ export function checkCost(raw) {
  * @param {Registry} reg @param {unknown} body
  * @returns {{ ok: true, reg: Registry } | { ok: false, why: string }}
  */
+/** A URL's origin, or the URL itself when it does not parse (the record check refuses those first). @param {string} u */
+const originOf = (u) => { try { return new URL(u).origin; } catch { return u; } };
+
 export function applyChange(reg, body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, why: "a change is { op, ... }" };
   const b = /** @type {Record<string, unknown>} */ (body);
@@ -143,6 +146,10 @@ export function applyChange(reg, body) {
     /** @type {ModelRecord} */
     // The cost is what the form sent: the edit form always carries it, so an absent cost is a cleared one.
     const next = { name: c.record.name, baseUrl: c.record.baseUrl, model: c.record.model, ...(c.record.cost ? { cost: c.record.cost } : {}) };
+    // A kept key stays with its host: an edit that moves the URL to another origin and types no key would send the old
+    // provider's key to the new one (Phase 04 D106 B1, narrowing ADR-1350 Amendment 3's keep-the-key rule).
+    if (c.record.key === undefined && b.clearKey !== true && hit.key !== undefined && originOf(c.record.baseUrl) !== originOf(hit.baseUrl))
+      return { ok: false, why: "the URL moved to another host, so its key is not carried over: type the key for the new host, or remove the key" };
     const key = b.clearKey === true ? undefined : c.record.key ?? hit.key;
     if (key !== undefined) next.key = key;
     const models = reg.models.map((m) => (m === hit ? next : m));

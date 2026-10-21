@@ -112,9 +112,14 @@ check("A: MUTANT CONTROL -- a view that echoes the record FAILs the same check",
   const KEY2 = ["sk", "or", "v1", "SECONDtalkKEY", "77aa"].join("-");
   const base = add(add(m.emptyRegistry(), { name: "One", baseUrl: "https://a.example/v1", model: "a", key: PLANTED }).reg, { name: "Two", baseUrl: "https://b.example/v1", model: "b" }).reg;
   const ed = (body) => m.applyChange(base, { op: "edit", ...body });
-  const kept = ed({ name: "one", model: { name: "Uno", baseUrl: "https://c.example/v1", model: "c" } });
-  check("A: edit renames in place, keeps the key when none is typed, and the active choice follows the rename",
-    kept.ok && kept.reg.models.length === 2 && kept.reg.models[0].name === "Uno" && kept.reg.models[0].baseUrl === "https://c.example/v1" && kept.reg.models[0].key === PLANTED && kept.reg.active === "Uno", JSON.stringify(kept.ok ? kept.reg.active : kept.why));
+  const kept = ed({ name: "one", model: { name: "Uno", baseUrl: "https://a.example/v2", model: "c" } });
+  check("A: edit renames in place, keeps the key when none is typed (same host), and the active choice follows the rename",
+    kept.ok && kept.reg.models.length === 2 && kept.reg.models[0].name === "Uno" && kept.reg.models[0].baseUrl === "https://a.example/v2" && kept.reg.models[0].key === PLANTED && kept.reg.active === "Uno", JSON.stringify(kept.ok ? kept.reg.active : kept.why));
+  // Phase 04 D106 B1: a kept key never travels to another host.
+  const moved = ed({ name: "One", model: { name: "One", baseUrl: "https://other.example/v1", model: "a" } });
+  const movedTyped = ed({ name: "One", model: { name: "One", baseUrl: "https://other.example/v1", model: "a", key: KEY2 } });
+  check("A: an edit moving the URL to another host with no key typed is refused, never sends the old key there; with a key typed it is accepted",
+    !moved.ok && /another host/.test(moved.why) && movedTyped.ok && movedTyped.reg.models[0].key === KEY2, JSON.stringify(moved));
   const swapped = ed({ name: "One", model: { name: "One", baseUrl: "https://a.example/v1", model: "a", key: KEY2 } });
   const cleared = ed({ name: "One", clearKey: true, model: { name: "One", baseUrl: "https://a.example/v1", model: "a" } });
   check("A: edit replaces the key when one is typed, and removes it with clearKey", swapped.ok && swapped.reg.models[0].key === KEY2 && cleared.ok && !("key" in cleared.reg.models[0]));
