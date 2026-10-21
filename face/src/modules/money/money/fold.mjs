@@ -17,7 +17,7 @@ import {
   COST_KIND, OVERHEAD_VENTURE, REAL_KIND, SIM_KIND, asOfSupport, costTally, fileBorneNote, fmtInt, moneyFlags, rupees,
   notServed as routeGaps, returnStatement,
 } from "../../../lib/money.mjs";
-import { costView, gateView, killLinesView, moneyReads, substanceView } from "../../../lib/money-room.mjs";
+import { costRecords, costView, gateView, killLinesView, moneyReads, substanceView } from "../../../lib/money-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
 /** @typedef {import("../../../lib/money.mjs").Figure} Figure */
@@ -51,6 +51,8 @@ import { costView, gateView, killLinesView, moneyReads, substanceView } from "..
  * @property {import("../../../lib/registry.mjs").NotServed} milestones
  * @property {import("../../../lib/registry.mjs").NotServed} sources
  * @property {string[]} northStar
+ * @property {string} gapsWhere
+ * @property {import("../../../lib/records.mjs").RecordCollection[]} records
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
 
@@ -109,6 +111,9 @@ export function fold(payloads, ctx) {
   const flags = moneyFlags(views);
   const asof = asOfSupport();
   const costFigure = m.real.isRead ? fmtInt(allTally.lines.length) : "—";
+  const kill = killLinesView(m);
+  const productCost = costRecords("product-cost", costView(`${COST_KIND} — attributed to a product`, "what a venture cost. Every line is one receipt, in the currency it was recorded in.", productTally, m.real));
+  const overheadCost = costRecords("overhead-cost", costView(`${COST_KIND} — overhead (venture: ${OVERHEAD_VENTURE})`, "building the factory is not a cost of any product made in it, so these are never attributed to a venture.", overheadTally, m.real));
   return {
     // The shell decoded the served registry once; decoding it again would manufacture a `<` (Phase 03 attack).
     sentence: String(ctx.room.sentence ?? ""),
@@ -129,14 +134,15 @@ export function fold(payloads, ctx) {
     realPanel,
     simPanel,
     neverAdded: `These two panels are never added, never averaged, and never placed in one row. They come from two separate reads of two separate kinds, ${REAL_KIND} and ${SIM_KIND}, and the money brain selects one kind at the top and never reads the other. Nothing on this screen combines them, because there is no quantity a combination of them would be.`,
-    productCost: costView(`${COST_KIND} — attributed to a product`, "what a venture cost. Every line is one receipt, in the currency it was recorded in.", productTally, m.real),
-    overheadCost: costView(`${COST_KIND} — overhead (venture: ${OVERHEAD_VENTURE})`, "building the factory is not a cost of any product made in it, so these are never attributed to a venture.", overheadTally, m.real),
+    productCost: productCost.overview,
+    overheadCost: overheadCost.overview,
     ret: { code: ret.code, human: ret.human, parts: ret.parts, command: ret.command },
-    kill: killLinesView(m),
+    kill: { ...kill, rows: [], summary: kill.rows.length > 0 ? `${kill.summary} Each line is a row on the Records tab.` : kill.summary },
     // A simulated flag wears the non-real texture, decided here so the View draws one value.
     flags: flags.map((f) => ({ key: `${f.substance}:${f.type}:${f.venture}:${f.detail}`, type: f.type, venture: f.venture, detail: f.detail, isSim: f.substance === "simulated", hatch: f.substance === "simulated" ? "var(--sim-hatch)" : "" })),
     hasFlags: flags.length > 0,
     gaps: routeGaps({ real: m.realView, sim: m.simView, health: m.healthView }),
+    gapsWhere: "Each gap -- what this route does not serve, and why -- is a row on the Records tab.",
     provenance: fileBorneNote().map((n) => ({ half: n.half, source: n.source, badge: n.badge ?? "", hasBadge: n.badge !== null, asof: n.asof })),
     asof: { code: asof.code, offer: asof.offer },
     chart: dayTable("Fourteen days", "real", `${REAL_KIND} · ₹ cash in`, "real money, by the day each receipt was recorded -- the only one of the three that is money",
@@ -170,6 +176,33 @@ export function fold(payloads, ctx) {
     northStar: [
       "Rupees a month of revenue, per hour of the owner's week.",
       "The only number arc optimises. A feature that adds human hours is a regression, however impressive it looks.",
+    ],
+    // REQ-02 (ADR-1365): the cost lines are the room's long lists, so they are drawn on the Records tab.
+    records: [
+      {
+        key: "kill-lines",
+        title: "Kill lines",
+        columns: [{ key: "venture", label: "venture" }, { key: "criterion", label: "criterion" }, { key: "headline", label: "distance" }, { key: "detail", label: "detail" }],
+        search: ["venture", "criterion", "headline"],
+        cap: 8,
+        rows: kill.rows.map((r) => ({ venture: r.venture, criterion: r.criterion, headline: r.headline, detail: r.detail })),
+        isReading: kill.isReading,
+        isRefused: kill.isRefused,
+        refusal: kill.refusal,
+      },
+      productCost.records,
+      overheadCost.records,
+      {
+        key: "route-gaps",
+        title: "What this route does not serve",
+        columns: [{ key: "what", label: "gap" }, { key: "why", label: "why" }],
+        search: ["what", "why"],
+        cap: 8,
+        rows: routeGaps({ real: m.realView, sim: m.simView, health: m.healthView }).map((g) => ({ what: g.what, why: g.why })),
+        isReading: false,
+        isRefused: false,
+        refusal: { code: "", human: "" },
+      },
     ],
     reads: m.reads,
   };

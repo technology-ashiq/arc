@@ -40,6 +40,23 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
             </div>
           </HPanel>
 
+          <HPanel title="The milestone line" hint="honest ranges, not promises">
+            <NotServed item={f.milestones} />
+          </HPanel>
+        </div>
+
+        <div className="min-w-0">
+          <KillLinesPanel k={f.kill} />
+
+          <HPanel title="The north-star">
+            <div className="text-[16px] leading-[24px] mb-2" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{f.northStar[0]}</div>
+            <p className="text-[13px] leading-[20px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{f.northStar[1]}</p>
+          </HPanel>
+
+          <HPanel title="Where money comes from" hint="portfolio math, honest">
+            <NotServed item={f.sources} />
+          </HPanel>
+
           <CostPanel c={f.productCost} />
           <CostPanel c={f.overheadCost} />
 
@@ -59,22 +76,6 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
             </p>
           </HPanel>
 
-          <HPanel title="The milestone line" hint="honest ranges, not promises">
-            <NotServed item={f.milestones} />
-          </HPanel>
-        </div>
-
-        <div className="min-w-0">
-          <KillLinesPanel k={f.kill} />
-
-          <HPanel title="The north-star">
-            <div className="text-[16px] leading-[24px] mb-2" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-1)' }}>{f.northStar[0]}</div>
-            <p className="text-[13px] leading-[20px]" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{f.northStar[1]}</p>
-          </HPanel>
-
-          <HPanel title="Where money comes from" hint="portfolio math, honest">
-            <NotServed item={f.sources} />
-          </HPanel>
 
           {f.hasFlags ? (
             <HPanel title="Needs you" hint="the money brain's own flags" tone="amber">
@@ -90,12 +91,7 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
 
           <HPanel title="What this route does not serve" hint="a gap the reader cannot see is a gap the reader assumes is not there">
             <div>
-              {f.gaps.map((g) => (
-                <div key={g.what} className="py-2" style={{ borderBottom: '1px solid var(--line-1)' }}>
-                  <div className="text-[12.5px]" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{g.what}</div>
-                  <p className="text-[12px] leading-[18px] mt-0.5" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{g.why}</p>
-                </div>
-              ))}
+              <p className="text-[12px] leading-[18px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.gapsWhere}</p>
             </div>
             <div className="mt-3 space-y-1.5">
               {f.provenance.map((n) => (

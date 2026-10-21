@@ -301,6 +301,9 @@ export function createWorkDoor(ctx, opts = {}) {
       throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : op.touchesTree ? "writes a lane's tracker in this checkout" : op.leavesMachine ? "acts outside the spine and outside a branch -- it sends, or writes files in this checkout" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
     if (p.state !== "planned") return { ...view(p), replayed: true };
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
+    // REQ-03 (ADR-1369): a picker's options are read again here, so a value that left its list between the plan and the
+    // click -- a venture removed, a month rolled out of the window -- is refused before the claim, never applied.
+    validateInput(op, p.values);
 
     // THE CLAIM. Synchronous, before the first await: a second apply of this plan id, from anywhere, sees "running"
     // and replays -- it cannot start a second run.

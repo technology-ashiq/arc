@@ -33,8 +33,51 @@ import { unescapeDoorText } from "../../../lib/door.mjs";
  * @property {{ isVerbPending: true, verb: string, sentence: string }} birthVerb
  * @property {OrgView} org
  * @property {import("../../../ui/orgchart").OrgChartView} chart
+ * @property {import("../../../lib/records.mjs").RecordCollection[]} records
  * @property {Read[]} reads
  */
+
+/**
+ * The roles, the scorecards and the venture teams as Records collections (REQ-02, ADR-1365): every role and every scored seat is one row,
+ * so Overview opens on the chart. Every value is the one OrgView already worded.
+ * @param {OrgView} o @returns {import("../../../lib/records.mjs").RecordCollection[]}
+ */
+export function orgRecords(o) {
+  const state = { isReading: o.isReading, isRefused: o.isRefused, refusal: o.refusal };
+  const score = (/** @type {ScoreRow} */ r) => ({ role: r.role, seat: r.seat, verdict: r.isVerdict ? r.verdict : "—", why: r.isVerdict ? `${r.why} · ${r.due}` : "", line: r.line });
+  return [
+    {
+      key: "roles",
+      title: "Roles",
+      columns: [{ key: "department", label: "department" }, { key: "title", label: "role" }, { key: "id", label: "id" }, { key: "state", label: "state" }, { key: "seat", label: "seat" }, { key: "who", label: "who" }],
+      search: ["department", "title", "id", "state", "who"],
+      cap: 8,
+      rows: o.departments.flatMap((d) => d.roles.map((r) => ({ department: d.name, title: r.title, id: r.id, state: r.state, seat: r.seat, who: r.who, tone: r.whoTone }))),
+      toneKey: "tone",
+      ...state,
+    },
+    {
+      key: "scorecards",
+      title: "Scorecards",
+      columns: [{ key: "role", label: "role" }, { key: "seat", label: "seat" }, { key: "verdict", label: "verdict" }, { key: "why", label: "why" }, { key: "line", label: "receipts" }],
+      search: ["role", "seat", "verdict", "line"],
+      cap: 8,
+      rows: [...o.scores.rows, ...o.scores.others].map(score),
+      isReading: o.isReading,
+      isRefused: o.scores.isRefused,
+      refusal: o.scores.refusal,
+    },
+    {
+      key: "teams",
+      title: "Venture teams",
+      columns: [{ key: "venture", label: "venture" }, { key: "stage", label: "stage" }, { key: "status", label: "status" }, { key: "seats", label: "seats" }, { key: "findings", label: "findings" }],
+      search: ["venture", "status", "seats", "findings"],
+      cap: 8,
+      rows: o.teams.rows.map((t) => ({ venture: t.venture, stage: t.stage, status: t.status, seats: t.seats, findings: t.findings.join(" · ") })),
+      ...state,
+    },
+  ];
+}
 
 /**
  * The roles, scorecards and teams section (org Cycle 19, ADR-1624/1625): every value as /api/org served it. The fold
@@ -295,6 +338,31 @@ export function fold(payloads, ctx) {
       "Only /arc-kickoff births a lane: it claims the next ADR century and lands the lane's room in the same change. The work door will start that ceremony from here.",
     ),
     org,
+    records: [
+      {
+        key: "lanes",
+        title: "The roster",
+        columns: [{ key: "lane", label: "lane" }, { key: "status", label: "status" }, { key: "phase", label: "phase" }, { key: "cycle", label: "cycle" }, { key: "line", label: "blocked on / next" }],
+        search: ["lane", "status", "cycle", "line"],
+        cap: 8,
+        rows: roster.map((r) => ({ lane: r.lane, status: r.status, phase: r.phase, cycle: r.cycle, line: r.line })),
+        isReading: board.isReading,
+        isRefused: board.isRefused,
+        refusal: board.refusal,
+      },
+      {
+        key: "bands",
+        title: "ADR bands",
+        columns: [{ key: "band", label: "century" }, { key: "who", label: "lane" }, { key: "note", label: "note" }],
+        search: ["band", "who", "note"],
+        cap: 8,
+        rows: bandsRead ? bandRows.map((b) => ({ band: b.band, who: b.who, note: b.note })) : [],
+        isReading: file.source.isReading,
+        isRefused: file.source.isRefused,
+        refusal: file.source.refusal,
+      },
+      ...orgRecords(org),
+    ],
     chart: foldChart(orgWhy === null ? payloadOf(payloads, orgRead) : { state: "refused", code: "READ_REFUSED", human: orgWhy }, ctx.picks ?? {}),
     reads,
   };

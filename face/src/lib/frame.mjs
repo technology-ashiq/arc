@@ -5,8 +5,10 @@
 // carries and what a not-ready session says are decided here, where node can import them with no install; the frame
 // runs the effects and draws.
 
+import { emptyPicker, NONE_YET } from "./ops.mjs";
+
 /**
- * @typedef {"overview" | "work"} FrameTab
+ * @typedef {"overview" | "records" | "work"} FrameTab
  * @typedef {{ kind: "op" | "session", id: string, label: string, ready: boolean, reason: string }} StripItem
  */
 
@@ -14,16 +16,30 @@
 export const OVERVIEW = "overview";
 
 /**
- * The tabs a room shows: Work only when the room has an op or a session to put on it (FV3-B).
- * @param {number} opCount @param {number} sessionCount @returns {FrameTab[]}
+ * The tabs a room shows: Records only when the fold declares a collection (ADR-1365), Work only when the room has an
+ * op or a session to put on it (FV3-B).
+ * @param {number} opCount @param {number} sessionCount @param {number} [recordCount] @returns {FrameTab[]}
  */
-export function frameTabs(opCount, sessionCount) {
-  return opCount > 0 || sessionCount > 0 ? ["overview", "work"] : ["overview"];
+export function frameTabs(opCount, sessionCount, recordCount = 0) {
+  /** @type {FrameTab[]} */
+  const tabs = ["overview"];
+  if (recordCount > 0) tabs.push("records");
+  if (opCount > 0 || sessionCount > 0) tabs.push("work");
+  return tabs;
 }
 
 /** A tab's label. @param {FrameTab} tab @returns {string} */
 export function tabLabel(tab) {
-  return tab === "work" ? "Work" : "Overview";
+  return tab === "work" ? "Work" : tab === "records" ? "Records" : "Overview";
+}
+
+/**
+ * The frame's sections, top to bottom (REQ-04): the action strip comes before the tab body, so a room's first verb is
+ * never pushed below its content. Returned as data so a node check holds the order with no browser.
+ * @returns {readonly ("tabs" | "strip" | "problems" | "body" | "drawer")[]}
+ */
+export function frameSections() {
+  return ["tabs", "strip", "problems", "body", "drawer"];
 }
 
 /**
@@ -61,8 +77,10 @@ export function stripItems(opCards, sessionCards) {
     const o = /** @type {any} */ (c);
     if (!o || typeof o.id !== "string") continue;
     const label = typeof o.label === "string" && o.label ? o.label : o.id;
-    const ready = o.state !== "absent";
-    out.push({ kind: "op", id: o.id, label, ready, reason: ready ? "" : String(o.why ?? "") });
+    // An op whose required picker has nothing to pick is not ready either (REQ-03): its button says so.
+    const empty = emptyPicker(o);
+    const ready = o.state !== "absent" && empty === null;
+    out.push({ kind: "op", id: o.id, label, ready, reason: empty !== null ? `${empty.label}: ${NONE_YET}` : ready ? "" : String(o.why ?? "") });
   }
   for (const c of Array.isArray(sessionCards) ? sessionCards : []) {
     const s = /** @type {any} */ (c);

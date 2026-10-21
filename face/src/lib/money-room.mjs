@@ -264,6 +264,7 @@ export function substanceView(m, want) {
  * @property {{ key: string, text: string, warn: string, hasWarn: boolean }[]} chips
  * @property {string} rule        why no total is printed -- a rule, not an apology
  * @property {{ id: string, ts: string, amount: string, isExact: boolean, note: string, source: string, label: string }[]} lines
+ * @property {string} elsewhere   where the lines are drawn instead, when the room moved them to its Records tab
  */
 
 /**
@@ -303,6 +304,30 @@ export function costView(title, lede, tally, state) {
         label: l.label ?? "",
       };
     }),
+    elsewhere: "",
+  };
+}
+
+/**
+ * A cost view's lines as a Records collection (REQ-02, ADR-1365), and the view left on Overview: its count, chips and
+ * rule stay, its lines move, and a sentence says where they went.
+ * @param {string} key @param {CostView} c
+ * @returns {{ overview: CostView, records: import("./records.mjs").RecordCollection }}
+ */
+export function costRecords(key, c) {
+  return {
+    overview: { ...c, lines: [], elsewhere: c.lines.length > 0 ? `The ${c.count} are on the Records tab, newest last, with a search.` : "" },
+    records: {
+      key,
+      title: c.title,
+      columns: [{ key: "ts", label: "when" }, { key: "amount", label: "amount" }, { key: "source", label: "source" }, { key: "label", label: "what" }, { key: "id", label: "receipt" }],
+      search: ["label", "source", "id"],
+      cap: 8,
+      rows: c.lines,
+      isReading: c.isReading,
+      isRefused: c.isRefused,
+      refusal: c.refusal,
+    },
   };
 }
 

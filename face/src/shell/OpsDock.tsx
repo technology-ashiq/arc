@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Door } from '../lib/door.mjs'
 import {
-  IDLE, RUN_POLL_MS, applyArgs, applyBlocked, applyFailed, applyStarted, callFailed, fieldCount, opCards, planBlocked, planInput,
+  IDLE, NONE_YET, RUN_POLL_MS, applyArgs, applyBlocked, applyFailed, applyStarted, callFailed, fieldCount, opCards, planBlocked, planInput,
   planSettled, planStarted, polling, runSettled, runVerdict,
 } from '../lib/ops.mjs'
 import type { OpCard, OpState } from '../lib/ops.mjs'
@@ -141,7 +141,9 @@ function OpCardView({ card, door, onApplied }: { card: OpCard; door: Door; onApp
       <fieldset disabled={st.phase === 'planning' || live} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 min-w-0 border-0 p-0 m-0">
         {card.fields.map((f) => (
           <Field key={f.name} label={f.label} className={f.type === 'select' ? 'md:col-span-2' : ''} hint={fieldCount(f, values[f.name]) || undefined}>
-            {f.type === 'select' ? (
+            {f.type === 'select' && f.options.length === 0 ? (
+              <p data-picker-empty={f.name} aria-disabled="true" className="text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{NONE_YET}</p>
+            ) : f.type === 'select' ? (
               <PickRow small label={f.label} options={f.options} value={values[f.name] ?? ''} onPick={(v) => setValue(f.name, v)} />
             ) : (
               <TextInput mono={f.type === 'int'} value={values[f.name] ?? ''} placeholder={f.placeholder} onChange={(v) => setValue(f.name, v)} />

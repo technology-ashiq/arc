@@ -68,6 +68,20 @@ export function opCards(moduleOps, registry) {
 /** @type {OpState} */
 export const IDLE = Object.freeze({ phase: "idle" });
 
+/** What an empty picker says (REQ-03): there is nothing to pick yet, so nothing can be planned on it. */
+export const NONE_YET = "none yet -- create one first";
+
+/**
+ * The first required picker on a ready card with no option to pick, or null (REQ-03, ADR-1369): the field is drawn
+ * disabled, Plan stays disabled, and the strip button reads not ready -- never an empty select that plans a blank.
+ * @param {any} card @returns {{ name: string, label: string } | null}
+ */
+export function emptyPicker(card) {
+  if (!card || card.state !== "ready" || !Array.isArray(card.fields)) return null;
+  const f = card.fields.find((/** @type {any} */ x) => x && x.type === "select" && x.required === true && Array.isArray(x.options) && x.options.length === 0);
+  return f ? { name: String(f.name), label: String(f.label || f.name) } : null;
+}
+
 /**
  * The fields a plan sends: every field the card names, trimmed of nothing (the door refuses edge whitespace itself, and
  * a client that trimmed would send something other than what the owner typed), empty ones left out.
@@ -103,6 +117,8 @@ export function fieldCount(field, value) {
  */
 export function planBlocked(card, values) {
   if (card.state !== "ready") return card.state === "absent" ? card.why : "the door's op list is still loading";
+  const empty = emptyPicker(card);
+  if (empty !== null) return `${empty.label}: ${NONE_YET}`;
   const missing = card.fields.filter((f) => f.required && !(typeof values[f.name] === "string" && values[f.name] !== ""));
   return missing.length ? `fill in ${missing.map((f) => f.label).join(", ")}` : null;
 }

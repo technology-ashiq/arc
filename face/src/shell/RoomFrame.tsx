@@ -8,6 +8,7 @@
 // ctx.onReread. A served room with no module draws through the generic module, which REPORTS that it
 // did, by the room's id, above the room.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment } from 'react'
 import type { ComponentType } from 'react'
 import {
   actCall, actProblem, actRereads, availabilityCountsOf, actSettled, actStarted, dropReads, fallbackFor, foldModule, keyLeaksFor, plannedReads,
@@ -26,7 +27,9 @@ import ActionStrip from './ActionStrip'
 import ActionDrawer from './ActionDrawer'
 import { opCards } from '../lib/ops.mjs'
 import { sessionCards } from '../lib/sessions.mjs'
-import { currentTab, frameTabs, itemKey, stripItems, tabLabel } from '../lib/frame.mjs'
+import { currentTab, frameSections, frameTabs, itemKey, stripItems, tabLabel } from '../lib/frame.mjs'
+import { recordCollections } from '../lib/records.mjs'
+import RecordsTable from './RecordsTable'
 import type { FrameTab } from '../lib/frame.mjs'
 import { MONO, UI } from '../ui/kit'
 import { AvailabilityCountsContext } from '../ui/availability-context'
@@ -192,7 +195,8 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
   }, [door, m])
   const strip = useMemo(() => stripItems(opCards(m.ops, opsRegistry), sessionCards(m.id, sessionRegistry)), [m, opsRegistry, sessionRegistry])
   const sessionCount = strip.filter((it) => it.kind === 'session').length
-  const tabs = frameTabs(m.ops.length, sessionCount)
+  const records = folded.ok ? recordCollections(folded.f) : []
+  const tabs = frameTabs(m.ops.length, sessionCount, records.length)
   // Both are held against the room they were picked in, so a room change opens on Overview with no drawer.
   const [picked, setPicked] = useState<{ room: string; tab: string } | null>(null)
   const [drawer, setDrawer] = useState<{ room: string; key: string } | null>(null)
@@ -211,8 +215,10 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
   const stale = Object.entries(loaded).flatMap(([k, v]) => (v.state === 'ok' && v.rereadFailed ? [`re-read of ${k} failed (${v.rereadFailed.code}) -- showing the last answer`] : []))
   // Text the HOST builds (a refused act, a stale re-read) is scrubbed too: it never passes a fold (round-2 attack B3).
   const problems = [...(leaks.length ? [keyLeakSentence(leaks)] : []), ...[...plan.problems.map((p) => `read refused: ${p}`), ...hostProblems, ...stale].map(scrubText)]
-  return (
-    <>
+  // REQ-04: drawn in frameSections() order, so the strip's place above the body is one checked decision.
+  const sections = {
+    tabs: (
+      <>
       {tabs.length > 1 ? (
         <div role="tablist" aria-label="Room views" data-frame-tabs={tabs.join(' ')} className="mb-3 flex items-center gap-1" style={{ borderBottom: '1px solid var(--line-1)' }}>
           {tabs.map((t: FrameTab) => (
@@ -231,8 +237,16 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
           ))}
         </div>
       ) : null}
+      </>
+    ),
+    strip: (
+      <>
       {/* FV3-A: every verb of the room sits here, above the content; a click opens the drawer holding that one form. */}
       <ActionStrip items={strip} open={openKey} onOpen={(key) => setDrawer({ room: m.id, key })} />
+      </>
+    ),
+    problems: (
+      <>
       {problems.length > 0 && (
         <p data-read-problem={problems.length} className="mb-3 text-[12px] leading-[18px]" style={{ fontFamily: MONO, color: 'var(--text-3)' }}>
           {problems.map((p) => (
@@ -242,10 +256,20 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
           ))}
         </p>
       )}
+      </>
+    ),
+    body: (
+      <>
       {tab === 'overview' ? (
         <AvailabilityCountsContext.Provider value={counts}>
           <View f={folded.f} ctx={viewCtx} />
         </AvailabilityCountsContext.Provider>
+      ) : tab === 'records' ? (
+        <div data-frame-records={m.id}>
+          {records.map((c) => (
+            <RecordsTable key={c.key} c={c} onRetry={onReread} />
+          ))}
+        </div>
       ) : (
         <div data-frame-work={m.id}>
           {/* Phase 05 (ADR-1339): the room's ops. A run that lands drops the room's reads, so the receipt shows without a reload. */}
@@ -255,6 +279,10 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
           <SessionDock roomId={m.id} door={door} />
         </div>
       )}
+      </>
+    ),
+    drawer: (
+      <>
       {openItem ? (
         <ActionDrawer key={openKey} title={openItem.label} kind={openItem.kind === 'op' ? 'op' : 'session'} onClose={closeDrawer}>
           {openItem.kind === 'op' ? (
@@ -264,6 +292,14 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
           )}
         </ActionDrawer>
       ) : null}
+      </>
+    ),
+  }
+  return (
+    <>
+      {frameSections().map((k) => (
+        <Fragment key={k}>{sections[k]}</Fragment>
+      ))}
     </>
   )
 }

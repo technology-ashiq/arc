@@ -43,6 +43,7 @@ import { parseVentures } from "./lib/ledger/ventures.mjs";
 import { venturesPath } from "./lib/ledger/kill-panel.mjs";
 import { ONE_LINE_SRC, ONE_LINE_BAD_SRC } from "../core/one-line.mjs";
 import { AGENT_TOOLS } from "../engine/agent-scaffold.mjs";
+import { storePath as leadsStorePath } from "../leads/lib/store.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -191,7 +192,67 @@ function registeredVentures() {
 export const FIELD_SOURCES = Object.freeze({
   "money.ingest": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
   "ventures.kill-review": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
+  // Cycle 17 P01 (REQ-03, ADR-1369): the other fields that name an existing thing. A text field with a source is a
+  // LIST of names (seat-assign binds several agents), and every name in it must be one the source holds.
+  "leads.daily-send": Object.freeze({ campaign: () => leadsCampaigns() }),
+  "legal.full-read": Object.freeze({ venture: () => legalVentures() }),
+  "org.seat-assign": Object.freeze({ agents: () => agentNames() }),
 });
+
+/**
+ * The months a close may name (REQ-03): this month and the eleven before it, newest first, counted in IST -- the
+ * spine's clock -- so 00:30 on 1 January in Chennai is January even though it is still December in UTC. Pure: the
+ * caller hands `now` in.
+ * @param {Date} now @param {number} [n] @returns {string[]}
+ */
+export function lastMonths(now, n = 12) {
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth() - i, 1));
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+/** An error's code, or THREW. @param {unknown} e @returns {string} */
+const errCode = (e) => (e !== null && typeof e === "object" && typeof (/** @type {any} */ (e).code) === "string" ? /** @type {any} */ (e).code : "THREW");
+
+/**
+ * The campaigns the leads store holds (REQ-03). A store that was never initialised holds none -- "none yet" -- while a
+ * store that exists and cannot be listed is unknown, never an empty list.
+ * @returns {{ failure: string, options: string[] }}
+ */
+function leadsCampaigns() {
+  try {
+    const names = readdirSync(join(leadsStorePath(), "campaigns")).filter((f) => /^[a-z0-9-]{1,64}\.json$/.test(f)).map((f) => f.slice(0, -5));
+    return { failure: "", options: names.sort() };
+  } catch (e) {
+    return errCode(e) === "ENOENT" ? { failure: "", options: [] } : { failure: errCode(e), options: [] };
+  }
+}
+
+/** The ventures a full legal read can name: the legal fixtures' ventures and every registered one (REQ-03). */
+function legalVentures() {
+  const reg = venturesRead();
+  /** @type {string[]} */
+  let fixtures = [];
+  try {
+    fixtures = readdirSync(join(HERE, "..", "..", "..", "tests", "fixtures", "legal", "ventures")).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n));
+  } catch { fixtures = []; }
+  // A registry that could not be read leaves the fixtures still nameable; only with neither is the field unknown.
+  return { failure: reg.failure !== "" && fixtures.length === 0 ? reg.failure : "", options: [...new Set([...fixtures, ...reg.ventures])].sort() };
+}
+
+/** The agents a seat can bind: every `.claude/agents/<name>.md` (REQ-03). */
+function agentNames() {
+  try {
+    const names = readdirSync(join(HERE, "..", "..", "agents")).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f)).map((f) => f.slice(0, -3));
+    return { failure: "", options: names.sort() };
+  } catch (e) {
+    return { failure: errCode(e), options: [] };
+  }
+}
 
 /** The rooms a term can be homed in: the contract's BUILT rooms and the lane template -- a planned room opens nothing. */
 function conceptRooms() {
@@ -435,7 +496,7 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "money", verb: "Close the month" }),
     humanRun: true, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "month", label: "Month", placeholder: "2026-10", type: "text", max: 7, pattern: "\\d{4}-(0[1-9]|1[0-2])", required: true }),
+      Object.freeze({ name: "month", label: "Month", placeholder: "", type: "select", get options() { return Object.freeze(lastMonths(new Date())); }, required: true }),
       // Optional: a month no rail touched reconciles against nothing, and the close says so itself. When a rail DID
       // move money, arc-pnl refuses the close without its total -- that refusal is the gate, not this form.
       Object.freeze({ name: "totals", label: "Provider totals", placeholder: "razorpay:INR=0 mor:INR=0", type: "text", max: 400, pattern: "[a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}( [a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}){0,7}", required: false }),
@@ -576,7 +637,7 @@ export const OPS = Object.freeze([
     // leavesMachine: mail leaves this machine. Without a flag for it a SIM door ran the real send (PR 5c round-1 attacks).
     humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
-      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "pilot", type: "text", max: 64, pattern: "[a-z0-9-]{1,64}", required: true }),
+      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "", type: "select", get options() { return Object.freeze(leadsCampaigns().options); }, required: true }),
     ]),
     plan: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign, "--dry-run"] }),
     apply: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign] }),
@@ -595,7 +656,7 @@ export const OPS = Object.freeze([
     // proposal branch -- so a sim door refuses it (PR 5c round-1 attacks; "gitignored" is not "not in this checkout").
     humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
-      Object.freeze({ name: "venture", label: "Venture", placeholder: "lexos", type: "text", max: 64, pattern: "[a-z][a-z0-9-]{0,63}", required: true }),
+      Object.freeze({ name: "venture", label: "Venture", placeholder: "", type: "select", get options() { return Object.freeze(legalVentures().options); }, required: true }),
     ]),
     // The pages carry a real venture's contact facts, so they are rendered under the gitignored state directory, never
     // into this public tree; the facts themselves come from ARC_LEGAL_VENTURE_DIR, which the tool never prints.
@@ -880,7 +941,8 @@ export function validateInput(op, input) {
     if (typeof raw !== "string") throw new OpError("BAD_INPUT", `${f.label} must be text`);
     if (f.type === "select") {
       const options = read !== null ? read.options : f.options;
-      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} must be one of ${options.join(", ")}`);
+      // The field and the value are both named (REQ-03): "must be one of" alone left the owner guessing what was sent.
+      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) "${raw.slice(0, 80)}" is not one of the options the door serves: ${options.length ? options.join(", ") : "none yet -- create one first"}`);
     } else if (f.type === "int") {
       if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new OpError("BAD_INPUT", `${f.label} must be a whole number`);
       const n = Number(raw);
@@ -897,6 +959,11 @@ export function validateInput(op, input) {
       if (raw.startsWith("-")) throw new OpError("BAD_INPUT", `${f.label} may not start with "-" -- a tool could read it as a flag`);
       if (f.pattern === ONE_LINE && refusedChar(raw)) throw new OpError("BAD_INPUT", `${f.label} is one line of text, and it holds ${refusedChar(raw)}`);
       if (!new RegExp(`^(?:${f.pattern})$`, "u").test(raw)) throw new OpError("BAD_INPUT", `${f.label} is not in the shape this op takes (${f.placeholder || f.pattern})`);
+      // A text field with a source is a list of existing names: each one must be in the source's own read.
+      if (read !== null) {
+        const unknown = raw.split(",").filter((x) => !read.options.includes(x));
+        if (unknown.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${unknown.map((x) => `"${x.slice(0, 64)}"`).join(", ")}, which the door does not hold`);
+      }
     }
     out[f.name] = raw;
   }

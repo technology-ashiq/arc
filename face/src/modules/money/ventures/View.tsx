@@ -6,12 +6,12 @@
 // did; the file's own rules are read from /api/ventures (Phase 04) and the passports are NOT SERVED (ADR-1324); registering,
 // staging and proposing a kill are work-door cards (ADR-1326); the venture.* trail is a sentence, because the
 // spine records no such kind yet; "Kill reviews waiting" became the crossed and undeclared counts the kill panel
-// actually serves.
+// actually serves. Cycle 17 (ADR-1365): the venture cards and the overhead lines are rows on the Records tab.
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Btn, MONO, SimBadge, UI, YoursBadge } from '../../../ui/kit'
 import { DoorRefusal, HPanel, NotServed, Reading, RoomHead, ServedTable, SourceFile, VerbPending } from '../../../ui/bits'
-import { CostPanel, FigureStrip, FileBadge, GateStrip, VentureCardPanel } from '../../../ui/money'
+import { CostPanel, FigureStrip, FileBadge, GateStrip } from '../../../ui/money'
 export { Buildings as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -43,10 +43,6 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
             ) : null}
             <p className="text-[12px] leading-[18px] mt-3" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.declared}</p>
           </HPanel>
-
-          {f.cards.map((v) => (
-            <VentureCardPanel key={v.key} v={v} neverMix={f.neverMix} />
-          ))}
 
           <HPanel title="Stage a venture" hint="each move a receipt">
             <div className="space-y-2.5">

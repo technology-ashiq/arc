@@ -9,7 +9,7 @@ import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { UI, YoursBadge } from '../../../ui/kit'
 import { DoorRefusal, HPanel, HoldsPanel, KpiStrip, Reading, RoomHead, SourcesPanel } from '../../../ui/bits'
-import { Chapter, CycleRows, MilestoneRows } from '../../../ui/company'
+import { Chapter, MilestoneRows } from '../../../ui/company'
 export { BookOpen as Icon } from '@phosphor-icons/react'
 
 export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
@@ -31,17 +31,14 @@ export default function View({ f }: { f: Folded; ctx: ModuleViewContext }) {
           <HPanel title="The chapters" hint="one entry per closed cycle, newest first, as the logbook keeps them">
             <p className="mb-1 text-[12.5px] leading-[19px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.lag}</p>
             {f.isChaptersEmpty ? <p className="text-[12.5px] leading-[19px] py-2" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.chaptersEmpty}</p> : null}
-            {f.chapters.map((c) => (
+            {f.chaptersShown.map((c) => (
               <Chapter key={c.key} c={c} />
             ))}
+            <p className="mt-2 text-[12px] leading-[18px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{f.chaptersMore}</p>
           </HPanel>
         </div>
 
         <div className="min-w-0">
-          <HPanel title="Every initiative" hint="the logbook's glance table, in its order">
-            <CycleRows rows={f.cycles} empty={f.cyclesEmpty} isEmpty={f.isCyclesEmpty} />
-          </HPanel>
-
           <HPanel title="Milestones" hint="what the company set out to reach, in the book's words">
             <MilestoneRows rows={f.milestones} empty={f.milestonesEmpty} isEmpty={f.isMilestonesEmpty} />
           </HPanel>
