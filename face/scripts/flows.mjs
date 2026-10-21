@@ -173,7 +173,10 @@ export function pageFlow(arg) {
   const until = async (f, cap) => { const t0 = Date.now(); while (Date.now() - t0 < cap) { const v = f(); if (v) return v; await sleep(100); } return null; };
   return (async () => {
     const card = await until(() => {
-      const c = document.querySelector('section[data-room] [data-op="' + arg.id + '"]');
+      // face v3 (FV3-A/B): a room's verbs live on its Work tab, as an owner reaches them -- open it, then find the card.
+      const work = document.querySelector('section[data-room] [data-frame-tab="work"]');
+      if (work && work.getAttribute("aria-selected") !== "true") work.click();
+      const c = document.querySelector('section[data-room] [data-frame-work] [data-op="' + arg.id + '"]');
       return c && c.getAttribute("data-op-state") === "idle" ? c : null;
     }, 20000);
     if (!card) return { ok: false, step: "the op card never came up idle" };
@@ -413,6 +416,14 @@ export function startRequests(journalDir) {
   return n;
 }
 
+/** Open the room's Work tab when it has one and it is not shown -- where face v3 draws the session dock (FV3-B).
+ *  Idempotent, and a no-op on a room with no verbs. Self-contained, like pageFlow. */
+function openWorkTab() {
+  const work = document.querySelector('section[data-room] [data-frame-tab="work"]');
+  if (work && work.getAttribute("aria-selected") !== "true") { work.click(); return "opened"; }
+  return work ? "shown" : "none";
+}
+
 /** The session dock as the page draws it, read in the page. Self-contained, like pageFlow. */
 function dockState() {
   const dock = document.querySelector("section[data-room] [data-session-dock]");
@@ -466,7 +477,7 @@ export async function sessionFlow(o, log) {
     return r.result ? r.result.value : undefined;
   };
   // A predicate that throws mid-navigation (the context is being replaced) is "not yet", never the flow's failure.
-  const tryState = async () => { try { return await evalPage(dockState); } catch { return null; } };
+  const tryState = async () => { try { await evalPage(openWorkTab); return await evalPage(dockState); } catch { return null; } };
   const clicked = async (arg) => {
     const v = await evalPage(clickIn, arg);
     if (typeof v !== "string") throw new Error(`clickIn answered ${JSON.stringify(v)}, not a string`);

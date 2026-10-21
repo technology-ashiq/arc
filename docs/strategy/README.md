@@ -20,7 +20,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | `docs/archive/how-arc-works-simple.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/how-arc-works-simple.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
 | `docs/archive/usermanual.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/usermanual.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
 | `docs/archive/blueprint.md` | **SUPERSEDED 2026-09-25** by `docs/wiki/` | The hand-kept overview, archived whole. `docs/blueprint.md` is now a 7-line stub pointing at `docs/wiki/index.md` and at this copy (ADR-1510). |
-| `plans/` (31 files) | **ACTIVE — the operational layer** | Kickoff-ready: 29 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
+| `plans/` (32 files) | **ACTIVE — the operational layer** | Kickoff-ready: 30 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -769,13 +769,6 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     block's REQ-03 row and its P00 kill question are retired, its REQs become **REQ-14…19**, its ADRs
     start at **2023**, the new kill question is "a fresh clone opened in OpenCode lists `/arc-resume`",
     and P00 also closes Cycle 2's debt rows 22-24. DST-N…Q unchanged; still DRAFT for owner review.
-33. **2026-10-21:** `plans/PLAN-face-v3.md` added (face v3 — "Hands First"), owner-instructed. A live
-    audit of `main` @ `17c07a5` over the canonical spine found the work door real but drawn last
-    (`RoomFrame` renders View → OpsDock → SessionDock; org 7,732 px tall, its forms ~6,000 px down),
-    6 of 15 session buttons with no process behind them, and 13 of 32 ops rejecting their own
-    placeholder. Decisions FV3-A…H; Tier S, the owner's 30-minute timebox. `PLAN-face-v2.md` is NOT
-    superseded. File map 30 → 31 files, 28 → 29 full PLANs.
-
 33. **2026-10-20:** `plans/PLAN-launch-mobile.md` added (`launch` mobile v1.0: iOS + Android as one more
     slot group — Expo shell → signed builds → TestFlight / Play internal → store listing → a gated public
     release, every step proven by an outside answer). **Trigger FIRED by owner ruling 2026-10-20**
@@ -801,6 +794,12 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     **individual** (legal name as seller) and Play as a **personal** account with the 12-tester × 14-day
     closed test. Correction to the same day's chat estimate (5–6 days for ~8 slots): the tree needs 13
     slots, so **8d effort / 9d cap**.
+34. **2026-10-21:** `plans/PLAN-face-v3.md` added (face v3 — "Hands First"), owner-instructed. A live
+    audit of `main` @ `17c07a5` over the canonical spine found the work door real but drawn last
+    (`RoomFrame` renders View → OpsDock → SessionDock; org 7,732 px tall, its forms ~6,000 px down),
+    6 of 15 session buttons with no process behind them, and 13 of 32 ops rejecting their own
+    placeholder. Decisions FV3-A…H; Tier S, the owner's 30-minute timebox. `PLAN-face-v2.md` is NOT
+    superseded. File map 31 → 32 files, 29 → 30 full PLANs.
 
 ## Provenance
 
