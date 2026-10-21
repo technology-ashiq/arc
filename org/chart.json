@@ -600,7 +600,7 @@
             ],
             "skills": [],
             "scripts": [],
-            "process": null,
+            "process": "qa-run",
             "tier": "balanced-workhorse"
           },
           "reports_to": "solution-architect"
@@ -674,7 +674,7 @@
             "agents": [],
             "skills": [],
             "scripts": [],
-            "process": null,
+            "process": "ship-run",
             "tier": null
           },
           "reports_to": "solution-architect"

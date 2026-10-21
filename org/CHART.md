@@ -60,11 +60,11 @@ Every count above is derived from the cards on disk. A vacant role is shown, nev
 | Developer (`developer`) | partial | partial · own | pattern-miner, process:develop-proof | `solution-architect` |
 | DevOps / release (`devops-release`) | staffed | script · own | ci-digest.mjs, process:commit-msg-draft | `solution-architect` |
 | Log analyst (`log-analyst`) | staffed | agent · own | log-analyzer | `solution-architect` |
-| QA tester (`qa-tester`) | staffed | agent · own | qa-tester | `solution-architect` |
+| QA tester (`qa-tester`) | staffed | agent · own | qa-tester, process:qa-run | `solution-architect` |
 | Security engineer (`security-engineer`) | staffed | agent · own | security-auditor, process:attack-diff | `solution-architect` |
 | Solution architect (`solution-architect`) | partial | partial · own | codebase-surveyor, process:adr-record | `ceo` |
 | Spec-fidelity checker (`spec-fidelity-checker`) | staffed | agent · own | spec-fidelity | `solution-architect` |
-| SRE / on-call (`sre-oncall`) | **VACANT** | vacant · own | -- | `solution-architect` |
+| SRE / on-call (`sre-oncall`) | **VACANT** | vacant · own | process:ship-run | `solution-architect` |
 
 ## Design
 
