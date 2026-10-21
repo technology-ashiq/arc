@@ -1217,6 +1217,7 @@
           "PLAN-executor",
           "PLAN-face",
           "PLAN-face-v2",
+          "PLAN-face-v3",
           "PLAN-growth",
           "PLAN-launch",
           "PLAN-launch-mobile",
@@ -1233,7 +1234,7 @@
           "PLAN-trader"
         ]
       },
-      "itemCount": 33
+      "itemCount": 34
     },
     {
       "id": "org",

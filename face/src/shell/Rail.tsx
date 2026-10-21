@@ -8,8 +8,13 @@
 //   3. (paid, face v2 Phase 09, ADR-1349) the brand is v0.7's button again, back to the front door;
 //   4. (face v2 Phase 11, ADR-1350 Amendment 2) a Settings link under the rooms opens HQ's Settings page. It is not a
 //      room: not in the groups, not counted, and it carries no data-room.
+//   5. (face v3 P04, FV3-G) a ring header folds its rooms away, so five rings fit at 768 px. Which rings are open is
+//      lib/rail.mjs's decision; this file reads and writes the viewer's choice in try/catch (no storage = defaults).
+import { useState } from 'react'
 import type { ComponentType } from 'react'
-import { CircleDashed, GearSix, MagnifyingGlass } from '@phosphor-icons/react'
+import { CaretDown, CaretRight, CircleDashed, GearSix, MagnifyingGlass } from '@phosphor-icons/react'
+import { RAIL_STORAGE_KEY, canFold, expandedRings, parseSaved, serializeSaved, toggleRing } from '../lib/rail.mjs'
+import type { RailSaved } from '../lib/rail.mjs'
 import { stateBadge } from '../lib/rooms.mjs'
 import type { Room } from '../lib/rooms.mjs'
 import type { Attachment } from '../lib/registry.mjs'
@@ -40,6 +45,19 @@ export default function Rail({
 }) {
   const roomCount = groups.reduce((n, g) => n + g.rooms.length, 0)
   const moduleCount = Object.keys(attachment.attached).length
+  const [saved, setSaved] = useState<RailSaved>(() => {
+    try { return parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)) } catch { return {} }
+  })
+  // Written only on a click, never on mount, and what storage holds NOW wins over this tab's copy: a second tab's fold survives
+  // this one's stale copy (attack 0991e16 B1).
+  const onToggle = (ring: string) => {
+    let fresh: RailSaved = saved
+    try { fresh = { ...saved, ...parseSaved(window.localStorage.getItem(RAIL_STORAGE_KEY)) } } catch { /* no storage: in-memory only */ }
+    const next = toggleRing(groups, current, fresh, ring)
+    setSaved(next)
+    try { window.localStorage.setItem(RAIL_STORAGE_KEY, serializeSaved(next)) } catch { /* no storage: the defaults hold next visit */ }
+  }
+  const open = expandedRings(groups, current, saved)
   return (
     <nav aria-label="Rooms" className="fixed left-0 top-0 bottom-0 z-40 hidden lg:flex flex-col" style={{ width: RAIL_W, background: 'var(--bg-1)', borderRight: '1px solid var(--line-1)' }}>
       <div className="flex items-center gap-2 px-4 shrink-0" style={{ height: HEAD_H }}>
@@ -65,11 +83,22 @@ export default function Rail({
 
       <div className="flex-1 overflow-y-auto px-3 pb-4 rail-scroll">
         {groups.map((g) => (
-          <div key={g.ring} className="mt-3 first:mt-1">
-            <div className="px-2.5 pb-1 text-[10.5px] uppercase tracking-[0.08em]" style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)' }} title={g.lede}>
-              {g.ring}
-            </div>
-            {g.rooms.map((r) => {
+          <div key={g.ring} className="mt-2 first:mt-1" data-rail-ring={g.ring}>
+            <button
+              type="button"
+              data-rail-ring-header={g.ring}
+              aria-expanded={open[g.ring] === true}
+              aria-disabled={canFold(groups, current, g.ring) ? undefined : true}
+              onClick={() => onToggle(g.ring)}
+              title={canFold(groups, current, g.ring) ? g.lede : `${g.lede} · holds the room open now`}
+              className="w-full flex items-center gap-1.5 px-2.5 h-[26px] text-left text-[10.5px] uppercase tracking-[0.08em] cursor-pointer transition-colors duration-150 hover:text-(--text-2) focus-visible:outline focus-visible:outline-2 focus-visible:outline-(--accent)"
+              style={{ fontFamily: UI, fontWeight: 600, color: 'var(--text-3)', borderRadius: 'var(--r-sm)' }}
+            >
+              <span className="flex-1 truncate">{g.ring}</span>
+              {open[g.ring] ? null : <span className="normal-case tracking-normal text-[10.5px]" style={{ fontFamily: MONO, fontWeight: 500 }}>{g.rooms.length}</span>}
+              {open[g.ring] ? <CaretDown size={11} aria-hidden="true" /> : <CaretRight size={11} aria-hidden="true" />}
+            </button>
+            {open[g.ring] ? g.rooms.map((r) => {
               const isActive = !settingsOn && current === r.id
               const planned = Boolean(r.planned)
               const extra = Boolean(r.extra)
@@ -93,7 +122,7 @@ export default function Rail({
                   <span className="sr-only">{badge.label}</span>
                 </button>
               )
-            })}
+            }) : null}
           </div>
         ))}
       </div>

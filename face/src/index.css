@@ -34,6 +34,14 @@ html.hq body {
   background: var(--bg-0);
 }
 
+/* The workroom reserves its scrollbar's width from the first paint (face v3, FV3-G). Without it the page's
+   scrollbar appears only once a room's records load taller than the window, and every right-aligned header
+   control (Settings, the inbox chip) jumps left by its width under a pointer already on its way -- the face's
+   own browser harness clicked the gear's old place and missed it. A gutter that is always there never moves. */
+html.hq {
+  scrollbar-gutter: stable;
+}
+
 /* Quiet scrollbars that follow the ink of the mood. */
 html.hq * {
   scrollbar-color: rgba(var(--ink), 0.18) transparent;

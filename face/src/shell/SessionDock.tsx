@@ -16,9 +16,11 @@ import {
 } from '../lib/sessions.mjs'
 import type { SessionCard, SessionState } from '../lib/sessions.mjs'
 import { fieldCount } from '../lib/ops.mjs'
+import { notReadyReason } from '../lib/frame.mjs'
 import { Btn, Chip, Field, MONO, Panel, PanelTitle, PickRow, Receipt, TextInput, UI } from '../ui/kit'
 
-export default function SessionDock({ roomId, door }: { roomId: string; door: Door }) {
+// `only` draws just the verb card with that id and no run list (the action drawer, FV3-A); `bare` drops the section chrome.
+export default function SessionDock({ roomId, door, only, bare = false }: { roomId: string; door: Door; only?: string; bare?: boolean }) {
   const [registry, setRegistry] = useState<unknown>(null)
   const [loadError, setLoadError] = useState('')
   const [bump, setBump] = useState(0)
@@ -32,11 +34,28 @@ export default function SessionDock({ roomId, door }: { roomId: string; door: Do
     return () => ac.abort()
   }, [door, bump])
 
-  const cards = sessionCards(roomId, registry)
+  const cards = sessionCards(roomId, registry).filter((c) => only === undefined || c.id === only)
   if (registry !== null && cards.length === 0) return null
   const drivers = driverChoices(registry)
   const processes = registry && typeof registry === 'object' && Array.isArray((registry as { processes?: unknown }).processes) ? ((registry as { processes: unknown[] }).processes.filter((p) => typeof p === 'string') as string[]) : []
-  const runs = roomRuns(roomId, registry)
+  const runs = only === undefined ? roomRuns(roomId, registry) : []
+  if (bare) {
+    return (
+      <div data-session-dock={roomId}>
+        {loadError ? <p className="mb-3 text-[12px]" style={{ fontFamily: MONO, color: 'var(--red)' }}>session list refused: {loadError}</p> : null}
+        {registry === null && !loadError ? <p className="text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>loading the door's session list</p> : null}
+        <div className="space-y-4">
+          {cards.map((c) => <SessionCardView key={c.id} card={c} door={door} drivers={drivers} processes={processes} onStarted={() => setBump((n) => n + 1)} />)}
+        </div>
+        {runs.length > 0 ? (
+          <div className="mt-5 space-y-3" data-session-runs={runs.length}>
+            <PanelTitle>Recent sessions</PanelTitle>
+            {runs.map((r) => <RunView key={r.sid} sid={r.sid} session={r.session} listedState={r.state} door={door} />)}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
   return (
     <section data-session-dock={roomId} className="mt-6">
       <Panel>
@@ -81,6 +100,8 @@ function SessionCardView({ card, door, drivers, processes, onStarted }: { card: 
   }
 
   const blocked = startBlocked(card, values, proc)
+  // FV3-E: a verb whose process is not built is drawn, disabled, with the reason beside its Start -- never hidden.
+  const notReady = notReadyReason(card)
   return (
     <div data-session={card.id} data-session-state={st.phase} className="rounded-xl border p-4" style={{ borderColor: 'var(--line-2)', background: 'var(--bg-3)' }}>
       <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -107,9 +128,14 @@ function SessionCardView({ card, door, drivers, processes, onStarted }: { card: 
         </Field>
       </fieldset>
       <div className="flex flex-wrap items-center gap-2">
-        <Btn small tone="primary" onClick={onStart} disabled={blocked !== null || st.phase === 'starting'} title={blocked ?? undefined}>
+        <Btn small tone="primary" onClick={onStart} disabled={!card.ready || blocked !== null || st.phase === 'starting'} title={notReady || blocked || undefined}>
           Start session
         </Btn>
+        {notReady ? (
+          <span data-session-not-ready={card.process} className="text-[11.5px]" style={{ fontFamily: UI, color: 'var(--amber)' }}>
+            needs process <span style={{ fontFamily: MONO }}>{card.process || 'unnamed'}</span> — not built yet
+          </span>
+        ) : null}
         {blocked && card.ready ? <span className="text-[11.5px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{blocked}</span> : null}
       </div>
       {st.phase === 'starting' ? <p className="mt-3 text-[12px]" style={{ fontFamily: UI, color: 'var(--text-3)' }}>starting -- the door is checking and starting arc-run</p> : null}

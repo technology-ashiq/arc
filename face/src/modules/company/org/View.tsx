@@ -10,12 +10,19 @@ import type { Folded, OrgView, ScoreRow } from './fold.mjs'
 import { MONO, UI, YoursBadge } from '../../../ui/kit'
 import { DoorRefusal, HPanel, KpiStrip, NotServed, Reading, RoomHead, SourceFile, VerbPending } from '../../../ui/bits'
 import { BandRows, Roster } from '../../../ui/company'
+import { OrgChart } from '../../../ui/orgchart'
 export { UsersThree as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
   return (
     <>
       <RoomHead title={f.sentence} hint={f.lede} right={<YoursBadge>{f.badge}</YoursBadge>} />
+
+      <HPanel title="The org chart" hint="owner → CEO → departments → every role · pick a chip for its card">
+        {f.org.isReading ? <Reading what="the org" /> : null}
+        {f.org.isRefused ? <DoorRefusal code={f.org.refusal.code} human={f.org.refusal.human} /> : null}
+        {f.chart.isShown ? <OrgChart chart={f.chart} onPick={ctx.onPick} /> : null}
+      </HPanel>
 
       <KpiStrip items={f.kpis} />
 

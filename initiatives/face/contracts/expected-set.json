@@ -1438,6 +1438,7 @@
       "PLAN-executor": "strategy",
       "PLAN-face": "strategy",
       "PLAN-face-v2": "strategy",
+      "PLAN-face-v3": "strategy",
       "PLAN-growth": "strategy",
       "PLAN-launch": "strategy",
       "PLAN-launch-mobile": "strategy",

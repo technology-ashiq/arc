@@ -291,7 +291,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	7dae05958f08e0e975cdfd6669b066c9251d6527eec4382fe135ffd458e617f8
+.claude/scripts/hq/face-ops.mjs	328c882670f6935000cf78a35110d49f4720e9c296ee88c9eff6ec469b77f999
 .claude/scripts/hq/face-sessions.mjs	5255350fc9be8c2f0643e727fbbe028aa5cc4b02c184455ec474af7e5ba1c318
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
