@@ -42,7 +42,7 @@ depends-on: —
   00 closes on evidence, never rebuilt. 1365–1369 are the kickoff's forks. Owner rulings at kickoff:
   appetite **6 days + the 1.5-day Debt phase the debt budget requires (112 open rows) = 7.5 days → Tier M**; Records = **one generic frame table each fold declares** (ADR-1365);
   Ship = **Prepare ship only** (ADR-1366); agent tier **implied by `model:`** (ADR-1367); logic
-  attacker = **DeepSeek via OpenRouter** (ADR-1368); spine receipts emitted on the owner's main
+  attacker = **DeepSeek via OpenRouter** at the fork, then **`z-ai/glm-5.3-flash` via OpenRouter** by the owner's ruling the same day (ADR-1368 amended, before the kickoff stamp); spine receipts emitted on the owner's main
   clone by the session. **Kernel freeze:** `kickoff-lint` refused this kickoff under the owner's
   2026-10-18 ruling `01M5741NXKQ4GVDDRWZKTCYJ0Y` (no kernel-lane kickoff before the first
   `revenue.received`); the owner chose to exempt face Cycle 17, emitted as the superseding
@@ -71,4 +71,4 @@ depends-on: —
 `01M5ER722G87D19PFDR7KFD48H` (the freeze exemption) and the kickoff approval
 `01M5ESEN589HQAJAS7VZ4NPXMT` (`kickoff.done` = `01M5ESEMSQN7HH05QZ2W6J3SA2`), both on the canonical spine; then `/arc-phase-done 00` from the main clone
 on #449's evidence; then Phase 01 on `feat/face-v3-01-records-pickers`. Owner step before Phase 01's
-attack: the DeepSeek model id + `ARC_LLM_ENDPOINT` / `ARC_LLM_API_KEY` in his environment (ADR-1368).
+attack: the three values are saved in the face's Keys tab (2026-10-21); the owner corrects `ARC_LLM_ENDPOINT` there to the full `https://openrouter.ai/api/v1/chat/completions` (ADR-1368).

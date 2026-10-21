@@ -23,7 +23,7 @@ Fixing LOW findings beyond the six rows (they stay rows); re-architecting any at
 The other 106 open rows.
 
 ## Your-setup / pending
-REQ-05's DeepSeek model id and credentials in the environment that runs `/arc-attack`.
+REQ-05's trial model id (`z-ai/glm-5.3-flash`) and credentials, saved in the face's Keys tab and exported by the session into the `/arc-attack` child.
 
 ## Non-negotiables (verbatim from PLAN)
 

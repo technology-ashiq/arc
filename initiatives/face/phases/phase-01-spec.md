@@ -20,7 +20,7 @@
 - **Test command:** CI per job via `node .claude/scripts/review/ci-digest.mjs`; the node checks `node tests/face/l3-logic.mjs`, `node tests/face/work-door.mjs`, `node tests/face/face-pure.mjs` (install-free legs); the browser suite `tests/face-browser.bats` on CI.
 - **Expected failure first:** three reds, each shown before its code changes. (1) REQ-04: `main` @ `6012c36` already passes the first-verb assertion (27/27 at 126 px), so the red is the node mutant that returns the strip after the View from `frame.mjs` — `l3-logic.mjs` FAILs it with `strip index >= View index`; the browser twin prints `first verb at N px` per room. (2) Records: the shape check FAILs a fold declaring a column its rows lack (`unknown column NAME in COLLECTION`), and the 5,000-row fixture FAILs an uncapped table. (3) Pickers: `work-door.mjs` FAILs the stale-option mutant before `FIELD_SOURCES` serves the options.
 - **Live demo scenario:** open `#/ventures`, `#/money`, `#/story`, `#/org` at 1366×768: Overview fits in ≤ 3,000 px; the Records tab shows 8 rows, "show all N" and search; open `ventures.kill-review` from the strip and pick the venture from a list.
-- **Real-system check:** the owner's main clone with the canonical spine; one real `/arc-attack` against DeepSeek via OpenRouter.
+- **Real-system check:** the owner's main clone with the canonical spine; one real `/arc-attack` against `z-ai/glm-5.3-flash` via OpenRouter (ADR-1368 as amended).
 - **Expected evidence:** `evidence/phase-01/heights.md` (before/after per room), shots of the four rooms, the logic attack JSON, CI run id.
 
 ## Rabbit holes in this phase
@@ -30,7 +30,7 @@ Server-side search or pagination; declaring every room's records now (four rooms
 `qa-run` / `ship-run` (Phase 02); agent tiers and the hunt op (Phase 03); the ADR-0069 production row for the attacker (ADR-1368 trigger).
 
 ## Your-setup / pending
-`ARC_LLM_ENDPOINT`, `ARC_LLM_API_KEY`, `ARC_ATTACK_TRIAL_MODEL` (the DeepSeek id via OpenRouter) in the shell that runs `/arc-attack` or in the face's Keys tab — never in the repo.
+`ARC_LLM_ENDPOINT`, `ARC_LLM_API_KEY`, `ARC_ATTACK_TRIAL_MODEL` (`z-ai/glm-5.3-flash` via OpenRouter) in the shell that runs `/arc-attack` or in the face's Keys tab — never in the repo.
 
 ## Non-negotiables (verbatim from PLAN)
 
