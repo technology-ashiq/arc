@@ -1,0 +1,93 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "medium",
+      "where": "face/src/shell/OpsDock.tsx:23-36",
+      "breaking_input": "Mount a room while the frame's /api/ops read is still in flight; immediately open the op drawer so its dock issues its own /api/ops read; have a session in another tab complete so the door's ops answer changes between the two reads. The dock draws the newer answer (its own read), then when the frame's older read lands served flips to it and the drawer reverts to the older op list.",
+      "why": "registry is `served !== undefined && served !== null ? served : own`, so a null-but-in-flight served read does not suppress the dock's own fetch; when the older frame read lands it replaces the dock's newer own read. The fix replaces a fresh value with a stale one during the load window, and the l3-logic check only asserts the literal `if (served !== undefined) return`, so the null-window double read and the revert are unpinned.",
+      "fix": "Treat served===null as 'a read is in flight' by sharing one in-flight promise, and never let an older served snapshot overwrite a newer own read (compare fetch start times or only adopt served if own is still null).",
+      "twin_of": "A stale answer landing on a newer card"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:326-330",
+      "breaking_input": "Apply plan A for op fixture.slow where the apply script exits non-zero (a model failure or tool refusal). The apply throws after the guard set p.state='running'; any later apply of any other plan of the same op is then refused OP_BUSY forever in this door process.",
+      "why": "The new guard refuses when `other.state === 'running'`, but the diff adds no path that clears 'running' when the apply fails, times out or is interrupted. The lock's release condition is the sticky state string, not the actual run: one failed apply bricks the op until the door restarts. The new test only covers two applies where the first completes cleanly (slow.mjs exits 0).",
+      "fix": "Wrap the run in a finally that transitions the plan out of 'running' (failed/interrupted) on every non-receipt exit, and key OP_BUSY to an actual live run handle rather than to a state field nothing resets.",
+      "twin_of": "An unknown outcome read as 'not raised'"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:774-789",
+      "breaking_input": "Send ask A; when the 120 s timeout fires runTool starts stopTree on the arc-run tree but resolves { timedOut:true } before the killed child and its grandchildren have actually exited; the finally frees the slot; a user immediately sends ask B, which launches a new paid arc-run while A's old paid tree is still alive.",
+      "why": "The slot's release condition is the runTool promise settling, not the process tree being verified dead on the timeout path. The guard prevents N parallel asks only while the old tree is already gone; during the teardown window it still allows the N-parallel-paid-trees condition the fix claims to close.",
+      "fix": "Free the ASKS_RUNNING slot only after stopTree/waitExit confirms the child and its descendants are gone, or make the timeout path await the tree's death before resolving.",
+      "twin_of": "A paid route with no in-flight limit"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "face/scripts/proc.mjs:52-59,94-99",
+      "breaking_input": "A tracked child (the door) spawns a grandchild with detached:true (its own process group) and then the direct door process exits normally; LIVE keeps the door's pid, but a later SIGTERM/SIGINT calls stopAll which only kills -door.pid's group. The detached grandchild survives and keeps the port or spine lock.",
+      "why": "stopAll iterates direct children only. A descendant in a different process group is neither in LIVE nor reachable through -pid. The fixture tree-holder keeps its child alive until the stop and puts the grandchild in the child's group, so the child-exits-before-stop detached case is never exercised.",
+      "fix": "Walk the descendant tree explicitly (job object or /proc) at stop time, keep a child in LIVE until its whole tree is dead, and add a fixture mutant where the direct child exits first and a detached grandchild must still be reaped.",
+      "twin_of": "A descendant outliving a settled run"
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "face/scripts/proc.mjs:75-86",
+      "breaking_input": "Start the harness from a terminal; a runner or a terminal hangup sends SIGHUP to the harness process. SIGHUP's default action terminates it without running installStopHandlers, so the door, preview and Chrome keep running and the temp dir survives.",
+      "why": "The handler installs once-handlers for SIGINT and SIGTERM only; SIGHUP is a catchable signal with exactly the orphan-tree consequence debt #D23 claims to close. A runner that signals HUP (or a session close) skips every finally just as before.",
+      "fix": "Register SIGHUP with the same stop path (SIGKILL cannot be caught; HUP can).",
+      "twin_of": "Ctrl-C orphaned a running tool"
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/models.mjs:149-152",
+      "breaking_input": "Edit body { op:'edit', name:'One', model:{ name:'One', baseUrl:'https://other.example/v1', model:'a', key:null } } against a registry where 'One' holds a key: `c.record.key === undefined` is false for null, so the host-move guard is skipped, and `c.record.key ?? hit.key` resolves the null to the old key, which is silently stored for the new host.",
+      "why": "The guard tests `key === undefined`, but 'no key typed' can arrive as null; the nullish fallback treats null as absent and carries the old key to the new origin, exactly the kept-secret-carried-to-a-new-host rule this fix was written to enforce. The new talk.mjs tests cover omitted keys and typed keys, not null.",
+      "fix": "Refuse the cross-origin move when c.record.key == null (null or undefined) and clearKey is not true; also reject null keys in the record shape.",
+      "twin_of": "A kept secret carried to a new host"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:229-236",
+      "breaking_input": "ownerKeyBaseState(root, { baseRef: '0123...ABCDEF...' }) with an all-uppercase 40-hex digest of the real base commit: the SHA regex /^[0-9a-f]{40,64}$/ does not match, so the value is treated as a short name, no shadow ref is found, and the check returns 'the base ref does not exist here' instead of comparing against the commit.",
+      "why": "git accepts uppercase hex object names; the literal-detection regex only admits lowercase. A valid --base spelling makes the owner-key comparison fail closed as unavailable, silently skipping the swap guard.",
+      "fix": "Make the SHA pattern case-insensitive (/^[0-9a-fA-F]{40,64}$/) or resolve via git's object-name lookup."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:962",
+      "breaking_input": "The next change that adds an arm to proofArms without also editing the literal `=== 101` here and `-eq 101` in tests/docs-narrative.bats fails the installed gate; a change that removes an arm and edits both literals passes with the arm gone.",
+      "why": "The arm count is still a hand-kept literal, not derived from the arms array; this diff merely moves the magic number 100→101 in two files. The selftest floor cannot distinguish a renumbered suite from a removed arm.",
+      "fix": "Return `failed === 0` and print the arm count derived from the proofArms array; make the bats test compare against that derived count.",
+      "twin_of": "A hand-kept arm floor"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "face/src/shell/ActionDrawer.tsx:11-15",
+      "breaking_input": "Focus an input inside a web component's shadow root in the drawer and press Escape: e.target is the inner input, but Element.closest() does not cross the shadow boundary, so inField is false and the drawer closes, discarding the draft.",
+      "why": "The fix checks field-ness with closest(), which stops at shadow boundaries; the Escape-in-a-field rule holds only for elements in the same light-DOM tree.",
+      "fix": "Walk e.composedPath() and test every element in the composed path against the selector, including the shadow host.",
+      "twin_of": "Esc in a form field closed the surrounding drawer and its draft"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "face/src/shell/OpsDock.tsx:23-36,52-53",
+      "breaking_input": "Open an op's action drawer and leave it open; in another tab apply a different op whose run makes this op busy or expires a picker source. The drawer's served registry is the frame's room-mount snapshot and OpsDock no longer fetches when served is set, so the user sees a stale op card and the door refuses only at apply with OP_BUSY/OPTION_GONE.",
+      "why": "The one-read-per-room goal removed the dock's own freshness: the frame's /api/ops snapshot is re-read only when reads are dropped after THIS room's run lands, so a drawer left open across another room's run shows stale op cards and form fields.",
+      "fix": "Re-read the ops registry when a drawer opens, or pass a read version with served and refetch on version change while the drawer is mounted."
+    }
+  ]
+}

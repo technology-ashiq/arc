@@ -1,0 +1,95 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/scripts/proc.mjs:installStopHandlers",
+      "breaking_input": "SIGTERM or SIGINT arrives while runHarness is inside a blocking execFileSync (npm install or build) before any spawnTracked child exists, or while stopAll hangs on a child that will not die.",
+      "why": "A synchronous spawn blocks the event loop, so the JS signal handler cannot run until the sync child returns, and the sync child is not in LIVE so stopAll never stops it. The stop path also has no overall deadline: a hung stopAll or removeDir never reaches exit(), and the default SIGINT behaviour was already replaced by the once-handler, so a second Ctrl-C does nothing.",
+      "fix": "Give the execFileSync calls a timeout and killSignal, or run them through spawnTracked. Race stopAll and cleanup against an unref'd deadline that force-exits.",
+      "twin_of": "A pause that did not shrink with depth -> each level ends its own tree before the level above ends it."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/scripts/proc.mjs:signalTree (win32 branch)",
+      "breaking_input": "On win32 stopTree sends its first, graceful signal to a child such as arc-run that holds a lock file and a temp dir through its own grandchildren.",
+      "why": "The win32 branch now runs taskkill /T /F at once, so the whole tree is force-killed with no grace. graceMs is meaningless there, and every level dies at the same moment, so none can clean up its lock or temp dir.",
+      "fix": "On win32 send a non-forced taskkill /T first, wait graceMs, then escalate with /F.",
+      "twin_of": "SIGKILL before a nested tool can clean up -> a parent that kills must leave its child time to end its own children."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/scripts/harness-run.mjs:invokedDirectly block + proc.mjs:installStopHandlers",
+      "breaking_input": "A Windows runner or Ctrl-C ends the real harness-run. It is spawned with no IPC channel, and Node does not run a SIGTERM handler on a Windows process kill.",
+      "why": "The only catchable stop path on win32 is the IPC message event, which the real harness never gets. The fixture passes only because the test opens an IPC channel itself. The leak that debt #D23 describes remains on win32, yet the ledger row is marked PAID.",
+      "fix": "Start the harness with an IPC channel from its parent, or add a win32-reachable path such as a stdin-close or a parent-pid watchdog. Add a real-harness arm without the IPC shortcut, and correct the PAID row.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/scripts/proc.mjs:installStopHandlers (default exit)",
+      "breaking_input": "SIGTERM arrives while the stop handler is still writing stderr to a pipe on Windows. The default exit calls process.exit(code) right after cleanup.",
+      "why": "process.exit raced libuv teardown on Windows. The same pattern is on the defect list and is reintroduced in a new CLI path.",
+      "fix": "Set process.exitCode and let the loop drain. Force-exit only from an unref'd deadline timer.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows -> set `process.exitCode` and let the loop drain."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/scripts/proc.mjs:spawnTracked (LIVE.add)",
+      "breaking_input": "spawnTracked is given a command that does not exist (ENOENT). The child emits 'error' and never emits 'exit'.",
+      "why": "The child is added to LIVE on spawn and removed only on 'exit' (win32 only), so a failed spawn stays in the set. On POSIX nothing ever removes a child, so LIVE grows for the life of the process and every later stopAll sends process.kill to a stale pid group, which may have been reused by an unrelated process.",
+      "fix": "Delete from LIVE on 'error' or when pid is undefined. On POSIX, kill the group for an exited child only while the group still exists, and drop the entry after the stop.",
+      "twin_of": "existsSync accepted a directory as an executable, and a spawn error was an unhandled 'error' event -> every spawned child gets an 'error' listener before anything else."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/scripts/proc.mjs:stopAll",
+      "breaking_input": "On POSIX a tracked child exited long ago and its pid was reused by an unrelated process that is now a group leader. Stop is triggered.",
+      "why": "stopAll calls process.kill(-pid, SIGKILL) on an exited child's group number, so it can kill an unrelated process group that now owns that id.",
+      "fix": "Remove a child from LIVE once its group is verified empty, or kill the group only while the child is alive or within a short window after exit.",
+      "twin_of": "A reused pid wedged the lock forever -> a pid means nothing after its own lifetime."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/face/harness-tree.mjs:reap",
+      "breaking_input": "The probe window elapses and the test calls kill or taskkill by raw pid on the child and grandchild after the holder is gone.",
+      "why": "A reused pid means the test can kill an unrelated process. On POSIX alive() counts a zombie as alive until reaped, which makes the verdict flaky.",
+      "fix": "Reap only if the pid is still alive and is the recorded process. Treat zombies as dead.",
+      "twin_of": null
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:~326 (OP_BUSY loop)",
+      "breaking_input": "Plan A of an op is running when the door restarts or A's state stays 'running' after a failed settle. Plan B of the same op then applies.",
+      "why": "The busy check reads only the in-memory plans map for state 'running'. A run that outlived the process or whose state was never cleared blocks the op forever, or the check misses a run another door instance started on the same repo.",
+      "fix": "Free the running state in a finally on every settle path, and back the check with the per-op lock or journal the other doors share.",
+      "twin_of": "A lock beside each checkout for a resource every worktree shares -> lock where the uniqueness lives."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/arc-dash.mjs:apiAsk (ASKS_RUNNING)",
+      "breaking_input": "Two ask requests arrive for one door while the first is awaiting before the new guard is reached, for example during the pre-claim reads and awaits earlier in apiAsk.",
+      "why": "The slot is claimed only after the prompt is assembled, so any await before the claim lets a second request through. The claim is also in-process, so a second door process on the same repo is not limited.",
+      "fix": "Claim the slot at the top of the handler, before the first await, and release it in the finally.",
+      "twin_of": "A paid route with no in-flight limit -> every route that spends claims a per-door slot before its first await."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:962 and tests/docs-narrative.bats",
+      "breaking_input": "Add or remove one self-test arm and edit only one of the hand-kept 101 constants.",
+      "why": "The expected total is hand-kept in the gate, the bats test, its name and a comment. A dropped arm balanced by a counted skip still matches.",
+      "fix": "Derive the total from the arm list that proofArms returns plus the local arms, and have the bats compare against the RAN line.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}
