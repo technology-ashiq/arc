@@ -310,7 +310,7 @@
 .claude/scripts/hq/lib/face/reads.mjs	3da5cd1ee721dbb03b2f7cc24cb0577d32a226819bcd1be0edaeaeb4627c56af
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	cd2b57badaabe8310387800b1770aa3ca3eef1cecf3b3896a96d111167af8b49
-.claude/scripts/hq/lib/face/work-door.mjs	3ad48fdfdb18e10a5f12b4fbaae5090db8f94f7c2a1d04da486286563406b02c
+.claude/scripts/hq/lib/face/work-door.mjs	b5b11b4e67bbfd6719e904f0f96e280ba489bcf4637dcf7fe77d3d8e26d23609
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
