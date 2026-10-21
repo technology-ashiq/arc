@@ -326,6 +326,24 @@ const evolveConcludeArgs = (v) => ["conclude", "--experiment", v.experiment];
 const proposeArgs = (verb, v) => [verb, "--class", v.class, "--to", v.to, ...(v.why ? ["--why", v.why] : [])];
 
 export const OPS = Object.freeze([
+  // face Cycle 17 P03 (REQ-09, ADR-1369, superseding ADR-1356 decision 2): a hunt from the discover room. The niche goes
+  // to the tool in its environment, never on argv; discover/hunt-op.mjs writes it to a file named from its hash, runs
+  // `arc-discover hunt --niche-file F` (the plan writes no receipt) or the same argv with --emit, and removes the file.
+  Object.freeze({
+    id: "discover.hunt",
+    room: "discover",
+    lane: "discover",
+    label: "Hunt a niche",
+    hint: "Mines Hacker News for one niche and clusters what people ask for. The plan counts; the run records each idea and a run.completed. It spends on no model.",
+    receipt: Object.freeze({ kind: "run.completed" }),
+    binding: "/arc-hunt step 1 (`arc-discover hunt --emit`) -> idea.captured per record + run.completed{step: hunt}; score and the council judge stay /arc-hunt's",
+    humanRun: false, spends: false, touchesFiles: false,
+    fields: Object.freeze([
+      Object.freeze({ name: "niche", label: "Niche", placeholder: "invoice reminders", type: "text", max: 60, pattern: "[a-z0-9][a-z0-9 -]{1,58}[a-z0-9]", required: true }),
+    ]),
+    plan: (v) => ({ script: "discover/hunt-op.mjs", args: [], env: { ARC_HUNT_NICHE: v.niche } }),
+    apply: (v) => ({ script: "discover/hunt-op.mjs", args: ["--emit"], env: { ARC_HUNT_NICHE: v.niche } }),
+  }),
   Object.freeze({
     id: "today.capture-idea",
     room: "today",

@@ -105,3 +105,11 @@ setup() {
   [[ "$output" == *"captured 2"* ]] || { echo "$output"; false; }
   [ -z "$(ls -A "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null)" ] || { echo "something quarantined"; ls "$ARC_SPINE_ROOT/events/_quarantine"; false; }
 }
+
+@test "discover.hunt op: plan writes no receipt, apply lands run.completed, the niche never on argv, its file gone, HUNT_RUNNING" {
+  run node "$ARC_ROOT/tests/discover/hunt-op.mjs"
+  [[ "$output" == *"RAN hunt-op checks"* ]] || { echo "the suite never started: $output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok the apply landed run.completed{step: hunt}, credited to the run"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
+}

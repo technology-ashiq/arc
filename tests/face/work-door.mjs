@@ -149,6 +149,7 @@ const INPUTS = {
   // The live lanes (ADR-1344): no leads store on this tree, and a FIXTURE venture for the legal gate.
   "leads.daily-send": { campaign: "work-door" },
   "legal.full-read": { venture: "fixture-gateway-gst" },
+  "discover.hunt": { niche: "invoice reminders" },
   // The company ring (ADR-1343): branch writers, planned where there is a main and refused SIM_EFFECT at apply.
   "org.lane-status": { lane: "face", status: "QUEUED" },
   "org.seat-assign": { role: "coo-dispatcher", seat: "agent", agents: "researcher" },

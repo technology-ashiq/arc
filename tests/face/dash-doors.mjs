@@ -539,6 +539,19 @@ try {
       const ro = await route("/api/roster");
       check("P04 roster: named, the runtime hire is on the books, and its dispatch is served", ro.named && sourced(ro, "engine/router.yaml")
         && ro.body.hires.some((h) => h.name === "build-in-public-draft" && h.driver === "hermes") && ro.body.runs.length === 1 && ro.body.runs[0].driver === "hermes", JSON.stringify(ro.body.runs));
+      // Cycle 17 P03 (REQ-08, ADR-1367): every agent's tier is implied by its model through router.yaml, labelled so.
+      const agents = Array.isArray(ro.body.agents) ? ro.body.agents : [];
+      check("P03 roster: serves the agents, each with a tier and an 'implied by model:' source (vacuous-pass guard: >= 20 agents)",
+        agents.length >= 20 && agents.every((a) => typeof a.tier === "string" && a.tier !== "" && String(a.tier_source).startsWith("implied by model:")) && ro.body.agentsUnreadable === false,
+        JSON.stringify(agents.slice(0, 3)));
+      check("P03 roster: a sonnet agent reads balanced-workhorse, an opus one high-judgment", agents.some((a) => a.model === "sonnet" && a.tier === "balanced-workhorse") && agents.some((a) => a.model === "opus" && a.tier === "high-judgment"));
+      const READS_LIB = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "lib", "face", "reads.mjs")).href);
+      const tiers = [{ tier: "cheap-scan", models: [{ driver: "claude-code", model: "haiku" }] }, { tier: "high-judgment", models: [{ driver: "claude-code", model: "opus" }] }];
+      check("impliedTier: a model the map names reads its tier; one it does not reads unmapped", READS_LIB.impliedTier(tiers, "claude-code", "opus") === "high-judgment" && READS_LIB.impliedTier(tiers, "claude-code", "gpt-9") === "unmapped");
+      const twice = [...tiers, { tier: "balanced-workhorse", models: [{ driver: "claude-code", model: "opus" }] }];
+      check("impliedTier: a model two tiers both name is unmapped, never the first match", READS_LIB.impliedTier(twice, "claude-code", "opus") === "unmapped");
+      const guess = (t, d, m) => (t.find((x) => x.models.some((y) => y.model === m)) || t[t.length - 1]).tier;
+      check("MUTANT CONTROL: an inverter that guesses a tier for an unknown model is caught", guess(tiers, "claude-code", "gpt-9") !== "unmapped");
     }
     // /api/slices -- every LIVE lane's current phase, by develop's ledger parser.
     {

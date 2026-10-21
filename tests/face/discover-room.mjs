@@ -123,7 +123,8 @@ try {
   const view = readFileSync(join(dir, "View.tsx"), "utf8");
   check("ROOM: the View wears no data-planned and draws no REHEARSAL card or planned line", !/data-planned/.test(view) && !/Rehearsal|PlannedLinePanel|PlannedBanner/.test(view));
   const ops = (await import(pathToFileURL(join(dir, "ops.mjs")).href)).ops;
-  check("ROOM: ops.mjs stays empty -- running a hunt stays /arc-hunt", Array.isArray(ops) && ops.length === 0);
+  // Cycle 17 P03 (ADR-1369 supersedes ADR-1356 decision 2): the room offers one verb, the hunt; score and judge stay /arc-hunt's.
+  check("ROOM: ops.mjs offers exactly the hunt", Array.isArray(ops) && ops.length === 1 && ops[0] === "discover.hunt", JSON.stringify(ops));
   const rooms = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "rooms.generated.json"), "utf8"));
   const room = rooms.rooms.find((r) => r.id === "discover");
   check("ROOM: the served registry lists discover as built, not planned", room && room.status === "built" && room.planned !== true, JSON.stringify(room));

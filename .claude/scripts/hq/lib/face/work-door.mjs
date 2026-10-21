@@ -215,7 +215,8 @@ export function createWorkDoor(ctx, opts = {}) {
     if (ctx.mode === "sim" && op.spends && !(typeof op.simSafe === "function" && op.simSafe(values)))
       throw new OpError("SIM_SPEND", `${op.id} spends real money, and this door is in sim mode -- it runs here only in the form that spends nothing`);
     const planCmd = op.plan(values);
-    const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS });
+    // A row may hand its tool a value in the environment rather than argv (discover.hunt's niche, ADR-1369).
+    const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS, env: planCmd.env || {} });
     const base = {
       // Scrubbed like everything else the page is served, ONE ARGUMENT AT A TIME: the argv carried a --root path and a
       // `why` holding an address unscrubbed (PR 4 round-3 logic attack), and scrubbing the whole line withheld everything
@@ -320,6 +321,7 @@ export function createWorkDoor(ctx, opts = {}) {
         const before = await kindIds(ctx, p.receipt.kind);
         const res = await runTool(ctx, p.applyCmd, {
           timeoutMs: APPLY_TIMEOUT_MS,
+          env: p.applyCmd.env || {},
           onLine: (stream, line) => {
             p.lines.push({ s: stream, t: scrub(line, ctx.repo) });
             if (p.lines.length > LINES_KEPT * 4) { const n = p.lines.length - LINES_KEPT; p.lines.splice(0, n); p.linesDropped += n; }

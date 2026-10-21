@@ -84,6 +84,7 @@ export function flowInputs(ctx) {
     // (ADR-0402/0413) wherever it runs; the legal gate renders a FIXTURE venture and raises its question for real.
     "leads.daily-send": { campaign: "browser-flow" },
     "legal.full-read": { venture: "fixture-gateway-gst" },
+    "discover.hunt": { niche: "invoice reminders" },
     // The company ring (ADR-1343): both write a proposal branch, so a sim door refuses them at apply.
     "org.lane-status": { lane: "face", status: "QUEUED" },
     "org.seat-assign": { role: "coo-dispatcher", seat: "agent", agents: "researcher" },
