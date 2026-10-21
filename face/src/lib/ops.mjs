@@ -11,7 +11,7 @@
 
 import { unescapeDoorText } from "./door.mjs";
 
-/** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean, maxBytes: number, sourceFailure: string }} OpField */
+/** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean, maxBytes: number, sourceFailure: string, sourceSize: number }} OpField */
 /**
  * @typedef {{ id: string, state: "loading" } | { id: string, state: "absent", why: string } |
  *   { id: string, state: "ready", label: string, hint: string, humanRun: boolean, spends: boolean, touchesFiles: boolean, touchesOs: boolean, touchesTree: boolean, leavesMachine: boolean, receiptKind: string, fields: OpField[] }} OpCard
@@ -60,6 +60,8 @@ export function opCards(moduleOps, registry) {
         required: f.required === true,
         // The code a sourced field's list could not be read with, or "" (attack 8dec47f B4).
         sourceFailure: typeof f.sourceFailure === "string" ? f.sourceFailure : "",
+        // How many names a sourced field's source holds, or -1 for a field with no source (attack b0a4249 L5).
+        sourceSize: Number.isInteger(f.sourceSize) ? f.sourceSize : -1,
         // A text field's cap is in BYTES (the door's unit on the wire and in the receipt); 0 = no cap to show.
         maxBytes: (f.type === "select" || f.type === "int") ? 0 : (Number.isInteger(f.max) && f.max > 0 ? f.max : 0),
       })),
@@ -80,7 +82,7 @@ export const NONE_YET = "none yet -- create one first";
  */
 export function emptyPicker(card) {
   if (!card || card.state !== "ready" || !Array.isArray(card.fields)) return null;
-  const f = card.fields.find((/** @type {any} */ x) => x && x.required === true && ((typeof x.sourceFailure === "string" && x.sourceFailure !== "") || (x.type === "select" && Array.isArray(x.options) && x.options.length === 0)));
+  const f = card.fields.find((/** @type {any} */ x) => x && x.required === true && ((typeof x.sourceFailure === "string" && x.sourceFailure !== "") || (x.type === "select" && Array.isArray(x.options) && x.options.length === 0) || x.sourceSize === 0));
   if (!f) return null;
   const why = typeof f.sourceFailure === "string" && f.sourceFailure !== "" ? `its list could not be read (${f.sourceFailure})` : NONE_YET;
   return { name: String(f.name), label: String(f.label || f.name), why };

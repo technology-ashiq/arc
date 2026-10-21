@@ -174,7 +174,7 @@ check("NOT SERVED: served, zero and unknown are refused -- they are states of a 
     // Bounded: a probe that never exits names itself here rather than hanging the shard (attack c0fc549 B4).
     check("FIELD_UNKNOWN: the probe ran and answered (vacuous-pass guard)", !missing.error && missing.status === 0 && out !== null, `${missing.error ? missing.error.code : ""} ${missing.status} ${missing.stderr}`);
     if (out !== null) {
-      check("FIELD_UNKNOWN: the gated ops are exactly the ones whose fields name an existing thing (Phase 15 + Cycle 17 P01)", JSON.stringify(out.gated) === JSON.stringify(["leads.daily-send", "legal.full-read", "money.ingest", "org.seat-assign", "ventures.kill-review"]), JSON.stringify(out.gated));
+      check("FIELD_UNKNOWN: the gated ops are exactly the ones whose fields name an existing thing (Phase 15 + Cycle 17 P01)", JSON.stringify(out.gated) === JSON.stringify(["leads.daily-send", "legal.full-read", "money.close-month", "money.ingest", "org.seat-assign", "ventures.kill-review"]), JSON.stringify(out.gated));
       for (const id of ["money.ingest", "ventures.kill-review"]) {
         const r = out.results[id];
         check(`FIELD_UNKNOWN: ${id} planned against an unreadable ventures.yaml refuses FIELD_UNKNOWN (status ${409}), and no tool ran`,
