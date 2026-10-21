@@ -263,7 +263,7 @@ function invokedDirectly() {
   catch { return false; }
 }
 
-/** The run's scratch directory, for the stop handler to remove when a kill skips the `finally` (debt #D23). */
+/** The run's scratch directory, for the stop handler to remove when a kill skips the `finally` (debt D23). */
 export const ACTIVE = { tmp: "" };
 
 if (invokedDirectly()) {

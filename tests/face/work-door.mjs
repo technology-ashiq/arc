@@ -653,7 +653,7 @@ try {
       writeFileSync(join(slowDir, "slow.mjs"), `if (process.argv[2] === "--plan") { console.log("would wait"); process.exit(0); }
 setTimeout(() => process.exit(0), 1500);
 `);
-      const reg = [{ ...registry[0], id: "fixture.slow", plan: () => ({ script: "fixture/slow.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/slow.mjs", args: [] }) }];
+      const reg = [{ ...registry[0], id: "fixture.slow", leavesMachine: true, simSafe: () => true, plan: () => ({ script: "fixture/slow.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/slow.mjs", args: [] }) }];
       const sd = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_C, repo: fx }, { registry: reg, now: () => clock });
       const a = await sd.plan("fixture.slow", { input: {} }), b = await sd.plan("fixture.slow", { input: {} });
       sd.apply("fixture.slow", { planId: a.planId });

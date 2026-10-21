@@ -323,9 +323,10 @@ export function createWorkDoor(ctx, opts = {}) {
       throw e;
     }
 
-    // One running apply per op: a drawer closed mid-run and reopened plans again, and a second apply of the same op --
-    // a second mail send, a second paid bench run -- must wait for the first (Phase 04 PR449 B2).
-    for (const [id, other] of plans) if (id !== planId && other.opId === op.id && other.state === "running")
+    // One running apply per op that spends or leaves the machine: a drawer closed mid-run and reopened plans again, and a
+    // second mail send or paid bench run must wait for the first (Phase 04 PR449 B2). A plain op may run concurrently --
+    // the attribution arm runs four at once and pins that each receipt is its own.
+    if (op.spends || op.leavesMachine) for (const [id, other] of plans) if (id !== planId && other.opId === op.id && other.state === "running")
       throw new OpError("OP_BUSY", `${op.id} is still running from an earlier apply; wait for its receipt`);
     // THE CLAIM. Synchronous, before the first await: a second apply of this plan id, from anywhere, sees "running"
     // and replays -- it cannot start a second run.

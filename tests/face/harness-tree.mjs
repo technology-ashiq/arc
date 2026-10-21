@@ -39,10 +39,16 @@ console.log(`RAN pids child=${real.child} grandchild=${real.grand} stop=${POSIX 
 check("a stopped harness ends its child AND its grandchild (pid probe)", real.started && !real.after.child && !real.after.grand, JSON.stringify(real.after));
 if (real.started) { reap(real.child); reap(real.grand); }
 
-const mut = await run(["--mutant"]);
-check("MUTANT CONTROL: a stop that ends only the direct child leaves the grandchild alive, and the probe sees it",
-  mut.started && !mut.after.child && mut.after.grand, JSON.stringify(mut));
-if (mut.started) { reap(mut.child); reap(mut.grand); }
+if (POSIX) {
+  const mut = await run(["--mutant"]);
+  check("MUTANT CONTROL: a stop that ends only the direct child leaves the grandchild alive, and the probe sees it",
+    mut.started && !mut.after.child && mut.after.grand, JSON.stringify(mut));
+  if (mut.started) { reap(mut.child); reap(mut.grand); }
+} else {
+  // libuv puts a non-detached child in a kill-on-close job object, so the direct-child-only stop already ends the tree
+  // on win32 (CI windows shard 11, run 39680716611): there is no surviving grandchild for a mutant to leave behind.
+  console.log("SKIP MUTANT CONTROL on win32: libuv's kill-on-close job ends a child's descendants with it");
+}
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran === 3 ? 0 : 1;
+process.exitCode = failed === 0 && ran === (POSIX ? 3 : 2) ? 0 : 1;

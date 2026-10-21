@@ -49,7 +49,7 @@ export function waitExit(child, ms) {
   });
 }
 
-/** Every child spawnTracked started and has not seen exit: what a stop must end (debt #D23). */
+/** Every child spawnTracked started and has not seen exit: what a stop must end (debt D23). */
 const LIVE = new Set();
 
 /** Stop every live tracked child and its whole tree. */
@@ -64,7 +64,7 @@ export async function stopAll() {
 /**
  * End the harness cleanly when it is told to stop: SIGINT and SIGTERM on POSIX, the IPC `shutdown` message on win32
  * (where a parent cannot deliver a catchable signal), and an uncaught error. Every tracked tree is stopped and
- * `cleanup` runs before exit, so a runner kill no longer skips the `finally` and leaks children (debt #D23).
+ * `cleanup` runs before exit, so a runner kill no longer skips the `finally` and leaks children (debt D23).
  * @param {() => Promise<void> | void} cleanup @param {(code: number) => void} [exit]
  */
 export function installStopHandlers(cleanup, exit = (code) => process.exit(code)) {
@@ -111,7 +111,7 @@ function signalTree(child, signal) {
   try {
     if (POSIX) process.kill(-child.pid, signal);
     // win32 has no process group to signal, and child.kill ends the direct child ONLY: it exited inside the grace, the
-    // taskkill below never ran, and its grandchild lived on (debt #D23). The tree is ended by taskkill /T at once.
+    // taskkill below never ran, and its grandchild lived on (debt D23). The tree is ended by taskkill /T at once.
     else spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore", windowsHide: true, timeout: 10000 });
   } catch { /* already gone */ }
 }

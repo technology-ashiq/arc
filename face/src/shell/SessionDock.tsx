@@ -24,7 +24,7 @@ export default function SessionDock({ roomId, door, only, bare = false, served }
   const [own, setRegistry] = useState<unknown>(null)
   const [loadError, setLoadError] = useState('')
   const [bump, setBump] = useState(0)
-  // debt #D113: the frame's /api/sessions read is used until a start asks for a fresh one (bump), never read twice.
+  // debt D113: the frame's /api/sessions read is used until a start asks for a fresh one (bump), never read twice.
   const registry = bump === 0 && served !== undefined && served !== null ? served : own
   useEffect(() => {
     if (bump === 0 && served !== undefined) return

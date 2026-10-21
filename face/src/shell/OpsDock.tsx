@@ -21,7 +21,7 @@ import { Btn, Chip, Field, MONO, Panel, PanelTitle, PickRow, Receipt, TextInput,
 export default function OpsDock({ ops, door, onApplied, only, bare = false, served }: { ops: readonly unknown[]; door: Door; onApplied: () => void; only?: string; bare?: boolean; served?: unknown }) {
   const [own, setRegistry] = useState<unknown>(null)
   const [loadError, setLoadError] = useState('')
-  // debt #D113: the frame already read /api/ops for the strip; a dock handed that read uses it and asks again for nothing.
+  // debt D113: the frame already read /api/ops for the strip; a dock handed that read uses it and asks again for nothing.
   const registry = served !== undefined && served !== null ? served : own
   useEffect(() => {
     if (served !== undefined) return
