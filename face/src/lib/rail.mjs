@@ -108,9 +108,12 @@ export function parseSaved(raw) {
   /** @type {RailSaved} */
   const out = Object.create(null);
   // debt #D113: a hand-edited or hostile entry holding thousands of keys is read up to a cap, never walked whole.
-  let n = 0;
-  for (const [k, b] of Object.entries(v)) {
-    if (n >= SAVED_MAX) break;
+  let n = 0, seen = 0;
+  for (const k in v) {
+    // The walk is capped too, not only what is kept: 5,000 rejected keys never cost 5,000 checks (attack 16af00b L2).
+    if (n >= SAVED_MAX || ++seen > SAVED_MAX * 4) break;
+    if (!Object.hasOwn(v, k)) continue;
+    const b = v[k];
     if (typeof b === "boolean" && usableKey(k)) { out[k] = b; n++; }
   }
   return out;

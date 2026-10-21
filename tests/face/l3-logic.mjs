@@ -1154,7 +1154,9 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   check("every dock the frame draws is handed the frame's own read (vacuous-pass guard: 4 docks)", docks.length === 4 && docks.every((d) => /served=\{(opsRegistry|sessionRegistry)\}/.test(d)), docks.join(" | "));
   const opsDock = readFileSync(join(REPO, "face", "src", "shell", "OpsDock.tsx"), "utf8");
   check("a dock handed a read asks the door for nothing", /if \(served !== undefined\) return/.test(opsDock));
-  check("MUTANT CONTROL: a frame whose dock reads on its own is caught", !/served=\{/.test("<OpsDock ops={m.ops} door={door} onApplied={dropAll} />"));
+  const handed = (text) => { const d = [...text.matchAll(/<(OpsDock|SessionDock)\b[^>]*>/g)].map((m) => m[0]); return d.length === 4 && d.every((x) => /served=\{(opsRegistry|sessionRegistry)\}/.test(x)); };
+  const mutant = frame.replace(/ served=\{opsRegistry\}/, "");
+  check("MUTANT CONTROL: the real frame with one dock's served= removed fails the same detector", mutant !== frame && handed(frame) && !handed(mutant));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

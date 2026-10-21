@@ -113,7 +113,8 @@ const isObj = (/** @type {unknown} */ v) => v !== null && typeof v === "object" 
 // debt #D113: a door string drawn on a chip or a card is one line and capped -- a role title holding a newline or
 // 10,000 characters never stretches the chart.
 const STR_MAX = 200;
-const str = (/** @type {unknown} */ v) => (typeof v === "string" ? unescapeDoorText(v).replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").slice(0, STR_MAX) : "");
+// Array.from counts code points, so the cap never splits a surrogate pair (attack 16af00b L9).
+const str = (/** @type {unknown} */ v) => (typeof v === "string" ? Array.from(unescapeDoorText(v).replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")).slice(0, STR_MAX).join("") : "");
 const int = (/** @type {unknown} */ v) => (Number.isInteger(v) ? /** @type {number} */ (v) : null);
 
 /**

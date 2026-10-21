@@ -54,7 +54,11 @@ const LIVE = new Set();
 
 /** Stop every live tracked child and its whole tree. */
 export async function stopAll() {
-  await Promise.all([...LIVE].map((c) => stopTree(c, { graceMs: 1500 })));
+  await Promise.all([...LIVE].map((c) => {
+    if (POSIX && isDead(c) && c.pid) { try { process.kill(-c.pid, "SIGKILL"); } catch { /* the group is gone */ } return Promise.resolve(); }
+    return stopTree(c, { graceMs: 1500 });
+  }));
+  LIVE.clear();
 }
 
 /**
@@ -91,8 +95,10 @@ export function spawnTracked(command, args, opts = {}) {
     windowsHide: true,
     detached: POSIX,
   });
+  // Kept after exit on POSIX: a grandchild that outlived its parent is still in the parent's process group, and only
+  // the group kill reaches it (attack 16af00b L6). win32 has no group, so an exited child is dropped there.
   LIVE.add(child);
-  child.once("exit", () => LIVE.delete(child));
+  if (!POSIX) child.once("exit", () => LIVE.delete(child));
   let tail = "";
   child.spawnError = null;
   child.on("error", (e) => { child.spawnError = e; });

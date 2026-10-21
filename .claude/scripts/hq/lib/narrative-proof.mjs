@@ -227,11 +227,13 @@ export function ownerKeyBaseState(root, opts = {}) {
   /** @type {string} */ let target = base, sha = "";
   try {
     const literal = base.startsWith("refs/") || base === "HEAD" || /^[0-9a-f]{40,64}$/.test(base);
-    // A full `refs/...` name, HEAD or a sha resolves by exact match first: a ref planted at refs/tags/refs/... cannot
-    // stand in for it, so a literal base is never refused as ambiguous (attack abf6f1b B1, Phase 04 D95). Short names
-    // are still scanned for a local branch or tag shadowing the real base.
-    const shadows = literal ? [] : [`refs/${base}`, `refs/tags/${base}`, `refs/heads/${base}`, `refs/remotes/${base}`].filter(exists);
-    if (literal && base.startsWith("refs/") && !exists(base)) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`);
+    // A full `refs/...` name resolves by exact match: a ref planted at refs/tags/refs/... cannot stand in for it, so it is
+    // never refused as ambiguous (attack abf6f1b B1, Phase 04 D95). HEAD, a sha and short names are still scanned for a
+    // branch or tag of the same name (attack 16af00b L1).
+    const full = base.startsWith("refs/");
+    const shadows = full ? [] : [`refs/${base}`, `refs/tags/${base}`, `refs/heads/${base}`, `refs/remotes/${base}`].filter(exists);
+    if (literal && !full && shadows.length > 0) return cannot(`the base ref name ${base} is ambiguous (it names ${shadows.join(" and ")}); a local branch or tag can stand in for the real base, so pass the full name, for example refs/remotes/origin/main`);
+    if (full && !exists(base)) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`);
     if (!literal && shadows.length > 1) return cannot(`the base ref name ${base} is ambiguous (it names ${shadows.join(" and ")}); a local branch or tag can stand in for the real base, so pass the full name, for example refs/remotes/origin/main`);
     if (!literal) { if (shadows.length === 0) return cannot(`the base ref ${base} does not exist here (a shallow CI checkout has none: fetch it, or pass --base <sha>), so the owner key could not be compared with it`); target = shadows[0]; }
   } catch (e) { return cannot(why(e)); }

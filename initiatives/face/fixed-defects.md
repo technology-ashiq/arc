@@ -1087,3 +1087,8 @@ Every row here is a TWIN: a PR 1 fix applied in the file the attacker named and 
 - **One running apply per plan, not per op** -- a drawer closed mid-run and reopened could start a second mail send or paid bench run (Phase 04 PR449 B2). *Check: the door refuses an apply while another plan of the same op is running (OP_BUSY).*
 - **Esc in a form field closed the surrounding drawer and its draft** (Phase 04 PR449 L14). *Check: a window-level Esc ignores keys typed into an input, textarea, select or contenteditable.*
 - **A toggle decided on the merged copy rather than what the viewer sees** -- a rail click looked dead and overwrote another tab's fold (Phase 04 PR449 B1). *Check: a click flips what this tab shows, and only that key is written over storage.*
+- **A fix that narrowed one exemption too far** -- skipping the shadow scan for every "literal" base dropped it for HEAD and a sha, which a same-named branch can still shadow (attack 16af00b L1). *Check: only a full refs/ name skips the scan.*
+- **A cap on what is kept, not on the walk** (attack 16af00b L2). *Check: a loop over untrusted keys counts every key it visits, not only the accepted ones.*
+- **A tracked child forgotten at exit** -- its orphaned grandchildren stayed in its process group, unkilled (attack 16af00b L6). *Check: on POSIX a tracked child stays in the registry after exit, and the stop kills its group.*
+- **A mutant control that tested a hand-written string** (attack 16af00b L10). *Check: the mutant is the real file with one change, judged by the same detector as the real one.*
+- **A string cap counted in UTF-16 units** (attack 16af00b L9). *Check: a cap on display text slices code points (Array.from).*
