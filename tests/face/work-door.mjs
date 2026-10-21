@@ -171,7 +171,7 @@ check("every registry op is driven by this suite",
 // day-1 probe to the op that ships it, or names it as residue. Its op ids equal the registry's both ways, and its row
 // count equals the probe's own non-SESSION count -- read from the probe's ring tables, never typed here.
 {
-  const EV = join(REPO, "initiatives", "face", "evidence", "phase-05");
+  const EV = join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-05");
   const tableRows = (text, header) => {
     const lines = text.split(/\r?\n/);
     const rows = [];

@@ -604,7 +604,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     const plannedHere = registry.rooms.some((r) => r.ring === ring && (r.planned === true || r.status === "planned") && have.includes(r.id));
     if (plannedHere) ringsWithPlanned.push(ring);
     if (plannedHere || rehearsalRows.length > 0) {
-      listCheck(`rehearsal-${ring}.md`, join(REPO, "initiatives", "face", "evidence", "phase-03", `rehearsal-${ring}.md`),
+      listCheck(`rehearsal-${ring}.md`, join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-03", `rehearsal-${ring}.md`),
         /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm,
         (m) => `${m[1]} | ${m[2]} | ${m[3]}`, rehearsalRows, "REHEARSAL");
       check(`REHEARSAL LIST rehearsal-${ring}.md: the ring's planned rooms rehearse at least one flow (vacuous-pass guard)`, rehearsalRows.length > 0, `rows=${rehearsalRows.length}`);
@@ -619,9 +619,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   // an op its module declares.
   {
     const VERB_RE = /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| ([^|]+?) \|$/gm;
-    listCheck("verbs-pending.md", join(REPO, "initiatives", "face", "evidence", "phase-05", "verbs-pending.md"),
+    listCheck("verbs-pending.md", join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-05", "verbs-pending.md"),
       VERB_RE, (m) => `${m[1]} | ${m[2]} | ${m[3]}`, allVerbRows, "VERBS PENDING");
-    const P03 = join(REPO, "initiatives", "face", "evidence", "phase-03");
+    const P03 = join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-03");
     const phase03 = readdirSync(P03).filter((n) => /^verbs-pending-.+\.md$/.test(n))
       .flatMap((n) => [...readFileSync(join(P03, n), "utf8").matchAll(VERB_RE)].map((m) => ({ module: m[1], verb: m[2], row: `${m[1]} | ${m[2]} | ${m[3]}` })));
     const opsReg = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "face-ops.mjs")).href);
@@ -640,7 +640,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   // Phase 04 (REQ-06): the RESIDUE -- every panel still NOT SERVED, with the route it needs -- and the SERVED list --
   // every panel a door route now fills -- each held equal to the folds both ways. A panel that flips leaves the
   // first and joins the second; one that vanished from both is a mismatch in the second.
-  const P04 = join(REPO, "initiatives", "face", "evidence", "phase-04");
+  const P04 = join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-04");
   listCheck("residue.md", join(P04, "residue.md"),
     /^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm,
     (m) => `${m[1]} | ${m[2]} | ${m[3]} | ${m[4]}`, allRows, "NOT SERVED");
@@ -662,9 +662,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   // The Phase 03 lists were Phase 04's input: every panel they named is now either served or residue, by module and
   // panel -- none quietly dropped on the way (REQ-06's "the union drops to 0, or to a named residue").
   {
-    const input = readdirSync(join(REPO, "initiatives", "face", "evidence", "phase-03"))
+    const input = readdirSync(join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-03"))
       .filter((n) => /^not-served-.+\.md$/.test(n))
-      .flatMap((n) => [...readFileSync(join(REPO, "initiatives", "face", "evidence", "phase-03", n), "utf8")
+      .flatMap((n) => [...readFileSync(join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-03", n), "utf8")
         .matchAll(/^\| `([a-z][a-z0-9-]*)` \| ([^|]+?) \| `(\/api\/[^`]+)` \| ([^|]+?) \|$/gm)].map((m) => `${m[1]} | ${m[2]}`));
     const accounted = new Set([...allRows, ...allServedRows].map((r) => r.split(" | ").slice(0, 2).join(" | ")));
     const dropped = input.filter((r) => !accounted.has(r));
@@ -677,7 +677,7 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   // not shipped, or a rehearsal list for a ring with no planned module -- would widen what the browser is judged
   // against without any fold behind its rows (money ring attack).
   {
-    const listDir = join(REPO, "initiatives", "face", "evidence", "phase-03");
+    const listDir = join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-03");
     const files = readdirSync(listDir).filter((n) => /^(not-served|verbs-pending|rehearsal)-.+\.md$/.test(n));
     const stray = files.filter((n) => {
       const m = /^(not-served|verbs-pending|rehearsal)-(.+)\.md$/.exec(n);

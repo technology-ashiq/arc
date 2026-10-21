@@ -135,7 +135,7 @@ process.env.LEADS_CONFIG = "planted-leads-config";
     }
     return rows;
   };
-  const text = readFileSync(join(REPO, "initiatives", "face", "evidence", "phase-06", "residue.md"), "utf8");
+  const text = readFileSync(join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-06", "residue.md"), "utf8");
   const idOf = (r) => r[0].replace(/`/g, "");
   const ships = tableRows(text, /^\| row id \| process file \| receipt kind \|/).map(idOf);
   const residue = tableRows(text, /^\| row id \| door today \| missing piece \| filed to \|/).map(idOf);
