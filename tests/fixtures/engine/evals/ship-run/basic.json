@@ -1,0 +1,5 @@
+{
+  "note": "Eval fixture (face Cycle 17 Phase 02). `expected` asserts the SHAPE of a prepared ship: the full commit SHA and the approval.requested{gate: deploy} receipt id. Nothing deploys.",
+  "input": {},
+  "expected": { "sha": "3fda79db0000000000000000000000000000abcd", "receipt_id": "01M5F1BVH3X5KW2KGQ1YAKRRFK" }
+}

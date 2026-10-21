@@ -135,7 +135,7 @@ process.env.LEADS_CONFIG = "planted-leads-config";
     }
     return rows;
   };
-  const text = readFileSync(join(REPO, "initiatives", "face", "archive", "evidence-cycle16-2026-10-21", "phase-06", "residue.md"), "utf8");
+  const text = readFileSync(join(REPO, "initiatives", "face", "evidence", "phase-02", "residue.md"), "utf8");
   const idOf = (r) => r[0].replace(/`/g, "");
   const ships = tableRows(text, /^\| row id \| process file \| receipt kind \|/).map(idOf);
   const residue = tableRows(text, /^\| row id \| door today \| missing piece \| filed to \|/).map(idOf);
@@ -190,7 +190,21 @@ process.env.LEADS_CONFIG = "planted-leads-config";
       err ? `${err.code}: ${err.message}` : JSON.stringify(call && call.args.slice(1, 5)));
   }
   const confirmRows = SESS.SESSIONS.filter((s) => s.confirmStep).length;
-  check("every other row reached a spawn (the loop judged real starts, not refusals)", confirmRows === 1 && started === 14 && rec.calls.length === 14, `started=${started} spawns=${rec.calls.length}`);
+  // Cycle 17 P02 (ADR-1366): ship-run ends on the deploy gate, so no real row holds a confirm step any more.
+  check("every row reached a spawn (the loop judged real starts, not refusals)", confirmRows === 0 && started === 15 && rec.calls.length === 15, `confirm=${confirmRows} started=${started} spawns=${rec.calls.length}`);
+  check("review-ship.ship is Prepare ship: ship-run, sealed by approval.requested, no confirm step, ship.done claimed nowhere",
+    (() => { const r = SESS.sessionById("review-ship.ship"); return r && r.label === "Prepare ship" && r.process === "ship-run" && r.receipt && r.receipt.kind === "approval.requested" && r.confirmStep === null && SESS.SESSIONS.every((x) => !x.receipt || x.receipt.kind !== "ship.done"); })());
+  // The refusal itself is kept by a fixture row WITH a confirm step: it is still refused, and dispatch cannot reach its
+  // process by name either.
+  {
+    const held = { ...SESS.sessionById("review-ship.review"), id: "fixture.held", confirmStep: "deploy" };
+    const fr = recorder(undefined);
+    const fd = door(TREE, "journal-held", { spawn: fr.spawn, sessions: [held, SESS.sessionById("executor.dispatch")] });
+    check("fixture.held: REFUSED until its deploy stop is enforced -- a process file alone never makes it one click",
+      codeOf(() => fd.start("fixture.held", { click: fd.click().click, input: {}, driver: "auto" })) === "CONFIRM_STEP_UNENFORCED" && fr.calls.length === 0);
+    check("dispatch naming a held process is held back BY NAME: CONFIRM_STEP_UNENFORCED, nothing started",
+      codeOf(() => fd.start("executor.dispatch", { click: fd.click().click, input: {}, process: held.process })) === "CONFIRM_STEP_UNENFORCED" && fr.calls.length === 0);
+  }
   const env = rec.calls[0] && rec.calls[0].opts.env;
   check("the child is told the door's spine, keeps PATH, and sees none of the door's ARC_DASH_*, the owner's deploy/VCS tokens or the leads steering list",
     env && env.ARC_SPINE_ROOT === SPINE && Object.keys(env).some((k) => k.toUpperCase() === "PATH")
@@ -247,8 +261,6 @@ process.env.LEADS_CONFIG = "planted-leads-config";
   check("list() spawns nothing", rec.calls.length === 1);
   check("dispatch takes only a process on this tree", codeOf(() => d.start("executor.dispatch", { click: d.click().click, input: {}, process: "../../etc" })) === "NO_PROCESS" && rec.calls.length === 1);
   check("positive control: ship-run's process file IS on the scratch tree", existsSync(join(TREE, "processes", "ship-run.process.yaml")));
-  check("dispatch naming ship's process is held back BY NAME: CONFIRM_STEP_UNENFORCED, nothing started",
-    codeOf(() => d.start("executor.dispatch", { click: d.click().click, input: {}, process: "ship-run" })) === "CONFIRM_STEP_UNENFORCED" && rec.calls.length === 1);
 
   // A scratch tree of its own for NO_PROCESS: never the repo, whose processes/ other lanes grow (attack B11).
   const BARE = join(tmp, "bare");

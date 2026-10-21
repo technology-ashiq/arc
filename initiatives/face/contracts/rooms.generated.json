@@ -667,6 +667,10 @@
           "qa-tester",
           "security-auditor"
         ],
+        "processes": [
+          "qa-run",
+          "ship-run"
+        ],
         "gates": [
           "coverage",
           "design",
@@ -688,7 +692,7 @@
           "workflow:weigh-tests"
         ]
       },
-      "itemCount": 32
+      "itemCount": 34
     },
     {
       "id": "design-studio",

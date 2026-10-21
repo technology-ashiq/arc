@@ -11,6 +11,7 @@
   "scripts": [
     ".claude/scripts/hq/adr-record.mjs",
     ".claude/scripts/hq/arc-brief.mjs",
+    ".claude/scripts/hq/review-ship-record.mjs",
     ".claude/scripts/hq/arc-dash.mjs",
     ".claude/scripts/hq/arc-face.mjs",
     ".claude/scripts/hq/face-module.mjs",

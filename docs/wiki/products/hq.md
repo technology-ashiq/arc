@@ -209,7 +209,7 @@ ledger: the list of money in and money out.
 
 None declared.
 
-## Scripts (88)
+## Scripts (89)
 
 - [`.claude/scripts/hq/adr-record.mjs`](../../../.claude/scripts/hq/adr-record.mjs)
 - [`.claude/scripts/hq/arc-brief.mjs`](../../../.claude/scripts/hq/arc-brief.mjs)
@@ -297,6 +297,7 @@ None declared.
 - [`.claude/scripts/hq/policy-lint.mjs`](../../../.claude/scripts/hq/policy-lint.mjs)
 - [`.claude/scripts/hq/policy-matrix.mjs`](../../../.claude/scripts/hq/policy-matrix.mjs)
 - [`.claude/scripts/hq/policy-promote.mjs`](../../../.claude/scripts/hq/policy-promote.mjs)
+- [`.claude/scripts/hq/review-ship-record.mjs`](../../../.claude/scripts/hq/review-ship-record.mjs)
 - [`.claude/scripts/hq/spine.mjs`](../../../.claude/scripts/hq/spine.mjs)
 - [`.claude/scripts/hq/venture-register.mjs`](../../../.claude/scripts/hq/venture-register.mjs)
 

@@ -58,10 +58,11 @@ load 'test_helper'
   [[ "$output" == *"ok a FRESH door attaches to the run door A started, while it runs"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok its receipt is read back OFF THE SPINE THE DOOR NAMED, credited because"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a real event the run named as ANOTHER kind, and printed bare, is unattributed"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok dispatch naming ship's process is held back BY NAME"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok dispatch naming a held process is held back BY NAME"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok the run never saw the door's token, the owner's deploy/VCS tokens or the leads steering list"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a start with no click is 428 CLICK_REQUIRED"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"ok review-ship.ship: REFUSED until its deploy stop is enforced"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok fixture.held: REFUSED until its deploy stop is enforced"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok review-ship.ship is Prepare ship: ship-run, sealed by approval.requested"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a checkout on main: BRANCH_REFUSED, nothing started"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ok a key the run printed is served redacted, never as written"* ]] || { echo "$output"; false; }
 }
@@ -243,4 +244,14 @@ load 'test_helper'
              "E: two concurrent requests are answered from one body, not two"; do
     [[ "$output" == *"ok $arm"* ]] || { echo "arm missing or failed: $arm"; echo "$output"; false; }
   done
+}
+
+@test "review-ship: qa seals qa.completed, ship raises the deploy gate only over green CI, nothing deploys" {
+  run node "$ARC_ROOT/tests/face/review-ship-record.mjs"
+  [[ "$output" == *"RAN review-ship-record checks"* ]] || { echo "the suite never started: $output"; false; }
+  [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok qa: lands qa.completed, read back off the spine by the id it printed"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok ship over a CI that is not green: refused, no approval.requested lands"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok MUTANT CONTROL: a planted"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
 }

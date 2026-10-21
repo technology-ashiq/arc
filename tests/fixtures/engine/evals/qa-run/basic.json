@@ -1,0 +1,5 @@
+{
+  "note": "Eval fixture (face Cycle 17 Phase 02). `expected` asserts the SHAPE of a QA pass: two digit-string counts and the qa.completed receipt id. Counts are free.",
+  "input": { "url": "http://localhost:3000" },
+  "expected": { "bugs": "2", "fixed": "0", "receipt_id": "01M5F1B1AB5K1P74TB0ZQNJZYG" }
+}
