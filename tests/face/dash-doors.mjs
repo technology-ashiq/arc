@@ -642,8 +642,8 @@ try {
         rows.every((r) => r.length === 1 && r[0].method === "GET" && r[0].mutates === false && r[0].spineEffect === "none"), JSON.stringify(rows.map((r) => r.length)));
       // The list above is the union of Phase 03's NOT SERVED lists' SERVED routes: a route on the table that is on
       // none of them was not asked for (the spec's first exit criterion).
-      const input = readdirSync(join(REPO, "initiatives/face/evidence/phase-03")).filter((n) => /^not-served-.+\.md$/.test(n))
-        .flatMap((n) => [...disk(`initiatives/face/evidence/phase-03/${n}`).matchAll(/\| `(\/api\/[a-z-]+)[^`]*` \|/g)].map((m) => m[1]));
+      const input = readdirSync(join(REPO, "initiatives/face/archive/evidence-cycle16-2026-10-21/phase-03")).filter((n) => /^not-served-.+\.md$/.test(n))
+        .flatMap((n) => [...disk(`initiatives/face/archive/evidence-cycle16-2026-10-21/phase-03/${n}`).matchAll(/\| `(\/api\/[a-z-]+)[^`]*` \|/g)].map((m) => m[1]));
       check("P04 route list: every Phase 04 route is one a Phase 03 NOT SERVED list named", input.length >= 40 && P04.every((p) => input.includes(p)), P04.filter((p) => !input.includes(p)).join(","));
       // The posture (ADR-1312) on EVERY Phase 04 route, not only on the routes the posture arms above sample.
       const posture = [];

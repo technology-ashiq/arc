@@ -1,59 +1,40 @@
-# Phase 02 — Shell + module frame: the v0.7 shell, the module tree, `face-pure`, the scaffold
+# Phase 02 — `qa-run` and `ship-run`: review → QA → Prepare ship from the face
 
-**Goal (one line):** REQ-03 — the v0.7 shell reads only the served registry, every module is four files whose decisions run under node, and `face-pure` FAILs drift before a single one of the 36 modules is written (ADR-1320).
-**Appetite:** 0.5 days spent of 2 days allotted, the rest banked forward (ADR-1339)
+**Goal (one line):** REQ-06 — the review-ship room's QA and Prepare-ship sessions start from a click and land receipts; nothing deploys.
+**Appetite:** 2 days
 **Depends on:** phase-01
-**Serves:** REQ-03
-**Branch:** `feat/face-v2-02`
-**Preconditions (STOP if absent):** Phase 01's PROGRESS row reads ✅ CLOSED via `/arc-phase-done 01` from the main clone.
+**Serves:** REQ-06
+**Branch:** `feat/face-v3-02-qa-ship`
 
 ## Exit criteria (Definition of Done)
-
-- [ ] v0.7 shell ported: 240 px rail · 56 px header · ⌘K palette · the dock in the content column, **text-only** (ADR-1315); rail, palette and map read `/api/rooms` only — no shell file names a room.
-- [ ] `face/src/modules/<ring>/` tree; a served room with no module renders through the generic module and is REPORTED by name (ADR-1321).
-- [ ] `face/src/lib/registry.mjs` two-way reconcile (served ids ↔ module folders), node-tested in `tests/face/l3-logic.mjs`.
-- [ ] `face-pure` (FAIL from birth, `.claude/scripts/core/`): `fold.mjs` may import only relative `.mjs` and node builtins; `View.tsx` may hold no comparison or arithmetic operator, no `if`/`switch`, no nested ternary, and conditions only on boolean fields `fold()` returns. Mutants: a planted branch in a `View.tsx` and a planted React import in a `fold.mjs` both FAIL; files-scanned count asserted > 0.
-- [ ] `face-coverage` module half (REQ-04 groundwork): an orphan module folder FAILs; the extra-room exemption mechanism exists and is EMPTY until the factory and company rings add their named rows (ADR-1327).
-- [ ] `/arc-face-module <ring>/<id>` (hand-written command + `.claude/scripts/hq/face-module.mjs`): scaffolds the four files from a template, refuses an id `/api/rooms` does not serve, and the scaffolded module is green on `face-pure` + `face-coverage` in 1 command; the new command is homed in `face-coverage`'s commands inventory AND the root `CLAUDE.md` hand-written-command count ("The other 21 commands") is updated in the same PR; `face-module.mjs`'s main-guard realpaths both sides (symlinked-tmpdir mutant).
-- [ ] Browser suite green in both moods through the new shell on every Node ≥20.19 leg.
-- [ ] Two fresh attackers (lint decision logic · scaffold shell/OS boundary); CI green per job; `/arc-phase-done 02` from the main clone.
+- [ ] `processes/qa-run.process.yaml` + `hq.policy.yaml` row + `router.yaml` class row (`balanced-workhorse`, ADR-0069 cited); `review-ship.qa` ready; a mock-driver session lands `qa.completed`, read back by the room; a mock run that lands nothing FAILs its arm.
+- [ ] `processes/ship-run.process.yaml` runs lint, build, a per-job CI read, then `approval.requested{gate: deploy}`; the `review-ship.ship` row in `face-sessions.mjs` changes in the same PR — label "Prepare ship", `receipt.kind: approval.requested`, `confirmStep: null` (there is no deploy step left to confirm; `sessionsView` forces `processReady: false` while `confirmStep` is set) — and the `CONFIRM_STEP_UNENFORCED` refusal keeps a fixture proving a row WITH a `confirmStep` is still refused; `ship.done` is claimed nowhere; a fixture proves no deploy, publish or push in its compiled argv or any step, and that approving `{gate: deploy}` in the inbox triggers nothing (ADR-1366).
+- [ ] Real-side arm: the owner starts QA and Prepare ship once each on a real driver from the face; one `qa.completed` and one `approval.requested{gate: deploy}` are found in `events/` (not `events/_quarantine/`) on the canonical spine.
+- [ ] `arc-compile --all` and `gate-parity` green; wiki, sync golden (by its recipe) and `face-sections` regenerated, each `--check` green; two attack surfaces; CI per job; `/arc-phase-done 02` from the main clone.
 
 ## Verification plan
-
-Coarse (refined via `/arc-change` when the phase starts): `face-pure` and `face-coverage` mutant fixtures RED first, then green on CI per job; scaffold demo from the main clone produces a green module in one command.
+- **Test command:** CI per job (`ci-digest.mjs`).
+- **Expected failure first:** `gate-parity` and the review-ship room read `processReady: false` for both rows before the files exist; the no-deploy fixture FAILs a planted `vercel` step.
+- **Fixtures:** (1) a mock-driver session per process lands its receipt; (2) the no-deploy fixture greps ship-run's compiled argv and every step for deploy|publish|push; (3) each ship-run step is an existing arc script by exact path (`ci-digest.mjs`, the lint script; no `npm test`, none is run on the box), and the step list in the process file is the only place a step can be added.
+- **Live demo scenario:** on the owner's main clone, review-ship → QA → Prepare ship from the strip; the inbox shows the deploy gate; nothing deploys.
+- **Expected evidence:** the two real receipts' ids, CI run id, `evidence/phase-02/owner-demo.md`.
 
 ## Rabbit holes in this phase
-
-- **`face-pure` as a TSX parser** — structural scan only (PLAN rabbit holes); no TypeScript compiler API.
-- **Porting v0.7's `HQ.jsx` room switch** — it hard-codes rooms; the shell derives from `/api/rooms` instead (ADR-1306).
+A new QA runner (wrap the existing path); a real deploy (ADR-1366).
 
 ## Out of scope for this phase
-
-Any of the 36 modules' content → Phase 03 · `ops.mjs` behaviour → Phase 05 (the file exists, empty, from the scaffold).
+`phase-close`, `hire-certify`, `absorb-adopt`, `growth-draft` (their lanes).
 
 ## Your-setup / pending
-
-The owner runs the git for `feat/face-v2-02`.
+None beyond Phase 01's.
 
 ## Non-negotiables (verbatim from PLAN)
 
-<!-- Generated from PLAN.md at kickoff; resynced by /arc-change. Never hand-edited. -->
-
-- The served registry is the only room list: modules attach to served ids, orphans are checked both ways, and the four extra rooms are exempted by name only (ADR-1306, ADR-1321, ADR-1327).
-- Tokens have one source, `docs/design/system/tokens.css`; `face/src/tokens.css` is generated and never hand-edited, as `.claude/scripts/core/face-tokens.mjs --check` enforces; no colour literal under `face/src/modules/**`; council renders `--accent-dim` and violet is the non-real family alone (ADR-1308, ADR-1322).
-- Every decision lives in a `.mjs` that node imports with no install: `fold.mjs` imports nothing from React, Vite or three, `View.tsx` carries no branch worth asserting, and Tailwind stops at L3 (ADR-1320, ADR-1323).
-- `POST /api/decide` stays byte-parity with `arc-inbox`: the parity fixture is green on every PR of this cycle and is a Phase 05 exit criterion (ADR-1302, ADR-1333).
-- Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
-- Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
-- The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
-- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
-- No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
-- No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
-- No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
-- Real vs simulated / rehearsal / planned are never mixed or summed; planned rooms render dotted and every write inside them says REHEARSAL (ADR-1313, ADR-1328).
-- Both moods ship together from Phase 01; light is never deferred to a later batch (ADR-1331).
-- The reference is the target: v0.7 is the canonical design and the ported harness's frozen strings are the bar (ADR-1318, ADR-1330).
-- REQ-10 claims the surface is operable over two real days and never claims the habit holds (ADR-1329).
-- Localhost + token; no PII in git, the door or the intake; escaped serializer (ADR-1312).
-- Zero product-code writes before explicit owner approval of this plan; each phase lands as its own feat branch + PR, and a phase closes through `/arc-phase-done` from the main clone before the next phase's branch opens (ADR-1332).
-- Tests green on CI per job, never run on this box; the browser harness runs on every leg with Node ≥20.19 and Node 18 is a named, counted skip; structural face lints (`face-pure`, colour-literal, facts-bundle) FAIL from birth, heuristic arms start WARN-first; two fresh attackers per new gate (decision logic + shell/OS boundary) carrying the lane's fixed-defect list; assert it RAN before asserting what it printed (ADR-1335, ADR-1336).
+- The module contract stays four files and a `View.tsx` holds no branch (ADR-1320, ADR-1359).
+- `POST /api/decide` stays byte-parity with `arc-inbox` (`tests/face/dash-parity.mjs`).
+- Zero new spine kinds; picker options and agent tiers ride EXISTING routes (`/api/ops`, `/api/roster`).
+- Every write verb plans first and applies on the plan id (ADR-1339); every session starts only from a click as `arc-run --process NAME --driver NAME` (ADR-1326).
+- Nothing in the face deploys, publishes or pushes (ADR-1366, AGENTS.md).
+- Generated files are regenerated, never hand-edited (rooms.generated.json, docs/wiki, sync golden, compiled commands).
+- No key, token or credential in the tree; the logic attacker's credentials live in the owner's environment (ADR-1368).
+- Branch-only writes; `main` untouchable from the face; merge is the owner's.

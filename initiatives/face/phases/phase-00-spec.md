@@ -1,86 +1,54 @@
-# Phase 00 — Harness steel thread: v0.7 in, L3 built on CI, the ported smoke opening today's rooms
+# Phase 00 — Hands First part 1, recorded: PR #449 closed on its evidence
 
-**Goal (one line):** v0.7 lands as the canonical reference with its 36-module contract frozen, and a bats suite builds `face/` and opens every served room in a real headless Chrome on every CI leg with Node ≥20.19 (ADR-1336).
-**Appetite:** 1 day spent of 2 days allotted, the rest banked forward (ADR-1339) — hard stop at 2 days without a green browser suite (ADR-1336)
+**Goal (one line):** REQ-01 — record the Hands First work that merged before this kickoff (PR #449, `6012c36`) as the cycle's steel thread, and close it on the evidence it already carries.
+**Appetite:** 0.5 days (gather and file the evidence 0.25d · owner read + `/arc-phase-done 00` 0.25d)
 **Depends on:** none
-**Serves:** no REQ (steel thread) — it de-risks REQ-01 and REQ-09 before any dependent work.
-**Branch:** `feat/face-v2-00`
-**Preconditions (STOP if absent):** the owner has approved PLAN.md — a `decision.recorded` answering the kickoff `approval.requested{gate: kickoff}`, whose ULID is written in PROGRESS.md § Now — and the kickoff PR has merged to `main`.
+**Serves:** REQ-01
+**Branch:** `feat/face-v3-00-record` from `origin/main` after the kickoff PR merges (evidence, its audit tool and tracker only — no product code)
+
+Decisions it records: ADR-1357 (strip + drawer), ADR-1358 (frame-owned tabs), ADR-1359 (no View branch), ADR-1360 (org chart), ADR-1361 (not-ready sessions named), ADR-1362 (placeholders as examples), ADR-1363 (shell papercuts), ADR-1364 (the audit as proof).
+
+Why it exists: the owner's 30-minute timebox (2026-10-21) built and merged FV3-A…H before any kickoff. Arc has no tracked home for a change without a cycle, so this phase is that home. It is closed on evidence, never rebuilt.
 
 ## Exit criteria (Definition of Done)
-
-**Intake (ADR-1318)**
-- [ ] v0.7 source copied from `E:/Work_Hub/01_Automemory/arc-face-hq2/assets/arcface` to `docs/design/reference/face-hq/assets/arcface/`, **excluding** `node_modules/`, `dist/`, `.shots/`; the v0.4 tree moves to `docs/design/reference/face-hq/assets/arcface-v0.4/` with a `SUPERSEDED.md`; `docs/design/explore/face-hq-v{1,2}/` gain a superseded note — nothing deleted.
-- [ ] PII grep of the whole intake (owner email, phone numbers, LexOS contact values held in `~/.arc-private/legal/lexos`) is clean; any file that carries them is excluded and named in `SOURCE.md`. The arc repo is public.
-- [ ] `docs/design/reference/face-hq/SOURCE.md` rewritten against v0.7 — form · where · what — and the four corrections on record (PLAN-face-v2 §1): **(1)** v0.7 renders violet for council AND simulated; the token law keeps council `--accent-dim` (ADR-1322) · **(2)** v0.7's `--blue` (neutral progress) is adopted · **(3)** `src/data/arcFacts.js` (137 KB facts snapshot) never enters the product (ADR-1324) · **(4)** v0.7's browser-side brain with a pasted key and `approve`/`reject` actions is not the product's Ask (ADR-1325).
-- [ ] `docs/design/system/hq-design-system-v0.7.md` copied from `E:/Work_Hub/01_Automemory/arc-face-hq2/docs/superpowers/specs/2026-09-15-hq-design-system.md`.
-
-**Contract**
-- [ ] `initiatives/face/contracts/modules-v2.json`, derived by a script from `src/hq/roomRegistry.js` + `rooms.generated.json`, never typed by hand: one row per module — `id` (always the SERVED id) · `alias` (the v0.7 id when it differs) · `ring` (read from `rooms.generated.json` for served ids and from `roomRegistry.js` for extras; both carry it and agree today — on disagreement the served ring wins and the delta report names it) · `class` (`served` | `served-planned` | `extra`) · v0.7 `reads` — plus the served entries that get no module (`chat-mcp` generic, `lane` template). Expected per PLAN § Module inventory: 36 modules = 29 same-id + 3 renamed + 4 extra; if the script disagrees, its output wins and the delta report says why.
-- [ ] `initiatives/face/evidence/phase-00/delta-report.md` names every renamed id (`today`←overview · `engine-room`←engine · `council-chamber`←council), every extra (ADR-1327), the served-planned rooms (ADR-1328), and the served entries with no v0.7 design.
-- [ ] `initiatives/face/fixed-defects.md` seeded — the lane's running list of already-fixed defects that every attacker prompt this cycle carries: each Cycle 15 hole recorded in `initiatives/face/archive/**` and the arc-face rows of `docs/retro-log.md`, one line each (defect · file it was fixed in · the pattern to check elsewhere). Every attacker pass this cycle appends to it.
-- [ ] v0.7 baseline shots for REQ-01: the reference's own `scripts/shots.mjs` on the owner's box, 1440×1000, both moods, one shot per v0.7 room; PNGs stay local and gitignored (Cycle 15's `.playwright-mcp/` precedent); `initiatives/face/evidence/phase-00/baseline-shots.json` commits room id · mood · sha256 · viewport · Chrome version.
-
-**Harness thread (ADR-1330, ADR-1335)**
-- [ ] `face/scripts/cdp.mjs` — dependency-free RFC 6455 client (text frames, client masking) + CDP calls (launch, navigate, evaluate, console + exception stream). No `WebSocket` global.
-- [ ] `tests/face/fake-cdp.mjs` + `tests/face/cdp-client.mjs` — the client proven against a scripted fake on all 5 CI configurations (no Chrome, no install).
-- [ ] `face/scripts/smoke.mjs` ported from v0.7: Chrome discovery per ADR-1335 (`CHROME_BIN` only if set · Windows `App Paths` registry key then `%ProgramFiles%` · macOS `/Applications` · Linux `command -v google-chrome`) → FAIL naming every place tried; prints the runner image name; `--no-sandbox` on Linux; room ids read from `/api/rooms`, never a hand list; per-room console errors + exceptions; a JSON report printed to stdout.
-- [ ] `tests/face-browser.bats`: (1) prints `node -v` and the runner image; Node <20.19 → prints `SKIP: Vite 8 and @tailwindcss/oxide require Node >=20.19` and the skip is asserted as a skip — and a SKIP on any leg other than the Node 18 leg FAILs, so a Node-20 leg pinned below 20.19 can never pass silently; (2) offline lockfile platform check FAILs if `face/package-lock.json` lacks the native optional entries this OS needs for what the lockfile holds TODAY (Vite 8's native bindings) — Phase 01 extends the same check to `@tailwindcss/oxide-*`; (3) `npm ci --include=optional` in `face/`; (4) `vite build`; (5) door started `--spine` over a fixture from `tests/fixtures/face/gen-spine.mjs` (exists — `tests/face/dash-doors.mjs` uses it); (6) `vite preview` with `ARC_DASH_ORIGIN` and a check that `/api/health` answers through the preview proxy; (7) smoke opens every OPENABLE room `/api/rooms` serves — 34 entries today, 33 openable; each `template` entry (today only `lane`) is printed by name as not opened, never silently dropped; (8) every executing job prints `face-browser: RAN leg=OS/NODE` — the file is picked up by the CI sharder (`shard-tests.mjs` refuses a file that lands in no shard), and the evidence lists that line per job, so "added a bats file" is never mistaken for "the gate ran".
-- [ ] Vacuous-pass guard, BOTH directions: the suite asserts `opened == openable > 0` (openable = `/api/rooms` entries whose `status` is not `template` — 33 today; PLAN § Module inventory) BEFORE asserting 0 console errors and 0 exceptions (a stub smoke that never navigates is kept as the mutant control and FAILs); AND a planted page that throws a real console error is opened over REAL Chrome — not `fake-cdp.mjs` — and the suite FAILs on it, proving the real socket path detects an error (retro-log 2026-08-17: a fake whose right answer equals the failure's answer proves nothing).
-- [ ] No inline program strings: `tests/face-browser.bats` and `face/scripts/*` run no `node -e` / `bash -c` program text; every program is its own file (CLAUDE.md shell-string rule), and `tests/embedded-program-probe.mjs` — the existing automated half of that rule — scans the new files (its `scanned=` count rises), extended if it does not already reach them.
-- [ ] `cdp.mjs` and `smoke.mjs` main-guards realpath BOTH `argv[1]` and `import.meta.url`; a symlinked-tmpdir mutant is the fixture (retro-log 2026-08-19, the fourth recurrence).
-- [ ] A v1 room that throws is fixed only if the fix is one line; otherwise it goes on a named baseline list in the delta report that can only shrink, its Phase 03 module must empty it, and the suite's 0-exceptions assertion excludes exactly the ids on that list — never a global relaxation.
-- [ ] A measured shard weight for `tests/face-browser.bats` is committed to `tests/shard-timings.json`, the table the CI sharder reads — never the 16 s default; before editing that shared table, `git log origin/main --oneline -5 -- tests/shard-timings.json` runs per `.claude/rules/lanes.md` § Shared files, and a collision is resolved by re-measuring on the merged tree, never by keeping the earlier number.
-
-**Close**
-- [ ] CI green per job on the PR head SHA (`gh run view <id> --json jobs`, head SHA = local HEAD): the browser arm EXECUTED on ubuntu Node 20 + 22, macOS and windows; the counted SKIP on ubuntu Node 18.
-- [ ] Two fresh attackers — one on the smoke/CDP decision logic, one on the bats suite's shell/OS boundary — each carrying the lane's fixed-defect list; holes fixed and pinned as fixtures.
-- [ ] `/arc-phase-done 00` from the main clone; PROGRESS row ✅ + done-log.
+- [ ] **Capability on `main`:** measured by `initiatives/face/evidence/phase-00/audit.cjs` on product code `6012c36` (or the later `main` SHA, named) and filed as `initiatives/face/evidence/phase-00/audit-SHA.md`. The file is the script's stdout unedited: a per-room markdown table, then exactly these four summary lines, each of which must read as shown (the room set is derived from `/api/rooms`, never from this file):
+  - `first verb < 768 px: N/N rooms with verbs · console errors: 0` — both N equal (23/23 of 36 served rooms in the kickoff dry-run, 2026-10-21);
+  - `org chart: 71 role chips · 10 department boxes · 24 after the Vacant filter`;
+  - `not-ready sessions (door): 6 -- develop.close-phase, review-ship.qa, review-ship.ship, executor.hire, absorb.adopt, growth.draft` — the per-button "not built yet" render is read from CI's `face-browser` sessions line (criterion 2), not re-proven here;
+  - `ops planned 200 with their own placeholders: 32/32`.
+  A changed count is not a fail by itself if the door changed under it (a new room, role or op on `main`); the done log names the delta and its cause. A count that drops with no door change is a fail.
+- [ ] **Tests green:** `node .claude/scripts/review/ci-digest.mjs --sha d8f03de9a837ef7200e88ae1d6c304831f5a664a` (the PR head merged as `6012c36`) reads run 39551997252 19/19 `success` per job (needs the runner's `gh` auth). `main` has no push-triggered CI (`on: pull_request, workflow_dispatch`), so the merged tree is re-read by one `gh workflow run arc-ci --ref main` dispatch at close and `ci-digest.mjs --sha MAIN_SHA`, the SHA named in the done log.
+- [ ] **Live demo:** the owner's read of the pages on his main clone ("pages pathuten nice work", 2026-10-21, this session's chat) quoted with date and medium in `initiatives/face/evidence/phase-00/owner-demo.md`.
+- [ ] **Attack evidence:** the two boundary rounds are ALREADY at `initiatives/face/evidence/phase-00/attack-0991e16-r1-boundary.json` and `attack-7b0c082-r2-boundary.json` (moved there by the kickoff commit `255a713`); the three mediums (0991e16 B1, B2; 7b0c082 B1) are the two rows already appended to `initiatives/face/fixed-defects.md` by #449 (verify, do not re-add); the LOW residue is row D113 of `initiatives/face/debt-ledger.md` (verify). **Narrower than written, stated:** the logic surface did not run (no trial model) — carried to REQ-07 (Phase 04, area #449).
+- [ ] **Order deviation recorded:** the PROGRESS done-log line for Phase 00 says, in these words, "built and merged before its kickoff (the owner's 30-minute timebox, 2026-10-21); closed on evidence, not rebuilt".
+- [ ] **Tracker + receipts:** `/arc-phase-done 00 --lane face` run from the owner's MAIN clone (`E:/Work_Hub/01_Automemory/arc`, branch `main` pulled; a worktree cannot write the canonical spine) flips the row ✅, adds the done-log line with `t-to-phase0`, and emits `phase.closed{phase:"00"}` and `approval.requested{gate: phase-done, phase:"00"}` on the canonical spine; Phase 00 has no evidence bundle (ADR-0002 bundles start at Phase 02).
 
 ## Verification plan
-
-- **Test command:** `node tests/face/cdp-client.mjs` and `bats tests/face-browser.bats` — on CI only, every leg, read per job with `gh run view <id> --json jobs`; never run on this box.
-- **Expected failure first:** the tests are committed before the client: `node tests/face/cdp-client.mjs` fails `ERR_MODULE_NOT_FOUND … face/scripts/cdp.mjs`, and the bats arm `every served room opened` fails `opened=0 openable=33` (openable derived from `/api/rooms` at run time) against the stub smoke that exits without navigating (the stub stays as the mutant control).
-- **Live demo scenario:** after merge, from the main clone: `node .claude/scripts/hq/arc-face.mjs` → open the printed URL → the served rooms still render as before; then the owner opens the windows-leg job log and reads `face-browser: RAN` then `N/N rooms · 0 console errors · 0 exceptions · chrome=PATH`.
-- **Real-system check:** the PR's CI run — browser arm executed (not skipped) on 4 leg types, counted SKIP on Node 18; the reference runs from its own folder on the owner's box (`cd docs/design/reference/face-hq/assets/arcface && npm install && npm run dev`, its `node_modules/` gitignored by the folder's own `.gitignore`).
-- **Expected evidence:** `initiatives/face/evidence/phase-00/` — `delta-report.md` · `ci-jobs.json` · `smoke-log-excerpts.md` (per OS, from `gh run view --log`) · the two attacker reports.
+- **Order (STOP if absent):** (1) the kickoff PR is merged and the owner has stamped BOTH the freeze-exemption owner-ruling `01M5ER722G87D19PFDR7KFD48H` and the kickoff `approval.requested{gate: kickoff}` (its id is printed when it is emitted and is listed by `node .claude/scripts/hq/arc-inbox.mjs inbox`); (2) branch `feat/face-v3-00-record` from `origin/main` at that moment; (3) evidence; (4) PR; (5) the owner merges; (6) `/arc-phase-done 00 --lane face` from the main clone.
+- **Test command:** CI read first — `node .claude/scripts/review/ci-digest.mjs --sha d8f03de9a837ef7200e88ae1d6c304831f5a664a > /tmp/ci-d8f03de.txt`, then for each `face-browser` job id it lists: `gh api repos/technology-ashiq/arc/actions/jobs/JOB_ID/logs` (the API answers 302; follow the Location) `| grep -E "smoke: front-door|^flows:|^sessions:"`. Both outputs go verbatim into `initiatives/face/evidence/phase-00/ci-d8f03de.md`: the digest under `## ci-digest`, one `## face-browser JOB_ID (OS)` block per leg. Expected: 19/19 `success`; per leg 34/34 front door, 32/32 flows, 9/9 sessions. Read from CI, not re-run on the box (`testing.md`).
+- **Audit topology (who, where):** this session (cloud), not the owner's machine — a checkout of `main` at the SHA under test with a COPY of the owner's canonical spine (`.claude/state/hq/events/*.jsonl`, staged read-only from `E:/Work_Hub/01_Automemory/arc`); door + app started by `node .claude/scripts/hq/arc-face.mjs --no-open --token TOKEN` (defaults: app `http://localhost:5180/`, door `http://127.0.0.1:8317`); then `APP=http://localhost:5180/ DOOR=http://127.0.0.1:8317 ARC_DASH_TOKEN=TOKEN PLAYWRIGHT_PATH=/opt/npm-tools/node_modules/playwright node initiatives/face/evidence/phase-00/audit.cjs > initiatives/face/evidence/phase-00/audit-SHA.md`. The copy is never written back; the audit only reads and plans (plan seals nothing on the spine). The kickoff dry-run of exactly this command on 2026-10-21 printed the four lines of exit criterion 1.
+- **Expected failure first:** the "before" numbers are quoted from `docs/strategy/plans/PLAN-face-v3.md` §1 lines 35–36 (org first verb ~6,000 px; page heights), line 43 (6/15 dead session buttons) and line 46 (13/32 ops rejecting their placeholder), measured 2026-10-21 on `17c07a5`; cited, not re-run. The audit script's own red: pointed at `17c07a5` it would report rooms with verbs and no strip (`—`), which its summary counts as failing.
+- **Live demo scenario:** open `#/org`, `#/bench`, `#/develop` at 1366×768: the strip is under the header, a strip button opens the drawer with its form, the org opens on the chart, `develop.close-phase` reads "not built yet" (exit criterion 1, the 6/6 count).
+- **Real-system check:** the owner's canonical spine and door on his main clone.
+- **Expected evidence:** `initiatives/face/evidence/phase-00/{audit.cjs, audit-SHA.md, ci-d8f03de.md, owner-demo.md, attack-0991e16-r1-boundary.json, attack-7b0c082-r2-boundary.json}` and the two phase-done receipts' ids in the done log.
+- **Who runs `/arc-phase-done 00`:** this session, against the owner's main clone through the device shell (owner's ruling at kickoff: "Naan un machine-la emit pannuren") — `cd E:/Work_Hub/01_Automemory/arc`, `--dry-run` first, then the real emit; the tracker edit lands on the Phase 00 branch, never on `main`.
 
 ## Rabbit holes in this phase
-
-- **Porting `flows.mjs` now.** Detour: flows come in Phase 05 with the work door (ADR-1334); this phase ports smoke only.
-- **Fixing v1 rooms Phase 03 replaces.** Detour: the one-line rule and the shrinking baseline list above.
-- **Chrome timing flakes.** Detour: poll a DOM condition with a hard cap; never a longer fixed sleep.
-- **A lockfile that fails the platform check.** Detour: regenerate on the owner's box with `npm install --os=<os> --cpu=<cpu>` for each CI platform; never commit `node_modules`.
+Re-opening any FV3-A…H decision — they are merged and recorded (ADR-1357…1364); a defect found while re-measuring becomes a Phase 01 slice via `/arc-change`, not a Phase 00 edit.
 
 ## Out of scope for this phase
-
-Tokens, kit and the light mood → Phase 01 · shell, module folders, `face-pure` → Phase 02 · any module → Phase 03 · flows and the work door → Phase 05.
+Records tab, pickers, the CI gate and the logic attacker (Phase 01).
 
 ## Your-setup / pending
-
-- The owner keeps `E:/Work_Hub/01_Automemory/arc-face-hq2/` readable until the intake lands — both `assets/arcface/` and `docs/superpowers/specs/2026-09-15-hq-design-system.md`; if a `CHANGES-v0.8.md` has appeared, the owner rules which version is intake before the copy.
-- If the lockfile platform check FAILs on a non-Windows configuration (likely — the lockfile was generated on Windows), the session supplies the per-platform `npm install --os=… --cpu=…` commands and the lockfile is regenerated on the owner's box inside this phase's 2 days.
-- The owner runs the git for `feat/face-v2-00` and the merge; the close runs from the main clone.
+Stamp the freeze-exemption owner-ruling `01M5ER722G87D19PFDR7KFD48H` and the kickoff approval in the face inbox (both precede the Phase 00 branch); merge the kickoff PR; read the pages (done 2026-10-21).
 
 ## Non-negotiables (verbatim from PLAN)
 
-<!-- Generated from PLAN.md at kickoff; resynced by /arc-change. Never hand-edited. -->
-
-- The served registry is the only room list: modules attach to served ids, orphans are checked both ways, and the four extra rooms are exempted by name only (ADR-1306, ADR-1321, ADR-1327).
-- Tokens have one source, `docs/design/system/tokens.css`; `face/src/tokens.css` is generated and never hand-edited, as `.claude/scripts/core/face-tokens.mjs --check` enforces; no colour literal under `face/src/modules/**`; council renders `--accent-dim` and violet is the non-real family alone (ADR-1308, ADR-1322).
-- Every decision lives in a `.mjs` that node imports with no install: `fold.mjs` imports nothing from React, Vite or three, `View.tsx` carries no branch worth asserting, and Tailwind stops at L3 (ADR-1320, ADR-1323).
-- `POST /api/decide` stays byte-parity with `arc-inbox`: the parity fixture is green on every PR of this cycle and is a Phase 05 exit criterion (ADR-1302, ADR-1333).
-- Zero new spine kinds: every op emits a kind already in `validate.mjs` KINDS, and an op that would need a new one does not ship (ADR-0026, ADR-1334).
-- Branch-only writes: a file-touching op writes to a `feat/face-*` branch, shows the diff and stops; `main` is untouchable and merge never exists in the face (ADR-1326).
-- The WORK door has no logic of its own: each op shells the same script a hand-run calls, proven per op by a no-second-path fixture; an op without a green fixture ships read-only with an honest badge (ADR-1326).
-- The SESSION door starts `arc-run --driver …`, never a harness binary (ADR-1326).
-- No provider key in the browser; Ask keeps zero write tools and `ASK_ACTIONS` = `open_room` · `set_speed` · `enter_hq` (ADR-1325).
-- No facts bundle under `face/src/**`: a module cites a door route or renders `NOT SERVED` (ADR-1324).
-- No new surface outside `.claude/scripts/` this cycle; the layout move belongs to the distribute lane, in one atomic PR (ADR-1319).
-- Real vs simulated / rehearsal / planned are never mixed or summed; planned rooms render dotted and every write inside them says REHEARSAL (ADR-1313, ADR-1328).
-- Both moods ship together from Phase 01; light is never deferred to a later batch (ADR-1331).
-- The reference is the target: v0.7 is the canonical design and the ported harness's frozen strings are the bar (ADR-1318, ADR-1330).
-- REQ-10 claims the surface is operable over two real days and never claims the habit holds (ADR-1329).
-- Localhost + token; no PII in git, the door or the intake; escaped serializer (ADR-1312).
-- Zero product-code writes before explicit owner approval of this plan; each phase lands as its own feat branch + PR, and a phase closes through `/arc-phase-done` from the main clone before the next phase's branch opens (ADR-1332).
-- Tests green on CI per job, never run on this box; the browser harness runs on every leg with Node ≥20.19 and Node 18 is a named, counted skip; structural face lints (`face-pure`, colour-literal, facts-bundle) FAIL from birth, heuristic arms start WARN-first; two fresh attackers per new gate (decision logic + shell/OS boundary) carrying the lane's fixed-defect list; assert it RAN before asserting what it printed (ADR-1335, ADR-1336).
+- The module contract stays four files and a `View.tsx` holds no branch (ADR-1320, ADR-1359).
+- `POST /api/decide` stays byte-parity with `arc-inbox` (`tests/face/dash-parity.mjs`).
+- Zero new spine kinds; picker options and agent tiers ride EXISTING routes (`/api/ops`, `/api/roster`).
+- Every write verb plans first and applies on the plan id (ADR-1339); every session starts only from a click as `arc-run --process NAME --driver NAME` (ADR-1326).
+- Nothing in the face deploys, publishes or pushes (ADR-1366, AGENTS.md).
+- Generated files are regenerated, never hand-edited (rooms.generated.json, docs/wiki, sync golden, compiled commands).
+- No key, token or credential in the tree; the logic attacker's credentials live in the owner's environment (ADR-1368).
+- Branch-only writes; `main` untouchable from the face; merge is the owner's.

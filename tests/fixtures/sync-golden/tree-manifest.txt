@@ -306,7 +306,7 @@
 .claude/scripts/hq/lib/face/discover/route.mjs	11f58d39cd507bdfdb6c96f62c124d58c42738af9b2a9537f22b7a4eb663251a
 .claude/scripts/hq/lib/face/models.mjs	dee2063e634ff21cbe6c4c30b5060d0c5269c89a7a866b383a662ed50b96b684
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
-.claude/scripts/hq/lib/face/reads.mjs	8aedfeaacc8ee48eec6ee21ffcc6b7bf4bf274b31dd289b6dfe13633994899ac
+.claude/scripts/hq/lib/face/reads.mjs	178668845cc49bf8583e86881581258d0f3a40e0b632838bd92eeee0f3c06ac7
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	f1e95bbda2066ca6b6172fa020745b407d740919db08aeab32ebf754c64e608f
 .claude/scripts/hq/lib/face/work-door.mjs	53b1accf8f94fe2b3dbaa2b843034a7e00a4304ca27711772827c90f030c880f
