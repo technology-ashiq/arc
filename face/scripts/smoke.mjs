@@ -477,6 +477,7 @@ export function judge(report) {
   if (report.served && report.served.panels === null) reasons.push("the served panel count could not be read in every opened room");
   // Cycle 17 P01 (REQ-04): a verb drawn below the first screen is a buried verb, and an unread top is not a pass.
   if (!report.firstVerb || report.firstVerb.unread > 0) reasons.push("the first verb's place could not be read in every opened room");
+  else if (report.firstVerb.rooms === 0) reasons.push("no opened room drew a verb: the first-verb check measured nothing");
   else if (report.firstVerb.over.length > 0) reasons.push(`first verb at or below ${FIRST_VERB_MAX_PX} px: ${report.firstVerb.over.join(",")}`);
   // Phase 15 (ADR-1354): a panel that drew no availability is a field the room could not name.
   // A report that never measured it is refused too, never passed on the bats wrapper alone (attack c0fc549 B6).
@@ -990,11 +991,16 @@ export async function runSmoke(opts, log = (line) => process.stdout.write(line +
           // highest drawn strip button, from the top of the page. -1 is a room with no verb. The frame is put back to
           // the suite's 1440x1000 before the next read, so no other count is measured on a different frame.
           await page.send("Emulation.setDeviceMetricsOverride", { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false });
-          const firstVerb = await page.send("Runtime.evaluate", {
-            expression: `(function () { var all = document.querySelectorAll("[data-strip-item]"); var top = null; for (var i = 0; i < all.length; i++) { var e = all[i]; if (e.getClientRects().length === 0) continue; var t = e.getBoundingClientRect().top + window.scrollY; if (top === null || t < top) top = t; } return top === null ? -1 : Math.round(top); })()`,
-            returnByValue: true,
-          });
-          await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+          let firstVerb;
+          try {
+            firstVerb = await page.send("Runtime.evaluate", {
+              expression: `(function () { var all = document.querySelectorAll("[data-strip-item]"); var top = null; for (var i = 0; i < all.length; i++) { var e = all[i]; if (e.getClientRects().length === 0) continue; var t = e.getBoundingClientRect().top + window.scrollY; if (top === null || t < top) top = t; } return top === null ? -1 : Math.round(top); })()`,
+              returnByValue: true,
+            });
+          } finally {
+            // Restored whatever the read did, so no later count is measured on the 1366 frame (attack 7d3f02f B5).
+            await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+          }
           room.firstVerb = Number.isInteger(firstVerb.result?.value) ? firstVerb.result.value : null;
           // ADR-1328: a planned room's REHEARSAL cards, whether the room is marked planned, and -- in a planned
           // room only -- how many times it drew LIVE as a word of its own (F3). Read from innerText, so a chip

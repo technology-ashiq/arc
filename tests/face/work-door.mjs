@@ -663,7 +663,7 @@ try {
         let gone = "";
         try { pd.apply("fixture.pick", { planId: ok.planId }); gone = "APPLIED"; } catch (e) { gone = `${e.code} ${e.message}`; }
         await pd.settled();
-        if (!/^BAD_INPUT /.test(gone) || !gone.includes("beta")) return `value gone at apply: ${gone}`;
+        if (!/^OPTION_GONE /.test(gone) || !gone.includes("beta")) return `value gone at apply: ${gone}`;
         if (readFileSync(counter, "utf8").length !== before) return "the tool ran on a value that left its list";
         return "";
       };

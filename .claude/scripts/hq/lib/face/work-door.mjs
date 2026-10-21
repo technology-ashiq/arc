@@ -303,7 +303,12 @@ export function createWorkDoor(ctx, opts = {}) {
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
     // REQ-03 (ADR-1369): a picker's options are read again here, so a value that left its list between the plan and the
     // click -- a venture removed, a month rolled out of the window -- is refused before the claim, never applied.
-    validateInput(op, p.values);
+    // A source that cannot be read stays FIELD_UNKNOWN; a value that left a list it was read from is OPTION_GONE, so the
+    // owner can tell "the list moved" from "the list is unreadable" (attack 7d3f02f B4).
+    try { validateInput(op, p.values); } catch (e) {
+      if (e instanceof OpError && e.code === "BAD_INPUT") throw new OpError("OPTION_GONE", `a value this plan was made with is no longer offered -- plan again. ${e.message}`);
+      throw e;
+    }
 
     // THE CLAIM. Synchronous, before the first await: a second apply of this plan id, from anywhere, sees "running"
     // and replays -- it cannot start a second run.

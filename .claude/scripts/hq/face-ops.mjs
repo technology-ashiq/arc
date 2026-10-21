@@ -36,7 +36,7 @@
 //
 // Exit: 0 printed | 2 bad arguments.
 
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { parseVentures } from "./lib/ledger/ventures.mjs";
@@ -215,6 +215,18 @@ export function lastMonths(now, n = 12) {
   return out;
 }
 
+/**
+ * Whether a listed entry is what its name claims, read with lstat so a symlink or junction is never followed: a
+ * directory named `x.json`, or a link pointing out of the tree, is not a pickable name (attack 7d3f02f B1, B2).
+ * @param {string} p @param {"file" | "dir"} kind
+ */
+function entryIs(p, kind) {
+  try { const st = lstatSync(p); return kind === "file" ? st.isFile() : st.isDirectory(); } catch { return false; }
+}
+
+/** A refused value as the refusal echoes it: printable ASCII only, so no control or line-break character rides out. */
+const echo = (v, n) => String(v).slice(0, n).replace(/[^ -~]/g, "?");
+
 /** An error's code, or THREW. @param {unknown} e @returns {string} */
 const errCode = (e) => (e !== null && typeof e === "object" && typeof (/** @type {any} */ (e).code) === "string" ? /** @type {any} */ (e).code : "THREW");
 
@@ -225,7 +237,8 @@ const errCode = (e) => (e !== null && typeof e === "object" && typeof (/** @type
  */
 function leadsCampaigns() {
   try {
-    const names = readdirSync(join(leadsStorePath(), "campaigns")).filter((f) => /^[a-z0-9-]{1,64}\.json$/.test(f)).map((f) => f.slice(0, -5));
+    const dir = join(leadsStorePath(), "campaigns");
+    const names = readdirSync(dir).filter((f) => /^[a-z0-9-]{1,64}\.json$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -5));
     return { failure: "", options: names.sort() };
   } catch (e) {
     return errCode(e) === "ENOENT" ? { failure: "", options: [] } : { failure: errCode(e), options: [] };
@@ -238,7 +251,8 @@ function legalVentures() {
   /** @type {string[]} */
   let fixtures = [];
   try {
-    fixtures = readdirSync(join(HERE, "..", "..", "..", "tests", "fixtures", "legal", "ventures")).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n));
+    const dir = join(HERE, "..", "..", "..", "tests", "fixtures", "legal", "ventures");
+    fixtures = readdirSync(dir).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n) && entryIs(join(dir, n), "dir"));
   } catch { fixtures = []; }
   // A registry that could not be read leaves the fixtures still nameable; only with neither is the field unknown.
   return { failure: reg.failure !== "" && fixtures.length === 0 ? reg.failure : "", options: [...new Set([...fixtures, ...reg.ventures])].sort() };
@@ -247,7 +261,8 @@ function legalVentures() {
 /** The agents a seat can bind: every `.claude/agents/<name>.md` (REQ-03). */
 function agentNames() {
   try {
-    const names = readdirSync(join(HERE, "..", "..", "agents")).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f)).map((f) => f.slice(0, -3));
+    const dir = join(HERE, "..", "..", "agents");
+    const names = readdirSync(dir).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -3));
     return { failure: "", options: names.sort() };
   } catch (e) {
     return { failure: errCode(e), options: [] };
@@ -942,7 +957,7 @@ export function validateInput(op, input) {
     if (f.type === "select") {
       const options = read !== null ? read.options : f.options;
       // The field and the value are both named (REQ-03): "must be one of" alone left the owner guessing what was sent.
-      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) "${raw.slice(0, 80)}" is not one of the options the door serves: ${options.length ? options.join(", ") : "none yet -- create one first"}`);
+      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) "${echo(raw, 80)}" is not one of the options the door serves: ${options.length ? options.join(", ") : "none yet -- create one first"}`);
     } else if (f.type === "int") {
       if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new OpError("BAD_INPUT", `${f.label} must be a whole number`);
       const n = Number(raw);
@@ -961,8 +976,12 @@ export function validateInput(op, input) {
       if (!new RegExp(`^(?:${f.pattern})$`, "u").test(raw)) throw new OpError("BAD_INPUT", `${f.label} is not in the shape this op takes (${f.placeholder || f.pattern})`);
       // A text field with a source is a list of existing names: each one must be in the source's own read.
       if (read !== null) {
-        const unknown = raw.split(",").filter((x) => !read.options.includes(x));
-        if (unknown.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${unknown.map((x) => `"${x.slice(0, 64)}"`).join(", ")}, which the door does not hold`);
+        const names = raw.split(",");
+        const unknown = names.filter((x) => !read.options.includes(x));
+        if (unknown.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${unknown.map((x) => `"${echo(x, 64)}"`).join(", ")}, which the door does not hold`);
+        // A name given twice binds one thing twice (attack 7d3f02f B3).
+        const twice = names.filter((x, i) => names.indexOf(x) !== i);
+        if (twice.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${twice.map((x) => `"${echo(x, 64)}"`).join(", ")} more than once`);
       }
     }
     out[f.name] = raw;
