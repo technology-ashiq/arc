@@ -1,0 +1,88 @@
+{
+  "phase": "04",
+  "commit": "8199ab574706f4c8cad0579deb8ac9e3d0b3d58c",
+  "short": "8199ab57",
+  "generated": "2026-10-22T03:27:21Z",
+  "files": [
+    {
+      "name": "D106/attack-496fc35-r1-boundary.json",
+      "sha256": "6f318bd811769694881962643b6b234b1bb1b1af6d0ee66b7861827884f98f04"
+    },
+    {
+      "name": "D106/attack-b06a254-r1-logic.json",
+      "sha256": "0f02aaf2f392430cc95bde9ea9cc55d0a31b30abd24bd41945aba1a5652b97b0"
+    },
+    {
+      "name": "D95a/attack-6b47ad9-r1-logic.json",
+      "sha256": "ea8110503d422ac09639c64b88b78f0f1393631472a4c1ed0171a0ea339d67a5"
+    },
+    {
+      "name": "D95a/attack-abf6f1b-r1-boundary.json",
+      "sha256": "5ba86e340ead3ea933724f63621d591211a575216f22e673432d113d9fb7059a"
+    },
+    {
+      "name": "D95b/attack-5143a43-r1-logic.json",
+      "sha256": "bd464a5b4586c4967b7e7027f9259ae8e40685054c23d94fa43d957968be58b0"
+    },
+    {
+      "name": "D95b/attack-c831c22-r1-boundary.json",
+      "sha256": "b11386a810ec2813cec132dd092ae54f12aab8e6d21cb811cef74499f55cd4f2"
+    },
+    {
+      "name": "D95b/empty-reasoning-off/attack-50327ad-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "D96/attack-1cf6a5f-r1-boundary.json",
+      "sha256": "902f538c6ea5088b2a8d591469399dda218322fc65b2430e6f96346e4ac0d426"
+    },
+    {
+      "name": "D96/attack-7b409a3-r1-logic.json",
+      "sha256": "c2782ab2c4b80b3598dca964850f2217bdf1f229acb6a9e767532775bea0f798"
+    },
+    {
+      "name": "D96/empty-reasoning-off/attack-e227a8c-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "D99/attack-6c37cd4-r1-logic.json",
+      "sha256": "8adde33128fdd3696722e2c02c58142a591abe88865e9f1b1415389fbf52ebf5"
+    },
+    {
+      "name": "D99/attack-6cd5a3c-r1-boundary.json",
+      "sha256": "d04e50c4b144662acffb1c1f838564120b851336190947c44631d87b63cdc73a"
+    },
+    {
+      "name": "D99/empty-reasoning-off/attack-be675fd-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "PR449/attack-686d3f8-r1-boundary.json",
+      "sha256": "b8269ecee7c8797e9902fc32d8d19965c50ec3fe94b72329c45433d6f7b11e4d"
+    },
+    {
+      "name": "PR449/attack-686d3f8-r1-logic.json",
+      "sha256": "23d7c057e95b6070bdc2897b53e300de4a05999d0a56052f2c0b1ad585993372"
+    },
+    {
+      "name": "attack-bases.md",
+      "sha256": "4cb53d0f1ee6070a3b0b4e3105ac4cc6772c167e5196dc31712e59ec793beb67"
+    },
+    {
+      "name": "self/attack-16af00b-r1-boundary.json",
+      "sha256": "04a92b5609117bb524b4441e025c4dce588788977910505a569cb0cc6885012e"
+    },
+    {
+      "name": "self/attack-16af00b-r1-logic.json",
+      "sha256": "8ee4db5adde9ed4b2bce8162955c4bb077135d837af1a5018973e9da32fddb14"
+    },
+    {
+      "name": "self/attack-ab29eeb-r2-boundary.json",
+      "sha256": "d13d82ecfa4c7716b79b30f69339f435d591ba09b0cac4ef442353dbe2fe262b"
+    },
+    {
+      "name": "self/attack-ab29eeb-r2-logic.json",
+      "sha256": "bb7c8b565b691d7a26623bc2df79c22f01626af3526bbddd5fb02bf8f853d8f1"
+    }
+  ]
+}
