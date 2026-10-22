@@ -87,7 +87,9 @@ export const SESSIONS = Object.freeze([
   row("develop.close-phase", "develop", "Close a phase", "phase-close", "phase.closed", [lane, phase]),
   row("review-ship.review", "review-ship", "Review the diff", "review-diff", "review.completed", [Object.freeze({ name: "base", label: "Base branch", placeholder: "main", type: "text", max: 100, pattern: "[A-Za-z0-9][A-Za-z0-9._/-]*", required: false })]),
   row("review-ship.qa", "review-ship", "Run QA", "qa-run", "qa.completed", [text("url", "URL", "http://localhost:3000", 300, true)]),
-  row("review-ship.ship", "review-ship", "Ship", "ship-run", "ship.done", [], { confirmStep: "deploy" }),
+  // Cycle 17 P02 (ADR-1366): the session ends on the owner's deploy gate and deploys nothing, so there is no deploy step
+  // left to confirm; ship.done is claimed nowhere.
+  row("review-ship.ship", "review-ship", "Prepare ship", "ship-run", "approval.requested", []),
   row("executor.hire", "engine-room", "Hire (certification)", "hire-certify", null, [text("candidate", "Candidate", "the runtime or agent to certify", 200, true)]),
   row("executor.dispatch", "engine-room", "Dispatch a process", "", "run.completed", [], { pickProcess: true }),
   row("memory.log-lesson", "memory", "Log a lesson", "lesson-log", "note.logged", [text("lesson", "The lesson", "one line -- what was learned", 500, true)]),

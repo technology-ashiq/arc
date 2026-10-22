@@ -16,7 +16,7 @@ binds:
   agents: []
   skills: []
   scripts: []
-  process: null
+  process: 'ship-run'
   tier: null
 reports_to: 'solution-architect'
 escalate_to: 'solution-architect'

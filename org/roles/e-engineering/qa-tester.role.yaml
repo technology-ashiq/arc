@@ -17,7 +17,7 @@ binds:
     - 'qa-tester'
   skills: []
   scripts: []
-  process: null
+  process: 'qa-run'
   tier: 'balanced-workhorse'
 reports_to: 'solution-architect'
 escalate_to: 'solution-architect'

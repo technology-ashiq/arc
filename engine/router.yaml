@@ -308,6 +308,29 @@ classes:
     max_cost_currency: USD
     fallback: []
 
+  # face Cycle 17 Phase 02 (REQ-06, ADR-1366). A QA pass and a prepared ship each run fixed steps against an explicit
+  # contract and seal through one writer script that reads CI itself: structured production, which ADR-0069 block (a)
+  # seats in balanced-workhorse. Neither grades another's work. `fallback: []`: only claude-code fences the commands.
+  qa-run:
+    tier: balanced-workhorse
+    driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 1800000
+    # one browser pass by the qa-tester agent; $1 is generous (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 100
+    max_cost_currency: USD
+    fallback: []
+
+  ship-run:
+    tier: balanced-workhorse
+    driver: claude-code
+    max_attempts: 2
+    max_wall_ms: 1800000
+    # four fixed commands and one receipt; $0.50 is generous (USD cents; notional for claude-code, ADR-0231)
+    max_cost: 50
+    max_cost_currency: USD
+    fallback: []
+
   # Phase 06 slice 04 (face lane, memory ring). Choosing a rule's home and writing it in that file's style is
   # production against /arc-retro step 2's fixed homes, and it proposes only: the owner judges the branch before
   # anything changes. So ADR-0069 block (a)'s balanced-workhorse, not a judgment seat. `fallback: []`: only claude-code

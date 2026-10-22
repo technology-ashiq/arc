@@ -1,0 +1,57 @@
+name: ship-run
+version: 1.0.0
+role: sre-oncall
+intent: "Prepare a ship: lint, build check, a per-job CI read, then ask the owner for the deploy gate. Deploys nothing."
+permissions: declared
+
+# face Cycle 17 Phase 02 (REQ-06, ADR-1366). The review-ship room's "Prepare ship" row starts this through
+# `arc-run --process ship-run --driver <name>` after an owner click. It ENDS on approval.requested{gate: deploy}:
+# there is no deploy step, approving the gate triggers nothing, and the deploy stays the owner's own command.
+# The steps below are the only steps; adding one is an edit to this file, reviewed like any other.
+# The gate is raised by .claude/scripts/hq/review-ship-record.mjs, which reads CI itself: a run cannot vouch for a
+# green it did not see.
+inputs: []
+tools:
+  - shell.run:
+      # Exact grants, no `:*`: a prefix grant on arc-compile let `--check ... --write` through, and arc-compile takes
+      # the LAST mode flag (attack 09a1c07 B5). Only the writer takes arguments.
+      - "node .claude/scripts/plan/kickoff-lint.mjs"
+      - "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code"
+      - "git rev-parse HEAD"
+      - "node .claude/scripts/hq/review-ship-record.mjs ship:*"
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - sha
+    - receipt_id
+  properties:
+    sha:
+      type: string
+      pattern: "^[0-9a-f]{40}$"
+    receipt_id:
+      type: string
+      pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+evals:
+  - tests/fixtures/engine/evals/ship-run/basic.json
+baseline:
+  waived: capability-gap
+  why: "/arc-ship lints, builds, tests and deploys in one shot; this process stops at the owner's deploy gate by design (ADR-1366), so there is no command to reproduce byte for byte"
+  recorded: 2026-10-21
+body: |
+  You PREPARE a ship, headless: no one is at the keyboard until you finish. This run is one turn: never background
+  anything, never wait for a later wakeup. You never deploy, publish or push -- no step here can.
+
+  Your tools are exactly these, and everything else is refused: Bash for the four commands below, and nothing else.
+
+  1. Lint: `node .claude/scripts/plan/kickoff-lint.mjs`. A non-zero exit means the run has FAILED: say what it printed
+     and return no output object.
+  2. Build check: `node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code`. A non-zero exit
+     means the run has FAILED, as above.
+  3. The commit: `git rev-parse HEAD` -- the full 40-hex SHA.
+  4. Ask for the deploy gate: `node .claude/scripts/hq/review-ship-record.mjs ship --sha SHA --as-process ship-run@1.0.0`.
+     It reads CI per job for that SHA itself and raises the gate only when every job is green, printing
+     `receipt: approval.requested <id>`. If it exits non-zero, the run has FAILED: say what it printed and return no
+     output object.
+
+  Your reply is ONLY this JSON object, nothing before or after it: `sha` and `receipt_id` (the id from the receipt line).

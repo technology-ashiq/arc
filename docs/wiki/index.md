@@ -7,15 +7,15 @@ Every part of arc, generated from the tree by `wiki-build`. No list or number on
 |---|---|---|
 | [Products](#products) | 20 | 17 |
 | [Lanes](#lanes) | 21 | 17 |
-| [Processes](#processes) | 17 | 0 |
+| [Processes](#processes) | 19 | 0 |
 | [Decisions (ADR bands)](#decisions-adr-bands) | 21 | 0 |
 | [Commands](#commands) | 29 | 0 |
 | [Agents](#agents) | 32 | 0 |
 | [Rules](#rules) | 7 | 0 |
 | [Gates](#gates) | 7 | 0 |
-| **Total** | **154** | **34** |
+| **Total** | **156** | **34** |
 
-Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 445 of 528 carry every parsed field; the rest are named on their band's page.
+Narrative debt: **122 of 156** pages have no narrative yet. ADR headers: 445 of 528 carry every parsed field; the rest are named on their band's page.
 
 ## Products
 
@@ -32,7 +32,7 @@ Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 445 of 
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |
 | [git](products/git.md) | 1.0.0 | [core](products/core.md) | 4 | 0 | 0 |
 | [growth](products/growth.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 21 |
-| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 88 |
+| [hq](products/hq.md) | 1.0.0 | [core](products/core.md) | 1 | 0 | 89 |
 | [launch](products/launch.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 16 |
 | [leads](products/leads.md) | 1.2.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 18 |
 | [legal](products/legal.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 9 |
@@ -87,8 +87,10 @@ Narrative debt: **120 of 154** pages have no narrative yet. ADR headers: 445 of 
 | [launch-watch](processes/launch-watch.md) | 1.0.0 | Re-verify every launched venture's public slots weekly and raise a regression to needs-you. |
 | [lesson-log](processes/lesson-log.md) | 1.0.0 | Log one lesson as a docs/retro-log.md row, after the near-duplicate check, and end on its note.logged receipt. |
 | [narrative-verify](processes/narrative-verify.md) | 1.0.0 | Judge every block of one drafted wiki narrative against the sources its anchors name, and return one verdict per block. |
+| [qa-run](processes/qa-run.md) | 1.0.0 | Run one QA pass against a running URL and seal what it found as qa.completed. |
 | [review-diff](processes/review-diff.md) | 1.0.0 | Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/. |
 | [rule-promote](processes/rule-promote.md) | 1.0.0 | Propose one rule for its permanent home as a proposal branch, and end on the approval.requested it raises. |
+| [ship-run](processes/ship-run.md) | 1.0.0 | Prepare a ship: lint, build check, a per-job CI read, then ask the owner for the deploy gate. Deploys nothing. |
 
 ## Decisions (ADR bands)
 

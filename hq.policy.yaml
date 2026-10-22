@@ -356,3 +356,32 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+# Phase 02 (REQ-06, ADR-1366): the two hq.policy.yaml rows qa-run and ship-run are born with (kickoff-lint birth-rule).
+# hq.policy.yaml is deny-floor: the agent cannot write or commit it, so the owner pastes these under `kinds:`, beside
+# "process:lesson-log". Born at L1 for what each does; deploy and publish are L0, so a ship can never deploy.
+
+  # face Cycle 17 Phase 02. qa-run invokes the qa-tester agent against a running URL and seals qa.completed through
+  # hq/review-ship-record.mjs: shell and network L1 (a local browser pass). It writes no file and moves no money.
+  "process:qa-run":
+    e2: []
+    read: { level: L3 }
+    write: { level: L0 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # ship-run lints, runs the compile check, reads CI per job (gh, through ci-digest) and raises approval.requested
+  # {gate: deploy}: shell and network L1. deploy and publish stay L0 -- approving the gate deploys nothing.
+  "process:ship-run":
+    e2: []
+    read: { level: L3 }
+    write: { level: L0 }
+    shell: { level: L1, evidence_days: 35 }
+    network: { level: L1, evidence_days: 35 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }

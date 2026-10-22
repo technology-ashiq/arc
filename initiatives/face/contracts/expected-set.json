@@ -839,7 +839,9 @@
       "face-ask": "ask-arc",
       "launch-watch": "engine-room",
       "distribute-radar": "engine-room",
-      "lane-stale": "engine-room"
+      "lane-stale": "engine-room",
+      "qa-run": "review-ship",
+      "ship-run": "review-ship"
     }
   },
   "gates": {

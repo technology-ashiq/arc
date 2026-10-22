@@ -77,7 +77,6 @@ export const SESSION_STATUS = Object.freeze({
 });
 
 // Processes held back by a row's confirm step. Refused by NAME, whichever row starts them -- dispatch included.
-const HELD = new Map(SESSIONS.filter((s) => s.confirmStep && s.process).map((s) => [s.process, s]));
 
 // ---- the env a session child gets: an allow-list ----
 const OS_NAMES = new Set(["PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
@@ -191,6 +190,10 @@ export function createSessionDoor(ctx, opts = {}) {
   const spawn = opts.spawn || nodeSpawn;
   // Read per call, never cached: a directory unreadable for a moment at boot must not make every driver BAD_DRIVER.
   const drivers = opts.drivers || (() => sessionDrivers());
+  // The registry this door starts from: the real SESSIONS, or a fixture's (Cycle 17 P02 keeps a confirm-step row only as
+  // a fixture, once ship-run stops at the deploy gate instead of before a deploy step).
+  const rows = opts.sessions || SESSIONS;
+  const HELD = new Map(rows.filter((s) => s.confirmStep && s.process).map((s) => [s.process, s]));
   const branch = opts.branch || (() => currentBranch(ctx.repo));
   const branchAsync = opts.branchAsync || (opts.branch ? async () => branch() : () => currentBranchAsync(ctx.repo));
   const sessionsDir = join(ctx.journalDir, "sessions");
@@ -288,7 +291,7 @@ export function createSessionDoor(ctx, opts = {}) {
 
   /** @param {string} sessionId @param {unknown} body */
   function start(sessionId, body) {
-    const s = sessionById(sessionId);
+    const s = opts.sessions ? rows.find((r) => r.id === sessionId) : sessionById(sessionId);
     if (body === null || typeof body !== "object" || Array.isArray(body)) throw new SessionError("BAD_SESSION_BODY", "a start takes { click, input, driver }");
     for (const k of Object.keys(body)) if (!["click", "input", "driver", "process"].includes(k)) throw new SessionError("BAD_SESSION_BODY", `a start takes { click, input, driver${s.pickProcess ? ", process" : ""} }, not "${k}"`);
     const b = /** @type {any} */ (body);
@@ -476,5 +479,5 @@ export function createSessionDoor(ctx, opts = {}) {
     return { receipts: out.slice(0, RECEIPTS_KEPT), receiptsDropped: Math.max(0, out.length - RECEIPTS_KEPT), unattributed };
   }
 
-  return { list, click, start, read, rows: SESSIONS };
+  return { list, click, start, read, rows };
 }
