@@ -1,0 +1,36 @@
+{
+  "phase": "01",
+  "commit": "5cc4c097cdfa060f07e6ce378578f2ba5121d0ce",
+  "short": "5cc4c097",
+  "generated": "2026-10-22T06:37:23Z",
+  "files": [
+    {
+      "name": "attack-7d3f02f-r1-boundary.json",
+      "sha256": "53effa2e4ff736356905fc0200590a54d5706e099ed6f9fe8135018ce43c634e"
+    },
+    {
+      "name": "attack-8dec47f-r2-boundary.json",
+      "sha256": "ce919c81b3ac289a266cac8ba557083b517a2a376d9451f3bb4a55c5192f1561"
+    },
+    {
+      "name": "attack-b0a4249-r1-boundary.json",
+      "sha256": "221c12db20b7d47049ef6a22066ab9395f3c47a6451975a5836130859573c692"
+    },
+    {
+      "name": "attack-b0a4249-r1-logic.json",
+      "sha256": "61b0930a69d341eba9b86f0ef0ed03c48f62ca55cc02ad7b1b879a9de37856c5"
+    },
+    {
+      "name": "heights.cjs",
+      "sha256": "39036fa2ba75c716a9a80924f3f3e113ff14b60055ac2c2113f47a30d96a497e"
+    },
+    {
+      "name": "heights.md",
+      "sha256": "b1bcc23a0b798280fc1726ca37c146be0ddbb7e93f13e806f153cfa301d7c69c"
+    },
+    {
+      "name": "owner-demo.md",
+      "sha256": "42d44db9e6586ba9533395ca3c137666ab5be6df9e6e7236d036425d7e3f9c90"
+    }
+  ]
+}

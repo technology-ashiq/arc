@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-face v3 (Cycle 17, opened 2026-10-21)
-phase: 01
+phase: 02
 appetite: 7.5d
-burn: 2d
+burn: 5d
 blocked-on: —
 depends-on: —
 
@@ -25,13 +25,13 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Hands First part 1, recorded — PR #449 closed on its evidence (REQ-01, ADR-1357…1364) | 0.5d | ✅ closed 2026-10-22 (merged `6012c36`, CI 19/19 run 39551997252; `phase.closed` `01M5GTM184F5RQMBA742QMMATZ`) |
-| 01 | Records tab + pickers + the first-verb CI gate + the logic attacker (REQ-02…05, ADR-1365, 1368, 1369) | 2d | 🟡 built + merged #452 `75a8fa51` (CI green per job); closes after the owner reads ventures, money, story and org in the face |
-| 02 | `qa-run` + `ship-run` — review → QA → Prepare ship from the face (REQ-06, ADR-1366) | 2d | 🟡 built + merged #453 `ba702637` (CI green per job); closes after the owner's QA → Prepare ship run lands two receipts |
-| 03 | Agent tiers on `/api/roster` + the discover hunt op (REQ-08, REQ-09, ADR-1367, ADR-1369) | 1d | 🟡 built + merged #454 `b97dcc00` (CI green per job); closes after the owner runs one hunt from the face |
+| 01 | Records tab + pickers + the first-verb CI gate + the logic attacker (REQ-02…05, ADR-1365, 1368, 1369) | 2d | ✅ closed 2026-10-22 (merged #452 `75a8fa51`, CI run 39685764462; `phase.closed` `01M5H5BXJQDKF3H4F94KKVE182`) |
+| 02 | `qa-run` + `ship-run` — review → QA → Prepare ship from the face (REQ-06, ADR-1366) | 2d | 🟡 built + merged #453 `ba702637` (CI green per job); NOT closed — no session start on the door journal 2026-10-22, no `qa.completed` / `approval.requested{gate: deploy}` on the spine |
+| 03 | Agent tiers on `/api/roster` + the discover hunt op (REQ-08, REQ-09, ADR-1367, ADR-1369) | 1d | ✅ closed 2026-10-22 (merged #454 `b97dcc00`, CI run 39707549896; owner's hunt `01M5H4QFYCNYBAXVB5Y9G71XNH`; `phase.closed` `01M5H5BZ1TEMKFRTPFBDWKVM3N`) |
 | 04 | Debt: the logic surface owed (debt #D95, debt #D96, debt #D99, debt #D106) + harness children (debt #D23) + v3 residue (debt #D113) (REQ-07) | 1.5d | ✅ closed 2026-10-22 (merged #455 `8199ab57`, CI 19/19 run 39712523040; `phase.closed` `01M5GTM2B4M8ZE64ATFZZ800QW`) |
 | 05 | Retro + HISTORY — the cycle closes on the record (REQ-10) | 0.5d | ⬜ not started |
 
-**Appetite burn:** 2d of 7.5d (27%) — under the 3.75d tripwire. Phase appetites sum to the full 7.5d — zero slack, stated. 50% tripwire at 3.75d (PLAN § Appetite).
+**Appetite burn:** 5d of 7.5d (67%) — past 50% with Phase 01 closed (no cut); under the 5.6d 75% line, where an unclosed Phase 02 would cut REQ-09 then REQ-08. Phase appetites sum to the full 7.5d — zero slack, stated. 50% tripwire at 3.75d (PLAN § Appetite).
 
 ## Done log
 
@@ -86,12 +86,21 @@ depends-on: —
   `01M5GTM2B4M8ZE64ATFZZ800QW`, approval `01M5GTM43MWXAAWX2XHYC7G0GT` (his). REQ-07 validated. Metrics:
   amendments: 0 · reopened: n.
 
+- **2026-10-22 — Phases 01 and 03 CLOSED (`/arc-phase-done 01`, `03 --lane face`, main clone).** Owner:
+  "live runs done machi, phase-done 01-03 pannu". The door journal backs both: the ventures, money, org and
+  story reads at 11:53–11:54, and `discover.hunt` plan ×5 → apply at 11:58 with receipt
+  `01M5H4QFYCNYBAXVB5Y9G71XNH` (`expense tracker`: 20 captured, 7 clusters) on the canonical spine.
+  `owner-demo.md` in each bundle; bundles verified (7 + 7 artifacts). Receipts: `phase.closed`
+  `01M5H5BXJQDKF3H4F94KKVE182` (01), `01M5H5BZ1TEMKFRTPFBDWKVM3N` (03); approvals
+  `01M5H5C119GCMKETT56AJNRHYN`, `01M5H5C322Q1XACFYPH3Q2FHJ0` (his). REQ-02…05, REQ-08, REQ-09 validated.
+  Metrics: amendments: 0 · reopened: n (both). **Phase 02 refused:** the journal holds 8 POSTs that day
+  (2 decides, 5 hunt plans, 1 apply) and no session start; the spine holds no `qa.completed` and no deploy gate.
+
 ## Now
 
-**Phases 00 and 04 CLOSED; 01–03 merged and waiting on the owner's live runs (2026-10-22).** All four
-Cycle 17 PRs are on `main` (#452–#455). His three runs, each in the face on the main clone after a
-pull: (1) open `#/ventures`, `#/money`, `#/story`, `#/org` and read the Records tab → closes 01;
-(2) review-ship room → QA → Prepare ship; the inbox shows the deploy gate, nothing deploys → closes 02;
-(3) discover room → Hunt → Plan → Apply → closes 03. Then `/arc-phase-done 01..03`, then Phase 05
-(retro + HISTORY, lane IDLE). His stamps: approvals `01M5GTM3AGDHS0CV160WMKDEBS` (00) and
-`01M5GTM43MWXAAWX2XHYC7G0GT` (04).
+**Phases 00, 01, 03, 04 CLOSED; Phase 02 waits on one owner run (2026-10-22).** On the main clone's face:
+review-ship room → **QA** (session starts, lands `qa.completed`) → **Prepare ship** (lands
+`approval.requested{gate: deploy}` in the inbox; nothing deploys). Then `/arc-phase-done 02`, then Phase 05
+(retro + HISTORY, lane IDLE). Burn 5d of 7.5d; the 75% line (5.6d) cuts REQ-09 then REQ-08 if 02 is still
+open — both already shipped, so the cut would be on the record only. His stamps: `01M5H5C119GCMKETT56AJNRHYN`
+(01), `01M5H5C322Q1XACFYPH3Q2FHJ0` (03).
