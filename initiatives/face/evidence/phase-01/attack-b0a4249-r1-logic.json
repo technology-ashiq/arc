@@ -1,0 +1,90 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput (text-with-source branch)",
+      "breaking_input": "org.seat-assign with agents = 'a,,b' or 'a,' — an empty element between or after separators. The regex pattern requires at least one character per comma-separated group, so 'a,,b' fails the pattern and never reaches the source check, but 'a,' also fails the pattern. Similarly, a leading comma ',a' fails. So the pattern gate prevents empty elements. However, consider agents = 'a' with f.list='' — the code sets names=[raw] only when f.list is a non-empty string; if a future field declares f.list:'' (empty string) — it falls back to [raw] and checks the whole. That's handled. But what about a field with f.list:',' and a value like 'a' — split gives ['a'] fine. The real issue: the list grammar is the field's own `pattern`, which the door uses elsewhere. The membership check splits on f.list, but the apply step passes the raw to the tool which splits on its own grammar. If the tool splits on spaces but the field declares f.list=',', a value 'a b' is one name and passes membership if the source holds an agent literally named 'a b' (regex disallows spaces, so not here). Not exploitable with current fields. Instead: close-month 'month' is now a select, and its options come from `lastMonths(new Date())` — a wall clock that is NOT the door's injected now. A plan made at the last second of a month, applied a moment later, sees the month options shift. The apply re-check in work-door will refuse OPTION_GONE for a month that just rolled — but the finder described as fixed. The real break: between plan and apply, the month list is re-read from wall clock; a month at the edge of the 12-month window that was valid at plan is no longer offered, so apply refuses a plan that was made seconds earlier — a denial-of-service on a legitimate plan. Also, `lastMonths(new Date())` uses the machine's local clock, not the IST-consistent clock of the spine. If the server's TZ is UTC, at 00:30 IST (19:00 UTC the prior day) the month offered is the UTC month, which is December while the spine (IST) considers it January. The close-month 'month' options then list December, and the apply uses the actual IST date? The close-month tool likely uses IST. So an operator planning close-month at 00:30 IST on 1 Jan gets a month list featuring 2026-12 (UTC Dec 31) and 2025-12 (UTC), not 2026-01. That mislabels the month.",
+      "why": "The picker's options are computed from `new Date()` at option-read time, independent of the work-door's injected `now` (used for expiry and other logic). The four rooms' apply re-check re-reads options, so a plan made at the edge is refused (OPTION_GONE) — a denial for a legitimate plan. Also the options are in the server's local TZ, not IST, so the month list can be wrong relative to the spine for a part of each day. The defect pattern 'A bad test clock hung the door' and 'read the clock at boot' twin: the door has a clock, but this picker ignores it.",
+      "fix": "Read the month list from the door's injected now()/clock, passed through validateInput and the field getter, instead of a fresh new Date(). Make the getter take the clock as a parameter, and have the work-door's apply re-check use the same clock as the plan. Pin with a test that plans at 23:59:59 and applies at 00:00:01 with an injected clock.",
+      "twin_of": "A bad test clock hung the door -> read the clock at boot; a body built on a forced clock says so."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:leadsCampaigns and legalVentures: entryIs uses lstatSync but the listing root is read via readdirSync after listRealDir (which lstat's the root). The entries' lstat is file/dir check, but the actual read the tool later performs (e.g., arc-leads daily <campaign>) will dereference a symlink that replaced the file between the lstat and the run. More concretely, a TOCTOU: between `lstatSync(join(dir, f))` (returns isFile true) and the tool reading that file, an attacker who can write the store replaces the regular file with a symlink to /etc/passwd. The membership check passes (the lstat showed a regular file), the plan is accepted, and apply runs the tool which follows the symlink. Even with lstat, the check is a separate read from the tool's read — check-then-use with no lock or re-realpath.",
+      "breaking_input": "An attacker with write access to the leads store or the agents dir replaces a valid campaign file (e.g., pilot.json) with a symlink to an arbitrary file between the plan's re-check and the tool's read. Since a plan can be made (the re-check happens at apply before the claim), and the tool runs after the claim, a race window exists.",
+      "why": "The fix for attack 7d3f02f B1/B2 lstat's each entry but does not re-lstat or re-contain at the moment of use; the membership check in validateInput and the work-door apply re-check are both separate reads from the later run of arc-leads/org-own. The listing root itself is lstat'ed (listRealDir) but the entries are not realpath-contained against a fixed root, so a swapped-in symlink outside the tree passes the membership check (isFile sees the target? lstatSync of a symlink returns isSymbolicLink, not isFile — so a symlink is NOT isFile; only the race where the regular file is replaced AFTER lstat passes, and the tool dereferences. The check that 'the value is still offered' (apply) re-runs and would see the symlink as not a file, so apply refuses OPTION_GONE. So the race is closed for the membership check, but the ARGUMENT still passes the old value to the tool after the claim; a plan whose campaign went symlink between the last apply re-check and the actual spawn? The apply re-check and the claim are synchronous; the tool runs after the claim. There is a small window between the re-check's lstat and the tool's open, which is inherent. The listed directory itself is lstat'ed but not realpath'd against a fixed root — a junctioned store pointing outside passes listRealDir (isDirectory true) and all entries then live outside the tree. This is exactly the round-2 B2 that was claimed fixed but the fix only lstat's the root, not realpath-contains it. A junctions/campaigns or a symlinked .claude/agents dir makes every 'clean' entry an external path. The stated fix says 'realpath the listed directory and require it to sit inside its expected root' — that was the fix's intent but the code shown only checks isDirectory, never realpath containment.",
+      "fix": "Realpath the directory in listRealDir and require the realpath to be inside the store root / repo .claude / fixtures root before listing; and have the tool's actual read resolve through the same realpath, refusing an entry whose realpath no longer sits inside the root at read time. Twin: 'A listing that followed symlinks -> Each listed file is lstat'ed regular and realpath'ed inside the root' — only half done.",
+      "twin_of": "A listing that followed symlinks -> Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput select branch and the option-list error message",
+      "breaking_input": "A select field whose options list holds a huge number of names (e.g., agents directory with thousands of .md files, or a compromised store). The refusal 'is not one of the options the door serves: ' + options.join(', ') concatenates every option, unbounded — a multi-megabyte error message that goes to the page and logs. Also a name containing a comma makes the join ambiguous, and echo() caps each raw value at 80 but the options join is uncapped.",
+      "why": "The message smuggle is the same class as the repeatedly fixed 'an unbounded fragment beside a capped buffer'. A crafted store (write access to .claude/agents, or a leads store with thousands of files) yields a huge error line, defeating log caps and page layout. It also echoes option names that can contain control characters (filenames allow most bytes except / and NUL), not passed through echo(), so a filename with a newline (allowed on POSIX) forges a log line.",
+      "fix": "Cap the joined option list (e.g., first 20 names plus a count), and pass each name through echo() before interpolating. Also refuse option names that are not printable ASCII at source-read time.",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:legalVentures failure handling",
+      "breaking_input": "Make ventures.yaml unreadable (e.g., a permission error or a corrupt file that venturesRead reports as failure), but keep a fixture dir like 'lexos' existing. The legal.full-read 'venture' select then serves only fixtures, failure empty, so the owner can plan a full read on a venture whose registry standing is unknown — the tool may send mail based on facts that are stale.",
+      "why": "Two independent failures are conflated: a registry that cannot be read should make the entire field unknown, not 'fixtures only'. The comment even says 'only with neither is the field unknown' — but an unreadable registry plus a present fixture is not 'neither'; the registry is a real source that failed. This hides a read failure as a narrower list, violating the 'empty because absent and empty because unreadable are different results' rule.",
+      "fix": "If reg.failure is non-empty, return failure=reg.failure regardless of fixtures; only when reg.failure is empty do fixtures contribute to options.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "face/src/lib/ops.mjs:emptyPicker and planBlocked",
+      "breaking_input": "Add a new op (or modify an existing) with a required text field that has a FIELD_SOURCES entry and an empty list; Plan stays enabled and the input accepts any value, which the source check at plan will refuse with BAD_INPUT — but the UI lets the user type, and the refusal comes only at plan time, after they think it's fillable. Not a security break, but a UX/consistency gap that defeats the 'nothing can be planned on an empty picker' promise.",
+      "why": "emptyPicker's condition checks select type specifically for the empty-options case, but a sourced text field with zero options is not treated as empty. The correct rule is: any sourced field (select OR text-with-source) with no options is empty, regardless of type.",
+      "fix": "In emptyPicker, treat any field with a source (sourceFailure or the field being in FIELD_SOURCES, or, simpler: options length 0 regardless of type when the card has a source) as empty, not only selects.",
+      "twin_of": "An unreadable source drawn as an empty one -> the door serves each sourced field's read failure, and the page names it instead of 'none yet'."
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": "face/src/lib/records.mjs:recordsMatch — the search is a literal substring, which is fine, but in RecordsTable.tsx the query is not capped; a massive query (e.g., 1 MB string) against a 5,000-row read is O(len*rows) and could be slow, but the test caps at under a second for a normal query. The real logic break: recordsMatch uses `.toLowerCase().includes(q)` with q trimmed. If q contains a NUL or control character, it still matches, and the 'No records match' message interpolates the raw query 'No ... match “{query}”.' — the query is user-controlled text drawn into the page's judgement line. React escapes it, so no XSS, but the message can carry a newline (TextInput allows? probably single-line) and uncapped length. Also 'show all' button reveals at most 200 rows, but the search runs over ALL rows (c.rows) before windowing, so a 5,000-row read with a search still walks every row per keystroke — acceptable.",
+      "breaking_input": "A query that consists of many spaces (e.g., 1000 spaces) is trimmed to '', fine. A query with a very long string (e.g., 100k chars) causes a linear scan of each of 5000 cells — could exceed 1 s but that's a perf bound, not a correctness break. The actual finding: in RecordsTable, when the collection has a sourceFailure (isRefused true), the search and rows are not shown; fine. But when a collection is NOT read yet (isReading true) and also has rows pre-filled (the fold provides rows even while isReading), the UI shows 'Reading…' and does not show the rows — that's correct. The logic break for the verdict: judge() for first-verb requires rooms>0, but the smoke's firstVerbOf counts only rooms with an integer firstVerb >= 0; a room whose strip has buttons but all are at top 768 exactly is 'over' (>=768) — good. But a room whose firstVerb is 767 passes, even if the actual button is visually below the fold due to a transform or scroll? getBoundingClientRect().top + window.scrollY gives document-relative, but if the page has a horizontal overlay, the measurement could be off; the judge's floor of 20 rooms in bats is fine.",
+      "why": "The core logic break is that recordsShapeProblems is only run at render time, not gating whether a collection is drawn; a malicious fold (from a compromised door) can declare a collection with a search field that is not a column, but the check only names it, it still draws the table. That's by design (naming, not refusal). The real gate that matters is judge() being able to see a first-verb measurement; a mutant where the strip renders at the very top of the page but the selector [data-strip-item] is wrong (e.g., a typo) yields firstVerb -1 for all rooms — judge() then requires unread>0, which is satisfied (unread = all rooms), and refuses. Good.",
+      "fix": "Treat any integer < 0 other than the sentinel -1 as unread (the measurement is malformed), not as 'no verb'."
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "face/src/lib/records.mjs recordsShapeProblems and RecordsTable.tsx",
+      "breaking_input": "Nothing exploitable; a crafted rows element that is not an object (e.g., a number) makes recordsShapeProblems check `!r || typeof r !== 'object'` — a number r is not object, so 'unknown column' is named. OK. The table renders cellText(value) for each column; a row with a Symbol or BigInt value: cellText returns '' for symbols and throws for the boolean? cellText handles string/number/boolean, else ''. BigInt is not handled → '' — fine.",
+      "why": "No correctness break; leaving this finding out.",
+      "fix": "None."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs runSmoke firstVerb measurement",
+      "breaking_input": "A smoke run where every opened room has NO strip buttons (selector mismatch) yields firstVerb -1 for all, rooms=0, judge refuses 'no opened room drew a verb' — good. A run where a single room draws a verb at 769 (over) fails. A mutant where the strip is drawn at 767 (just above) passes, even if the room's first verb is actually bisected by a later element? The measurement reads the FIRST (lowest top) button, so a strip later in the DOM with a lower top would be caught.",
+      "why": "Acceptable per design.",
+      "fix": "None."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs validateInput int branch",
+      "breaking_input": "None reachable in the diff's ops.",
+      "why": "The int branch accepts any length, but the only int field (none in the diff) is not present.",
+      "fix": "If an int field appears, cap its length to avoid precision loss."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "face/src/lib/ops.mjs planInput / opCards",
+      "breaking_input": "A select field whose options include a name with a comma or a space isn't handled specially in the membership check (it uses includes, so it's fine). The only logic break: the select branch of validateInput does NOT pass the value through echo() when it's refused — it uses `${f.label} (${f.name}) \"${echo(raw, 80)}\"...` — echo is used, good.",
+      "why": "Acceptable.",
+      "fix": "None."
+    }
+  ]
+}
