@@ -132,7 +132,7 @@
 .claude/scripts/core/one-line.mjs	de7576a87c7710b049a6984a6f60b48937b44d626a9ebd347f5af12b74625a65
 .claude/scripts/core/owner-apply-lane-stale.mjs	78bca5ef2edb730cab0478b9b5366d53b6da71bcf1f9dadbcec194e09bfe23a7
 .claude/scripts/core/ownership-lint.sh	f6f24f2afaf6b845cca533728a85693926fa4c22b73d741fc868ce28bddc82dc
-.claude/scripts/core/plan-bound-allowlist.json	618bc285d9599c77aeaaea4e3e91676f3d6e1a03b9cc8da7f6cc63ccbcc2c716
+.claude/scripts/core/plan-bound-allowlist.json	7dd35edae27cf15b336bd716a26b8d986174961703103755950ae97e02913aec
 .claude/scripts/core/plan-bound-audit.mjs	c8b375c36c494d647aa2f55d9c9bc966a9496eca2ef44601f62407868ff34f4c
 .claude/scripts/core/plan-expect.mjs	94d5d89b19db14ab02c6121f4dc5ec8218f4c01ba69c60ffd9cb5500cd14bc4c
 .claude/scripts/core/product-lint.mjs	9f2c1edd27b93f4649ec25a9dae1439eee040ea377f8a7dcd1b97b18e93247e3
@@ -184,6 +184,7 @@
 .claude/scripts/develop/replay-child.mjs	1d641ffb0ad349084a14be12df3b3c8863e370e2f191b9e78d6214097be5749c
 .claude/scripts/develop/stuck.mjs	7f3d64a9341e180186df5e892cfa6bfcffc676836739a3ac7c810cb19eb9531e
 .claude/scripts/discover/arc-discover.mjs	5162fbc6814ca7ec59dad4b4401763dc7f53af4ef2b69137cf5de3a145997104
+.claude/scripts/discover/hunt-op.mjs	27c37776d69b0040eb88a18c8b2d9e6221a8f21fc6b8cbd4cf522a79fa688de5
 .claude/scripts/discover/lib/cluster.mjs	05ba04783cb541f5bd27fcca3fdc7948a21d11b4dbd3160e549cc845a7d8da41
 .claude/scripts/discover/lib/export.mjs	17343122887d5b6a3fabd4edb1c12861c4a3409eeab6e51e290531e033051ee4
 .claude/scripts/discover/lib/judge.mjs	55859493b6c41b301b263d2b6feff24fcbf12b6ba1a98286f7ed81ed3c67452d
@@ -291,7 +292,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/face-module.mjs	4dffb1452c051fb97512a0a92b30ddc7724c3197db549ca7980005692c27685a
 .claude/scripts/hq/face-modules-contract.mjs	5f98ea1ebcb15edf9e19ed5a3d331c8bca4b8b63addf8200a5cc67bf4f02c918
-.claude/scripts/hq/face-ops.mjs	51ddfba84203e01bd2c587233a8cb93c45f26b13cda8ed07e0c2655a2591c74a
+.claude/scripts/hq/face-ops.mjs	064e581877f190dda577f03cd28bba4cc0958d6d5c399bdea9002afc3b6dc144
 .claude/scripts/hq/face-sessions.mjs	39b7b10ba842b82f5fa50ad777b42440b5166a3ba67befeedfa8f2d73d07992b
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
@@ -306,10 +307,10 @@
 .claude/scripts/hq/lib/face/discover/route.mjs	11f58d39cd507bdfdb6c96f62c124d58c42738af9b2a9537f22b7a4eb663251a
 .claude/scripts/hq/lib/face/models.mjs	dee2063e634ff21cbe6c4c30b5060d0c5269c89a7a866b383a662ed50b96b684
 .claude/scripts/hq/lib/face/org/route.mjs	f5390d1f207d5c4b29f5496bd496bd3d3e331bb2f46072ec578f5de3221d886c
-.claude/scripts/hq/lib/face/reads.mjs	178668845cc49bf8583e86881581258d0f3a40e0b632838bd92eeee0f3c06ac7
+.claude/scripts/hq/lib/face/reads.mjs	3da5cd1ee721dbb03b2f7cc24cb0577d32a226819bcd1be0edaeaeb4627c56af
 .claude/scripts/hq/lib/face/reference/route.mjs	a7ff66b945460166b8898c77a6d5522a4daceaf44b149e5b0c5ac6cfbab2aa20
 .claude/scripts/hq/lib/face/session-door.mjs	cd2b57badaabe8310387800b1770aa3ca3eef1cecf3b3896a96d111167af8b49
-.claude/scripts/hq/lib/face/work-door.mjs	82a9f0d83942e1194aee2c5cee332fa7bff16403b3ac96ef586222bacb63ff41
+.claude/scripts/hq/lib/face/work-door.mjs	0ed3e096a4a1e3239b4b9ed2138b99d775b43fdb939d4f10751c887ee2cf69e0
 .claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
