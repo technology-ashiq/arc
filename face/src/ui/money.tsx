@@ -236,6 +236,7 @@ export function CostBlock({ c }: { c: CostView }) {
             ))}
           </div>
           <p className="text-[12px] leading-[18px] mb-3 pl-3 max-w-[72ch]" style={{ fontFamily: UI, color: 'var(--text-3)', borderLeft: '2px solid var(--line-2)' }}>{c.rule}</p>
+          {c.elsewhere ? <p data-records-elsewhere className="text-[12px] leading-[18px] mb-1" style={{ fontFamily: UI, color: 'var(--text-3)' }}>{c.elsewhere}</p> : null}
           <div>
             {c.lines.map((l) => (
               <div key={l.id} className="flex items-baseline gap-3 flex-wrap py-1.5 text-[12px]" style={{ fontFamily: MONO, borderBottom: '1px solid var(--line-1)' }}>

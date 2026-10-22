@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:leadsCampaigns (lines ~226-233)",
+      "breaking_input": "A campaigns directory entry named like a valid campaign (e.g. `pilot.json`) that is a directory, a dangling symlink or a junction. Also a store whose `campaigns` path exists but is a file (readdir throws ENOTDIR).",
+      "why": "The filter checks the name only, never `isFile()`/lstat and never containment. A directory called `x.json` becomes a pickable campaign, and `arc-leads daily x` then runs against a non-campaign. ENOTDIR is reported as a failure while ENOENT is treated as empty, so the distinction is inconsistent. This is the 'listing that followed symlinks' / 'each listed file is lstat-ed regular and realpath-ed inside the root' pattern.",
+      "fix": "Use readdirSync withFileTypes, keep only isFile() entries that are not symlinks, and realpath-contain them inside the store root. Treat ENOTDIR like a named failure.",
+      "twin_of": "A listing that followed symlinks -> Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:agentNames and legalVentures (lines ~236-256)",
+      "breaking_input": "`.claude/agents/` containing a directory named `foo.md`, or a symlink `evil.md` pointing outside the tree. In legalVentures, a plain file or symlink named `lexos` placed in tests/fixtures/legal/ventures.",
+      "why": "Both readers filter by name regex only, with no isFile/isDirectory check and no containment. A non-regular entry becomes a valid pickable name. For legal.full-read the picked venture feeds a tool that sends mail and reads ARC_LEGAL_VENTURE_DIR, so a fixture dir name that is not a real venture directory is accepted. The agents list has no ENOENT-as-empty handling but returns a failure, which is fine.",
+      "fix": "Use withFileTypes and require isFile() for agents and isDirectory() for fixture ventures. Reject symlinks, or realpath-contain them inside the root.",
+      "twin_of": "A listing that followed symlinks -> Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput (text-with-source branch, ~line 962)",
+      "breaking_input": "org.seat-assign `agents` = `researcher,,researcher` or a value with a trailing comma such as `researcher,`, or `researcher, planner` (space after the comma).",
+      "why": "The value is split on a bare comma and each piece must be in the source list. The empty piece fails, which is correct. The field's own `pattern` decides what a separator is, though, and the membership check hard-codes a comma. If the op's pattern allows a space-separated list (seat-assign binds several agents), `a b` is one 'name' that fails membership, or the tool re-splits on a different separator than the check, so the check and the use read different grammars. Duplicates (`researcher,researcher`) are accepted and bind the same agent twice.",
+      "fix": "Derive the separator from the op field declaration, or assert the pattern admits only commas. Refuse duplicates by name.",
+      "twin_of": "Two grammars for one value -> Import one pattern from its owner."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "work-door.mjs apply, new validateInput(op, p.values) before the claim (~line 304)",
+      "breaking_input": "A plan whose stored `p.values` came through validateInput at plan time, then applied after the picker source becomes unreadable. A reader failure in a picker (e.g. ventures.yaml temporarily locked on Windows, EBUSY) makes `read.options` empty with a failure code.",
+      "why": "The re-validation reads the source a second time, and the source can fail transiently. The result is a BAD_INPUT or read failure at apply for a plan that was valid, with no distinction between 'value left the list' and 'list could not be read'. A planned op is also not retried. The re-read is unlocked, so the check and the later run read different states, a check-then-act with an await gap before the tool runs.",
+      "fix": "Distinguish a source failure from a missing value. Name the source failure in the refusal, and re-check at the moment of the run if membership matters, not only before the claim.",
+      "twin_of": "An apply re-derived from a moved world -> an apply writes the digest the plan showed, or nothing; every check runs again at apply."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:runSmoke (new firstVerb read, ~line 990)",
+      "breaking_input": "`page.send(\"Emulation.setDeviceMetricsOverride\", 1366x768)` succeeds, then `Runtime.evaluate` throws or times out. The restore to 1440x1000 never runs.",
+      "why": "The viewport restore is not in a finally. A throw leaves the page at 1366x768, so every later count measured on that page (and the next room if the page is reused) uses a different frame. The per-room catch records a finding, but later rooms inherit the wrong viewport.",
+      "fix": "Wrap the evaluate in try/finally that always sends the 1440x1000 override.",
+      "twin_of": "Every step after a write is inside the path that undoes the write."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:firstVerbOf (~line 612)",
+      "breaking_input": "A report where `opened` rooms have `firstVerb: -1` everywhere (no strip rendered in any room, e.g. the strip component crashed or the selector changed).",
+      "why": "-1 is filtered out as a 'room with no verb', so `rooms` is 0 and `over` is empty, `unread` is 0 and `judge()` passes. Only the bats floor of 20 rooms catches this, and it lives outside judge(). The harness verdict itself accepts a measurement over nothing.",
+      "fix": "Have judge() require a floor of rooms with a verb, or an expected count derived from the contract, plus a mutant at zero.",
+      "twin_of": "A verdict that passes a report missing the measurement it adds -> a new measurement is refused when absent and when it measured zero."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput refusal message (~line 944)",
+      "breaking_input": "Select field value `raw` containing U+2028, ESC (0x1b) or a newline, e.g. campaign `x\\u2028forged: line`.",
+      "why": "The message embeds `raw.slice(0, 80)` inside quotes with no one-line treatment. The text field branch checks the one-line rule, but the select branch runs first and echoes the raw value. The BAD_INPUT message then reaches the owner's page and any parsed log carrying a control character or a forged line. The twin text branch echoes names up to 64 chars the same way.",
+      "fix": "Pass the echoed value through JSON.stringify or the shared oneLine escape before interpolating, in both branches.",
+      "twin_of": "A finding that interpolates a fold-returned string raw -> every value a finding quotes from data is one line, quoted and capped."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:lastMonths and the month field getter",
+      "breaking_input": "The month `options` getter calls `new Date()` on every read. A plan made at 23:59:59 IST on the last day of a month, applied at 00:00:01 the next month, still lists the month in range. The reverse case at the window edge: after 12 months roll, a plan for the oldest month is refused at apply, with the generic message.",
+      "why": "The window is computed from a wall clock inside the op declaration, so validation depends on when it is read and cannot be injected by the door's `now` option. The door has an injected `now`, but the getter ignores it, so tests of the door clock cannot control the option list.",
+      "fix": "Take the clock from the door's now() through validateInput, or pass it as a parameter, and keep the getter pure.",
+      "twin_of": "A bad test clock hung the door -> read the clock at boot; a body built on a forced clock says so."
+    }
+  ]
+}

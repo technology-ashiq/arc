@@ -55,7 +55,15 @@ const check = (name, cond, detail = "") => {
   const planted = dock.replace(/>(\s*)Plan it(\s*)</, ">$1Plan this$2<");
   check("MUTANT: a planted rename of a frozen button is named", planted !== dock && flows.frozenDrift(planted).includes("Plan it"), flows.frozenDrift(planted).join(","));
   const ops = await import(pathToFileURL(join(REPO, ".claude", "scripts", "hq", "face-ops.mjs")).href);
-  const inputs = flows.flowInputs({ tmp: tmpdir(), closeMonth: "2026-01" });
+  // The campaign picker reads the leads store (Cycle 17 P01, ADR-1369): the same scratch store with the browser-flow
+  // campaign the harness makes, so the flow's campaign is one the door serves -- never the box's own ~/.arc/leads.
+  const leadsStore = join(mkdtempSync(join(tmpdir(), "live-pulse-leads-")), "store");
+  process.env.ARC_LEADS_STORE = leadsStore;
+  for (const args of [["store", "init"], ["campaign", "init", "browser-flow"]]) {
+    const r = spawnSync(process.execPath, [join(REPO, ".claude", "scripts", "leads", "arc-leads.mjs"), ...args], { cwd: REPO, encoding: "utf8", timeout: 60_000, env: { ...process.env, ARC_LEADS_STORE: leadsStore } });
+    check(`the scratch leads store: arc-leads ${args.join(" ")} ran`, !r.error && r.status === 0, r.error ? r.error.message : String(r.stderr).slice(0, 200));
+  }
+  const inputs = flows.flowInputs({ tmp: tmpdir(), closeMonth: ops.lastMonths(new Date())[2] });
   const missing = ops.OPS.filter((o) => !Object.hasOwn(inputs, o.id)).map((o) => o.id);
   check("every op the registry holds has a browser flow (REQ-09)", ops.OPS.length > 0 && missing.length === 0, missing.join(","));
   const stray = Object.keys(inputs).filter((id) => !ops.OPS.some((o) => o.id === id));

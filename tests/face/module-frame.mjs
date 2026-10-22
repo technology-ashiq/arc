@@ -547,6 +547,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
   const bornAfter = (contract.servedWithoutModule || []).filter((r) => r && r.status === "built");
   check("the rooms born after v0.7 with a module folder are exactly reference (ADR-1346)",
     JSON.stringify(bornAfter.map((r) => r.id).sort()) === JSON.stringify(["reference"]), JSON.stringify(bornAfter));
+  const recordsLib = await import(pathToFileURL(join(SRC, "lib", "records.mjs")).href);
+  /** @type {string[]} */
+  const declaring = [];
   for (const ring of SHIPPED_RINGS) {
     const want = contract.modules.filter((m) => m.ring === ring && (m.class !== "extra" || exemptions.includes(m.id))).map((m) => m.id)
       .concat(bornAfter.filter((r) => r.ring === ring).map((r) => r.id)).sort();
@@ -586,6 +589,10 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
       const reachable = (manifest.routes || []).some((r) => (door.ASOF_ROUTES || []).includes(r));
       check(`SHIPPED RING ${ring}: ${id}'s asOf claim matches whether the scrub reaches its routes`,
         (manifest.asOf === true) === reachable, `asOf=${String(manifest.asOf)} reachable=${reachable}`);
+      // Cycle 17 P01 (ADR-1365): every collection a fold declares for the Records tab has a shape the table can draw.
+      const recs = recordsLib.recordCollections(folded);
+      if (recs.length > 0) declaring.push(id);
+      for (const c of recs) check(`SHIPPED RING ${ring}: ${id}'s records collection ${c.key} has a drawable shape`, recordsLib.recordsShapeProblems(c).length === 0, recordsLib.recordsShapeProblems(c).join(" ; "));
       for (const ns of (typeof reg.notServedOf === "function" ? reg.notServedOf(folded) : [])) rows.push(`${id} | ${ns.panel} | ${ns.route} | ${ns.sentence}`);
       for (const s of (typeof reg.servedOf === "function" ? reg.servedOf(folded) : [])) servedRows.push(`${id} | ${s.panel} | ${s.route}`);
       for (const v of (typeof reg.verbPendingOf === "function" ? reg.verbPendingOf(folded) : [])) verbRows.push(`${id} | ${v.verb} | ${v.sentence}`);
@@ -613,6 +620,9 @@ const SHIPPED_RINGS = ["command", "kernel", "factory", "money", "company"];
     allServedRows.push(...servedRows);
     allVerbRows.push(...verbRows);
   }
+  // The shape arm above ran over real declarations, not over none (vacuous-pass guard): the four long rooms declare.
+  check("Cycle 17 P01: ventures, money, story and org each declare Records collections (ADR-1365)",
+    ["ventures", "money", "story", "org"].every((id) => declaring.includes(id)), `declaring=${declaring.join(",")}`);
   // Phase 05 (REQ-07, ADR-1339): the VERBS still PENDING -- Phase 03's cards minus each one a work-door op retired.
   // Held equal to the folds both ways, AND to Phase 03's rows minus the registry's `retires`, so a card can neither
   // leave a fold without an op that retires it nor be invented; and every retirement names a real Phase 03 card and

@@ -374,6 +374,14 @@ heading_verdict() {
       || { echo "mood=$mood: the browser drew '$nsPanels' NOT SERVED panels, the residue list names $nsExpected"; false; }
     [ "$nsRooms" = "$nsRoomsExpected" ] \
       || { echo "mood=$mood: NOT SERVED panels per room read '$nsRooms', the residue list names '$nsRoomsExpected'"; false; }
+    # Cycle 17 P01 (REQ-04): every room with a verb draws its first verb above the first screen at 1366x768. The line
+    # is the RAN marker -- no line, or a line that read too few rooms, is a fail, never a pass on silence.
+    local fvLine fvRooms
+    fvLine="$(printf '%s\n' "$output" | grep "^smoke: first-verb mood=$mood " | tail -1)"
+    [ -n "$fvLine" ] || { echo "no first-verb line for mood=$mood (harness exit $status)"; false; }
+    fvRooms="$(printf '%s\n' "$fvLine" | sed -n 's/.* rooms=\([0-9][0-9]*\) over=0 worst=[0-9]* unread=0 max=768 over-rooms=none$/\1/p')"
+    [ -n "$fvRooms" ] && [ "$fvRooms" -ge 20 ] \
+      || { echo "mood=$mood: a first verb sits at or below 768 px, was not read, or too few rooms drew one: $fvLine"; false; }
     printf '%s\n' "$output" | grep -qE "^smoke: served mood=$mood panels=[0-9]+ rooms=[a-z0-9:,-]+\$" \
       || { echo "no served line for mood=$mood (harness exit $status)"; false; }
     local svPanels svRooms svExpected svRoomsExpected

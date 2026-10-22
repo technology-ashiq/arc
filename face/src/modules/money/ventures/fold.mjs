@@ -16,7 +16,7 @@ import {
   KILL_BADGE, OVERHEAD_VENTURE, REAL_KIND, SIM_KIND, asOfSupport, costTally, criterionSentence, fmtInt, killSummary,
   rosterSummary, ventureMoney, ventureRoster,
 } from "../../../lib/money.mjs";
-import { costView, gateView, moneyReads, substanceView } from "../../../lib/money-room.mjs";
+import { costRecords, costView, gateView, moneyReads, substanceView } from "../../../lib/money-room.mjs";
 import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
 
 /** @typedef {import("../../../lib/registry.mjs").Payload} Payload */
@@ -80,6 +80,7 @@ import { roomLink, sourceFile } from "../../../lib/lane-room.mjs";
  * @property {{ canOpen: boolean, room: string }} board
  * @property {{ canOpen: boolean, room: string }} money
  * @property {{ code: string, offer: string }} asof
+ * @property {import("../../../lib/records.mjs").RecordCollection[]} records
  * @property {import("../../../lib/registry.mjs").Read[]} reads
  */
 
@@ -161,6 +162,36 @@ export function fold(payloads, ctx) {
     };
   });
   const realPanel = substanceView(m, "real");
+  const overhead = costRecords("overhead-cost", costView(
+      `the factory · venture: ${OVERHEAD_VENTURE}`,
+      `building the factory is not a cost of any product made in it, so venture: ${OVERHEAD_VENTURE} is overhead and never appears as a venture above. It is shown so its spend is not invisible -- not so it can be counted against a product.`,
+      costTally(m.realView === null ? [] : m.realView.overhead.lines, "GET /api/pnl → model.overhead.lines[]"),
+      m.real,
+    ));
+  // REQ-02 (ADR-1365): the roster's cards are the room's long list, so each venture is one row on the Records tab;
+  // its kill lines and its cost stay in the row as sentences, never dropped.
+  /** @type {import("../../../lib/records.mjs").RecordCollection} */
+  const roster = {
+    key: "ventures",
+    title: "Ventures",
+    columns: [
+      { key: "venture", label: "venture" }, { key: "badge", label: "status" }, { key: "worst", label: "worst kill line" },
+      { key: "earned", label: "earned" }, { key: "kill", label: "kill lines" }, { key: "cost", label: "cost" },
+    ],
+    search: ["venture", "badge", "worst", "kill"],
+    cap: 8,
+    rows: cards.map((v) => ({
+      venture: v.venture,
+      badge: v.badge,
+      worst: v.hasWorst ? v.worst : "—",
+      earned: v.earned,
+      kill: v.hasKill ? v.criteria.map((c) => `${c.criterion}: ${c.headline}`).join(" · ") : v.noKill,
+      cost: v.cost.count,
+    })),
+    isReading: m.real.isReading,
+    isRefused: m.real.isRefused,
+    refusal: m.real.refusal,
+  };
   // Which ventures are DECLARED has one reader: the kill panel, the same body the cards' badges read. The
   // registry's inventory beside it was a second reading of the same fact, and the two could disagree on one
   // screen (money ring attack).
@@ -192,12 +223,7 @@ export function fold(payloads, ctx) {
     cards,
     hasCards: cards.length > 0,
     neverMix: `The real figure and the simulated one come from two separate reads of two separate kinds, ${REAL_KIND} and ${SIM_KIND}. They are never added, never averaged, and the simulated one never wears the colour of the real one.`,
-    overhead: costView(
-      `the factory · venture: ${OVERHEAD_VENTURE}`,
-      `building the factory is not a cost of any product made in it, so venture: ${OVERHEAD_VENTURE} is overhead and never appears as a venture above. It is shown so its spend is not invisible -- not so it can be counted against a product.`,
-      costTally(m.realView === null ? [] : m.realView.overhead.lines, "GET /api/pnl → model.overhead.lines[]"),
-      m.real,
-    ),
+    overhead: overhead.overview,
     overheadLede: "",
     declared: names === null
       ? "Which ventures are declared is read from the criteria file's kill panel, and there is no readable panel on this read -- a fact about the read, not about the company."
@@ -247,6 +273,7 @@ export function fold(payloads, ctx) {
     board: roomLink(ctx, "board"),
     money: roomLink(ctx, "money"),
     asof: { code: asof.code, offer: asof.offer },
+    records: [roster, overhead.records],
     reads,
   };
 }

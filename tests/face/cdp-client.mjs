@@ -357,8 +357,18 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
 
 // ---- smoke + harness pure half ----
 {
-  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
+  const good = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], mood: "dark", moodMiss: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 }, firstVerb: { rooms: 23, over: [], worst: 126, unread: 0 } };
   check("the verdict passes a full, clean, settled run", smoke.judge(good).ok);
+  // Cycle 17 P01 (REQ-04): a verb below the first screen fails the run, and so does a first verb nobody read.
+  check("the verdict fails a first verb at or below 768 px, naming the room", (() => { const v = smoke.judge({ ...good, firstVerb: { rooms: 23, over: ["ventures:6000"], worst: 6000, unread: 0 } }); return !v.ok && v.reasons.some((r) => r.includes("ventures:6000")); })());
+  check("the verdict fails a run where no room drew a verb (attack 7d3f02f B6)", !smoke.judge({ ...good, firstVerb: { rooms: 0, over: [], worst: 0, unread: 0 } }).ok);
+  check("the verdict fails a report whose first verbs were never read", !smoke.judge({ ...good, firstVerb: undefined }).ok && !smoke.judge({ ...good, firstVerb: { rooms: 22, over: [], worst: 126, unread: 1 } }).ok);
+  {
+    const rows = [{ id: "a", opened: true, firstVerb: 126 }, { id: "b", opened: true, firstVerb: 768 }, { id: "c", opened: true, firstVerb: -1 }, { id: "d", opened: false }];
+    const fv = smoke.firstVerbOf(rows);
+    check("firstVerbOf counts rooms with a verb, names the buried one, skips a verbless room", fv.rooms === 2 && fv.over.join() === "b:768" && fv.worst === 768 && fv.unread === 0, JSON.stringify(fv));
+    check("the first-verb line names its counts", smoke.firstVerbLine({ mood: "dark", firstVerb: fv }) === "smoke: first-verb mood=dark rooms=2 over=1 worst=768 unread=0 max=768 over-rooms=b:768", smoke.firstVerbLine({ mood: "dark", firstVerb: fv }));
+  }
   const stub = JSON.parse(readFileSync(join(REPO, "tests", "fixtures", "face", "smoke-stub-report.json"), "utf8"));
   check("the verdict FAILS the stub report of a smoke that never navigated", !smoke.judge(stub).ok && smoke.judge(stub).reasons.some((r) => /opened=0/.test(r)));
   check("the verdict FAILS when nothing was openable", !smoke.judge({ ...good, openable: 0, opened: 0 }).ok);
@@ -532,7 +542,8 @@ check("node floor reports the major so the suite can skip on 18 only", floor.mee
   check("a class list that was not read, or a near-miss class, never holds",
     !smoke.moodHolds(null, "dark") && !smoke.moodHolds(undefined, "light") && !smoke.moodHolds("hq-lightish hq", "light") && !smoke.moodHolds("hqx", "dark") && !smoke.moodHolds("hq", "sepia"));
 
-  const clean = { openable: 33, opened: 33, countedErrors: 0, unsettled: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
+  // Cycle 17 P01 (REQ-04): a clean report read every room's first verb, above the first screen.
+  const clean = { firstVerb: { rooms: 23, over: [], worst: 126, unread: 0 }, openable: 33, opened: 33, countedErrors: 0, unsettled: [], availability: { states: { served: 3, zero: 1, unknown: 1, "not-applicable": 0, "not-instrumented": 2 }, bad: 0, rooms: ["money:7"] }, expected: 33, missingFromDoor: [], unexpectedFromDoor: [], extras: { expected: ["agents", "executor"], opened: ["agents", "executor"], errors: 0 } };
   check("a clean light run passes", smoke.judge({ ...clean, mood: "light", moodMiss: [] }).ok);
   const noLight = smoke.judge({ ...clean, mood: "light", moodMiss: [{ id: "today", htmlClass: "hq" }, { id: "inbox", htmlClass: "hq" }] });
   check("a light run whose rooms lack hq-light FAILS with the spec's words",

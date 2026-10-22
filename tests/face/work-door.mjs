@@ -645,6 +645,70 @@ try {
     let expired = null;
     try { door.apply("fixture.count", { planId: p2.planId }); } catch (e) { expired = e.code; }
     check("an expired plan -> PLAN_EXPIRED, and the tool was not run", expired === "PLAN_EXPIRED" && readFileSync(counter, "utf8") === "xxx", `code=${expired} count=${readFileSync(counter, "utf8").length}`);
+    // ---- pickers (Cycle 17 P01, REQ-03, ADR-1369): a value outside the served list is refused at plan, naming the field
+    // and the value, and a value that LEFT the list after its plan is refused at apply, with the tool never run ----
+    {
+      console.log("RAN picker membership checks");
+      const pickerHolds = async (row, list) => {
+        const reg = [{ ...registry[0], id: "fixture.pick", fields: [row] }];
+        const pd = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_C, repo: fx }, { registry: reg, now: () => clock });
+        list.splice(0, list.length, "alpha", "beta");
+        let outside = "";
+        try { await pd.plan("fixture.pick", { input: { thing: "gamma" } }); outside = "PLANNED"; } catch (e) { outside = `${e.code} ${e.message}`; }
+        if (!/^BAD_INPUT /.test(outside) || !outside.includes("thing") || !outside.includes("gamma")) return `outside value: ${outside}`;
+        const ok = await pd.plan("fixture.pick", { input: { thing: "beta" } });
+        if (ok.ok !== true) return `inside value did not plan: ${JSON.stringify(ok).slice(0, 160)}`;
+        list.splice(1, 1);
+        const before = readFileSync(counter, "utf8").length;
+        let gone = "";
+        try { pd.apply("fixture.pick", { planId: ok.planId }); gone = "APPLIED"; } catch (e) { gone = `${e.code} ${e.message}`; }
+        await pd.settled();
+        if (!/^OPTION_GONE /.test(gone) || !gone.includes("beta")) return `value gone at apply: ${gone}`;
+        if (readFileSync(counter, "utf8").length !== before) return "the tool ran on a value that left its list";
+        return "";
+      };
+      const live = [];
+      const real = await pickerHolds({ name: "thing", label: "Thing", placeholder: "", type: "select", get options() { return [...live]; }, required: true }, live);
+      check("a picker refuses an outside value at plan (field + value named) and a value that left its list at apply", real === "", real);
+      const staleList = [];
+      let snapshot = null;
+      const stale = await pickerHolds({ name: "thing", label: "Thing", placeholder: "", type: "select", get options() { if (snapshot === null) snapshot = ["alpha", "beta"]; return snapshot; }, required: true }, staleList);
+      check("MUTANT CONTROL: a picker serving a stale list fails the membership check", stale !== "", stale);
+      const skipList = [];
+      const skipped = await pickerHolds({ name: "thing", label: "Thing", placeholder: "", type: "text", max: 64, pattern: "[a-z]+", required: true, get options() { return [...skipList]; } }, skipList);
+      check("MUTANT CONTROL: a picker whose plan skips the membership check fails it", skipped !== "", skipped);
+      // The months a close may name, from an injected clock (IST): 31 Dec, 1 Jan just after midnight, and 29 Feb.
+      const m = OPS_MOD.lastMonths;
+      check("lastMonths: 31 Dec 2026 offers 2026-12 down to 2026-01", JSON.stringify(m(new Date("2026-12-31T23:00:00+05:30"))) === JSON.stringify(["2026-12", "2026-11", "2026-10", "2026-09", "2026-08", "2026-07", "2026-06", "2026-05", "2026-04", "2026-03", "2026-02", "2026-01"]));
+      check("lastMonths: 00:30 IST on 1 Jan 2027 is January, though UTC still reads December", m(new Date("2027-01-01T00:30:00+05:30"))[0] === "2027-01" && m(new Date("2027-01-01T00:30:00+05:30"))[11] === "2026-02");
+      // The month window is judged on the caller's clock (attack b0a4249 L1): a door at 2026-03 refuses 2025-02.
+      const close = OPS_MOD.OPS.find((o) => o.id === "money.close-month");
+      let at = "";
+      try { OPS_MOD.validateInput(close, { month: "2025-02" }, Date.parse("2026-03-10T12:00:00+05:30")); at = "ACCEPTED"; } catch (e) { at = e.code; }
+      let inside = "";
+      try { OPS_MOD.validateInput(close, { month: "2025-04" }, Date.parse("2026-03-10T12:00:00+05:30")); inside = "ACCEPTED"; } catch (e) { inside = e.code; }
+      check("close-month judges its window on the injected clock, not the wall clock", at === "BAD_INPUT" && inside === "ACCEPTED", `${at} ${inside}`);
+      // An unreadable campaigns store is FIELD_UNKNOWN at plan, never planned on (attack b0a4249 B3).
+      const leadsBefore = process.env.ARC_LEADS_STORE;
+      const badStore = join(tmp, "bad-leads");
+      mkdirSync(badStore, { recursive: true });
+      writeFileSync(join(badStore, "campaigns"), "not a directory");
+      process.env.ARC_LEADS_STORE = badStore;
+      let unread = "";
+      try { OPS_MOD.validateInput(OPS_MOD.OPS.find((o) => o.id === "leads.daily-send"), { campaign: "pilot" }); unread = "ACCEPTED"; } catch (e) { unread = e.code; }
+      if (leadsBefore === undefined) delete process.env.ARC_LEADS_STORE; else process.env.ARC_LEADS_STORE = leadsBefore;
+      check("a campaigns store that is a file, not a directory: FIELD_UNKNOWN, never planned on", unread === "FIELD_UNKNOWN", unread);
+      check("lastMonths: 29 Feb 2028 offers 2028-02 down to 2027-03", m(new Date("2028-02-29T12:00:00+05:30"))[0] === "2028-02" && m(new Date("2028-02-29T12:00:00+05:30"))[11] === "2027-03" && m(new Date("2028-02-29T12:00:00+05:30")).length === 12);
+      // Every field that names an existing venture, campaign or month is a picker, or a list checked against its source.
+      const kindOf = (id, name) => { const o = OPS_MOD.OPS.find((x) => x.id === id); const f = o && o.fields.find((x) => x.name === name); return f ? f.type : "missing"; };
+      for (const [id, name] of [["money.ingest", "venture"], ["ventures.kill-review", "venture"], ["legal.full-read", "venture"], ["leads.daily-send", "campaign"], ["money.close-month", "month"]])
+        check(`${id}.${name} is a picker`, kindOf(id, name) === "select", kindOf(id, name));
+      check("org.seat-assign.agents is checked name by name against the agents the door holds", Object.hasOwn(OPS_MOD.FIELD_SOURCES["org.seat-assign"] || {}, "agents"));
+      const seat = OPS_MOD.OPS.find((o) => o.id === "org.seat-assign");
+      let seatErr = "";
+      try { OPS_MOD.validateInput(seat, { role: "coo-dispatcher", seat: "agent", agents: "researcher,no-such-agent" }); seatErr = "ACCEPTED"; } catch (e) { seatErr = `${e.code} ${e.message}`; }
+      check("an agent the door does not hold is refused by name", /^BAD_INPUT /.test(seatErr) && seatErr.includes("no-such-agent") && !seatErr.includes("\"researcher\""), seatErr);
+    }
     // THE CLICK, for each of the four human-run ops (Phase 05 DoD): under each op's REAL id and its REAL humanRun flag
     // from the registry, over the counting tool -- so the send and the legal stamp, which refuse or are refused
     // SIM_EFFECT before the door's confirmation rule on this tree, are held to it too (spec-fidelity at the close).

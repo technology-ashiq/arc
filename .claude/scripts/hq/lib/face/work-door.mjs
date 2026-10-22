@@ -209,7 +209,7 @@ export function createWorkDoor(ctx, opts = {}) {
     if (body !== null && typeof body === "object" && !Array.isArray(body)) {
       for (const k of Object.keys(body)) if (k !== "input") throw new OpError("BAD_INPUT", `a plan takes { input }, not "${k}"`);
     } else throw new OpError("BAD_INPUT", "a plan takes { input: { ...fields } }");
-    const values = validateInput(op, /** @type {any} */ (body).input);
+    const values = validateInput(op, /** @type {any} */ (body).input, now());
     // A sim door answers against a fixture spine; a paid model called from one would spend real money to write a
     // receipt nobody can trust. The row says when its run is free (the mock driver); nothing else runs here.
     if (ctx.mode === "sim" && op.spends && !(typeof op.simSafe === "function" && op.simSafe(values)))
@@ -301,6 +301,14 @@ export function createWorkDoor(ctx, opts = {}) {
       throw new OpError("SIM_EFFECT", `${op.id} ${op.touchesOs ? "registers a task with this machine's scheduler" : op.touchesTree ? "writes a lane's tracker in this checkout" : op.leavesMachine ? "acts outside the spine and outside a branch -- it sends, or writes files in this checkout" : "writes a proposal branch to this repository"}, and this door is in sim mode -- the plan above is the whole rehearsal`);
     if (p.state !== "planned") return { ...view(p), replayed: true };
     if (p.expiresAt <= now()) { plans.delete(planId); throw new OpError("PLAN_EXPIRED", "that plan expired before it was applied -- plan again, and read the new one"); }
+    // REQ-03 (ADR-1369): a picker's options are read again here, so a value that left its list between the plan and the
+    // click -- a venture removed, a month rolled out of the window -- is refused before the claim, never applied.
+    // A source that cannot be read stays FIELD_UNKNOWN; a value that left a list it was read from is OPTION_GONE, so the
+    // owner can tell "the list moved" from "the list is unreadable" (attack 7d3f02f B4).
+    try { validateInput(op, p.values, now()); } catch (e) {
+      if (e instanceof OpError && e.code === "BAD_INPUT") throw new OpError("OPTION_GONE", `a value this plan was made with is no longer offered -- plan again. ${e.message}`);
+      throw e;
+    }
 
     // THE CLAIM. Synchronous, before the first await: a second apply of this plan id, from anywhere, sees "running"
     // and replays -- it cannot start a second run.

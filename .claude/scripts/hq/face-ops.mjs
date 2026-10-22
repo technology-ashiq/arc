@@ -36,13 +36,14 @@
 //
 // Exit: 0 printed | 2 bad arguments.
 
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { parseVentures } from "./lib/ledger/ventures.mjs";
 import { venturesPath } from "./lib/ledger/kill-panel.mjs";
 import { ONE_LINE_SRC, ONE_LINE_BAD_SRC } from "../core/one-line.mjs";
 import { AGENT_TOOLS } from "../engine/agent-scaffold.mjs";
+import { storePath as leadsStorePath } from "../leads/lib/store.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -186,12 +187,109 @@ function registeredVentures() {
  * phase-15-spec.md before any code; an op not here is not gated. When the source's read failed the op refuses
  * FIELD_UNKNOWN rather than planning on an empty list (money.criteria, money.close-month and ventures.register read no
  * such field).
- * @type {Readonly<Record<string, Readonly<Record<string, () => { failure: string, options: string[] }>>>>}
+ * @type {Readonly<Record<string, Readonly<Record<string, (now: number) => { failure: string, options: string[] }>>>>}
  */
 export const FIELD_SOURCES = Object.freeze({
   "money.ingest": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
   "ventures.kill-review": Object.freeze({ venture: () => { const r = venturesRead(); return { failure: r.failure, options: r.ventures }; } }),
+  // Cycle 17 P01 (REQ-03, ADR-1369): the other fields that name an existing thing. A text field with a source is a
+  // LIST of names (seat-assign binds several agents), and every name in it must be one the source holds.
+  "leads.daily-send": Object.freeze({ campaign: () => leadsCampaigns() }),
+  "legal.full-read": Object.freeze({ venture: () => legalVentures() }),
+  "org.seat-assign": Object.freeze({ agents: () => agentNames() }),
+  // The month window is judged on the DOOR's clock, never the wall clock read inside the row (attack b0a4249 L1).
+  "money.close-month": Object.freeze({ month: (now) => ({ failure: "", options: lastMonths(new Date(now)) }) }),
 });
+
+/**
+ * The months a close may name (REQ-03): this month and the eleven before it, newest first, counted in IST -- the
+ * spine's clock -- so 00:30 on 1 January in Chennai is January even though it is still December in UTC. Pure: the
+ * caller hands `now` in.
+ * @param {Date} now @param {number} [n] @returns {string[]}
+ */
+export function lastMonths(now, n = 12) {
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth() - i, 1));
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+/**
+ * Whether a listed entry is what its name claims, read with lstat so a symlink or junction is never followed: a
+ * directory named `x.json`, or a link pointing out of the tree, is not a pickable name (attack 7d3f02f B1, B2).
+ * @param {string} p @param {"file" | "dir"} kind
+ */
+function entryIs(p, kind) {
+  try { const st = lstatSync(p); return kind === "file" ? st.isFile() : st.isDirectory(); } catch { return false; }
+}
+
+/**
+ * A picker source's directory, listed only when it is itself a real directory: a linked or junctioned listing root
+ * would make every lstat-clean entry one outside the tree (attack 8dec47f B2). An absent directory is `null` -- none
+ * yet -- while a link, a file or a dangling link where the directory should be is a failure, never "none" (B3).
+ * @param {string} dir @returns {string[] | null}
+ */
+function listRealDir(dir) {
+  let st;
+  try { st = lstatSync(dir); } catch (e) { if (errCode(e) === "ENOENT") return null; throw e; }
+  if (!st.isDirectory()) throw Object.assign(new Error("not a directory"), { code: st.isSymbolicLink() ? "LINKED_SOURCE" : "ENOTDIR" });
+  return readdirSync(dir);
+}
+
+/** A refused value as the refusal echoes it: printable ASCII only, so no control or line-break character rides out. */
+const echo = (v, n) => String(v).slice(0, n).replace(/[^ -~]/g, "?");
+
+/** An error's code, or THREW. @param {unknown} e @returns {string} */
+const errCode = (e) => (e !== null && typeof e === "object" && typeof (/** @type {any} */ (e).code) === "string" ? /** @type {any} */ (e).code : "THREW");
+
+/**
+ * The campaigns the leads store holds (REQ-03). A store that was never initialised holds none -- "none yet" -- while a
+ * store that exists and cannot be listed is unknown, never an empty list.
+ * @returns {{ failure: string, options: string[] }}
+ */
+function leadsCampaigns() {
+  try {
+    const dir = join(leadsStorePath(), "campaigns");
+    const listed = listRealDir(dir);
+    if (listed === null) return { failure: "", options: [] };
+    const names = listed.filter((f) => /^[a-z0-9-]{1,64}\.json$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -5));
+    return { failure: "", options: names.sort() };
+  } catch (e) {
+    return { failure: errCode(e), options: [] };
+  }
+}
+
+/** The ventures a full legal read can name: the legal fixtures' ventures and every registered one (REQ-03). */
+function legalVentures() {
+  const reg = venturesRead();
+  /** @type {string[]} */
+  let fixtures = [];
+  try {
+    const dir = join(HERE, "..", "..", "..", "tests", "fixtures", "legal", "ventures");
+    fixtures = (listRealDir(dir) ?? []).filter((n) => /^[a-z][a-z0-9-]{0,63}$/.test(n) && entryIs(join(dir, n), "dir"));
+  } catch (e) {
+    // A link or a file where the fixtures directory should be is a failure, never "no fixtures" (attack b0a4249 B1).
+    return { failure: errCode(e), options: [] };
+  }
+  // A registry that could not be read makes the whole field unknown: a full read sends on facts whose standing is
+  // then unknown, so the fixtures alone never stand in for it (attack b0a4249 L4).
+  if (reg.failure !== "") return { failure: reg.failure, options: [] };
+  return { failure: "", options: [...new Set([...fixtures, ...reg.ventures])].sort() };
+}
+
+/** The agents a seat can bind: every `.claude/agents/<name>.md` (REQ-03). */
+function agentNames() {
+  try {
+    const dir = join(HERE, "..", "..", "agents");
+    const names = (listRealDir(dir) ?? []).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f) && entryIs(join(dir, f), "file")).map((f) => f.slice(0, -3));
+    return { failure: "", options: names.sort() };
+  } catch (e) {
+    return { failure: errCode(e), options: [] };
+  }
+}
 
 /** The rooms a term can be homed in: the contract's BUILT rooms and the lane template -- a planned room opens nothing. */
 function conceptRooms() {
@@ -435,7 +533,7 @@ export const OPS = Object.freeze([
     retires: Object.freeze({ module: "money", verb: "Close the month" }),
     humanRun: true, spends: false, touchesFiles: false,
     fields: Object.freeze([
-      Object.freeze({ name: "month", label: "Month", placeholder: "2026-10", type: "text", max: 7, pattern: "\\d{4}-(0[1-9]|1[0-2])", required: true }),
+      Object.freeze({ name: "month", label: "Month", placeholder: "", type: "select", get options() { return Object.freeze(lastMonths(new Date())); }, required: true }),
       // Optional: a month no rail touched reconciles against nothing, and the close says so itself. When a rail DID
       // move money, arc-pnl refuses the close without its total -- that refusal is the gate, not this form.
       Object.freeze({ name: "totals", label: "Provider totals", placeholder: "razorpay:INR=0 mor:INR=0", type: "text", max: 400, pattern: "[a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}( [a-z][a-z0-9-]*:[A-Z]{3}=[0-9]{1,15}){0,7}", required: false }),
@@ -538,7 +636,7 @@ export const OPS = Object.freeze([
       Object.freeze({ name: "role", label: "Role", placeholder: "coo-dispatcher", type: "text", max: 64, pattern: "[a-z][a-z0-9-]*", required: true }),
       Object.freeze({ name: "seat", label: "Seat", placeholder: "", type: "select", options: Object.freeze(["agent", "vacant"]), required: true }),
       // The tool's own grammar, so the door refuses what the tool would: names, comma-separated, no spaces.
-      Object.freeze({ name: "agents", label: "Agents (empty for a vacant seat)", placeholder: "researcher,code-reviewer", type: "text", max: 1600, pattern: "[a-z0-9][a-z0-9-]{0,63}(,[a-z0-9][a-z0-9-]{0,63}){0,23}", required: false }),
+      Object.freeze({ name: "agents", label: "Agents (empty for a vacant seat)", placeholder: "researcher,code-reviewer", type: "text", list: ",", max: 1600, pattern: "[a-z0-9][a-z0-9-]{0,63}(,[a-z0-9][a-z0-9-]{0,63}){0,23}", required: false }),
     ]),
     plan: (v) => ({ script: "org/org-own.mjs", args: ["--assign", "--role", v.role, "--seat", v.seat, ...(v.agents ? ["--agents", v.agents] : []), "--dry-run"] }),
     apply: (v) => ({ script: "org/org-own.mjs", args: ["--assign", "--role", v.role, "--seat", v.seat, ...(v.agents ? ["--agents", v.agents] : [])] }),
@@ -576,7 +674,7 @@ export const OPS = Object.freeze([
     // leavesMachine: mail leaves this machine. Without a flag for it a SIM door ran the real send (PR 5c round-1 attacks).
     humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
-      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "pilot", type: "text", max: 64, pattern: "[a-z0-9-]{1,64}", required: true }),
+      Object.freeze({ name: "campaign", label: "Campaign", placeholder: "", type: "select", get options() { return Object.freeze(leadsCampaigns().options); }, required: true }),
     ]),
     plan: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign, "--dry-run"] }),
     apply: (v) => ({ script: "leads/arc-leads.mjs", args: ["daily", v.campaign] }),
@@ -595,7 +693,7 @@ export const OPS = Object.freeze([
     // proposal branch -- so a sim door refuses it (PR 5c round-1 attacks; "gitignored" is not "not in this checkout").
     humanRun: true, spends: false, touchesFiles: false, leavesMachine: true,
     fields: Object.freeze([
-      Object.freeze({ name: "venture", label: "Venture", placeholder: "lexos", type: "text", max: 64, pattern: "[a-z][a-z0-9-]{0,63}", required: true }),
+      Object.freeze({ name: "venture", label: "Venture", placeholder: "", type: "select", get options() { return Object.freeze(legalVentures().options); }, required: true }),
     ]),
     // The pages carry a real venture's contact facts, so they are rendered under the gitignored state directory, never
     // into this public tree; the facts themselves come from ARC_LEGAL_VENTURE_DIR, which the tool never prints.
@@ -851,10 +949,10 @@ export function opById(id) {
 /**
  * The owner's fields, checked against the row. Strings only, every key known, every required key present, each
  * value inside its pattern, options or range. Returns the values the plan and apply builders see -- nothing else.
- * @param {typeof OPS[number]} op @param {unknown} input
+ * @param {typeof OPS[number]} op @param {unknown} input @param {number} [now] the caller's clock (ms), for a windowed source
  * @returns {Record<string, string>}
  */
-export function validateInput(op, input) {
+export function validateInput(op, input, now = Date.now()) {
   if (input === null || typeof input !== "object" || Array.isArray(input))
     throw new OpError("BAD_INPUT", `${op.id} takes an object of fields (${op.fields.map((f) => f.name).join(", ")})`);
   const known = new Set(op.fields.map((f) => f.name));
@@ -868,7 +966,7 @@ export function validateInput(op, input) {
     const source = Object.hasOwn(FIELD_SOURCES, op.id) && Object.hasOwn(FIELD_SOURCES[op.id], f.name) ? FIELD_SOURCES[op.id][f.name] : null;
     // ONE read judges the source and supplies the options the value is checked against (attack c0fc549 B8): judging one
     // read and checking against another let a file swapped between them pass a value neither read held.
-    const read = source === null ? null : source();
+    const read = source === null ? null : source(now);
     if (read !== null) {
       const { failure } = read;
       if (failure !== "") throw new OpError("FIELD_UNKNOWN", `${f.label} is read from a source that could not be read (${failure}), so it is unknown -- not empty; ${op.id} does not plan on it`);
@@ -880,7 +978,8 @@ export function validateInput(op, input) {
     if (typeof raw !== "string") throw new OpError("BAD_INPUT", `${f.label} must be text`);
     if (f.type === "select") {
       const options = read !== null ? read.options : f.options;
-      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} must be one of ${options.join(", ")}`);
+      // The field and the value are both named (REQ-03): "must be one of" alone left the owner guessing what was sent.
+      if (!options.includes(raw)) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) "${echo(raw, 80)}" is not one of the options the door serves: ${options.length ? `${options.slice(0, 12).join(", ")}${options.length > 12 ? ` and ${options.length - 12} more` : ""}` : "none yet -- create one first"}`);
     } else if (f.type === "int") {
       if (!/^(0|[1-9][0-9]*)$/.test(raw)) throw new OpError("BAD_INPUT", `${f.label} must be a whole number`);
       const n = Number(raw);
@@ -897,6 +996,17 @@ export function validateInput(op, input) {
       if (raw.startsWith("-")) throw new OpError("BAD_INPUT", `${f.label} may not start with "-" -- a tool could read it as a flag`);
       if (f.pattern === ONE_LINE && refusedChar(raw)) throw new OpError("BAD_INPUT", `${f.label} is one line of text, and it holds ${refusedChar(raw)}`);
       if (!new RegExp(`^(?:${f.pattern})$`, "u").test(raw)) throw new OpError("BAD_INPUT", `${f.label} is not in the shape this op takes (${f.placeholder || f.pattern})`);
+      // A text field with a source is a list of existing names: each one must be in the source's own read.
+      // The separator is the field's own declaration -- the one the tool is handed (`--agents a,b`) -- never a guess
+      // here; a sourced text field that declares none is checked whole (attack 8dec47f B1).
+      if (read !== null) {
+        const names = typeof f.list === "string" && f.list !== "" ? raw.split(f.list) : [raw];
+        const unknown = names.filter((x) => !read.options.includes(x));
+        if (unknown.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${unknown.map((x) => `"${echo(x, 64)}"`).join(", ")}, which the door does not hold`);
+        // A name given twice binds one thing twice (attack 7d3f02f B3).
+        const twice = names.filter((x, i) => names.indexOf(x) !== i);
+        if (twice.length) throw new OpError("BAD_INPUT", `${f.label} (${f.name}) names ${twice.map((x) => `"${echo(x, 64)}"`).join(", ")} more than once`);
+      }
     }
     out[f.name] = raw;
   }
@@ -972,7 +1082,13 @@ export function registryView(registry = OPS) {
     receipt: o.receipt, binding: o.binding, retires: o.retires || null,
     humanRun: o.humanRun, spends: o.spends, touchesFiles: o.touchesFiles, touchesOs: o.touchesOs === true, touchesTree: o.touchesTree === true,
     leavesMachine: o.leavesMachine === true, expect: o.expect === true,
-    fields: o.fields,
+    // A sourced field carries whether its source could be read, so the page can say "could not be read" rather than
+    // "none yet" over an empty list (attack 8dec47f B4).
+    fields: o.fields.map((f) => {
+      const src = Object.hasOwn(FIELD_SOURCES, o.id) && Object.hasOwn(FIELD_SOURCES[o.id], f.name) ? FIELD_SOURCES[o.id][f.name](Date.now()) : null;
+      // sourceSize: a sourced TEXT field with nothing to name is as empty as a select with no option (attack b0a4249 L5).
+      return src === null ? f : { ...f, ...(f.type === "select" ? { options: src.options } : {}), sourceFailure: src.failure, sourceSize: src.options.length };
+    }),
     apply: typeof o.apply === "function" ? "argv" : o.apply,
   }));
 }

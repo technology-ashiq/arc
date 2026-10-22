@@ -1099,5 +1099,48 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   check("Tailwind and phosphor stop at L3: no lib file imports them", libImports.length === 0, libImports.join(", "));
 }
 
+// ── face v3 Cycle 17 P01 (REQ-02, REQ-04; ADR-1365): the frame's order and the Records tab's decisions ──
+{
+  const frame = await import(pathToFileURL(join(LIB, "frame.mjs")).href);
+  const rec = await import(pathToFileURL(join(LIB, "records.mjs")).href);
+  console.log("RAN frame-order + records checks");
+  // REQ-04's node half: the strip is drawn before the tab body. The checker is run on a mutant first -- the order with the
+  // strip after the body -- so a checker that passes everything cannot pass here (the vacuous-pass rule).
+  const stripFirst = (order) => {
+    const i = order.indexOf("strip"), j = order.indexOf("body");
+    return i >= 0 && j >= 0 && i < j ? "" : `strip index ${i} >= View index ${j}`;
+  };
+  const mutant = ["tabs", "problems", "body", "strip", "drawer"];
+  check("MUTANT CONTROL -- a frame that draws the strip after the View fails the first-verb order", stripFirst(mutant) !== "", stripFirst(mutant));
+  check("the frame draws the action strip before the tab body (first verb above the content)", stripFirst([...frame.frameSections()]) === "", stripFirst([...frame.frameSections()]));
+  check("frameSections names each section once", new Set(frame.frameSections()).size === frame.frameSections().length);
+  check("Records is a tab only when the fold declares a collection", JSON.stringify(frame.frameTabs(1, 0, 0)) === '["overview","work"]' && JSON.stringify(frame.frameTabs(0, 0, 2)) === '["overview","records"]' && JSON.stringify(frame.frameTabs(1, 1, 1)) === '["overview","records","work"]');
+  check("the Records tab reads Records", frame.tabLabel("records") === "Records");
+
+  const good = { key: "things", title: "Things", columns: [{ key: "name", label: "name" }, { key: "n", label: "n" }], search: ["name"], cap: 8, rows: [{ name: "a", n: 1 }], isReading: false, isRefused: false, refusal: { code: "", human: "" } };
+  check("a well-formed declaration has no shape problem", rec.recordsShapeProblems(good).length === 0, rec.recordsShapeProblems(good).join(" | "));
+  const noCol = rec.recordsShapeProblems({ ...good, columns: [...good.columns, { key: "colour", label: "colour" }] });
+  check("a column its rows lack is named", noCol.includes("unknown column colour in things"), noCol.join(" | "));
+  for (const cap of [0, -1, 1.5]) check(`a cap of ${cap} is refused`, rec.recordsShapeProblems({ ...good, cap }).some((x) => x.startsWith(`cap ${cap}`)));
+  check("a search field that is not a column is named", rec.recordsShapeProblems({ ...good, search: ["secret"] }).includes("search field secret in things is not a column"));
+
+  const rows = [{ name: "Alpha.(x)" }, { name: "beta" }, { name: "GAMMA" }];
+  check("search is a case-insensitive substring", rec.recordsMatch(rows, "gam", ["name"]).length === 1 && rec.recordsMatch(rows, "A", ["name"]).length === 3);
+  let threw = false, meta = [];
+  try { meta = rec.recordsMatch(rows, ".(x", ["name"]); rec.recordsMatch(rows, "[", ["name"]); rec.recordsMatch(rows, "(", ["name"]); } catch { threw = true; }
+  check("a regex metacharacter query matches itself and never throws", !threw && meta.length === 1 && rec.recordsMatch(rows, ".*", ["name"]).length === 0);
+  check("an empty query keeps every row", rec.recordsMatch(rows, "  ", ["name"]).length === 3);
+
+  const many = Array.from({ length: 5000 }, (_, i) => ({ name: `row ${i}` }));
+  const t0 = Date.now();
+  const capped = rec.recordsWindow(many, 8, false), all = rec.recordsWindow(many, 8, true), hit = rec.recordsMatch(many, "row 4", ["name"]);
+  const ms = Date.now() - t0;
+  check("8 rows by default, with show all N", capped.rows.length === 8 && capped.more === "show all 5000", capped.more);
+  check("show all draws at most 200 rows, then names the rest", all.rows.length === 200 && all.more === "4800 more -- narrow the search", all.more);
+  check("a 5,000-row read is windowed and searched in under a second", ms < 1000 && hit.length === 1111, `${ms} ms, ${hit.length} hits`);
+  check("a short list draws whole with no more line", rec.recordsWindow(rows, 8, false).more === "" && rec.recordsWindow(rows, 8, false).rows.length === 3);
+  check("a fold with no records declares none", rec.recordCollections({}).length === 0 && rec.recordCollections(null).length === 0);
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;

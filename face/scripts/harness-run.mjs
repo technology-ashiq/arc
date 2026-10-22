@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runFlows, flowsLine } from "./flows.mjs";
-import { runFrontDoor, frontDoorLine, judgeFrontDoor, FRONT_DOOR_CHECKS, runSmoke, summaryLines, renderLine, notServedLine, servedLine, availabilityLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
+import { runFrontDoor, frontDoorLine, judgeFrontDoor, FRONT_DOOR_CHECKS, runSmoke, summaryLines, renderLine, notServedLine, servedLine, firstVerbLine, availabilityLine, verbsPendingLine, headingLine, rehearsalLine, plannedLine, extrasLine, runnerLine, largestBodyLine, judge, redactSecrets, SetupError, MOODS, oneLine, expectedOpenable as smokeExpectedOpenable, expectedPlannedIds, expectedExtras } from "./smoke.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FACE_DEFAULT = resolve(HERE, "..");
@@ -197,6 +197,7 @@ export async function runHarness(opts, log = (l) => process.stdout.write(l + "\n
       log(renderLine(report));
       log(notServedLine(report));
       log(servedLine(report));
+      log(firstVerbLine(report));
       log(availabilityLine(report));
       log(verbsPendingLine(report));
       log(rehearsalLine(report));

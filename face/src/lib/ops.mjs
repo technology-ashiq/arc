@@ -11,7 +11,7 @@
 
 import { unescapeDoorText } from "./door.mjs";
 
-/** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean, maxBytes: number }} OpField */
+/** @typedef {{ name: string, label: string, placeholder: string, type: "text" | "select" | "int", options: string[], required: boolean, maxBytes: number, sourceFailure: string, sourceSize: number }} OpField */
 /**
  * @typedef {{ id: string, state: "loading" } | { id: string, state: "absent", why: string } |
  *   { id: string, state: "ready", label: string, hint: string, humanRun: boolean, spends: boolean, touchesFiles: boolean, touchesOs: boolean, touchesTree: boolean, leavesMachine: boolean, receiptKind: string, fields: OpField[] }} OpCard
@@ -58,6 +58,10 @@ export function opCards(moduleOps, registry) {
         type: f.type === "select" || f.type === "int" ? f.type : "text",
         options: Array.isArray(f.options) ? f.options.map(String) : [],
         required: f.required === true,
+        // The code a sourced field's list could not be read with, or "" (attack 8dec47f B4).
+        sourceFailure: typeof f.sourceFailure === "string" ? f.sourceFailure : "",
+        // How many names a sourced field's source holds, or -1 for a field with no source (attack b0a4249 L5).
+        sourceSize: Number.isInteger(f.sourceSize) ? f.sourceSize : -1,
         // A text field's cap is in BYTES (the door's unit on the wire and in the receipt); 0 = no cap to show.
         maxBytes: (f.type === "select" || f.type === "int") ? 0 : (Number.isInteger(f.max) && f.max > 0 ? f.max : 0),
       })),
@@ -67,6 +71,22 @@ export function opCards(moduleOps, registry) {
 
 /** @type {OpState} */
 export const IDLE = Object.freeze({ phase: "idle" });
+
+/** What an empty picker says (REQ-03): there is nothing to pick yet, so nothing can be planned on it. */
+export const NONE_YET = "none yet -- create one first";
+
+/**
+ * The first required picker on a ready card with no option to pick, or null (REQ-03, ADR-1369): the field is drawn
+ * disabled, Plan stays disabled, and the strip button reads not ready -- never an empty select that plans a blank.
+ * @param {any} card @returns {{ name: string, label: string, why: string } | null}
+ */
+export function emptyPicker(card) {
+  if (!card || card.state !== "ready" || !Array.isArray(card.fields)) return null;
+  const f = card.fields.find((/** @type {any} */ x) => x && x.required === true && ((typeof x.sourceFailure === "string" && x.sourceFailure !== "") || (x.type === "select" && Array.isArray(x.options) && x.options.length === 0) || x.sourceSize === 0));
+  if (!f) return null;
+  const why = typeof f.sourceFailure === "string" && f.sourceFailure !== "" ? `its list could not be read (${f.sourceFailure})` : NONE_YET;
+  return { name: String(f.name), label: String(f.label || f.name), why };
+}
 
 /**
  * The fields a plan sends: every field the card names, trimmed of nothing (the door refuses edge whitespace itself, and
@@ -103,6 +123,8 @@ export function fieldCount(field, value) {
  */
 export function planBlocked(card, values) {
   if (card.state !== "ready") return card.state === "absent" ? card.why : "the door's op list is still loading";
+  const empty = emptyPicker(card);
+  if (empty !== null) return `${empty.label}: ${empty.why}`;
   const missing = card.fields.filter((f) => f.required && !(typeof values[f.name] === "string" && values[f.name] !== ""));
   return missing.length ? `fill in ${missing.map((f) => f.label).join(", ")}` : null;
 }
