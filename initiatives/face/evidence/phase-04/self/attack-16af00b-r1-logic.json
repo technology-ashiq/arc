@@ -1,0 +1,104 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:229-237",
+      "breaking_input": "Pass `--base 1111111111111111111111111111111111111111` (a real 40-hex known-good SHA) while a tag named `refs/tags/1111111111111111111111111111111111111111` has been created pointing at an evil commit holding a swapped owner key.",
+      "why": "The new code treats a 40-64 hex literal as `literal=true` and sets `shadows=[]`, so it never checks whether a ref with exactly that SHA name exists. `git rev-parse --verify --end-of-options <sha>^{commit}` can resolve a ref named as the hex string instead of the object, so a planted `refs/tags/<sha>` shadows the real base. The old code scanned `refs/tags/<sha>` and refused it as ambiguous; the fix only guards full `refs/...` names and explicitly claims SHA literals cannot be shadowed.",
+      "fix": "For a literal SHA or HEAD, resolve the exact ref name too: refuse when `refs/tags/<base>` or any other ref names exactly the literal, and verify the resolved object's SHA equals the literal when the literal is a SHA.",
+      "twin_of": "A case-insensitive ref shadow"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "face/src/lib/rail.mjs:107-115",
+      "breaking_input": "A localStorage value that is a JSON object with 1,000,000 keys, each invalid (e.g. `{\"a.b\": 1, ...}`) — all fail `usableKey` or the boolean check, so `n` never reaches `SAVED_MAX` and the loop walks every entry.",
+      "why": "The cap is on accepted output keys, not on the walk. `Object.entries(v)` already materialises the whole object, and the loop only breaks after 64 accepted booleans. A hostile entry full of non-boolean or unusable keys is still fully walked, defeating the D113 DoS cap that the comment claims.",
+      "fix": "Count every iteration and break when the iteration budget is reached, before `Object.entries` if possible (e.g. iterate with `Object.keys` and stop at a hard bound), and cap the parsed JSON input size earlier.",
+      "twin_of": "An unbounded fragment beside a capped buffer"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "face/src/shell/Rail.tsx:56-60",
+      "breaking_input": "Two tabs open: tab A has ring X collapsed (`saved=false`), tab B has it expanded (`saved=true`). In tab B the component's `current` prop is stale and still shows the ring expanded while its `saved` prop has already been updated to collapsed by the parent; clicking X in tab B computes `flipped` from the stale `current`/`saved` pair and writes the opposite of what the tab displays.",
+      "why": "The fix bases the flip decision on `current` and `saved`, then writes only `flipped[ring]` merged with the other tab's `fresh`. If `current` and `saved` disagree (a stale parent prop or an in-flight storage merge), the click can write a ring state that does not match what this tab shows, and it still overwrites the other tab's storage value. The comment claims the click flips what THIS tab shows, but the code never verifies that `current[ring]` and `saved[ring]` agree before writing.",
+      "fix": "Derive `flipped` from the same merged value that is displayed (`fresh` plus the ring being toggled), or refuse the click when `current` and `saved` disagree for that ring; only write after confirming the computed value equals the displayed new state.",
+      "twin_of": "A toggle decided on the merged copy rather than what the viewer sees"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "face/src/shell/OpsDock.tsx:21-35",
+      "breaking_input": "Pass `served` as the frame's `/api/ops` registry; then, while the drawer is open, another tab or a session start changes the server-side ops registry (a new op appears or an op becomes unrunnable). The drawer's dock suppresses its own fetch (`if (served !== undefined) return`) forever.",
+      "why": "The dock now trusts the served registry completely and never re-reads. If the served value is not updated by the parent (RoomFrame passes `opsRegistry` which this diff does not show reloading), the drawer shows stale op cards, allowing a user to click an op that the door now refuses, or hiding a newly available op. The 'one read per room' goal trades away freshness for any dock that outlives the frame's read.",
+      "fix": "Pass a read version/timestamp with `served`, and have the dock refetch when the version changes or after an `onApplied` drop, or keep the dock's own fetch but share the in-flight promise so the frame and dock reuse one request.",
+      "twin_of": "A stale answer landing on a newer card"
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/face/work-door.mjs:326-329",
+      "breaking_input": "Apply plan A for op `fixture.slow`; while it runs, kill the door process or the runner tree with SIGKILL (as the new proc.mjs stop path does). The plan's state stays `\"running\"` because the completion/receipt code never runs. Restart/continue with the same door state and try to apply plan B for the same op.",
+      "why": "The OP_BUSY guard reads `other.state === \"running\"` from in-memory plans. Nothing in the diff shows a `finally` that clears `running` when the apply is interrupted, times out, or crashes. A single interrupted apply permanently bricks that op id with OP_BUSY until the door restarts, even though nothing is running. The claim in the comment is only correct on the happy path.",
+      "fix": "Track the actual child/run handle with the plan state, and in a `finally` (or on child exit/timeout) transition the plan out of `running`; if the run is interrupted, mark it failed/interrupted rather than leaving it forever running.",
+      "twin_of": "A lock released while the tree it guarded was still alive"
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": "face/scripts/proc.mjs:52-59,94-96",
+      "breaking_input": "A tracked child spawns a grandchild with `detached: true` on POSIX (or a grandchild that creates its own process group), then the direct child exits normally. LIVE removes the child on its `exit` event; later a SIGTERM/SIGINT calls stopAll, which no longer knows the grandchild.",
+      "why": "stopAll only iterates direct children currently in LIVE. A descendant that survives the direct child's exit (for example Chrome or a git helper that detaches) is never in LIVE and is not killed. The fixture `tree-holder.mjs` keeps the direct child alive until the stop, so it never exercises the exit-before-stop case, and POSIX `-pid` only reaches the child's own process group, not a detached grandchild's group.",
+      "fix": "Track descendants explicitly (e.g. walk /proc or use a job-object / process-group tree) and keep the parent in LIVE until the whole tree is dead; in the fixture, add a mutant where the direct child exits before the stop and its detached grandchild must still be reaped.",
+      "twin_of": "A descendant outliving a settled run"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-dash.mjs:774-791",
+      "breaking_input": "Issue two concurrent /api/ask requests; the second gets ASK_BUSY. Let the first time out at 120s; `res.timedOut` throws ASK_FAILED and the `finally` deletes the ctx slot. Immediately issue a third ask while the timed-out arc-run child is still being torn down or its tree is still winding down.",
+      "why": "The slot is freed on the timeout verdict, not when the paid child tree is verified dead. If runTool's timeout path returns before the whole process group is reaped (or the teardown fails silently), a new ask starts while the old paid run is still alive, restoring the N-parallel-paid-trees condition the fix claims to close. The comment says the run 'was ended', but the guard itself does not check or wait for the tree's death.",
+      "fix": "Free the ASKS_RUNNING slot only after stopTree/waitExit confirms the child and its descendants are gone, and have the timeout path report liveness so a lingering tree is not silently replaced by a new ask.",
+      "twin_of": "A paid action guarded only in the page"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "face/src/shell/SessionDock.tsx:23-37",
+      "breaking_input": "Frame loads /api/sessions; the response is initially null (loading) and `served` is null. The dock sees `served === null`, skips the early return, and issues its own /api/sessions fetch. The frame's own fetch is already in flight.",
+      "why": "The condition `served !== undefined && served !== null` means a null/loading served value is treated as 'not served', so the dock and the frame both fetch — exactly the duplicate-read defect (r2 B3) this cycle claims to fix. The frame's read is discarded instead of held while loading, causing a second read per room mount and per drawer open.",
+      "fix": "Treat a null served value as 'a read is in flight' and share the same promise; only fetch independently when the frame explicitly says it has no read (e.g. a distinct sentinel), and still maintain a single in-flight request.",
+      "twin_of": "A second reader of one fact"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "face/src/modules/company/org/fold.mjs:113-116",
+      "breaking_input": "A door string of 199 ASCII characters followed by a multi-code-unit emoji (or a combining mark), served as a role title.",
+      "why": "`slice(0, STR_MAX)` operates on UTF-16 code units and can cut a surrogate pair or combining sequence in half, yielding a lone surrogate or broken glyph in the chip/card. The one-line/cap fix prevents stretching but introduces malformed text rendering for strings whose display width is not code-unit-aligned.",
+      "fix": "Slice by code points (e.g. `Array.from(v).slice(0, STR_MAX).join('')`) or by grapheme clusters, and replace lone surrogates before drawing.",
+      "twin_of": "A wrong-shaped source read as empty"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": "tests/face/l3-logic.mjs:1152-1161",
+      "breaking_input": "A mutant change to OpsDock/SessionDock that removes the `served` prop usage but keeps the exact string `<OpsDock ... served={...}>` in RoomFrame.tsx, or wraps the dock in a component that forwards `served` but still fetches internally.",
+      "why": "The mutant control is vacuous: `!/served=\\{/.test(\"<OpsDock ops={m.ops} door={door} onApplied={dropAll} />\")` always passes because it tests a hard-coded string, not a transformation of the production file. The main check is a regex over RoomFrame.tsx matching one spelling (`served=\\{`), so a refactor to a different but correct single-read wiring (or a fake single-read that still fetches) is not caught.",
+      "fix": "Make the mutant control actually mutate the production source and assert the mutated source fails, and parse the JSX structurally (or import the components with a mocked door) so a change in prop spelling cannot hide a duplicate fetch.",
+      "twin_of": "A mutant control that tests a local copy of the rule"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "face/src/shell/ActionDrawer.tsx:11-15",
+      "breaking_input": "Focus an input that lives inside an open shadow root whose host is not itself an input/textarea/select/contenteditable; press Escape in that inner input.",
+      "why": "`closest('input,textarea,select,[contenteditable]')` does not cross shadow boundaries. When the event target is inside the shadow tree, `closest` only sees ancestors within that shadow root, so an inner field inside a custom element is not recognized as a field, and Escape closes the drawer and its draft — the exact bug the fix claims to prevent.",
+      "fix": "Use `e.composedPath()` and test each element in the composed path against the selector, or check `e.target`'s shadow root ancestors explicitly.",
+      "twin_of": "Esc in a form field closed the surrounding drawer and its draft"
+    }
+  ]
+}

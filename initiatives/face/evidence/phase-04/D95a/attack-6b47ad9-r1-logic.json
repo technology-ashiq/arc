@@ -1,0 +1,113 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:176",
+      "breaking_input": "An approved decision.recorded whose payload.sigs has the page key set to a non-string object, e.g. sigs['products/hq'] = { toString: () => 'base64-of-valid-sig' }",
+      "why": "ownerSigProblem reads `const sig = String(sigs[page])` and feeds it to verifyOwnerSig. The value is never shape-checked at the reader; only assertDecision runs sigsShapeProblem, but verifyAcceptApproval is the accept door and does not repeat it. A non-string sigs value with a coercion to a valid signature bypasses the closed-shape rule at the reader, and a malformed sigs object is not refused by name.",
+      "fix": "Before String(sigs[page]), require typeof sigs[page] === 'string' and run sigsShapeProblem over the whole sigs object inside ownerSigProblem too, so the reader and the validator share one shape check.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:200-208",
+      "breaking_input": "A base commit whose .claude/owner-key.pub is a gitlink (submodule, mode 160000) or a symlink (mode 120000) containing the attacker's key text as its link target; the working tree contains a regular file with that same key text.",
+      "why": "ownerKeyBaseState reads the base entry with `git ls-tree --name-only` and then `git show <at>:<rel>`, which follows gitlinks and symlink blobs. The working-tree reader (readOwnerPubFile) refuses symlinks, but the base-side reader does not check the blob mode. A base whose key entry is a symlink to another key, or a gitlink that resolves to empty, can be compared as regular content, so the swapped key is reported 'same' instead of 'changed'.",
+      "fix": "Parse `git ls-tree -z` with modes and refuse any base entry that is not a regular blob (mode 100644) before comparing; do not read through gitlinks or symlink blobs.",
+      "twin_of": "A listing that followed symlinks -> Each listed file is lstat'ed regular and realpath'ed inside the root, or rejected by name."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:190-196",
+      "breaking_input": "baseRef = 'refs/heads/main~1' with a local repo that has a branch refs/heads/main whose parent carries the attacker's key; the current branch carries that same key.",
+      "why": "The plain-ref regex admits '~' and '^'. A full ref name ending in '~1' is not a plain ref: rev-parse resolves it to the parent commit, so the key comparison runs against an arbitrary older commit the attacker chooses. The state is reported 'checked' with a definitive 'same'/'changed' instead of refusing the revision expression.",
+      "fix": "Reject '~' and '^' in a base that is not a 40/64-hex SHA, or run `git check-ref-format` on the resolved ref name before rev-parse; a full ref with a revision suffix is not a plain ref name.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:203-206",
+      "breaking_input": "A shallow clone whose history cannot name a merge-base between the base ref and HEAD, where the base tip's key happens to equal the current tree's swapped key.",
+      "why": "The merge-base failure is caught and silently falls back to the base tip (`at = sha`). The comparison then reports 'same'/'checked' even though the check could not actually run against the branch point. A base that moved on and then reverted its key, or a shallow checkout, makes a swapped key read as clean; the state is indistinguishable from a real merge-base comparison.",
+      "fix": "When merge-base cannot be resolved, return state 'unavailable' with a one-line reason naming the shallow-checkout cause, and emit the [owner-key-unchecked] WARN instead of comparing against the tip.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:178-186",
+      "breaking_input": "A tree where .claude/owner-key.pub has been deleted, and the base ref refs/remotes/origin/main does not exist (shallow CI checkout with no remote-tracking refs).",
+      "why": "cannot() returns out('no-key') whenever the tree key is gone, even when the reason is an unreadable base. ownerKeyFinding('no-key') emits no WARN and says owner-key-base=no-key. An attacker who deletes the key file in a shallow clone gets a silent pass instead of an [owner-key-unchecked] warning naming the missing base; the 'nothing to compare' path fails open.",
+      "fix": "When the tree has no key and the base cannot be read or resolved, return 'unavailable' (or a distinct 'no-key-unchecked' state) and emit the unchecked WARN; reserve 'no-key' for a successfully read base that never had the file.",
+      "twin_of": "A check that goes quiet when it cannot look -> a check that cannot run says so in the summary line and names who covers the gap."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:159-175",
+      "breaking_input": "On a POSIX box where process.env inherits PATH, call gitEnv({ Path: 'decoy' }) or gitEnv({ PATH: 'good', Path: 'evil' }); then pass the resulting env to a spawned git.",
+      "why": "The shadowed set is built from extra keys upper-cased, but the extra keys themselves are not normalized. Calling gitEnv({ PATH: 'good', Path: 'evil' }) returns an object carrying both PATH and Path; on POSIX that is two variables and git reads one of them depending on its own lookup, so an attacker who can influence the extra argument can make the PATH that git sees differ from the one the gate intended. The proof only tests one inherited case and one extra spelling; two extra spellings or a lower-case extra survive as a second variable, violating the 'exactly one survives' guarantee.",
+      "fix": "Normalize every extra key to the platform's canonical case before building the env, and refuse an extra object that contains two keys differing only by case.",
+      "twin_of": "Name filters compared case-sensitively on an OS whose env is not -> normalise case before every env-name comparison."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:205-208",
+      "breaking_input": "baseRef = 'HEAD' on the branch whose key the gate is checking; the working tree key is swapped to an attacker key.",
+      "why": "ownerKeyBaseState treats HEAD as a literal ref and compares the tree's key against the current commit's own key. A self-referential base always reports 'same'/'checked', proving nothing about a swap; the proof even uses HEAD as the 'same' control. An owner or CI that passes --base HEAD (or any ref that resolves to the current HEAD) defeats the key-swap check while the summary line says owner-key-base=checked.",
+      "fix": "Refuse HEAD and any base ref whose resolved commit is the current HEAD (or whose merge-base with HEAD equals HEAD itself) as a self-comparison; require a distinct base ref for the key-swap check.",
+      "twin_of": "A check that reads a cache -> a check that guards a write reads the source, never an index of it"
+    },
+    {
+      "id": "L8",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:159-175",
+      "breaking_input": "A same-user attacker swaps .claude/owner-key.pub in the working tree to their own Ed25519 public key, signs the approval with the matching private key, and runs the accept gate.",
+      "why": "ownerSigProblem verifies the signature against the public key currently in the working tree, not against the base's committed key. ownerKeyBaseState can detect the swap, but per the proof arms it produces only a WARN with count 1 (owner-key-changed=1), and the signature check against the swapped key succeeds, so verifyAcceptApproval returns why ''. The gate is loud but still accepts a signed approval made with a swapped key; the ADR-1514 'Correction' is only a warning the CI can ignore.",
+      "fix": "When ownerKeyBaseState returns 'changed', have verifyAcceptApproval (and the accept CLI) refuse the approval with a named error rather than returning a clean signature, or verify against the base's key as well as the working-tree key.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:189-193",
+      "breaking_input": "baseRef = 'refs/heads/main^{commit}' or 'refs/heads/main~2' where the regex accepts the braces/tilde and shadows list stays empty; git resolves the expression.",
+      "why": "The plain-ref regex accepts '^' (and '{...}' is not listed but '^' is) and '~' and does not verify with `git check-ref-format`. A base name that is not a plain ref is passed through rev-parse, so the comparison can be pointed at any revision expression the attacker chooses, contrary to the stated guarantee that only a plain ref name is handed to git.",
+      "fix": "After resolving a literal ref candidate, run `git check-ref-format --branch` or reject any base containing '~', '^', ':', or a leading '-' before rev-parse; resolve the full ref with `show-ref --verify` and use the returned sha, never the name again.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:210-216",
+      "breaking_input": "A base commit whose tree contains .claude/owner-key.pub as a 5000-byte regular file, while the working tree has a valid 100-byte Ed25519 key file.",
+      "why": "The base-side reader uses `git show <at>:<rel>` with no size cap and no lstat on the blob, so an oversized base key is read whole and compared; readOwnerPubFile caps and refuses oversized files on the working-tree side. Two readers of one file have different size and type rules, so the base comparison can read through a key shape the working-tree reader would refuse.",
+      "fix": "Read the base key through the same readOwnerPubFile-style rules: check the blob mode and size (via `git cat-file -s`) before showing it, and refuse a base key that is not a regular blob under the size cap.",
+      "twin_of": "Three readers, three rules for one file -> One reader per trust anchor."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:141-148",
+      "breaking_input": "A public key file whose PEM content is identical to the base's key but whose raw bytes differ by a trailing newline or CRLF; or a key file containing the same Ed25519 key in a re-encoded SPKI spelling.",
+      "why": "ownerKeyBaseState compares raw text (norm(then) === norm(cur)) where `cur` is readOwnerPubFile's returned pem; if readOwnerPubFile normalizes, parses or trims while `then` is the raw git blob, semantically identical keys can compare as 'changed', producing a false [owner-key-changed] WARN. Conversely two files whose raw text is normalized equal but parse to different keys are not possible with PEM, but the raw-text comparison is the weak point: the comparison should compare the parsed keys or their fingerprints, not raw textual bytes.",
+      "fix": "Compare fingerprint(parse(then)) against fingerprint(parse(cur)) using the same reader for both sides, so byte-level normalization differences cannot produce a false swap verdict.",
+      "twin_of": null
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/narrative-proof.mjs:174-176",
+      "breaking_input": "The public key file contains an Ed25519 public key that is valid, but the file also carries an appended line such as 'owner: attacker' (a trailing comment).",
+      "why": "readOwnerPubFile likely extracts only the PEM block, but ownerKeyBaseState's raw-text comparison would compare the whole file including the appended line against the base. A key that semantically matches the base is reported 'changed' because of a trailing comment, and a swapped key whose appended comment is made to match the base's comment could also confuse the text comparison; the two sides should compare the parsed key, not the file text.",
+      "fix": "Compare only the parsed public key (SPKI DER fingerprint) from both sides, not the raw file content.",
+      "twin_of": null
+    }
+  ]
+}

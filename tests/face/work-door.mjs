@@ -647,6 +647,21 @@ try {
     let expired = null;
     try { door.apply("fixture.count", { planId: p2.planId }); } catch (e) { expired = e.code; }
     check("an expired plan -> PLAN_EXPIRED, and the tool was not run", expired === "PLAN_EXPIRED" && readFileSync(counter, "utf8") === "xxx", `code=${expired} count=${readFileSync(counter, "utf8").length}`);
+    // ---- one running apply per op (Phase 04 PR449 B2): a second plan of the same op cannot apply while the first runs ----
+    {
+      const slowDir = join(fx, ".claude", "scripts", "fixture");
+      writeFileSync(join(slowDir, "slow.mjs"), `if (process.argv[2] === "--plan") { console.log("would wait"); process.exit(0); }
+setTimeout(() => process.exit(0), 1500);
+`);
+      const reg = [{ ...registry[0], id: "fixture.slow", leavesMachine: true, simSafe: () => true, plan: () => ({ script: "fixture/slow.mjs", args: ["--plan"] }), apply: () => ({ script: "fixture/slow.mjs", args: [] }) }];
+      const sd = DOOR_MOD.createWorkDoor({ mode: "sim", root: SPINE_C, repo: fx }, { registry: reg, now: () => clock });
+      const a = await sd.plan("fixture.slow", { input: {} }), b = await sd.plan("fixture.slow", { input: {} });
+      sd.apply("fixture.slow", { planId: a.planId });
+      let second = "";
+      try { sd.apply("fixture.slow", { planId: b.planId }); second = "APPLIED"; } catch (e) { second = e.code; }
+      await sd.settled();
+      check("a second apply of the same op while the first runs is refused OP_BUSY", second === "OP_BUSY", second);
+    }
     // ---- pickers (Cycle 17 P01, REQ-03, ADR-1369): a value outside the served list is refused at plan, naming the field
     // and the value, and a value that LEFT the list after its plan is refused at apply, with the tool never run ----
     {

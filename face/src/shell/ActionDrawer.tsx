@@ -8,7 +8,9 @@ import { MONO, UI } from '../ui/kit'
 
 export default function ActionDrawer({ title, kind, onClose, children }: { title: string; kind: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    // Esc typed into a field cancels the field, never the drawer and its draft (Phase 04 PR449 L14).
+    const inField = (t: EventTarget | null) => t instanceof HTMLElement && t.closest('input,textarea,select,[contenteditable]') !== null
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !inField(e.target)) onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])

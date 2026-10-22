@@ -1142,5 +1142,22 @@ check("a dead handle SAYS it is dead rather than reporting a clean boundary",
   check("a fold with no records declares none", rec.recordCollections({}).length === 0 && rec.recordCollections(null).length === 0);
 }
 
+// ── face v3 Cycle 17 P04 (debt #D113): one ops + sessions read per room, a capped saved-rail entry ──
+{
+  const rail = await import(pathToFileURL(join(LIB, "rail.mjs")).href);
+  console.log("RAN D113 checks");
+  const many = JSON.stringify(Object.fromEntries(Array.from({ length: 5000 }, (_, i) => [`ring-${i}`, true])));
+  const read = rail.parseSaved(many);
+  check("parseSaved reads a hostile entry only up to its cap", Object.keys(read).length === rail.SAVED_MAX && rail.SAVED_MAX > 0 && rail.SAVED_MAX <= 64, String(Object.keys(read).length));
+  const frame = readFileSync(join(REPO, "face", "src", "shell", "RoomFrame.tsx"), "utf8");
+  const docks = [...frame.matchAll(/<(OpsDock|SessionDock)\b[^>]*>/g)].map((m) => m[0]);
+  check("every dock the frame draws is handed the frame's own read (vacuous-pass guard: 4 docks)", docks.length === 4 && docks.every((d) => /served=\{(opsRegistry|sessionRegistry)\}/.test(d)), docks.join(" | "));
+  const opsDock = readFileSync(join(REPO, "face", "src", "shell", "OpsDock.tsx"), "utf8");
+  check("a dock handed a read asks the door for nothing", /if \(served !== undefined\) return/.test(opsDock));
+  const handed = (text) => { const d = [...text.matchAll(/<(OpsDock|SessionDock)\b[^>]*>/g)].map((m) => m[0]); return d.length === 4 && d.every((x) => /served=\{(opsRegistry|sessionRegistry)\}/.test(x)); };
+  const mutant = frame.replace(/ served=\{opsRegistry\}/, "");
+  check("MUTANT CONTROL: the real frame with one dock's served= removed fails the same detector", mutant !== frame && handed(frame) && !handed(mutant));
+}
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;

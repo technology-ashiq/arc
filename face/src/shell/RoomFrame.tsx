@@ -273,10 +273,10 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
       ) : (
         <div data-frame-work={m.id}>
           {/* Phase 05 (ADR-1339): the room's ops. A run that lands drops the room's reads, so the receipt shows without a reload. */}
-          {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} /> : null}
+          {m.ops.length > 0 ? <OpsDock ops={m.ops} door={door} onApplied={dropAll} served={opsRegistry} /> : null}
           {/* Phase 06 (REQ-08, ADR-1326): the room's session verbs. It reads on mount and starts nothing: a session starts
               only from its Start button's click. */}
-          <SessionDock roomId={m.id} door={door} />
+          <SessionDock roomId={m.id} door={door} served={sessionRegistry} />
         </div>
       )}
       </>
@@ -286,9 +286,9 @@ function ModuleView({ module: m, ctx, seed }: { module: AttachedModule; ctx: Mod
       {openItem ? (
         <ActionDrawer key={openKey} title={openItem.label} kind={openItem.kind === 'op' ? 'op' : 'session'} onClose={closeDrawer}>
           {openItem.kind === 'op' ? (
-            <OpsDock ops={m.ops} door={door} onApplied={dropAll} only={openItem.id} bare />
+            <OpsDock ops={m.ops} door={door} onApplied={dropAll} only={openItem.id} bare served={opsRegistry} />
           ) : (
-            <SessionDock roomId={m.id} door={door} only={openItem.id} bare />
+            <SessionDock roomId={m.id} door={door} only={openItem.id} bare served={sessionRegistry} />
           )}
         </ActionDrawer>
       ) : null}

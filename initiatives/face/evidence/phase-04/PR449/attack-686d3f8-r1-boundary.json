@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/src/shell/Rail.tsx:onToggle",
+      "breaking_input": "Two tabs are open. Tab B folds the first ring, so storage holds that ring as false. Tab A still shows it open, because its in-memory `saved` has no entry and the default for the first ring is open. The viewer clicks the header in tab A to fold it. onToggle merges storage over `saved` into `fresh` and calls toggleRing on `fresh`. `fresh` says the ring is folded, so toggleRing writes true. Tab A re-renders with the ring still open.",
+      "why": "The decision is made on one read (storage) while the screen shows another (the tab's `saved`). The click looks dead and the stored value is flipped to the state already on screen. This is the fix for attack 0991e16 B1, and the fix creates this case.",
+      "fix": "Merge storage into `saved` first with setSaved. Or compute the toggle from the state the viewer sees (`open[ring]`) and write only that ring's key over the fresh storage copy.",
+      "twin_of": "Viewer state written to storage on mount, from a stale in-memory copy -> Check: per-viewer storage is written only on the viewer's own act, merged over what storage holds at that moment."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/src/shell/ActionDrawer.tsx:12-16 and face/src/shell/RoomFrame.tsx (ActionDrawer key={openKey})",
+      "breaking_input": "Open the drawer for a humanRun, leavesMachine or spends op (daily mail send, bench run) and click Apply. While the request is in flight, press Esc, click ×, or click another strip item. The drawer unmounts (or remounts via key=openKey) and the OpCardView state goes back to idle. The viewer reopens it, re-plans and applies again.",
+      "why": "A window-level Esc closes the drawer even while a form is mid-call. The in-flight answer lands on an unmounted card, so the receipt and the sent/spent state are lost. A mail op has no server-side in-flight slot, so a second send is invited. Nothing blocks closing while busy, which is the pattern of a form cleared before the server answered.",
+      "fix": "Have the card report busy. Ignore Esc, × and item switches while an op or session start is in flight. Or keep the card state above the drawer so the answer survives a close.",
+      "twin_of": "A form cleared before the server answered -> Check: an edit form closes on the server's acceptance, never on submit."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "face/src/shell/Dock.tsx:useEffect(() => { close() }, [place, close])",
+      "breaking_input": "If useAsk returns a `close` that is a fresh function each render (not useCallback), every render re-runs the effect. Asking a question sets state and re-renders, the effect calls close(), and the answer card shuts as it appears.",
+      "why": "The effect depends on the function's identity, but the intent is to run only when `place` changes. It also runs close() on mount.",
+      "fix": "Run the effect on `[place]` only, keeping `close` in a ref. Or memoize `close` in useAsk and pin that with a test that asks, then re-renders without changing place, and expects the answer to stay.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": "face/src/shell/RoomFrame.tsx: registry useEffect with deps [door, m]",
+      "breaking_input": "Any parent re-render that gives ModuleView a new `m` object for the same room, such as an attachment recompute or a registry re-read. The effect aborts, sets both registries to null, and re-fetches. While they are null, `strip` is empty, `sessionCount` is 0 and `tabs` is ['overview']. currentTab drops the viewer from Work to Overview, and `openItem` is undefined so the open drawer disappears with its half-typed form.",
+      "why": "Tab and drawer state is derived from async registries that are blanked on identity churn rather than on a room change. Keying on the object `m` instead of `m.id` turns a re-render into a visible state reset.",
+      "fix": "Key the effect on `m.id` and `door`. Keep the last good registries while a re-read is in flight, and null them only when the room id changes.",
+      "twin_of": "A failed re-read replacing a good answer -> Check: a re-read that fails keeps the last good answer and says so."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/src/shell/RoomFrame.tsx (Work tab OpsDock/SessionDock plus drawer OpsDock/SessionDock) and face/scripts/flows.mjs:dockState",
+      "breaking_input": "On the Work tab, open a strip item. The same op card (`data-op=<id>`) and the same `data-session-dock=<room>` now exist twice in one section, one in `[data-frame-work]` and one in the drawer. dockState's `section[data-room] [data-session-dock]` returns whichever comes first in the DOM, the Work tab copy. A Start clicked in the drawer is read through the other dock.",
+      "why": "Two live instances of one card hold independent state. The harness selector was scoped for the op card (`[data-frame-work]`) but not for the session dock, so one selector query can read a different element than the one acted on.",
+      "fix": "Do not render the Work-tab copy of a card while its drawer is open. Or scope every harness selector to either `[data-frame-work]` or `[data-action-drawer]`.",
+      "twin_of": "A pick and a click in one synchronous script -> Check: a positive control must be deterministic on every runner."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/src/modules/kernel/bench/fold.mjs:row and View.tsx key={r.key}",
+      "breaking_input": "/api/bench returns two run rows with the same `id`. Both rows get `key: id`, so React sees duplicate keys and `data-served-row` collides. With the 8-row cap and the \"show all\" toggle, one duplicate row can hide or replace its twin on reorder.",
+      "why": "The rows are not deduplicated or counted when ids repeat. Elsewhere the lane already had to fix a name the registry listed twice being drawn under a duplicate key.",
+      "fix": "Include the row index in the key. Better, drop repeated ids in the row builder and count them as `duplicates`.",
+      "twin_of": "A name the registry listed twice was counted twice and drawn under a duplicate React key -> Rows the fold cannot tell apart are counted, not drawn."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "face/src/modules/company/org/fold.mjs:foldChart (ownerRef, ceoId, ids in title/tag/data-org-chip)",
+      "breaking_input": "A role served with `reports_to` set to a long or multi-line string, or an `id` outside the role-id grammar. It is printed raw into the Owner node's sub line, the chip `title` attribute, `data-org-chip` and the card's id line. Two roles with an empty `id` collide on byId key \"\", so a missing `reports_to` is counted as reporting to that role and it becomes the CEO.",
+      "why": "Ids and refs from the served body are drawn without a grammar check or a one-line cap, and byId accepts the empty id. This is an id served outside its grammar.",
+      "fix": "Skip any role whose id fails the role-id grammar, and count those. Run printed refs through the one-line and length cap before drawing.",
+      "twin_of": "A fold that echoes payload strings into labels -> Check: a ref printed from data matches its grammar or is not printed."
+    }
+  ]
+}

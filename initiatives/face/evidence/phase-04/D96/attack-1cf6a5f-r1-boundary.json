@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/scripts/smoke.mjs (runFrontDoor, MOOD_KEY/withChrome/until/moodHolds use)",
+      "breaking_input": "runFrontDoor references MOOD_KEY, withChrome, until and moodHolds, but the diff's import line adds only modeOf/exitHash/STAGE_UNMOUNT_MS. If any of these is not already defined or exported in smoke.mjs, the first call throws ReferenceError.",
+      "why": "harness-run.mjs catches the throw and prints SETUP-FAIL with checks: [], so every mood fails. The failure is a red run, but the cause (undefined helper) gets mislabelled as a setup failure.",
+      "fix": "Confirm each helper is defined in smoke.mjs, and add a selftest arm that calls runFrontDoor's helpers.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-colour-literal.mjs:226-236 (allow-absent loop)",
+      "breaking_input": "allow entry 'face/src/frontdoor/neon.mjs', where face/src/frontdoor is a symlink or junction to a directory elsewhere, or where neon.mjs is itself a symlink to a file with a literal-laden target. lstat(resolve(base,a)).isFile() is false for a symlinked file, so allow-absent fires. But with a junctioned parent directory, lstat on the child passes through the junction.",
+      "why": "The existence check resolves the path through ancestor links while the walk applies lstat per directory entry. Two readers of one path (the walk's per-entry lstat vs. the allowance check's full-path lstat) can disagree on the same file: the check passes while the walker skips or flags the directory as a symlink, so the allowance is judged on a different file than the one scanned.",
+      "fix": "Derive the allowance check from the walker's own visited-file set (match allow against the paths actually scanned) instead of a separate lstat.",
+      "twin_of": "A path checked by one resolver and loaded by another"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/face-colour-literal.mjs (owner lookup, startsWith(abs + sep))",
+      "breaking_input": "Roots ['face/src/lib/stage.mjs'] (a file root) plus allow ['face/src/lib/stage.mjs']: owner is computed by startsWith(rootAbs + sep), which a file root can never satisfy for itself, so owner is undefined and the allow-absent check is skipped (continue).",
+      "why": "For file roots, STAGE_FILE (a root that is itself the allowed file) has no existence check from this loop. Only REQUIRED_DEFAULT_ROOTS covers it, and only on the default path. If stage.mjs is deleted, the 'root absent' finding comes from a different code path; the allowance and its absence finding are inconsistent with NEON_FILE's.",
+      "fix": "Treat a file root equal to an allowed path as its own owner, or rely on required-root handling and pin it with a test.",
+      "twin_of": "A completeness gate's expected set was its own contract keys"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs (cross, held read)",
+      "breaking_input": "document.documentElement.dataset.warpHeldMs is read once after the unmount poll. A second crossing in the same page without a reload reads the previous crossing's value if the new timer has not yet written.",
+      "why": "The harness reloads each step via go(), which clears the dataset, so this is safe today. However, the exit-to-door step and the later crossings share page P, and the App deletes warpHeldMs only when dir===1. A stale value could satisfy warp-held for a crossing that never held, since the value is checked against only a floor.",
+      "fix": "Snapshot and clear the dataset attribute before each crossing, and require it to appear after crossedAt.",
+      "twin_of": "A 'since' read off a log that keeps earlier events"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs (click helper, mouseMoved/mousePressed)",
+      "breaking_input": "click() scrolls the element into view and then immediately reads getBoundingClientRect. On a fixed-position header button under smooth scrolling or a layout shift from the warp, the coordinates are stale by the time the mouse events dispatch.",
+      "why": "Between the coordinate read and the dispatch there is no re-check, so the click can land on a different element, such as the scrim or palette, and report a spurious 'hash stayed' failure.",
+      "fix": "Re-read the rect after a frame, or use elementFromPoint to confirm the target before pressing.",
+      "twin_of": "A pick and a click in one synchronous script"
+    }
+  ]
+}

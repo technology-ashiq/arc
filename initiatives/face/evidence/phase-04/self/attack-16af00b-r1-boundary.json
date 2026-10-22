@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "face/scripts/proc.mjs:signalTree (win32 branch)",
+      "breaking_input": "On win32, stopTree sends its first, graceful signal to a child such as arc-run. That child has its own grandchildren holding a lock file and a temp dir.",
+      "why": "The win32 branch of signalTree now runs `taskkill /T /F` at once, so the whole tree is force-killed with no grace period. A parent that kills must leave its child time to end its own children and clean up. The `graceMs: 1500` passed by stopAll is meaningless on win32, and force-killing every level at once leaves locks and temp dirs behind.",
+      "fix": "On win32, first send a non-forced `taskkill /T` (no /F), wait the grace period, then escalate to /F. Alternatively, keep /F but run the cleanup before it.",
+      "twin_of": "SIGKILL before a nested tool can clean up -> a parent that kills must leave its child time to end its own children."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "face/scripts/proc.mjs:installStopHandlers + face/scripts/harness-run.mjs (invokedDirectly block)",
+      "breaking_input": "A Windows CI runner or Ctrl-C ends harness-run. The harness is spawned without an IPC channel, so no `shutdown` message can reach it, and Node does not run a SIGTERM handler for a Windows process kill.",
+      "why": "The only catchable stop path on win32 is the IPC `message` event, and the real harness is not started with IPC. The fixture proves the handler only because the test opens an IPC channel to it. The leak that debt #D23 describes therefore remains on the leg where it was reported, yet the ledger row is marked PAID.",
+      "fix": "Either have the runner start harness-run with an IPC channel, or add a win32-reachable path such as a stdin-close or a watchdog parent-pid poll. Then add a real-harness arm that does not use the IPC shortcut.",
+      "twin_of": null
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "face/scripts/proc.mjs:installStopHandlers (default `exit`)",
+      "breaking_input": "SIGTERM arrives while the stop handler is writing to a pipe on Windows. The default `exit` calls `process.exit(code)` right after the cleanup.",
+      "why": "`process.exit()` races libuv teardown on Windows. The same pattern is already in the defect list, and this helper reintroduces it in a new CLI path. There is also no overall deadline, so if stopAll or removeDir hangs the process never exits after its default SIGINT handler has been replaced.",
+      "fix": "Set `process.exitCode = code` and let the loop drain, with an unref'd deadline timer that force-exits only as a last resort.",
+      "twin_of": "`process.exit()` raced libuv teardown on Windows -> set `process.exitCode` and let the loop drain."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "face/scripts/harness-run.mjs (execFileSync use) + proc.mjs:installStopHandlers",
+      "breaking_input": "SIGTERM or SIGINT arrives while runHarness is inside a blocking `execFileSync` (the build or install step), before any spawnTracked child exists.",
+      "why": "A synchronous spawn blocks the event loop, so the JS signal handler cannot run until the sync child returns. The kill is deferred, and the sync child is not in LIVE, so it is never stopped by stopAll. The handler covers only the async-spawned children.",
+      "fix": "Run the long steps through spawnTracked, or give the execFileSync calls a timeout and a killSignal. Record the gap in the debt ledger.",
+      "twin_of": null
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/scripts/proc.mjs:spawnTracked (LIVE.add / child.once('exit'))",
+      "breaking_input": "spawnTracked is given a command that does not exist, e.g. ENOENT. The child emits 'error' and never emits 'exit'.",
+      "why": "The child is added to LIVE immediately but removed only on 'exit', so a spawn failure leaves it in the set permanently. Later stopAll calls then run stopTree on a pid-less handle, and process.kill(-undefined) is swallowed.",
+      "fix": "Also delete the child from LIVE in the 'error' handler, or when child.pid is undefined.",
+      "twin_of": "existsSync accepted a directory as an executable, and a spawn error was an unhandled 'error' event -> every spawned child gets an 'error' listener before anything else."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/src/modules/company/org/fold.mjs:str",
+      "breaking_input": "A role title whose 199th/200th UTF-16 units are a surrogate pair, e.g. an emoji straddling the cut.",
+      "why": "`.slice(0, STR_MAX)` cuts in UTF-16 units and leaves a lone surrogate. That renders as U+FFFD, and it can break a later JSON or encode step.",
+      "fix": "Cut on code points, e.g. `Array.from(s).slice(0, STR_MAX).join('')`, or drop a trailing lone high surrogate after the slice.",
+      "twin_of": "echo() slices UTF-16 units before its ASCII replace"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": "tests/face/harness-tree.mjs (reap / alive) and tests/fixtures/face/tree-holder.mjs",
+      "breaking_input": "On win32, the holder is killed by the mutant path and the 4 s probe window elapses. The test then calls `taskkill /PID <recorded pid>` on pids that may already have been reused.",
+      "why": "The test reaps by raw pid after the owner process is gone. A reused pid means it may kill an unrelated process. On POSIX, `alive()` reports a zombie child as alive until its parent reaps it, which can make the pass or fail verdict flaky. The holder's `stdio` is also never closed on the failure path before the reap.",
+      "fix": "Reap only if `alive(pid)` is still true, and compare the process start-time or command line first. Treat a zombie as dead on POSIX by reading /proc state or using `ps -o stat`.",
+      "twin_of": null
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:962 and tests/docs-narrative.bats",
+      "breaking_input": "Add or remove one self-test arm, and edit only one of the three hand-kept `101` constants.",
+      "why": "The expected total is hand-kept in the gate and in the bats test, and the arm count is also written into the test name and a comment. The total is not derived from the arm list, so a dropped arm that is balanced by a counted skip still matches.",
+      "fix": "Derive the expected total from the arm definitions that proofArms returns plus the local arms. Have the bats compare against the RAN count the selftest prints.",
+      "twin_of": "A hand-kept floor one above the real count -> Never hand-keep a count the code can print."
+    }
+  ]
+}

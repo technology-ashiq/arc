@@ -18,10 +18,13 @@ import type { OpCard, OpState } from '../lib/ops.mjs'
 import { Btn, Chip, Field, MONO, Panel, PanelTitle, PickRow, Receipt, TextInput, UI } from '../ui/kit'
 
 // `only` draws just the card with that op id (the action drawer, FV3-A); `bare` drops the section chrome around the cards.
-export default function OpsDock({ ops, door, onApplied, only, bare = false }: { ops: readonly unknown[]; door: Door; onApplied: () => void; only?: string; bare?: boolean }) {
-  const [registry, setRegistry] = useState<unknown>(null)
+export default function OpsDock({ ops, door, onApplied, only, bare = false, served }: { ops: readonly unknown[]; door: Door; onApplied: () => void; only?: string; bare?: boolean; served?: unknown }) {
+  const [own, setRegistry] = useState<unknown>(null)
   const [loadError, setLoadError] = useState('')
+  // debt D113: the frame already read /api/ops for the strip; a dock handed that read uses it and asks again for nothing.
+  const registry = served !== undefined && served !== null ? served : own
   useEffect(() => {
+    if (served !== undefined) return
     const ac = new AbortController()
     setRegistry(null)
     setLoadError('')
@@ -30,7 +33,7 @@ export default function OpsDock({ ops, door, onApplied, only, bare = false }: { 
       .then((r: unknown) => { if (!ac.signal.aborted) setRegistry(r) })
       .catch((err: { human?: string; message?: string }) => { if (!ac.signal.aborted) setLoadError(String(err?.human ?? err?.message ?? 'the door did not answer')) })
     return () => ac.abort()
-  }, [door])
+  }, [door, served])
 
   const cards = opCards(ops, registry).filter((c) => only === undefined || c.id === only)
   if (cards.length === 0) return null

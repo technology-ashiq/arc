@@ -161,7 +161,7 @@ const STATUS = Object.freeze({
   PHASES_OUTSIDE: 403,
   // Phase 10 (ADR-1350): a model change the registry refuses is the caller's to fix; a models file the door cannot
   // place or read is a precondition, never a silent empty list.
-  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, BAD_KEY: 400, KEYS_UNAVAILABLE: 503, MODEL_FAILED: 502, TEST_BUSY: 429,
+  BAD_MODEL: 400, MODELS_UNAVAILABLE: 503, BAD_KEY: 400, KEYS_UNAVAILABLE: 503, MODEL_FAILED: 502, TEST_BUSY: 429, ASK_BUSY: 429,
   DECISION_REFUSED: 502,
   // Phase 04 (REQ-06). A file a route parses that is not on this tree is a precondition, like REGISTRY_ABSENT; a
   // file the owning lane's parser refuses is unprocessable, not an internal fault; a lane module that will not load
@@ -771,7 +771,11 @@ async function apiAsk(ctx, body) {
     `MODE: ${ctx.mode}${ctx.mode === "sim" ? " (SIMULATED — every value here is fixture data, never real)" : ""}`,
   ].join("\n");
 
-  const res = await runTool(ctx, {
+  if (ASKS_RUNNING.has(ctx)) throw new DashError("ASK_BUSY", "an ask is already being answered; wait for it to finish");
+  ASKS_RUNNING.add(ctx);
+  let res;
+  try {
+  res = await runTool(ctx, {
     script: "engine/arc-run.mjs",
     args: ["--process", "face-ask", "--driver", "generic-api", "--owner-model", active.model, "--input", JSON.stringify({ q, state: pack })],
   }, {
@@ -782,6 +786,7 @@ async function apiAsk(ctx, body) {
     // spine checks its answers against that spine, so the run must be written there too.
     env: { ARC_LLM_ENDPOINT: models.endpointOf(active.baseUrl), ARC_LLM_API_KEY: active.key ?? "none", ...(ctx.mode === "sim" ? { ARC_SPINE_ROOT: ctx.root } : {}) },
   });
+  } finally { ASKS_RUNNING.delete(ctx); }
   if (res.timedOut) throw new DashError("ASK_FAILED", "the ask ran past 120 s and was ended, with everything it had started");
   // The owner reads the cause and the next step, never the driver's log (2026-10-02: a raw 429 transcript on the door).
   if (res.exit !== 0) throw new DashError("MODEL_FAILED", models.providerFault(redactKey(String(res.stderr ?? ""), active.key)));
@@ -958,6 +963,8 @@ function apiKeysChange(ctx, body) {
 const MODEL_TESTS = new WeakMap();
 /** Doors with a model test in flight (attack 8b23b40 B3). */
 const TESTS_RUNNING = new WeakSet();
+// One paid ask per door at a time, as for a model test: N parallel asks were N paid arc-run trees (Phase 04 D99 L1/B7).
+const ASKS_RUNNING = new WeakSet();
 function testsOf(ctx) {
   let m = MODEL_TESTS.get(ctx);
   if (!m) { m = new Map(); MODEL_TESTS.set(ctx, m); }

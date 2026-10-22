@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:1056",
+      "breaking_input": "--accept products/hq --approval <ULID> run while the spine lookup in verifyAcceptApproval fails: proof.why is non-empty, so the first acceptEntry call is skipped and `{doc:null, refused:\"\"}` is built. Separately, the pre-call `acceptEntry(..., \"pending\")` passes sig=\"pending\" and its `own` filter ignores signature fails, so a page already holding bad-owner-signature fails is judged only after the spine read.",
+      "why": "Two-step accept uses a placeholder sig 'pending' to pre-validate, then re-runs with the real sig. A pre-check that exits through a different path than the final write is 'validate one read, use another': the narratives/fails are the same object but the second call re-derives `own` from the same stale `r.fails`. Also if verifyAcceptApproval returns {why:'',sig:undefined} (e.g. approval decided by an older decision without sigs) the second acceptEntry refuses with a generic message instead of naming the missing decision signature.",
+      "fix": "Make verifyAcceptApproval always return a sig string when why is empty, and assert typeof proof.sig === 'string' before acceptEntry; have the pre-check use the same function path with a documented sentinel that cannot be written.",
+      "twin_of": "Validate one read, serve another, at the door"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/owner-sig.mjs:readOwnerPubFile",
+      "breaking_input": "Swap .claude/owner-key.pub for a symlink to a regular file between lstatSync and openSync on a platform where O_NOFOLLOW is 0 (Windows): constants.O_NOFOLLOW is undefined so `|| 0` removes the protection; the inode comparison is the only guard, and on Windows NTFS fstat ino/dev via bigint can be 0n for both files.",
+      "why": "On Windows, ino can be 0 for files on some filesystems/ReFS-less volumes, so `now.ino !== before.ino` is vacuously equal and the swap check passes. The TOCTOU defence the comment claims does not hold on the platform this repo's owner uses.",
+      "fix": "On win32 also compare size+mtimeNs from the two stats, or re-realpath after open and refuse if it differs from the checked realpath; treat ino===0n as 'identity unavailable' and refuse or fall back to a content-hash re-read.",
+      "twin_of": "Check-then-open on a caller's path -> decide on the descriptor you read from"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:initOwnerKey",
+      "breaking_input": "Two terminals run `arc-inbox owner-key init` concurrently with different passphrases. Both pass the `present(keyPath)`/`present(pubPath)` pre-checks; the first writeNew(pubPath,'wx') wins, the second fails EEXIST with madePub=false, but if A creates pubPath then B's tmp is `${keyPath}.tmp-${pid}` (distinct) and B's open of pubPath fails — fine; however A can rename tmp over keyPath while B (having failed) does nothing. Next: A finishes pub write, then B's rollback path is not triggered, yet if A crashes between pub write and rename, pubPath stays committed with no private key.",
+      "why": "The public key is written first and the private key renamed second; a crash/kill (Ctrl-C at the rename, antivirus lock on Windows making renameSync throw EPERM after the pub is written) leaves a committed-ready public key with no sealed private half. The rollback covers throws but not process death, and `present(pubPath)` then refuses every re-init, requiring a manual delete.",
+      "fix": "Write the private key (tmp then rename) first and the public half last, or install a SIGINT/exit handler that removes madePub; on the refusal for an existing pub with no private key, name the orphan state and the recovery.",
+      "twin_of": "A private key written before the last refusal -> Write the public half first and roll back on any later failure"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:ownerKeyRepoProblem",
+      "breaking_input": "Run `arc-inbox owner-key init` from a checkout in detached HEAD (like this very worktree: 'Current branch: HEAD'), or where `git` is not on PATH, or git times out: `git branch --show-current` prints empty / throws, function returns \"\" and init proceeds.",
+      "why": "The main/master guard fails open: detached HEAD, a missing git, a timeout or an exception all read as 'no objection', so the trust-anchor public key is written into a tree that may be main's checkout (a detached HEAD at main's commit). The repo itself documents 'unknown is never the permissive answer'.",
+      "fix": "Return a refusal when git cannot answer or branch is empty; only an affirmative non-main/master branch name permits init.",
+      "twin_of": "Unreadable read as released -> unknown is never the permissive answer"
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:readPassphraseTty",
+      "breaking_input": "Terminal where stdin is a TTY and stdout is a TTY but the user presses Ctrl-C or Ctrl-D at the prompt: readline emits 'close' with done=false and the promise rejects; in decide(), signAccept awaits readPassphrase with no try/catch, so the rejection escapes as an unhandled error stack carrying the install path. Also rl keeps process.stdin in raw mode/ref'd if rejected before rl.close.",
+      "why": "A tool a door/CLI runs must end every failure as one named refusal line; an input-closed rejection from readPassphrase propagates raw through signAccept/initOwnerKey (neither catches readPassphrase throwing), printing a stack with machine paths and possibly leaving the terminal in raw mode.",
+      "fix": "Wrap readPassphrase calls in signAccept, unsealOwnerKey and initOwnerKey in try/catch returning a named no(...) refusal; ensure rl.close() on all paths.",
+      "twin_of": "The CLI let the library's throw out as a stack with machine paths -> A library throw is translated at the CLI edge"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:main --base",
+      "breaking_input": "`--base --upload-pack=x` is refused by the dash rule, but `--base HEAD:foo` or `--base \"main~1^{/x}\"` or a ref beginning with a space/newline is passed straight as `baseRef` to ownerKeyBaseState which spawns git; there is no grammar check on the value, and a value like `refs/heads/x\\n--output=...` containing a newline is accepted.",
+      "why": "The flag value reaches a git argv with only 'does not start with -' validated; ref grammar, length and control characters are not checked, unlike PAGE_ARG for --accept. A value carrying a newline or NUL can forge the printed `[owner-key-changed] ... differs from <base>` line (st.base is interpolated raw into a WARN).",
+      "fix": "Validate --base against a ref/sha grammar (e.g. /^[A-Za-z0-9._\\/~^@{}-]{1,200}$/ with no leading dash) and pass it after `--` or via `git rev-parse --verify --end-of-options`; run st.base/why through shownPage/safeText before printing.",
+      "twin_of": "Messages that echoed a forged line -> one-line rule applies to names read off a disk"
+    }
+  ]
+}

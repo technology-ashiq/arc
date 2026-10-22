@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "face/src/lib/rail.mjs:parseSaved",
+      "breaking_input": "localStorage 'arc.face.rail.rings' = '{\"__proto__\":{\"polluted\":true},\"constructor\":{\"x\":1},\"prototype\":{\"y\":2}}'",
+      "why": "parseSaved correctly drops reserved names, and all maps are null-prototype; no prototype pollution reaches a plain object. The claimed attack does not land.",
+      "fix": "No change; the RESERVED drop on read and null-prototype maps already defend.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "face/src/shell/RoomFrame.tsx:ActionStrip/openKey",
+      "breaking_input": "A room whose ops registry has an op with id that contains a colon, e.g. id='a:b' (served by the door's registry). The strip item key is `op:a:b`; clicking it sets `drawer.key='op:a:b'`, and `openItem` finds it by `itemKey(it)===openKey`. But `itemKey` for a session with id 'a:b' also yields `session:a:b` — no collision. However, an op id containing a colon is not in the op grammar? The op ids come from ops.mjs, which are fixed module-defined strings. The door's registry could answer with an op id that differs from `m.ops` — the strip uses opCards(m.ops, opsRegistry) which labels by the registry's `id`. If the registry serves an op id with a newline, the `data-strip-item` attribute becomes two lines, and the browser harness parses it. But ids are grammar-checked elsewhere. The real issue: `only` filter in OpsDock compares `c.id === only` — if the registry's op id is 'a' and the module's op id is 'a', fine. No break.",
+      "why": "No concrete input; op ids are module-constants, registry echoes them, and itemKey is unambiguous (kind prefix).",
+      "fix": "None needed.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "face/scripts/flows.mjs:pageFlow",
+      "breaking_input": "A room with no `[data-frame-tab=\"work\"]` element but with a `[data-frame-work]` child that is already visible/clickable — the guard `if (work && ...) work.click()` is fine; if work is null, it still queries `[data-frame-work]`. The problem: `pageFlow` opens the Work tab by clicking, but if the room's ops are not yet loaded when the tab is clicked, the `[data-frame-work]` element may not exist yet (the tab renders only when `tab==='work'` and rooms with ops render it). The until loop retries `document.querySelector('section[data-room] [data-frame-work] [data-op=...]')` for up to 20s, so it waits. But if the room's module has ops that load AFTER the flow starts and the tab click happens before the element exists, the loop still polls and finds it once loaded. However, the query requires `[data-frame-work]` which only renders when `m.ops.length > 0` or sessions; a room with session verbs but no ops renders `[data-frame-work]` with SessionDock only — no `[data-op]` inside, so the op card never appears and the flow times out with \"the op card never came up idle\". That is correct behavior for a room with no ops — but the flow is only called for ops (arg.id). A room that has sessions but no ops would not be asked to run an op. No break.",
+      "why": "pageFlow correctly opens the Work tab and polls for the card; no concrete failure.",
+      "fix": "No change.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "face/src/shell/SessionDock.tsx:bare return",
+      "breaking_input": "When `only` is set (action drawer), the bare branch renders `runs` as `[]` (line `const runs = only === undefined ? roomRuns(...) : []`), so no recent sessions are shown. But the non-bare branch renders `runs` below the cards. The action drawer duplicates the session card; that is intended. However, `SessionCardView` with `only` still shows the Start button; if the user clicks Start in the drawer, `onStarted` calls `setBump`, which refetches the registry, but the drawer's card is keyed by `c.id` and the registry refetch is fine. No logic break.",
+      "why": "The bare path intentionally omits run history; no breaking input.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": "face/src/modules/kernel/bench/fold.mjs:benchTable",
+      "breaking_input": "`shortReason` regex `/(\\d+)\\s*(?:of|\\/)\\s*(\\d+)/` on a reason like \"NO PROPOSAL - evidence insufficient (1 of 5 fixtures)\" gives head=`no proposal`, got=1, of=5 — fine. But a reason like \"NO PROPOSAL - evidence insufficient (12 of 5 fixtures)\" (where count > total) yields the string \"no proposal 12/5\" which is self-contradictory; the bench viewer sees nonsense. More critically, a reason that says \"NO PROPOSAL (2 of 1)\" could be served by a malicious spine; the chip prints a misleading fraction. The `classChip` title uses the full reason, so the truth is in the title, but the visible chip lies. Additionally, `head.length > 24` truncation: a reason of \"no proposal with a long explanation goes on\" is cut mid-word without an ellipsis attached to the fraction — cosmetic. The real issue: `shortReason` is applied to a reason that could contain a forged \"of\" fraction from a hostile spine, and the bench shows it as fact. The door should not trust reason strings to the point of drawing derived fractions from them; it should derive the fraction from the fixtures count, not the prose.",
+      "why": "A hostile `reason` field in a bench run receipt can forge a plausible-sounding fraction (e.g. \"NO PROPOSAL (9 of 3)\") that the UI draws as a number, misleading the owner about insurmountable evidence. The prose reason is free text from the run tool, not a typed count.",
+      "fix": "Do not parse the fraction from prose; have the bench chip carry the fixture counts as separate fields and derive the numerator/denominator independently, refusing mismatches.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "face/src/modules/company/org/fold.mjs:foldChart",
+      "breaking_input": "The `keep` filter: `filter === \"staffed\"` keeps roles where class is not in [\"vacant\",\"human\",\"partial\"], i.e. `agent`, `script`, `skill`, `process` — but also `agent` is what `chipClass` returns for a staffed seat with an unknown seat value (default). So a staffed role with `seat=\"foo\"` is drawn as `agent` and counted under \"staffed\" — acceptable. However, when `filter === \"vacant\"`, `keep` returns `cls === filter`, so only roles with `state === \"vacant\"` or `seat === \"vacant\"` show. A role with `state=\"staffed\"` and `seat=\"vacant\"` (a seat labeled vacant but not fully vacant) is shown under Vacant, and its chip class is \"vacant\" — correct. The bug: `chipClass` checks `state === \"vacant\" || seat === \"vacant\"` first, so a role with `state=\"human\"` and `seat=\"vacant\"` is classed vacant, not human; the Human filter hides it. That is arguably intended (vacancy wins). But consider a role with `state=\"partial\"` and `seat=\"human\"` — chipClass returns \"human\" (since `state !== \"staffed\"` returns partial, but the second branch `seat === \"human\"` returns human? Actually order: vacant? no; `state === \"human\" || seat === \"human\"` → true → returns \"human\". So a partial human is shown as human. The Human filter shows it; the counts in deptBoxes count it as human, not partial. This is a classification mismatch: the department's `countParts` will say \"1 human\" and \"0 partial\" for a role that is partially staffed by a human, understating partialness. The room's \"Human\" filter shows a seat that is not fully staffed as if it were.",
+      "why": "A role with state=partial and seat=human is misclassified as fully human, hiding its partial nature from the Human filter and the department counts. A malicious or mistaken spine could pair these and the chart would overstate human coverage.",
+      "fix": "Priority order: vacant > partial > human > seat kind; a partial role is always partial regardless of seat.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "face/src/modules/company/org/fold.mjs:foldChart (owner/ceo derivation)",
+      "breaking_input": "The CEO is chosen as the role most others report to out of ALL roles across departments. If a department head within a department reports to another head, the tally counts all report targets. A spine where the CEO has 5 reports and a department head has 5 reports ties; `sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))` picks the lexicographically smaller id. A malicious spine could make a department head's id sort before the real CEO's id, and the chart would draw that head as CEO, and the owner would be whoever that head reports to — wrong org. The tie-break by id is arbitrary. Also, a role that reports to nobody is not counted; a CEO with zero direct reports (all roles report to department heads who report to the CEO) — the CEO still has indirect reports but the tally only counts direct `reports_to` targets present in the set, so the CEO would have 0 and a department head would have the most, misidentifying the CEO. A spine shaped with a CEO who has no direct reports (all via department heads) mis-roots the entire chart.",
+      "why": "The \"most others report to\" heuristic misidentifies the CEO/owner when reporting is indirect or ties on id order. The chart then draws the wrong person as CEO and computes `ownerRef` from the wrong node. A hostile or merely unusual spine yields a false org chart.",
+      "fix": "Use a declared root id in the payload (`root_role`) or follow a single root chain (a role with no reports_to), and refuse ambiguous ties by failing to a named refusal rather than guessing by id.",
+      "twin_of": null
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "face/src/modules/company/org/fold.mjs:foldChart (byId picks)",
+      "breaking_input": "`const byId = new Map(all.map((x) => [str(x.r[\"id\"]), x]));` — if a role's `id` is an empty string, `byId.set(\"\", x)` replaces the previous empty-id role. Then `picked` (from the View pick) could be an empty string when the user clicks a chip with empty id; `sel = byId.get(\"\")` returns the last empty-id role, and the card shows that role's data regardless of which empty-id role was clicked, because all empty-id chips share the key \"\" and React keys collide (`key: ${i}-${j}-${id}` would be `0-0-` vs `0-1-` distinct, but the click handler sets `onPick('role', c.pick)` where `pick = isSelected ? \"\" : id` — for empty id, `pick` is `\"\"` and the close handler also sets `\"\"`; clicking an empty-id chip closes a previously open card and cannot open a card for that role, because `picked===\"\"` is treated as \"no selection\". So roles with no id are unselectable and a stale card closes. More importantly, when two roles have the same id (duplicate), the Map keeps the last and the other is unclickable. The door should refuse duplicate/empty ids as a named finding, not silently collapse them.",
+      "why": "A spine with duplicate or empty role ids makes some roles unopenable and others show the wrong role's card; the chart silently loses rows instead of naming the corruption.",
+      "fix": "Refuse a chart with empty or duplicate role ids (counted as a named refusal), and never let an empty id mean \"close\".",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": "face/src/lib/rail.mjs:expandedRings",
+      "breaking_input": "`const s = saved && typeof saved === \"object\" ? saved : {};` — if `saved` is an array (parseSaved returns {} for arrays, so never), or if a caller passes a plain object with a `__proto__` own key, `Object.prototype.hasOwnProperty.call(s, g.ring)` checks own key — safe. But `saved` can be a null-prototype object from `parseSaved`; that is fine. The issue: `expandedRings` returns `out` as null-prototype, good. In `Rail.tsx`, `open = expandedRings(groups, current, saved)` — `saved` is the useState copy. When `current` changes (user navigates rooms), `expandedRings` recomputes from `saved`, but `saved` is only updated on toggle — fine. However, the ring holding the current room is forced open, but `toggleRing` refuses to fold it (`canFold`), and the header shows `aria-disabled=true`. A user who wants to fold the room they are in cannot — intended. Then when they navigate to another room, the previous ring stays as the viewer left it (folded or open) — fine. A subtle bug: if the current room's ring was never touched and it is not the first ring, it is forced open in `expandedRings`, but `toggleRing` for that ring is disabled, so the viewer cannot fold it away even though it was not their choice to keep it open.",
+      "why": "Usability: a ring forced open by the current room cannot be folded while in it, but that's by design (you never lose your row). Not a security break.",
+      "fix": "No change.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "high",
+      "where": "face/src/shell/Dock.tsx:useEffect close on place change",
+      "breaking_input": "`place` is computed in App.tsx as `settingsOn ? '#settings' : openable ? openable.id : shownId ?? ''`. When the user is typing a query in the Dock and a background poll or an unrelated state change (e.g. the rail's fold state changes via `openable` re-render) causes `place` to change value (e.g. from '' to '' — unchanged is fine), the effect calls `close()`. But `openable` is derived from the current room; if the room id is the same string, `place` is stable. However, if the user opens Settings (place becomes '#settings'), the answer card closes — intended. If the user picks a role chip in the org chart, `onPick('role', ...)` changes `picks` but not `openable` or `shownId`, so `place` stays the same; the close effect does not fire. If the user toggles a rail ring, `openable` unchanged. If the user clicks a room in the rail, `openable.id` changes, closing the answer — intended FV3-G. The risk: `close()` is called even when the place change is only a formatting change ('' vs '' — no). The actual bug: `place` changes when the user navigates to a DIFFERENT room that has the SAME id? Impossible. However, if the user is in the middle of asking and the room's state updates `shownId` after a re-read (e.g. the room id is stable but `openable` becomes non-null after the reads finish), `place` changes from `shownId ?? ''` to `openable.id` even though it is the same room id, closing the answer. Let me check App.tsx: `openable` is presumably a room object that becomes available after the room is resolved; `shownId` is the raw id. If a room transitions from \"shown by id\" to \"openable\" (a subtle state change), `place` flips from '' (if shownId was not set) to the id, or from one spelling to another, closing the dock mid-question. The Dock's `close()` drops the answer but keeps the draft (comment says draft kept) — so the user loses their answer.",
+      "why": "A stable room can change `place` between `shownId` and `openable.id` (same id, but the expression changes value when `openable` becomes available), firing `close()` and dropping an answer the user did not navigate away from.",
+      "fix": "Normalize `place` to a single stable identity (e.g. resolve the room id once) and only close when the canonical room id actually changes; also guard against closing on the same id.",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "high",
+      "where": "face/src/shell/Rail.tsx:onToggle and localStorage merge",
+      "breaking_input": "`onToggle(ring)` reads storage fresh with `parseSaved(window.localStorage.getItem(...))` and merges `{...saved, ...fresh}`. If the viewer has multiple tabs: tab A toggles ring X (writes `{X:true}`), tab B (stale `saved={X:false}`) toggles ring Y and reads storage fresh `{X:true}`, merges `{X:false, X:true}` — whatever order — spread last wins, so `X:true` preserved. Good. But if tab B's `saved` has `X:false` and storage has `X:true`, the merge yields `X:true` (fresh wins) — correct. However, `toggleRing` operates on the merged `fresh` and writes the whole result; a concurrent write between the read and write in tab A and tab B can lose a toggle (last-write-wins). The comment says \"what storage holds NOW wins over this tab's copy\" but there is no lock; two tabs toggling different rings concurrently can race: A reads {X:false}, B reads {X:false}, A writes {X:true,Y:false}, B writes {X:false,Y:true} — A's X toggle is lost. This is a classic lost-update.",
+      "why": "Two tabs toggling different rings concurrently lose one toggle due to no read-modify-write atomicity; the viewer's choice silently reverts.",
+      "fix": "Use a storage event and a per-key write, or serialize toggles via a mutex; at minimum re-read and merge immediately before each write and detect a storage change between read and write.",
+      "twin_of": null
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "face/src/shell/Rail.tsx:aria-disabled on current ring header",
+      "breaking_input": "`aria-disabled={canFold(groups, current, g.ring) ? undefined : true}` — when the ring cannot fold, the button still has `onClick` and calls `onToggle`, which via `toggleRing` returns `s` unchanged. So the click is a no-op but the button is still focusable and announces `aria-disabled`, and `aria-expanded` is set. A keyboard user may press Enter expecting to fold; nothing happens, which is correct.",
+      "why": "No security break.",
+      "fix": "No change.",
+      "twin_of": null
+    },
+    {
+      "id": "L13",
+      "severity": "medium",
+      "where": "face/src/modules/kernel/bench/View.tsx / fold.mjs:benchTable `isAll` toggle",
+      "breaking_input": "`toggleValue = isAll ? \"\" : \"all\"` — when `isAll` is true (picked `runs=all`), the button label \"show the latest 8\" and `onPick('runs', f.bench.toggleValue)` with toggleValue=`\"\"`. The View's `ctx.onPick('runs', '')` sets the pick to empty string, and `benchTable` reads `picks.runs === \"all\"`, so empty is not \"all\" — returns to 8 rows. Good. But the `route` field and data attributes `data-served` are drawn; a malicious bench route or availability string with newlines could break the harness's one-line parsing (the `data-availability` attr). `t.avail.availability` comes from the served table; if it contains a newline, the attribute becomes two lines. The door should scrub it, but the fold passes it through. The harness (`flows.mjs`) parses `data-availability`; a newline in it could forge parse lines.",
+      "why": "Unscrubbed availability text with a newline in a data attribute can break the browser harness's line-based parsing, or simply corrupt the DOM; the fold should one-line-ify any served free text.",
+      "fix": "Ensure `availability` and `failure` are single-line (strip control chars) before putting them in attributes.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": "face/src/shell/ActionDrawer.tsx:Esc handler",
+      "breaking_input": "The Esc key handler closes the drawer. If the user is typing in a form inside the drawer (e.g. an op's text field) and presses Esc to cancel an IME composition or clear focus, the drawer closes, losing the form draft. The handler does not check whether the event target is an input/textarea; a form field's legitimate Esc (e.g. to end composition on some IMEs) will close the drawer and lose the user's unsaved input. This is a usability/data-loss bug, not a security one.",
+      "why": "Pressing Esc inside a focused input closes the whole drawer, discarding the form's unsaved state.",
+      "fix": "Only close on Esc when the event target is not an editable field, or confirm before discarding a dirty form.",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "face/src/shell/OpsDock.tsx:bare / only filter",
+      "breaking_input": "`opCards(ops, registry).filter(...)` — when `only` is an id that does not exist in the registry's answer yet (registry loading), `cards.length===0` and the bare branch returns `null`, so the drawer opens empty (no form) until the registry loads, then the card appears. If the registry fails to load (`loadError`), the drawer shows an error but no form; the user cannot retry except by closing. Acceptable. If the registry answers with an op id that differs from the module's `only` (e.g. the door's op list is stale), the drawer is empty silently. The strip button is still drawn from `stripItems` which uses the same opCards result — if the op is absent, the strip button is not-ready; clicking it opens the drawer which is empty. The user sees a `not served` badge but the drawer has no refusal message beyond \"ops list refused\" if loadError. For a not-ready op (state absent), the drawer shows no card at all, contradicting the strip's \"not served\" badge which should say why. The FV3-E reason is only shown on the button title, not inside the drawer.",
+      "why": "Clicking a 'not served' op opens an empty drawer with no explanation, because the drawer's `only` filter yields no card and the loadError only appears for a fetch failure, not for an absent op.",
+      "fix": "When `only` is set and the card is absent, render the not-ready reason (from stripItems) inside the drawer instead of returning null.",
+      "twin_of": null
+    }
+  ]
+}

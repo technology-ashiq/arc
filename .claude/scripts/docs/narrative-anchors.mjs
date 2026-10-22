@@ -959,7 +959,7 @@ async function selftest() {
   const proof = await import(PROOF_HREF);
   for (const [name, ok, skip] of await proof.proofArms({ good, wiki, ACCEPT_GATE, sha256, requestPayload, approvalProblem, evaluate, trackedIn, isTopDir, acceptEntry, sigsOf, ownerKeyFinding, summaryLine, shownPage, rejectedFindings, OWNER_PUB, script: join(HERE, "narrative-anchors.mjs") })) arm(name, ok, skip === true);
   console.log(`RAN: ${ran} checks, ${failed} failed, ${skipped} skipped`);
-  return failed === 0 && ran + skipped === 100 ? 0 : 1;
+  return failed === 0 && ran + skipped === 101 ? 0 : 1;
 }
 
 // ---------------------------------------------------------------- CLI ----------------------------------------------------------------

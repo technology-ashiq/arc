@@ -1,0 +1,86 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/hq/arc-inbox.mjs:180-194 (decide signer parameter) and owner-key.mjs signAccept",
+      "breaking_input": "Call the exported decide() with signer={isTty:()=>true, readPassphrase:async()=>'known', keyDir:'/tmp/attacker-key'} after creating a sealed key at /tmp/attacker-key with a known passphrase. Also push a change to .claude/owner-key.pub containing the matching attacker public key; the gate only warns on the swap.",
+      "why": "The signer/keyDir/readPassphrase parameters are injectable by any code running as the owner (the agent is the same OS user), so the 'terminal + passphrase' protection is a caller-controlled boolean. Combined with the public-key swap being only a WARN (ownerKeyFinding state 'changed' returns changed:1 but no FAIL; the process exits 0), the whole signature authentication is bypassable without the owner's passphrase.",
+      "fix": "Never accept keyDir/readPassphrase/isTty as parameters from untrusted callers; open the controlling terminal device directly (/dev/tty, CONIN$) and require the committed public key to be unchanged from the base ref as a FAIL, not a WARN.",
+      "twin_of": "A mode entered on a truthy value, sharing a run with another -> Enter a mode on the flag, never on its value."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/owner-sig.mjs:139-159 (readCheckedFile/readOwnerPubFile)",
+      "breaking_input": "On Windows (or a filesystem where BigIntStats.ino is 0n), run --accept while another process replaces .claude/owner-key.pub with an attacker Ed25519 key between the lstat in readOwnerPubFile and the open/fstat in readCheckedFile. The identity check compares ino and dev; ino is 0 for both, dev is the same volume, so the swap is accepted and the attacker key is read as the trust anchor.",
+      "why": "The swap guard ('a file swapped between the check and the open is a different inode and is refused') is vacuous when the platform does not provide inodes. The consequence is the same key-substitution bypass as L1, without a warning, because the bytes read are then used for verification.",
+      "fix": "When ino is 0n, require an additional identity fact (e.g., birthtime plus size, or re-lstat after reading and compare a hash of the content), or open the parent directory and use openat with O_NOFOLLOW and FILE_SHARE_DELETE refused on Windows.",
+      "twin_of": "Check-then-open on a caller's path -> decide on the descriptor you read from."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:1025-1046 (main --accept path)",
+      "breaking_input": "Run --accept with an approval that is valid; while verifyAcceptApproval is doing its git/spine read (which can take seconds), another process overwrites the narrative file docs/wiki/products/hq.md. The final acceptEntry is called with the stale r.fails and stale narratives hash, so it writes {sha256: newHash, sig: proof.sig} where proof.sig was verified over oldHash. The write succeeds; the accepted entry later FAILs the gate with [bad-owner-signature], but the acceptance file has been modified.",
+      "why": "The code re-checks nothing between the spine read and the final write: pre=acceptEntry(...) uses the stale r.fails, then after the long await the second acceptEntry uses the same stale r.fails and narratives. This is a check-then-emit with no re-read (the exact class the project has repeatedly fixed).",
+      "fix": "After verifyAcceptApproval returns, re-read the narrative file and the ACCEPT_FILE, recompute the sha256, re-run evaluate/acceptEntry on the fresh reads, and refuse with SOURCE_CHANGING if anything moved.",
+      "twin_of": "A check-then-emit with no lock (pick, profile) -> the PR 3a round-2 row, a third time: a spine check is only a guard if nothing can land between it and the emit."
+    },
+    {
+      "id": "L4",
+      "severity": "high",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:50-52 (ownerKeyDir) and 139-153 (initOwnerKey)",
+      "breaking_input": "Create ~/.arc-private as a symlink to /tmp/attacker/writable before the owner runs 'arc-inbox owner-key init'. initOwnerKey's mkdirSync follows the symlink, the private key file is created in the attacker-controlled directory. The owner then approves a request; unsealOwnerKey reads from the attacker-controlled path. The attacker can swap in a sealed file of their own, or simply copy the real sealed file after capture.",
+      "why": "The fixed key path is derived from userInfo().homedir (good), but no path component is checked for being a symbolic link or for ownership/mode. The comment promises the private key stays outside every repo, but a symlinked home subdirectory moves it to any location the attacker chooses. Same-user attacker can also redirect the file to a network mount they control.",
+      "fix": "lstat every component of the keyDir path before writing, refuse any symlink, require the directory to be owned by the current uid and mode 0700; create the directory with mkdirSync and verify it is still a real directory (not a link) before opening any file inside it.",
+      "twin_of": "A picker's options listed by NAME only -> every listed entry is lstat-ed and is the kind its name claims, and a link is never followed."
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:753-757 (selftest total)",
+      "breaking_input": "Run the selftest on a platform or environment where every arm in proofArms is returned with skip=true (or supply a modified hook that forces skips). The final condition failed===0 && ran+skipped===100 passes even when ran===0, so the selftest exits 0 after running zero real checks and all arms skipped.",
+      "why": "A suite that is 100% skipped counts as success. The comment says a skip is never an 'ok', but the exit condition treats a skip as satisfying the total, and there is no floor on non-skipped arms.",
+      "fix": "Require ran>0 (and ideally a minimum non-skipped count), and print the skip reasons to stderr; make all-skipped a FAIL.",
+      "twin_of": "A hand-kept arm floor -> a suite compares its PASS count to the RAN count the selftest derives from its own arms."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:108-112 (readPassphraseTty) and signAccept/unsealOwnerKey",
+      "breaking_input": "An attacker with code execution as the owner (the agent) calls signAccept or unsealOwnerKey directly with readPassphrase=async()=>process.env.STOLEN_PASSPHRASE and isTty=()=>true, completely bypassing the real terminal. The functions are exported and accept these as plain parameters; there is no way for the production CLI to know whether the caller is the CLI or attacker code.",
+      "why": "The 'only a caller's own code can inject' comment is precisely the problem: the attacker is a caller with code. The tty boolean is a weak proxy for 'a human typed this', and the passphrase reader is swappable, so the authentication step is not anchored to the terminal device.",
+      "fix": "Do not export the prompt/keyPath as injection points for production: the unseal operation must read from the controlling terminal directly (open /dev/tty or CONIN$), and the key path must be a fixed, verified path that the function itself resolves from the OS user record.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/docs/narrative-anchors.mjs:422-431 (evaluate signature loop)",
+      "breaking_input": "Craft an ACCEPT_FILE entry {sha256:\"\", approval:<ulid>, sig:...}. The check 'if (accepted[page] === \"\" || !ULID.test(approval)) continue;' skips the signature check entirely; the page is then counted as awaiting-owner, not accepted, so no [no-owner-signature]/[bad-owner-signature] fires and no malformed-entry finding is emitted. A corrupt acceptance file with an empty hash is silently treated as 'owner has not read it yet'.",
+      "why": "An empty/absent sha256 in an accepted entry is a wrong-shaped source that should be a named finding, not a quiet default to awaiting-owner. The gate's count stays green while the acceptance record is malformed.",
+      "fix": "Any entry present in accepted that lacks a well-formed 64-hex sha256 should produce a named fail (e.g., [malformed-accept]) rather than being folded into the awaiting path.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:187-199 (pageListing/signAccept ordering)",
+      "breaking_input": "A narrative-accept request with 201 valid pages: decide() calls pageListing which prints 200 rows and '... and 1 more' to stderr; then signAccept refuses with 'the ceiling is 200'. The listing prints before any refusal, so a crafted request can make the terminal display a long attacker-chosen list of page ids (grammar-valid, so no control chars) before the signing is refused.",
+      "why": "The size ceiling is checked inside signAccept, but the terminal listing is printed before signAccept runs, so the owner sees the full listing of an oversized request that will then be refused. Usability and minor terminal-clutter issue, not a security bypass.",
+      "fix": "Check pages.length and distinct-page count in decide() before writing the listing, or have signAccept's ceiling check done before pageListing is printed.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/hq/lib/owner-key.mjs:49-52 (ownerKeyDir home handling)",
+      "breaking_input": "On a system where userInfo().homedir returns a path that the process cannot actually access (e.g., a stale NIS/AD record), init refuses; no bypass. More relevantly, the code uses userInfo().homedir but still allows a caller to pass a different home to ownerKeyDir for testing; production wires no home, so not a finding.",
+      "why": "No concrete security impact beyond the symlink issue already reported in L4.",
+      "fix": "No separate fix needed.",
+      "twin_of": null
+    }
+  ]
+}

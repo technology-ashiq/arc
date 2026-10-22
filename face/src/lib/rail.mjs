@@ -92,6 +92,9 @@ export function toggleRing(groups, roomId, saved, ring) {
   return next;
 }
 
+/** The most ring choices a saved entry is read for: far above the rings a face has. */
+export const SAVED_MAX = 64;
+
 /**
  * Read the stored choices. Anything that is not a JSON object of booleans reads as "nothing saved".
  * @param {string | null | undefined} raw
@@ -104,8 +107,14 @@ export function parseSaved(raw) {
   if (!v || typeof v !== "object" || Array.isArray(v)) return {};
   /** @type {RailSaved} */
   const out = Object.create(null);
-  for (const [k, b] of Object.entries(v)) {
-    if (typeof b === "boolean" && usableKey(k)) out[k] = b;
+  // debt D113: a hand-edited or hostile entry holding thousands of keys is read up to a cap, never walked whole.
+  let n = 0, seen = 0;
+  for (const k in v) {
+    // The walk is capped too, not only what is kept: 5,000 rejected keys never cost 5,000 checks (attack 16af00b L2).
+    if (n >= SAVED_MAX || ++seen > SAVED_MAX * 4) break;
+    if (!Object.hasOwn(v, k)) continue;
+    const b = v[k];
+    if (typeof b === "boolean" && usableKey(k)) { out[k] = b; n++; }
   }
   return out;
 }
