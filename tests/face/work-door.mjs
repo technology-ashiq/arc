@@ -149,6 +149,7 @@ const INPUTS = {
   // The live lanes (ADR-1344): no leads store on this tree, and a FIXTURE venture for the legal gate.
   "leads.daily-send": { campaign: "work-door" },
   "legal.full-read": { venture: "fixture-gateway-gst" },
+  "discover.hunt": { niche: "invoice reminders" },
   // The company ring (ADR-1343): branch writers, planned where there is a main and refused SIM_EFFECT at apply.
   "org.lane-status": { lane: "face", status: "QUEUED" },
   "org.seat-assign": { role: "coo-dispatcher", seat: "agent", agents: "researcher" },
@@ -190,7 +191,7 @@ check("every registry op is driven by this suite",
   // AN OP BORN AFTER THE PROBE: the probe and its residue file are Phase 05's sealed evidence (arc-evidence verify
   // hashes both), so a later op is named here with the accepted ADR that birthed it, never written into the bundle.
   // Each must be absent from the residue file and its ADR must be on disk and accepted.
-  const AFTER_PROBE = new Map([["org.seat-assign", "1352"]]);
+  const AFTER_PROBE = new Map([["org.seat-assign", "1352"], ["discover.hunt", "1369"]]);
   const adrs = readdirSync(join(REPO, "docs", "adr"));
   const bornOk = [...AFTER_PROBE].every(([id, n]) => {
     const f = adrs.find((x) => x.startsWith(`${n}-`));
@@ -294,7 +295,8 @@ check("every effect op is human-run", OPS_MOD.OPS.filter((o) => o.touchesFiles |
 // ---- the hand-run: exactly what a person would type, from the tool's own output ----
 function handRun(op, values) {
   const env = { ...process.env, ARC_SPINE_ROOT: SPINE_B };
-  const run = (cmd) => spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...cmd.script.split("/")), ...cmd.args], { cwd: REPO, encoding: "utf8", env });
+  // A row that hands its tool a value in the environment (discover.hunt's niche) is typed with it, as a person would.
+  const run = (cmd) => spawnSync(process.execPath, [join(REPO, ".claude", "scripts", ...cmd.script.split("/")), ...cmd.args], { cwd: REPO, encoding: "utf8", env: { ...env, ...(cmd.env || {}) } });
   let applyCmd;
   if (op.apply === "emit-plan" || op.expect === true) {
     const planned = run(op.plan(values));

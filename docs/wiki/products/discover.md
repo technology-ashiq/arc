@@ -23,9 +23,10 @@
 
 None declared.
 
-## Scripts (8)
+## Scripts (9)
 
 - [`.claude/scripts/discover/arc-discover.mjs`](../../../.claude/scripts/discover/arc-discover.mjs)
+- [`.claude/scripts/discover/hunt-op.mjs`](../../../.claude/scripts/discover/hunt-op.mjs)
 - [`.claude/scripts/discover/lib/cluster.mjs`](../../../.claude/scripts/discover/lib/cluster.mjs)
 - [`.claude/scripts/discover/lib/export.mjs`](../../../.claude/scripts/discover/lib/export.mjs)
 - [`.claude/scripts/discover/lib/judge.mjs`](../../../.claude/scripts/discover/lib/judge.mjs)

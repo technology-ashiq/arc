@@ -30,7 +30,7 @@
 //   - Only plain JSON leaves a handler; a Set, a Map or a raw nested payload never does.
 //   - Receipts the spine reader could not read are COUNTED on every log route (`unreadLines.torn`, `.skipped`), never
 //     silently absent from a table. (The key is not "spine": a face lib file may not name a served room, even as a key.)
-import { existsSync, readFileSync, readdirSync, statSync, realpathSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync, realpathSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, sep, dirname } from "node:path";
 import { execFile } from "node:child_process";
@@ -525,6 +525,37 @@ export async function apiModelPolicy(ctx, url) {
     });
 }
 
+/**
+ * The tier a model implies, inverted from router.yaml's `models` map for one driver (Cycle 17 P03, REQ-08, ADR-1367).
+ * A model no tier names, or one two tiers both name, is `unmapped` -- never a guessed tier: a tier is law (ADR-0069).
+ * @param {{ tier: string, models: { driver: string, model: string }[] }[]} tiers @param {string} driver @param {string} model
+ * @returns {string}
+ */
+export function impliedTier(tiers, driver, model) {
+  const hits = tiers.filter((t) => t.models.some((m) => m.driver === driver && m.model === model)).map((t) => t.tier);
+  return hits.length === 1 ? hits[0] : "unmapped";
+}
+
+/**
+ * Every agent the harness loads -- a regular `.claude/agents/<name>.md` -- with the model its frontmatter names and
+ * the tier that model implies on claude-code, the agents' runtime. Read with lstat, never through a link.
+ * @param {any} ctx @param {{ tier: string, models: { driver: string, model: string }[] }[]} tiers
+ */
+function agentTiers(ctx, tiers) {
+  const dir = join(ctx.repo, ".claude", "agents");
+  let names = [];
+  try { names = readdirSync(dir).filter((f) => /^[a-z0-9][a-z0-9-]{0,63}\.md$/.test(f)); } catch { return { agents: [], unreadable: true }; }
+  const agents = [];
+  for (const f of names.sort()) {
+    let raw = "";
+    try { if (!lstatSync(join(dir, f)).isFile()) continue; raw = readFileSync(join(dir, f), "utf8").slice(0, 8192); } catch { continue; }
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw);
+    const model = fm ? ((/^model:[ \t]*["']?([A-Za-z0-9._:/-]{1,80})["']?[ \t]*$/m.exec(fm[1]) || [])[1] || "") : "";
+    agents.push({ name: text(ctx, f.slice(0, -3)), model: text(ctx, model), tier: model ? impliedTier(tiers, "claude-code", model) : "unmapped", tier_source: model ? `implied by model: ${text(ctx, model)}` : "implied by model: (none in its frontmatter)", enabled: true });
+  }
+  return { agents, unreadable: false };
+}
+
 /** GET /api/roster -- the contractors router.yaml hires (a runtime row, or one carrying tenure terms) and their runs. */
 export async function apiRoster(ctx, url) {
   onlyQuery(url, []);
@@ -538,10 +569,14 @@ export async function apiRoster(ctx, url) {
       const p = obj(e.payload);
       return { id: idOf(e.id), ts: tsOf(e.ts), process: text(ctx, p.process), driver: text(ctx, p.driver), outcome: text(ctx, p.outcome) || text(ctx, e.outcome), reason: text(ctx, p.reason), duration_ms: num(p.duration_ms) };
     });
-  return answer(ctx, "/api/roster", "file and log", "engine/yaml-subset.mjs#parseYamlSubset · engine/router-row.mjs#isExpired,RUNTIME_DRIVERS · hq/spine.mjs#readAll", [r.f], {
+  // Every agent file the harness loads is switched on: arc keeps no disabled flag, and a file that is there is loaded.
+  const roster = agentTiers(ctx, r.tiers);
+  return answer(ctx, "/api/roster", "file and log", "engine/yaml-subset.mjs#parseYamlSubset · engine/router-row.mjs#isExpired,RUNTIME_DRIVERS · hq/spine.mjs#readAll · .claude/agents/*.md frontmatter `model:`", [r.f], {
     today: r.today,
     hires,
     runs,
+    agents: roster.agents,
+    agentsUnreadable: roster.unreadable,
   }, counts);
 }
 

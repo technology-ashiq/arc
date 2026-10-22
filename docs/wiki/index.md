@@ -26,7 +26,7 @@ Narrative debt: **122 of 156** pages have no narrative yet. ADR headers: 445 of 
 | [council](products/council.md) | 1.0.0 | [core](products/core.md) | 1 | 12 | 3 |
 | [design](products/design.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 6 | 20 |
 | [develop](products/develop.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 2 | 3 | 10 |
-| [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 8 |
+| [discover](products/discover.md) | 0.1.0 | [core](products/core.md), [council](products/council.md), [growth](products/growth.md), [hq](products/hq.md), [launch](products/launch.md) | 1 | 0 | 9 |
 | [docs](products/docs.md) | 0.1.0 | [core](products/core.md), [engine](products/engine.md), [hq](products/hq.md) | 0 | 0 | 5 |
 | [engine](products/engine.md) | 0.1.0 | [core](products/core.md), [hq](products/hq.md) | 1 | 0 | 53 |
 | [evolve](products/evolve.md) | 1.0.0 | [core](products/core.md), [hq](products/hq.md) | 0 | 0 | 8 |

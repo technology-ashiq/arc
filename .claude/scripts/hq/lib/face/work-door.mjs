@@ -80,6 +80,17 @@ export const WORK_STATUS = Object.freeze({
  * @param {{ timeoutMs: number, onLine?: (stream: "out" | "err", line: string) => void, outputCap?: number, env?: Record<string, string> }} opts -- `env` is laid over childEnv() for this one child (Phase 10: the owner model's endpoint and key, never an argument)
  * @returns {Promise<{ exit: number | null, signal: string | null, stdout: string, stderr: string, timedOut: boolean, dropped: number, droppedOut: number, droppedErr: number }>}
  */
+/** The env names a registry row may hand its tool: values the owner typed, never a variable that steers the child. */
+export const ROW_ENV_NAMES = Object.freeze(["ARC_HUNT_NICHE"]);
+
+/** A row's env, checked: any other name is a registry bug, refused before anything runs. @param {{ id: string }} op @param {{ env?: Record<string, string> }} cmd */
+export function rowEnv(op, cmd) {
+  const env = cmd.env || {};
+  const bad = Object.keys(env).filter((k) => !ROW_ENV_NAMES.includes(k) || typeof env[k] !== "string");
+  if (bad.length) throw new OpError("TOOL_MISSING", `${op.id} hands its tool ${bad.join(", ")} in the environment, which the door never passes`);
+  return { ...env };
+}
+
 export function runTool(ctx, cmd, { timeoutMs, onLine, outputCap = OUTPUT_CAP, env = {} }) {
   if (!SCRIPT_RE.test(cmd.script)) throw new OpError("TOOL_MISSING", `the registry names "${cmd.script}", which is not a script path the door runs`);
   const script = join(ctx.repo, ".claude", "scripts", ...cmd.script.split("/"));
@@ -215,7 +226,9 @@ export function createWorkDoor(ctx, opts = {}) {
     if (ctx.mode === "sim" && op.spends && !(typeof op.simSafe === "function" && op.simSafe(values)))
       throw new OpError("SIM_SPEND", `${op.id} spends real money, and this door is in sim mode -- it runs here only in the form that spends nothing`);
     const planCmd = op.plan(values);
-    const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS });
+    // A row may hand its tool a value in the environment rather than argv (discover.hunt's niche, ADR-1369) -- only
+    // under a name this door allows, so a row can never set PATH, HOME or the spine (attack c1f375b L1).
+    const res = await runTool(ctx, planCmd, { timeoutMs: PLAN_TIMEOUT_MS, env: rowEnv(op, planCmd) });
     const base = {
       // Scrubbed like everything else the page is served, ONE ARGUMENT AT A TIME: the argv carried a --root path and a
       // `why` holding an address unscrubbed (PR 4 round-3 logic attack), and scrubbing the whole line withheld everything
@@ -320,6 +333,7 @@ export function createWorkDoor(ctx, opts = {}) {
         const before = await kindIds(ctx, p.receipt.kind);
         const res = await runTool(ctx, p.applyCmd, {
           timeoutMs: APPLY_TIMEOUT_MS,
+          env: rowEnv(op, p.applyCmd),
           onLine: (stream, line) => {
             p.lines.push({ s: stream, t: scrub(line, ctx.repo) });
             if (p.lines.length > LINES_KEPT * 4) { const n = p.lines.length - LINES_KEPT; p.lines.splice(0, n); p.linesDropped += n; }

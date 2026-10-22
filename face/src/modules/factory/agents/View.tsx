@@ -7,7 +7,7 @@
 import type { ModuleViewContext } from '../../../lib/registry.mjs'
 import type { Folded } from './fold.mjs'
 import { Chip, MONO, UI } from '../../../ui/kit'
-import { HPanel, KpiStrip, NotServed, RoomHead } from '../../../ui/bits'
+import { HPanel, KpiStrip, RoomHead, ServedTable } from '../../../ui/bits'
 export { Robot as Icon } from '@phosphor-icons/react'
 
 export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) {
@@ -42,7 +42,7 @@ export default function View({ f, ctx }: { f: Folded; ctx: ModuleViewContext }) 
         <div className="min-w-0">
           <HPanel title="Tiers are law" hint="ADR-0069">
             <p className="text-[13px] leading-[20px] mb-3" style={{ fontFamily: UI, color: 'var(--text-2)' }}>{f.law}</p>
-            <NotServed item={f.tiers} />
+            <ServedTable item={f.tiers} />
           </HPanel>
         </div>
       </div>

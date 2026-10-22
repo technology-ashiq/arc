@@ -5,6 +5,7 @@
 export default Object.freeze({
   id: "agents",
   ring: "factory",
-  routes: Object.freeze([]),
+  // Cycle 17 P03 (REQ-08, ADR-1367): each agent's tier, implied by its model, and whether it is switched on.
+  routes: Object.freeze(["/api/roster"]),
   asOf: false,
 });
