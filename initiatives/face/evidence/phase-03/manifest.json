@@ -1,0 +1,36 @@
+{
+  "phase": "03",
+  "commit": "5cc4c097cdfa060f07e6ce378578f2ba5121d0ce",
+  "short": "5cc4c097",
+  "generated": "2026-10-22T06:38:05Z",
+  "files": [
+    {
+      "name": "attack-54ad42f-r2-boundary.json",
+      "sha256": "da1436a7089d331e11c334124c23778236e8935af27dbcf2ba1af53acdccd8fe"
+    },
+    {
+      "name": "attack-c1f375b-r1-boundary.json",
+      "sha256": "0aa840d0073b9be036e56abe0ba6cc9a97bb64c7c4cddb3eee7c8259390d54f5"
+    },
+    {
+      "name": "attack-c1f375b-r1-logic.json",
+      "sha256": "b0df5162e2f3df59d89c8d819e141a3fe8cfc1d1f34fcf3c678821c102f6ffa3"
+    },
+    {
+      "name": "attack-c551846-r1-boundary.json",
+      "sha256": "94f8d59b3f2def8c44f696c5ac4246d992bf563b1322bbe8b2fd00f740f7557d"
+    },
+    {
+      "name": "owner-demo.md",
+      "sha256": "09b9054361b33c2d84c02b48bc7c306f30e7acc0d17359c7c2e99033919e4f47"
+    },
+    {
+      "name": "residue.md",
+      "sha256": "d515edcd186883692dde0c734f4a09a671d270abb2329e236ec628bb0c9f69b5"
+    },
+    {
+      "name": "served.md",
+      "sha256": "e059e829a97140353b7dc360c2376ddf3b1dac59cc3c06eae950eece99444df9"
+    }
+  ]
+}
