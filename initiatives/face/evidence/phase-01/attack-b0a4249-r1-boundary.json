@@ -1,0 +1,77 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:legalVentures",
+      "breaking_input": "tests/fixtures/legal/ventures is a symlink or junction pointing outside the tree, or is a file. listRealDir throws LINKED_SOURCE/ENOTDIR, which the surrounding bare `catch { fixtures = []; }` swallows.",
+      "why": "The listing-root fix (failure for a link or file where the directory should be) is discarded for the fixtures half. The only failure surfaced is reg.failure, and only when the fixtures list is empty. A linked fixtures root reads as none, so the failure is indistinguishable from an absent directory. This is the 'wrong-shaped source returned an empty inventory' pattern, and the 'unreadable source drawn as empty' fix is applied to leads and agents but not here.",
+      "fix": "Record the fixtures failure code and fold it into the returned failure when it is not ENOENT-absent. Do not swallow it.",
+      "twin_of": "A wrong-shaped source returned an empty inventory -> empty because absent and empty because unreadable are different results."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput (select branch)",
+      "breaking_input": "leads.daily-send campaign picker with leadsCampaigns() returning {failure:\"EACCES\", options:[]}, or legal.full-read with a failed registry. Any campaign value is posted.",
+      "why": "The select branch only tests options.includes(raw) and throws BAD_INPUT. The text branch has no failure check either. An unreadable source is therefore reported as 'is not one of the options ... none yet -- create one first'. FIELD_UNKNOWN is never thrown for these new FIELD_SOURCES; the new picker ops are not gated, though the work-door comment and the debt row assume they are. On apply, re-validation turns the same unreadable list into OPTION_GONE. The round-2 B8 finding is not fixed, only moved into the debt ledger.",
+      "fix": "In validateInput, when read.failure is non-empty, throw FIELD_UNKNOWN before the membership test. In apply, rethrow it unchanged.",
+      "twin_of": "One refusal code for \"the list moved\" and \"the list is unreadable\" -> a value that left its list after the plan is OPTION_GONE; a source that cannot be read stays FIELD_UNKNOWN."
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/hq/face-ops.mjs:FIELD_SOURCES (leads.daily-send, legal.full-read, org.seat-assign)",
+      "breaking_input": "The existing gate test lists the gated ops as exactly the five. Its FIELD_UNKNOWN arm exercises only money.ingest and ventures.kill-review with an unreadable ventures.yaml. A leads store whose campaigns path is a junction is never driven through plan.",
+      "why": "The three new sources have no unreadable-source plan test, so the refusal code for them is never pinned. The test list was widened to accept the new ids while the arms that prove a gate still refuses were not extended. The assertion got a longer expected set without a matching negative control.",
+      "fix": "Add an arm per new gated op that makes the source unreadable and asserts FIELD_UNKNOWN, with no tool run.",
+      "twin_of": "A test that passes proves the assertion held, not that the code ran."
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:leadsCampaigns / leadsStorePath",
+      "breaking_input": "ARC_LEADS_STORE set to a relative path, or to a path inside a different cwd than the door's. The live-pulse test sets process.env.ARC_LEADS_STORE to an absolute temp path, but the door reads it per call.",
+      "why": "The picker's source path is re-derived from the environment on every registryView and validateInput call, so a relative override resolves against the process cwd. The campaign list seen at plan can differ from the one the spawned arc-leads child (different cwd or env) reads at apply. This is two readers of one location, resolved differently.",
+      "fix": "Require an absolute store path in the picker (refuse by name otherwise), and pass the resolved path to the child through the argv or env the plan used.",
+      "twin_of": "A relative path override resolved per process -> a path override shared across processes is refused unless absolute."
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:runSmoke firstVerb read",
+      "breaking_input": "The finally's restore send (1440x1000) itself rejects, e.g. the page crashed after the first override. The rejection from finally replaces the original error and propagates out of the per-room try.",
+      "why": "The restore is not guarded, so a throw in finally masks the read error, and the per-room catch records the wrong cause. After a failed restore, later rooms are measured at 1366x768 with no record that the frame is wrong.",
+      "fix": "Wrap the restore in its own try/catch, record a finding on failure, and re-raise the original error.",
+      "twin_of": "A cleanup in `finally` that can throw past the RAN line -> cleanup is wrapped and WARNs."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "face/scripts/smoke.mjs:firstVerbOf",
+      "breaking_input": "A room whose strip draws all its buttons only after a late React render (after the read), or one whose `[data-strip-item]` nodes are all hidden by an ancestor with display:none. getClientRects().length is 0 for each, so the room reports -1.",
+      "why": "-1 is read as 'room with no verb' and is excluded from both `over` and `unread`. A room whose verbs failed to draw is indistinguishable from a room that has none. Only the bats floor of 20 rooms bounds it, and a run with 20 or more rooms passes while any number of verb-bearing rooms silently drew none. A mutant that hides one room's strip passes.",
+      "fix": "Derive the set of rooms that must draw a verb from the served ops registry (rooms with ops or sessions), and fail a room in that set that reads -1.",
+      "twin_of": "A judged number with a floor below its promise -> Judge the number against what the REQ promises (every crossing), with a mutant at each failing value."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:validateInput refusal message",
+      "breaking_input": "A picker source holding several hundred names (campaigns directory with 500 files) and a posted value that is not among them.",
+      "why": "`options.join(\", \")` is uncapped inside the BAD_INPUT message, which travels to the page, the receipt and the logs. The raw value is capped at 80 but the list is not. Debt row B7 admits the cap is on the value only.",
+      "fix": "Cap the joined list (first 20 names plus a count).",
+      "twin_of": "An unbounded fragment beside a capped buffer -> cap the line as well as the buffer."
+    },
+    {
+      "id": "B8",
+      "severity": "low",
+      "where": ".claude/scripts/hq/face-ops.mjs:registryView",
+      "breaking_input": "A FIELD_SOURCES function that throws (for instance venturesRead() raising on a malformed registry).",
+      "why": "registryView calls each source with no try/catch while mapping fields. One throwing source takes down the whole registry view, so every op disappears from /api/ops instead of just the one sourced field. leadsCampaigns and agentNames catch internally, but legalVentures calls venturesRead() outside any try.",
+      "fix": "Wrap each source call, and on a throw return {failure: errCode(e), options: []} for that field.",
+      "twin_of": "One malformed row threw at render in every room -> a registry read at render is defensive per row."
+    }
+  ]
+}
