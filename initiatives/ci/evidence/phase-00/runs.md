@@ -4,6 +4,7 @@
 |---|---|---|---|
 | 40031569932 | 41aaeef0 | pull_request (draft) | every job skipped on a draft (REQ-02) |
 | 40031621509 | 41aaeef0 | ready_for_review | first real run: 7 green, security + bats (0) + bats (1) red, test red as their aggregate |
+| 40033731328 | 8d396b4f | synchronize | arc-scan now passes; security red on the NEW `npm audit` step: 2 high in face (source-map-js 1.2.1, vite 8.2.2) |
 
 ## 40031621509 -- three reds, three root causes
 
@@ -17,3 +18,10 @@
   This is A-01 firing (PLAN Assumptions).
 
 The follow-up run on the fixed head is appended below once it completes.
+
+## 40033731328 -- npm audit, pre-existing on main
+
+The old ci.yml never ran `npm audit`, so these two highs were already on main, unseen. Fixed with
+`npm audit fix --package-lock-only` in face: vite 8.2.2 -> 8.3.5 (minor), source-map-js 1.2.1 -> 1.2.2,
+and vite's own toolchain (rolldown 1.2.5 -> 1.2.15, @oxc-project/types, postcss, nanoid, picomatch
+patches). Build tooling only; the face job's tsc + vite build is the proof.
