@@ -729,3 +729,19 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-10-14 04:39 — feat/portfolio-cycle-5
 - Last commit: 2df81d4e chore(plan): ship kickoff-gates.mjs with the plan product
 - Uncommitted files at exit: 3
+
+## 2026-10-20 19:24 — feat/launch-supabase-org-pick
+- Last commit: 67c6e07b fix(launch): a venture names its Supabase org; launch never picks one (F6, ADR-1773)
+- Uncommitted files at exit: 7
+
+## 2026-10-20 19:32 — feat/launch-supabase-org-pick
+- Last commit: 47d6b916 fix(launch): attack r1 on 67c6e07 -- unscoped project refused, org resolved once, blank/null org refused, every org id listed
+- Uncommitted files at exit: 9
+
+## 2026-10-22 16:27 — feat/face-c17-p02-live
+- Last commit: 48aa8b86 docs(face): close Cycle 17 Phases 01 and 03 on the owner's live runs; Phase 02 refused (no QA/ship receipt) (#457)
+- Uncommitted files at exit: 8
+
+## 2026-10-23 01:06 — feat/face-c17-p02-live
+- Last commit: 48aa8b86 docs(face): close Cycle 17 Phases 01 and 03 on the owner's live runs; Phase 02 refused (no QA/ship receipt) (#457)
+- Uncommitted files at exit: 10
