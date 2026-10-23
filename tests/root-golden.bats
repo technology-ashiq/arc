@@ -55,7 +55,9 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 0 ]
   [ -f "$SANDBOX/docs/session-log.md" ]
   rm -f "$SANDBOX/docs/session-log.md"
-  ARC_DRIVER_INPUT_FILE=/nonexistent/input.json bash "$SANDBOX/.claude/hooks/SessionEnd.d/00-session-log.sh"
+  # `env VAR=x` because a bare prefix on `run` never reaches the child.
+  run env ARC_DRIVER_INPUT_FILE=/nonexistent/input.json bash "$SANDBOX/.claude/hooks/SessionEnd.d/00-session-log.sh"
+  [ "$status" -eq 0 ]
   [ ! -e "$SANDBOX/docs/session-log.md" ]
 }
 
