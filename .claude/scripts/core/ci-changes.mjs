@@ -34,13 +34,14 @@ function changedPaths(argv) {
   const base = flag("--base");
   const head = flag("--head") || "HEAD";
   if (!base) return [];
-  const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  // Literal argv, no wrapper: plan-bound-audit reads a variable git argv as a write (fail closed).
+  const opts = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
   try {
     // Both ends must resolve before a diff is believed: a successful diff over the wrong range is
     // the one fail-open cannot catch (attack B1, L6). -z: a quoted or newline-bearing path is one record.
     // --no-renames: a file moved OUT of face/ lists its old path too (attack r2 B3).
-    for (const ref of [base, head]) git(["cat-file", "-e", `${ref}^{commit}`]);
-    return git(["-c", "core.quotePath=false", "diff", "-z", "--no-renames", "--name-only", `${base}...${head}`]).split("\0").filter(Boolean);
+    for (const ref of [base, head]) execFileSync("git", ["cat-file", "-e", `${ref}^{commit}`], opts);
+    return execFileSync("git", ["-c", "core.quotePath=false", "diff", "-z", "--no-renames", "--name-only", `${base}...${head}`], opts).split("\0").filter(Boolean);
   } catch { return []; }
 }
 

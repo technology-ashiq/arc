@@ -154,7 +154,7 @@ flowchart TB
 
 | Assumption | How we'd know it's wrong (trigger) | Phase tests it |
 |---|---|---|
-| A-01: the bats suite passes on ubuntu Node 24 as it does on 22 | a red bats shard whose files, run alone on a Node-22 dispatch and a Node-24 dispatch, pass on 22 and fail on 24 | 00 |
+| A-01: the bats suite passes on ubuntu Node 24 as it does on 22 | a red bats shard whose files, run alone on a Node-22 dispatch and a Node-24 dispatch, pass on 22 and fail on 24 FIRED 2026-10-24 (launch-contract rollback fixture: node --test spec reporter default since Node 23; pinned tap, evidence/phase-00/runs.md) | 00 |
 | A-02: round-robin by file over 4 shards lands each shard within ~2x of the others | any shard > 2x the fastest in REQ-03's per-job durations | 00 |
 | A-03: GitHub counts an `if:`-skipped required job as passing | REQ-02's docs-only PR shows "required check expected" instead of mergeable | 01 |
 | A-04: `test:changed` on the owner's box finishes a typical one-lane push in < 5 min while bats remains | 3 consecutive pushes with pre-push > 5 min | 01 |
