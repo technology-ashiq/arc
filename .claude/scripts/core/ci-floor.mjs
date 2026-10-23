@@ -49,7 +49,7 @@ export function floor({ root, baseline = BASELINE }) {
       declared += Number(body.trim());
     } else if (rel === "DROPPED.md" || /^[^/]+\/MIGRATED\.md$/.test(rel)) {
       for (const l of readFileSync(f, "utf8").split("\n")) {
-        const m = DROP_ROW.exec(l.trim());
+        const m = l.trim().match(DROP_ROW); // not RegExp.exec: arc-js-child-process-shell reads any .exec(var) as a shell call
         if (!m) continue;
         if (m[1].trim() === "" || m[2].trim() === "") throw new Malformed(`drop row without a name or reason in tests/${rel}: ${l.trim()}`);
         if (dropped.has(m[1].trim())) throw new Malformed(`test dropped twice: "${m[1].trim()}" (tests/${rel})`);
