@@ -746,7 +746,8 @@
       "org": "lane",
       "launch": "lane",
       "discover": "discover",
-      "distribute": "lane"
+      "distribute": "lane",
+      "ci": "lane"
     }
   },
   "commands": {
@@ -1396,6 +1397,7 @@
       "1800": "model-policy",
       "1900": "discover",
       "2000": "lane",
+      "2200": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
@@ -1455,6 +1457,7 @@
       "PLAN-policy": "strategy",
       "PLAN-portfolio": "strategy",
       "PLAN-scheduler": "strategy",
+      "PLAN-social": "strategy",
       "PLAN-trader": "strategy"
     }
   },

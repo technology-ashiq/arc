@@ -200,7 +200,7 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [log-analyzer](../agents/log-analyzer.md) — Diagnoses errors, stack traces and incident logs via differential diagnosis and first-error analysis, returning root cause + minimal fix + prevention. Use when debugging errors, crashes, or incidents.
 - [researcher](../agents/researcher.md) — Researches a topic (competitors, libraries, APIs, tech choices) via web + codebase with source triangulation and confidence labels. Use for open-ended "go find out X" or "compare X vs Y" tasks.
 
-## Scripts (43)
+## Scripts (47)
 
 - [`.claude/scripts/core/arc-gates.sh`](../../../.claude/scripts/core/arc-gates.sh)
 - [`.claude/scripts/core/arc-products.mjs`](../../../.claude/scripts/core/arc-products.mjs)
@@ -210,6 +210,10 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/scripts/core/board-lint.sh`](../../../.claude/scripts/core/board-lint.sh)
 - [`.claude/scripts/core/brain-drift.mjs`](../../../.claude/scripts/core/brain-drift.mjs)
 - [`.claude/scripts/core/branch-guard.sh`](../../../.claude/scripts/core/branch-guard.sh)
+- [`.claude/scripts/core/ci-bats-shard.sh`](../../../.claude/scripts/core/ci-bats-shard.sh)
+- [`.claude/scripts/core/ci-changes.mjs`](../../../.claude/scripts/core/ci-changes.mjs)
+- [`.claude/scripts/core/ci-floor.mjs`](../../../.claude/scripts/core/ci-floor.mjs)
+- [`.claude/scripts/core/ci-install-tools.sh`](../../../.claude/scripts/core/ci-install-tools.sh)
 - [`.claude/scripts/core/common.sh`](../../../.claude/scripts/core/common.sh)
 - [`.claude/scripts/core/concept-define.mjs`](../../../.claude/scripts/core/concept-define.mjs)
 - [`.claude/scripts/core/evolve-manifest.mjs`](../../../.claude/scripts/core/evolve-manifest.mjs)

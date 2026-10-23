@@ -1208,6 +1208,7 @@
           "BRIEF-chat-mcp",
           "PLAN-absorb",
           "PLAN-bench",
+          "PLAN-ci",
           "PLAN-cycle2-receipt-spine-v2.1",
           "PLAN-cycle3-venture-launch",
           "PLAN-design",
@@ -1235,10 +1236,11 @@
           "PLAN-policy",
           "PLAN-portfolio",
           "PLAN-scheduler",
+          "PLAN-social",
           "PLAN-trader"
         ]
       },
-      "itemCount": 34
+      "itemCount": 36
     },
     {
       "id": "org",
@@ -1251,7 +1253,7 @@
       "indexes": "lanes",
       "stations": [],
       "holds": {},
-      "itemCount": 21
+      "itemCount": 22
     },
     {
       "id": "concepts",
@@ -1322,6 +1324,7 @@
           "phase.closed"
         ],
         "lanes": [
+          "ci",
           "distribute",
           "docs",
           "launch",
@@ -1364,10 +1367,11 @@
           "1500",
           "1600",
           "1700",
-          "2000"
+          "2000",
+          "2200"
         ]
       },
-      "itemCount": 33
+      "itemCount": 35
     }
   ],
   "inventories": {
@@ -1383,6 +1387,7 @@
       "1800": "model-policy",
       "1900": "discover",
       "2000": "lane",
+      "2200": "lane",
       "0000": "board",
       "0100": "develop",
       "0200": "engine-room",
