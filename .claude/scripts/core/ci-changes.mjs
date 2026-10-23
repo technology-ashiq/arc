@@ -10,7 +10,8 @@
  * that errors, or an empty list turns every output true -- a skipped required job reads as passing,
  * so doubt must run the job, never skip it.
  */
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -29,12 +30,32 @@ const PAPERWORK = [/^docs\/.*\.md$/, /^initiatives\/[^/]+\/(PLAN|PROGRESS)\.md$/
 const READ_BY_TESTS = [/^docs\/(wiki|memory|council|archive|design|templates)\//, /^docs\/[^/]+\.md$/, /^docs\/strategy\/README\.md$/,
   /^initiatives\/develop\/PLAN\.md$/, /^initiatives\/absorb\/evidence\/planoff\//, /^initiatives\/engine\/evidence\/phase-04\//,
   /^initiatives\/face\/evidence\/phase-03\//, /^initiatives\/policy\/evidence\/phase-02\//];
-export const isPaperwork = (p) => PAPERWORK.some((r) => r.test(p)) && !READ_BY_TESTS.some((r) => r.test(p));
+// A program or test is code wherever it sits, evidence/ and handoffs/ included (attack p01 B11).
+const CODE_EXT = /\.(mjs|cjs|js|ts|tsx|sh|bash|bats|ps1|py|ya?ml)$/;
 
-export function classify(paths) {
+/**
+ * The static list goes stale the day a test starts reading a new doc (attack p01 L3/L10), so the tests' own
+ * text is asked too: a path a test file names literally, or a directory of 3+ segments it names, is code.
+ * shortcut: a templated read (`initiatives/$lane/...`) is invisible to this; READ_BY_TESTS carries those.
+ */
+export function testsText(root = ".") {
+  const out = [];
+  const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(bats|mjs|bash)$/.test(e.name)) out.push(readFileSync(p, "utf8")); } };
+  try { walk(join(root, "tests")); } catch { return null; } // unreadable tests/ -> no answer, so nothing is paperwork
+  return out.join("\n");
+}
+const namedByTests = (p, text) => {
+  if (text === null) return true;
+  const segs = p.split("/");
+  for (let n = segs.length; n >= 3; n--) if (text.includes(segs.slice(0, n).join("/"))) return true;
+  return false;
+};
+export const isPaperwork = (p, text = "") => PAPERWORK.some((r) => r.test(p)) && !READ_BY_TESTS.some((r) => r.test(p)) && !CODE_EXT.test(p) && !namedByTests(p, text);
+
+export function classify(paths, text = "") {
   const out = {};
   for (const [k, res] of Object.entries(RULES)) out[k] = paths.length === 0 || paths.some((p) => res.some((r) => r.test(p)));
-  out.code = paths.length === 0 || !paths.every(isPaperwork);
+  out.code = paths.length === 0 || !paths.every((p) => isPaperwork(p, text));
   return out;
 }
 
@@ -61,5 +82,7 @@ const invoked = process.argv[1] ? (() => { try { return realpathSync(process.arg
 if (invoked === self) {
   const paths = changedPaths(process.argv.slice(2));
   if (paths.length === 0) console.error("ci-changes: no change list (dispatch, diff error or empty) -- failing open");
-  for (const [k, v] of Object.entries(classify(paths))) console.log(`${k}=${v}`);
+  // The tree this script sits in, not the cwd: the tests it asks are the ones that will run.
+  const root = join(dirname(self), "..", "..", "..");
+  for (const [k, v] of Object.entries(classify(paths, testsText(root)))) console.log(`${k}=${v}`);
 }

@@ -5,7 +5,13 @@
 # this push touches -- never the full bats suite (~4.3 h on Windows); CI on ubuntu confirms.
 set -e
 cd "$(git rev-parse --show-toplevel)"
+# git's ref lines arrive once on stdin and two readers need them, so keep them in a file and point stdin at
+# it before each (attack p01 B1). The branch-guard line stays verbatim: gate-parity matches it exactly.
+refs="$(mktemp)"
+trap 'rm -f "$refs"' EXIT
+cat > "$refs"
+exec < "$refs"
 bash .claude/scripts/core/branch-guard.sh --pre-push
-refs="$(cat)"
 npm run --silent lint
-printf '%s\n' "$refs" | node .claude/scripts/core/test-changed.mjs --quiet
+exec < "$refs"
+node .claude/scripts/core/test-changed.mjs --stdin --quiet

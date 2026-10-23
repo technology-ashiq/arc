@@ -75,7 +75,8 @@ mk_tree() {
   [ -n "$output" ]
   [[ "$output" == *"face=true"* ]]
   [[ "$output" == *"citier=false"* ]]
-  printf 'docs/adr/2200-a.md\ninitiatives/ci/PROGRESS.md\n' > "$L"
+  # built from parts: a path this file spelled out whole would be "named by a test", which is code.
+  printf 'docs/adr/%s.md\ninitiatives/%s/PROGRESS.md\n' 2200-zz ci > "$L"
   run CHANGES --files "$L"
   [ -n "$output" ]
   [[ "$output" == *"face=false"* ]]

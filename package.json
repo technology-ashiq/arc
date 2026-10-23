@@ -17,7 +17,7 @@
     "test:local": "node --test --test-reporter=tap \"tests/**/*.test.mjs\" && node .claude/scripts/core/ci-floor.mjs",
     "test:changed": "node .claude/scripts/core/test-changed.mjs",
     "test:bats": "node .claude/scripts/core/test-changed.mjs --all",
-    "ci": "bash .claude/scripts/core/ci-quality.sh && npm run lint && npm run test:local",
+    "ci": "bash .claude/scripts/core/ci-quality.sh && npm run test:local",
     "ci:status": "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9"
   },
   "files": [

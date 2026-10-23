@@ -18,3 +18,10 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (n) `node --test` output is parsed only under `--test-reporter=tap`; the default reporter is not TAP on Node 24 (B6).
 - (o) A claimed count (`.count`, a drop row) is checked against what actually ran or existed: the runner's reported total covers the sum of `.count`, and one name buys one drop (r2 B1/B6).
 - (p) A diff that feeds a filter passes `--no-renames`, so a file moved out of a gated path still triggers the gate; a change to the gate itself triggers every gated job (r2 B3/B4).
+- (q) A hook's stdin is read ONCE and handed to every reader that needs it; the first reader drains it for the rest (p01 B1).
+- (r) "Nothing mapped" or "0 tests ran" is never green: a lane with no test file runs the core set, and a node run must report `# tests N` > 0 (p01 B2/L1).
+- (s) A child spawned from a git hook gets an env with every `GIT_*` variable removed, so a test sandbox cannot write the real repo (p01 B3).
+- (t) On Windows, `bash` is git's own (`git --exec-path`/../../../usr/bin/bash.exe), never a PATH lookup that can land on WSL (p01 B5).
+- (u) A glob over lane dirs uses nullglob and the lanes.md name grammar; a non-lane dir is skipped, never passed as `--lane` (p01 B4).
+- (v) An allowlist of "safe to skip" paths also asks the tests' own text: a path or 3+-segment dir a test names is code; a code extension is code anywhere (p01 B11/L3/L10).
+- (w) A lane name from a file name is the LONGEST known lane prefix, never the first `-` word (p01 L4).

@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:107-117",
+      "breaking_input": "A `tests/<lane>/file.test.mjs` whose file imports by reading a nonexistent module or throws at load, and no `.count` file exists. The `node --test` run reports the file as failed, so the lane fails. But if the file matches 0 tests, node exits 0, so a typo in a test name leaves it green. Path: a test file with only a `test('x', ...)` whose `x` doesn't match, run by `--files` with that lane.",
+      "why": "Defect (a): the script relies on the process exit status of `node --test`; a file matching zero tests exits 0, and the mapping has no `.count` per lane to cross-check against the reported count. The count floor lives in ci-floor.mjs but pre-push runs `test-changed.mjs` with `--files` and never checks counts.",
+      "fix": "Run node with `--test` and also assert the test runner's reported test count against the lane's `.count` (or require at least one test file to have run). Ensure import errors are caught and reported."
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:63-69",
+      "breaking_input": "A path named `tests/ci-gate.bats` (a file that exists) plus a path `tests/ci-gate.bats/../..` won't occur, but a newline in the file name—say `tests/lane-bats\nsomething`—with git `core.quotePath` unset. The diff uses `-c core.quotePath=false` and `-z`, so a newline-bearing path is split into two records by the `\\0` split, treating the part up to the newline as one path and the rest as another.",
+      "why": "Defect (i)/(j): the script splits git `-z` output on NUL, which is correct for newlines, but `planFor` uses regexes that match on the whole path including any embedded newline; a crafted file whose name contains a newline plus a second real path causes misclassification. Also the `--files` input is split on `\\r?\\n`, so a path containing a newline cannot be represented.",
+      "fix": "Use `--name-only -z` and split on NUL consistently for both the diff and the `--files` list; reject NUL or newline in `--files` input, or document that paths with newlines are unsupported and fail if present."
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:30-32",
+      "breaking_input": "A path `docs/initiatives/x.md` (contrived: a file named `docs/initiatives/x.md`) — this isn't covered by `PAPERWORK`'s `^docs\\/.*\\.md$` because `PAPERWORK`'s regex is `^/docs/.*/\\.md$`? Actually it covers. More real: a file `docs/foo.md` that a bats test reads by content is classified as paperwork? No—`README_BY_TESTS` has `^docs\\/[^/]+\\.md$` which matches, but the READ_BY_TESTS list is hand-maintained and stale. A doc under `docs/strategy/README.md` is paperwork; a bats test reading `docs/foo.md` via a wildcard would be missed.",
+      "why": "Defect (a) twin: the paperwork allowlist excludes docs a test reads, but the list is static and a new doc path a test reads (e.g., `docs/design/x.md`) becomes paperwork, so pre-push skips the test. CI would catch it, but the owner's box gate is meant to catch reds first.",
+      "fix": "Derive the read-by-tests set from the actual bats test greps over the tree, not a hard-coded list; or fail open when uncertain."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:55-61",
+      "breaking_input": "A path `tests/lane.bats` that matches `/^tests\\/([a-z0-9]+)-[^/]*\\.bats$/` correctly maps to `lane`, but a path `tests/foo-bar.bats` matches `([a-z0-9]+)` as `foo`, dropping the `-bar`. If a lane is named `foo-bar`, its tests file `tests/foo-bar.bats` runs under lane `foo`, which may not exist, so pre-push runs lane `foo` (with no files) and skips the actual lane's bats. The push proceeds with the real lane broken.",
+      "why": "Defect (a) twin: the mapping regex only captures `[a-z0-9]+` and doesn't allow hyphens in the lane name, but lanes can contain hyphens (e.g., `ci-gate`).",
+      "fix": "Include hyphens in the lane character class, e.g., `([a-z0-9-]+)`."
+    },
+    {
+      "id": "L5",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:46-53, 80-96",
+      "breaking_input": "A shared script `.claude/scripts/core/common.sh` is changed. The mapping adds `core` and every node lane, and `filesFor` picks bats files that contain the basename via a name grep. But a bats file that reaches `common.sh` indirectly (via another helper) is missed. Pre-push skips that lane's bats, and the broken test only shows on CI.",
+      "why": "Defect (a) twin weak: the shortcut grep is acknowledged in the comment but the pre-push gate is sold as catching reds; a real test on `common.sh` gets skipped locally and only fails after push.",
+      "fix": "Either run all bats files that reference any core helper by grep, or accept and document the gap; better, fail the pre-push if shared files changed and there is any doubt."
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:120-122 and .githooks/pre-push",
+      "breaking_input": "On a Windows box, `bash` is not necessarily on PATH in a git-bash context; `.githooks/pre-push` invokes `bash .claude/scripts/core/branch-guard.sh` and then `node`. If `bash` is missing, the hook exits nonzero regardless of tests. More specifically, `spawnSync` uses `bash` with args `-c` — on Windows, `bash` resolves to a Git-bash path but the shell string is fine. A POSIX path embedded as argv is correct.",
+      "why": "Defect (d)/(e) twin? The comment claims `argv, never an interpolated program`, but `test-changed.mjs` passes `f` (a relative path beginning with `tests/`) as argv to `bash -c` — that's fine. However, the pre-push hard-codes `bash`, which on a Windows Git installation may not be on PATH.",
+      "fix": "Resolve `bash` via `git --exec-path` or use the node script's own shebang; or check `command -v bash` first."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:58-59",
+      "breaking_input": "A `--files` list with a path `tests/lane.test.mjs` that, when changed, maps to lane `lane`; nodeLanes() looks for `.test.mjs` files under `tests/<dir>`, but a lone `tests/lane.test.mjs` (a file directly under `tests/`, not under a directory) — the regex `^tests\\/([a-z0-9]+)\\.bats$` only matches bats, and `tests/lane.test.mjs` has no matching lane regex, so it falls to `core` and runs all node lanes instead of just the affected one. Not a security hole but a false-positive expansion.",
+      "why": "Defect mapping incompleteness: `tests/*.test.mjs` files (not in a subdir) exist? The diff shows `tests/core/test-changed.test.mjs` is under `tests/core/`, so it's fine. But a future flat test file gets misclassified.",
+      "fix": "Add a regex for `^tests\\/[^/]+\\.test\\.mjs$` mapping to the lane by filename, or treat unknown as core with why."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "ci.yml:137-148 (the final `if` job)",
+      "breaking_input": "A paperwork PR (code=false) has bats and node-test skipped. The final job's loop allows `skipped` only when `code=false`. But if `code` is `false` and bats is skipped, that's fine. However, if `code=false` is TRUE because `changes` job itself failed (e.g., malformed path), then `code` output is unset or empty, and the loop treats bats skipped as failed. No — the real hole: the `allow` condition requires `code=false` and `result=skipped`, but if code is `false` due to a paperwork-only change, and bats is actually `skipped` (correct), ok. But if `code` is `false` and bats runs (because the `if` condition `needs.changes.outputs.code != 'false'` is false, so bats skipped), the loop passes. No bug.",
+      "why": "The condition `needs.changes.outputs.code != 'false'` in the `if` — if `changes` job fails, its output code is empty string, so `!= 'false'` is true, so bats still runs, and the final loop will see bats maybe failed and fail. That's fail-OPEN, acceptable.",
+      "fix": "No change."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "ci-quality.sh:13-14",
+      "breaking_input": "`ci-quality.sh` uses `set -euo pipefail` and `step node .claude/scripts/docs/wiki-build.mjs --check`, but if that script exits nonzero, the whole job fails—good. But it calls `step bats ...` after the lint steps; if `bats` is not on PATH, the `step` runs and fails with a confusing error, but that's a failure.",
+      "why": "Defect twin for (d)? The script uses `bash` and `node` — fine.",
+      "fix": "None."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:12-14",
+      "breaking_input": "The `READ_BY_TESTS` list includes `^initiatives\\/develop\\/PLAN\\.md$` but not `^initiatives\\/develop\\/phases\\/` etc. A change to `initiatives/develop/handoffs/x.md` is on the `PAPERWORK` list (`^initiatives\\/[^/]+\\/handoffs\\//`) and not excluded by `READ_BY_TESTS`, so it's paperwork. But a bats test reads `initiatives/develop/handoffs/x.md` (unknown), so pre-push skips tests that would fail.",
+      "why": "Same stale-list issue as L3; the allowlist can't know every file a test reads by content.",
+      "fix": "Run the test mapper against the actual `bats` file content to discover which docs are read; or make paperwork-only pushes still run a content-scanning gate."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:22-29",
+      "breaking_input": "`isPaperwork` is exported from ci-changes.mjs and also used in `planFor`. But the `README_BY_TESTS` list includes `^docs\\/(wiki|memory|council|archive|design|templates)\\/` and `^docs\\/[^/]+\\.md$`; this excludes `docs/adr/...`? No, `^docs\\/[^/]+\\.md$` only matches one-level deep. `docs/adr/2200-x.md` is on the `READ_BY_TESTS`? No, it matches `^docs\\/[^/]+\\.md$`? No, that regex requires no slash after the first segment, so `docs/adr/2200-x.md` is not excluded—it's paperwork. But the test `docs-only change` expects it to be paperwork. That's intended.",
+      "why": "No defect.",
+      "fix": "None."
+    },
+    {
+      "id": "L12",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:104-106 and run()",
+      "breaking_input": "The 5-minute cap: `run(files, deadline)` checks `left <= 0` before each step, but if a single bats file runs longer than the remaining time, `spawnSync` gets `timeout: left`, and on timeout `r.error.code === 'ETIMEDOUT'` triggers the cap message. But the bats process is killed; however, `left` could be negative and `spawnSync` with `timeout` negative is treated as no timeout. On the first step if `left <= 0` it returns 1 early. The bug: if there are multiple steps and the cap is hit during a step, the code prints a message and returns 1, but the already-run tests might have passed, and the pre-push fails—good. But the message says 'not run' for steps not reached, yet the failing step's output isn't shown, making it hard. Not a security hole.",
+      "why": "No.",
+      "fix": "None."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".githooks/pre-push:8-10",
+      "breaking_input": "The pre-push runs `npm run --silent lint` before `test-changed.mjs`. If `lint` fails, the hook aborts before running tests—good. But if `npm` is not installed (a bare Node environment), the hook fails even though tests could run. Not a hole.",
+      "why": "No.",
+      "fix": "None."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "package.json:14-16",
+      "breaking_input": "`npm run ci` does NOT run the ESLint trial step (`lint:js`), so a parse error in any script won't be caught locally; CI runs it as a trial with continue-on-error so it never blocks. But arc's `.claude/scripts` use Node 24 syntax; a parse error in a changed script would be caught by `node --test` only if that file runs. A typo in an unused script could slip.",
+      "why": "Defect (a) twin: the mapping only runs lanes touched; a parse error in an untouched core script won't be checked locally.",
+      "fix": "Have pre-push or `npm run ci` run `node --check` on all `.mjs` files under `.claude/scripts`."
+    },
+    {
+      "id": "L15",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:84-90",
+      "breaking_input": "`changedPaths` reads git's stdin for pre-push. If git provides multiple push lines (multiple refs), it runs merge-base for each head, but the `merge-base` is computed against `base` which defaults to `origin/main` and is re-fetched each time. If the same commit is pushed, fine. But if the push is a tag (refs/tags/x), the local sha is a commit, and merge-base works. If pushing a branch whose previous push was rewound (force), the diff `mb..h` covers everything—fine. No clear hole.",
+      "why": "No.",
+      "fix": "None."
+    }
+  ]
+}

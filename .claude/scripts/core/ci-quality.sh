@@ -7,7 +7,16 @@ cd "$(git rev-parse --show-toplevel)"
 step() { echo "== $*"; "$@"; }
 step bash .claude/scripts/review/arc-scan/version-gate.sh
 step node .claude/scripts/core/product-lint.mjs
-for d in initiatives/*/; do step node .claude/scripts/plan/kickoff-lint.mjs --lane "$(basename "$d")"; done
+# gate-parity, brain-drift, arc-compile --check: a docs-only PR that drops a file they name must fail here,
+# because bats -- their other caller -- is skipped on it (attack p01 B8).
+step npm run --silent lint
+# Lanes by the lanes.md grammar; a root-mode tree has none, and an archive dir is not a lane (attack p01 B4).
+shopt -s nullglob
+for d in initiatives/*/; do
+  l="$(basename "$d")"
+  [[ "$l" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "-- skip initiatives/$l (not a lane name)"; continue; }
+  step node .claude/scripts/plan/kickoff-lint.mjs --lane "$l"
+done
 step node .claude/scripts/docs/wiki-build.mjs --check
 step node .claude/scripts/docs/wiki-coverage.mjs
 step node .claude/scripts/core/face-coverage.mjs
