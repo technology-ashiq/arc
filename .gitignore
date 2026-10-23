@@ -105,3 +105,6 @@ docs/design/explore/lexos-*/
 docs/design/explore/*/rival-*/
 # A pack screen framed for the jury is a third-party image: local only, never committed (Phase 07 S4b).
 docs/design/explore/*/ref-*/
+
+# SessionEnd appended to this every session, so the tree was never clean (ci REQ-11, ADR-2212). Local only now.
+docs/session-log.md

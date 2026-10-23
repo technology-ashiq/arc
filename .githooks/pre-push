@@ -1,6 +1,11 @@
 #!/bin/sh
 # arc commit-time line (distribute ADR-2013): refuse a push bound for main. The server refuses it
 # too once main is protected (ADR-2015); this only says so sooner.
+# Then the owner's box is the first gate (ci REQ-05, ADR-2203): the arc gates, and the tests of the lanes
+# this push touches -- never the full bats suite (~4.3 h on Windows); CI on ubuntu confirms.
 set -e
 cd "$(git rev-parse --show-toplevel)"
 bash .claude/scripts/core/branch-guard.sh --pre-push
+refs="$(cat)"
+npm run --silent lint
+printf '%s\n' "$refs" | node .claude/scripts/core/test-changed.mjs --quiet

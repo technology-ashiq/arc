@@ -21,9 +21,20 @@ const RULES = {
   citier: [/^docker\//, /^\.claude\/scripts\/review\/arc-tools-image\.sh$/, /^\.claude\/scripts\/review\/arc-scan\/adapters\/trivy/, ...GATE],
 };
 
+// Paperwork (REQ-02, ADR-2212): a change made ONLY of these runs quality + security, never the test suite.
+// Allowlist, not denylist: a path on no list is code. Off the list: every docs/initiatives path a bats test
+// reads by content (evidence/phase-00/readers.md) -- portfolio-board's reads run in quality instead.
+const PAPERWORK = [/^docs\/.*\.md$/, /^initiatives\/[^/]+\/(PLAN|PROGRESS)\.md$/, /^initiatives\/[^/]+\/phases\/[^/]+\.md$/,
+  /^initiatives\/[^/]+\/evidence\//, /^initiatives\/[^/]+\/handoffs\//, /^PORTFOLIO\.md$/];
+const READ_BY_TESTS = [/^docs\/(wiki|memory|council|archive|design|templates)\//, /^docs\/[^/]+\.md$/, /^docs\/strategy\/README\.md$/,
+  /^initiatives\/develop\/PLAN\.md$/, /^initiatives\/absorb\/evidence\/planoff\//, /^initiatives\/engine\/evidence\/phase-04\//,
+  /^initiatives\/face\/evidence\/phase-03\//, /^initiatives\/policy\/evidence\/phase-02\//];
+export const isPaperwork = (p) => PAPERWORK.some((r) => r.test(p)) && !READ_BY_TESTS.some((r) => r.test(p));
+
 export function classify(paths) {
   const out = {};
   for (const [k, res] of Object.entries(RULES)) out[k] = paths.length === 0 || paths.some((p) => res.some((r) => r.test(p)));
+  out.code = paths.length === 0 || !paths.every(isPaperwork);
   return out;
 }
 
