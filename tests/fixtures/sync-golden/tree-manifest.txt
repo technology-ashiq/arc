@@ -77,7 +77,7 @@
 .claude/hooks/PreToolUse.d/40-policy.sh	a307aed37927bb2af8207ab6105b2b20aa5762bc43fef52e3daf1d7f23711616
 .claude/hooks/PreToolUse.d/50-deploy.sh	e49e823b0c0ca1472ddb367c59f295dc5e008b86cd5b7d39146f1855724d20bd
 .claude/hooks/PreToolUse.sh	b9665de9907ba4798e1ee0152155d0ebafcf4ca1e4acd281322e8f5ef760802b
-.claude/hooks/SessionEnd.d/00-session-log.sh	eee5a7732098143bf3d781de55fad79ef382e783e4e08b4af0d7a78108a84b79
+.claude/hooks/SessionEnd.d/00-session-log.sh	5efad868caa25de5e752e684c0fb67bb4cce7bac173633d0bd8185450be476e1
 .claude/hooks/SessionEnd.d/90-emit.sh	a43ac0afcdcf1e08f94cf26cef4b43c3c272c715e3d79ae07612c6027241de0c
 .claude/hooks/SessionEnd.sh	cc40139eeb978ea8ef3555fdb47a31bcd8633a46667665b1c1f012eda428c49e
 .claude/hooks/SessionStart.d/00-context.sh	748147236d4f4b468024baed362866131177fd28274e83d1429c6fb90040f2d5
