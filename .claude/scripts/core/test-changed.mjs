@@ -83,10 +83,16 @@ function changedPaths(argv, stdin) {
   const i = argv.indexOf("--files");
   if (i >= 0) return { paths: readFileSync(argv[i + 1], "utf8").split(/\r?\n/).filter(Boolean) };
   const base = argv.includes("--base") ? argv[argv.indexOf("--base") + 1] : "origin/main";
-  const pushes = stdin.split(/\r?\n/).filter(Boolean).map((l) => l.split(" ")[1]).filter(Boolean);
+  // Tags carry no tests of their own; a branch ref is what runs.
+  const pushes = stdin.split(/\r?\n/).filter(Boolean).map((l) => l.split(" ")).filter((f) => f[1] && !String(f[0]).startsWith("refs/tags/")).map((f) => f[1]);
   const heads = pushes.length ? pushes.filter((s) => !ZERO.test(s)) : ["HEAD"];
   if (!heads.length) return { paths: [], note: "delete push -- nothing to test" };
   const opts = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60000 };
+  // The tests run from the working tree, which holds HEAD; a pushed commit that is not HEAD has its tests
+  // somewhere else, so this tree cannot vouch for it (attack p01 B1, the non-HEAD control).
+  const head = execFileSync("git", ["rev-parse", "HEAD"], opts).trim();
+  const other = heads.filter((h) => h !== "HEAD" && h !== head);
+  if (other.length) return { refuse: `pushing ${other.map((h) => h.slice(0, 8)).join(", ")}, which is not the checked-out HEAD -- check it out and push again (or push it by name from its own worktree)` };
   try {
     execFileSync("git", ["fetch", "-q", "origin", "main"], opts);
     const out = new Set();
@@ -114,7 +120,9 @@ function bashPath() {
 
 // A hook child inherits GIT_DIR / GIT_INDEX_FILE / GIT_WORK_TREE; a test sandbox running `git init` or
 // `git commit` under them would write the real repo (attack p01 B3).
-const testEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// PWD/OLDPWD go too: a hook shell that cd'd to git's `E:/...` toplevel exports that form, bash trusts it,
+// and bats refuses it as "not an absolute path" (found by the p01 non-HEAD control).
+const testEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_") && k !== "PWD" && k !== "OLDPWD"));
 
 function run(files, deadline) {
   const bats = files.filter((f) => f.endsWith(".bats"));
@@ -158,7 +166,8 @@ function main(argv) {
   }
   // Only the hook's stdin is read: an IDE or agent terminal can hold stdin open forever (attack p01 B7).
   const stdin = argv.includes("--stdin") ? readFileSync(0, "utf8") : "";
-  const { paths, note } = changedPaths(argv, stdin);
+  const { paths, note, refuse } = changedPaths(argv, stdin);
+  if (refuse) { console.log(`lanes: (refused)\ntest-changed: ${refuse}`); return 1; }
   const plan = planFor(paths, testsText("."));
   const files = filesFor(plan);
   const lanes = [...plan.lanes].sort();

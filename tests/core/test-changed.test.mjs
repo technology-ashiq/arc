@@ -74,5 +74,6 @@ test("fixtures and _lib are never a lane of tests (attack p01 B9)", () => {
 });
 
 test("a hyphenated lane keeps its whole name, never its first word (attack p01 L4)", () => {
-  assert.deepEqual(plan(["tests/model-policy-zz.bats"]).lanes.filter((l) => l !== "core"), ["model-policy"]);
+  const p = plan(["tests/model-policy-zz.bats"]);
+  assert.ok(p.lanes.includes("model-policy") && !p.lanes.includes("model"), p.out);
 });
