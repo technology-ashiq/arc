@@ -20,3 +20,4 @@ repository: technology-ashiq/myfitfolio
 kill_lines:
   days_without_revenue: 90
   traffic_floor_monthly: 100
+supabase_org: cpdagwlxpdbtdpcyyyzt
