@@ -1455,6 +1455,7 @@
       "PLAN-policy": "strategy",
       "PLAN-portfolio": "strategy",
       "PLAN-scheduler": "strategy",
+      "PLAN-social": "strategy",
       "PLAN-trader": "strategy"
     }
   },
