@@ -1208,6 +1208,7 @@
           "BRIEF-chat-mcp",
           "PLAN-absorb",
           "PLAN-bench",
+          "PLAN-ci",
           "PLAN-cycle2-receipt-spine-v2.1",
           "PLAN-cycle3-venture-launch",
           "PLAN-design",
@@ -1235,10 +1236,11 @@
           "PLAN-policy",
           "PLAN-portfolio",
           "PLAN-scheduler",
+          "PLAN-social",
           "PLAN-trader"
         ]
       },
-      "itemCount": 34
+      "itemCount": 36
     },
     {
       "id": "org",

@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "processes/ship-run.process.yaml:20",
+      "breaking_input": "Run Prepare ship in a root-mode consumer repo, which has no initiatives/ directory, or in a repo whose live lane is not named face. The exact grant and the body both run `kickoff-lint.mjs --lane face`.",
+      "why": "The lane name is hard-coded into a process that ships to other repos. Per lanes.md, an unknown lane exits 4 (STOP), so every ship in a root-mode consumer fails. In a repo where face is not the shipping lane, the lint judges face's plan instead of the lane being shipped. The bare lint exited 3 when several lanes were live, and the fix swaps that for a wrong-lane or unknown-lane failure.",
+      "fix": "Take the lane from the ship request or the run input and build the command from it. Keep the grant exact by generating one grant per known lane. Omit `--lane` when `lane-resolve.sh` reports root-mode. Do not hard-code `face`.",
+      "twin_of": "A bare lint in a headless process met a multi-lane repo"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/hooks/SessionEnd.d/00-session-log.sh:6",
+      "breaking_input": "Run a headless driver session with `ARC_DRIVER_INPUT_FILE` set. Any other hook that writes a tracked file at session end or stop still runs, for example the other fragments in SessionEnd.d/, Stop.d/ and PreCompact.d/ that write snapshots, wip-lines or PROGRESS.",
+      "why": "The fix was applied to one fragment only. The new fixed-defects row states a general rule (a hook that writes tracked files skips inside a driver run), but nothing enforces it for the sibling fragments. Any of them dirties the tree the next ship gate reads in the same way.",
+      "fix": "Grep every `.claude/hooks/*.d/` fragment for writes to tracked paths and apply the same guard. Better, add a gate that fails on any hook fragment which writes a tracked file without the `ARC_DRIVER_INPUT_FILE` check.",
+      "twin_of": "A SessionEnd hook dirtied the tree a later gate reads"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".claude/hooks/SessionEnd.d/00-session-log.sh:6",
+      "breaking_input": "Export `ARC_DRIVER_INPUT_FILE=x` in the owner's shell profile, or start the HQ door or face under an arc-run driver. Every later interactive session then skips logging silently.",
+      "why": "The skip keys on a non-empty env var whose value is never validated: the test uses `/nonexistent/input.json` and passes. The marker is inherited by every descendant process, so an interactive session started from a driver-run shell is also treated as headless. Nothing records the skip.",
+      "fix": "Require the value to name an existing regular file inside the run's scratch directory, or use a dedicated boolean marker that only the driver sets. Strip it from env handed to anything that is not a driver child.",
+      "twin_of": "A test door honoured beside the canonical spine"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "tests/root-golden.bats:58",
+      "breaking_input": "Any change to the hook that makes it exit 0 early for another reason in the marker case, for example a failing `cd` or `git rev-parse` in the sandbox. The unchecked `[ ! -e ... ]` still passes. No test ties the exact grant string in ship-run.process.yaml to the command quoted in its body.",
+      "why": "The marker-case run is not wrapped in `run` and its status is not asserted. It also never proves the hook reached the new skip line rather than exiting earlier. The positive control only proves the unmarked path writes. The grant and the body prose are two hand-kept copies of one command with no check that they agree, so a later edit can drift them and the fenced run would be refused the command its prompt tells it to run.",
+      "fix": "Use `run env ARC_DRIVER_INPUT_FILE=... bash ...` and assert status 0. Add a second marker value, an empty string, that must write. Add a check that the lint command in the grants list appears verbatim in the body.",
+      "twin_of": "A hand-kept list beside a glob"
+    }
+  ]
+}

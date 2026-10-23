@@ -15,7 +15,9 @@ tools:
   - shell.run:
       # Exact grants, no `:*`: a prefix grant on arc-compile let `--check ... --write` through, and arc-compile takes
       # the LAST mode flag (attack 09a1c07 B5). Only the writer takes arguments.
-      - "node .claude/scripts/plan/kickoff-lint.mjs"
+      # The lint names its lane: bare, with more than one live lane it exits 3 (ambiguous) and failed every live
+      # ship (face C17 P02). The company-level checks it runs read root files whatever the lane.
+      - "node .claude/scripts/plan/kickoff-lint.mjs --lane face"
       - "node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code"
       - "git rev-parse HEAD"
       - "node .claude/scripts/hq/review-ship-record.mjs ship:*"
@@ -44,7 +46,7 @@ body: |
 
   Your tools are exactly these, and everything else is refused: Bash for the four commands below, and nothing else.
 
-  1. Lint: `node .claude/scripts/plan/kickoff-lint.mjs`. A non-zero exit means the run has FAILED: say what it printed
+  1. Lint: `node .claude/scripts/plan/kickoff-lint.mjs --lane face`. A non-zero exit means the run has FAILED: say what it printed
      and return no output object.
   2. Build check: `node .claude/scripts/engine/arc-compile.mjs --check --all --target claude-code`. A non-zero exit
      means the run has FAILED, as above.

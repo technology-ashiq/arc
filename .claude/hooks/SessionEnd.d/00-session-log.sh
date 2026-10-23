@@ -3,6 +3,8 @@
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+# A headless arc-run driver run is not a session: its entry dirtied the tree the next ship gate reads (face C17 P02).
+[ -n "${ARC_DRIVER_INPUT_FILE:-}" ] && exit 0
 
 LOG="docs/session-log.md"
 mkdir -p docs

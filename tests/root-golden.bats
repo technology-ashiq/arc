@@ -47,6 +47,20 @@ teardown() { _arc_teardown; }
   _arc_root_norm "$groot" < "$SANDBOX/docs/session-log.md" | _arc_root_golden_check sessionend-log
 }
 
+@test "root-golden: SessionEnd writes nothing inside a headless arc-run driver run" {
+  _arc_tracker_sandbox
+  rm -f "$SANDBOX/docs/session-log.md"
+  # Positive control first: the same sandbox without the marker DOES write, so the skip below is the marker's doing.
+  run bash "$SANDBOX/.claude/hooks/SessionEnd.d/00-session-log.sh"
+  [ "$status" -eq 0 ]
+  [ -f "$SANDBOX/docs/session-log.md" ]
+  rm -f "$SANDBOX/docs/session-log.md"
+  # `env VAR=x` because a bare prefix on `run` never reaches the child.
+  run env ARC_DRIVER_INPUT_FILE=/nonexistent/input.json bash "$SANDBOX/.claude/hooks/SessionEnd.d/00-session-log.sh"
+  [ "$status" -eq 0 ]
+  [ ! -e "$SANDBOX/docs/session-log.md" ]
+}
+
 # ---------- kickoff-lint ----------
 
 @test "root-golden: kickoff-lint output on the good fixture is byte-stable (exit 0)" {
