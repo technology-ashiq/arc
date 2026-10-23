@@ -16,3 +16,5 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (l) A downloaded tool binary is installed only when its sha256 equals the pinned published digest; presence alone is not trust (L13).
 - (m) A one-line count file accepts `\r\n` as well as `\n`: files are written on a Windows box (L1).
 - (n) `node --test` output is parsed only under `--test-reporter=tap`; the default reporter is not TAP on Node 24 (B6).
+- (o) A claimed count (`.count`, a drop row) is checked against what actually ran or existed: the runner's reported total covers the sum of `.count`, and one name buys one drop (r2 B1/B6).
+- (p) A diff that feeds a filter passes `--no-renames`, so a file moved out of a gated path still triggers the gate; a change to the gate itself triggers every gated job (r2 B3/B4).

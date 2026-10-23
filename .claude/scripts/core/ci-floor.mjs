@@ -38,6 +38,7 @@ export function floor({ root, baseline = BASELINE }) {
   const files = walk(tests);
   let declared = 0;
   let drops = 0;
+  const dropped = new Set(); // one name buys one slot, however often it is listed (attack r2 B6)
   for (const f of files) {
     const rel = relative(tests, f).split("\\").join("/");
     if (f.endsWith(".bats")) {
@@ -51,6 +52,8 @@ export function floor({ root, baseline = BASELINE }) {
         const m = DROP_ROW.exec(l.trim());
         if (!m) continue;
         if (m[1].trim() === "" || m[2].trim() === "") throw new Malformed(`drop row without a name or reason in tests/${rel}: ${l.trim()}`);
+        if (dropped.has(m[1].trim())) throw new Malformed(`test dropped twice: "${m[1].trim()}" (tests/${rel})`);
+        dropped.add(m[1].trim());
         drops++;
       }
     }

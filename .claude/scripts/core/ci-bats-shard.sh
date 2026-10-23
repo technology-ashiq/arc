@@ -12,7 +12,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 files=()
-while IFS= read -r f; do files+=("$f"); done < <(find tests -name '*.bats' | LC_ALL=C sort | awk -v i="$1" -v n="$2" 'NR % n == i')
+while IFS= read -r f; do files+=("$f"); done < <(find tests -type f -name '*.bats' | LC_ALL=C sort | awk -v i="$1" -v n="$2" 'NR % n == i')
 [ "${#files[@]}" -gt 0 ] || { echo "::error::shard $1/$2 resolved to no files"; exit 1; }
 echo "shard $1/$2 runs ${#files[@]} file(s)"
 

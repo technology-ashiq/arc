@@ -14,9 +14,11 @@ import { readFileSync, realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+// A change to the gate itself runs every gated job, so a broken job definition cannot merge unrun (attack r2 B4).
+const GATE = [/^\.github\/workflows\/ci\.yml$/, /^\.claude\/scripts\/core\/ci-changes\.mjs$/];
 const RULES = {
-  face: [/^face\//],
-  citier: [/^docker\//, /^\.claude\/scripts\/review\/arc-tools-image\.sh$/, /^\.claude\/scripts\/review\/arc-scan\/adapters\/trivy/],
+  face: [/^face\//, ...GATE],
+  citier: [/^docker\//, /^\.claude\/scripts\/review\/arc-tools-image\.sh$/, /^\.claude\/scripts\/review\/arc-scan\/adapters\/trivy/, ...GATE],
 };
 
 export function classify(paths) {
@@ -36,8 +38,9 @@ function changedPaths(argv) {
   try {
     // Both ends must resolve before a diff is believed: a successful diff over the wrong range is
     // the one fail-open cannot catch (attack B1, L6). -z: a quoted or newline-bearing path is one record.
+    // --no-renames: a file moved OUT of face/ lists its old path too (attack r2 B3).
     for (const ref of [base, head]) git(["cat-file", "-e", `${ref}^{commit}`]);
-    return git(["-c", "core.quotePath=false", "diff", "-z", "--name-only", `${base}...${head}`]).split("\0").filter(Boolean);
+    return git(["-c", "core.quotePath=false", "diff", "-z", "--no-renames", "--name-only", `${base}...${head}`]).split("\0").filter(Boolean);
   } catch { return []; }
 }
 

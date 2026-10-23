@@ -43,6 +43,10 @@ mk_tree() {
   run FLOOR --root "$T" --baseline 4
   [ -n "$output" ]
   [ "$status" -eq 0 ]
+  printf '| t | DROPPED | r |\n| t | DROPPED | r |\n' > "$T/tests/DROPPED.md"
+  run FLOOR --root "$T" --baseline 4
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"dropped twice"* ]]
   printf '| gone test | DROPPED |  |\n' > "$T/tests/DROPPED.md"
   run FLOOR --root "$T" --baseline 4
   [ "$status" -eq 2 ]
@@ -85,6 +89,10 @@ mk_tree() {
   [[ "$output" == *"citier=true"* ]]
   printf 'docker/arc-tools/Dockerfile\n' > "$L"
   run CHANGES --files "$L"
+  [[ "$output" == *"citier=true"* ]]
+  printf '.github/workflows/ci.yml\n' > "$L"
+  run CHANGES --files "$L"
+  [[ "$output" == *"face=true"* ]]
   [[ "$output" == *"citier=true"* ]]
 }
 
