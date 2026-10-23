@@ -32,9 +32,12 @@ function changedPaths(argv) {
   const base = flag("--base");
   const head = flag("--head") || "HEAD";
   if (!base) return [];
+  const git = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   try {
-    return execFileSync("git", ["diff", "--name-only", `${base}...${head}`], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
-      .split("\n").filter(Boolean);
+    // Both ends must resolve before a diff is believed: a successful diff over the wrong range is
+    // the one fail-open cannot catch (attack B1, L6). -z: a quoted or newline-bearing path is one record.
+    for (const ref of [base, head]) git(["cat-file", "-e", `${ref}^{commit}`]);
+    return git(["-c", "core.quotePath=false", "diff", "-z", "--name-only", `${base}...${head}`]).split("\0").filter(Boolean);
   } catch { return []; }
 }
 

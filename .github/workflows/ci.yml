@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: '24'
       - id: paths
-        run: node .claude/scripts/core/ci-changes.mjs --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}" | tee -a "$GITHUB_OUTPUT"
+        run: node .claude/scripts/core/ci-changes.mjs --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha || github.sha }}" | tee -a "$GITHUB_OUTPUT"
 
   quality:
     needs: changes
@@ -77,7 +77,8 @@ jobs:
       - name: Install tools
         run: bash .claude/scripts/core/ci-install-tools.sh
       - name: Run bats shard
-        run: bash .claude/scripts/core/ci-bats-shard.sh ${{ matrix.shard }} 4
+        # index and total come from the matrix itself, so every file lands in exactly one shard (attack B4).
+        run: bash .claude/scripts/core/ci-bats-shard.sh ${{ strategy.job-index }} ${{ strategy.job-total }}
 
   node-test:
     needs: changes
@@ -95,7 +96,7 @@ jobs:
           lanes="$(find tests -mindepth 2 -maxdepth 2 -name .count | wc -l | tr -d ' ')"
           echo "node:test: $n file(s), $lanes lane(s) migrated"
           if [ "$n" -eq 0 ] && [ "$lanes" -eq 0 ]; then exit 0; fi
-          node --test "tests/**/*.test.mjs" 2>&1 | tee "$RUNNER_TEMP/node-test.tap"
+          node --test --test-reporter=tap "tests/**/*.test.mjs" 2>&1 | tee "$RUNNER_TEMP/node-test.tap"
           rc=${PIPESTATUS[0]}
           [ "$rc" -eq 0 ] || exit "$rc"
           ran="$(sed -n 's/^# tests \([0-9]*\)$/\1/p' "$RUNNER_TEMP/node-test.tap" | tail -1)"
@@ -149,7 +150,7 @@ jobs:
 
   face:
     needs: changes
-    if: ${{ needs.changes.outputs.face == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
+    if: ${{ needs.changes.outputs.face != 'false' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -166,7 +167,7 @@ jobs:
 
   ci-tier:
     needs: changes
-    if: ${{ needs.changes.outputs.citier == 'true' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
+    if: ${{ needs.changes.outputs.citier != 'false' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

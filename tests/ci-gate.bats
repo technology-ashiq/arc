@@ -55,6 +55,9 @@ mk_tree() {
   run FLOOR --root "$T" --baseline 5
   [ -n "$output" ]
   [ "$status" -eq 0 ]
+  printf '2\r\n' > "$T/tests/org/.count"
+  run FLOOR --root "$T" --baseline 5
+  [ "$status" -eq 0 ]
   printf 'two\n' > "$T/tests/org/.count"
   run FLOOR --root "$T" --baseline 5
   [ "$status" -eq 2 ]
@@ -93,6 +96,10 @@ mk_tree() {
   [[ "$output" == *"face=true"* ]]
   [[ "$output" == *"citier=true"* ]]
   run CHANGES --base "" --head HEAD
+  [ -n "$output" ]
+  [[ "$output" == *"face=true"* ]]
+  [[ "$output" == *"citier=true"* ]]
+  run CHANGES --base 0000000000000000000000000000000000000000 --head HEAD
   [ -n "$output" ]
   [[ "$output" == *"face=true"* ]]
   [[ "$output" == *"citier=true"* ]]

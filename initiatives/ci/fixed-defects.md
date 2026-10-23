@@ -10,3 +10,9 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (f) A Node CLI main guard realpaths both sides.
 - (g) A byte-compared git extract passes `-c core.autocrlf=false -c core.eol=lf` (retro 2026-10-14#1).
 - (h) A floor only catches shrinkage: every count file is compared against the runner's REPORTED count, never a grep of the source.
+- (i) A path filter that believes a successful diff over an unverified range: both refs are `cat-file -e` checked first, and any doubt fails OPEN (attack c9aab1d B1/L6). A job gated on a filter output tests `!= 'false'`, never `== 'true'`, so an unset output runs the job (B2).
+- (j) Paths from git are read with `-z` and `core.quotePath=false`: a quoted or newline-bearing path is one record, never two or none (B3/L4).
+- (k) A counted file set and the set the runner executes come from ONE enumeration: no symlink follow on either side, and shard index/total come from the matrix (`strategy.job-index/job-total`), never a second hand-typed number (B4, B7/L2, B8).
+- (l) A downloaded tool binary is installed only when its sha256 equals the pinned published digest; presence alone is not trust (L13).
+- (m) A one-line count file accepts `\r\n` as well as `\n`: files are written on a Windows box (L1).
+- (n) `node --test` output is parsed only under `--test-reporter=tap`; the default reporter is not TAP on Node 24 (B6).

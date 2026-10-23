@@ -1,0 +1,104 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:changes job (paths step) + .claude/scripts/core/ci-changes.mjs:changedPaths",
+      "breaking_input": "A PR that touches face/ where `git diff base...head` fails, e.g. because the step passes `--head ${{ github.sha }}`. On pull_request events github.sha is the synthetic merge commit, not the PR head, and the diff errors or covers the wrong range. Or the base sha is unreachable. The catch returns [], which the code treats as fail-open.",
+      "why": "Fail-open only holds for an empty list. A diff that succeeds on the wrong range (merge commit versus base) returns a plausible but wrong list. A PR whose real face/ change is not in that list gets face=false, and the required `face` job is skipped and counts as passing.",
+      "fix": "Use github.event.pull_request.head.sha for --head. Verify both SHAs resolve with `git cat-file -e` before diffing, and fail open on any mismatch. Prefer `git diff --name-only base head` (two dots) with explicit SHAs.",
+      "twin_of": null
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".github/workflows/ci.yml:changes job paths step",
+      "breaking_input": "`node ci-changes.mjs ... | tee -a \"$GITHUB_OUTPUT\"` with default shell bash and no pipefail override. If node crashes (a syntax error, or a missing module on Node 24), the pipeline exit status is tee's (0). GITHUB_OUTPUT then gets no face= or citier= lines, and the step stays green.",
+      "why": "Unset outputs evaluate to '' in `needs.changes.outputs.face == 'true'`, so face and ci-tier are skipped silently. This is the opposite of fail-open: a script crash turns into a skipped required check.",
+      "fix": "Run with `set -o pipefail`, or write to a temp file and `cat` it into GITHUB_OUTPUT only after node exits 0. Better still, treat empty outputs as true in the job `if:`.",
+      "twin_of": null
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:classify / changedPaths",
+      "breaking_input": "`--files` pointing at a file with CRLF is handled, but a `git diff --name-only` path containing non-ASCII characters is returned quoted and octal-escaped (core.quotePath default), e.g. \"face/caf\\303\\251.tsx\". The leading quote breaks `^face/`.",
+      "why": "The path is quoted, so the anchored regex misses it. A change that touches only such a path under face/ or docker/ gets false for its job, and the job is skipped.",
+      "fix": "Pass `-z` (or `-c core.quotePath=false`) to git diff and split on NUL.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:19",
+      "breaking_input": "`find tests -name '*.bats' | sort | awk 'NR % n == i'` with shard index I >= N (e.g. `ci-bats-shard.sh 4 4`), or with I = N. The arg check only enforces that I is numeric.",
+      "why": "NR % n is never equal to i for i >= n, so the shard resolves to no files and exits 1. That case is caught. The real gap is the inverse: the matrix pins shards 0-3 with N=4, and awk's NR is 1-based. The shards are 1,2,3,0, so all files are covered only if shard 0 is run. If a future matrix edit drops shard 0 (e.g. [1,2,3,4] with N=4), the files at NR%4==0 are covered and the arg check passes but nothing asserts that the union of shards is the full set. Nothing in CI checks coverage across shards.",
+      "fix": "Add a cross-shard coverage check: a `changes`/test step that sums per-shard file counts, or validates I < N in the script and the matrix against N.",
+      "twin_of": null
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:30-31,40",
+      "breaking_input": "A bats run that produces no `ok`/`not ok` lines, e.g. bats is missing (exit 127, a pipe into tee), crashes, or a file fails to load. TAP is empty and executed=0. The declared count is >0, so reconcile fails. Separately, `grep -hcE ... \"$@\"` with a file list that includes filenames containing spaces or leading dashes is fine because the files are quoted, but a filename starting with `-` is not possible since `find tests` prefixes paths.",
+      "why": "The fault is the ordering: if `_rc` is nonzero it exits with `_rc` and drops the reconcile result. A real failure is reported, so this is acceptable, though the `::error::` annotation about never-executed tests is never shown when bats itself fails first. The failure reason is hidden from the CI summary when both fail.",
+      "fix": "Exit with the max of the two codes, and print the reconcile result before exiting with `_rc`.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "B6",
+      "severity": "medium",
+      "where": ".github/workflows/ci.yml:node-test",
+      "breaking_input": "`node --test \"tests/**/*.test.mjs\"` is passed quoted so that the shell does not expand it. Node 24's --test accepts a glob pattern, but the TAP summary the step parses with `sed -n 's/^# tests \\([0-9]*\\)$/\\1/p'` is only present with the tap reporter. Node 24 defaults to the spec reporter when stdout is not a TTY, in which case there are no `# tests N` lines.",
+      "why": "With the default reporter in CI the sed matches nothing, `ran` is empty, and the step fails with 'reported no tests run' on a healthy suite. Conversely, with no `.test.mjs` files and lane `.count` files present, a lane with 0 tests could not be told apart from a pass. Either way the vacuous-pass guard is wrong.",
+      "fix": "Pass `--test-reporter=tap` explicitly, or parse the spec reporter summary. Assert the per-lane reported count against `.count` (defect h).",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "B7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:floor (walk)",
+      "breaking_input": "A tests/ tree containing a symlink loop or a symlinked directory (e.g. a fixture symlink created by symlinkSync, retro 2026-10-14#1), or node_modules under tests/. `statSync` follows symlinks and `walk` recurses without a visited set.",
+      "why": "A symlink to an ancestor gives infinite recursion until ELOOP or a stack overflow, and an uncaught exception exits 1, which reads as 'below the floor'. A broken symlink makes statSync throw ENOENT. Fixtures that are `.bats` under tests/fixtures are also counted as declared tests, inflating the count and hiding real shrinkage.",
+      "fix": "Use lstatSync/withFileTypes, skip symlinks, and exclude tests/fixtures from the declared count (matching what bats -r would find, or at least what the shards find).",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:DECLARED vs ci-bats-shard.sh:_declared",
+      "breaking_input": "A `.bats` file under tests/ that no shard runs but ci-floor counts, or the reverse. The shard list is `find tests -name '*.bats'`, while the floor walk counts every `.bats` file including those under tests/fixtures/. The two use the same extension but different enumerators (find vs readdir), with different handling of CRLF.",
+      "why": "ci-floor splits on \"\\n\" and the regex is `^[ \\t]*@test[ \\t]`, so a CRLF file is fine. But `@test\"name\"` with no space, or a tab-indented line, differs from the shell regex `[[:blank:]]`. The floor and the reconcile can disagree, so the floor counts tests the shards never ran, and the floor passes with the suite actually smaller.",
+      "fix": "Derive both counts from one enumerator (have ci-floor call the same find) and one regex, and exclude fixtures in both.",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".github/workflows/ci.yml:test job",
+      "breaking_input": "The `test` job interpolates `${{ needs.*.result }}` into a shell string. If the `bats` matrix is cancelled or skipped, the aggregated result is 'cancelled'/'skipped' and fails the check correctly. But `changes` is skipped on drafts while `quality` and others also are skipped, which is fine. The gap: `security`, `face` and `ci-tier` are NOT in `test.needs`, so `test` can pass while `security` fails.",
+      "why": "`test` is documented as an aggregator, yet it does not depend on `security`. That is acceptable only because `security` is a separate required check; if the owner's protection edit omits it, nothing gates it. There is also no timeout-protected cancel path: with `!cancelled()`, a cancelled run of `test` is skipped.",
+      "fix": "Keep the protection list exactly as specified and add a test asserting the required-check list; alternatively add security to the aggregation.",
+      "twin_of": "(b)"
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-install-tools.sh:14-16",
+      "breaking_input": "A gitleaks download that returns an HTML error page with status 200, or a truncated archive. `curl -fsSL -o gl.tgz ... && tar ... || echo skipped` swallows the failure, and the script sets `set -u` only, not -e. The following `security` step runs `command -v gitleaks`.",
+      "why": "The release assets are not checksum-verified, so a corrupted or substituted binary is installed and run with repo read access. The pin is a version only, not a hash, which is a supply-chain gap for a security gate.",
+      "fix": "Verify the sha256 of each downloaded binary against a committed digest before installing it.",
+      "twin_of": null
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".github/workflows/ci.yml:security job",
+      "breaking_input": "The `arc-scan` step reads `${{ github.event.pull_request.base.sha }}` and uses `--base \"$base\"`, but checkout without a ref on pull_request checks out the merge commit, while the diff range is base..HEAD of that merge. On a dispatch run `base` is empty and `--all` is used. A PR from a fork gets a read-only token and `npm audit` over `face` runs with no lockfile if face/ has none.",
+      "why": "`npm audit` in `face` fails hard with ENOLOCK if package-lock.json is absent, and the working-directory `face` must exist. If face/ is ever removed the security job breaks for every PR, and the face job's `if` would skip while security still requires it.",
+      "fix": "Guard the audit with a lockfile existence check, and fall back to skip with a visible message.",
+      "twin_of": null
+    }
+  ]
+}

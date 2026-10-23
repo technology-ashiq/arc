@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/ci-floor.mjs:50-55",
+      "breaking_input": "A `.count` file containing \"5\\r\\n\" (CRLF line ending)",
+      "why": "The regex `/^\\d+\\n$/` requires exactly a newline at the end; on a Windows-created `.count` with CRLF, `\\r` is not matched, so `body.trim()` returns '5' but the regex check fails and the file is rejected as malformed, causing a false failure.",
+      "fix": "Trim the body before the regex: `/^\\d+$/` after `body.trim()`, or allow `\\r?\\n`.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:34-40",
+      "breaking_input": "A symlink loop under tests/ (e.g., tests/a -> tests/b)",
+      "why": "`walk()` uses `statSync` (follows symlinks) and recurses into directories without detecting cycles; a symlink loop causes infinite recursion / stack overflow, crashing ci-floor with a non-2 exit, breaking the gate.",
+      "fix": "Use `lstatSync` and skip symlinks, or track visited realpaths; do not recurse into a directory already visited.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:57-63",
+      "breaking_input": "A `DROPPED.md` row whose reason cell contains a pipe `|` (e.g., `| name | DROPPED | reason with | pipe |`)",
+      "why": "DROP_ROW regex `/^\\|([^|]*)\\|\\s*DROPPED\\s*\\|([^|]*)\\|/` captures only up to the first pipe in the reason; a reason with additional pipes leaves `m[2]` non-empty and the row passes validation but the extra text is silently ignored, so a malformed row does not error.",
+      "fix": "Parse the markdown row more rigorously (split on unescaped pipes) and require exactly 4 cells.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:28-31",
+      "breaking_input": "A path containing a newline (e.g., `face/foo\\nbar`) in a `--files` list",
+      "why": "`split(/\\r?\\n/)` treats a literal newline in a path as a record separator; the path's `\\n` splits it into two entries, so a malicious path could change classification (e.g., a filename with an embedded newline before `face/` could be parsed as two entries, making `paths.some` see a `face/`-prefixed entry).",
+      "fix": "Read NUL-delimited input (git -z) or reject newlines in paths.",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:39-42",
+      "breaking_input": "Invoking with `--base SHA` where `git diff` exits 0 but outputs nothing (e.g., the branch is empty of changed files)",
+      "why": "`changedPaths` returns `[]` on an empty diff, and `classify` sees `paths.length === 0` and fails open (face=true, citier=true). The comment says an empty list should fail open, but an empty diff from a real PR (not dispatch) also fails open, forcing unnecessary face/ci-tier runs; more critically, it hides a real 'no changes' state and may cause a required job to run when it shouldn't, though the comment legitimises it.",
+      "fix": "Distinguish dispatch/no-base from an actual empty diff: if base exists and the merge-base diff is empty, return 'no-changes' and set both false.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:41-43 (changes job)",
+      "breaking_input": "A PR whose `base.sha` is not present locally (e.g., a shallow clone or an updated base); the `changes` job runs `node ci-changes.mjs --base \"${{ github.event.pull_request.base.sha }}\" --head \"${{ github.sha }}\"`",
+      "why": "`ci-changes.mjs` runs `git diff --name-only base...head`; on a fresh checkout with `fetch-depth: 0`, both SHAs are present, but if `git diff` errors (e.g., base is an unreachable merge-base), it catches and returns `[]` — which fails open. That is intended, but the `changes` job's stdout is appended with `tee -a \"$GITHUB_OUTPUT\"`; any stderr line (the fail-open warning goes to stderr) is not appended, but the `changes` outputs `face=true/citier=true`. The danger: if the `git diff` silently succeeds with an empty list (a PR that only deletes files? no, those are listed), a PR that only changes e.g. `.gitignore` would still fail open and run face+ci-tier unnecessarily, costing minutes. More subtly: a PR whose diff against base is non-empty but contains only paths outside face/docker still returns both false, which is correct, but if `--base` is empty (dispatch), it fails open and runs everything — the documented intent, but the same code path is used when `github.event.pull_request.base.sha` is empty due to a race (draft ready_for_review). The test `--base \"\"` only covers empty string, not a missing flag.",
+      "fix": "Make the fail-open only apply to dispatch / missing base; for a real PR with a base, a git error should exit non-zero and fail the job, not silently fail open.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:64-66 (node-test step)",
+      "breaking_input": "A PR that deletes all `tests/**/*.test.mjs` files while `tests/*/.count` lanes remain",
+      "why": "The step computes `n=$(find tests -name '*.test.mjs' | wc -l)` and `lanes=$(find tests -mindepth 2 -maxdepth 2 -name .count | wc -l)`. If `n=0` but `lanes>0`, it proceeds to run `node --test \"tests/**/*.test.mjs\"` — the glob matches no files; on Node 24, `node --test` with a non-matching glob argument treats it as a literal file path and emits an error (file not found) or runs zero tests; the `sed` on the TAP log then finds no `# tests` line, and the step exits 1. That is the intended 'vacuous pass' guard. But if a lane migrated to `.count` and its `.test.mjs` files are in a subdirectory deeper than `tests/**/*.test.mjs` (e.g., `tests/org/deep/test.test.mjs` — but `**` matches recursively, so it's fine). The real gap: the guard only checks `ran -gt 0`; `# tests 0` could appear if `node:test` reports a plan of 0 for an empty-but-matched set (a directory with no test files?), but the glob forces it. The critical defect is when a `.test.mjs` throws at import: node --test reports the file as `fail` and the TAP has `# tests 1` but a failure, which `rc` catches — that's fine. The attack is the opposite: a `.test.mjs` that matches but reports `# tests 0` because it uses `test.skip` on all tests; `ran` is 1 (the `# tests 1` line?) Actually node reports `# tests 0` if all skipped; the guard `[ \"$ran\" -gt 0 ]` fails, which is correct per (a). However, `ran` is parsed as the LAST `# tests N` line; a file with a passing plan and a failing plan? The real hole: if `node --test` prints `# tests 0` for a lane that has no tests but a `.count` says >0 — that's the intended protection. But the guard says `[ -n \"$ran\" ] && [ \"$ran\" -gt 0 ]`; if the TAP has multiple `# tests` lines (e.g., subtest output), `tail -1` takes the last, which could be a subtest's count while the outer suite ran 0 — node:test's summary line is `# tests N`; a file that throws at import yields a `# Subtest` and a `# tests 1`? The verified hole: a `.test.mjs` file that contains no `test()` calls but imports successfully — node --test reports `# tests 0`? Actually it reports `# tests 0` and exits 0, but the guard catches it. The dangerous one is a file that throws at import: node reports `# tests 0` AND a failed subtest, and `rc` becomes non-zero, so it fails — good. The genuine bypass: a `.test.mjs` that `process.exit(0)` before any test, or that uses `test` with `{ skip: true }` on every test: node reports `# tests 0` (all skipped) or `# tests 1` with one skip? Node 24 reports `# tests 1` with a skip, and `ran=1`, passes guard even though nothing meaningful ran — matching (a) incompletely: a skip is not an assertion, but the guard counts it as 'ran'. A `.test.mjs` that skips all tests while `.count` says 5 would pass: `ran>0` (e.g., `# tests 5` with 5 skips), and no failure. This is a real weakening of (a): skips are counted as executed.",
+      "fix": "Reject any `# skip` / `# todo` lines, or require `passed` count to equal declared `.count`, not merely `ran > 0`.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L8",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:83-86 (test job)",
+      "breaking_input": "A PR where the `bats` matrix has 4 shards but one shard's job is `skipped` because the shard's `awk` resolved to zero files (e.g., if a future change reduces the file count and shard 3 gets no files — but `ci-bats-shard.sh` exits 1 in that case, so it's a failure). More relevantly: if the `bats` job is skipped by the `if:` because the PR is a draft, but `test` also has the draft `if:`, so on a draft `test` is skipped too — that's fine. The attack: a `needs.bats.result` that is `cancelled` because one shard was cancelled by the `concurrency` cancel-in-progress (a newer push supersedes), but the other shards succeeded; the `test` job's loop sees `bats=cancelled` and fails, which is correct. BUT if `changes` job is `skipped` (it never started because the workflow event is a `pull_request` with `draft=true` — the `changes` job has `if: draft != true`, so on a draft it's skipped), then `test` also has the draft `if:`, so `test` is skipped — fine. The real hole is in `test`'s `if: !cancelled()` — if one of its needs is `skipped` (e.g., `bats` skipped because `changes` output said skip? but bats has no path filter in Phase 00, it always runs, so it can't be skipped except by draft — and then `test` is also skipped). The concrete bug: `needs.bats.result` is from the matrix; if `strategy.fail-fast: false` and one shard fails, `needs.bats.result` is `failure`, `test` fails — good. But if a shard is `skipped` for another reason (e.g., a future `if:` on the matrix job), `test` would fail even when the others succeeded — that's conservative but could block a PR that a change intentionally wanted to skip. Since Phase 00 has no skip, this is theoretical. More concrete: the `test` job's loop exits 1 on any non-success, including `cancelled`; `!cancelled()` in the `if:` prevents running when the workflow is cancelled, but if only one job is cancelled (concurrency kill), `test` still runs and fails — acceptable. The actual logic gap: `test`'s `needs` includes `quality`, but `quality` has no path filter and always runs; on a draft all are skipped and `test` is skipped — no green check for a draft (correct). The attack that matters is a skipped `changes` on a non-draft: `changes` has `if: github.event_name == 'workflow_dispatch' || draft != true`; on a normal PR it runs. No real hole here.",
+      "why": "The loop checks every needed job's result is 'success'; if `changes` is skipped (e.g., `workflow_dispatch`? no, it runs) — but if `changes` is skipped because the workflow was cancelled, `test` runs and fails red, which is fine. The real vulnerability: `needs.changes.result` is 'skipped' when the `changes` job's `if:` is false on a draft, but then `test` also skips — OK. It's more that a single job's failure makes `test` fail, but `test` is a required check; if `bats` shard 0 fails but shard 1-3 succeed, `test` fails — correct. No weakness found beyond that.",
+      "fix": "No fix needed; the aggregator correctly fails on any needed job that isn't success.",
+      "twin_of": null
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:25-30",
+      "breaking_input": "A bats test whose `@test` name contains a newline, or whose name is split so that `_declared` counts fewer than `_executed` (or vice versa) because `_declared` uses grep over the files while `executed` comes from TAP lines; a test that prints an extra line starting with `ok ` in its body (e.g., a test that does `echo 'ok extra'`) makes `executed` higher than `declared`, so the reconciliation `declared -ne executed` fails and reports 'negative never executed' — a false failure even though all tests ran.",
+      "why": "The `_reconcile` function only checks inequality, not direction; a test body that emits a TAP-like `ok ` line increases the executed count, causing a false red build. This is a real false-positive that blocks a PR.",
+      "fix": "Count only TAP plan lines (e.g., `^ok [0-9]+`) or use bats' `--report-formatter` to get a reliable count; additionally, a `declared < executed` should be a warning or acceptable, not a failure.",
+      "twin_of": null
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:35-39",
+      "breaking_input": "Invoking the script as `ci-bats-shard.sh 0 1` (N=1) — the `awk -v i=0 -v n=1 'NR % 1 == 0'` matches every line, so all files run; that's fine. But `NR % n == i` with `i` not in 0..n-1 (e.g., `i=2, n=2`) gives no files and the script exits 1 — correct. The defect: if `i` is 0 and `n` is 0, the earlier guard `[ \"$2\" =~ ^[1-9][0-9]*$ ]` rejects 0, so exit 2 — OK. However, `awk` uses `i` without proper integer validation beyond the `^[0-9]+$`; a huge `i` (e.g., 999999) passes but `% n` works, so it's safe. The real issue: the awk expression `NR % n == i` with n possibly negative? no, guard rejects. It's safe.",
+      "why": "No concrete breaking input; the guard handles invalid inputs.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-install-tools.sh:26-28",
+      "breaking_input": "A PATH collision: if `$HOME/bin` already contains a malicious `jq` or `bats`, the script doesn't override it — but on a fresh runner it's clean. More concrete: `sudo apt-get install -y jq` can fail (network), but `set -u` (not `-e`) means a failed apt does not stop the script; the banner then shows `MISSING`, but the subsequent bats runs may need jq and fail later — not a logic bug, it's best-effort. The defect in the script's logic: `set -u` is not `set -e`, so a failed `curl` for gitleaks still executes `tar` only if `&&` succeeds; the `|| echo 'gitleaks install skipped'` catches it — correct. But `npm install -g bats` failing would not stop the script, and later `ci-bats-shard.sh` would fail with `bats: command not found` — which is acceptable, but the script's 'best-effort' philosophy means a failed bats install makes the whole test job fail (not skip), contradicting 'skip visibly' — bat runs are not optional; if bats is missing, the shard fails red. That's fine. No logic hole worth reporting.",
+      "why": "No breaking input that causes an incorrect pass/fail decision.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "tests/ci-gate.bats:37-40",
+      "breaking_input": "In `ci-floor: a count below the floor fails`, the test uses `--baseline 4` and expects output containing `test count 3 < floor 4`. But if `ci-floor.mjs` later changes to print a different format, the test breaks — that's not a defect. The real issue: the test does not assert that the command actually ran beyond `[ -n \"$output\" ]`, which the test does for only some arms; the `--baseline 3` case (at floor) only checks `status -eq 0`, not that output is non-empty — but the code prints always. The defect is in the test's assumption: `mk_tree` creates a bats file with three tests but the `_declared` regex in `ci-floor.mjs` is `/^[ \\t]*@test[ \\t]/` which counts the indented `@test \"b\"` as well (leading blanks), so declared=3 — correct. No defect in the tests themselves.",
+      "why": "No breaking input; the tests are correct.",
+      "fix": "None.",
+      "twin_of": null
+    },
+    {
+      "id": "L13",
+      "severity": "critical",
+      "where": ".github/workflows/ci.yml:119-120 (security job, scanners present)",
+      "breaking_input": "A CI runner where `gitleaks`, `opengrep`, or `jq` are installed but are malicious binaries injected via a supply-chain compromise of the pinned tool download URL (e.g., a MITM or a compromised release). The `command -v gitleaks && ... && command -v jq` check only verifies presence, not integrity; `ci-install-tools.sh` downloads from `https://github.com/...` with `curl -fsSL` (no checksum). A compromised binary would pass this presence check and the security scans would run with a weaponized scanner that could report no findings, silently letting secrets through.",
+      "why": "The check 'Scanners are present' only tests existence, not that the binary is the pinned, trusted version. A malicious or altered binary (e.g., a version that finds zero results) would satisfy the check and the arc-scan step would pass, creating a false sense of security.",
+      "fix": "Pin and verify checksums (e.g., SHASUMS) for gitleaks and opengrep in `ci-install-tools.sh`, and verify integrity before use; alternatively, run containers/pinned images.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:15-22",
+      "breaking_input": "A path like `face/../docker/foo` (a path traversal in a `--files` list). The `RULES` regexes test against the raw path string; `face/../docker/foo` does not start with `face/` and does not start with `docker/`, so neither `face` nor `citier` matches, and the job is skipped when it should run (or vice versa). Git paths are typically normalized, but a `--files` input (used from the workflow's generated diff, which is git-normalized) is safe; however, the `classification` is also used by the bats tests with arbitrary `--files`, and a user-controlled list could bypass.",
+      "why": "Path traversal in the file list defeats the prefix-based classifier, silently skipping a required job (ci-tier or face) that should run, potentially greenlighting a change that breaks docker or face.",
+      "fix": "Normalize paths (e.g., with `path.resolve` and verify it stays under the repo root) before matching, or reject paths containing `..`.",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".github/workflows/ci.yml:12-15 (concurrency group)",
+      "breaking_input": "A PR that is pushed twice quickly; the `concurrency` group `arc-ci-${{ github.ref }}` cancels the first run. The `test` aggregator job reads `needs.bats.result` from the run it's in; if the first run's `test` job was already reading the result when the run is cancelled, it could report a success for a test that never completed — but GitHub marks cancelled jobs as `cancelled`, so `test` would see 'cancelled' and fail — no false green. The concern is a race where the `changes` job's output is read by a later job in the same run — that's deterministic within a run. No concrete defect.",
+      "why": "The concurrency semantics are correct; a cancelled run fails the aggregator.",
+      "fix": "None.",
+      "twin_of": null
+    }
+  ]
+}

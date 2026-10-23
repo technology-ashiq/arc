@@ -11,7 +11,7 @@
  *
  * Exit: 0 declared >= floor · 1 below the floor · 2 a malformed .count or drop row, or bad usage.
  */
-import { readFileSync, readdirSync, existsSync, statSync, realpathSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,11 +21,13 @@ const DROP_ROW = /^\|([^|]*)\|\s*DROPPED\s*\|([^|]*)\|/;
 
 class Malformed extends Error {}
 
+// Symlinks are not followed, the same as the shards' `find tests -name '*.bats'`: one enumeration, so
+// the floor counts exactly the files the shards run, and a link cycle cannot recurse (attack B7, L2).
 function walk(dir, out = []) {
-  for (const n of readdirSync(dir)) {
-    const p = join(dir, n);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else out.push(p);
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else if (e.isFile()) out.push(p);
   }
   return out;
 }
@@ -42,7 +44,7 @@ export function floor({ root, baseline = BASELINE }) {
       for (const l of readFileSync(f, "utf8").split("\n")) if (DECLARED.test(l)) declared++;
     } else if (/^[^/]+\/\.count$/.test(rel)) {
       const body = readFileSync(f, "utf8");
-      if (!/^\d+\n$/.test(body)) throw new Malformed(`bad .count: tests/${rel}`);
+      if (!/^\d+\r?\n$/.test(body)) throw new Malformed(`bad .count: tests/${rel}`);
       declared += Number(body.trim());
     } else if (rel === "DROPPED.md" || /^[^/]+\/MIGRATED\.md$/.test(rel)) {
       for (const l of readFileSync(f, "utf8").split("\n")) {
