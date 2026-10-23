@@ -9,7 +9,7 @@
 - **Name:** arc
 - **Goal:** an AI build system — tracked plans, deterministic gates, a receipt spine and agent workflows, installable into other repos (`README.md`)
 - **Domain:** arc.automemory.ai
-- **Stack:** Node ESM scripts with zero npm deps · bash · bats on CI (3 OS legs) · the HQ face app in `face/` (React + three)
+- **Stack:** Node ESM scripts with zero npm deps · bash · bats on CI (ubuntu, Node 24; Windows weekly) · the HQ face app in `face/` (React + three)
 
 ---
 
@@ -73,8 +73,9 @@
 - **After a push, the building session runs `/arc-attack` and `ci-digest` itself. It never starts a new
   session for them** (ADR-0226, amended 2026-09-24). The attacker stays fresh because `arc-run` gives it
   only the diff, and the CI read is a script. A new session adds no independence and costs ~100k tokens.
-- **"Tests green" means green on CI. Never run a suite on this box** — and read per-JOB conclusions,
-  not the watcher's exit code → `.claude/rules/testing.md` § where tests run.
+- **"Tests green" means green on CI; your box is the first gate.** `git push` runs the changed lanes
+  (pre-push, `test-changed.mjs`), never the full suite; CI confirms. Read per-JOB conclusions, not the
+  watcher's exit code → `.claude/rules/testing.md` § where tests run.
 - Offline-first: every external dependency gets an interface + fake + real impl.
 - A gate/lint/parser is NOT done until an adversarial construct-a-breaking-input pass has run
   against it and the found holes are fixed + pinned as fixtures (council v2+v3: 43 real holes
