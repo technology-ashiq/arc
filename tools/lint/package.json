@@ -4,7 +4,7 @@
   "description": "ESLint for arc's scripts (ci ADR-2203). Its own package so arc's root stays zero-dependency (distribute REQ-08).",
   "devDependencies": {
     "@eslint/js": "9.39.5",
-    "eslint": "9.39.5",
+    "eslint": "10.13.0",
     "globals": "17.13.0"
   }
 }
