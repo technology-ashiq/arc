@@ -86,6 +86,8 @@ function changedPaths(argv, stdin) {
   const base = argv.includes("--base") ? argv[argv.indexOf("--base") + 1] : "origin/main";
   // Tags carry no tests of their own; a branch ref is what runs.
   const pushes = stdin.split(/\r?\n/).filter(Boolean).map((l) => l.split(" ")).filter((f) => f[1] && !String(f[0]).startsWith("refs/tags/")).map((f) => f[1]);
+  // --stdin with no ref lines is a push of nothing: HEAD is not what git is sending (attack p01 r2 B2).
+  if (argv.includes("--stdin") && !pushes.length) return { paths: [], note: "no ref lines on stdin -- nothing is being pushed" };
   const heads = pushes.length ? pushes.filter((s) => !ZERO.test(s)) : ["HEAD"];
   if (!heads.length) return { paths: [], note: "delete push -- nothing to test" };
   const opts = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60000 };
@@ -132,6 +134,10 @@ function run(files, deadline) {
   if (node.length) steps.push({ what: node, cmd: process.execPath, args: ["--test", "--test-reporter=tap", ...node] });
   // argv, never an interpolated program: a POSIX path inside `bash -c` breaks on the Windows leg.
   const bash = bashPath();
+  // A missing bats inside that bash would read as every file FAILED; say what is missing instead (attack p01 r2 B3).
+  if (bats.length && spawnSync(bash, ["-c", "command -v bats"], { stdio: "ignore", env: testEnv() }).status !== 0) {
+    console.log(`test-changed: bats is not on PATH in ${bash} -- install it (npm i -g bats) or run without the bats lanes`); return 1;
+  }
   for (const f of bats) steps.push({ what: [f], cmd: bash, args: ["-c", 'exec bats --print-output-on-failure "$@"', "bats", f] });
   const env = testEnv();
   for (let k = 0; k < steps.length; k++) {
