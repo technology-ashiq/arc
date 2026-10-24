@@ -1,0 +1,32 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".github/workflows/weekly.yml:37",
+      "breaking_input": "A lane's node:test file that throws at import or matches zero tests, while other files still report `# tests N` > 0. The glob `tests/**/*.test.mjs` is expanded by node itself, so a file the glob misses is never counted either.",
+      "why": "The windows-test job only requires the reported total to be greater than 0. It never compares that total with the sum of the lanes' `.count` files, which is what CI's node-test job does. A lane that quietly shrinks, or a nested file the glob skips, stays green on the weekly run and on the release gate that depends on it.",
+      "fix": "Compare the last `# tests N` line with the sum of the `.count` files, as ci.yml's node-test job does. Reuse that script rather than a second inline check.",
+      "twin_of": "(h) A floor only catches shrinkage: every count file is compared against the runner's REPORTED count"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:244",
+      "breaking_input": "A push of only `initiatives/ci/foo.md`, where a bats or bash gate (board-lint, kickoff-lint) reads `initiatives/*/*.md` by glob without naming the file. `testsText` finds no test that names the path, so `files` is empty.",
+      "why": "The new `notes` regex marks any `initiatives/<lane>/<x>.md` as paperwork once `files` is empty. The \"does a test name it\" check is skipped, and a glob-reading gate never names its inputs. A lane note that breaks such a gate pushes with exit 0 and fails only on CI. The code comment acknowledges this.",
+      "fix": "Restrict the regex to an explicit allow-list of note names (`debt-ledger.md`, `fixed-defects.md`), or require that no test text mentions the lane's directory.",
+      "twin_of": "(v) An allowlist of \"safe to skip\" paths also asks the tests' own text"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "tests/ci-gate.bats:140",
+      "breaking_input": "A `.bats` file with a tab-indented `@test` line, or with CRLF line endings (files are written on a Windows box). `grep -rnE` prefixes each hit with `file:line:`, and the remainder of the line is matched against `[^ -~]`.",
+      "why": "A tab or CR is outside the printable ASCII range ` -~`, so the guard reports it as non-ASCII. The failure message points at a character that is not in the test name. The guard also does not tell a bad test name from an unusual filename, because the `-r` file prefix is included in what it scans.",
+      "fix": "Extract only the name (`sed -E 's/^[[:blank:]]*@test[[:blank:]]+//'`) and test it with `[^[:print:]]`, or strip `\\r` and the leading blank before the check.",
+      "twin_of": null
+    }
+  ]
+}

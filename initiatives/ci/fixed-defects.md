@@ -38,3 +38,4 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (ah) A test never reads history a shallow CI clone lacks: a shipped artifact the test needs is a fixture, not `git show <old-sha>` (REQ-11 r1 B2, L6).
 - (ai) A hash compared across repos drops CR first: arc's eol=lf pin does not travel to a venture's autocrlf checkout (REQ-11 r2 B2, L5). Its test plants a CRLF copy, and a mutant without the strip goes red.
 - (aj) A test for a multi-value rule exercises the second value, not only the first (REQ-11 r2 B1, L6): the retire test plants the OLDER session-log version.
+- (ak) A second runner of the same suite carries every check the first one has: weekly's windows node:test step asserted only `# tests > 0` and skipped arc-ci's `.count` claim check, so a lane loading none of its tests on windows passed (REQ-07 r1 B1).
