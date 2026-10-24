@@ -55,12 +55,12 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-01: the PR's ready-for-review run lists only `ubuntu-latest` jobs that started, ≤ 10 of them (skipped jobs do not count), every one on Node 24, read per JOB via `ci-digest.mjs --sha` with the head SHA asserted
-- [ ] REQ-03: `cost.md` holds the public run and the post-flip run, next to the 39736016311 baseline
-- [ ] every bats shard reconciled declared = executed, and `ci-floor` printed a count ≥ 4815
-- [ ] `readers.md` committed, with every hit resolved, filed or deferred with a reason
-- [ ] owner confirmed the §5 step-2 edit; PR merged; the dispatch run on `main`'s head is green per job; `gh api repos/technology-ashiq/arc/branches/main/protection/required_status_checks --jq '.contexts'` lists exactly `quality, test, security, face, ci-tier`
-- [ ] tracker updated through `/arc-phase-done 00` (PROGRESS row ✅ + done-log + PORTFOLIO row in the same commit)
+- [x] REQ-01: the PR's ready-for-review run lists only `ubuntu-latest` jobs that started, ≤ 10 of them (skipped jobs do not count), every one on Node 24, read per JOB via `ci-digest.mjs --sha` with the head SHA asserted
+- [x] REQ-03: `cost.md` holds the public run and the post-flip run, next to the 39736016311 baseline
+- [x] every bats shard reconciled declared = executed, and `ci-floor` printed a count ≥ 4815
+- [x] `readers.md` committed, with every hit resolved, filed or deferred with a reason
+- [x] owner confirmed the §5 step-2 edit; PR merged; the dispatch run on `main`'s head is green per job; `gh api repos/technology-ashiq/arc/branches/main/protection/required_status_checks --jq '.contexts'` lists exactly `quality, test, security, face, ci-tier`
+- [x] tracker updated through `/arc-phase-done 00` (PROGRESS row ✅ + done-log + PORTFOLIO row in the same commit)
 
 ## Verification plan
 
