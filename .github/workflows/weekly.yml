@@ -42,6 +42,10 @@ jobs:
           ran="$(tr -d '\r' < "$RUNNER_TEMP/node-test.tap" | sed -n 's/^# tests \([0-9]*\)$/\1/p' | tail -1)"
           echo "node:test reported ${ran:-none} test(s), exit $rc"
           [ -n "$ran" ] && [ "$ran" -gt 0 ] || { echo "::error::node --test reported no tests run"; exit 1; }
+          # The same .count check as arc-ci's node-test: a lane that loads none of its tests on windows is red (attack B1).
+          claimed="$(find tests -mindepth 2 -maxdepth 2 -name .count -exec cat {} + | tr -d '\r' | awk '{s+=$1} END{print s+0}')"
+          echo "node:test reported $ran, .count files claim $claimed"
+          [ "$ran" -ge "$claimed" ] || { echo "::error::node --test ran $ran, below the $claimed the .count files claim"; exit 1; }
           exit "$rc"
 
   clean-install:
