@@ -79,6 +79,31 @@ _arc_env_block() {  # <src-env-file> <sentinel-regex>
   fi
 }
 
+# ---------- retired files (REQ-11, ADR-2212) ----------
+# A copy only ever adds, so a hook arc deleted lives on in every venture. Remove a retired path only when
+# it is byte-identical to a version arc shipped (every sha256 git ever held); an edited copy is the venture's.
+# CRs are dropped before hashing: the eol=lf pin stays in arc, so a venture's autocrlf checkout must still match (attack r2 B2).
+_arc_sha() { tr -d '\r' < "$1" | if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | cut -c1-64; }
+_arc_retire() {
+  local p h list
+  list="$(cat)"
+  while read -r p h; do
+    [ -f "$TARGET/$p" ] && [ "$(_arc_sha "$TARGET/$p")" = "$h" ] && rm -f "$TARGET/$p" && echo "retired: $p"
+  done <<<"$list"
+  while read -r p h; do
+    [ -f "$TARGET/$p" ] && echo "sync: kept $p -- arc retired it, but this copy is edited"
+  done < <(printf '%s\n' "$list" | sort -u -k1,1)
+  return 0
+}
+_arc_retire_all() {
+  _arc_retire <<'RETIRED'
+.claude/hooks/PostToolUse.d/00-format.sh 9a067203f25cc368bd96dbf3e95646ee14add49bacce87c0d976baea0994e3ba
+.claude/hooks/PostToolUse.d/90-emit.sh 7f1e76c9eb0f107e201164ca72ca83bfca750e0cfb5550ffb480cedc232a69f7
+.claude/hooks/SessionEnd.d/00-session-log.sh 5efad868caa25de5e752e684c0fb67bb4cce7bac173633d0bd8185450be476e1
+.claude/hooks/SessionEnd.d/00-session-log.sh eee5a7732098143bf3d781de55fad79ef382e783e4e08b4af0d7a78108a84b79
+RETIRED
+}
+
 # ---------- consumer settings preservation (Phase 04 dogfood finding) ----------
 # The copy overwrites .claude/settings.json wholesale, which silently deleted a real
 # consumer's `coverageMode: warn` / `docsGate: warn` and flipped their gates to block --
@@ -127,6 +152,7 @@ if [ "$MODE" = "products" ]; then
   mkdir -p "$TARGET/.claude"
   printf '%s\n' "$_reg" > "$TARGET/.claude/arc-registry.json"
   _arc_settings_merge
+  _arc_retire_all
   echo "sync: products [$PRODUCTS] + core -> $TARGET"
   echo "sync: IMPORTANT -- restart the Claude Code session in that project (commands load at session start)."
   exit 0
@@ -147,6 +173,7 @@ _out="$(node "$SRC/.claude/scripts/engine/arc-install.mjs" --target claude-code 
   || { printf '%s\n' "$_out" >&2; echo "sync: the claude-code install failed and rolled back; nothing of this run was left" >&2; exit 3; }
 
 _arc_env_block "$SRC/.env.example" "^JUROR_BASE_URL="
+_arc_retire_all
 
 echo "sync: template -> $TARGET"
 echo "sync: untouched -- CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, .claude/state, app code, docs/council/sessions."

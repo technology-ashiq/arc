@@ -327,3 +327,23 @@ _claude_set() { ( cd "$1/.claude" && find . -type f \
   run diff <(_claude_set "$ARC_ROOT") <(_claude_set "$TARGET")
   [ "$status" -eq 0 ] || { echo "manifest/reality drift:"; echo "$output"; false; }
 }
+
+@test "sync: a retired hook is removed when byte-identical to arc's copy, kept when edited (REQ-11)" {
+  mkdir -p "$TARGET/.claude/hooks/PostToolUse.d"
+  # The shipped copies live as fixtures: CI's bats job is a shallow clone without the commits that held them.
+  cp "$ARC_ROOT/tests/fixtures/sync-retired/00-format.sh" "$ARC_ROOT/tests/fixtures/sync-retired/90-emit.sh" "$TARGET/.claude/hooks/PostToolUse.d/"
+  echo "# venture edit" >> "$TARGET/.claude/hooks/PostToolUse.d/90-emit.sh"
+  # The older of the two shipped session-log versions (the second-hash arm), checked out CRLF as autocrlf would.
+  mkdir -p "$TARGET/.claude/hooks/SessionEnd.d"
+  sed 's/$/\r/' "$ARC_ROOT/tests/fixtures/sync-retired/00-session-log.sh" > "$TARGET/.claude/hooks/SessionEnd.d/00-session-log.sh"
+  [ "$(od -An -c "$TARGET/.claude/hooks/SessionEnd.d/00-session-log.sh" | grep -c '\\r')" -gt 0 ]  # grep alone drops CR on Git Bash
+  run bash "$ARC_ROOT/sync-to-project.sh" "$TARGET"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"retired: .claude/hooks/PostToolUse.d/00-format.sh"* ]]
+  [ ! -e "$TARGET/.claude/hooks/PostToolUse.d/00-format.sh" ]
+  [[ "$output" == *"kept .claude/hooks/PostToolUse.d/90-emit.sh"* ]]
+  grep -q "# venture edit" "$TARGET/.claude/hooks/PostToolUse.d/90-emit.sh"
+  [[ "$output" == *"retired: .claude/hooks/SessionEnd.d/00-session-log.sh"* ]]
+  [ ! -e "$TARGET/.claude/hooks/SessionEnd.d/00-session-log.sh" ]
+  [ "$(grep -c '^retired: ' <<<"$output")" -eq 2 ]
+}

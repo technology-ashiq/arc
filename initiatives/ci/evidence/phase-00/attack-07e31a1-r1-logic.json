@@ -1,0 +1,125 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": "sync-to-project.sh:85-91 (_arc_sha/_arc_retire)",
+      "breaking_input": "TARGET contains a file named with a path like `..\\x` (backslash) on POSIX, or a filename beginning with `-`; _arc_sha passes the path unquoted into sha256sum/shasum and `cut -c1-64` reads full line, but a path with a newline in TARGET breaks read; also `$list` fed twice via here-string and process-substitution, second read is fine. Concrete: TARGET/.claude/hooks/PostToolUse.d/00-format.sh is a symlink to /etc/passwd; _arc_sha follows the symlink and computes sha256 of /etc/passwd, equals nothing, so not removed — but harmless. Worse: a file named `x\\n` (literal newline in the path) — read splits the path, h gets a fragment, rm removes a different file.",
+      "why": "The retire loop `read -r p h` splits on whitespace, so any retired path containing a newline or leading/trailing space is misinterpreted; the file list is fixed but the TARGET path is user-controlled. Also `[ -f \"$TARGET/$p\" ]` follows symlinks and the sha check reads the target of a symlink, which can match a hash for a different content and delete a symlink target? Actually rm -f removes the symlink, not target, but the hash check is on the resolved content. More critically, an attacker who controls TARGET could pre-place a file whose content matches a retired hash at a path that is actually a symlink to a protected file; rm -f removes the symlink, not the target, so not a write. The newline path is the real break: an edited-file misclassification or unintended deletion.",
+      "fix": "Validate each retired path with `read -r -d ''` style or reject paths containing control characters; use `--` before `$TARGET/$p` to avoid option parsing; and hash the path itself, not the resolved content, or refuse symlinks."
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "sync-to-project.sh:82 (_arc_sha fallback)",
+      "breaking_input": "On macOS where `sha256sum` absent and `shasum -a 256` present, but the retired hash list was computed with GNU sha256sum; both produce the same hex, so fine. Actual break: a TARGET path whose name contains a space — `_arc_sha \"$TARGET/$p\"` is quoted, fine. But `cut -c1-64` on a filename that starts with `-`? The command `sha256sum -- \"$1\"`? It runs `sha256sum \"$1\"`, and if `$1` is `-` or `--help`, sha256sum treats it as an option. `$TARGET/$p` always has a slash, so no. Low.",
+      "why": "The fallback `shasum -a 256` output format differs on some platforms (may emit a `(` and path), but `cut -c1-64` takes the first 64 chars which are the hex, ok. Not a real defect.",
+      "fix": "No change needed; skip."
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": "sync-to-project.sh:156 (_arc_retire_all during products mode) and line 175 (template mode)",
+      "breaking_input": "Run `sync-to-project.sh` against a TARGET that is the repository's own working tree (e.g., TARGET=. or TARGET=$ARC_ROOT). The retired lines list `.claude/hooks/PostToolUse.d/00-format.sh` with hash `9a06...`, but the current file in the tree is the OLD version (ffeecd72) which differs, so kept. However the other retired file `.claude/hooks/SessionEnd.d/00-session-log.sh` has two hashes; the current tree's file (old 9270a4db) matches neither, kept. No deletion. But if the user has an unmodified shipped old hash in TARGET that matches, and TARGET is a live project, it deletes the hook for that user, which is expected behavior. The real safety defect: `_arc_retire` runs `rm -f` on a path under `$TARGET` that is validated only by the hash of the file's content, not by the path being inside the arc-managed `.claude/hooks` subtree. A malicious TARGET could pre-create `$TARGET/.claude/hooks/PostToolUse.d/../session-log` etc., but paths are fixed. Actually a bigger issue: TARGET is attacker-controllable and could be `/some/other/root`; the hash list only covers known hooks, so a path like `$TARGET/.claude/hooks/PostToolUse.d/00-format.sh` could be a symlink to a sensitive file; `rm -f` on the symlink is fine but if TARGET is `/` and the path exists as a real file that happens to match a retired hash (the attacker controls content), it deletes a root file. Concrete: run as root with TARGET=/ and pre-create /.claude/hooks/.../00-format.sh with the retired content — rm deletes it. That is a privileged arbitrary-file-delete primitive.",
+      "why": "The retirement mechanism trusts `$TARGET` without restricting the delete scope to the arc-managed subdirectory; combined with running as root, an attacker who can influence TARGET (e.g., a malicious sync caller, a bad env var) can cause deletion of any file path whose content matches a known hash. The hashes are public in the script, so the attacker crafts the content.",
+      "fix": "Only remove files under `$TARGET/.claude/hooks/` with a strict allowlist, and ensure `$TARGET` is a directory arc owns; additionally refuse to run as root or require the target to be an existing project with `.claude` already; at minimum resolve the real path and confirm it stays under `$TARGET/.claude/hooks`."
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "sync-to-project.sh:157 (products mode) and 175 (template mode)",
+      "breaking_input": "The function `_arc_retire_all` reads the RETIRED here-doc, but the second while loop in `_arc_retire` uses `sort -u -k1,1` on the list that includes duplicate paths (SessionEnd has two hashes). It prints `kept` for each unique path, but the first loop already printed `retired`/`kept` per hash line, so a single file with two hashes prints two `retired` lines? The first while processes both lines: the first hash matches, removes and prints `retired`; the second line then checks `[ -f ... ]` which is now false, so prints nothing. Then the second loop prints `kept` because the file no longer exists? Actually the second loop checks `[ -f ]`, so no. Fine. The defect: the two loops are not idempotent — if a path is edited (hash mismatch), the first loop prints nothing (no retired), the second prints `kept`. But if a path is missing (already deleted), both loops skip. That's fine. No finding.",
+      "why": "Not a real defect; the loops are consistent.",
+      "fix": "No change."
+    },
+    {
+      "id": "L5",
+      "severity": "low",
+      "where": "sync-to-project.sh:88 (while read with here-string)",
+      "breaking_input": "A retired path that is an empty string (impossible, hardcoded), or the here-doc with CRLF line endings: if the RETIRED list were generated on Windows with \\r\\n, `read` would include a trailing \\r in `$h`, making all hash comparisons fail, so no file is ever retired — a silent skip, violating the intent but not a security flaw. Since the list is static in the script, not a real concern.",
+      "why": "The static list is LF, so no.",
+      "fix": "No change."
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/sync.bats:330-342 (new test)",
+      "breaking_input": "The test extracts `00-format.sh` from git at commit `5c1333dd` and `90-emit.sh` at `dc94dd10`, but those commits are not pinned to exist on every checkout; if the repository history is shallow or those specific commits are not reachable, `git show` fails, the test errors (bats fails), which is okay. The real defect: the test runs `sync-to-project.sh` against a `$TARGET` that has a file `00-format.sh` whose hash must EXACTLY match the retired hash; but the test copies from a commit that may not be the one that produced the recorded hash `9a06...`. If the file content at 5c1333dd differs from the hash (because the hash was computed from a later edit), the test will not assert retirement, and `[ ! -e ]` will fail, so test fails — that's safe. But it uses `git show` without `-c core.autocrlf=false` (defect pattern g): on Windows, `git show` may apply autocrlf conversion, producing a file whose bytes differ from the retired hash, making the test red on Windows. That is a CI Windows failure, not a security issue.",
+      "why": "The test isn't robust across platforms because git's autocrlf can rewrite the file on checkout, and the test doesn't force LF. This is a portability defect that could fail CI on Windows, but not a security break.",
+      "fix": "Use `git -c core.autocrlf=false -c core.eol=lf show ...`."
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": "tests/sync.bats:330 (hardcoded commit hashes)",
+      "breaking_input": "The retired hashes in the script correspond to specific file contents. If the repo is later rebased or history rewritten, those commit ids may change; the test hardcodes old SHAs which may become dangling and `git show` fails, breaking the test. But that's a maintenance issue.",
+      "why": "Not a security issue.",
+      "fix": "Use a tag or the current HEAD's file instead."
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": "products/core/manifest.json:66-75 and products/hq/manifest.json:102-104",
+      "breaking_input": "The manifest files list `files` but the retired files were removed from the lists. However the `_arc_retire_all` runs after the manifest is written, and the manifest's `files` are used by other checks (like a manifest/reality drift test). The retired hooks are no longer listed, so a venture that already has those hooks (which the retire function would remove) will now have a manifest that doesn't include them, and the drift check `diff` compares the target's `.claude` files to the manifest's set. Since the retire deletes them, they won't appear in target, matching the manifest. So consistent. But what about a venture that has an EDITED copy of a retired hook? The retire keeps it, but the manifest now doesn't list it, so the drift test (sync.bats line 327) will report manifest/reality drift, failing future syncs. The sync test only tests a non-edited removal; an edited copy becomes a permanent manifest mismatch, making every subsequent `--check` fail and blocking the venture. That's a functional regression.",
+      "why": "The edit-kept case is deliberately supported, but the manifest is not updated to reflect that an edited copy may persist, so the manifest/reality drift check will flag a kept file as unlisted drift. This will fail the sync's own CI (sync.bats that runs the drift check) for any real venture with an edited retired hook.",
+      "fix": "When a retired file is kept because it's edited, remove it from the manifest too, or update the manifest to allowlist known kept-retired paths; alternatively the drift check should ignore files matched by the RETIRED keep list."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "sync-to-project.sh:157 and 175 (both call _arc_retire_all)",
+      "breaking_input": "In products mode, `_arc_retire_all` removes the hooks. In template mode, it runs after install. But there's no guard against `$TARGET` being the repository itself or the current working tree; if a user runs `sync-to-project.sh .` , it could delete hooks from the live arc repo. The retired hooks were just deleted from the source tree in this diff, so running sync against the repo would attempt to delete them from a working tree where they no longer exist, no effect. But if a user syncs from an older arc repo (with those hooks) to a target, it deletes them — intended. No security.",
+      "why": "No defect.",
+      "fix": "No change."
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/hooks/PreToolUse-read.d/10-design-composer.sh:9-10 (compgen guard)",
+      "breaking_input": "The new guard `compgen -G \"${CLAUDE_PROJECT_DIR:-.}/.claude/state/design/composer-session--*\" >/dev/null || exit 0` checks for a glob match. If `CLAUDE_PROJECT_DIR` is unset and the current directory is the project root, the glob is `./.claude/...`. But if the glob pattern has a space or special characters in the directory path, compgen may fail or match incorrectly. More importantly, if the path contains a newline or `[` (glob metacharacters), the pattern won't match even if a file exists, causing the hook to skip running the scope check when it should run, allowing a read of a malicious path to bypass the scope-check's control-verb filtering (like a path named `--end`). The pattern is not quoted inside compgen; a project dir containing `[` breaks the glob. Concrete: CLAUDE_PROJECT_DIR set to `/tmp/p[1]` and a session file at `/tmp/p[1]/.claude/state/design/composer-session--foo` — `compgen -G` sees `[...]` as a character class and looks for `p1` etc., fails, exits early, skipping the scope check entirely. Then a Read of `--end` is honoured as a control verb.",
+      "why": "The glob is used as a guard but is sensitive to glob metacharacters in the path, enabling a bypass of the scope-check that the hook exists to enforce.",
+      "fix": "Use `[[ -e ... ]]` with a quoted variable or `find` with `-maxdepth`, or quote the glob output with `compgen -G \"$(printf '%q' ...)\"`; better, check with `test -n \"$(shopt -s nullglob; printf '%s' \"$pattern\")\"` with proper quoting."
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "sync-to-project.sh:85 (sha256sum vs shasum portability)",
+      "breaking_input": "The `_arc_sha` function uses `sha256sum` if available, else `shasum -a 256`. On some Linux systems `sha256sum` exists; on macOS `shasum` exists. But on a minimal system like BusyBox, `shasum` may not exist and `sha256sum` may not either; then the command fails, `cut -c1-64` receives empty input, produces empty hash, never matches, so files are never retired — silent skip. Not a security issue.",
+      "why": "Portability gap.",
+      "fix": "Fall back to `openssl dgst -sha256` or require one."
+    },
+    {
+      "id": "L12",
+      "severity": "medium",
+      "where": "initiatives/ci/PROGRESS.md and DROPPED.md",
+      "breaking_input": "The DROPPED.md table lists two dropped tests but the code (ci-floor.mjs baseline) went from 4824 to 4826, which is an increase, not a decrease of 2. The comment says \"subtracts one floor slot per row\" but the baseline increased, and the drop rows in DROPPED.md are not machine-checked by ci-floor (it only greps DROPPED rows in some count file, not DROPPED.md). The floor is based on DECLARED lines in the source, and the two removed tests reduce that count, but baseline increased by 2 because 2 new tests were added elsewhere (the sync case and others). The DROPPED.md mechanism may be advisory only, so no logic flaw. But if ci-floor counts the DROPPED rows and subtracts, and the baseline was not adjusted, it's a mismatch. Not an attackable input.",
+      "why": "Not a defect in code; documentation consistency.",
+      "fix": "None."
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": "sync-to-project.sh:89 (while read with here-string and process substitution)",
+      "breaking_input": "The `_arc_retire` function uses `while read ... done <<<\"$list\"` then again with process substitution. If the `list` contains a path with a backslash, `read` treats `\\` as an escape character, so a path like `foo\\bar` gets read as `foobar`; but retired paths are fixed, no backslashes. No issue.",
+      "why": "No.",
+      "fix": "No."
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": "tests/sync.bats:342 (grep assertion)",
+      "breaking_input": "The test checks `grep -q \"# venture edit\" \"$TARGET/.claude/hooks/PostToolUse.d/90-emit.sh\"` but the file had a trailing newline appended; the grep would pass. Not a defect.",
+      "why": "No.",
+      "fix": "No."
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": "sync-to-project.sh:90 (sort -u -k1,1)",
+      "breaking_input": "`sort -u -k1,1` prints unique lines by first field, but the second while loop prints `kept` for each unique path regardless of whether the first loop already removed it; but it checks `[ -f ]` so skips removed ones. Fine.",
+      "why": "No.",
+      "fix": "No."
+    }
+  ]
+}

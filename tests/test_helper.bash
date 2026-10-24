@@ -270,7 +270,6 @@ _arc_tracker_sandbox() {
            "$SANDBOX/.claude/scripts/core" \
            "$SANDBOX/.claude/scripts/plan"
   cp "$ARC_ROOT/.claude/hooks/SessionStart.d/00-context.sh"   "$SANDBOX/.claude/hooks/SessionStart.d/"
-  cp "$ARC_ROOT/.claude/hooks/SessionEnd.d/00-session-log.sh" "$SANDBOX/.claude/hooks/SessionEnd.d/"
   cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/review-ledger.sh" "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/arc-profile.sh"   "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true

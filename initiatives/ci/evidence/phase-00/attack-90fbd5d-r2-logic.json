@@ -1,0 +1,104 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/hooks/PreToolUse-read.d/10-design-composer.sh:7-10",
+      "breaking_input": "A project path containing a single quote, e.g. CLAUDE_PROJECT_DIR=/tmp/foo'bar, with a live composer-session--* marker present. The new guard iterates `for _m in \"$dir/\"composer-session--*`, and the unquoted `composer-session--*` tail glob runs in the current shell; the `\"$dir/\"` prefix is quoted so the directory is literal, but the tail glob is still expanded against the real filesystem. On a path with a closing `]` or `[` inside the directory component, e.g. `/tmp/p[1]`, the glob tail is fine because the bracketed part is in the quoted dir; the real break: a directory with a trailing backslash or a name starting with `-`? The glob tail is `composer-session--*`, literal. The break is different: when `dir` is `/tmp/foo'bar`, the quoted string `\"/tmp/foo'bar/\"composer-session--*` is fine because the quote inside is literal. The actual break: if `dir` contains a `?` or `*` after the `/`, e.g. `CLAUDE_PROJECT_DIR=/tmp/a*b` , the glob `\"$dir/\"composer-session--*` expands `*` inside `$dir`? No, `$dir` is quoted so its `*` is literal. The tail also literal. So no break. The real residual: the loop globs the literal tail, but if the directory itself is a symlink and the marker file is behind a symlink, `[ -f \"$_m\" ]` follows it; no. The breaking case is when the path has a newline: `CLAUDE_PROJECT_DIR=/tmp/foo\\nbar`; the expansion `\"$dir/\"composer-session--*` becomes one word with an embedded newline, `[ -f ]` handles it, so still fine. The defect is elsewhere: the guard checks `[ -f ]` on the glob result, but if the glob matches multiple entries, `_m` takes the first; that is fine. The real problem: the loop uses a `for` over an unquoted glob, so if the directory has a space, e.g. `/tmp/foo bar`, the iterated values are `\"$dir/\"`prefix + space? No, `\"$dir/\"` stays one word with the space, and the tail appends, so `_m` is `/tmp/foo bar/composer-session--x` correctly. The guard is actually robust. The finding is that the tail glob is NOT quoted, but because the dir is quoted and the tail is a literal, the shell does not re-split; the only issue is if the directory itself ends with a glob metacharacter AND the tail is concatenated: `\"$dir/\"` is a single quoted word followed by an unquoted literal tail, forming one word that the shell then glob-expands as a whole. The dir part is protected because it is quoted, but the whole word `/tmp/a*/composer-session--*` has the `*` in the dir part unexpanded due to being inside the quoted segment, but the final `*` is outside; that's correct. The true break is if the directory name itself ends with a backslash: `/tmp/foo\\` ; the quoted `\"$dir/\"` yields `/tmp/foo\\/`, and the unquoted tail appends, producing `/tmp/foo\\/composer-session--*`; the backslash escapes the following `/`, collapsing the path. So `CLAUDE_PROJECT_DIR=/tmp/foo\\` with a marker makes the pattern `/tmp/foo/composer-session--*` (backslash eaten), missing the marker, failing open. This is exactly the prior B1 shape but only the directory is quoted, not the whole pattern; the shell still interprets the backslash inside the quoted part? No — inside double quotes, a backslash before `/` is literal. So the backslash is preserved, and glob treats it as an escape. The guard still fails on a trailing backslash in the dir.",
+      "why": "The fix quoted only the directory, but the final glob tail `composer-session--*` is appended outside the quotes; the shell treats the whole word as one glob pattern for expansion, so backslashes in the directory are still escape characters. A project path ending in a backslash (Windows-style, e.g. C:\\Users\\x\\) collapses the separator, the glob fails to match the marker, and the hook exits 0 before running the scope check — fail OPEN on the exact class of input the fix claimed to cover.",
+      "fix": "Glob only the literal basename with the directory kept entirely quoted and the glob character escaped, e.g. use `for _m in \"$dir\".claude/state/design/composer-session--*` after `cd \"$dir\"` and run the glob in a subshell with nullglob; or use `find \"$dir/.claude/state/design\" -maxdepth 1 -name 'composer-session--*'` so the directory is never part of a glob.",
+      "twin_of": "(ag)"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": "sync-to-project.sh:88-90 (_arc_retire)",
+      "breaking_input": "TARGET=/ and run as root. The retired here-doc lists `.claude/hooks/PostToolUse.d/00-format.sh 9a0672...`. An attacker who can create a file at that absolute path (e.g. via a prior sync run or a controlled volume) with content whose sha256 equals 9a0672... (the hash is public in the script) triggers `rm -f /.claude/hooks/.../00-format.sh`. Because TARGET is operator-controlled and the retire step does not restrict the delete to a directory arc owns, this is an arbitrary-file-delete primitive for any path that matches a known hash under /.",
+      "why": "The retire step deletes `$TARGET/$p` after only matching the file's content hash against a public constant. TARGET is taken as-is from the command line and never validated to be a project arc owns or to keep the path under `$TARGET/.claude/hooks`. A malicious or mistaken TARGET=/ lets the script delete files outside any .claude subtree; the content can be pre-created because the hash is stored in the script. This is the same trust-the-operator defect the triage marked DEBT (D17).",
+      "fix": "Resolve `$TARGET` to a real path, require it to be an existing project (poor man: `[ -d \"$TARGET/.claude\" ]` or `[ -f \"$TARGET/claude.json\" ]`), resolve `$TARGET/$p` and `realpath` each candidate and refuse any that does not stay under the resolved hooks dir, and refuse to run as root unless TARGET is explicitly a project arc owns.",
+      "twin_of": null
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": "sync-to-project.sh:88-90 (_arc_retire)",
+      "breaking_input": "A retired path that is a symlink to a file outside TARGET whose content hashes to one of the four published hashes. For example, TARGET=some/project and an attacker (or prior venture state) creates `TARGET/.claude/hooks/PostToolUse.d/00-format.sh` as a symlink to `/etc/shadow` whose content hash does not match — but the content can be chosen: create a symlink to a file whose bytes are the retired hook. `[ -f ]` and `sha256sum` both follow the symlink and compute the hash of the target; if it matches, `rm -f` removes the symlink, not the target, so no data loss. The real break: if `$TARGET/.claude/hooks/PostToolUse.d` is itself a symlink to a shared or privileged directory (e.g. `/etc/hooks`), and the pointed-to file content matches, the `rm -f` deletes a file outside TARGET through the symlinked directory. This is the D16 debt and the earlier B4 finding; the triage said 'only the link is removed', but that is false when an intermediate directory is the symlink.",
+      "why": "The retire step checks `[ -f ]` and hashes through symlinks; if a directory component (`.claude/hooks/PostToolUse.d`) is a symlink into a shared tree, the delete removes the target directory's file, not just the link. The debt excuse that 'rm removes only the link' is wrong for symlinked directories. This can delete a file outside the target the operator meant to sync.",
+      "fix": "Before deleting, walk each path component and refuse if any is a symlink (`[ -L \"$cur\" ]`); or resolve `$TARGET/$p` with `realpath` and require it to remain under `realpath \"$TARGET/.claude/hooks\"`.",
+      "twin_of": "(k)"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": "sync-to-project.sh:88 (_arc_retire retires two hashes for one path)",
+      "breaking_input": "A file `$TARGET/.claude/hooks/SessionEnd.d/00-session-log.sh` that is byte-identical to the second hash `eee5a7...`. The first loop sees the first line (hash 5efad8...), hash mismatch, nothing. The second loop (uniqued by first field) prints 'kept'. The file is actually the exact shipped second version, so arc owns it; it should be retired, but because the first loop only checks the first matching line it may never remove it. Concrete: the current source tree used to contain a SessionEnd.d/00-session-log.sh with hash eee5a7 (the old 9270a4db is not in the list; the two hashes should cover two historical versions). If a venture has the second-version copy, the retire loop checks only the first line's hash, fails, and the second loop reports 'kept' — the dead hook stays live.",
+      "why": "The list is hardcoded and can only cover hashes known at commit time; any shipped version whose hash is not in the list (future edits, or an omitted historical blob) is classified as 'edited' and left live. The comment 'every sha256 git ever held' is not enforced by a test. The earlier B5 debt accepted this; but the latent failure is silent — a dead hook keeps running npx and latency cost in old ventures.",
+      "fix": "Generate the RETIRED list from `git log --all --format=%H -- <path>` at build time, and add a test that fails when a fixture or historical blob is not in the list. At least add a test that writes a file with a known old hash (a fixture) and asserts it is retired.",
+      "twin_of": "(o)"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": "tests/sync.bats:330-342 (fixture approach)",
+      "breaking_input": "CI runs the bats job on a fresh shallow clone with `core.autocrlf=true` on Windows (actions/checkout applies autocrlf on checkout). The fixtures `tests/fixtures/sync-retired/00-format.sh` and `90-emit.sh` were renamed from `.claude/hooks/...`; on a Windows checkout those fixture files get CRLF line endings because no `.gitattributes` pins them (the diff only pins `*.sh text eol=lf`? The triage claims `.gitattributes` pins `*.sh text eol=lf`, but the diff does not show that file being changed; the existing attribute may not cover `tests/fixtures/sync-retired/*.sh` — actually `.gitattributes` is repo-wide, so if it exists it does. But if `.gitattributes` does not include `eol=lf`, the copy will have CRLF and the sha256 of the target file will not match the retired hash, so the test's `retired:` assertion fails red on Windows. That is a portability failure, not a silent skip. The fix is to copy with `git cat-file` or add a `.gitattributes` entry.",
+      "why": "The fixture files are copied with `cp`; on a Windows checkout with autocrlf they carry CR bytes, and the `_arc_sha` of the target will not equal the published sha. The test will fail (red) on Windows CI, which counts as a broken CI. The triage said 'NO CHANGE .gitattributes pins eol=lf', but the diff does not add or modify `.gitattributes`; we must verify it exists. If it does not, the test is platform-fragile exactly like the fixed `git show` bug.",
+      "fix": "Add (or confirm) `.gitattributes` line `tests/fixtures/sync-retired/*.sh text eol=lf`, and/or copy the fixtures with `git -c core.autocrlf=false show` or `git cat-file blob`.",
+      "twin_of": "(g)"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": "tests/sync.bats:337 (retire assertion)",
+      "breaking_input": "A target that has `TARGET/.claude/hooks/PostToolUse.d/00-format.sh` byte-identical to a shipped hash, but where `$TARGET` does not yet have a `.claude` directory? The retire step runs `[ -f \"$TARGET/$p\" ]` and `rm`, fine. The real gap: the new test only exercises the `00-format.sh` and `90-emit.sh` paths, not the `SessionEnd.d/00-session-log.sh` path that has two hashes. The two-list loop is only tested with a single-hash path. An edited copy of `SessionEnd.d` (the kept case) is never asserted, and the `retired` line for the second-hash variant is never exercised. A regression in the second-hash matching would pass CI.",
+      "why": "The test covers the keep and retire arms for one path each, but not the core of `_arc_retire`: a path with multiple hashes (the only reason the loop exists). It never plants a file matching the second hash of SessionEnd, so a future change that only matches the first hash per path would stay green.",
+      "fix": "Add a subcase that copies the fixture (or a planted file) whose hash equals the second SessionEnd hash and asserts it is retired; and an edited SessionEnd case asserting kept.",
+      "twin_of": "(r)"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": "sync-to-project.sh:99-100 (sort -u -k1,1)",
+      "breaking_input": "A retired path whose name contains a space (not in the fixed list, but the mechanism reads `$list` from the here-doc; if a future maintainer adds a path with a space, `sort -u -k1,1` keys on the first whitespace-delimited field, so two paths like `foo bar` and `foo baz` are both keyed as `foo`, and the second loop prints only one line, or `sort` treats the rest as part of the same key? `sort -k1,1` compares the whole first field, so `foo` and `foo` collapse; a path `a b` and `a c` both first field `a`, `sort -u` keeps only one, and the second loop prints one `kept` line, silently dropping the report of the second. More importantly the while loop in the first loop splits on IFS (space), so a path with a space is split into two fields; `$p` gets the first word, `$h` the second word, and the hash is wrong — no match, nothing retired, and the second loop reports kept for the wrong path. The retired list is fixed and has no spaces, but the mechanism is fragile to any future entry. The real break now: target path `$TARGET/$p` is fine, but if a venture already placed a file at a path with a space that happens to be retired? The list is fixed, so no. Low severity, but the code violates the reading of user-controlled paths (pattern j).",
+      "why": "`read -r p h` splits on whitespace and `sort -k1,1` keys on first field; any path with a space becomes two records and the hash comparison misaligns. The static list today has no spaces, so it is latent, but the code makes no attempt to read paths safely despite the target dir being user-controlled.",
+      "fix": "Read the here-doc with a delimiter that cannot appear in paths (`read -r -d ''` or use a separator like tab) and use `read -r -d $'\\t'` or store path and hash on separate lines; or at least reject paths containing spaces.",
+      "twin_of": "(j)"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "sync-to-project.sh:85 (_arc_sha)",
+      "breaking_input": "On a system where neither `sha256sum` nor `shasum` exists (minimal BusyBox, some stripped containers), `_arc_sha` runs the else branch: `shasum -a 256 \"$1\" | cut -c1-64`. If `shasum` is missing, the command fails, `pipefail` is not set (the script sets `set -uo pipefail`? The diff shows `set -uo pipefail` at top of the file — yes), so the pipeline's left side fails and `_arc_sha` returns non-zero? The `$(...)` captures empty output, `cut` prints empty, `_arc_sha` prints the empty string, comparison `[ \"\" = \"<hash>\" ]` is false, nothing retired, and the second loop reports `kept` for every retired file that actually exists unedited — a silent skip that leaves dead hooks live.",
+      "why": "The portability fallback only tries two names; a system without both silently yields an empty hash, defeating the retire mechanism without any error. This is the L11 debt (NO CHANGE) but it is real: on a minimal base image, the whole REQ-11 cleanup never runs, and the sync test does not cover a missing sha tool. The test on CI runs on Ubuntu where both exist, so it cannot catch it.",
+      "fix": "Explicitly fail: `command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 || return 1` and have `_arc_retire` abort (or at least report) rather than silently treat empty as a mismatch.",
+      "twin_of": "(m)"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": "initiatives/ci/ci-floor.mjs:18 (BASELINE) and tests/DROPPED.md",
+      "breaking_input": "The DROPPED.md table lists two dropped tests, and the diff comment in ci-floor says 'subtracts one floor slot per row', but the baseline went from 4824 to 4826 (an increase of 2), and the new test file `tests/design-composer-eyes.bats` and the new sync case add 3 tests. If the floor is meant to catch tests that disappear without a recorded drop, a future commit that deletes a test and also adds another could manipulate the floor: delete one test, add one, baseline stays the same, and the DROPPED.md row is not enforced. More concretely, the new code replaced two removed tests with one new test (net -1) but the baseline went up by 2, meaning two other tests were added elsewhere; the floor mechanism only compares counts, not the actual dropped rows. If a maintainer deletes two tests and adds two elsewhere, the floor passes with DROPPED.md unmaintained. The DROPPED.md is advisory; the tool only greps DROPPED rows in some count file, not DROPPED.md per the prior L12 analysis. The concrete break: a commit that deletes a test and adds an equal number elsewhere, with an empty DROPPED.md, stays green.",
+      "why": "The floor is a count comparison, not a per-test audit; DROPPED.md is documentation. A test can vanish silently if another is added in the same release, keeping the baseline stable. The new two-drop row is not machine-checked. This is a test-hygiene gap that lets the REQ-11 dropped tests (which covered a real behavior) be replaced by nothing.",
+      "fix": "Have ci-floor read DROPPED.md and require that any test name removed from the suite is listed there, not merely that the count stays above a baseline.",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": "tests/design-composer-eyes.bats:230-243 (new test)",
+      "breaking_input": "The new test asserts the hook runs the scope check when armed under a path with glob chars (`/tmp/p[1] x`). It copies the real hook and a stand-in scope check, but it does not assert the guard's behavior when `CLAUDE_PROJECT_DIR` itself is unset (the `:-.` fallback) nor when the marker exists but the path has a trailing backslash (the residual L1 issue). More importantly, the test's assertion `[[ \"$output\" == *SCOPE-CHECK-RAN* ]]` passes if the scope check merely runs, not that the hook passed the right arguments or that the control-verb filtering (the `--end` defense) is intact. The actual hook behavior for a control verb is not covered; a regression that makes the hook skip the check when unarmed would be caught, but a regression that makes it pass the wrong arg or bypass the `ARC_SCOPE_FORWARDED` guard would not.",
+      "why": "The test pins only the presence of the scope-check execution, not the security property the hook exists to enforce (honouring control verbs in the read path). If a future change removes the `ARC_SCOPE_FORWARDED=1` or the `--end` handling, this test stays green.",
+      "fix": "Add an assertion in the armed case that the scope check received the expected argument or that a `--end`-style read is NOT honoured (e.g., make the stand-in check print its argv and assert it contains the control verb).",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": "products/core/manifest.json and products/hq/manifest.json",
+      "breaking_input": "A venture that runs the new sync against an existing project where it already has an edited copy of `PostToolUse.d/00-format.sh` or `90-emit.sh`. The retire step keeps the edited copy, but the manifest no longer lists that path. The sync.bats test at line 327 runs a `diff <(_claude_set \"$ARC_ROOT\") <(_claude_set \"$TARGET\")` manifest/reality drift check. If that drift check is run after a sync against a venture with an edited retired hook, the kept edited file appears in the target's `.claude` set but not in the manifest's `files`, causing the diff to fail (or, if the drift check runs in CI on a fresh target, it passes because no edited copy exists). The drift invariant is not guarded to ignore kept-retired paths.",
+      "why": "The manifest deliberately removes the retired hooks, but the retire step deliberately keeps edited copies. Any later manifest/reality drift check (or a future `--check` that compares target to manifest) will flag the kept file as unlisted, breaking the venture's sync with a persistent mismatch. The triage marked L8 'NO CHANGE: drift invariant runs on fresh target only', but the sync script itself prints 'kept' and a real venture would hit this on the next full sync.",
+      "fix": "When a retired file is kept as edited, either remove it from the target or add it to a per-venture allowlist; or have the drift check ignore paths listed in the RETIRED keep list.",
+      "twin_of": "(af)"
+    }
+  ]
+}

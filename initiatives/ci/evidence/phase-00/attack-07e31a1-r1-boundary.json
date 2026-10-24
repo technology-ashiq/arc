@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".claude/hooks/PreToolUse-read.d/10-design-composer.sh:9",
+      "breaking_input": "Hook runs under Git Bash on Windows with CLAUDE_PROJECT_DIR=C:\\Users\\ashiq\\orca\\workspaces\\arc\\arc-ci (or any project path containing [, ], *, ? or a backslash), with a live .claude/state/design/composer-session--<variant> marker.",
+      "why": "compgen -G treats its argument as a glob pattern, so backslashes act as escapes and the path collapses to C:Usersashiq... and brackets become character classes. The glob matches nothing, the new guard exits 0 on every Read, and the composer scope check never runs. The earlier [ -f \"$SC\" ] test did not glob, so it worked on the same path. The guard therefore fails open: scope enforcement is silently off even while armed.",
+      "fix": "Do not glob the whole path. Enter the directory first (cd \"$dir/.claude/state/design\" 2>/dev/null || exit 0), then run compgen -G 'composer-session--*'. Or loop with a nullglob/shopt pattern applied only to the literal basename, so the directory part is never interpreted as a glob.",
+      "twin_of": "(e)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "tests/sync.bats:333-334",
+      "breaking_input": "CI checkout with fetch-depth 1 (the default for actions/checkout), where git -C $ARC_ROOT show 5c1333dd:... and dc94dd10:... name commits that are not in the object store.",
+      "why": "git show fails, but the redirect has already created an empty target file. The test then fails on the retired assertion for the wrong reason, or it is red on CI and green on a full clone. It does not check that the extraction succeeded. This is the same shape as a test passing without the code under test having run.",
+      "fix": "Check that each git show succeeded and, ideally, that the extracted bytes hash to the pinned value. Better, commit the two historical blobs as fixtures under tests/fixtures and copy them, or git fetch --unshallow in the job.",
+      "twin_of": "(g)"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "sync-to-project.sh:97-103",
+      "breaking_input": "sync-to-project.sh checked out with CRLF line endings (core.autocrlf=true on the owner's Windows box), so each heredoc line ends in \\r.",
+      "why": "read -r p h leaves h as '<hash>\\r', which never equals the 64-character sha, so nothing is retired. Every retired file then falls through to the sort -u loop and is reported as kept because it is edited, which is false.",
+      "fix": "Strip CR in the loop (h=${h%$'\\r'}), or pin the file to LF in .gitattributes.",
+      "twin_of": "(m)"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "sync-to-project.sh:88-91",
+      "breaking_input": "$TARGET/.claude/hooks is a symlink into a shared directory, or the retired path itself is a symlink to a file whose content matches the pinned hash.",
+      "why": "[ -f ] and sha256sum follow symlinks, and rm -f then deletes through the symlinked directory. This can delete a file outside $TARGET, which a copy-only sync never did before. A failed rm (a locked file on Windows) also falls through to the kept message, which wrongly says the copy is edited.",
+      "fix": "Skip when the path or any parent component is a symlink ([ -L ]). Report an rm failure separately from a hash mismatch.",
+      "twin_of": "(k)"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "sync-to-project.sh:99-102",
+      "breaking_input": "A venture holds an older shipped version of PostToolUse.d/90-emit.sh or 00-format.sh whose sha256 is not in the list. The list has one hash each for those two, but a file edited over its history has many.",
+      "why": "The comment promises every sha256 git ever held, but only the SessionEnd hook has two entries. The other copies are left behind and are reported as edited, so the dead hooks stay live in older ventures. Hooks that still run npx or spawn background emits keep their latency cost.",
+      "fix": "Generate the list from git log --all --format=%H -- <path> piped through git show | sha256sum, and add a test that fails when a historical blob is missing from the list.",
+      "twin_of": "(o)"
+    }
+  ]
+}

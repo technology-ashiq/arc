@@ -60,7 +60,6 @@ _emit_fragments() {
   cat <<'MAP'
 .claude/hooks/SessionStart.d/90-emit.sh
 .claude/hooks/SessionEnd.d/90-emit.sh
-.claude/hooks/PostToolUse.d/90-emit.sh
 MAP
 }
 
