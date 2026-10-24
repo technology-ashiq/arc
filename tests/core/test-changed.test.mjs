@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -121,4 +121,10 @@ test("a data file pulls no bats file, however many name it (A-04)", () => {
 test("a hyphenated lane keeps its whole name, never its first word (attack p01 L4)", () => {
   const p = plan(["tests/model-policy-zz.bats"]);
   assert.ok(p.lanes.includes("model-policy") && !p.lanes.includes("model"), p.out);
+});
+
+test("a data file runs the bats files naming its full path, not its bare name (A-04 attack r2 B3)", () => {
+  const b = batsOf(plan(["engine/router.yaml"]).out);
+  assert.ok(b.includes("tests/engine-attack-diff.bats"), b.join(" "));
+  assert.ok(b.every((f) => readFileSync(join(ROOT, f), "utf8").includes("engine/router.yaml")), b.join(" "));
 });

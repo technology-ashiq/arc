@@ -1,0 +1,131 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:85-99",
+      "breaking_input": "Change `.claude/scripts/core/foo.mjs` whose basename appears in an unrelated lane's bats file, e.g. a comment line `# foo.mjs` in `tests/other/bar.bats`.",
+      "why": "The basename grep has no lane guard: any bats file whose text contains the basename is picked, even from another lane, overriding the intent to only run files that name the changed path and risking cross-lane runs and the 5-minute cap.",
+      "fix": "Require the bats file's lane to equal the changed file's lane (or be in `plan.lanes`) before picking it.",
+      "twin_of": "(x)"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:88",
+      "breaking_input": "Change `.claude/scripts/legal/zz-unnamed.mjs` while `tests/legal/` contains a `.test.mjs` file alongside bats files.",
+      "why": "The fallback `ofLane(lane)` returns all files in the lane (including `.test.mjs`), but the code then filters `.bats`; the 'why' message claims 'lane legal bats whole' even when the only files are node:test, and the actual pick set may be empty of bats files, silently running no bats tests.",
+      "fix": "Filter `ofLane(lane)` to only `.bats` and verify the lane is a known lane before running the fallback; print an accurate message if no bats files exist.",
+      "twin_of": "(w)"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:57-60,72-80",
+      "breaking_input": "Rename `tests/legal-publish-gate.bats` to `tests/legal-publish-gate2.bats`: the changed path includes the old path (deleted) and new path (added), but `existsSync(p)` fails for the deleted path, so `direct` misses it, and the new path is a `.bats` file that is not `.mjs|.js|.sh`, so it is skipped in the changed loop.",
+      "why": "Renames are not detected; the removed path doesn't exist (not in `direct`) and the added path is not treated as code, so the renamed test never runs locally, silently passing a broken test.",
+      "fix": "Use `--no-renames`-style name-status to get both old and new paths and treat any changed `.bats` as a direct test even if the old path no longer exists.",
+      "twin_of": "(p)"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:57-60",
+      "breaking_input": "Change `tests/deep/nested/file.bats` (a nested bats file not at top level).",
+      "why": "The isTest regex `.*` matches slashes, so any nested `.bats` becomes a `direct` test, but the lane mapping (`LANE_OF`) may not match deep paths, forcing lane to `core` and pulling all node:test lanes whole, defeating the A-04 narrowing.",
+      "fix": "Restrict isTest to top-level `tests/*.bats` and known lane directories, or map deep bats files to their lane directory reliably.",
+      "twin_of": "(u)"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:93-95",
+      "breaking_input": "Change `.claude/scripts/legal/init.mjs` where the basename `init.mjs` appears in many bats files across lanes (e.g., in comments or helper strings).",
+      "why": "Basename substring matching without a path tail or lane guard picks up unrelated bats files in other lanes, undoing the 5-minute cap and running tests that don't exercise the changed script.",
+      "fix": "Match the last two path segments (e.g., `legal/init.mjs`) or require the bats file to be in the same lane, and prefer whole-word matching.",
+      "twin_of": "(x)"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:81,93-95",
+      "breaking_input": "Change `tests/fixtures/absorb/hostile/01-readme-injection.md` where no bats file names the exact directory `absorb/hostile` but the bats test loads a fixture via a computed path like `$ROOT/tests/fixtures/$dir/file`.",
+      "why": "The fixture branch matches only the full directory path `fixtures/absorb/hostile`; a bats file that constructs the path from parts won't contain that string, so it isn't picked, and the fallback prints 'no bats file names' and runs nothing locally, letting a broken fixture pass.",
+      "fix": "Also match the fixture's basename or a 3+ segment tail of the directory, and fall back to the lane's bats files when no exact directory match.",
+      "twin_of": "(af)"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:81-83",
+      "breaking_input": "Change `tests/_lib/helpers.sh` (a helper loaded by every bats file via `load helpers`).",
+      "why": "The `/^tests\\//` early-continue skips all helper files, so a change to the shared helper runs zero bats files, yet the header promises 'bats files naming that file'; a broken helper sails through pre-push.",
+      "fix": "Do not skip `tests/_lib/`; match the helper's basename in bats files or run a bounded sample, and always print a 'helper changed -> bats run on CI' note.",
+      "twin_of": "(af)"
+    },
+    {
+      "id": "L8",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:88-90,99-101",
+      "breaking_input": "Change `.claude/scripts/core/zz-unnamed.mjs` (a core script no bats file names it) while `core` is the catch-all lane that maps to many bats files.",
+      "why": "The fallback runs the whole core lane's bats files, which can be most of the suite, blowing the 5-minute cap on the first such push — the exact A-04 failure this change was meant to fix. The new test only asserts an unnamed core script runs no bats, but the code path for lane `core` when hits are empty still runs `ofLane('core')`.",
+      "fix": "For lane `core` with no hits, skip the fallback entirely and only run node:test lanes, printing 'no bats names X; CI covers'.",
+      "twin_of": "(ad)"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:57-59",
+      "breaking_input": "Change `.claude/scripts/legal/foo.MJS` (uppercase extension).",
+      "why": "The isTest regex uses lowercase `\\.(bats|test\\.mjs)$` and the changed-loop code check is `/\\.(mjs|js|sh)$/` (case-sensitive); an uppercase `.MJS` file is treated as data and silently skipped, so no bats test or fallback runs.",
+      "fix": "Make extension checks case-insensitive, or better, use the data allow-list DATA to decide 'data' and treat anything else as code.",
+      "twin_of": "(ac)"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:90-92",
+      "breaking_input": "Change `.claude/scripts/legal/zz-unnamed.mjs` where `tests/legal/` contains a `not-a-test.conf` file and a `.bats` file; `ofLane` returns the conf too.",
+      "why": "`ofLane` is used both to add node:test lanes and as the bats fallback source; if it returns non-bats files, the fallback adds them to `pick` and the runner may attempt to execute a non-bats file, or the count assertion is confused.",
+      "fix": "Have `ofLane` return only `.bats` files (or add a separate `batsOfLane`), and assert the result is all `.bats`.",
+      "twin_of": "(w)"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:88-90",
+      "breaking_input": "Change a `.mjs` script in a lane that has no bats files at all, e.g., a lane with only node:test.",
+      "why": "The fallback sees `hits.length === 0`, iterates `ofLane(lane)` (empty), and pushes a 'lane X bats whole' why message even though no bats file exists, contradicting the earlier 'lane maps to no test file -> core' logic and misleading the user into thinking bats ran.",
+      "fix": "Only print the 'whole' message when `ofLane(lane)` contains at least one `.bats` file; otherwise let the earlier core fallback message stand.",
+      "twin_of": "(r)"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:57-60,75-80",
+      "breaking_input": "Change a `.test.mjs` file under `tests/<lane>/` that is renamed (deleted+added).",
+      "why": "The `direct` list uses `existsSync(p)` on the changed path, so a renamed test's old path (deleted) isn't added to `direct`, and the new path isn't a `.bats` nor `.mjs|.js|.sh` (it's `.test.mjs`, which is only matched by the isTest regex that requires the file to exist). The renamed node:test file silently never runs.",
+      "fix": "Use `--no-renames` name-status to capture old/new paths and treat any deleted test path as a direct entry so the new test runs.",
+      "twin_of": "(p)"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:97-99",
+      "breaking_input": "Change `.claude/scripts/legal/gate.mjs` while a bats file in the same lane contains the substring `publish-gate.mjs`; the whole-word boundary `(?![\\w-]|\\.\\w)` incorrectly allows a match ending in `.mjs` when followed by a word char after the dot, e.g., `gate.mjsx` in a comment.",
+      "why": "The negative lookahead `|\\.\\w` permits a match where the basename is followed by a dot then a word character (e.g., `gate.mjsx`), so `gate.mjs` matches `publish-gate.mjsx` (if such a string exists), causing either over-pick or suppressing the fallback incorrectly.",
+      "fix": "Bound the match so the character after the basename is not a word char and not a dot at all: use `(?![\\w.])`.",
+      "twin_of": "(ab)"
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:85-86,93-95",
+      "breaking_input": "Change a file whose basename ends in `.sh` (e.g., `.claude/scripts/foo/run.sh`) — it is in the changed loop — but also name a data file `data.sh` (still code because `.sh` is code) that a bats file references by a subpath like `run/run.sh`. The basename `run.sh` matches `run.sh` in the bats file and suppresses the fallback even when the specific `foo/run.sh` is not exercised.",
+      "why": "Basename-only matching loses path disambiguation; a common basename like `run.sh` or `init.sh` appears in many bats files, triggering over-selection and suppressing the lane-whole fallback that would actually cover the changed script.",
+      "fix": "Match the last two path segments (e.g., `foo/run.sh`) rather than just the basename, and only suppress the fallback when the hit is in the same lane.",
+      "twin_of": "(x)"
+    }
+  ]
+}

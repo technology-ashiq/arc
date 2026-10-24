@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:101",
+      "breaking_input": "Change tests/test_helper.bash or tests/_lib/x.sh (or any non-bats, non-fixture file under tests/, e.g. tests/lanes/helper.sh). SHARED puts it in `changed` with lane core, but it first hits the `/^tests\\//` branch, which only pushes a why line saying bats run on CI. No bats file is selected, and node lanes run only because core adds them. A helper change that breaks every bats suite runs zero bats files locally.",
+      "why": "The fix for prior B1 only prints a message. It does not select the bats files that load the helper, so the pre-push gate is green while every suite is broken. The header comment still promises 'bats files naming that file' for tests/test_helper.bash.",
+      "fix": "For tests/test_helper.bash and tests/_lib/, select bats files whose text names the helper basename (they `load` it). If none load it, print the CI message. Fix the header comment.",
+      "twin_of": "(af) A changed fixture or helper is never silently nothing"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:107",
+      "breaking_input": "Change .claude/scripts/foo/lib/index.mjs. Some unrelated bats file contains the word index.mjs in a comment, so `hits` is non-empty and the lane-whole fallback is skipped. The bats file that reaches the script through a computed path such as \"$ROOT/$dir/index.mjs\" is never selected.",
+      "why": "The whole-word fix removed substring matches but still matches the basename only, at any depth. Any incidental mention counts as 'a test names it' and suppresses the fallback. Generic basenames (index.mjs, common.sh, lib.mjs) also over-select across lanes and can hit the 5-minute cap again.",
+      "fix": "Require the repo-relative path, or at least its last two segments, in the bats text. Fall back to the lane's bats files when only a bare-basename match exists.",
+      "twin_of": "(x) \"Named by a test\" checks the file's full path at any depth"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:106",
+      "breaking_input": "Change a code file whose extension is on the DATA list but is read as code by a test: foo.json under .claude/scripts/ (a policy file a bats test consumes), foo.yaml, foo.toml, foo.txt, foo.html, or .css or .svg under face/. The `if (DATA.test(p)) continue;` runs before any name match, so no bats file is selected even when a bats file names that exact path.",
+      "why": "The DATA skip is unconditional. The comment says package.json is named by dozens of files, but a data file in a lane's own scripts directory that exactly one bats file names runs nothing. This is the inverse of (v): a path a test names is code.",
+      "fix": "For a data file, select bats files naming its full repo-relative path (a path match, not a basename match). Skip only when no test names that full path.",
+      "twin_of": "(v) An allowlist of \"safe to skip\" paths also asks the tests' own text"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:104",
+      "breaking_input": "Change a bats file that lives deeper than tests/*.bats (for example tests/legal/x.bats), or a bats file whose name matches the fixture regex. isTest is true, so `direct` has it, but a rename or delete leaves `existsSync(p)` false. The path is skipped silently, with no why line and no fallback.",
+      "why": "A deleted or moved test pushes nothing and prints nothing. A rename (with `--no-renames` a delete plus an add) therefore selects only the new file. If a deleted test is the only guard for a script that also changed, the push is green with no trace.",
+      "fix": "For a deleted test path, print a why line ('test removed, CI covers'). Treat the lane as unnamed so the lane-scoped fallback applies.",
+      "twin_of": "(r) \"Nothing mapped\" or \"0 tests ran\" is never green"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:111",
+      "breaking_input": "Change a script whose basename contains a regex metacharacter or a non-ASCII or newline character (a path with a space, or a name like a+b.mjs). The escape set covers most metacharacters, but `\\w` is ASCII-only in JS, so a basename such as ünï.mjs gets no word boundary on its left (the preceding char is non-\\w). A bats file naming it as `xünï.mjs` still matches, and a neighbouring name `ünï.mjs.bak` does not match the `(?![\\w-]|\\.\\w)` lookahead as intended on Unicode letters.",
+      "why": "The boundary classes are ASCII-only while Windows and git paths can carry Unicode letters, so word-boundary behaviour differs from the stated rule.",
+      "fix": "Use the `u` flag with \\p{L}\\p{N}_ in the boundary classes, or compare on a tokenised basis.",
+      "twin_of": "(ab) A name match is a whole word, never a substring"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/core/test-changed.test.mjs:117",
+      "breaking_input": "Make the planner print no bats lines at all (for example, if the output indent changes from two spaces to one). `batsOf` returns [] for every input. 'an unnamed core script runs no bats lane' and 'a data file pulls no bats file' then pass vacuously. The data-file test asserts p.lanes includes core, which does not show the changed loop ran.",
+      "why": "The prior B6 fix did not land: the empty-list assertions are still anchored only by sibling tests that happen to expect non-empty lists. A formatting change breaks the positive tests, but these two tests prove only that the parser found nothing.",
+      "fix": "In each empty-list test, also assert a positive marker the planner printed, such as the `why:` line or the lane summary line, so the check proves the code ran.",
+      "twin_of": "(a) A test that passes proves the assertion held, not that the code ran"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:99",
+      "breaking_input": "Change tests/fixtures/x/y/z.md, where the fixture directory regex `^tests\\/(fixtures\\/.+)\\/[^/]+$` captures `fixtures/x/y`. A bats file loads the fixture through its parent only (`fixtures/x`) or through a computed path. `t.includes('fixtures/x/y')` does not match, so no bats file runs, and the push shows only a 'bats run on CI' line.",
+      "why": "The match requires the full fixture subdirectory to appear verbatim. Bats files usually reference the top-level fixture directory, so a deeper fixture change selects nothing. On a hit miss there is no lane fallback, unlike for scripts.",
+      "fix": "Try progressively shorter prefixes of the fixture directory (fixtures/x/y, then fixtures/x) until a bats file matches.",
+      "twin_of": "(x) \"Named by a test\" checks the file's full path at any depth"
+    }
+  ]
+}

@@ -100,7 +100,9 @@ function filesFor(plan) {
       continue;
     }
     if (/^tests\//.test(p)) { plan.why.push(`${p} is a bats helper -> bats run on CI, node lanes here`); continue; }
-    if (DATA.test(p)) continue;
+    // a nested data file runs the bats files naming its full path (r2 B3); a root one (package.json, AGENTS.md)
+    // is named by dozens, so its bats run is CI's
+    if (DATA.test(p)) { if (p.includes("/")) for (const f of bats) { const t = read(f); if (t === null || t.includes(p)) pick.add(f); } continue; }
     const word = new RegExp(`(^|[^\\w.-])${basename(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-]|\\.\\w)`);
     const hits = bats.filter((f) => { const t = read(f); return t === null || word.test(t); });
     for (const f of hits) pick.add(f);
