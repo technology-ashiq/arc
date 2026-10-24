@@ -89,7 +89,27 @@ test("a changed script runs the bats files that name it, not its whole lane (A-0
 test("a changed script no bats file names runs its lane's bats whole, and says why (A-04)", () => {
   const p = plan([".claude/scripts/legal/zz-unnamed.mjs"]);
   assert.ok(batsOf(p.out).filter((f) => f.startsWith("tests/legal-")).length > 1, p.out);
-  assert.match(p.out, /why: no test names \.claude\/scripts\/legal\/zz-unnamed\.mjs -> lane legal whole/);
+  assert.match(p.out, /why: no test names \.claude\/scripts\/legal\/zz-unnamed\.mjs -> lane legal bats whole/);
+});
+
+test("a basename matches as a whole word: gate.mjs is not publish-gate.mjs (A-04 attack B2)", () => {
+  const p = plan([".claude/scripts/legal/gate.mjs"]);
+  assert.ok(!batsOf(p.out).includes("tests/legal-publish-gate.bats") || /lane legal bats whole/.test(p.out), p.out);
+  assert.match(p.out, /why: no test names \.claude\/scripts\/legal\/gate\.mjs -> lane legal bats whole/);
+});
+
+test("a file not on the data list is code: a .cjs no test names runs its lane (A-04 attack B3)", () => {
+  assert.match(plan([".claude/scripts/legal/zz.cjs"]).out, /why: no test names \.claude\/scripts\/legal\/zz\.cjs -> lane legal bats whole/);
+});
+
+test("an unnamed core script runs no bats lane, and says CI runs it (A-04 attack B4)", () => {
+  const p = plan([".claude/scripts/core/zz-unnamed.mjs"]);
+  assert.deepEqual(batsOf(p.out), []);
+  assert.match(p.out, /why: no bats file names \.claude\/scripts\/core\/zz-unnamed\.mjs -> bats run on CI/);
+});
+
+test("a changed fixture runs the bats files naming its directory (A-04 attack L6)", () => {
+  assert.deepEqual(batsOf(plan(["tests/fixtures/absorb/hostile/01-readme-injection.md"]).out), ["tests/absorb-hostile.bats"]);
 });
 
 test("a data file pulls no bats file, however many name it (A-04)", () => {

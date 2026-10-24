@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:91",
+      "breaking_input": "Change tests/test_helper.bash or a tests/_lib/*.sh file that every bats file loads. The `/^tests\\//` skip drops it from `changed`, and it is not a `.test.mjs` file, so no node lane is added for it. A helper change that breaks every bats suite runs zero bats files locally.",
+      "why": "The comment says the node lanes cover test_helper and _lib, but nothing maps a helper change to any bats file. Before this diff a core hit ran the core lane's bats files. The header still promises 'bats files naming that file' for tests/test_helper.bash, but the code now does nothing for it.",
+      "fix": "Do not skip tests/test_helper.bash and tests/_lib/. Run a bounded sample of bats files, or the bats files that `load` the helper by name. At minimum, print a 'helper changed -> bats not run locally' line instead of staying silent.",
+      "twin_of": "(r) \"Nothing mapped\" or \"0 tests ran\" is never green"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:93-95",
+      "breaking_input": "Edit .claude/scripts/foo/lib/index.mjs, where another directory also has index.mjs. A comment in an unrelated bats file mentions 'index.mjs'. `hits` is non-empty, so the lane-whole fallback is skipped. The one bats file that exercises foo/lib/index.mjs through a computed path such as \"$ROOT/$dir/index.mjs\" never runs.",
+      "why": "The match is a bare-basename substring over the whole file text, not the full path. Any incidental mention counts as 'a test names it' and suppresses the safety fallback. The same substring also over-selects: 'gate.mjs' matches 'publish-gate.mjs', and 'common.sh' matches dozens of files, so the 5-minute cap can be hit again.",
+      "fix": "Match the repo-relative path or its tail of at least 2 segments, with a word boundary on the basename, e.g. /(^|[^\\w.-])name\\.mjs\\b/. Cap the hit count and fall back to a lane-scoped selection with a printed reason when it is exceeded.",
+      "twin_of": "(x) \"Named by a test\" checks the file's full path at any depth"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:91",
+      "breaking_input": "Change a .cjs, .ts, .tsx, .bash, .ps1 or .py script, a .claude/hooks/*.d/ fragment with no extension, or a file such as `Foo.MJS` with an uppercase extension. The `!/\\.(mjs|js|sh)$/` filter treats it as data and `continue`s. No bats file and no lane fallback is run, and the extension filter is case-sensitive.",
+      "why": "The 'scripts only' allowlist is a closed extension list. A code file outside it silently pulls no test. This is the inverse of the rule that a code extension is code anywhere.",
+      "fix": "Invert the rule: treat a changed path as data only if it is on an explicit data list (.md, .json, .yaml, .txt and so on). Otherwise treat it as code. Make the extension match case-insensitive and include extensionless files under .claude/hooks.",
+      "twin_of": "(v) An allowlist of \"safe to skip\" paths also asks the tests' own text: a code extension is code anywhere"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:93-97",
+      "breaking_input": "Change a shared core script (SHARED match, lane forced to \"core\") that no bats file names, for example a new .claude/scripts/core/zz.mjs. The fallback runs `ofLane(\"core\")` whole, and the core lane catches every unmapped path, so it can be most of the suite. The 5-minute cap is blown on the first such push, the same A-04 failure this change is meant to fix.",
+      "why": "The fallback for an unnamed script is 'its lane's bats files'. For lane core that is the catch-all, not one lane. The old behaviour for shared scripts was name-grep only, so this widens it.",
+      "fix": "For lane core with no hits, do not run the whole lane. Run node:test lanes only and print 'no bats names X; CI covers'. Or cap the fallback to N files and report the lanes not run.",
+      "twin_of": "(r) \"Nothing mapped\" or \"0 tests ran\" is never green"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:88",
+      "breaking_input": "Leave any file in the `bats` list unreadable: a dangling symlink, a file held open or locked on Windows, or a half-checked-out file. `readFileSync` throws ENOENT/EBUSY/EPERM while building the text Map, so the planner crashes on every push. This happens even when the change names no script, because the Map is now built eagerly.",
+      "why": "Before this diff the read happened only when a shared core script changed. Now one unreadable file breaks the whole pre-push planner with no fail-open path to the core run.",
+      "fix": "Read lazily and per file in try/catch, treating a read failure as a hit so the file is selected (fail open). Or build the Map only when `plan.changed` holds a script.",
+      "twin_of": "(i) any doubt fails OPEN"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": "tests/core/test-changed.test.mjs:98",
+      "breaking_input": "Change the dry-run output so bats lines are no longer indented by exactly two spaces. `batsOf` then returns [] for every input, and 'a data file pulls no bats file' passes vacuously. The 'unnamed script' and 'names it' tests would also have to change, but the data-file test alone proves nothing about the code path.",
+      "why": "An empty-list assertion with no check that the planner ran and printed its file list. It is only anchored by a different test in the same file.",
+      "fix": "In the data-file test, also assert that the output contains the lane/summary line, or that `p.lanes` is non-empty. Better, assert on the structured plan (planFor/filesFor result) rather than parsed text.",
+      "twin_of": "(a) A test that passes proves the assertion held, not that the code ran"
+    }
+  ]
+}

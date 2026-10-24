@@ -34,6 +34,8 @@ const CAP_MS = 5 * 60 * 1000;
 const ZERO = /^0+$/;
 const SHARED = [/^\.claude\/scripts\/core\//, /^tests\/test_helper\.bash$/, /^tests\/_lib\//];
 const LANE_OF = [/^\.claude\/scripts\/([a-z0-9-]+)\//, /^initiatives\/([a-z0-9-]+)\//, /^(face)\//, /^tests\/([a-z0-9]+)-[^/]*\.bats$/, /^tests\/([a-z0-9]+)\.bats$/, /^tests\/(?!fixtures\/|_lib\/)([a-z0-9-]+)\//];
+// never code (A-04 attack B3); everything else, extensionless hooks included, is
+const DATA = /(\.(md|json|jsonl|ya?ml|txt|csv|html?|css|svg|png|jpe?g|gif|webp|ico|lock|toml)|(^|\/)\.(gitignore|gitattributes|nvmrc|npmrc|editorconfig))$/i;
 const NOT_TESTS = new Set(["fixtures", "_lib"]); // test input and helpers, never a suite (attack p01 B9)
 
 const list = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
@@ -81,17 +83,33 @@ function filesFor(plan) {
   // node:test lanes run whole: seconds, and only a whole lane can be held to its .count.
   for (const l of plan.lanes) for (const f of ofLane(l)) if (f.endsWith(".test.mjs")) pick.add(f);
   // A bats lane runs only the files that name a changed path: whole lanes blew the 5-minute cap on three
-  // pushes in a row (A-04 FIRED 2026-10-24). Scripts only, by basename: package.json or AGENTS.md is named by
-  // dozens of files, so a data file's bats run is CI's.
+  // pushes in a row (A-04 FIRED 2026-10-24). Anything not on the data list is code, matched by its basename as
+  // a whole word (`gate.mjs` is not `publish-gate.mjs`); package.json or AGENTS.md is named by dozens of files,
+  // so a data file's bats run is CI's.
   // shortcut: a name grep, not an import graph; misses a test that reaches the file indirectly, CI catches it.
-  const text = new Map(bats.map((f) => [f, readFileSync(f, "utf8")]));
+  const cache = new Map();
+  // an unreadable bats file counts as a hit: selected, never silently dropped
+  const read = (f) => { if (!cache.has(f)) { try { cache.set(f, readFileSync(f, "utf8")); } catch { cache.set(f, null); } } return cache.get(f); };
   for (const { p, lane } of plan.changed ?? []) {
-    // test_helper and _lib are named by every file; the node lanes cover them
-    if (/^tests\//.test(p) || !/\.(mjs|js|sh)$/.test(p)) continue;
-    const hits = bats.filter((f) => text.get(f).includes(basename(p)));
+    // a fixture runs the bats files naming its directory (fixtures/<dir>), the way they load it (attack L6)
+    const fx = p.match(/^tests\/(fixtures\/.+)\/[^/]+$/);
+    if (fx) {
+      const hits = bats.filter((f) => { const t = read(f); return t === null || t.includes(fx[1]); });
+      for (const f of hits) pick.add(f);
+      if (!hits.length) plan.why.push(`no bats file names ${fx[1]} -> bats run on CI`);
+      continue;
+    }
+    if (/^tests\//.test(p)) { plan.why.push(`${p} is a bats helper -> bats run on CI, node lanes here`); continue; }
+    if (DATA.test(p)) continue;
+    const word = new RegExp(`(^|[^\\w.-])${basename(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-]|\\.\\w)`);
+    const hits = bats.filter((f) => { const t = read(f); return t === null || word.test(t); });
     for (const f of hits) pick.add(f);
-    // a changed script no test names gets its lane's bats files, never nothing
-    if (!hits.length) { for (const f of ofLane(lane)) pick.add(f); plan.why.push(`no test names ${p} -> lane ${lane} whole`); }
+    // a changed script no test names gets its lane's bats files, never nothing; core is every lane, so CI's
+    if (hits.length) continue;
+    const own = lane === "core" ? [] : ofLane(lane).filter((f) => f.endsWith(".bats"));
+    if (!own.length) { plan.why.push(`no bats file names ${p} -> bats run on CI`); continue; }
+    for (const f of own) pick.add(f);
+    plan.why.push(`no test names ${p} -> lane ${lane} bats whole`);
   }
   return [...pick];
 }
