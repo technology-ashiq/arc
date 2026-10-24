@@ -30,7 +30,8 @@ probe() {
   [ "$(_arc_json "$p" 'j.scripts.test')" = "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9" ] || { echo "test"; false; }
   # No `build`: npm runs a full install inside a git dependency that declares build, install, prepare or prepack, and
   # that broke `npm install -g <git URL>` (distribute-install-clean). arc-ship runs `npm run build --if-present`.
-  [ "$(_arc_json "$p" 'Object.keys(j.scripts).sort().join(",")')" = "lint,test" ] || { echo "an extra script: $(_arc_json "$p" 'Object.keys(j.scripts)')"; false; }
+  # The ban is on lifecycle names, not on extra scripts: ci Phase 01 added `ci`, `test:changed` and friends.
+  [ "$(_arc_json "$p" 'Object.keys(j.scripts).filter(k => /^(pre|post)?(build|install|prepare|prepack|pack)$/.test(k)).join(",")')" = "" ] || { echo "a lifecycle script: $(_arc_json "$p" 'Object.keys(j.scripts)')"; false; }
 }
 
 @test "distribute-ship-nodeploy: --wait returns the first settled verdict after re-reading a pending one" {
