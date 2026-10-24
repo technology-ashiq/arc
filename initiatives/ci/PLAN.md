@@ -159,7 +159,7 @@ flowchart TB
 | A-03: GitHub counts an `if:`-skipped required job as passing | REQ-02's docs-only PR shows "required check expected" instead of mergeable | 01 |
 | A-04: `test:changed` on the owner's box finishes a typical one-lane push in < 5 min while bats remains | 3 consecutive pushes with pre-push > 5 min | 01 |
 | A-05: `org` under `node:test` is ≥ 5x faster than under bats on the owner's box | Phase 02 timing below 5x → §11 kill line FIRED 2026-10-24 (org 678 s bats vs 222 s node:test = 3.05x; routed by /arc-change to a pilot: slow cases split into own files, 117-145 s = ~5.2x; owner ruled pass 2026-10-24, Phase D continues) | 02 |
-| A-06: an owner-named non-Claude model can drive the worker harness through OmniRoute with working tool calls | either pilot worker cannot complete the D.3 brief's tool calls on its lane | 03 |
+| A-06: an owner-named non-Claude model can drive the worker harness through OmniRoute with working tool calls | SUPERSEDED 2026-10-24: the owner named Claude models on the subscription (ADR-2211 amendment), no gateway. Was: either pilot worker cannot complete the D.3 brief's tool calls on its lane | 03 |
 | A-07: up to 5 parallel lane PRs merge without conflicts when shared files are off-limits | any two lane PRs conflict on a file outside their `tests/{lane}/**`, or `strict` protection forces > 2 rebase-and-rerun cycles on one PR | 04 |
 
 ## External dependencies
@@ -167,7 +167,7 @@ flowchart TB
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
 | GitHub Actions (runs, jobs, required checks) | `ci-digest.mjs` + `gh api …/runs/{id}/jobs` | n/a — the workflow IS the contract; Phase 00 proves it on its own PR | GitHub-hosted `ubuntu-latest` / `windows-latest` | the Phase 00 PR's per-job conclusions read by `ci-digest` |
-| OmniRoute / OpenRouter (worker models) | Claude Code via `ANTHROPIC_BASE_URL`, or OpenCode with an OpenAI-compatible provider (D.2) | none needed — workers are trusted only through `migrate-guard`'s mechanical table | the owner's gateway key + an owner-named model slug | the D.6 pilot: `migrate-guard` table on each pilot PR |
+| OmniRoute / OpenRouter (worker models) -- unused by the pilot since 2026-10-24: Sonnet 5.5 / Haiku 5.5 on the owner's subscription (ADR-2211 amendment) | Claude Code via `ANTHROPIC_BASE_URL`, or OpenCode with an OpenAI-compatible provider (D.2) | none needed — workers are trusted only through `migrate-guard`'s mechanical table | the owner's gateway key + an owner-named model slug | the D.6 pilot: `migrate-guard` table on each pilot PR |
 
 ## Pre-mortem (Klein)
 
