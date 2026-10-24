@@ -18,11 +18,11 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] REQ-09: `migrate-guard` FAILs each of the 6 planted mutants, and PASSes the real `org` lane
-- [ ] `org` parity proof (count, both green, name map, negative control) in the PR description
+- [x] REQ-09: `migrate-guard` FAILs each of the 6 planted mutants, and PASSes the real `org` lane
+- [x] `org` parity proof (count, both green, name map, negative control) in the PR description
 - [x] the §11 ratio recorded; < 5x → STOP and re-plan with the owner (3.05x, then the pilot below)
 - [x] Function-style pilot (owner, 2026-10-24, `/arc-change`): `team`, `role-seat`, `judge` import the script functions instead of spawning node / copying the arc tree (1-2 CLI smoke spawns per script kept), then re-time `org`. ≥ 5x vs the 678 s bats baseline → function style is the migration method and `tests/MIGRATING.md` says so; < 5x → strangler (new tests node:test only, a lane migrates when touched) and Phase 03/04 re-planned with the owner
-- [ ] tracker updated through `/arc-phase-done 02`
+- [x] tracker updated through `/arc-phase-done 02`
 
 ## Verification plan
 
