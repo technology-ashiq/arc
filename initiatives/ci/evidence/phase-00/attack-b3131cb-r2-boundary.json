@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".github/workflows/weekly.yml:37",
+      "breaking_input": "One `.count` file is saved without a trailing newline (written with printf or a Windows editor), for example `12` in tests/a/.count and `7` in tests/b/.count. The step runs `find tests -mindepth 2 -maxdepth 2 -name .count -exec cat {} +`.",
+      "why": "`cat` joins the files with no separator, so the stream is `127` and awk sums 127 instead of 19. The claimed total is inflated, `ran -ge claimed` fails, and weekly goes red. The release job needs weekly, so the tag cannot publish. Pattern (m) handles CRLF but not a missing final newline.",
+      "fix": "Sum per file so a missing newline cannot merge two files: `find tests -mindepth 2 -maxdepth 2 -type f -name .count -exec awk 'FNR==1{s+=$1} END{print s+0}' {} +`. awk ignores the trailing CR on `$1`, so the `tr` is no longer needed.",
+      "twin_of": "(m) A one-line count file accepts `\\r\\n` as well as `\\n`"
+    },
+    {
+      "id": "B2",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:36-46",
+      "breaking_input": "A node:test step that fails (any non-zero `node --test` exit) under `bash -eo pipefail`, which is what `defaults.run.shell: bash` runs.",
+      "why": "With pipefail, a failing `node --test | tee` pipeline makes `-e` abort the step on that line. `rc=${PIPESTATUS[0]}`, the count diagnostics and the final `exit \"$rc\"` never run on failure. The job still goes red, but there is no 'reported N tests' line, and the code reads as if it handled a failing rc.",
+      "fix": "Run `set +e` before the pipeline, or write `node --test ... 2>&1 | tee f || true; rc=${PIPESTATUS[0]}`, so the counts print on failure and rc is genuinely used.",
+      "twin_of": null
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:44-46",
+      "breaking_input": "Lane A claims 12 in its `.count` but loads none of its tests on windows. A test file outside any `.count` dir, or deeper than depth 2 (`tests/x/y/z.test.mjs`), contributes 12 tests the glob does execute.",
+      "why": "The check is one aggregate comparison: the runner's total against the sum of `.count` files. Surplus from unclaimed files masks a per-lane shrink. The `.count` enumeration (depth exactly 2) and the executed set (`tests/**/*.test.mjs`) come from two different enumerations.",
+      "fix": "Enumerate the claimed set and the executed set from one list. Run each lane dir's tests separately, or parse per-file TAP and compare per lane.",
+      "twin_of": "(k) A counted file set and the set the runner executes come from ONE enumeration"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:44",
+      "breaking_input": "A committed `tests/lane/.count` that is a symlink to a file outside the checkout, or a directory named `.count`.",
+      "why": "`find -name .count` has no `-type f`, so `cat` follows the symlink and reads outside the counted set. A directory makes `cat` exit non-zero and `-e` kills the step with no message. Pattern (k) forbids following symlinks on either side.",
+      "fix": "Add `-type f` to the find, since `find` does not follow symlinks by default. Optionally validate that each file's content is `^[0-9]+\\r?$`.",
+      "twin_of": "(k) no symlink follow on either side"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": "tests/core/test-changed.test.mjs:54-62",
+      "breaking_input": "Each run of the new test calls `mkdtempSync(join(tmpdir(), \"tc-\"))` and never removes the directory. The pre-push hook and `npm run ci` also run it with the hook's inherited `GIT_*` environment.",
+      "why": "A temp dir is leaked on every run, on a Windows box where tests run repeatedly. `spawnSync` passes the full `process.env` to the child, so a hook's `GIT_DIR` or `GIT_INDEX_FILE` reaches the `git status` that test-changed.mjs runs. Pattern (s) requires stripping `GIT_*` for children spawned from a git hook.",
+      "fix": "Pass `env` with every key starting `GIT_` removed to `spawnSync`, and `rmSync` the temp dir in a `finally` block.",
+      "twin_of": "(s) A child spawned from a git hook gets an env with every `GIT_*` variable removed"
+    }
+  ]
+}
