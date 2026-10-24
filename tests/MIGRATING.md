@@ -22,6 +22,7 @@ Every @test becomes a test with the SAME behaviour asserted. Never loosen an ass
 skip, never mark todo. If an old test was already broken, keep it failing and report it.
 Write tests/<lane>/MIGRATED.md: old @test name -> new test name, one row each.
 Write tests/<lane>/.count = the number of tests.
+Time each file alone; a test over 20 s goes in its own file (files run in parallel, one file's tests in series).
 Run: node --test "tests/<lane>/**/*.test.mjs" ; bats tests/<lane>-*.bats ; node .claude/scripts/core/migrate-guard.mjs <lane>
 Push only when migrate-guard prints PASS. Open a PR titled "test(<lane>): migrate to node:test".
 ```
@@ -29,7 +30,8 @@ Push only when migrate-guard prints PASS. Open a PR titled "test(<lane>): migrat
 ## Conventions
 
 - One `tests/<lane>/<name>.test.mjs` per old `tests/<lane>-<name>.bats`; several one-test files may share one
-  file (org: `fixture-run.test.mjs`). Keep every test NAME exactly as the `@test` string: the name map is then
+  file (org: `fixture-run.test.mjs`) -- unless one is slow: org's 222 s became ~131 s when its four 30-83 s
+  cases left the two files that ran them in series (`tests/org/MIGRATED.md`, pilot re-time). Keep every test NAME exactly as the `@test` string: the name map is then
   one name to itself, and the reviewer reads nothing into a rename.
 - A lane-local helper the old files repeated goes in `tests/<lane>/<helper>.mjs` (org: `scratch.mjs`).
 - Top-level `test(` calls only, one per line start: `migrate-guard`, `gate-parity` and the registered-test

@@ -49,3 +49,4 @@ ADR century 2200–2299; ADR-2200..2211 written at kickoff. CI-M = 1 (GitHub Pro
   **§11 kill line: org bats 678 s vs node:test 222 s = 3.05x, below 5x -> STOP Phase D and re-plan with the owner.**
 - **03/04** -- not started: 03 needs two owner-named models (CI-R), and the §11 line above stops Phase D first.
 **Change 2026-10-24 (`/arc-change`, owner OK):** A-05 FIRED (org 3.05x < 5x). Before any re-plan, a function-style pilot on `org` (`team`, `role-seat`, `judge`) re-times the lane; ≥ 5x keeps Phase D with that method, < 5x → strangler. Exit criterion in `phases/phase-02-spec.md`.
+**Ruling 2026-10-24 (owner):** pilot re-time ~5.2x (117-145 s vs 678 s bats) → §11 passes, Phase D continues; MIGRATING.md carries the slow-test-own-file rule.

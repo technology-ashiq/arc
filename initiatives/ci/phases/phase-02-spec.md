@@ -20,8 +20,8 @@
 
 - [ ] REQ-09: `migrate-guard` FAILs each of the 6 planted mutants, and PASSes the real `org` lane
 - [ ] `org` parity proof (count, both green, name map, negative control) in the PR description
-- [ ] the §11 ratio recorded; < 5x → STOP and re-plan with the owner
-- [ ] Function-style pilot (owner, 2026-10-24, `/arc-change`): `team`, `role-seat`, `judge` import the script functions instead of spawning node / copying the arc tree (1-2 CLI smoke spawns per script kept), then re-time `org`. ≥ 5x vs the 678 s bats baseline → function style is the migration method and `tests/MIGRATING.md` says so; < 5x → strangler (new tests node:test only, a lane migrates when touched) and Phase 03/04 re-planned with the owner
+- [x] the §11 ratio recorded; < 5x → STOP and re-plan with the owner (3.05x, then the pilot below)
+- [x] Function-style pilot (owner, 2026-10-24, `/arc-change`): `team`, `role-seat`, `judge` import the script functions instead of spawning node / copying the arc tree (1-2 CLI smoke spawns per script kept), then re-time `org`. ≥ 5x vs the 678 s bats baseline → function style is the migration method and `tests/MIGRATING.md` says so; < 5x → strangler (new tests node:test only, a lane migrates when touched) and Phase 03/04 re-planned with the owner
 - [ ] tracker updated through `/arc-phase-done 02`
 
 ## Verification plan
@@ -40,3 +40,4 @@
 - A migrated test asserts the SAME behaviour: no loosened assertion and no skipped, pending or `.only` test; a dropped test is listed with its reason in `MIGRATED.md`.
 - Runtime `dependencies` stays `{}`; ESLint is the only devDependency, with a committed lockfile.
 - Two-surface adversarial pass via `/arc-attack` (ADR-0226) per PR, carrying `initiatives/ci/fixed-defects.md`; the author is never the attacker.
+  **Result:** the time was four slow cases serialised in two files, not the runner; split into their own files, `org` = 117-145 s (~131 s avg) vs 678 s = **~5.2x**, no function-style rewrite needed. Owner ruled 2026-10-24: **pass, Phase D continues**; `tests/MIGRATING.md` now tells workers to give any > 20 s test its own file.
