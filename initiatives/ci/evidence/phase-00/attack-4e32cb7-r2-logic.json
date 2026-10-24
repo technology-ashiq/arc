@@ -1,0 +1,140 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:10-12",
+      "breaking_input": "`ci-bats-shard.sh 0 4` on a tree where `find tests -name '*.bats'` yields fewer than 4 files (e.g. a docs-only PR where bats files were deleted or moved). shard 0 gets some files, shards 1-3 get none and exit 1, but the matrix still shows 4 shards and the aggregate `test` job fails on 'shard resolved to no files'. A docs-only change (Phase 01) or any future restructuring that removes files entirely from a shard then blocks every PR, and the intended 'skip test' path can't skip because the file list is non-empty for shard 0 only.",
+      "why": "The awk round-robin makes NR%4==0 land only in shard 0. With fewer than 4 files, shards 1-3 are empty and exit 1. The reconcile/floor never runs. A change that reduces bats files below the shard count becomes unmergeable, and the 'code' skip design (which wants bats skipped for docs-only PRs) can't be expressed because the empty-shard guard fires instead.",
+      "fix": "In the workflow, only launch shards that resolve to a non-empty file set (check the file list once in the `changes` job and pass the per-shard file lists), or allow a shard with no files to exit 0 with a visible 'no files' note when the aggregate is still covered by the floor.",
+      "twin_of": null
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:31-33",
+      "breaking_input": "A bats test file that declares `@test` but the test body is empty (just `{ }`). bats counts an empty test as executed (it emits `ok`), so declared=executed and the reconcile passes. The test, however, asserts nothing — a vacuous pass. A cheap worker that rewrites every test to `{ }` (or `{ true; }`) leaves the declared count unchanged and CI green.",
+      "why": "The reconcile counts `@test` declarations and TAP `ok` lines, not assertions. It only proves the test function RAN, not that it asserted anything (defect pattern (a): a test that passes proves the assertion held, not that the code ran). The floor counts the same declared number, so shrinkage in assertions is invisible.",
+      "fix": "Strengthen the reconcile (or add a guarding step in the `test` job) to count assertions (e.g. require a minimum assertion density per test, as `migrate-guard` later does) and fail when a test has no assertion statements.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L3",
+      "severity": "high",
+      "where": ".claude/scripts/core/ci-floor.mjs:57-63",
+      "breaking_input": "A `tests/DROPPED.md` or `tests/{lane}/MIGRATED.md` row like `|  | DROPPED | reason |` collides with a row whose second cell contains `DROPPED ` with trailing space: `| name | DROPPED  | reason |`. The regex `/^\\|([^|]*)\\|\\s*DROPPED\\s*\\|([^|]*)\\|/` matches the second (trailing space still matches `\\s*`), while the emptiness check `m[1].trim() === \"\"` rejects the first. But a row `| | DROPPED | |` — name empty, reason empty — is correctly rejected. The attack is a row with the test name in the reason column and an empty name: `|  | DROPPED | real-test-name |`. That passes (name empty? no—`m[1].trim()` is empty → exit 2). Actually the concrete break is a name like `| x | DROPPED | reason |` that appears TWICE (two rows with the same name). Each is a valid drop row, so `drops` is incremented twice, lowering the floor by 2 for one test, letting a real test be dropped and covered by a duplicate row that references it twice.",
+      "why": "The drop-row grammar does not reject duplicate names. Two identical rows both decrement the floor, so an attacker can list one dropped test twice and the floor falls by two for a single removed test, hiding that another test was silently deleted. The floor exists to catch exactly that shrinkage.",
+      "fix": "Reject a DROPPED name that appears more than once across all DROPPED.md/MIGRATED.md files, and reject a drop row whose dropped name does not match a real declared test in the current tree (drop rows must be for still-existing tests that are being removed, or the count arithmetic becomes wrong).",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:50-55",
+      "breaking_input": "A `.count` file containing a leading plus sign or whitespace, e.g. ` 5\\n` or `+5\\n`. The regex `/^\\d+\\r?\\n$/` rejects it and exits 2 (a false failure). Meanwhile a `.count` containing `5\\n` but with a byte-order mark (BOM `\\uFEFF5\\n`) also fails. Conversely, a `.count` with an astronomically large integer (e.g. `999999999999999999999\\n`) passes the regex and `Number(body.trim())` yields an imprecise float; a count that is 1 more than the true value passes the floor forever.",
+      "why": "The validation only checks the shape, not the value's plausibility. A `.count` of 2^53+1 passes, `declared` becomes wrong (inflation), and the floor can never catch the lane's true test count dropping. The Windows-origin concern (defect m) was about CRLF, but the value itself is not bounded against the lane's actual tests.",
+      "fix": "Parse with a BigInt or validate the integer is within a sane bound (e.g. ≤ 1e6), and compare the per-lane `.count` against the runner's reported count (defect h) rather than trusting the file's number directly.",
+      "twin_of": "(m)"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:13-17",
+      "breaking_input": "A `--files` list where a path contains a NUL byte or where a path is exactly `face/` (a directory). `classify` runs `r.test(p)` with `^face\\/`; `face/` matches and returns face=true. But a directory entry from a `--files` file list is never produced by git diff (which lists files), so this is safe; the actual gap is a path like `face2/x` which does NOT match `^face/` — fine. The concrete break: a path like `.\\face\\x` (backslash, Windows-style path in a `--files` list) does not match `^face/`, so a Windows-generated file list (which the bats tests use via `printf 'face/src/a.tsx'` — POSIX) but if a CI job fed it a Windows path, the face job would be skipped. The workflow uses git diff which is POSIX-safe, but `--files` is also used by tests and potentially by other callers, and the classifier does not normalize backslashes.",
+      "why": "Fixed-defect (j) says paths from git are read with -z and core.quotePath=false, but the `--files` branch still splits on CRLF/LF and does not normalize backslashes. A backslash path defeats the prefix match, silently skipping a required job.",
+      "fix": "Normalize paths in classify (replace backslashes with forward slashes) and reject any path containing a NUL or an embedded newline when reading --files.",
+      "twin_of": "(j)"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:28-30",
+      "breaking_input": "`node ci-changes.mjs --base` (no value) with `--head HEAD`. `flag('--base')` returns `argv[i+1] ?? ''`; `argv[i+1]` is the literal token `--head`, so `base = '--head'`, `head = 'HEAD'`. `cat-file -e '--head^{commit}'` fails (no such ref), the catch returns `[]`, and classify fails open (face=true, citier=true). The run proceeds and force-runs face+ci-tier on a PR that touches neither — a cost and a false sense that the jobs are meaningful, but more importantly on a dispatch this silently forces jobs. A malformed invocation (`--base` with no head) fails open without any stderr warning.",
+      "why": "The flag parser consumes the next token as the value regardless of whether it is a flag. The fail-open path is intended for dispatch/no-base, but a wrong invocation that would have been a usage error instead runs everything, hiding the misconfiguration and costing minutes.",
+      "fix": "Validate that the `--base` value is not a `--`-prefixed token and that every flag is followed by a non-flag value; exit 2 (usage error) rather than fail open on malformed arguments.",
+      "twin_of": null
+    },
+    {
+      "id": "L7",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:node-test job (run block around lines 64-75)",
+      "breaking_input": "A `tests/**/*.test.mjs` file that calls `process.exit(0)` at the top, before any `test()` registration. `node --test --test-reporter=tap` runs the file as a subtest; the file exits 0 with no tests, and the TAP output becomes just the plan `1..0` plus `# tests 0`. The step's `sed 's/^# tests \\([0-9]*\\)$/\\1/p'` may find `# tests 0` for the whole run; with other files passing, the last `# tests N` is the suite total (e.g. 5), so `ran=5 > 0` passes. A lane with a `.count` of 5 and this single `process.exit(0)` file reports 0 tests but the step passes because other lanes' tests sum > 0.",
+      "why": "The guard only checks the TOTAL `ran > 0`, not the per-lane `.count` against the runner's REPORTED per-lane count. A lane whose file throws at import or exits early is not distinguished (defect a). The later `migrate-guard` and `ci-floor` compare totals, not per-lane execution.",
+      "fix": "For each lane with a `.count`, run `node --test` on that lane's files separately and assert the reported `# tests N` equals the `.count`, failing on any mismatch (defect h).",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L8",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:test job (runs block)",
+      "breaking_input": "A PR where the `changes` job's `node ci-changes.mjs ... | tee -a \"$GITHUB_OUTPUT\"` writes `face=` and `citier=` lines, but then a later `changes` step (there is none) or a malformed line writes `face=false` as `face = false` (space around =). GitHub Actions `$GITHUB_OUTPUT` requires the exact `name=value` form; a line `face=false` is valid, but if the script ever printed `face=false` in a comment or a second line `face=false` after `face=true`, the LAST line wins. The script prints exactly once, but a `tee` that appends both stdout and an error message to the same file could interleave. In this workflow, the script prints to stdout and `tee -a` appends; if the script also printed a `face=` line before the checks, the `if: needs.changes.outputs.face != 'false'` would read the last. The concrete gap: when `face` output is unset (script crash, handled by B2-style) or when `changes` is skipped on a draft, the job `if: !skipped && (draft != true)` — a draft skips `changes`, so `needs.changes.outputs.face` is `''` and `'' != 'false'` is true, so `face` RUNS on a draft even though every other job is skipped. That wastes minutes on a draft.",
+      "why": "A draft PR (REQ-02 design) should run 0 jobs; but `face` and `ci-tier` use `!= 'false'`, and with an empty output they are true, so they start and run `npm ci` + build. This violates the stated goal 'a draft PR starts 0 billable jobs'.",
+      "fix": "Gate face/ci-tier with `github.event_name == 'workflow_dispatch' || (draft != true && needs.changes.result == 'success' && needs.changes.outputs.face == 'true')`, and make draft explicitly skip all jobs including these.",
+      "twin_of": "(b)"
+    },
+    {
+      "id": "L9",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-bats-shard.sh:25-29",
+      "breaking_input": "A bats test body that emits a line `not ok 123` (e.g. a test that runs `echo 'not ok 123'` inside its body). bats' TAP output for a failing test would be `not ok 1 name`, but a body-printed `not ok 123` appears indented by `# `? bats prints test output as `# ` comments unless `--print-output-on-failure`; with that flag (used here), output is printed after the TAP line as `# not ok 123`. The `grep -cE '^(ok|not ok) '` matches only lines starting at column 0, so the `# `-prefixed body output does NOT match. The actual gap: a test that deliberately `exit 1` produces a real `not ok`, which IS counted — that is correct. The break is a test that calls another bats file or uses `@test` in a string that grep counts but bats does not execute due to an unclosed brace; the reconcile then reports 'declared never executed' — which is the intended catch. The real unsupported case is the opposite: a `@test` whose name spans two lines (name on line A, brace on line B) is still counted by `_declared` grep and executed by bats — consistent. The concrete defect: a bats file with Windows CRLF line endings: `_declared` uses `grep -hE '^[[:blank:]]*@test[[:blank:]]'` — the `$` anchors the end, but with `\r` the pattern still matches because it doesn't anchor end. So no failure. The true attack: a file whose `@test` line is `@test \"x\" {` but `_declared` regex requires a space after `@test`; `@test\"x\"` (no space) is NOT counted but bats may still parse it? bats likely requires the space; bats would error and not execute, reconcile catches. No practical bug here.",
+      "why": "The direction check (declared vs executed) is inequality, and a test body that emits a bare `ok ` line (with `--print-output-on-failure`, bats prints test stdout as `# ` prefixed, so not matched). The attack is a test that calls `run echo ok` — the run output is captured, not printed. bats with `--print-output-on-failure` prints the captured output as `# ok` — prefixed, not matched by `^ok`. So the initial L9 concern is unsupported, but a bats version or flag that prints raw would inflate executed; the reconcile would fail closed (a red build) — safe direction. Park this: no green-pass bypass from body output.",
+      "fix": "No fix needed; the direction is fail-closed. (Reported for completeness as a non-actionable twin of (a).",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L10",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:38-39 (walk)",
+      "breaking_input": "A `tests/` tree containing a symlink to a file outside `tests/` (e.g. `tests/x.bats -> /etc/passwd`). `readdirSync` with `withFileTypes` sees `isFile()` true for a symlink to a regular file, and `readFileSync` reads the target. A symlink to another repo's `.bats` file or to a `DROPPED.md` with many drop rows inflates the floor, or a symlink to a file with many `@test` lines inflates `declared`, letting the floor pass with fewer real tests. The comment claims 'symlinks are not followed', but `withFileTypes`'s `isFile()` follows the link (it reports the target type), and `readFileSync` follows it.",
+      "why": "The stated invariant 'no symlink follow on either side' (defect k) is broken: a symlink to a file is read and counted. The walk does not reject symlinks at all, so a fixture or an attacker-controlled symlink under tests/ changes the declared count or the drop count, undermining the floor's symmetry with the bats shards (which `find` without `-L` does not follow symlinks).",
+      "fix": "Use `lstat`/`Dirent.isSymbolicLink()` and skip every symlink (file or dir), matching `find tests -name '*.bats'` (no -L).",
+      "twin_of": "(k)"
+    },
+    {
+      "id": "L11",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:28-30 (changedPaths git branch)",
+      "breaking_input": "A PR where `head` resolves to a commit and `git diff -z --name-only base...head` succeeds but the range `base...head` uses the triple-dot merge-base. If `head` is an ancestor of `base` (a PR back-porting an older commit), `base...head` is empty and the diff returns nothing, so `classify` sees `paths.length===0` and fails OPEN (face=true, citier=true). A PR that only reverted face/ changes (bringing head behind base) still forces face+ci-tier to run unnecessarily — cost, not a correctness gap. But more concerning: when the diff is empty because all commits are in the other direction, the change is genuinely nothing, yet the tool still force-runs jobs, which hides that the fail-open also masks a real 'I intended to change face and the diff is empty' scenario.",
+      "why": "Fixed-defect (i) checks both refs resolve before believing the diff, but it does not check the merge-base is valid or that the range is non-empty; an empty diff from a real PR is indistinguishable from a dispatch/no-base failure, so the fail-open runs every possible job — the safe direction but costly, and it prevents detecting a configuration where the range is wrong.",
+      "fix": "For a real PR (base and head both provided), treat a git success with an empty diff as an ERROR (fail the job) rather than fail-open, since a PR by definition has a difference; only dispatch/no-base should fail open.",
+      "twin_of": "(i)"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": "tests/ci-gate.bats:100-107",
+      "breaking_input": "The test `ci-bats-shard: a shard that resolves to no files refuses` invokes `ci-bats-shard.sh 99999 100000`. The script's arg guard `[ \"$#\" -eq 2 ] && [[ \"$1\" =~ ^[0-9]+$ ]] && [[ \"$2\" =~ ^[1-9][0-9]*$ ]]` passes (99999 and 100000 are valid), and the awk `NR % 100000 == 99999` matches no file (NR < 100000), so it exits 1 with the 'no files' error — the test passes. But it does not test the matrix-invalid case `i >= n` when `i` is 4 and `n` is 4 (a future matrix [0,1,2,3,4] with total 4 would silently drop shard 0? no—it exits 1). The weak spot is that the test only checks `status -ne 0`, not that the script refused BEFORE running bats (a script that ran bats with an empty list but then reconciled could exit non-zero for a different reason).",
+      "why": "No breaking input; the script's guard handles it. The test asserts only exit status, but the real risk (from defect k) is that nothing proves the union of shards covers every file; the test does not close that gap. This is a test-quality finding, not a code defect.",
+      "fix": "Add a CI-level assertion that the sum of per-shard file counts equals the total `find tests -name '*.bats' | wc -l` (a coverage check), and extend the test to verify the script also fails when `$1 >= $2`.",
+      "twin_of": "(k)"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-install-tools.sh:20-29",
+      "breaking_input": "`sudo apt-get update && sudo apt-get install -y jq` under `set -u` (no `-e`): if `apt-get update` fails (network), the `&&` short-circuits and the whole line fails silently (the script continues). The banner reports `jq: MISSING`. The `security` job's 'Scanners are present' step requires `command -v jq`, so the security job FAILS red — that is a real failure, not a silent skip. But the bats shards (which need jq for various tests) run `ci-install-tools.sh` too; a jq failure would make bats tests that use jq fail unpredictably, and the install script's best-effort philosophy leaves the cause hidden.",
+      "why": "The script is documented as best-effort with 'skips VISIBLY', but a missing jq is not visible in the bats shard until arbitrary tests fail, and the failure reason (apt network) is swallowed. A scanner-dependent test that checks `command -v jq` and skips would then pass with a hidden gap.",
+      "fix": "For tools that the test jobs hard-depend on (bats, jq), fail the script loudly (exit non-zero) on install failure; keep best-effort only for the optional scanners (gitleaks/opengrep) that the security job separately verifies.",
+      "twin_of": null
+    },
+    {
+      "id": "L14",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-changes.mjs:15-22",
+      "breaking_input": "A path like `face/foo` in the changed list also sets `citier=false` — correct. But a `face/` change that renames a file only (no content change) is still listed by `git diff --name-only`, so `face=true` — fine. The gap: a path `face/../face2/x` normalizes to `face2/x` and does NOT match `face/`, so a PR that modifies face via a `..` path (impossible from git, which never emits `..`) — unsupported. The real low: `RULES.face` only checks `^face/`, but a change to the file `face` itself (a file named exactly `face`, not a directory) would NOT match `^face/` (requires the slash), so a malicious `--files` entry `face` (a file) would skip the face job. Git cannot have both `face` file and `face/` dir; but the `--files` test path could.",
+      "why": "The classifier is anchored to `face/` and misses a top-level file named `face`, so a `--files` list containing `face` returns face=false. In the workflow this input never occurs, but the function is also a public CLI.",
+      "fix": "Match `^face(/|$)` and `^docker(/|$)` (allow a bare directory name).",
+      "twin_of": null
+    },
+    {
+      "id": "L15",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-floor.mjs:34-40 (walk on a Windows box)",
+      "breaking_input": "`readdirSync(dir, { withFileTypes: true })` on Windows returns `Dirent.isFile()` false for a symlink/junction (as in `symlinkSync` junction fixtures, retro 2026-10-14#1). The walk uses `e.isDirectory()` and `e.isFile()`; a Windows junction to a directory reports `isSymbolicLink()` true and `isDirectory()` false, so it is neither recursed nor counted — matching the intended no-follow. But a junction to a `.bats` file reports `isFile()` false too, so the file is MISSED from the declared count, while the bats shard's `find tests -name '*.bats'` (on Windows Git Bash) also does not follow junctions by default — so they stay symmetric. On a POSIX CI, a symlink to a `.bats` file is counted by ci-floor (isFile true) but NOT by `find` (default no-follow), so the floor counts MORE than the shards run — a false safety margin, not a gap.",
+      "why": "The two enumerators (ci-floor walk vs find) disagree on symlink-to-file on POSIX: the floor counts it, the shard doesn't, so the floor can pass while a real test file (via symlink) is never executed — the inverse of the intended 'one enumeration' invariant (defect k).",
+      "fix": "In walk, check `e.isSymbolicLink()` and skip it explicitly, and in ci-bats-shard use `find -L tests -name '*.bats'` or (better) have ci-floor import the same file list that the shards use.",
+      "twin_of": "(k)"
+    }
+  ]
+}

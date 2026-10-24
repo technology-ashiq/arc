@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "where": ".github/workflows/ci.yml:node-test (ran check) + .claude/scripts/core/ci-floor.mjs:floor (.count branch)",
+      "breaking_input": "A PR deletes a whole bats file with 500 tests. It adds tests/foo/.count containing \"500\\n\" and one tests/foo/a.test.mjs with a single trivial test, or one whose tests are all test.skip. ci-floor adds 500 to declared and passes. node-test sees `# tests 1` (skips are counted in `# tests`), so ran>0 and the step passes.",
+      "why": "The .count value is trusted as declared and never compared with the count node reports. The node-test step only checks ran>0, and skipped tests count as ran. This is defect (h), plus the skip hole in (a) that was rejected as L7 in triage. A fabricated .count offsets any real shrinkage.",
+      "fix": "In node-test, parse the TAP `# pass` and `# skipped` totals. Require pass to equal the sum of tests/*/.count and skipped to be 0. Make ci-floor take only the runner-reported count for migrated lanes, not the file's claim.",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-floor.mjs:main (declared > floor branch)",
+      "breaking_input": "The suite grows from 4824 to 5100 and BASELINE is never raised. A later PR deletes 270 tests. declared (4830) is still >= floor (4824), so it exits 0 with only an advisory line.",
+      "why": "Above the floor the script prints \"raise BASELINE\" and exits 0, so the floor rots. This is the same failure the old comment records (floor 911 against 4815 tests). Shrinkage of up to the whole headroom is invisible.",
+      "fix": "Fail when declared exceeds floor by more than a small tolerance. Or compare declared against the count on origin/main's merge-base and fail on any net loss without a drop row.",
+      "twin_of": "(h)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:changedPaths (git diff args)",
+      "breaking_input": "A PR does `git mv face/src/App.tsx docs/App.tsx.md` (or docker/Dockerfile to docs/). `git diff --name-only` has rename detection on by default and lists only the destination path.",
+      "why": "The source path under face/ or docker/ is not in the list, so classify returns face=false and citier=false. The required face/ci-tier job is skipped (counts as passing) although face/ content was removed or moved. This is the same class as defect (i): a successful diff that does not show the real change set.",
+      "fix": "Pass `--no-renames` to the diff, so both the old and new paths are listed.",
+      "twin_of": "(i)"
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:RULES",
+      "breaking_input": "A PR edits only .github/workflows/ci.yml (breaking the face job's `npm ci` step or the ci-tier steps), or edits ci-changes.mjs itself. Paths match neither ^face/ nor the docker/trivy rules, so face=false and citier=false.",
+      "why": "The jobs whose definitions changed are skipped and show as passing. A broken face or ci-tier job definition merges unexercised, and the next unrelated face PR is the first to find it.",
+      "fix": "Add `^\\.github\\/workflows\\/` and `^\\.claude\\/scripts\\/core\\/ci-` to both rules. Or treat any workflow change as run-everything.",
+      "twin_of": "(b)"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-floor.mjs:walk vs .claude/scripts/core/ci-bats-shard.sh:find",
+      "breaking_input": "A symlink tests/x.bats pointing at a real .bats file, or a directory named tests/y.bats. `find tests -name '*.bats'` (no -L, no -type f) lists both and the shard feeds them to bats. walk() uses Dirent.isFile(), which is false for a symlink.",
+      "why": "The counted set and the executed set are not one enumeration, contrary to the comment and defect (k). Bats reads through the link, so its tests are declared and run in the shard but not counted by the floor. A directory entry named *.bats is passed to bats as a test file.",
+      "fix": "Use `find tests -type f -name '*.bats'` in the shard script, and make ci-floor use the same rule (or count symlinked files consistently).",
+      "twin_of": "(k)"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-floor.mjs:floor (drop rows)",
+      "breaking_input": "tests/DROPPED.md contains the identical row `| t | DROPPED | r |` repeated 100 times, or 100 rows with throwaway names that match no real test.",
+      "why": "Each row lowers the floor by one with no check that the name is unique or ever existed in the suite. A single doc edit buys arbitrary headroom to delete tests silently.",
+      "fix": "Reject duplicate names. Require each dropped name to appear in the base revision's bats files or in the lane's name map.",
+      "twin_of": "(h)"
+    }
+  ]
+}
