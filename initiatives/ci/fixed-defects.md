@@ -40,3 +40,4 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (aj) A test for a multi-value rule exercises the second value, not only the first (REQ-11 r2 B1, L6): the retire test plants the OLDER session-log version.
 - (ak) A second runner of the same suite carries every check the first one has: weekly's windows node:test step asserted only `# tests > 0` and skipped arc-ci's `.count` claim check, so a lane loading none of its tests on windows passed (REQ-07 r1 B1).
 - (al) Numbers read from several files are summed per file, never through `cat`: a `.count` with no trailing newline joined its neighbour (`12`+`7` read as `127`), in arc-ci's node-test AND weekly's twin (REQ-07 r2 B1). Reproduced 127 vs 19 before the fix.
+- (am) A shortcut that widens a "safe to skip" set re-applies the guard the original set had: the pre-push lane-notes arm now also requires that no test names the path (REQ-07 r2 L1).

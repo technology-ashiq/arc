@@ -241,7 +241,7 @@ function main(argv) {
   if (dirty.length && !argv.includes("--files")) console.log(`test-changed: WARN ${dirty.length} tracked file(s) modified and not in the commit -- this run tests them too; CI tests the commit`);
   if (argv.includes("--dry-run")) { for (const f of files) console.log(`  ${f}`); return 0; }
   // A lane's own notes (debt-ledger.md, fixed-defects.md) that no test names are paperwork here too; CI keeps them code.
-  const notes = !lanes.length || paths.every((p) => isPaperwork(p, text) || /^initiatives\/[^/]+\/[^/]+\.md$/.test(p));
+  const notes = !lanes.length || paths.every((p) => isPaperwork(p, text) || (/^initiatives\/[^/]+\/[^/]+\.md$/.test(p) && !text.includes(p)));
   if (!files.length) { console.log(notes ? "test-changed: paperwork only -- no tests to run" : "test-changed: no test file mapped"); return notes ? 0 : 1; }
   return run(files, Date.now() + CAP_MS);
 }
