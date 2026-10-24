@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:88-96,122-130",
+      "breaking_input": "HEAD is the pushed commit and contains a broken `tests/spine/x.test.mjs`. The working tree has an uncommitted or stashed-away edit that fixes it (git status already shows ` M .claude/settings.json`). Or the reverse: the commit is fine and a dirty edit breaks the test. `git push` runs the hook.",
+      "why": "The non-HEAD refusal only proves the pushed sha equals HEAD. The tests run from the working tree, so untracked and modified files decide the result. The push then goes out vouched for by files that are not in the commit, and CI sees a different tree. This is the same class of hole as the non-HEAD control, one level down.",
+      "fix": "Refuse or loudly warn when `git status --porcelain --untracked-files=no` is non-empty. Or run the tests from a clean `git worktree add` of the pushed sha.",
+      "twin_of": "(q)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs:41-46 (namedByTests loop `n >= 3`)",
+      "breaking_input": "A paperwork-only PR that edits `PORTFOLIO.md`, which is a single segment. A bats test other than portfolio-board.bats (resume, lane-resolve, wip-line or board tests) reads it by the literal name. `segs.length` is 1, so the `n >= 3` loop never runs and `namedByTests` returns false. The PR gets `code=false`, and bats and node-test are skipped.",
+      "why": "The fix for the stale-allowlist class only checks paths of 3 or more segments. `PORTFOLIO.md` is on the PAPERWORK list and is not in READ_BY_TESTS. Any test reading it, other than the one case re-run in quality, is skipped on a docs-only PR. The next code PR then goes red.",
+      "fix": "Run the named-by-tests check from n = segs.length down to 1 for single-file entries. Or put `PORTFOLIO.md` in READ_BY_TESTS and run every test that names it in quality.",
+      "twin_of": "(v)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": "package.json scripts.ci (`bash .claude/scripts/core/ci-quality.sh && ...`)",
+      "breaking_input": "On Windows, run `npm run ci` from PowerShell with System32 ahead of Git Bash on PATH. npm runs the script through cmd.exe, and bare `bash` resolves to WSL's bash.exe. WSL has no bats and cannot see the repo layout.",
+      "why": "B5 was fixed only inside test-changed.mjs's `bashPath()`. The `ci` script and its documented REQ-04 parity path still use a bare PATH lookup. The failure then reads as a quality-gate failure.",
+      "fix": "Add a node launcher, for example `node .claude/scripts/core/run-bash.mjs ci-quality.sh`, that reuses `bashPath()`. Or have `ci-quality.sh` be invoked via a node wrapper.",
+      "twin_of": "(t)"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:110-112",
+      "breaking_input": "Push a change under `.claude/scripts/spine/` while offline, or from a remote not named `origin`. `git fetch -q origin main` throws, and the catch returns `paths: [\"(unknown)\"]`.",
+      "why": "The fallback replaces the real change list with a single unknown path. Only the core set runs, so the pushed lane's own bats files (spine, in this input) are not run. The note says \"running the core set\", which hides that the lanes the push touched are dropped. An offline push is tested less than an online one.",
+      "fix": "On fetch failure, still diff against the existing local `origin/main` if it resolves, and union the result with the core set. Print the staleness.",
+      "twin_of": "(i)"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-changes.mjs:28-34 (PAPERWORK evidence/handoffs vs CODE_EXT)",
+      "breaking_input": "A new `initiatives/x/evidence/phase-02/expected.json`, or an extensionless executable or fixture under `handoffs/` or `evidence/`, that a test reads through a templated path such as `initiatives/$lane/evidence/...`. CODE_EXT omits json, jsonl, toml and extensionless files.",
+      "why": "The B11 fix is a denylist of extensions, not the allowlist the finding asked for. Machine-read files in those two directories are still paperwork, and `namedByTests` cannot see templated reads. A PR touching only them skips the test suite.",
+      "fix": "Restrict the evidence and handoffs patterns to `.md`, `.txt` and `.png`. Treat any other extension, or none, as code.",
+      "twin_of": "(v)"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:136-143",
+      "breaking_input": "A `node --test` step runs long, then the 5-minute cap hits (ETIMEDOUT). Or its TAP output exceeds `maxBuffer` (ENOBUFS).",
+      "why": "Node steps pipe stdout and print it only after the child exits. On ETIMEDOUT the code returns through `capHit()` before `process.stdout.write`, so the hung test's partial output is lost. On ENOBUFS the code prints \"could not start <node>: ...\", which is wrong because the process did start.",
+      "fix": "Write `r.stdout` before the error branches. Distinguish ENOBUFS from a spawn failure in the message.",
+      "twin_of": "(a)"
+    }
+  ]
+}

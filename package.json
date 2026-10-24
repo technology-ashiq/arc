@@ -8,11 +8,17 @@
     "arc": "bin/arc.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "scripts": {
     "lint": "node .claude/scripts/core/gate-parity.mjs && node .claude/scripts/core/brain-drift.mjs && node .claude/scripts/engine/arc-compile.mjs --check --all --input source --target opencode",
-    "test": "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9"
+    "test": "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9",
+    "lint:js": "node tools/lint/node_modules/eslint/bin/eslint.js --config tools/lint/eslint.config.mjs .",
+    "test:local": "node --test --test-reporter=tap \"tests/**/*.test.mjs\" && node .claude/scripts/core/ci-floor.mjs",
+    "test:changed": "node .claude/scripts/core/test-changed.mjs",
+    "test:bats": "node .claude/scripts/core/test-changed.mjs --all",
+    "ci": "node .claude/scripts/core/test-changed.mjs --ci",
+    "ci:status": "node .claude/scripts/review/ci-digest.mjs --wait --timeout-min 9"
   },
   "files": [
     "bin/",

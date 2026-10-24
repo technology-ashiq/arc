@@ -34,6 +34,7 @@ jobs:
     outputs:
       face: ${{ steps.paths.outputs.face }}
       citier: ${{ steps.paths.outputs.citier }}
+      code: ${{ steps.paths.outputs.code }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
         with:
@@ -54,15 +55,18 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
         with:
           node-version: '24'
-      - name: Version gate
-        run: bash .claude/scripts/review/arc-scan/version-gate.sh
-      - name: Product manifests lint
-        run: node .claude/scripts/core/product-lint.mjs
+      - name: Install tools
+        run: bash .claude/scripts/core/ci-install-tools.sh
+      - name: Quality gates (the same list `npm run ci` runs)
+        run: bash .claude/scripts/core/ci-quality.sh
+      - name: ESLint (TRIAL -- reports, never blocks; CI-S)
+        continue-on-error: true
+        run: npm --prefix tools/lint ci --no-audit --no-fund && npm run lint:js
 
   bats:
     name: bats (${{ matrix.shard }})
     needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true }}
+    if: ${{ needs.changes.outputs.code != 'false' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -82,7 +86,7 @@ jobs:
 
   node-test:
     needs: changes
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true }}
+    if: ${{ needs.changes.outputs.code != 'false' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -115,10 +119,14 @@ jobs:
     steps:
       - name: Every test job succeeded
         run: |
+          # A paperwork PR (code=false) skips bats and node-test; only then is "skipped" a pass (REQ-02).
+          code="${{ needs.changes.outputs.code }}"
           for r in "changes=${{ needs.changes.result }}" "quality=${{ needs.quality.result }}" \
                    "bats=${{ needs.bats.result }}" "node-test=${{ needs.node-test.result }}"; do
-            echo "$r"
-            [ "${r#*=}" = "success" ] || { echo "::error::${r%%=*} did not succeed (${r#*=})"; exit 1; }
+            echo "$r (code=$code)"
+            [ "${r#*=}" = "success" ] && continue
+            case "${r%%=*}" in bats|node-test) [ "$code" = "false" ] && [ "${r#*=}" = "skipped" ] && continue ;; esac
+            echo "::error::${r%%=*} did not succeed (${r#*=})"; exit 1
           done
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
@@ -151,6 +159,10 @@ jobs:
           else bash .claude/scripts/review/arc-scan/arc-scan.sh --all --no-stamp --out-dir "$RUNNER_TEMP/scan"; fi
       - name: npm audit (face)
         working-directory: face
+        run: npm audit --audit-level=high
+      # arc's root has no dependencies and no lockfile (distribute REQ-08); its one dev toolchain is tools/lint.
+      - name: npm audit (tools/lint)
+        working-directory: tools/lint
         run: npm audit --audit-level=high
 
   face:

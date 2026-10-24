@@ -26,21 +26,26 @@ paths:
   A change that survives until the next regeneration and then vanishes — while the tracker still
   claims it landed — is worse than one that fails immediately.
 
-## Where tests run — CI, never this box
+## Where tests run — your box first, CI confirms (ci ADR-2203)
 
-**Do not run `bats`, the full suite, or a suite shard locally.** It clogs the machine, and a green
-local run proves nothing about the three-OS matrix that actually gates: the failures that matter
-here have been Windows path resolution, BSD-vs-GNU `sed`, filesystem case-folding and locale
-collation — every one of them invisible on the box that wrote the code. Node for a parse check or
-to generate an artifact is fine; a test RUN is not.
+**The owner's box is the first gate; CI on ubuntu + Node 24 confirms.** `git push` runs
+`.githooks/pre-push` (enable once per clone: `git config core.hooksPath .githooks`): the branch guard,
+`npm run lint`, then `test-changed.mjs`, which runs only the lanes the push touches — the bats files
+of `tests/<lane>-*.bats` and the `node:test` files under `tests/<lane>/`, with a 5-minute cap that
+prints the lanes it did not run and fails. `npm run ci` runs the same quality list the CI job runs
+(`ci-quality.sh`) plus the node tests and the count floor.
 
-CI is the only gate, so make each push buy a full cycle: batch related work into one commit rather
-than pushing per-fix.
+**The full bats suite never runs locally** (~4.3 h on Windows, and it clogs the machine). Run one
+lane's files, one at a time, in the foreground; `npm run test:bats` (`--all`) exists for an explicit
+whole-suite run and nothing calls it by itself. Windows path resolution, BSD-vs-GNU `sed`, case-folding
+and locale collation still surface only on CI, which is why the weekly Windows run exists.
+
+Batch related work into one commit, so each push buys one CI cycle rather than one per fix.
 
 **Read the per-JOB conclusions, never the watcher's exit code.** `gh run watch --exit-status` has
 returned **0 on a run whose conclusion was `failure`** — the same shape as an emitter exiting 0
-while every receipt it wrote was quarantined. Use `gh run view <id> --json jobs` and assert on the
-conclusions themselves.
+while every receipt it wrote was quarantined. Use `ci-digest.mjs --sha <head>` or
+`gh run view <id> --json jobs` and assert on the conclusions themselves.
 
 **And first confirm a run EXISTS for your SHA.** A push does not always create one: on 2026-08-12
 a commit pushed to an open **draft** PR became the PR head with **no run ever created for it**,
@@ -68,10 +73,10 @@ branch conflicts with base — so GitHub creates no run at all and reports nothi
 identical to a slow queue. A conflict means another lane has landed on a file you also touched, so
 the fix is the merge you already owe (`.claude/rules/lanes.md`, shared organs), not a dispatch.
 
-`isDraft: true` blocks a run only where the workflow filters on `pull_request` types; this repo's
-`on: pull_request` has no `types:` filter, so a draft still fires. Check both, and believe the one
-that is actually true rather than the first plausible story — this note originally named the draft
-as the cause and was wrong.
+`isDraft: true` still fires a run, but since ci Phase 00 every job in it is skipped (REQ-02): mark the
+PR ready (`gh pr ready`) and the `ready_for_review` run is the real one. Check both, and believe the
+one that is actually true rather than the first plausible story — this note once named the draft as
+the cause of a missing run and was wrong.
 
 "Pushed" and "a run exists" are two separate facts, exactly as "merged" and "verified" are.
 

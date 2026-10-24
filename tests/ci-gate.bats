@@ -68,18 +68,27 @@ mk_tree() {
   [[ "$output" == *"bad .count"* ]]
 }
 
-@test "ci-changes: a face path sets face, a docs path sets neither" {
+@test "ci-changes: a face path sets face, a docs-only change sets neither and is not code" {
   L="$BATS_TEST_TMPDIR/files"
   printf 'face/src/a.tsx\n' > "$L"
   run CHANGES --files "$L"
   [ -n "$output" ]
   [[ "$output" == *"face=true"* ]]
   [[ "$output" == *"citier=false"* ]]
-  printf 'docs/a.md\n' > "$L"
+  # built from parts: a path this file spelled out whole would be "named by a test", which is code.
+  printf 'docs/adr/%s.md\ninitiatives/%s/PROGRESS.md\n' 2200-zz ci > "$L"
   run CHANGES --files "$L"
   [ -n "$output" ]
   [[ "$output" == *"face=false"* ]]
   [[ "$output" == *"citier=false"* ]]
+  [[ "$output" == *"code=false"* ]]
+  # paperwork is an allowlist: one code path among the docs makes it code; a doc a test reads is code too.
+  printf 'docs/adr/2200-a.md\nface/x.ts\n' > "$L"
+  run CHANGES --files "$L"
+  [[ "$output" == *"code=true"* ]]
+  printf 'docs/wiki/index.md\n' > "$L"
+  run CHANGES --files "$L"
+  [[ "$output" == *"code=true"* ]]
 }
 
 @test "ci-changes: the docker image and the trivy adapter set citier" {
@@ -103,6 +112,7 @@ mk_tree() {
   [ -n "$output" ]
   [[ "$output" == *"face=true"* ]]
   [[ "$output" == *"citier=true"* ]]
+  [[ "$output" == *"code=true"* ]]
   run CHANGES --base "" --head HEAD
   [ -n "$output" ]
   [[ "$output" == *"face=true"* ]]

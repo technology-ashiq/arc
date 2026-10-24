@@ -1,0 +1,102 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".githooks/pre-push:9-11",
+      "breaking_input": "`git push origin other-branch` while HEAD is a different branch. branch-guard.sh --pre-push runs first and inherits the hook's stdin, and it has to read the `<local ref> <local sha> <remote ref> <remote sha>` lines to see which remote ref is bound for main. It consumes them, so `refs=\"$(cat)\"` is empty.",
+      "why": "test-changed gets empty stdin, so `pushes` is empty and `heads` falls back to [\"HEAD\"]. It then tests and diffs HEAD instead of the commits actually being pushed. The pushed branch ships with its lanes untested, or with the wrong lanes tested. Both negative controls ran `git push --dry-run` of HEAD, so they cannot show this.",
+      "fix": "Read stdin once at the top of the hook, before branch-guard: `refs=\"$(cat)\"`, then feed branch-guard with `printf '%s\\n' \"$refs\" | bash ... --pre-push`. Add a control that pushes a non-HEAD branch carrying a planted failure."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:48-60,126",
+      "breaking_input": "Edit `.claude/scripts/docs/wiki-build.mjs`, or any `.claude/scripts/<lane>/x.mjs` whose bats files do not start with `<lane>-`. The lane resolves to `docs`, `filesFor` finds no `tests/docs-*.bats`, `files` is empty, and `if (!files.length) return 0`.",
+      "why": "The push passes with exit 0 and only a `lanes: docs` line. Nothing ran, and that is indistinguishable from green. This is the vacuous pass the repo already warns about: it asserts nothing ran.",
+      "fix": "When a non-paperwork change maps to lanes but yields zero files, print `no tests mapped for lane X` and either fall back to the core set or exit 1. Do not exit 0 silently.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:75-85",
+      "breaking_input": "Run via the pre-push hook. Git exports GIT_DIR (a worktree's .git/worktrees/x path), GIT_INDEX_FILE and possibly GIT_WORK_TREE to hook children. `spawnSync` passes the full env to bats files whose sandboxes run `git init`, `git commit` or `git checkout -b` in a temp dir.",
+      "why": "With GIT_DIR inherited, those git commands act on the real repo or worktree. They can create commits or branches, or write .git/config, while a push is in flight. Locally the same tests pass because the env is clean, so the failure appears only under the hook.",
+      "fix": "Spawn tests with a scrubbed env that drops every GIT_* variable (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_PREFIX, GIT_COMMON_DIR). Add a control test that runs a sandbox git commit under the hook env."
+    },
+    {
+      "id": "B4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-quality.sh:9",
+      "breaking_input": "Run the script in a checkout with no `initiatives/` dir (a root-mode consumer, since products/core ships this script), or with `initiatives/_archive/` or another directory that is not a valid lane name. The unmatched glob stays the literal `initiatives/*/`, so basename is `*`, or the non-lane directory gets passed as a lane.",
+      "why": "kickoff-lint gets `--lane \"*\"` or an invalid lane name and exits 4 or 5. `set -e` then fails the whole quality job and `npm run ci`. lanes.md says a directory that breaks the grammar is not a lane. Root-mode is a permanent consumer contract.",
+      "fix": "Add `shopt -s nullglob` and skip names not matching `^[a-z][a-z0-9-]*$`. Better, take the lane list from lane-resolve instead of the glob."
+    },
+    {
+      "id": "B5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:75,83-84",
+      "breaking_input": "On Windows, run the cap-hitting bats file from PowerShell, or with PowerShell's PATH ahead of Git Bash. `bash` resolves to WSL's bash.exe, where bats and the repo-relative layout are absent. Every step exits 127 and the push is blocked with `FAILED tests/x.bats`. `npm run test:changed`, `test:bats` and `ci` all spawn bare `bash` the same way.",
+      "why": "Per the known PowerShell-PATH-to-WSL issue, the failure is environmental but reads as a test failure. `--no-verify` becomes the habit.",
+      "fix": "Resolve bash explicitly: prefer `process.env.BASH` or Git's usr/bin/bash on win32, and refuse with a clear message if `bash` resolves to System32\\bash.exe."
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:75-85",
+      "breaking_input": "The 5-minute cap hits while bats is running on Windows. `spawnSync`'s timeout kills only the direct `bash` process. bats and its subshell children keep running as orphans, and the next push starts another set.",
+      "why": "The cap exists to stop the box clogging, but on timeout it leaves the clog behind. The cap also cannot interrupt a hung grandchild.",
+      "fix": "On ETIMEDOUT run `taskkill /T /F /PID` for the child on win32, or spawn detached and kill the process group on POSIX."
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:117",
+      "breaking_input": "`npm run test:changed` from an agent or IDE terminal whose stdin is an open pipe that is never closed. isTTY is false, so `readFileSync(0)` blocks forever.",
+      "why": "There is no timeout on the stdin read, so the command hangs. The same code path as the hook cannot tell a hook pipe from an idle pipe.",
+      "fix": "Read stdin only when the hook flag is present (for example `--stdin`, set by the hook), or race the read against a short timeout."
+    },
+    {
+      "id": "B8",
+      "severity": "medium",
+      "where": ".github/workflows/ci.yml; tools lint vs bats-only gates (docs/adr paperwork)",
+      "breaking_input": "A docs-only PR that deletes or renames a `docs/adr/*.md` or `docs/*.md` file that `engine/enforcement.yaml`, gate-parity or brain-drift references. Under `isPaperwork` it gives code=false, so bats and node-test are skipped. The quality job runs only version-gate, product-lint, kickoff-lint, wiki and face checks, and portfolio-board.",
+      "why": "script-vs-workflow.md admits that `npm run lint` (gate-parity, brain-drift, arc-compile --check) runs only inside bats on CI. A paperwork PR therefore merges green without them, and the next code PR goes red for a break this PR caused.",
+      "fix": "Add `npm run lint` to ci-quality.sh, or add the ADR and enforcement paths to READ_BY_TESTS so such a change counts as code."
+    },
+    {
+      "id": "B9",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:35-36,69",
+      "breaking_input": "A tests/fixtures/** directory containing a deliberately failing or cwd-dependent `*.test.mjs`. `nodeLanes()` lists `fixtures` as a lane because `walk` counts any `.test.mjs` below it. Any core-touching push then adds `tests/fixtures/...` to the `node --test` file list.",
+      "why": "LANE_OF excludes `tests/fixtures/`, but nodeLanes and filesFor do not. A fixture meant as test input runs as a real test and fails the push, or gets counted.",
+      "fix": "Exclude `fixtures` and `_lib` in nodeLanes/walk, and use the same enumeration as ci-floor."
+    },
+    {
+      "id": "B10",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:69-72",
+      "breaking_input": "A core push on Windows with a very large set of node test files plus bats names passed as one `node --test a b c ...` argv. The command line exceeds CreateProcess's roughly 32k limit, so spawnSync returns ENAMETOOLONG with status null.",
+      "why": "The failure is reported as `FAILED <hundreds of files>` rather than as an argument-length error, and the push is blocked.",
+      "fix": "Chunk the file list across several node invocations, or pass a glob or directory to node --test. Report `r.error` explicitly."
+    },
+    {
+      "id": "B11",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-changes.mjs:28-29",
+      "breaking_input": "A new `initiatives/<lane>/evidence/phase-NN/check.bats`, `.mjs` or `.sh`, or a `handoffs/*.json`, that a test reads. PAPERWORK allows any extension under evidence/ and handoffs/, and READ_BY_TESTS names only specific phases.",
+      "why": "The allowlist is by directory and not by file type. Executable or machine-read files land in paperwork, so a PR touching only them skips the whole test suite.",
+      "fix": "Restrict the evidence and handoffs patterns to `.md`, `.txt` and `.png`. Treat other extensions as code."
+    },
+    {
+      "id": "B12",
+      "severity": "low",
+      "where": "package.json:11",
+      "breaking_input": "`npm i -g` or `npx arc` on Node 20 or 22 with `engine-strict=true`, or in a CI image pinned to Node 20.",
+      "why": "`engines.node` changed from >=18 to >=24 for a package whose bin is installed into other repos. A consumer-facing install contract changed because arc's own CI moved to Node 24.",
+      "fix": "Keep the published `engines` floor at what the shipped scripts need and set the 24 pin in CI only."
+    }
+  ]
+}

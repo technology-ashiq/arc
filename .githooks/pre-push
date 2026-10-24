@@ -1,6 +1,17 @@
 #!/bin/sh
 # arc commit-time line (distribute ADR-2013): refuse a push bound for main. The server refuses it
 # too once main is protected (ADR-2015); this only says so sooner.
+# Then the owner's box is the first gate (ci REQ-05, ADR-2203): the arc gates, and the tests of the lanes
+# this push touches -- never the full bats suite (~4.3 h on Windows); CI on ubuntu confirms.
 set -e
 cd "$(git rev-parse --show-toplevel)"
+# git's ref lines arrive once on stdin and two readers need them, so keep them in a file and point stdin at
+# it before each (attack p01 B1). The branch-guard line stays verbatim: gate-parity matches it exactly.
+refs="$(mktemp)"
+trap 'rm -f "$refs"' EXIT
+cat > "$refs"
+exec < "$refs"
 bash .claude/scripts/core/branch-guard.sh --pre-push
+npm run --silent lint
+exec < "$refs"
+node .claude/scripts/core/test-changed.mjs --stdin --quiet

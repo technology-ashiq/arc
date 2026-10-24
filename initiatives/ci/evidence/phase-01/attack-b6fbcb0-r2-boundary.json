@@ -1,0 +1,59 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:96-101 (changedPaths fetch/diff try block)",
+      "breaking_input": "Push a branch whose local `origin/main` ref is stale AND where `git fetch -q origin main` succeeds, but `git merge-base origin/main <sha>` is run on a shallow clone / worktree lacking history (no common ancestor). merge-base exits 1 with empty stdout.",
+      "why": "The catch maps ANY failure (including merge-base exit 1 = no common ancestor) to paths:[\"(unknown)\"] and runs only the core set. The pushed lane's own tests are dropped, and the note blames fetch. Same class as debt D9 but triggered online, so the 'rare offline' justification does not hold.",
+      "fix": "On merge-base failure fall back to diffing against the tip of origin/main (`git diff origin/main..h`) or `--root`, and union with the core set instead of replacing the real change list.",
+      "twin_of": "(i)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".githooks/pre-push:11-17",
+      "breaking_input": "`git push` with a huge number of refs, or stdin that is empty because git ran the hook with no ref lines (e.g. `git push --dry-run` with nothing to push). `cat > \"$refs\"` yields an empty file; `exec < \"$refs\"` then feeds empty stdin to test-changed.",
+      "why": "Empty ref list makes test-changed fall back to `heads=[\"HEAD\"]` and test HEAD, which is not what git is pushing (nothing). More importantly, `exec < \"$refs\"` under `set -e` plus `trap ... EXIT` : if `mktemp` fails (read-only TMPDIR on a Windows box with no TEMP) the hook dies before the branch-guard, so main-push refusal is lost with a cryptic error instead of failing safe in the guard.",
+      "fix": "Run branch-guard first from a captured copy; treat mktemp failure as hook failure with an explicit message; when stdin has no lines, print 'nothing to push' and skip tests explicitly.",
+      "twin_of": "(q)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:131-139 (run(), bats steps with `bash -c 'exec bats ...'`)",
+      "breaking_input": "On Windows, git's usr/bin/bash.exe is used, but PATH inside that bash lacks bats (bats installed under a PowerShell-only npm global prefix, e.g. %APPDATA%\\npm). `exec bats` exits 127 for every bats file.",
+      "why": "bashPath() fixes WSL-vs-git bash but not the PATH inside it. A missing bats reads as `FAILED tests/x.bats` for every file, so the hook blocks every push and trains --no-verify. The failure is environmental yet is reported as a test failure.",
+      "fix": "Before running, probe `bats --version` via the chosen bash; on failure print 'bats not found on git bash PATH' and exit with a distinct environment error.",
+      "twin_of": "(t)"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:117-122 (dirty WARN) and 55-60 (testsText(\".\"))",
+      "breaking_input": "Run `node .claude/scripts/core/test-changed.mjs` from a subdirectory is handled by chdir, but `testsText(\".\")` in main() is called after chdir while the exported CLI of ci-changes uses the script's own tree. In a worktree where `tests/` contains a symlink loop or an unreadable subdir, `readdirSync` throws inside `walk`; the catch returns null.",
+      "why": "null makes namedByTests return true for everything, so every non-paperwork-listed doc becomes code. That is fail-safe, but a single unreadable entry (a Windows junction with denied ACL under tests/) silently converts every docs-only push to a full core run at the 5-minute cap, which then fails with 'cap hit'. Cap-induced failure on paperwork is a false red.",
+      "fix": "Skip unreadable entries per-directory instead of failing the whole walk, and report the skipped path.",
+      "twin_of": "(r)"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:147-156 (--ci branch)",
+      "breaking_input": "`npm run ci` where ci-quality.sh fails: `spawnSync(bashPath(), [...])` is given `env: testEnv()`, which strips PWD/OLDPWD and GIT_*, but the `--ci` node tests run via run(node, Infinity) with no timeout. A hung node test never ends and there is no cap.",
+      "why": "Unlike the pre-push path, --ci and --all pass deadline Infinity, so one hung test (a test waiting on a stdin pipe from npm) blocks forever; nothing kills the grandchildren on Ctrl-C on Windows.",
+      "fix": "Give --ci a generous but finite deadline (e.g. 30 minutes) and report which file was running when it hit.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-quality.sh:7 (step bash ...) and :10 (npm run --silent lint)",
+      "breaking_input": "Run ci-quality.sh from git's bash on Windows where `npm` is npm.cmd: `npm run --silent lint` inside MSYS bash resolves npm via PATH; if only npm.cmd exists, bash finds `npm` (the shell script shim) which invokes node with a POSIX-translated path. Lint then runs `node .claude/scripts/core/gate-parity.mjs && ...` through cmd.exe, whose bare `bash` inside those scripts may resolve to WSL.",
+      "why": "The package.json lint script chains node calls via cmd.exe on Windows, so any bare `bash` these gates spawn re-opens the WSL hole that bashPath() closed one level up. Fixed defect (t) is applied at the top level only.",
+      "fix": "Have gate-parity/brain-drift/arc-compile resolve bash the same way (shared helper), or run lint as `node` calls directly from ci-quality.sh.",
+      "twin_of": "(t)"
+    }
+  ]
+}

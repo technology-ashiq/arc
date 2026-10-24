@@ -1,0 +1,68 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".githooks/pre-push:11-17",
+      "breaking_input": "Any push on a box where mktemp fails (unwritable TMPDIR) or where `cat > \"$refs\"` is interrupted; also a push of a tag-only ref set.",
+      "why": "The hook now drains stdin into a temp file BEFORE branch-guard runs, under set -e. If mktemp/cat fails, the hook dies before branch-guard.sh --pre-push, so the main-push refusal line gate-parity expects is skipped by an environmental error with a cryptic message. The guard order was changed so the safety gate now depends on temp-file I/O.",
+      "fix": "Run branch-guard from a captured copy only after verifying the file; or have the guard run first with `tee`. On mktemp failure print an explicit message and still run the guard with the refs piped from a variable.",
+      "twin_of": "(q)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:96-108 (changedPaths) vs ZERO filter",
+      "breaking_input": "Pushing a new branch: git stdin line is `refs/heads/x <sha> refs/heads/x 0000...`. Also a push of two refs where one sha is a non-HEAD tag target or a branch with the same sha as HEAD under a different name.",
+      "why": "`other` compares each pushed sha to `head`. Pushing a second branch whose tip differs from HEAD is refused, but pushing HEAD plus a lightweight tag on another commit is filtered only by the `refs/tags/` prefix of the LOCAL ref; an annotated-tag push uses a tag object sha (not a commit sha), which is not HEAD and is also under refs/tags so it is skipped, fine, but `refs/for/` or `refs/notes/` style refs carry non-HEAD shas and now refuse every push that includes them with a message about 'checked-out HEAD'.",
+      "fix": "Only consider refs/heads/* local refs for the HEAD comparison; ignore notes and other namespaces with a printed note.",
+      "twin_of": "(q)"
+    },
+    {
+      "id": "B3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:112-116 (fetch inside try)",
+      "breaking_input": "`git push` from a worktree on a box with a credential helper that prompts, or no network: `git fetch -q origin main` with stdin ignored and timeout 60000.",
+      "why": "The fetch runs inside the pre-push hook while the outer `git push` already holds connection state; a prompting credential helper or slow remote consumes up to 60s per push before falling to the core-set fallback, and a hung fetch (ssh askpass on Windows opens a GUI) is not killed as a process tree. GIT_TERMINAL_PROMPT is not set to 0, so the fetch can block on a prompt that stdin:'ignore' cannot answer.",
+      "fix": "Set env GIT_TERMINAL_PROMPT=0 (and GCM_INTERACTIVE=never) on the fetch spawn; remember the 60s as part of the 5-minute cap.",
+      "twin_of": "(i)"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:131-139 (bashPath)",
+      "breaking_input": "Git for Windows installed per-user or portable with `git --exec-path` = <root>/mingw64/libexec/git-core, but bash at <root>/bin/bash.exe only, or a 32-bit/clangarm64 layout (`clangarm64/libexec/git-core`).",
+      "why": "The derived path assumes usr/bin/bash.exe three directories above exec-path; when it does not exist the function silently falls back to bare `bash`, which is exactly the WSL hole fixed defect (t) claims closed. No warning is printed.",
+      "fix": "Probe `<root>/bin/bash.exe` as well, and if falling back on win32 print that PATH bash is used and refuse when it resolves under System32.",
+      "twin_of": "(t)"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:164-170 (--ci node tests) and ci-quality.sh step bats",
+      "breaking_input": "`npm run ci` where ci-quality.sh's last step `bats --print-output-on-failure tests/portfolio-board.bats` runs under git's bash that was started with testEnv(), but ci-floor.mjs is spawned with the FULL process.env (no testEnv).",
+      "why": "The floor spawn at the end of --ci keeps GIT_* and PWD from the parent while every other child is scrubbed; defect (s) is applied unevenly. If ci-floor shells out to git, it runs against whatever GIT_DIR the invoking hook/env exported.",
+      "fix": "Pass `env: testEnv()` to the ci-floor spawn too.",
+      "twin_of": "(s)"
+    },
+    {
+      "id": "B6",
+      "severity": "low",
+      "where": ".claude/scripts/core/ci-quality.sh:10 (`step npm run --silent lint`)",
+      "breaking_input": "Run ci-quality.sh via git's bash on Windows when `npm` resolves to npm.cmd launched through cmd.exe: package.json lint chains node calls with `&&` under cmd.exe, and node scripts like arc-compile --check that spawn bare `bash` pick WSL's bash via cmd's PATH.",
+      "why": "bashPath() fixes only the top-level launcher; the lint step re-enters a PATH-resolved shell, reopening defect (t). A WSL bash lacks the repo layout and the failure reads as a gate failure.",
+      "fix": "Invoke the three lint node scripts directly from ci-quality.sh instead of via npm, or export a PATH with git's usr/bin first inside ci-quality.sh.",
+      "twin_of": "(t)"
+    },
+    {
+      "id": "B7",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:94-96 (--stdin with git's ref lines)",
+      "breaking_input": "A branch name containing a space cannot occur, but a remote URL-free ref line with a tab or CRLF: the Windows hook shell writes `\\r\\n` line ends; split(\" \") on a line ending in `\\r` leaves the remote sha with a trailing CR, and ZERO.test on the local sha is fine, yet `f[1]` for a 3-field truncated line is undefined.",
+      "why": "Lines are split on single spaces and only f[1] is trusted. A malformed or CR-terminated line is accepted without validating that f[1] is a 40/64-hex sha, so garbage becomes a `heads` entry, `h.slice(0,8)` is printed as a refusal, or merge-base fails and falls to the core set.",
+      "fix": "Validate f[1] against /^[0-9a-f]{40,64}$/ and treat any non-matching line as an error naming the line.",
+      "twin_of": "(j)"
+    }
+  ]
+}
