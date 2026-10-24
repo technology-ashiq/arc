@@ -95,3 +95,16 @@ Behaviour notes, none of them a loosened assertion:
 | org-team: --team and --products are exclusive, and an unknown team fails the sync | org-team: --team and --products are exclusive, and an unknown team fails the sync | team.test.mjs | from org-team.bats |
 | org-hire: a seat is staffed only by an approved org.role interview naming it (REQ-11) | org-hire: a seat is staffed only by an approved org.role interview naming it (REQ-11) | team.test.mjs | from org-team.bats |
 | org-hire: a request decided twice refuses the hire stamp by name (logic attack L5) | org-hire: a request decided twice refuses the hire stamp by name (logic attack L5) | team.test.mjs | from org-team.bats |
+
+## §11 kill line -- measured on the owner's box, 2026-10-24
+
+| suite | how | wall time | tests |
+|---|---|---|---|
+| bats | `bats tests/org-<f>.bats`, the 11 files one at a time, foreground | 678 s | 73 ok |
+| node:test | `node --test --test-reporter=tap "tests/org/*.test.mjs"` (files in parallel, the runner's default) | 222 s | 73 pass |
+
+**Ratio 3.05x -- below the 5x line.** Per PLAN-ci §11 that stops Phase D (the fan-out) until the owner re-plans.
+Where the time goes: both suites spend it in the same place, spawning arc's own scripts (org-team --init per
+scratch tree, sync-to-project twice, arc-run); the runner swap removes bash/bats start-up, not that work. A
+faster lane needs fewer spawns per test (import the pure functions, as PLAN-ci C says), which is a test redesign,
+not a translation.
