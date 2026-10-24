@@ -254,9 +254,8 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/templates/githooks/pre-commit`](../../../.claude/templates/githooks/pre-commit)
 - [`.claude/templates/githooks/pre-push`](../../../.claude/templates/githooks/pre-push)
 
-## Files (29)
+## Files (27)
 
-- [`.claude/hooks/PostToolUse.d/00-format.sh`](../../../.claude/hooks/PostToolUse.d/00-format.sh)
 - [`.claude/hooks/PostToolUse.sh`](../../../.claude/hooks/PostToolUse.sh)
 - [`.claude/hooks/PreCompact.d/00-snapshot.sh`](../../../.claude/hooks/PreCompact.d/00-snapshot.sh)
 - [`.claude/hooks/PreCompact.sh`](../../../.claude/hooks/PreCompact.sh)
@@ -266,7 +265,6 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/hooks/PreToolUse.d/00-destructive.sh`](../../../.claude/hooks/PreToolUse.d/00-destructive.sh)
 - [`.claude/hooks/PreToolUse.d/50-deploy.sh`](../../../.claude/hooks/PreToolUse.d/50-deploy.sh)
 - [`.claude/hooks/PreToolUse.sh`](../../../.claude/hooks/PreToolUse.sh)
-- [`.claude/hooks/SessionEnd.d/00-session-log.sh`](../../../.claude/hooks/SessionEnd.d/00-session-log.sh)
 - [`.claude/hooks/SessionEnd.sh`](../../../.claude/hooks/SessionEnd.sh)
 - [`.claude/hooks/SessionStart.d/00-context.sh`](../../../.claude/hooks/SessionStart.d/00-context.sh)
 - [`.claude/hooks/SessionStart.d/50-toolchain.sh`](../../../.claude/hooks/SessionStart.d/50-toolchain.sh)
