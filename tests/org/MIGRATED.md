@@ -6,7 +6,7 @@
 | harness · model | Claude Code · claude-opus-5-5 (Phase 02 is Opus's, PLAN-ci D.5) |
 | run | 2026-10-24, one session, by hand -- the worked example tests/MIGRATING.md points at |
 | old | 11 files `tests/org-*.bats`, 73 `@test` |
-| new | 9 files `tests/org/*.test.mjs`, 73 `test(` (.count = 73) |
+| new | 12 files `tests/org/*.test.mjs`, 73 `test(` (.count = 73) |
 | dropped | none |
 | timing | see "§11 kill line" below |
 
@@ -60,7 +60,7 @@ Behaviour notes, none of them a loosened assertion:
 | org-judge: refusals name every failed condition and write nothing | org-judge: refusals name every failed condition and write nothing | judge.test.mjs | from org-judge.bats |
 | org-judge: a dry run prints the payload and emits nothing | org-judge: a dry run prints the payload and emits nothing | judge.test.mjs | from org-judge.bats |
 | org-judge: run through a symlinked path, the CLI still runs (main guard realpaths both sides) | org-judge: run through a symlinked path, the CLI still runs (main guard realpaths both sides) | judge.test.mjs | from org-judge.bats |
-| org-own: the card rewrite and the command run every check clean | org-own: the card rewrite and the command run every check clean | fixture-run.test.mjs | from org-own.bats |
+| org-own: the card rewrite and the command run every check clean | org-own: the card rewrite and the command run every check clean | fixture-own.test.mjs | from org-own.bats |
 | org-own --assign: who sits a role, set on a branch with every refusal before any write (face Phase 13, ADR-1352) | org-own --assign: who sits a role, set on a branch with every refusal before any write (face Phase 13, ADR-1352) | fixture-run.test.mjs | from org-own.bats |
 | org-review: every test in this file is registered (none dropped by name) | org-review: every test in this file is registered (none dropped by name) | review.test.mjs | from org-review.bats |
 | org-review: a role's runs are derived from its placed receipts | org-review: a role's runs are derived from its placed receipts | review.test.mjs | from org-review.bats |
@@ -83,7 +83,7 @@ Behaviour notes, none of them a loosened assertion:
 | role-seat: --trial-seat refuses twice, empty, unknown, and on a process with no role -- exit 2, no receipt | role-seat: --trial-seat refuses twice, empty, unknown, and on a process with no role -- exit 2, no receipt | role-seat.test.mjs | from org-role-seat.bats |
 | role-seat: --dry-run names the seat and why | role-seat: --dry-run names the seat and why | role-seat.test.mjs | from org-role-seat.bats |
 | role-seat: a role process that emits a closed-payload kind still completes, role fields on run.completed only | role-seat: a role process that emits a closed-payload kind still completes, role fields on run.completed only | role-seat.test.mjs | from org-role-seat.bats |
-| skill-import: the vet, the source and the command run every check clean | skill-import: the vet, the source and the command run every check clean | fixture-run.test.mjs | from org-skill-import.bats |
+| skill-import: the vet, the source and the command run every check clean | skill-import: the vet, the source and the command run every check clean | fixture-skill-import.test.mjs | from org-skill-import.bats |
 | org-team: every test in this file is registered (none dropped by name) | org-team: every test in this file is registered (none dropped by name) | team.test.mjs | from org-team.bats |
 | org-team: --init proposes a valid discover team with E2 seats held by the owner, and never overwrites | org-team: --init proposes a valid discover team with E2 seats held by the owner, and never overwrites | team.test.mjs | from org-team.bats |
 | org-team: --init refuses a venture that is not registered | org-team: --init refuses a venture that is not registered | team.test.mjs | from org-team.bats |
@@ -91,7 +91,7 @@ Behaviour notes, none of them a loosened assertion:
 | org-team: an approved digest governs, a comment keeps it, a value change breaks it | org-team: an approved digest governs, a comment keeps it, a value change breaks it | team.test.mjs | from org-team.bats |
 | org-team: the gate refuses an E2 role on shift that the owner does not hold | org-team: the gate refuses an E2 role on shift that the owner does not hold | team.test.mjs | from org-team.bats |
 | org-team: a queue cap above 7 is refused (REQ-10) | org-team: a queue cap above 7 is refused (REQ-10) | team.test.mjs | from org-team.bats |
-| org-team: sync --team installs byte-for-byte what --products <the team closure> installs (REQ-07) | org-team: sync --team installs byte-for-byte what --products <the team closure> installs (REQ-07) | team.test.mjs | from org-team.bats |
+| org-team: sync --team installs byte-for-byte what --products <the team closure> installs (REQ-07) | org-team: sync --team installs byte-for-byte what --products <the team closure> installs (REQ-07) | team-sync.test.mjs | from org-team.bats |
 | org-team: --team and --products are exclusive, and an unknown team fails the sync | org-team: --team and --products are exclusive, and an unknown team fails the sync | team.test.mjs | from org-team.bats |
 | org-hire: a seat is staffed only by an approved org.role interview naming it (REQ-11) | org-hire: a seat is staffed only by an approved org.role interview naming it (REQ-11) | team.test.mjs | from org-team.bats |
 | org-hire: a request decided twice refuses the hire stamp by name (logic attack L5) | org-hire: a request decided twice refuses the hire stamp by name (logic attack L5) | team.test.mjs | from org-team.bats |
@@ -108,3 +108,17 @@ Where the time goes: both suites spend it in the same place, spawning arc's own 
 scratch tree, sync-to-project twice, arc-run); the runner swap removes bash/bats start-up, not that work. A
 faster lane needs fewer spawns per test (import the pure functions, as PLAN-ci C says), which is a test redesign,
 not a translation.
+
+### Pilot re-time (2026-10-24, `/arc-change`, phase-02 spec)
+
+Per-file timing showed the 222 s was not the runner: 7 of 9 files took 2-11 s, and two files held four slow
+cases in series (`fixture-run` 196 s: skill-import 75, own 39, dup-keys 31; `team` 97 s: the sync case 83).
+node:test runs one file's tests in series and files in parallel, so the slow cases moved to their own files
+(`fixture-own`, `fixture-skill-import`, `team-sync`), assertions and names unchanged. No function-style rewrite.
+
+| suite | wall time | tests |
+|---|---|---|
+| node:test, 12 files | 145 s, then 117 s | 73 pass |
+
+**Ratio 4.7x-5.8x -- on the 5x line, not clearly past it.** The floor is now the single slowest case (sync, ~83 s:
+two full installs); going lower needs that case redesigned, not the runner.

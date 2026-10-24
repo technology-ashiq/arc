@@ -158,7 +158,7 @@ flowchart TB
 | A-02: round-robin by file over 4 shards lands each shard within ~2x of the others | any shard > 2x the fastest in REQ-03's per-job durations | 00 |
 | A-03: GitHub counts an `if:`-skipped required job as passing | REQ-02's docs-only PR shows "required check expected" instead of mergeable | 01 |
 | A-04: `test:changed` on the owner's box finishes a typical one-lane push in < 5 min while bats remains | 3 consecutive pushes with pre-push > 5 min | 01 |
-| A-05: `org` under `node:test` is ≥ 5x faster than under bats on the owner's box | Phase 02 timing below 5x → §11 kill line | 02 |
+| A-05: `org` under `node:test` is ≥ 5x faster than under bats on the owner's box | Phase 02 timing below 5x → §11 kill line FIRED 2026-10-24 (org 678 s bats vs 222 s node:test = 3.05x; routed by /arc-change to a function-style pilot, phase-02 spec) | 02 |
 | A-06: an owner-named non-Claude model can drive the worker harness through OmniRoute with working tool calls | either pilot worker cannot complete the D.3 brief's tool calls on its lane | 03 |
 | A-07: up to 5 parallel lane PRs merge without conflicts when shared files are off-limits | any two lane PRs conflict on a file outside their `tests/{lane}/**`, or `strict` protection forces > 2 rebase-and-rerun cycles on one PR | 04 |
 
