@@ -24,3 +24,10 @@ branch-guard: refuses a push to main (refs/heads/x) -- open a PR instead
 RAN branch-guard
 hook exit=1
 ```
+
+## A-04 strike 1 -- the p01 branch's own push (2026-10-24)
+
+`git push -u origin feat/ci-p01-local-first`: 307 s, then `5-minute cap hit; not run: tests/face-browser.bats ...
+tests/launch-trust.bats` and the push was refused (exit 1). Not a typical one-lane push: p01 is stacked on the
+unmerged p00, so its diff against origin/main carries p00's face lockfile and launch fixture (4 lanes). Counted as
+strike 1 of A-04's "3 consecutive pushes > 5 min". After p00 merges the same push maps to ci + core only.
