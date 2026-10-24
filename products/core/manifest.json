@@ -24,6 +24,8 @@
     ".claude/scripts/core/ci-floor.mjs",
     ".claude/scripts/core/ci-install-tools.sh",
     ".claude/scripts/core/ci-quality.sh",
+    ".claude/scripts/core/migrate-guard.mjs",
+    ".claude/scripts/core/migrate-worktree.sh",
     ".claude/scripts/core/test-changed.mjs",
     ".claude/scripts/core/common.sh",
     ".claude/scripts/core/evolve-manifest.mjs",

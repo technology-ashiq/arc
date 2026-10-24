@@ -7,10 +7,10 @@
 
 ## Scope
 
-- The owner names X and Y and has the OmniRoute / OpenRouter key and endpoint ready (D.2). The session never picks a model (ADR-0069 b1, ADR-2211).
+- The owner named X = `claude-sonnet-5-5` (`spine`) and Y = `claude-haiku-5-5` (`jobs`) on 2026-10-24, run in Claude Code on the subscription (ADR-2211 amendment); no gateway key needed. The session never picks a model (ADR-0069 b1, ADR-2211).
 - `migrate-worktree.sh spine` and `migrate-worktree.sh jobs`; the owner launches each worker with the printed line.
 - Per PR: `migrate-guard` table, Opus review, one negative control, approve or send back.
-- Scorecard per model in each `MIGRATED.md` header: first-push PASS (y/n) · review findings by severity · negative control caught (y/n) · wall time · cost from OmniRoute logs.
+- Scorecard per model in each `MIGRATED.md` header: first-push PASS (y/n) · review findings by severity · negative control caught (y/n) · wall time · usage-limit % consumed (subscription, ADR-2211 amendment).
 - §11 second kill arm: both models fail first push AND both have a weakened assertion → STOP, the owner re-approves an Opus-only cost.
 
 ## Exit criteria (Definition of Done)

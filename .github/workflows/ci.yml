@@ -94,6 +94,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
         with:
           node-version: '24'
+      # migrate-guard's self-test runs its sandbox lane's old bats files (the "green" guard).
+      - name: Install tools
+        run: bash .claude/scripts/core/ci-install-tools.sh
       - name: node --test
         run: |
           n="$(find tests -name '*.test.mjs' | wc -l | tr -d ' ')"
@@ -115,7 +118,7 @@ jobs:
     needs: [changes, quality, bats, node-test]
     if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
       - name: Every test job succeeded
         run: |
@@ -129,11 +132,22 @@ jobs:
             echo "::error::${r%%=*} did not succeed (${r#*=})"; exit 1
           done
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
         with:
           node-version: '24'
       - name: Test-count floor
         run: node .claude/scripts/core/ci-floor.mjs
+      # A lane migration PR (migrate/<lane>) passes the six D.4 guards, FAIL from birth (ADR-2207, REQ-09).
+      - name: migrate-guard
+        if: ${{ startsWith(github.head_ref, 'migrate/') }}
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          bash .claude/scripts/core/ci-install-tools.sh
+          node .claude/scripts/core/migrate-guard.mjs "${HEAD_REF#migrate/}" --base "$BASE_SHA"
 
   security:
     needs: changes

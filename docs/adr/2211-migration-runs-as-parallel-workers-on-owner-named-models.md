@@ -22,3 +22,11 @@ Option 2. The owner names every model, so it is a human choice, not a switch, an
 ## Consequences
 
 Each run records `lane · harness · model slug · start/end · tokens/cost` in its `MIGRATED.md` header.
+
+## Amendment 2026-10-24 (`/arc-change`, owner)
+
+The owner named the pilot models: **X = `claude-sonnet-5-5` on `spine`, Y = `claude-haiku-5-5` on `jobs`**, run in
+Claude Code on the owner's subscription, not through OmniRoute. The gateway was there for cost; on the subscription
+there is no per-token cost, so each `MIGRATED.md` header records **usage-limit % consumed** in place of `$`. The
+shared quota is the new constraint: the pilot's usage figure sets how many workers fan out at once (≤ 5 still holds).
+A-06 (tool calls through a gateway) no longer applies. The guards, the Opus review and the negative control are unchanged.
