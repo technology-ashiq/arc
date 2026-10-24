@@ -139,7 +139,7 @@ export function check(root) {
     const id = typeof r.id === "string" && r.id.trim() ? r.id : "(row with no id)";
     if (ids.has(id)) gap(id, "duplicate id");
     ids.add(id);
-    const m = typeof r.source === "string" ? SOURCE_RE.exec(r.source) : null;
+    const m = typeof r.source === "string" ? r.source.match(SOURCE_RE) : null;
     if (!m) { gap(id, `source must be hook:EVENT/FILE.sh, gate:NAME or action:NAME, got ${JSON.stringify(r.source)}`); continue; }
     if (m[1] === "hook") {
       const key = `${m[2]}/${m[3]}`;
