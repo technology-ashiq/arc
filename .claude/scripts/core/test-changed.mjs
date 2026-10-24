@@ -16,6 +16,8 @@
  *   .claude/scripts/core/, tests/test_helper.bash,
  *   tests/_lib/, or a path no lane matches          -> core: bats files naming that file, plus every
  *                                                      node:test lane; prints why
+ * Within those lanes, node:test files run whole; bats files run only when changed or naming a changed path,
+ * and a changed script no bats file names runs its lane's bats whole (A-04 FIRED 2026-10-24).
  * A lane that maps to no test file runs the core set too, and says so: a lane with no tests is not green.
  * A failed fetch or merge-base runs the core set and prints why -- never a diff against a stale ref.
  * The full bats suite never runs here (~4.3 h on Windows); a 5-minute cap prints the lanes not run, exit 1.
@@ -32,6 +34,8 @@ const CAP_MS = 5 * 60 * 1000;
 const ZERO = /^0+$/;
 const SHARED = [/^\.claude\/scripts\/core\//, /^tests\/test_helper\.bash$/, /^tests\/_lib\//];
 const LANE_OF = [/^\.claude\/scripts\/([a-z0-9-]+)\//, /^initiatives\/([a-z0-9-]+)\//, /^(face)\//, /^tests\/([a-z0-9]+)-[^/]*\.bats$/, /^tests\/([a-z0-9]+)\.bats$/, /^tests\/(?!fixtures\/|_lib\/)([a-z0-9-]+)\//];
+// never code (A-04 attack B3); everything else, extensionless hooks included, is
+const DATA = /(\.(md|json|jsonl|ya?ml|txt|csv|html?|css|svg|png|jpe?g|gif|webp|ico|lock|toml)|(^|\/)\.(gitignore|gitattributes|nvmrc|npmrc|editorconfig))$/i;
 const NOT_TESTS = new Set(["fixtures", "_lib"]); // test input and helpers, never a suite (attack p01 B9)
 
 const list = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
@@ -50,17 +54,21 @@ export function planFor(paths, text = "") {
   const why = [];
   const sharedHits = [];
   const direct = []; // a changed test file runs itself, whatever lane it maps to (attack p01 L7)
+  const changed = []; // every other changed path, with its lane: the bats files that name it run
   const kn = known();
   for (const p of paths) {
     if (isPaperwork(p, text)) continue;
-    if (/^tests\/(?!fixtures\/|_lib\/).*\.(bats|test\.mjs)$/.test(p) && existsSync(p)) direct.push(p);
-    if (SHARED.some((r) => r.test(p))) { lanes.add("core"); sharedHits.push(p); why.push(`${p} is shared -> core`); continue; }
+    const isTest = /^tests\/(?!fixtures\/|_lib\/).*\.(bats|test\.mjs)$/.test(p);
+    if (isTest && existsSync(p)) direct.push(p);
+    if (SHARED.some((r) => r.test(p))) { lanes.add("core"); sharedHits.push(p); changed.push({ p, lane: "core" }); why.push(`${p} is shared -> core`); continue; }
     const b = p.match(/^tests\/([^/]+)\.bats$/);
     const m = b ? [null, batsLane(b[1], kn)] : LANE_OF.map((r) => p.match(r)).find(Boolean);
-    if (m && m[1] !== "core") lanes.add(m[1]);
-    else { lanes.add("core"); why.push(`no lane matches ${p} -> core`); }
+    const lane = m && m[1] !== "core" ? m[1] : "core";
+    lanes.add(lane);
+    if (lane === "core") why.push(`no lane matches ${p} -> core`);
+    if (!isTest) changed.push({ p, lane });
   }
-  return { lanes, why, sharedHits, direct };
+  return { lanes, why, sharedHits, direct, changed };
 }
 
 function filesFor(plan) {
@@ -72,11 +80,39 @@ function filesFor(plan) {
   for (const l of [...plan.lanes]) if (l !== "core" && ofLane(l).length === 0) { plan.lanes.add("core"); plan.why.push(`lane ${l} maps to no test file -> core`); }
   if (plan.lanes.has("core")) for (const l of nodeLanes()) plan.lanes.add(l);
   const pick = new Set(plan.direct);
-  for (const l of plan.lanes) for (const f of ofLane(l)) pick.add(f);
-  // A shared script's own tests are the bats files that name it; the rest of the suite is CI's.
-  // shortcut: a name grep, not an import graph; misses a test that reaches the script indirectly, CI catches it.
-  const names = plan.sharedHits.filter((p) => p.startsWith(".claude/scripts/core/")).map((p) => basename(p));
-  for (const f of bats) if (names.some((n) => readFileSync(f, "utf8").includes(n))) pick.add(f);
+  // node:test lanes run whole: seconds, and only a whole lane can be held to its .count.
+  for (const l of plan.lanes) for (const f of ofLane(l)) if (f.endsWith(".test.mjs")) pick.add(f);
+  // A bats lane runs only the files that name a changed path: whole lanes blew the 5-minute cap on three
+  // pushes in a row (A-04 FIRED 2026-10-24). Anything not on the data list is code, matched by its basename as
+  // a whole word (`gate.mjs` is not `publish-gate.mjs`); package.json or AGENTS.md is named by dozens of files,
+  // so a data file's bats run is CI's.
+  // shortcut: a name grep, not an import graph; misses a test that reaches the file indirectly, CI catches it.
+  const cache = new Map();
+  // an unreadable bats file counts as a hit: selected, never silently dropped
+  const read = (f) => { if (!cache.has(f)) { try { cache.set(f, readFileSync(f, "utf8")); } catch { cache.set(f, null); } } return cache.get(f); };
+  for (const { p, lane } of plan.changed ?? []) {
+    // a fixture runs the bats files naming its directory (fixtures/<dir>), the way they load it (attack L6)
+    const fx = p.match(/^tests\/(fixtures\/.+)\/[^/]+$/);
+    if (fx) {
+      const hits = bats.filter((f) => { const t = read(f); return t === null || t.includes(fx[1]); });
+      for (const f of hits) pick.add(f);
+      if (!hits.length) plan.why.push(`no bats file names ${fx[1]} -> bats run on CI`);
+      continue;
+    }
+    if (/^tests\//.test(p)) { plan.why.push(`${p} is a bats helper -> bats run on CI, node lanes here`); continue; }
+    // a nested data file runs the bats files naming its full path (r2 B3); a root one (package.json, AGENTS.md)
+    // is named by dozens, so its bats run is CI's
+    if (DATA.test(p)) { if (p.includes("/")) for (const f of bats) { const t = read(f); if (t === null || t.includes(p)) pick.add(f); } continue; }
+    const word = new RegExp(`(^|[^\\w.-])${basename(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-]|\\.\\w)`);
+    const hits = bats.filter((f) => { const t = read(f); return t === null || word.test(t); });
+    for (const f of hits) pick.add(f);
+    // a changed script no test names gets its lane's bats files, never nothing; core is every lane, so CI's
+    if (hits.length) continue;
+    const own = lane === "core" ? [] : ofLane(lane).filter((f) => f.endsWith(".bats"));
+    if (!own.length) { plan.why.push(`no bats file names ${p} -> bats run on CI`); continue; }
+    for (const f of own) pick.add(f);
+    plan.why.push(`no test names ${p} -> lane ${lane} bats whole`);
+  }
   return [...pick];
 }
 

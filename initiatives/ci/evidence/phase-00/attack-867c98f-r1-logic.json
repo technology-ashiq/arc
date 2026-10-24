@@ -1,0 +1,91 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:85-89",
+      "breaking_input": "Change a file like `.claude/scripts/core/foo.mjs` whose basename `foo.mjs` appears in the text of a bats file that is NOT its lane, e.g. `tests/other/bar.bats` has a line `# foo.mjs` in a comment. `filesFor` matches by basename substring and adds `tests/other/bar.bats` to the pick set even though `foo.mjs` is not in `other` lane.",
+      "why": "The new logic in the changed loop matches any bats file whose text includes `basename(p)`, regardless of which lane that bats file belongs to or whether the changed file is in that lane. A basename like `publish-gate.mjs` appearing in an unrelated bats file's comment or string causes that unrelated test to run, violating the intent that only the files that 'name' a changed path run, and can pull in tests from other lanes, breaking the 5-minute cap or running unrelated tests.",
+      "fix": "When matching bats files by basename, also require that the bats file's lane (from its path or name) equals the changed file's lane, or at least that the bats file's lane is among the changed file's lanes.",
+      "twin_of": "(x)"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:87-91",
+      "breaking_input": "Change `.claude/scripts/legal/zz-unnamed.mjs` (a script no bats file names). The code runs `ofLane('legal')` — but `ofLane` may return files that are not bats or may include files from other lanes if the lane mapping is ambiguous; e.g. if `tests/legal/` also contains a `node:test` file or a subdirectory that is not a bats file. The bats files of that lane run whole, but the `why` message says 'no test names ... -> lane legal whole' even when some of those files are not bats. More seriously, if `ofLane` returns a bats file from another lane (e.g., via a mistaken lane mapping for hyphenated names), that file runs here, duplicating or skipping coverage.",
+      "why": "The fallback that runs the lane whole when no test names the file is correct in spirit, but it relies on `ofLane(lane)` being a faithful list of that lane's bats files. If the lane mapping is imperfect (as the existing tests show for hyphenated lanes), running the lane whole can pull in files from other lanes or miss the intended ones, and the 'why' line claims a lane that may not match the files actually run.",
+      "fix": "Have `ofLane` return only bats files, and verify that the lane name is a known lane (from lanes.md) before using it; if the lane is unknown, fall back to core. Also assert that all files returned by `ofLane(lane)` end with `.bats`.",
+      "twin_of": "(w)"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:72-80, 82-94",
+      "breaking_input": "A changed test file, e.g. `tests/legal-publish-gate.bats`, is both pushed to `direct` and, because a bats file is not `.mjs|.js|.sh`, is skipped by the changed loop. But the changed loop's extension filter excludes `.bats`, so a changed bats file never triggers the 'no test names' fallback; instead it runs itself only. If a bats file's own name is changed, that's fine, but if a bats file is renamed, the old name may not be picked up, leaving the renamed file's new name not matching any direct entry because `direct` uses `existsSync(p)` — a renamed-away file may not exist, so a renamed bats file is not run.",
+      "why": "The `direct` list is built by checking `existsSync(p)` on the changed path. When a test file is renamed (removed and added), the removed path doesn't exist, so it's not put in `direct`; the new path is also a changed path but only the loop's `changed` list picks it up if it's `.mjs|.js|.sh` — a `.bats` rename is skipped. Result: a renamed bats test file never runs in pre-push, silently passing when it should fail.",
+      "fix": "Also treat changed bats files as test files even when the old path no longer exists, by splitting the path into old/new from git (e.g., using `git diff --name-status` to get both sides) and handling renames.",
+      "twin_of": "(p)"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:61-64",
+      "breaking_input": "A path like `tests/legal-publish-gate.bats` matches the isTest regex `/^tests\\/(?!fixtures\\/|_lib\\/).*\\.(bats|test\\.mjs)$/`, so it goes to `direct`. But the regex allows any `.*` including `/`, so a path like `tests/deep/nested/file.bats` (a deep bats file that is not a lane-level file) is treated as a direct test. Similarly a path like `tests/legal-publish-gate.test.mjs` (a `.test.mjs` at any depth) is a direct test. The code later uses `batsLane(b[1], kn)` only for top-level `tests/*.bats`, but the `m` match for lane uses `LANE_OF` which may not match deep paths, falling back to core. A deep `.bats` that is changed would run itself as a direct test, but its lane mapping is core, so it also pulls the whole core node lanes — possible overrun.",
+      "why": "The regex treats any file under `tests/` (except fixtures/_lib) with `.bats` or `.test.mjs` extension as a direct test. That includes deep nested files that are not lane tests, and the lane detection (`LANE_OF`) may not map them, causing them to fall into core and run all node lanes, defeating the A-04 narrowing.",
+      "fix": "Restrict `isTest` to only top-level `tests/*.bats` and `tests/*/*.test.mjs` that are known lanes, or at least require the lane name to match the directory structure.",
+      "twin_of": "(u)"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:75-80",
+      "breaking_input": "The `changed` loop runs after the `pick` set is built from `direct` and node lanes. For a changed script like `.claude/scripts/legal/publish-gate.mjs`, `filesFor` adds any bats file whose text contains `publish-gate.mjs`. But then it ALSO, if `hits.length` is non-empty, does NOT add the lane's bats whole — correct. However, the `hits` list is computed by scanning `text.get(f).includes(basename(p))`. A basename like `publish-gate.mjs` could appear in a bats file that imports it indirectly (e.g., via a path string `../../scripts/legal/publish-gate.mjs`), but that's fine. The real problem: a changed script with a very short basename (e.g., `init.mjs`) appears in every bats file that mentions `init`, which could be many, so the filter matches too broadly.",
+      "why": "The basename grep is a substring match; a generic name like `init.mjs`, `util.mjs`, or `test.mjs` will appear in many bats files across lanes, causing those unrelated bats files to run, undoing the 5-minute cap and pulling in tests from other lanes.",
+      "fix": "Match on a more specific path portion, e.g. the last two path segments, or require the bats file to be in the same lane as the changed script.",
+      "twin_of": "(x)"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs:93-95, 81",
+      "breaking_input": "`plan.changed` is only built for non-test paths. But `tests/fixtures/` and `tests/_lib/` paths are skipped by the isTest regex and also are excluded from the changed loop by `/^tests\\//.test(p)`. So a changed file under `tests/fixtures/` (e.g., a fixture used by a bats test) never triggers any bats run — even though the bats test may rely on that fixture. The A-04 change makes it so a fixture change is never propagated to the bats tests that use it.",
+      "why": "The loop `if (/^tests\\//.test(p) || !/\\.(mjs|js|sh)$/.test(p)) continue;` skips ALL paths under `tests/`, including fixtures. But fixtures under `tests/fixtures/` are often read by bats tests; a change to a fixture should run the bats tests that reference it. The new code treats fixtures as never naming any test, so the pre-push may pass when a fixture change breaks a bats test.",
+      "fix": "Allow `tests/fixtures/` and `tests/_lib/` to be handled by the changed loop (treat them like data files that can be named by bats tests), or at least run the lane's bats tests when a fixture in that lane's directory is changed.",
+      "twin_of": "(v)"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:87-91",
+      "breaking_input": "A changed `.mjs` script in a lane that has NO bats files (e.g., a script in a lane that only has node:test) and no bats file names it: the code runs `ofLane(lane)` which returns an empty list, so `hits.length` is 0 and then it iterates `ofLane(lane)` again adding nothing, and pushes a why message 'no test names ... -> lane x whole' but the lane has no tests. This is fine because the message says whole, but the result is that the node:test lanes are added earlier by the `core` fallback if lane maps to no test file. However, if the lane maps to a node:test file only, the changed loop sees a script and runs `ofLane(lane)` which may return a `.test.mjs` file (since `ofLane` may include that), and then `pick` already has it from the node lanes. But the exit condition: `if (!hits.length) { for (const f of ofLane(lane)) pick.add(f); ... }` — if `ofLane` returns the `.test.mjs`, that's fine. But if the lane has no files at all, `ofLane` returns [], and the code still pushes the why message claiming a whole lane that has nothing — minor.",
+      "why": "The why message 'lane x whole' is printed even when the lane has no test files, which is misleading and could hide that the lane actually maps to core (since earlier code adds core when a lane has no files). Not a functional bug but a clarity/accuracy issue.",
+      "fix": "Only print the 'whole' message when `ofLane(lane).length > 0`; otherwise the earlier 'lane maps to no test file -> core' applies."
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:79-83",
+      "breaking_input": "The `changed` loop excludes paths that are not `.mjs|.js|.sh`. So a change to e.g. `.claude/scripts/core/some.conf` (a config file) or a policy YAML that a bats test reads is not picked up, and the bats tests that use it never run. The prior code had a comprehension on `sharedHits` but that only covered `shared` regex; now a non-code file change runs nothing.",
+      "why": "The extension filter is too narrow: many tests read JSON, YAML, or other data files in scripts; a change to those should run the bats tests that reference them. With the new filter, those changes trigger no bats runs, letting regressions through.",
+      "fix": "Consider matching data files (e.g., `.json`, `.yaml`, `.toml`) by basename in the bats grep too, or document that only code files are tracked; but at minimum, a change to a data file that lives next to a script should run that lane's bats tests."
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:55-61",
+      "breaking_input": "The `isPaperwork(p, text)` check is called before determining if `p` is a test or changed. If `isPaperwork` returns true, the path is skipped entirely. It's plausible that `isPaperwork` considers docs or markdown changes as paperwork and skips them — that's fine. But if a bats test is accidentally classified as paperwork (e.g., it contains a pattern that `isPaperwork` matches), it would be skipped and never run, even though the test file was changed.",
+      "why": "The test suite relies on `isPaperwork` to filter out non-code changes. If that function has a false positive on a `.bats` or `.test.mjs` file, a changed test would be silently dropped, making the diff appear green.",
+      "fix": "Ensure `isPaperwork` never returns true for `.bats` or `.test.mjs` files, or check `isTest`/changed before `isPaperwork`."
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:87-91",
+      "breaking_input": "The fallback in the changed loop runs `ofLane(lane)` whole for a changed script no test names. But `ofLane` is also used earlier to add node:test lanes whole — however those are only added for the lanes in `plan.lanes`. If a changed script's lane is, say, `legal`, but `plan.lanes` also includes `legal` because the changed script was added to `lanes` in `planFor`, that's consistent. But consider a path like `.claude/scripts/legal/publish-gate.mjs` that also matches a `SHARED` regex — then in `planFor` it's added with lane `core` (continue), and `changed` gets it with lane `core`. Then in the changed loop, `basename` is `publish-gate.mjs`, and it may match a bats file in `legal`, but that bats file's lane is legal, not core — yet it gets picked. This is the same as L1 — cross-lane matching.",
+      "why": "The lane stored in `changed` is sometimes `core` when the path is shared, but the basename grep can match a bats file in a different lane, causing cross-lane runs regardless of the stored lane.",
+      "fix": "When building `hits`, only include bats files whose own lane matches the changed file's lane, as in L1."
+    }
+  ]
+}

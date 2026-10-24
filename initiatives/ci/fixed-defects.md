@@ -29,3 +29,8 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (y) A local command that runs bash runs git's bash, never PATH's: `npm run ci` is `test-changed.mjs --ci` (p01 r2 B3).
 - (z) A runner's summary is read from its LAST `# tests N` line; a test's own output can print one first (p01 r2 L3).
 - (aa) A local run that covers a migrated lane whole is held to that lane's `.count`, like CI's node-test job (p01 r2 L2).
+- (ab) A name match is a whole word, never a substring: `gate.mjs` must not match `publish-gate.mjs`, and a stray mention must not suppress a fallback (A-04 r1 B2).
+- (ac) "Is it code" is decided by a data allow-list, never a code extension list: `.cjs`, `.ts`, extensionless hooks are code (A-04 r1 B3).
+- (ad) A fallback is scoped: an unnamed core script does not pull every lane; it says CI runs it (A-04 r1 B4).
+- (ae) An unreadable input counts as a hit (selected), never as a silent skip (A-04 r1 B5).
+- (af) A changed fixture or helper is never silently nothing: it runs what names its directory, or says CI runs it (A-04 r1 B1, L6).

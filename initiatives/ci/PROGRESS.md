@@ -51,3 +51,4 @@ ADR century 2200–2299; ADR-2200..2211 written at kickoff. CI-M = 1 (GitHub Pro
 **Change 2026-10-24 (`/arc-change`, owner OK):** A-05 FIRED (org 3.05x < 5x). Before any re-plan, a function-style pilot on `org` (`team`, `role-seat`, `judge`) re-times the lane; ≥ 5x keeps Phase D with that method, < 5x → strangler. Exit criterion in `phases/phase-02-spec.md`.
 **Ruling 2026-10-24 (owner):** pilot re-time ~5.2x (117-145 s vs 678 s bats) → §11 passes, Phase D continues; MIGRATING.md carries the slow-test-own-file rule.
 **Change 2026-10-24 (`/arc-change`, owner):** Phase 03 pilot models named: Sonnet 5.5 → `spine`, Haiku 5.5 → `jobs`, on the subscription (ADR-2211 amendment); scorecard cost = usage-limit %; A-06 superseded.
+**Change 2026-10-24 (`/arc-change`, owner):** A-04 FIRED (3 pre-push cap hits); pre-push narrows bats to the files naming a changed path (phase-01 spec), branch `feat/ci-prepush-files`.
