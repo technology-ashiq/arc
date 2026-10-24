@@ -226,6 +226,23 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 0 ]
 }
 
+@test "composer scope: the read fragment reaches the scope check when armed under a project dir holding glob characters (ci REQ-11 attack B1)" {
+  # A stand-in scope check that only says it ran: this pins the fragment's own early exit, not the check.
+  local P="$BATS_TEST_TMPDIR/p[1] x"
+  mkdir -p "$P/.claude/hooks/PreToolUse-read.d" "$P/.claude/scripts/design" "$P/.claude/state/design"
+  cp "$ARC_ROOT/.claude/hooks/PreToolUse-read.d/10-design-composer.sh" "$P/.claude/hooks/PreToolUse-read.d/"
+  printf '#!/usr/bin/env bash
+echo SCOPE-CHECK-RAN
+' > "$P/.claude/scripts/design/composer-scope-check.sh"
+  run env CLAUDE_PROJECT_DIR="$P" bash "$P/.claude/hooks/PreToolUse-read.d/10-design-composer.sh" "README.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *SCOPE-CHECK-RAN* ]]
+  touch "$P/.claude/state/design/composer-session--lexos-v1--variant-a"
+  run env CLAUDE_PROJECT_DIR="$P" bash "$P/.claude/hooks/PreToolUse-read.d/10-design-composer.sh" "README.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *SCOPE-CHECK-RAN* ]]
+}
+
 # ---------- 5. the agent contract, which the hook enforces ----------
 
 @test "ui-composer declares a scoped Bash grant for the renderer and nothing wider" {

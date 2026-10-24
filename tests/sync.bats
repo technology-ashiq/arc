@@ -330,8 +330,8 @@ _claude_set() { ( cd "$1/.claude" && find . -type f \
 
 @test "sync: a retired hook is removed when byte-identical to arc's copy, kept when edited (REQ-11)" {
   mkdir -p "$TARGET/.claude/hooks/PostToolUse.d"
-  git -C "$ARC_ROOT" show 5c1333dd:.claude/hooks/PostToolUse.d/00-format.sh > "$TARGET/.claude/hooks/PostToolUse.d/00-format.sh"
-  git -C "$ARC_ROOT" show dc94dd10:.claude/hooks/PostToolUse.d/90-emit.sh > "$TARGET/.claude/hooks/PostToolUse.d/90-emit.sh"
+  # The shipped copies live as fixtures: CI's bats job is a shallow clone without the commits that held them.
+  cp "$ARC_ROOT/tests/fixtures/sync-retired/00-format.sh" "$ARC_ROOT/tests/fixtures/sync-retired/90-emit.sh" "$TARGET/.claude/hooks/PostToolUse.d/"
   echo "# venture edit" >> "$TARGET/.claude/hooks/PostToolUse.d/90-emit.sh"
   run bash "$ARC_ROOT/sync-to-project.sh" "$TARGET"
   [ "$status" -eq 0 ]

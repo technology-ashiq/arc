@@ -34,3 +34,5 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (ad) A fallback is scoped: an unnamed core script does not pull every lane; it says CI runs it (A-04 r1 B4).
 - (ae) An unreadable input counts as a hit (selected), never as a silent skip (A-04 r1 B5).
 - (af) A changed fixture or helper is never silently nothing: it runs what names its directory, or says CI runs it (A-04 r1 B1, L6).
+- (ag) A path from the environment is never a glob pattern: quote the dir, glob only the literal tail (`"$DIR/"name--*`). `compgen -G "$DIR/..."` read a Windows `C:\...` CLAUDE_PROJECT_DIR (and any `[`) as a pattern and failed OPEN (REQ-11 r1 B1, L10).
+- (ah) A test never reads history a shallow CI clone lacks: a shipped artifact the test needs is a fixture, not `git show <old-sha>` (REQ-11 r1 B2, L6).

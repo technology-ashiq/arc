@@ -68,7 +68,7 @@
 .claude/hooks/PreToolUse-edit.d/11-design-composer.sh	d3a2903221e05965bb43dfd462bf895e0934870d5b90d5cf8789875a5405c3c5
 .claude/hooks/PreToolUse-edit.d/40-policy.sh	8f77193c518caaeca127f37a37469ad584dad2dd8de6a86f0f7f116da53407de
 .claude/hooks/PreToolUse-edit.sh	8dea19705f6a3d6eb2d1b16d328becadd2183d869871a1b9dbc808b8c4d8ab23
-.claude/hooks/PreToolUse-read.d/10-design-composer.sh	3e1f611f803f5c1ffc742327f24574a47e11254c22438efd17a9e369f616dc06
+.claude/hooks/PreToolUse-read.d/10-design-composer.sh	fa7010d898c16a2a387fdddbd727881a08232bc1639b70f3620f3788b232e016
 .claude/hooks/PreToolUse-read.sh	3e96140407458acaa68f8ef6d654bd607d57c7431e9acceea8811bff4da32861
 .claude/hooks/PreToolUse.d/00-destructive.sh	8ed748949b643aadb938ccb322138bcb913e700ab89c7eda5ac04ce8ef590e23
 .claude/hooks/PreToolUse.d/10-design-composer.sh	4356a613eedc0455c22d9f58e473ef9426ec34cdaa889012340c17a0ba851cd8
