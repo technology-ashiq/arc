@@ -3,7 +3,7 @@
   "private": true,
   "description": "ESLint for arc's scripts (ci ADR-2203). Its own package so arc's root stays zero-dependency (distribute REQ-08).",
   "devDependencies": {
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "10.0.1",
     "eslint": "9.39.5",
     "globals": "17.13.0"
   }
