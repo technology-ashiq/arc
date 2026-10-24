@@ -66,6 +66,7 @@
     ".claude/scripts/core/secret-diff-scan.sh"
   ],
   "files": [
+    ".claude/hooks/PostToolUse.d/README.md",
     ".claude/hooks/PostToolUse.sh",
     ".claude/hooks/PreCompact.d/00-snapshot.sh",
     ".claude/hooks/PreCompact.sh",

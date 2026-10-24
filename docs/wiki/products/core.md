@@ -254,8 +254,9 @@ compaction: the AI's working memory being squeezed to make room; core saves a sn
 - [`.claude/templates/githooks/pre-commit`](../../../.claude/templates/githooks/pre-commit)
 - [`.claude/templates/githooks/pre-push`](../../../.claude/templates/githooks/pre-push)
 
-## Files (27)
+## Files (28)
 
+- [`.claude/hooks/PostToolUse.d/README.md`](../../../.claude/hooks/PostToolUse.d/README.md)
 - [`.claude/hooks/PostToolUse.sh`](../../../.claude/hooks/PostToolUse.sh)
 - [`.claude/hooks/PreCompact.d/00-snapshot.sh`](../../../.claude/hooks/PreCompact.d/00-snapshot.sh)
 - [`.claude/hooks/PreCompact.sh`](../../../.claude/hooks/PreCompact.sh)
