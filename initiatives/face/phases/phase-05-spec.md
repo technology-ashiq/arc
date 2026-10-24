@@ -7,9 +7,9 @@
 **Branch:** `feat/face-v3-05-close`
 
 ## Exit criteria (Definition of Done)
-- [ ] 5/5 prior phases closed through `/arc-phase-done` (spine receipts present, not only tracker ticks).
-- [ ] `/arc-retro --lane face` run, recording the face-vs-terminal count for the verbs Phases 01–03 added beside what shipped, and deciding ADR-1368's trigger (keep the logic attacker as a trial, or file the ADR-0069 amendment as the next cycle's first slice); `docs/retro-log.md` gains Cycle 17 rows (repeated corrections → setup upgrades); `docs/HISTORY.md` gains the Cycle 17 entry.
-- [ ] PROGRESS `status: IDLE`, `phase: 05 (cycle closed)`; `board-lint` green with no hand edit to PORTFOLIO.md; CI per job; `/arc-phase-done 05`.
+- [x] 5/5 prior phases closed through `/arc-phase-done` (spine receipts present, not only tracker ticks).
+- [x] `/arc-retro --lane face` run, recording the face-vs-terminal count for the verbs Phases 01–03 added beside what shipped, and deciding ADR-1368's trigger (keep the logic attacker as a trial, or file the ADR-0069 amendment as the next cycle's first slice); `docs/retro-log.md` gains Cycle 17 rows (repeated corrections → setup upgrades); `docs/HISTORY.md` gains the Cycle 17 entry.
+- [x] PROGRESS `status: IDLE`, `phase: 05 (cycle closed)`; `board-lint` green with no hand edit to PORTFOLIO.md; CI per job; `/arc-phase-done 05`.
 
 ## Verification plan
 Refined when the phase starts: `board-lint`, `kickoff-lint`, CI per job, the retro receipt.

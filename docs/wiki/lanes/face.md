@@ -188,7 +188,7 @@ face-coverage: the check that every module and every served room has its partner
 
 | | |
 |---|---|
-| Status | LIVE |
+| Status | IDLE |
 | Cycle | arc-face v3 (Cycle 17, opened 2026-10-21) |
 | Product | — |
 

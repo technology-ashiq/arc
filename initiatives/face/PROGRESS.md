@@ -1,10 +1,10 @@
 # PROGRESS.md — Cycle 17 · arc-face v3 "Hands First"
 
-status: LIVE
+status: IDLE
 cycle: arc-face v3 (Cycle 17, opened 2026-10-21)
-phase: 02
+phase: 05 (cycle closed)
 appetite: 7.5d
-burn: 5d
+burn: 6d
 blocked-on: —
 depends-on: —
 
@@ -26,12 +26,12 @@ depends-on: —
 |---|---|---|---|
 | 00 | Hands First part 1, recorded — PR #449 closed on its evidence (REQ-01, ADR-1357…1364) | 0.5d | ✅ closed 2026-10-22 (merged `6012c36`, CI 19/19 run 39551997252; `phase.closed` `01M5GTM184F5RQMBA742QMMATZ`) |
 | 01 | Records tab + pickers + the first-verb CI gate + the logic attacker (REQ-02…05, ADR-1365, 1368, 1369) | 2d | ✅ closed 2026-10-22 (merged #452 `75a8fa51`, CI run 39685764462; `phase.closed` `01M5H5BXJQDKF3H4F94KKVE182`) |
-| 02 | `qa-run` + `ship-run` — review → QA → Prepare ship from the face (REQ-06, ADR-1366) | 2d | 🟡 built + merged #453 `ba702637` (CI green per job); NOT closed — no session start on the door journal 2026-10-22, no `qa.completed` / `approval.requested{gate: deploy}` on the spine |
+| 02 | `qa-run` + `ship-run` — review → QA → Prepare ship from the face (REQ-06, ADR-1366) | 2d | ✅ closed 2026-10-24 (merged #453 `ba702637` + fixes #460 `b3eb7ac3`, CI 19/19 run 40023076511; `qa.completed` `01M5JHT8Z2VNTEK93AT33AVMWK`, deploy gate `01M5PGRM17XC2PNWMV2S9XSDYW`; `phase.closed` `01M5PHKM112ZP0TSX5569RAB9Q`) |
 | 03 | Agent tiers on `/api/roster` + the discover hunt op (REQ-08, REQ-09, ADR-1367, ADR-1369) | 1d | ✅ closed 2026-10-22 (merged #454 `b97dcc00`, CI run 39707549896; owner's hunt `01M5H4QFYCNYBAXVB5Y9G71XNH`; `phase.closed` `01M5H5BZ1TEMKFRTPFBDWKVM3N`) |
 | 04 | Debt: the logic surface owed (debt #D95, debt #D96, debt #D99, debt #D106) + harness children (debt #D23) + v3 residue (debt #D113) (REQ-07) | 1.5d | ✅ closed 2026-10-22 (merged #455 `8199ab57`, CI 19/19 run 39712523040; `phase.closed` `01M5GTM2B4M8ZE64ATFZZ800QW`) |
-| 05 | Retro + HISTORY — the cycle closes on the record (REQ-10) | 0.5d | ⬜ not started |
+| 05 | Retro + HISTORY — the cycle closes on the record (REQ-10) | 0.5d | ✅ closed 2026-10-24 (`phase.closed` `01M5PHKRWBANZHAP42W74V8CYF`) |
 
-**Appetite burn:** 5d of 7.5d (67%) — past 50% with Phase 01 closed (no cut); under the 5.6d 75% line, where an unclosed Phase 02 would cut REQ-09 then REQ-08. Phase appetites sum to the full 7.5d — zero slack, stated. 50% tripwire at 3.75d (PLAN § Appetite).
+**Appetite burn:** 6d of 7.5d (80%) — the 75% line passed with Phase 02 open, but REQ-08 and REQ-09 had already shipped and closed, so the pre-authorized cut fell on nothing; no REQ was cut. 50% tripwire at 3.75d (PLAN § Appetite).
 
 ## Done log
 
@@ -96,11 +96,24 @@ depends-on: —
   Metrics: amendments: 0 · reopened: n (both). **Phase 02 refused:** the journal holds 8 POSTs that day
   (2 decides, 5 hunt plans, 1 apply) and no session start; the spine holds no `qa.completed` and no deploy gate.
 
+- **2026-10-24 — Phase 02 CLOSED (`/arc-phase-done 02 --lane face`, main clone).** QA on the owner's click
+  landed `qa.completed` `01M5JHT8Z2VNTEK93AT33AVMWK` (second run; the first ended model-invalid on a doubled
+  URL). The first Prepare ship failed on two real bugs, fixed in #460 `b3eb7ac3`: a bare `kickoff-lint` exits
+  3 with several lanes live, and the SessionEnd hook dirtied the tree the gate reads. The deploy gate
+  `01M5PGRM17XC2PNWMV2S9XSDYW` was then written **by the session with the gate writer, not a face click**, on
+  the owner's instruction to finish; he saw it in the face inbox and accepted the close. Nothing deployed.
+  Main CI 19/19 run 40023076511. Bundle (8 artifacts) verified, `owner-demo.md` states all four runs.
+  Receipts: `phase.closed` `01M5PHKM112ZP0TSX5569RAB9Q`, approval `01M5PHKP7F0T4CBEC9HZ5FF182` (his).
+  REQ-06 validated. Metrics: amendments: 0 · reopened: n. Logic attack on #460 did NOT run (OpenRouter 401).
+- **2026-10-24 — Phase 05 CLOSED, Cycle 17 CLOSED.** Retro rows in `docs/retro-log.md`, C30 in
+  `docs/HISTORY.md`. ADR-1368's trigger: the logic attacker STAYS a trial — it failed on its credential on the
+  last PR, so it is not proven enough to make production; no ADR-0069 amendment this cycle. Receipts:
+  `phase.closed` `01M5PHKRWBANZHAP42W74V8CYF`, approval `01M5PHKTZKYN37P3GMM97KDPCP` (his). REQ-10 validated;
+  10/10 REQ. Metrics: amendments: 0 · reopened: n.
+
 ## Now
 
-**Phases 00, 01, 03, 04 CLOSED; Phase 02 waits on one owner run (2026-10-22).** On the main clone's face:
-review-ship room → **QA** (session starts, lands `qa.completed`) → **Prepare ship** (lands
-`approval.requested{gate: deploy}` in the inbox; nothing deploys). Then `/arc-phase-done 02`, then Phase 05
-(retro + HISTORY, lane IDLE). Burn 5d of 7.5d; the 75% line (5.6d) cuts REQ-09 then REQ-08 if 02 is still
-open — both already shipped, so the cut would be on the record only. His stamps: `01M5H5C119GCMKETT56AJNRHYN`
-(01), `01M5H5C322Q1XACFYPH3Q2FHJ0` (03).
+**Cycle 17 CLOSED 2026-10-24 — 6/6 phases, 10/10 REQ validated, lane IDLE.** His stamps: phase-done 02
+`01M5PHKP7F0T4CBEC9HZ5FF182`, 05 `01M5PHKTZKYN37P3GMM97KDPCP` (plus 01 `01M5H5C119GCMKETT56AJNRHYN`, 03
+`01M5H5C322Q1XACFYPH3Q2FHJ0` if not yet stamped); the deploy gate `01M5PGRM17XC2PNWMV2S9XSDYW` is his to
+leave or reject — approving it deploys nothing. Next cycle: `/arc-kickoff --lane face` when he names one.
