@@ -117,3 +117,7 @@ depends-on: —
 `01M5PHKP7F0T4CBEC9HZ5FF182`, 05 `01M5PHKTZKYN37P3GMM97KDPCP` (plus 01 `01M5H5C119GCMKETT56AJNRHYN`, 03
 `01M5H5C322Q1XACFYPH3Q2FHJ0` if not yet stamped); the deploy gate `01M5PGRM17XC2PNWMV2S9XSDYW` is his to
 leave or reject — approving it deploys nothing. Next cycle: `/arc-kickoff --lane face` when he names one.
+
+**Cross-lane go-ahead 2026-10-24 (`/arc-change`, owner):** ci Phase 01 may edit `contracts/expected-set.json` in its
+own PR. It adds `workflow:weekly` + `workflow:release` and drops the three retired workflow rows, then regenerates
+`rooms.generated.json`. No face code, REQ or phase changes; lane stays IDLE. Record: `initiatives/ci/handoffs/face-expected-set.md`.
