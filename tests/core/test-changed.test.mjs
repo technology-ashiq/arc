@@ -73,6 +73,31 @@ test("fixtures and _lib are never a lane of tests (attack p01 B9)", () => {
   assert.ok(!/^ {2}tests\/(fixtures|_lib)\//m.test(p.out), p.out);
 });
 
+// A-04 FIRED 2026-10-24: whole bats lanes blew the 5-minute cap, so a bats lane runs only what a change names.
+const batsOf = (out) => out.split("\n").filter((l) => /^ {2}tests\/.*\.bats$/.test(l)).map((l) => l.trim());
+
+test("a changed bats file runs itself, not the rest of its lane (A-04)", () => {
+  assert.deepEqual(batsOf(plan(["tests/legal-publish-gate.bats"]).out), ["tests/legal-publish-gate.bats"]);
+});
+
+test("a changed script runs the bats files that name it, not its whole lane (A-04)", () => {
+  const b = batsOf(plan([".claude/scripts/legal/publish-gate.mjs"]).out);
+  assert.ok(b.includes("tests/legal-publish-gate.bats"), b.join(" "));
+  assert.ok(!b.some((f) => f.startsWith("tests/legal-") && f !== "tests/legal-publish-gate.bats"), b.join(" "));
+});
+
+test("a changed script no bats file names runs its lane's bats whole, and says why (A-04)", () => {
+  const p = plan([".claude/scripts/legal/zz-unnamed.mjs"]);
+  assert.ok(batsOf(p.out).filter((f) => f.startsWith("tests/legal-")).length > 1, p.out);
+  assert.match(p.out, /why: no test names \.claude\/scripts\/legal\/zz-unnamed\.mjs -> lane legal whole/);
+});
+
+test("a data file pulls no bats file, however many name it (A-04)", () => {
+  const p = plan(["package.json"]);
+  assert.ok(p.lanes.includes("core"), p.out);
+  assert.deepEqual(batsOf(p.out), []);
+});
+
 test("a hyphenated lane keeps its whole name, never its first word (attack p01 L4)", () => {
   const p = plan(["tests/model-policy-zz.bats"]);
   assert.ok(p.lanes.includes("model-policy") && !p.lanes.includes("model"), p.out);

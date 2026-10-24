@@ -27,6 +27,7 @@
 - [ ] REQ-02: a draft PR starts 0 jobs; a docs-only PR shows `test`/`node-test`/`bats` skipped and the merge button enabled (A-03)
 - [ ] REQ-04: the command list in `scripts.ci` equals the `run:` lines of `quality` + `test` (a diff in `evidence/phase-01/` shows 0 missing)
 - [ ] REQ-05: two negative controls. A planted failing test in a changed lane makes `git push` exit non-zero from `pre-push`. The same plant in a worktree whose local `origin/main` is 20 commits behind also exits non-zero.
+- [ ] A-04 FIRED fix (owner, 2026-10-24, `/arc-change`): `test-changed` runs a changed test file, the bats files that name a changed path, and node:test lanes whole; a bats lane runs whole only for a changed code file no test names. Dry-run tests pin each arm.
 - [ ] REQ-07: AFTER the merge, a `gh workflow run weekly.yml --ref main` run has its `windows-latest` step log printing `# tests N` with N ≥ 1, and the suite, the clean-install proof and `ci-tier` are all `success`
 - [ ] face's expected-set edit landed in this PR with face's recorded go-ahead; launch's handoff filed (its merge is launch's)
 - [ ] REQ-11: spine `note.logged` count before/after a 10-edit session moves by 0 `tool.postuse`; no `npx` process in the edit hook chain; `git status --short` empty after SessionEnd; a fresh sync target lacks the 3 retired files; the read hook exits before spawning when unarmed (the existing composer bats suites stay green)
