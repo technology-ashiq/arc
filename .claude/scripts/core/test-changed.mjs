@@ -5,6 +5,7 @@
  *
  *   node .claude/scripts/core/test-changed.mjs [--dry-run] [--quiet] [--stdin] [--files LIST] [--base REF]
  *   node .claude/scripts/core/test-changed.mjs --all          # the whole suite, explicitly, no timeout
+ *   node .claude/scripts/core/test-changed.mjs --ci           # `npm run ci`: ci-quality.sh, every node test, the floor
  *
  * With --stdin (the pre-push hook passes it) it reads git's `<local ref> <local sha> <remote ref> <remote sha>`
  * lines; without it, it tests HEAD. It fetches, then diffs merge-base(origin/main, local sha)..local sha.
@@ -153,12 +154,21 @@ function run(files, deadline) {
 }
 
 function main(argv) {
-  const known = new Set(["--dry-run", "--quiet", "--all", "--stdin", "--files", "--base"]);
+  const known = new Set(["--dry-run", "--quiet", "--all", "--ci", "--stdin", "--files", "--base"]);
   for (let i = 0; i < argv.length; i++) {
     if (!known.has(argv[i])) { console.log(`test-changed: unknown argument ${argv[i]}`); return 2; }
     if (argv[i] === "--files" || argv[i] === "--base") { if (!argv[i + 1] || argv[i + 1].startsWith("--")) { console.log(`test-changed: ${argv[i]} needs a value`); return 2; } i++; }
   }
   process.chdir(execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim());
+  // `npm run ci`: CI's quality list, every node test, the floor. Through git's bash, never a PATH `bash`,
+  // because npm on Windows may be started from PowerShell, where that is WSL's (attack p01 r2 B3).
+  if (argv.includes("--ci")) {
+    const q = spawnSync(bashPath(), [".claude/scripts/core/ci-quality.sh"], { stdio: "inherit", env: testEnv() });
+    if (q.status !== 0) { console.log(`test-changed: ci-quality ${q.error ? `could not start: ${q.error.message}` : `exit ${q.status}`}`); return 1; }
+    const node = walk("tests").filter((f) => f.endsWith(".test.mjs")).sort();
+    if (node.length && run(node, Infinity) !== 0) return 1;
+    return spawnSync(process.execPath, [".claude/scripts/core/ci-floor.mjs"], { stdio: "inherit" }).status === 0 ? 0 : 1;
+  }
   if (argv.includes("--all")) {
     const all = walk("tests").filter((f) => f.endsWith(".bats") || f.endsWith(".test.mjs")).sort();
     console.log(`lanes: (all) -- ${all.length} file(s)`);
@@ -174,6 +184,10 @@ function main(argv) {
   console.log(`lanes: ${lanes.length ? lanes.join(" ") : "(none)"}`);
   if (note) console.log(`why: ${note}`);
   if (!argv.includes("--quiet")) for (const w of plan.why) console.log(`why: ${w}`);
+  // The tests read the working tree; edits not in the pushed commit can make this verdict differ from
+  // CI's, which runs the commit itself. Said, not refused: CI is the gate (attack p01 r2 B1).
+  const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" }).split("\n").filter(Boolean);
+  if (dirty.length && !argv.includes("--files")) console.log(`test-changed: WARN ${dirty.length} tracked file(s) modified and not in the commit -- this run tests them too; CI tests the commit`);
   if (argv.includes("--dry-run")) { for (const f of files) console.log(`  ${f}`); return 0; }
   if (!files.length) { console.log(lanes.length ? "test-changed: no test file mapped" : "test-changed: paperwork only -- no tests to run"); return lanes.length ? 1 : 0; }
   return run(files, Date.now() + CAP_MS);

@@ -46,8 +46,9 @@ export function testsText(root = ".") {
 }
 const namedByTests = (p, text) => {
   if (text === null) return true;
+  if (text.includes(p)) return true; // the file itself, at any depth: PORTFOLIO.md is one segment (attack p01 r2 B2)
   const segs = p.split("/");
-  for (let n = segs.length; n >= 3; n--) if (text.includes(segs.slice(0, n).join("/"))) return true;
+  for (let n = segs.length - 1; n >= 3; n--) if (text.includes(segs.slice(0, n).join("/"))) return true;
   return false;
 };
 export const isPaperwork = (p, text = "") => PAPERWORK.some((r) => r.test(p)) && !READ_BY_TESTS.some((r) => r.test(p)) && !CODE_EXT.test(p) && !namedByTests(p, text);

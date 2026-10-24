@@ -25,3 +25,5 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (u) A glob over lane dirs uses nullglob and the lanes.md name grammar; a non-lane dir is skipped, never passed as `--lane` (p01 B4).
 - (v) An allowlist of "safe to skip" paths also asks the tests' own text: a path or 3+-segment dir a test names is code; a code extension is code anywhere (p01 B11/L3/L10).
 - (w) A lane name from a file name is the LONGEST known lane prefix, never the first `-` word (p01 L4).
+- (x) "Named by a test" checks the file's full path at any depth, not only 3+-segment dirs: PORTFOLIO.md is one segment (p01 r2 B2).
+- (y) A local command that runs bash runs git's bash, never PATH's: `npm run ci` is `test-changed.mjs --ci` (p01 r2 B3).
