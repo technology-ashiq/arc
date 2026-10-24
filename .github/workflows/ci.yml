@@ -110,7 +110,7 @@ jobs:
           [ -n "$ran" ] && [ "$ran" -gt 0 ] || { echo "::error::node --test reported no tests run"; exit 1; }
           # A .count is a claim; the runner's REPORTED total must cover it, or the floor counts tests
           # that never ran (attack r2 B1/L4/L7, fixed-defect h). Per-lane: migrate-guard, Phase 02.
-          claimed="$(find tests -mindepth 2 -maxdepth 2 -name .count -exec cat {} + | tr -d '\r' | awk '{s+=$1} END{print s+0}')"
+          claimed="$(find tests -mindepth 2 -maxdepth 2 -type f -name .count -exec awk 'FNR==1{s+=$1} END{print s+0}' {} +)"
           echo "node:test reported $ran, .count files claim $claimed"
           [ "$ran" -ge "$claimed" ] || { echo "::error::node --test ran $ran, below the $claimed the .count files claim"; exit 1; }
 
