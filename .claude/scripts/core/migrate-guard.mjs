@@ -61,9 +61,14 @@ export function nodeTests(srcs) {
 /** MIGRATED.md rows: | old name | new name | file | note |. */
 export function nameMap(md) {
   const rows = [];
+  // Only the table under the `| old @test |` header: a header or timing table elsewhere is not the map.
+  let inMap = false;
   for (const l of md.replace(/\r/g, "").split("\n")) {
+    if (/^\|\s*old @test\s*\|/.test(l)) { inMap = true; continue; }
+    if (!inMap) continue;
+    if (!l.startsWith("|")) { inMap = false; continue; }
     const c = l.split("|").slice(1, -1).map((x) => x.trim());
-    if (c.length < 3 || /^-+$/.test(c[0]) || c[0] === "old @test") continue;
+    if (c.length < 3 || /^-+$/.test(c[0])) continue;
     rows.push({ old: c[0].replace(/^`|`$/g, ""), neu: c[1].replace(/^`|`$/g, ""), file: c[2], note: c[3] ?? "" });
   }
   return rows;
