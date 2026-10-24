@@ -1,0 +1,77 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs filesFor() names filter (~l.66-67)",
+      "breaking_input": "Commit a change to tests/test_helper.bash (e.g. setup() exits 1) and git push. planFor puts tests/test_helper.bash into sharedHits and lanes={core}; filesFor's names filter keeps only sharedHits that start with .claude/scripts/core/, so the list of bats files to grep is empty; zero bats files are picked. The run executes only the node:test lanes, which pass, and the push exits 0. Every CI bats shard then fails because every bats file sources test_helper.bash.",
+      "why": "The SHARED list advertises tests/test_helper.bash and tests/_lib/ as core, and the header promises 'bats files naming that file, plus every node:test lane', but the names selection only handles .claude/scripts/core/ basenames. A change to the single most-shared test file therefore runs NO bats test locally, so the gate asserts green about a file it never exercised. This is the (a)/(r) class: tests passing prove nothing about the changed file.",
+      "fix": "For sharedHits outside .claude/scripts/core/ (test_helper.bash, tests/_lib/*), pick every bats file that sources/loads them, or run the full bats set for such changes; never let a test_helper/_lib change produce an empty bats selection.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L2",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs run() node count check (~l.126-128)",
+      "breaking_input": "tests/spine/x.test.mjs registers only one real test while tests/spine/.count says 12 (e.g. the other 11 valuable tests were replaced by test.skip or a single sanity test). Push the lane. node --test reports '# tests 1' and exits 0; ran=1>0 so the pre-push passes. The same commit also adds a new empty tests/zzplant/plant.test.mjs next to a core change: the aggregate '# tests' comes from the other files, so zzplant's zero-test file is invisible and the push stays green.",
+      "why": "The prior L1 fix added a '# tests N > 0' check, but that is not the count floor: the per-lane .count files are never compared, and node files from many lanes run in ONE invocation so a 0-test file in one lane is hidden by tests in another. Pattern (o) requires the runner's reported total to cover the sum of .count; the pre-push never reads .count, so the first gate certifies coverage that CI later disproves.",
+      "fix": "Run/parse node tests per lane (or per file), and for every node lane in the plan assert the reported count is >= the lane's .count (and >0 per file). Never rely on a whole-plan aggregate for the 0-tests check.",
+      "twin_of": "(o)"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs run() node count check (~l.126)",
+      "breaking_input": "Create tests/zzplant/plant.test.mjs with zero test() calls but a top-level console.log('# tests 3'); push that file. node --test --test-reporter=tap prints the file's own '# tests 3' line before the reporter's final '# tests 0' summary and exits 0. The regex /^# tests (\\d+)$/m returns the FIRST match, so ran=3 and the 0-tests guard passes even though the lane registered no tests.",
+      "why": "The 0-tests guard parses attacker/test-controlled stdout and trusts the first summary-shaped line, not the runner's final summary. A stray diagnostic that looks like a TAP summary defeats the fix for pattern (n)/(r).",
+      "fix": "Use the LAST '# tests N' line (or parse the final summary block after the runner's end marker), or set --test-reporter=tap and validate the '# pass'/'# fail' block instead of a loose first match.",
+      "twin_of": "(n)"
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs main() dirty WARN (~l.174-176)",
+      "breaking_input": "Commit tests/spine/x.test.mjs containing a planted assert.equal(1,2). Without committing, edit the working tree to fix it. git push: the pushed sha equals HEAD so the non-HEAD guard passes; git status --porcelain prints a WARN line but the exit code goes to 0 because node --test ran the FIXED working-tree file. The push is certified green while the commit CI will test is broken.",
+      "why": "The r2 B1 fix moved the dirty-tree warning into the script but kept it advisory: it does not change the exit code. The pre-push still validates one read (HEAD sha) and tests another (dirty working tree), so a failed commit can ship with a local green.",
+      "fix": "Fail the push (or the local run) when tracked files are modified at hook time, unless an explicit override is given; better, run the tests from a clean worktree of the pushed sha.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs namedByTests() n>=3 loop (l.41-46)",
+      "breaking_input": "A bats test contains 'for f in docs/strategy/*.md; do grep -q \"^# \" \"$f\"; done'. Add docs/strategy/roadmap.md that lacks the heading, and push a PR touching only that file. namedByTests for a 3-segment path never runs its prefix loop (n starts at segs.length-1=2, below the n>=3 floor), READ_BY_TESTS only protects docs/strategy/README.md, and the glob string does not literally include the full filename. isPaperwork=true, CI sets code=false, bats and node-test are skipped, and the glob test never runs; the PR is green and the next code PR breaks.",
+      "why": "The 'tests' own text' fix only re-checks full paths and 3+ segment directory prefixes. A test that reads a 2-segment directory (docs/strategy/, docs/adr/) is invisible unless hand-listed in READ_BY_TESTS, so the stale-list gap pattern (v) survives for all unlisted 2-segment dirs.",
+      "fix": "Check prefixes from n = segs.length-1 down to 1 (so a test naming 'docs/strategy' covers everything under it), or derive READ_BY_TESTS from the same text scan rather than a static list.",
+      "twin_of": "(v)"
+    },
+    {
+      "id": "L6",
+      "severity": "medium",
+      "where": ".claude/scripts/core/ci-changes.mjs PAPERWORK/CODE_EXT (l.25-31)",
+      "breaking_input": "Add initiatives/ci/evidence/phase-01/expected.json, and let a bats test read each lane's evidence via a templated glob, e.g. 'for f in initiatives/$lane/evidence/phase-01/*.json'. Push a PR touching only expected.json. PAPERWORK matches evidence/, CODE_EXT has no json, and testsText can never see the templated read; isPaperwork=true, code=false, bats/node-test skip, and the test that must validate the JSON never runs. The same PR being reviewed adds such evidence .json files, so this is live.",
+      "why": "The B11 fix is a denylist of extensions, not the allowlist rule (v) asked for: machine-read non-code files under evidence/ and handoffs/ remain paperwork whenever the reading test interpolates the lane or uses a glob, which namedByTests cannot see. Debt D10 is still present in the changed file.",
+      "fix": "Restrict PAPERWORK's evidence/ and handoffs/ patterns to .md/.txt/.png and treat every other extension (json, yml, toml) or no extension as code, regardless of directory.",
+      "twin_of": "(v)"
+    },
+    {
+      "id": "L7",
+      "severity": "medium",
+      "where": ".claude/scripts/core/test-changed.mjs changedPaths() fetch/merge-base catch (~l.99-101)",
+      "breaking_input": "Commit a planted failure in tests/spine/x.bats and push while offline (or from a clone whose origin/main has no common ancestor, so merge-base exits 1 even online). The catch replaces the real change list with paths:['(unknown)']; planFor maps it to core, filesFor runs only the node lanes plus core-mapped bats, the planted lane's bats file never runs, the node tests pass, and the push exits 0. The pushed lane shipped untested.",
+      "why": "The spec-mandated fallback (DEBT D9) drops the very lanes the push touches: '(unknown)' yields the core set, not the changed lanes' files, so a green here says nothing about the commit. Pattern (i)'s 'any doubt fails open' is implemented as 'run the wrong tests and exit 0'.",
+      "fix": "On fetch/merge-base failure, diff against the local origin/main (or fetched tip) and union the real paths with the core set; print staleness; if no range can be established at all, refuse the push rather than exiting 0.",
+      "twin_of": "(i)"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs filesFor() basename grep (l.66-67)",
+      "breaking_input": ".claude/scripts/core/common.sh is sourced by tests/helpers/tree.bash, which tests/forest.bats sources; forest.bats never contains the literal string 'common.sh'. Push a change to common.sh that breaks forest.bats. names=['common.sh'], the grep finds no bats file containing it, only the node lanes and core-mapped bats run (forest.bats is not among them), and the push exits 0; forest.bats fails on CI.",
+      "why": "The shortcut comment admits the name grep misses indirect callers, and CI is the backstop; but the pre-push gate is presented as the first gate, and a broken shared core script still ships with a local green. The L5 rejection does not remove the hole from the new code.",
+      "fix": "For a .claude/scripts/core change, also grep the bats helper files that are sourced (transitive closure), or run the full bats set for any core/ change and accept the cost.",
+      "twin_of": "(a)"
+    }
+  ]
+}

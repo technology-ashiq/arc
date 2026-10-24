@@ -27,3 +27,5 @@ Imported classes. Every attacker prompt carries this list; check each one in EVE
 - (w) A lane name from a file name is the LONGEST known lane prefix, never the first `-` word (p01 L4).
 - (x) "Named by a test" checks the file's full path at any depth, not only 3+-segment dirs: PORTFOLIO.md is one segment (p01 r2 B2).
 - (y) A local command that runs bash runs git's bash, never PATH's: `npm run ci` is `test-changed.mjs --ci` (p01 r2 B3).
+- (z) A runner's summary is read from its LAST `# tests N` line; a test's own output can print one first (p01 r2 L3).
+- (aa) A local run that covers a migrated lane whole is held to that lane's `.count`, like CI's node-test job (p01 r2 L2).

@@ -97,7 +97,8 @@ function changedPaths(argv, stdin) {
   const other = heads.filter((h) => h !== "HEAD" && h !== head);
   if (other.length) return { refuse: `pushing ${other.map((h) => h.slice(0, 8)).join(", ")}, which is not the checked-out HEAD -- check it out and push again (or push it by name from its own worktree)` };
   try {
-    execFileSync("git", ["fetch", "-q", "origin", "main"], opts);
+    // never a credential prompt inside a push: it would hang the hook until the timeout (attack p01 r2 B3)
+    execFileSync("git", ["fetch", "-q", "origin", "main"], { ...opts, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
     const out = new Set();
     for (const h of heads) {
       const mb = execFileSync("git", ["merge-base", base, h], opts).trim();
@@ -131,7 +132,9 @@ function run(files, deadline) {
   const bats = files.filter((f) => f.endsWith(".bats"));
   const node = files.filter((f) => f.endsWith(".test.mjs"));
   const steps = [];
-  if (node.length) steps.push({ what: node, cmd: process.execPath, args: ["--test", "--test-reporter=tap", ...node] });
+  // the lanes this node run covers WHOLE: only those can be held to their .count
+  const whole = [...new Set(node.map((f) => f.split("/")[1]))].filter((l) => walk(`tests/${l}`).filter((f) => f.endsWith(".test.mjs")).every((f) => node.includes(f)));
+  if (node.length) steps.push({ what: node, lanes: whole, cmd: process.execPath, args: ["--test", "--test-reporter=tap", ...node] });
   // argv, never an interpolated program: a POSIX path inside `bash -c` breaks on the Windows leg.
   const bash = bashPath();
   // A missing bats inside that bash would read as every file FAILED; say what is missing instead (attack p01 r2 B3).
@@ -152,8 +155,13 @@ function run(files, deadline) {
     if (r.error) { console.log(`test-changed: could not start ${steps[k].cmd}: ${r.error.message}`); return 1; }
     if (r.status !== 0) { console.log(`test-changed: FAILED ${steps[k].what.join(" ")}`); return 1; }
     if (isNode) {
-      const ran = Number(((r.stdout || "").match(/^# tests (\d+)$/m) || [])[1] || 0);
+      // The LAST summary line is the runner's: a test can print a `# tests N` of its own before it (attack p01 r2 L3).
+      const ran = Number([...(r.stdout || "").matchAll(/^# tests (\d+)$/gm)].pop()?.[1] ?? 0);
       if (ran === 0) { console.log(`test-changed: node --test ran 0 tests in ${steps[k].what.join(" ")}`); return 1; }
+      // A lane run whole must run at least what its .count claims, or the floor counts tests that never ran
+      // (attack p01 r2 L2, fixed-defect o).
+      const claimed = (steps[k].lanes ?? []).reduce((s, l) => s + (existsSync(`tests/${l}/.count`) ? Number(readFileSync(`tests/${l}/.count`, "utf8").trim()) || 0 : 0), 0);
+      if (ran < claimed) { console.log(`test-changed: node --test ran ${ran}, below the ${claimed} the .count of ${steps[k].lanes.join(" ")} claims`); return 1; }
     }
   }
   return 0;
@@ -173,7 +181,7 @@ function main(argv) {
     if (q.status !== 0) { console.log(`test-changed: ci-quality ${q.error ? `could not start: ${q.error.message}` : `exit ${q.status}`}`); return 1; }
     const node = walk("tests").filter((f) => f.endsWith(".test.mjs")).sort();
     if (node.length && run(node, Infinity) !== 0) return 1;
-    return spawnSync(process.execPath, [".claude/scripts/core/ci-floor.mjs"], { stdio: "inherit" }).status === 0 ? 0 : 1;
+    return spawnSync(process.execPath, [".claude/scripts/core/ci-floor.mjs"], { stdio: "inherit", env: testEnv() }).status === 0 ? 0 : 1;
   }
   if (argv.includes("--all")) {
     const all = walk("tests").filter((f) => f.endsWith(".bats") || f.endsWith(".test.mjs")).sort();
