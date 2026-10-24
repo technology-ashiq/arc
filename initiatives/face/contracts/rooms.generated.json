@@ -687,12 +687,11 @@
         ],
         "ci": [
           "workflow:ci",
-          "workflow:measure-windows-cost",
-          "workflow:shard-calibrate",
-          "workflow:weigh-tests"
+          "workflow:release",
+          "workflow:weekly"
         ]
       },
-      "itemCount": 34
+      "itemCount": 33
     },
     {
       "id": "design-studio",
@@ -1418,9 +1417,8 @@
     },
     "ci": {
       "workflow:ci": "review-ship",
-      "workflow:measure-windows-cost": "review-ship",
-      "workflow:shard-calibrate": "review-ship",
-      "workflow:weigh-tests": "review-ship"
+      "workflow:release": "review-ship",
+      "workflow:weekly": "review-ship"
     }
   },
   "surfaces": [

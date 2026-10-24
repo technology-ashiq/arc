@@ -15,7 +15,7 @@ import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const BASELINE = 4826; // main 14a80c41 + the sync retire case, before the 2 ci REQ-11 drops, 2026-10-24
+export const BASELINE = 4827; // main ca9a1b93 + the ASCII guard moved into ci-gate.bats; drops: 2 REQ-11 + 13 REQ-07, 2026-10-24
 const DECLARED = /^[ \t]*@test[ \t]/;
 const DROP_ROW = /^\|([^|]*)\|\s*DROPPED\s*\|([^|]*)\|/;
 

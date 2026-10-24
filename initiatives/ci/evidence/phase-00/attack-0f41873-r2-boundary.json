@@ -1,0 +1,50 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": ".github/workflows/release.yml:41",
+      "breaking_input": "Tag v1.2.3 pushed while CHANGELOG.md has a heading like `## [1.2.3] - 2026-10-24`, plus an earlier heading `## [1.2.30]`. awk matches via index($0,h)==1 with h='## [1.2.3]' which requires the closing bracket, fine; but CRLF CHANGELOG.md (written on a Windows box) makes the section lines carry a trailing CR, and a CRLF `package.json` is irrelevant. The notes file then holds CR-terminated lines.",
+      "why": "Release notes get stray CRs; more importantly a prerelease tag such as v1.2.3-rc.1 yields ver='1.2.3-rc.1', which fails the package.json equality check with an opaque error, and a tag like v1.2.3 pushed on a commit not on main is released without any check that the tagged commit is reachable from main.",
+      "fix": "Strip CR from CHANGELOG with `tr -d '\\r'` before awk, and verify the tag commit is an ancestor of origin/main (`git merge-base --is-ancestor`) before publishing.",
+      "twin_of": "(m) A one-line count file accepts `\\r\\n` as well as `\\n`"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": ".github/workflows/weekly.yml:46",
+      "breaking_input": "A `.count` file that is empty, or whose first line is non-numeric (e.g. `TODO`, or a UTF-8 BOM followed by `12`). The new awk uses `FNR==1{s+=$1}`.",
+      "why": "A BOM makes `$1` read as `\\ufeff12`, which awk coerces to 0, silently deflating the claimed total so a shrunken lane passes. A non-numeric first line also coerces to 0 with no error. The old `cat` path had the same weakness, but the fix claims to validate per file and does not.",
+      "fix": "Have awk reject any file whose first field does not match /^[0-9]+$/ (after stripping CR and BOM) and exit non-zero, so a malformed claim is red rather than 0.",
+      "twin_of": "(o) A claimed count (`.count`, a drop row) is checked against what actually ran or existed"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:44",
+      "breaking_input": "`find ... -exec awk '...' {} +` with many .count files: find batches arguments and may invoke awk more than once (large argument list, Windows command-line length limit).",
+      "why": "Each awk invocation prints its own `END` sum, so the command substitution holds several lines such as `19` and `4`; `[ \"$ran\" -ge \"$claimed\" ]` then fails with `integer expression expected` on a multi-line value, or the echo shows the wrong total. The same applies to the identical line in ci.yml.",
+      "fix": "Pipe the find output through a second awk that sums the partial totals, or use `-exec awk ... {} \\;` per file with a summing outer awk, so exactly one number reaches the comparison.",
+      "twin_of": "(al) Numbers read from several files are summed per file, never through `cat`"
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:37",
+      "breaking_input": "`node --test --test-reporter=tap \"tests/**/*.test.mjs\"` on windows-latest where the quoted glob is passed to node unexpanded.",
+      "why": "Glob expansion is delegated to node, whose support for `**` depends on the Node version. If it matches fewer files than `.count` dirs imply, the run is only caught by the aggregate check; the claimed set (depth exactly 2) and the executed set (any depth) still come from two enumerations.",
+      "fix": "Build one file list with `find tests -name '*.test.mjs' -type f` and pass it to node, deriving the claim from the same list's directories.",
+      "twin_of": "(k) A counted file set and the set the runner executes come from ONE enumeration"
+    },
+    {
+      "id": "B5",
+      "severity": "low",
+      "where": ".claude/scripts/core/test-changed.mjs:244",
+      "breaking_input": "A push containing `initiatives/ci/x.md` together with a file whose test mapping is empty but which `isPaperwork` rejects, e.g. a `.github/workflows/weekly.yml` change that no test names.",
+      "why": "`notes` requires every path to be paperwork or a lane note, so a mixed push stays 'no test file mapped' (exit 1) correctly; but a lane note under a nested evidence path with a single segment such as `initiatives/ci/README.md` is also treated as paperwork even when a bats gate reads it by glob, so a break in it exits 0 locally and is red only on CI.",
+      "fix": "Restrict the regex to the named allow-list (`debt-ledger.md`, `fixed-defects.md`) instead of every `*.md` directly under a lane.",
+      "twin_of": "(v) An allowlist of \"safe to skip\" paths also asks the tests' own text"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+name: release
+
+# A v* tag publishes a GitHub release (ci lane REQ-07, ADR-2209): the weekly proof first, then the packed
+# tarball with that version's CHANGELOG section as the notes. The package is private, so nothing goes to npm.
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  weekly:
+    uses: ./.github/workflows/weekly.yml
+
+  publish:
+    needs: weekly
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # gh release create needs write; the top-level read would make it a 403.
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
+        with:
+          node-version: '24'
+      - name: Pack, cut the notes, create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ver="${TAG#v}"
+          [ "$(node -p 'require("./package.json").version')" = "$ver" ] || { echo "::error::tag $TAG is not package.json's version"; exit 1; }
+          tgz="$(npm pack --silent | tail -1)"
+          awk -v h="## [$ver]" 'index($0, h) == 1 {on = 1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "::error::CHANGELOG.md has no ## [$ver] section"; exit 1; }
+          gh release create "$TAG" "$tgz" --title "$TAG" --notes-file notes.md --verify-tag

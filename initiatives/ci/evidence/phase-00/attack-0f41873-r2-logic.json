@@ -1,0 +1,122 @@
+{
+  "surface": "logic",
+  "findings": [
+    {
+      "id": "L1",
+      "severity": "high",
+      "where": ".claude/scripts/core/test-changed.mjs:243-245",
+      "breaking_input": "A push of only initiatives/ci/debt-ledger.md where a bats or bash gate (board-lint, kickoff-lint) reads initiatives/*/*.md by glob without naming the file. testsText finds no test that names the path, so files is empty.",
+      "why": "The new notes computation marks any initiatives/<lane>/<x>.md as paperwork once files is empty, skipping the 'does a test name it' check (pattern v). A glob-reading gate never names its inputs, so a lane note that breaks such a gate pushes with exit 0 and fails only on CI. The code comment and the prior finding (attack 721902c B2) acknowledge this but the fix is not applied.",
+      "fix": "Restrict the regex to an explicit allow-list of note names (debt-ledger.md, fixed-defects.md) or require that no test text mentions the lane's directory.",
+      "twin_of": "(v) An allowlist of safe-to-skip paths also asks the tests' own text"
+    },
+    {
+      "id": "L2",
+      "severity": "medium",
+      "where": "tests/ci-gate.bats:140-144",
+      "breaking_input": "A .bats file with a tab-indented @test line or CRLF line endings (files written on a Windows box). grep -rnE prefixes each hit with file:line:, and the remainder of the line is matched against [^ -~].",
+      "why": "A tab or CR is outside the printable ASCII range so the guard reports it as non-ASCII, pointing at a character not in the test name. Also, the -r file prefix (with braces or other punctuation) gets included in what is scanned, so a filename with a non-ASCII character in the path could trigger a false positive. This matches pattern (v) and prior finding B3, but the guard was only moved, not fixed.",
+      "fix": "Extract only the name with sed -E 's/^[[:blank:]]*@test[[:blank:]]+//' and test with [^[:print:]], or strip \\r and leading blank before the check.",
+      "twin_of": "(v) An allowlist of safe-to-skip paths also asks the tests' own text"
+    },
+    {
+      "id": "L3",
+      "severity": "medium",
+      "where": ".github/workflows/release.yml:42-47",
+      "breaking_input": "A tag named v1.2.3 but package.json version is 1.2.3-beta (semver pre-release). The check requires exact equality: require('./package.json').version = \"$ver\" where ver=\"${TAG#v}\". The node -p strips the leading v but the comparison is string equality, so a pre-release or build-metadata suffix in the tag fails even though the release should be valid.",
+      "why": "The version check is a strict string equality between the tag stripped of leading 'v' and package.json's version field. Semver allows pre-release/build metadata; a maintainer pushing v1.2.3-rc.1 while package.json says 1.2.3-rc.1 would work, but any mismatch in formatting fails the release. Conversely, package.json with a different patch after the tag is rejected properly, but harmless whitespace or a leading '=' would also break. This is not a security hole but blocks legitimate releases.",
+      "fix": "Parse both as semver and compare the core version components, or explicitly reject only if versions differ in major/minor/patch.",
+      "twin_of": null
+    },
+    {
+      "id": "L4",
+      "severity": "medium",
+      "where": ".github/workflows/release.yml:46",
+      "breaking_input": "A tag named v1.2.3 but the CHANGELOG.md section heading uses a different format, e.g. '[1.2.3]' without the leading '##' or with extra spaces. The awk script only matches lines where index($0, h) == 1, requiring the heading to start at column 1.",
+      "why": "The awk script is brittle: it requires the exact string '## [1.2.3]' at the start of a line. If the CHANGELOG has a heading like '## [1.2.3] - 2026-10-25' the script works, but a heading with a trailing note like '### [1.2.3]' or '## [v1.2.3]' fails to match, producing empty notes and a release that fails with 'CHANGELOG.md has no ## [ver] section'.",
+      "fix": "Use a regex that matches the version with optional whitespace and any trailing text, e.g. awk -v v=\"$ver\" 'index($0, \"## [\" v \"]\") == 1 {on=1; next} on && /^## \\[/ {exit} on'",
+      "twin_of": null
+    },
+    {
+      "id": "L5",
+      "severity": "medium",
+      "where": ".github/workflows/release.yml:43-44",
+      "breaking_input": "A tag named v1.2.3 but the packed tarball has a different name, so `npm pack --silent | tail -1` returns a line that is not the filename (e.g. an empty string if npm pack prints nothing to stdout due to a warning on stderr).",
+      "why": "The code assumes npm pack always prints exactly the tarball filename on its last stdout line. If npm emits any non-filename output (warnings, notices) to stdout, the last line could be a note and the tarball path wrong, causing gh release create to fail or attach the wrong file.",
+      "fix": "Use `npm pack --silent --json | node -e 'let d=JSON.parse(require(\"fs\").readFileSync(0)); console.log(d[0].filename)'` or set `npm_config_loglevel=error` and check the file exists.",
+      "twin_of": null
+    },
+    {
+      "id": "L6",
+      "severity": "low",
+      "where": ".github/workflows/ci.yml:116",
+      "breaking_input": "A .count file whose content wraps across multiple lines, e.g. '12\\n7' (a file with two numbers). The awk 'FNR==1{s+=$1}' only reads the first line of each file, so it sums only the first number (12) and ignores the second (7), undercounting.",
+      "why": "The fix (al) changed the sum to read only FNR==1 per file, but a .count with multiple numbers is malformed and should be refused, not silently undercounted. The undercount could hide a lane shrink. Pattern (al) says per-file sum, but the file content is still not validated to be a single integer.",
+      "fix": "Validate each .count file matches ^[0-9]+\\r?$ before summing, and fail if it does not.",
+      "twin_of": "(al) Numbers read from several files are summed per file, never through cat"
+    },
+    {
+      "id": "L7",
+      "severity": "low",
+      "where": ".github/workflows/ci.yml:116",
+      "breaking_input": "A .count file with a leading plus or space, e.g. '+12' or ' 12'. awk FNR==1 sees the string and s+$1 may yield 12 (coerced), but a negative '-12' would subtract.",
+      "why": "No validation of the .count content; a negative or non-numeric value could inflate or deflate the claimed total. The pattern (o) says a claimed count is checked against what actually ran, but the file format itself is not enforced.",
+      "fix": "Add a strict regex check like grep -qE '^[0-9]+\\r?$' for each file before summing.",
+      "twin_of": "(o) A claimed count (.count) is checked against what actually ran or existed"
+    },
+    {
+      "id": "L8",
+      "severity": "low",
+      "where": "tests/core/test-changed.test.mjs:54-62",
+      "breaking_input": "A GIT_DIR environment variable set in the test's process env. The test calls spawnSync without an env override, passing the full process.env to the child, so a GIT_DIR pointing to a different repo would make test-changed.mjs run git status against the wrong repo.",
+      "why": "The new test never strips GIT_* variables, violating pattern (s). A hook that runs the test with a GIT_DIR set (e.g. a bare repo) would fail or corrupt the sandbox. The test is new and the leak was flagged as D23 in debt-ledger but not fixed.",
+      "fix": "Pass env with every key starting GIT_ removed to spawnSync, and rmSync the temp dir in a finally block.",
+      "twin_of": "(s) A child spawned from a git hook gets an env with every GIT_* variable removed"
+    },
+    {
+      "id": "L9",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:36-46",
+      "breaking_input": "A failing node --test step under bash -eo pipefail. The pipeline node --test | tee exits non-zero, so the step aborts before rc=${PIPESTATUS[0]} and the count lines run.",
+      "why": "This is the exact twin of prior finding B2: pipefail makes -e abort on the first failing pipeline, so the diagnostic 'reported N tests' never prints and the code that intended to handle a failing rc never executes. The step is still red, but the .count check is skipped on failure, hiding a lane that loads zero tests (because the suite already failed). The prior B2 was recorded, but this diff only added the release.yml and weekly.yml without fixing weekly.yml's own pipefail issue. The comments claim the count is checked, but on a failure it is not.",
+      "fix": "Run set +e before the pipeline, or write node --test ... 2>&1 | tee f || true; rc=${PIPESTATUS[0]} so counts print on failure and rc is genuinely used.",
+      "twin_of": "(ak) A second runner of the same suite carries every check the first one has"
+    },
+    {
+      "id": "L10",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:44",
+      "breaking_input": "A committed tests/lane/.count that is a symlink to an outside file or a directory named .count. the find has no -type f, so cat follows the symlink.",
+      "why": "The find in weekly.yml still lacks -type f, mirroring prior B4. A symlink to a large file or a directory would cause cat to fail (directory) or read unintended content (symlink), both without a clear message under -e. The fix is trivial and already identified.",
+      "fix": "Add -type f to the find, and optionally validate each file's content is ^[0-9]+\\r?$.",
+      "twin_of": "(k) A counted file set and the set the runner executes come from ONE enumeration"
+    },
+    {
+      "id": "L11",
+      "severity": "low",
+      "where": ".github/workflows/weekly.yml:45-46",
+      "breaking_input": "A test file that prints lines beginning '# tests 12' inside its own output during a test; the sed -n 's/^# tests \\([0-9]*\\)$/\\1/p' picks up that line before the real summary line, and tail -1 grabs the last one.",
+      "why": "The line says pattern (z): read the LAST '# tests N' line, and it does use tail -1. But a test that prints a spurious '# tests 999' after the real summary would still be taken, and the step would pass. This is the same as pattern (z) and is not a new flaw, but the claim 'the count is read before the pass' does not guarantee the last line is the summary if the test emits a trailing '# tests' line.",
+      "fix": "Parse only the final summary block produced by the TAP reporter, e.g. use a regex that anchors to the end of the file or use a dedicated TAP parser.",
+      "twin_of": "(z) A runner's summary is read from its LAST # tests N line; a test's own output can print one first"
+    },
+    {
+      "id": "L12",
+      "severity": "low",
+      "where": ".github/workflows/ci.yml:116",
+      "breaking_input": "A .count file with a trailing newline and then a second line containing whitespace, e.g. '12\\n  '. FNR==1 only reads the first line, safe. But a file with '12\\r7' reads only 12, ignoring 7.",
+      "why": "The fix (al) handles missing newline between files, but still reads only the first line of each file, silently ignoring extra lines. A malformed file with multiple numbers is not refused, merely undercounted.",
+      "fix": "Validate each .count file contains exactly one integer line, and refuse otherwise.",
+      "twin_of": "(al) Numbers read from several files are summed per file"
+    },
+    {
+      "id": "L13",
+      "severity": "low",
+      "where": ".github/workflows/release.yml:37-40",
+      "breaking_input": "A tag name with an apostrophe or single quote, e.g. v1.2.3'foo, which is a valid git ref name but the shell string interpolation \"${TAG#v}\" is used inside a double-quoted run block. Although TAG is from github.ref_name, an attacker controlling the ref cannot, but a malicious tag with a newline or backtick could break out of the string interpolation.",
+      "why": "The TAG and $tgz are interpolated into a bash -c command via the run block. GitHub Actions does not provide a safe argv path; a tag containing '$(...)' or template characters could be injected, though tags are usually restricted. The git ref name may allow single quotes, and the command uses \"$TAG\" quoting but the tag string can contain a backtick or $, leading to command substitution. Pattern (d) forbids such interpolation.",
+      "fix": "Pass TAG and tgz via environment variables and reference them as \"$TAG\" inside the script, avoiding direct interpolation into the shell string.",
+      "twin_of": "(d) A program embedded in a shell string carries no apostrophe; inside a double-quoted string, no backtick and no $"
+    }
+  ]
+}

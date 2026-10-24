@@ -1,0 +1,16 @@
+# Weekly update PRs (ci lane REQ-07). arc's root has no dependencies (distribute REQ-08); its packages live
+# in face/ and tools/lint/. Actions are pinned by SHA, and dependabot moves the SHA with its version comment.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /face
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /tools/lint
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

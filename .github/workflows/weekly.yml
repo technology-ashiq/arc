@@ -1,0 +1,80 @@
+name: weekly
+
+# What arc-ci proves only on ubuntu, proven weekly on the rest (ci lane REQ-07, ADR-2201): the node:test
+# suite on windows-latest, a clean install of the packed tarball, and the ci-tier image. release.yml calls
+# this before it publishes, so a tag never ships what the week would have caught.
+#   gh workflow run weekly.yml --ref main
+
+on:
+  schedule:
+    - cron: '17 3 * * 0'
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: weekly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  windows-test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
+        with:
+          node-version: '24'
+      # migrate-guard's self-test runs its sandbox lane's old bats files; jq ships on the windows image.
+      - name: Install bats
+        run: npm install -g bats
+      - name: node --test (windows)
+        run: |
+          node --test --test-reporter=tap "tests/**/*.test.mjs" 2>&1 | tee "$RUNNER_TEMP/node-test.tap"
+          rc=${PIPESTATUS[0]}
+          # The count is read before the pass: an empty glob exits 0 having run nothing.
+          ran="$(tr -d '\r' < "$RUNNER_TEMP/node-test.tap" | sed -n 's/^# tests \([0-9]*\)$/\1/p' | tail -1)"
+          echo "node:test reported ${ran:-none} test(s), exit $rc"
+          [ -n "$ran" ] && [ "$ran" -gt 0 ] || { echo "::error::node --test reported no tests run"; exit 1; }
+          # The same .count check as arc-ci's node-test: a lane that loads none of its tests on windows is red (attack B1).
+          claimed="$(find tests -mindepth 2 -maxdepth 2 -type f -name .count -exec awk 'FNR==1{s+=$1} END{print s+0}' {} +)"
+          echo "node:test reported $ran, .count files claim $claimed"
+          [ "$ran" -ge "$claimed" ] || { echo "::error::node --test ran $ran, below the $claimed the .count files claim"; exit 1; }
+          exit "$rc"
+
+  clean-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0 (node24)
+        with:
+          node-version: '24'
+      - name: npm pack, install into an empty dir, run the entry
+        run: |
+          set -euo pipefail
+          tgz="$PWD/$(npm pack --silent | tail -1)"
+          d="$(mktemp -d)"
+          cd "$d" && npm init -y >/dev/null && npm install --no-audit --no-fund "$tgz"
+          # arc doctor is the package checking its own files from where npm put them, not from the checkout.
+          node node_modules/arc/bin/arc.mjs --version
+          node node_modules/arc/bin/arc.mjs doctor
+
+  ci-tier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (node24)
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      # shortcut: build + verify only; the vulnerable-dependency rung stays in arc-ci's ci-tier job, which runs when docker/ or trivy changes.
+      - name: Build the arc-tools image
+        run: bash .claude/scripts/review/arc-tools-image.sh build
+      - name: Verify trivy runs inside the image
+        run: bash .claude/scripts/review/arc-tools-image.sh verify
