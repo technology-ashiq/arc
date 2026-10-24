@@ -1,0 +1,40 @@
+{
+  "phase": "02",
+  "commit": "b3eb7ac35c7f283e8e946fc5cf2048cf4adb2e16",
+  "short": "b3eb7ac3",
+  "generated": "2026-10-24T08:48:05Z",
+  "files": [
+    {
+      "name": "attack-091c310-r1-boundary.json",
+      "sha256": "08e627461d91b1bf9efcac9a4a58b0541aecfd9131593a3decd83aee6b211ec8"
+    },
+    {
+      "name": "attack-091c310-r1-logic.json",
+      "sha256": "b88b6fd83d88a4eda483834b447cda70b0b30627fca2cdee2825d922bb4e7096"
+    },
+    {
+      "name": "attack-09a1c07-r1-boundary.json",
+      "sha256": "6165aaaeda472478ac58638c029e4e2fb22aa1c501792cd9bfcfd6179343322a"
+    },
+    {
+      "name": "attack-2afd64c-r1-boundary.json",
+      "sha256": "5f53bd5259ad969c8dd9df68cce08487490f99641abfbe0ad6210aa95f309b3d"
+    },
+    {
+      "name": "attack-2d8afd0-r2-boundary.json",
+      "sha256": "ef88b17c62343cc3789d30d2a4c9a6dd9924e92ea5a1ea811ff75ecd23ba5c43"
+    },
+    {
+      "name": "owner-demo.md",
+      "sha256": "412a5cf82cfea65e0c6d61775d96dcf3e616aa9c3f4dc8b08259ae1e15c8cead"
+    },
+    {
+      "name": "policy-rows.yaml",
+      "sha256": "6538b61993db7fee00ad5ad49c055eea2fc40fd7e9b99e803e53b52cda82ea85"
+    },
+    {
+      "name": "residue.md",
+      "sha256": "e10af0427c78ccf3f133a112394c91766a500069571c8ee8f69d7dc4bbb30aa1"
+    }
+  ]
+}

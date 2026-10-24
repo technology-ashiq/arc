@@ -7,10 +7,10 @@
 **Branch:** `feat/face-v3-02-qa-ship`
 
 ## Exit criteria (Definition of Done)
-- [ ] `processes/qa-run.process.yaml` + `hq.policy.yaml` row + `router.yaml` class row (`balanced-workhorse`, ADR-0069 cited); `review-ship.qa` ready; a mock-driver session lands `qa.completed`, read back by the room; a mock run that lands nothing FAILs its arm.
-- [ ] `processes/ship-run.process.yaml` runs lint, build, a per-job CI read, then `approval.requested{gate: deploy}`; the `review-ship.ship` row in `face-sessions.mjs` changes in the same PR — label "Prepare ship", `receipt.kind: approval.requested`, `confirmStep: null` (there is no deploy step left to confirm; `sessionsView` forces `processReady: false` while `confirmStep` is set) — and the `CONFIRM_STEP_UNENFORCED` refusal keeps a fixture proving a row WITH a `confirmStep` is still refused; `ship.done` is claimed nowhere; a fixture proves no deploy, publish or push in its compiled argv or any step, and that approving `{gate: deploy}` in the inbox triggers nothing (ADR-1366).
-- [ ] Real-side arm: the owner starts QA and Prepare ship once each on a real driver from the face; one `qa.completed` and one `approval.requested{gate: deploy}` are found in `events/` (not `events/_quarantine/`) on the canonical spine.
-- [ ] `arc-compile --all` and `gate-parity` green; wiki, sync golden (by its recipe) and `face-sections` regenerated, each `--check` green; two attack surfaces; CI per job; `/arc-phase-done 02` from the main clone.
+- [x] `processes/qa-run.process.yaml` + `hq.policy.yaml` row + `router.yaml` class row (`balanced-workhorse`, ADR-0069 cited); `review-ship.qa` ready; a mock-driver session lands `qa.completed`, read back by the room; a mock run that lands nothing FAILs its arm.
+- [x] `processes/ship-run.process.yaml` runs lint, build, a per-job CI read, then `approval.requested{gate: deploy}`; the `review-ship.ship` row in `face-sessions.mjs` changes in the same PR — label "Prepare ship", `receipt.kind: approval.requested`, `confirmStep: null` (there is no deploy step left to confirm; `sessionsView` forces `processReady: false` while `confirmStep` is set) — and the `CONFIRM_STEP_UNENFORCED` refusal keeps a fixture proving a row WITH a `confirmStep` is still refused; `ship.done` is claimed nowhere; a fixture proves no deploy, publish or push in its compiled argv or any step, and that approving `{gate: deploy}` in the inbox triggers nothing (ADR-1366).
+- [x] Real-side arm: the owner starts QA and Prepare ship once each on a real driver from the face; one `qa.completed` and one `approval.requested{gate: deploy}` are found in `events/` (not `events/_quarantine/`) on the canonical spine.
+- [x] `arc-compile --all` and `gate-parity` green; wiki, sync golden (by its recipe) and `face-sections` regenerated, each `--check` green; two attack surfaces; CI per job; `/arc-phase-done 02` from the main clone.
 
 ## Verification plan
 - **Test command:** CI per job (`ci-digest.mjs`).
