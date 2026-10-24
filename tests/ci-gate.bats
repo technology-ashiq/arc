@@ -129,3 +129,15 @@ mk_tree() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"no files"* ]]
 }
+
+# Moved from shard-tests.bats when the sharder was deleted (ci REQ-07): bats drops a @test whose name it
+# cannot encode as an identifier, so the test vanishes from the run with nothing red. Recursive, because
+# ci-bats-shard.sh runs nested .bats files too.
+@test "every @test name is pure ASCII (a non-ASCII name silently does not run)" {
+  local n hits
+  n="$(cd "$ARC_ROOT" && grep -rhE '^[[:blank:]]*@test[[:blank:]]' --include='*.bats' tests | wc -l)"
+  [ "$n" -gt 100 ]
+  hits="$(cd "$ARC_ROOT" && grep -rnE '^[[:blank:]]*@test[[:blank:]]' --include='*.bats' tests \
+            | LC_ALL=C grep '[^ -~]' || true)"
+  [ -z "$hits" ] || { echo "Non-ASCII in a @test NAME -- use plain ASCII:"; echo "$hits"; false; }
+}

@@ -51,6 +51,16 @@ test("a docs-only change runs no tests", () => {
   assert.deepEqual(plan([["initiatives", "ci", "PROGRESS.md"].join("/"), ["docs", "adr", "2200-zz.md"].join("/")]).lanes, []);
 });
 
+test("a push of only a lane's own notes exits 0 as paperwork, not 'no test file mapped'", () => {
+  // Not --dry-run: the exit code IS the verdict. Built from parts so no test names the paths.
+  const f = join(mkdtempSync(join(tmpdir(), "tc-")), "files");
+  writeFileSync(f, [["initiatives", "ci", "zz-ledger.md"].join("/"), ["initiatives", "ci", "zz-defects.md"].join("/")].join("\n") + "\n");
+  const r = spawnSync(process.execPath, [SCRIPT, "--files", f], { cwd: ROOT, encoding: "utf8" });
+  assert.match(r.stdout, /^lanes: ci$/m, r.stdout + r.stderr);
+  assert.match(r.stdout, /paperwork only/);
+  assert.equal(r.status, 0, r.stdout);
+});
+
 test("a doc a test names by its path is code, not paperwork (attack p01 L3)", () => {
   const p = plan(["docs/memory/aliases.md", ["initiatives", "engine", "evidence", "phase-04", "zz.md"].join("/")]);
   assert.ok(p.lanes.length > 0, p.out);

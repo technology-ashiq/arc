@@ -228,7 +228,8 @@ function main(argv) {
   const stdin = argv.includes("--stdin") ? readFileSync(0, "utf8") : "";
   const { paths, note, refuse } = changedPaths(argv, stdin);
   if (refuse) { console.log(`lanes: (refused)\ntest-changed: ${refuse}`); return 1; }
-  const plan = planFor(paths, testsText("."));
+  const text = testsText(".");
+  const plan = planFor(paths, text);
   const files = filesFor(plan);
   const lanes = [...plan.lanes].sort();
   console.log(`lanes: ${lanes.length ? lanes.join(" ") : "(none)"}`);
@@ -239,7 +240,9 @@ function main(argv) {
   const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" }).split("\n").filter(Boolean);
   if (dirty.length && !argv.includes("--files")) console.log(`test-changed: WARN ${dirty.length} tracked file(s) modified and not in the commit -- this run tests them too; CI tests the commit`);
   if (argv.includes("--dry-run")) { for (const f of files) console.log(`  ${f}`); return 0; }
-  if (!files.length) { console.log(lanes.length ? "test-changed: no test file mapped" : "test-changed: paperwork only -- no tests to run"); return lanes.length ? 1 : 0; }
+  // A lane's own notes (debt-ledger.md, fixed-defects.md) that no test names are paperwork here too; CI keeps them code.
+  const notes = !lanes.length || paths.every((p) => isPaperwork(p, text) || /^initiatives\/[^/]+\/[^/]+\.md$/.test(p));
+  if (!files.length) { console.log(notes ? "test-changed: paperwork only -- no tests to run" : "test-changed: no test file mapped"); return notes ? 0 : 1; }
   return run(files, Date.now() + CAP_MS);
 }
 

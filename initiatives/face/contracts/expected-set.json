@@ -1486,9 +1486,8 @@
   "ci": {
     "map": {
       "workflow:ci": "review-ship",
-      "workflow:measure-windows-cost": "review-ship",
-      "workflow:shard-calibrate": "review-ship",
-      "workflow:weigh-tests": "review-ship"
+      "workflow:release": "review-ship",
+      "workflow:weekly": "review-ship"
     }
   },
   "surfaces": {

@@ -17,7 +17,7 @@
 # reads no globals -- a helper that read $output/$status could not be tested under `run` at
 # all, since `run` owns those names.
 #
-# Every @test name on this page is ASCII-only. tests/shard-tests.bats:184-197 greps the whole
+# Every @test name on this page is ASCII-only. tests/ci-gate.bats greps the whole
 # @test LINE, and six em-dashed names once made windows shard 10/12 report "declared 93,
 # executed 87" -- tests that existed, were counted, and never ran. That recurred once inside
 # this very cycle, so it is checked here rather than trusted.
