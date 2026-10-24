@@ -88,6 +88,16 @@ function batsTestRegion(text, name) {
   return region;
 }
 
+/** The node:test twin (ci Phase 02): a top-level `test("NAME", ...)` line opens the region, the next one ends it. */
+function nodeTestRegion(text, name) {
+  const lines = text.split("\n");
+  const i = lines.findIndex((l) => l.startsWith(`test(${JSON.stringify(name)},`));
+  if (i < 0) return null;
+  const region = [lines[i]];
+  for (let k = i + 1; k < lines.length && !lines[k].startsWith("test("); k++) region.push(lines[k]);
+  return region;
+}
+
 export function check(root) {
   const events = blockingEvents(root);
   if (events.length === 0) throw new CouldNotScan("no hook event dispatches in blocking mode");
@@ -154,13 +164,17 @@ export function check(root) {
         const sep = mt.indexOf("::");
         const file = sep > 0 ? mt.slice(0, sep) : "";
         const name = sep > 0 ? mt.slice(sep + 2) : "";
-        if (!/^tests\/[A-Za-z0-9._-]+\.bats$/.test(file) || !name) gap(id, `merge_time must be tests/FILE.bats::TEST or repo:SETTING, got ${JSON.stringify(mt)}`);
+        // A migrated lane's merge-time truth is a node:test case (ci Phase 02): same exists + no-skip checks.
+        const isNode = /^tests\/[a-z][a-z0-9-]*\/[A-Za-z0-9._-]+\.test\.mjs$/.test(file);
+        if (!(isNode || /^tests\/[A-Za-z0-9._-]+\.bats$/.test(file)) || !name) gap(id, `merge_time must be tests/FILE.bats::TEST, tests/LANE/FILE.test.mjs::TEST or repo:SETTING, got ${JSON.stringify(mt)}`);
         else if (!existsSync(join(root, file))) gap(id, `merge_time test not found: ${file} does not exist`);
         else {
-          const region = batsTestRegion(readFileSync(join(root, file), "utf8").replace(/\r/g, ""), name);
-          if (region === null) gap(id, `merge_time test not found: ${file} has no @test "${name}"`);
-          // Any `skip` word outside a comment line: a merge-time truth must never be able to skip (B6).
-          else if (region.some((l) => !/^\s*#/.test(l) && /\bskip\b/.test(l))) gap(id, `merge_time test can skip: ${file}::${name}`);
+          const text = readFileSync(join(root, file), "utf8").replace(/\r/g, "");
+          const region = isNode ? nodeTestRegion(text, name) : batsTestRegion(text, name);
+          if (region === null) gap(id, `merge_time test not found: ${file} has no ${isNode ? "test(" : "@test "}"${name}"`);
+          // Any `skip` word outside a comment line: a merge-time truth must never be able to skip (B6). In node the
+          // same rule in its own syntax: skip, todo or only, anywhere in the region.
+          else if (region.some((l) => !/^\s*(#|\/\/)/.test(l) && (isNode ? /\b(skip|todo|only)\b/ : /\bskip\b/).test(l))) gap(id, `merge_time test can skip: ${file}::${name}`);
         }
       }
       const ct = typeof r.commit_time === "string" ? r.commit_time.trim() : "";
