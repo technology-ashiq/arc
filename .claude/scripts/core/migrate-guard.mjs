@@ -29,7 +29,8 @@ const SKIPS = /\.(skip|todo|only)\s*\(|\{\s*[^}]*\b(skip|todo|only)\s*:|\bt\.(sk
 
 // NODE_TEST_CONTEXT makes a nested `node --test` report to its parent instead of printing TAP, so the guard
 // would read no `# tests N` whenever it runs under a test runner (its own self-test does).
-const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "NODE_TEST_CONTEXT"));
+// PWD/OLDPWD too: an `E:/...` PWD from the caller is trusted by bash and refused by bats as not absolute.
+const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => !["NODE_TEST_CONTEXT", "PWD", "OLDPWD"].includes(k) && !k.startsWith("GIT_")));
 const git = (args, opts = {}) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024, ...opts });
 const walk = (d, out = []) => { if (!existsSync(d)) return out; for (const e of readdirSync(d, { withFileTypes: true })) { const p = `${d}/${e.name}`; if (e.isDirectory()) walk(p, out); else if (e.isFile()) out.push(p); } return out; };
 
@@ -144,7 +145,7 @@ export function guard(lane, { root, base, run = true }) {
         writeFileSync(join(root, f), git(["show", `${base}:${f}`], { cwd: root }));
         restored.push(f);
       }
-      const b = spawnSync(bash(), ["-c", 'exec bats "$@"', "bats", ...baseFiles], { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+      const b = spawnSync(bash(), ["-c", 'exec bats "$@"', "bats", ...baseFiles], { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, env: cleanEnv() });
       const okN = (String(b.stdout).match(/^ok /gm) || []).length;
       oldOk = b.status === 0 && okN === old.length;
       why = `old bats ${b.status === 0 ? "green" : `exit ${b.status}`} (${okN} of ${old.length} ok)`;
