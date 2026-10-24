@@ -40,7 +40,7 @@ ADR century 2200–2299; ADR-2200..2211 written at kickoff. CI-M = 1 (GitHub Pro
 - **01** -- built on `feat/ci-p01-local-first` (stacked on 00): ci-changes `code=` paperwork skip, ci-quality.sh,
   test-changed pre-push + `npm run ci`, ESLint trial in `tools/lint`, .nvmrc, docs, handoffs filed. Attack: 2 rounds
   (boundary 12+6+6+7, logic 15 + 8 on reasoning-on), every medium+ fixed or rejected in `evidence/phase-01/`.
-  `npm run ci` green locally. **Not pushed**: the new pre-push hit its 5-min cap on this stacked branch (A-04 strike 1);
+  `npm run ci` green locally. **Not pushed**: the new pre-push hit its 5-min cap on this stacked branch (A-04 strike 1); strike 2 on 2026-10-24: a one-line fix in `tests/distribute-ship-nodeploy.bats` pulled the whole distribute lane (20 files) past the cap, pushed once with `--no-verify` on the owner's OK;
   it pushes cleanly once 00 merges, or by the owner's OK to push once with `--no-verify`.
   Still owed: weekly/release/dependabot + workflow retire (waits on face's go-ahead, `handoffs/face-expected-set.md`);
   the 3 dead hooks + the composer read-hook line (deny-floor `.claude/hooks/**`: the owner's one line).
