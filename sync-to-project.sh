@@ -82,7 +82,8 @@ _arc_env_block() {  # <src-env-file> <sentinel-regex>
 # ---------- retired files (REQ-11, ADR-2212) ----------
 # A copy only ever adds, so a hook arc deleted lives on in every venture. Remove a retired path only when
 # it is byte-identical to a version arc shipped (every sha256 git ever held); an edited copy is the venture's.
-_arc_sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -c1-64; }
+# CRs are dropped before hashing: the eol=lf pin stays in arc, so a venture's autocrlf checkout must still match (attack r2 B2).
+_arc_sha() { tr -d '\r' < "$1" | if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi | cut -c1-64; }
 _arc_retire() {
   local p h list
   list="$(cat)"

@@ -1,0 +1,41 @@
+{
+  "surface": "boundary",
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "medium",
+      "where": "tests/sync.bats:331-342",
+      "breaking_input": "The pinned sha256 for PostToolUse.d/90-emit.sh (7f1e76c9...) or for either SessionEnd.d/00-session-log.sh hash is wrong by one hex digit, or the fixture drifts from the shipped bytes.",
+      "why": "The test only edits 90-emit.sh before syncing, so its \"kept\" assertion passes whether the hash matches or not. No unedited 90-emit.sh is ever shown to be retired. Neither SessionEnd hash is exercised at all. A mistyped hash silently leaves the dead hook (npx, background emit) live in every venture, and the suite stays green. This is the vacuous-pass pattern: the assertion held, but the retire path never ran for 3 of the 4 pinned hashes.",
+      "fix": "Add a second case that syncs an unedited copy of 90-emit.sh and asserts it is removed. Add a fixture for each SessionEnd hash. Better, a test that sha256sums every file in tests/fixtures/sync-retired/ and asserts each digest appears in the RETIRED heredoc.",
+      "twin_of": "(a)"
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "where": "sync-to-project.sh:87-103",
+      "breaking_input": "A Windows venture with core.autocrlf=true and no *.sh eol pin in its own .gitattributes. Its checkout of the committed hook files has CRLF bytes, so sha256 of $TARGET/.claude/hooks/PostToolUse.d/00-format.sh differs from the pinned LF digest.",
+      "why": "The retire decision hashes working-tree bytes, and the arc-side eol=lf pin does not travel to the venture. An unedited retired hook never matches, is never removed, and is reported as 'kept ... this copy is edited', which is false. The dead hooks stay live on exactly the Windows boxes the owner uses.",
+      "fix": "Hash a CR-stripped stream (tr -d '\\r' < file | sha256sum) and pin the digests of the LF form. Alternatively also accept the CRLF digest of each version.",
+      "twin_of": "(m)"
+    },
+    {
+      "id": "B3",
+      "severity": "low",
+      "where": "sync-to-project.sh:93-98",
+      "breaking_input": "A retired file whose hash matches but whose rm fails, such as a read-only mount, a locked file on Windows, or a directory without write permission.",
+      "why": "The && chain is [ -f ] && hash-match && rm -f && echo. When rm fails, nothing is printed. The second loop then sees the file still present and prints 'kept ... this copy is edited'. The operator is told a byte-identical hook was edited and is never told the delete failed. sync exits 0, so a stale hook silently survives.",
+      "fix": "Separate the hash match from the delete: on rm failure, print 'sync: could not remove <p>' to stderr. Keep the 'edited' message only for a hash mismatch.",
+      "twin_of": null
+    },
+    {
+      "id": "B4",
+      "severity": "low",
+      "where": "sync-to-project.sh:85",
+      "breaking_input": "A target host with neither sha256sum nor shasum on PATH, such as minimal Git Bash or BusyBox.",
+      "why": "The if/else pipeline emits nothing, so cut yields an empty string and no hash ever matches. Every retired path present is then reported as 'kept ... edited', and sync exits 0. The missing tool is never reported.",
+      "fix": "Check for a hashing tool once before the loop. If none is found, print 'sync: no sha256 tool, retired hooks not checked' and skip the retire step.",
+      "twin_of": null
+    }
+  ]
+}

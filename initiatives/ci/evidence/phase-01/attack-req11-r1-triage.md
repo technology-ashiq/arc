@@ -12,3 +12,16 @@ The first logic run failed (arc-run could not emit from a worktree); round 1 log
 | L2, L4, L11 | medium | NO CHANGE: the attacker's own analysis ends "not a real defect". |
 | L3 | high | DEBT D17: operator-chosen TARGET; deletes only 3 fixed paths on an exact hash. |
 | L8 | medium | NO CHANGE: the drift invariant runs on a fresh target only; no venture runs it. |
+
+## Round 2 (90fbd5d; ../phase-00/attack-90fbd5d-r2-*.json)
+
+| id | sev | verdict |
+|---|---|---|
+| L1 | high | NO CHANGE: the glob tail sits outside the quotes on purpose; that is the only part meant to glob. The pinned bracket-path test runs it. |
+| L2 / L3 | high/medium | DEBT D17 / D16 (repeat of round 1). |
+| L4 | medium | NO CHANGE: the list holds every version git ever held. |
+| B2 / L5 | medium | FIXED: `_arc_sha` drops CR before hashing; the test plants a CRLF copy and a mutant without the strip goes red. (ai) |
+| B1 / L6 | medium | FIXED: the test now retires the OLDER session-log version (second-hash arm) and counts exactly 2 retired lines. (aj) |
+| B3, B4, L7, L8 | low | DEBT D19. |
+| L9, L11 | low | DEBT D20. |
+| L10 | low | NO CHANGE: the scope check's own refusals are pinned by the 20 other cases in the same suite. |
